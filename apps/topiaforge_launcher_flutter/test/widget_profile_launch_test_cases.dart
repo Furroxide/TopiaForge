@@ -83,12 +83,12 @@ void _registerProfileLaunchWidgetTests(_PumpHome pumpHome) {
     expect(repository.savedSelectedProfileId, created.id);
   });
 
-  testWidgets('profile enables Creator Tools with its dependency closure', (
+  testWidgets('profile enables Sandbox with its dependency closure', (
     tester,
   ) async {
     const robotKitId = 'io.github.furroxide.topiaforge.robotkit';
     const contentId = 'io.github.furroxide.topiaforge.creatorcontent';
-    const toolsId = 'io.github.furroxide.topiaforge.creatortools';
+    const sandboxId = 'io.github.furroxide.topiaforge.sandbox';
     const worldsId = 'io.github.furroxide.topiaforge.worlds';
     final robotKit = _manifest(robotKitId, version: '1.0.0', name: 'RobotKit');
     final content = _manifest(
@@ -98,9 +98,9 @@ void _registerProfileLaunchWidgetTests(_PumpHome pumpHome) {
     );
     final worlds = _manifest(worldsId, version: '1.0.0', name: 'Worlds');
     final tools = _manifest(
-      toolsId,
+      sandboxId,
       version: '1.0.0',
-      name: 'Creator Tools',
+      name: 'Sandbox',
       category: 'DevTool',
       dependencies: const [
         ModDependency(id: contentId),
@@ -128,12 +128,12 @@ void _registerProfileLaunchWidgetTests(_PumpHome pumpHome) {
 
     await tester.tap(find.text('Profiles'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('profile-mod-$toolsId')));
+    await tester.tap(find.byKey(const ValueKey('profile-mod-$sandboxId')));
     await tester.pumpAndSettle();
 
     final updated = repository.savedProfiles.first;
     expect(updated.inheritManagerModState, isFalse);
-    expect(updated.enabledMods, {robotKitId, contentId, worldsId, toolsId});
+    expect(updated.enabledMods, {robotKitId, contentId, worldsId, sandboxId});
     expect(updated.selectedVersions.keys, containsAll(updated.enabledMods));
     expect(repository.savedProfiles.last, same(ordinary));
   });

@@ -102,10 +102,14 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --force --no-tags origin "$BASE_SHA"
+          # Derive the cutover tag from release policy instead of hard-coding it, so renumbering the
+          # product line cannot silently turn DCO enforcement into a permanent no-op.
+          cutover_version=$(jq -er '.versioning.productVersion' release/release-policy.json)
+          cutover_tag="v$cutover_version"
           git fetch --force origin \
-            refs/tags/v1.0.0-rc.1:refs/tags/v1.0.0-rc.1 2>/dev/null || true
-          if ! git rev-parse --verify refs/tags/v1.0.0-rc.1 >/dev/null 2>&1; then
-            echo 'DCO cutover tag does not exist yet; existing history is grandfathered.'
+            "refs/tags/$cutover_tag:refs/tags/$cutover_tag" 2>/dev/null || true
+          if ! git rev-parse --verify "refs/tags/$cutover_tag" >/dev/null 2>&1; then
+            echo "DCO cutover tag $cutover_tag does not exist yet; existing history is grandfathered."
             exit 0
           fi
           failures=0

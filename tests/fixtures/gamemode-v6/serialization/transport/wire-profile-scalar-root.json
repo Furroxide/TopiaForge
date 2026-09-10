@@ -1,0 +1,22 @@
+{
+  "id": "wire-profile-scalar-root",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive profile codec scalar root",
+  "transport": "profile",
+  "payload": true,
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

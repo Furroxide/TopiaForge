@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-null-schemaversion",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec null schemaversion",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": null,
+    "requestId": "request-01",
+    "sequence": 3,
+    "phase": "loading-world",
+    "nativeBusy": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

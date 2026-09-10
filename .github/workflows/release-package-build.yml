@@ -3,10 +3,6 @@ name: Unsigned release package dry-run build
 on:
   workflow_call:
     inputs:
-      source_sha:
-        description: "Exact commit to package."
-        required: true
-        type: string
       fail_on_missing_refs:
         description: "Fail when public managed references are unavailable."
         required: false
@@ -28,13 +24,22 @@ env:
 jobs:
   build-launchers:
     name: Build Flutter launcher artifacts
+    needs: preflight
     uses: ./.github/workflows/flutter-launcher-builds.yml
     with:
       artifact_retention_days: ${{ inputs.artifact_retention_days }}
-      source_sha: ${{ inputs.source_sha }}
 
   preflight:
     name: Verify release package inputs
+    # A reusable workflow sees its caller's github context. Never execute an
+    # independently supplied revision inside that caller's cache/artifact scope.
+    if: >-
+      github.repository == 'Furroxide/TopiaForge' &&
+      ((github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/heads/release/')) ||
+      (github.event_name == 'workflow_dispatch' &&
+      (github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/release/'))))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -43,7 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 
@@ -88,7 +93,7 @@ jobs:
       - name: Checkout exact source with LFS payloads
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 
@@ -117,8 +122,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --cache-key-only
 
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Restore-only. This job executes the admitted caller commit, so letting it
+      # write the cache would let that ref plant an entry the default branch
+      # later restores -- and a cache hit is currently accepted on a structural
+      # check alone, without re-asserting the pinned archive SHA-256. Entries
+      # are populated by ci.yml on trusted refs instead.
+      - name: Restore cached Robotopia managed refs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -133,7 +143,14 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --source public --require-latest
 
-      - name: Validate 12 SDK packages and all 7 C# harnesses
+      - name: Restore CLI dependencies for generated-package tests
+        shell: bash
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart pub get --enforce-lockfile
+
+      - name: Validate 11 SDK packages and all 7 C# harnesses
         shell: bash
         run: |
           set -euo pipefail
@@ -147,15 +164,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(dotnet --version)" = 10.0.301
-          dart pub get --enforce-lockfile
           dotnet build \
             "$GITHUB_WORKSPACE/src/TopiaForge.ModPackageValidator/TopiaForge.ModPackageValidator.csproj" \
             -c Release --nologo
           for output in "$RUNNER_TEMP/ecosystem-a" "$RUNNER_TEMP/ecosystem-b"; do
             dart run bin/topiaforge.dart pack --all --output "$output" --configuration Release
-            dart run bin/topiaforge.dart pack \
-              --project "$GITHUB_WORKSPACE/mods/TopiaForge.CreatorTools" \
-              --output "$output" --configuration Release
             dart run bin/topiaforge.dart unity pack-packages --output "$output/vpm"
             shopt -s nullglob
             packages=("$output"/*.topiaforgemod)
@@ -163,16 +176,12 @@ jobs:
             multiplayer_packages=(
               "$output"/io.github.furroxide.topiaforge.multiplayer-*.topiaforgemod
             )
-            creator_tools_packages=(
-              "$output"/io.github.furroxide.topiaforge.creatortools-*.topiaforgemod
-            )
             ui_gallery_packages=(
               "$output"/io.github.furroxide.topiaforge.uigallery-*.topiaforgemod
             )
-            test "${#packages[@]}" -eq 15
-            test "${#vpm_packages[@]}" -eq 3
+            test "${#packages[@]}" -eq 13
+            test "${#vpm_packages[@]}" -eq 2
             test "${#multiplayer_packages[@]}" -eq 1
-            test "${#creator_tools_packages[@]}" -eq 1
             test "${#ui_gallery_packages[@]}" -eq 0
             for package in "${packages[@]}"; do
               dart run bin/topiaforge.dart check package "$package"
@@ -228,7 +237,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Dart
@@ -237,8 +246,22 @@ jobs:
           sdk: "3.12.2"
 
       - name: Build x64 CLI
-        working-directory: apps/topiaforge_cli
+        shell: bash
         run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          trap topiaforge_cleanup_neutral_build_root EXIT
+          cp -R "${DART_HOME//\\//}" "$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk"
+          dart_bin="$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"
+          if [ "$RUNNER_OS" = Windows ]; then
+            dart_bin="$(cygpath -u "$dart_bin")"
+          fi
+          export PATH="$dart_bin:$PATH"
+          resolved_dart="$(command -v dart)"
+          test "${resolved_dart%.exe}" = "$dart_bin/dart"
+          [[ "$(dart --version 2>&1)" == 'Dart SDK version: 3.12.2 '* ]]
+          export PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"
+          cd "$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"
           dart pub get --enforce-lockfile
           dart compile exe bin/topiaforge.dart -o "$RUNNER_TEMP/topiaforge-macos-x64"
           chmod +x "$RUNNER_TEMP/topiaforge-macos-x64"
@@ -278,7 +301,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.sha }}
           lfs: true
           persist-credentials: false
 
@@ -325,8 +348,13 @@ jobs:
           --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj
           -c Release -- --cache-key-only
 
-      - name: Cache Robotopia managed refs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Restore-only. This job executes the admitted caller commit, so letting it
+      # write the cache would let that ref plant an entry the default branch
+      # later restores -- and a cache hit is currently accepted on a structural
+      # check alone, without re-asserting the pinned archive SHA-256. Entries
+      # are populated by ci.yml on trusted refs instead.
+      - name: Restore cached Robotopia managed refs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/robotopia-managed-refs-cache
           key: ${{ steps.refs-cache.outputs.key }}
@@ -355,9 +383,21 @@ jobs:
       - name: Prepare architecture-dispatched macOS CLI
         if: matrix.platform == 'macos'
         shell: bash
-        working-directory: apps/topiaforge_cli
         run: |
           set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          trap topiaforge_cleanup_neutral_build_root EXIT
+          cp -R "${DART_HOME//\\//}" "$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk"
+          dart_bin="$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"
+          if [ "$RUNNER_OS" = Windows ]; then
+            dart_bin="$(cygpath -u "$dart_bin")"
+          fi
+          export PATH="$dart_bin:$PATH"
+          resolved_dart="$(command -v dart)"
+          test "${resolved_dart%.exe}" = "$dart_bin/dart"
+          [[ "$(dart --version 2>&1)" == 'Dart SDK version: 3.12.2 '* ]]
+          export PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"
+          cd "$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"
           dart pub get --enforce-lockfile
           cli_dir="$RUNNER_TEMP/topiaforge-macos-cli"
           mkdir -p "$cli_dir"
@@ -371,6 +411,32 @@ jobs:
           x64_help="$(arch -x86_64 "$cli_dir/topiaforge-x64" --help)"
           grep -Fq 'TopiaForge CLI' <<< "$arm_help"
           grep -Fq 'TopiaForge CLI' <<< "$x64_help"
+
+      - name: Build neutral CLI
+        if: matrix.platform != 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"
+          trap topiaforge_cleanup_neutral_build_root EXIT
+          cp -R "${DART_HOME//\\//}" "$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk"
+          dart_bin="$TOPIAFORGE_NEUTRAL_ROOT/dart-sdk/bin"
+          if [ "$RUNNER_OS" = Windows ]; then
+            dart_bin="$(cygpath -u "$dart_bin")"
+          fi
+          export PATH="$dart_bin:$PATH"
+          resolved_dart="$(command -v dart)"
+          test "${resolved_dart%.exe}" = "$dart_bin/dart"
+          [[ "$(dart --version 2>&1)" == 'Dart SDK version: 3.12.2 '* ]]
+          export PUB_CACHE="$TOPIAFORGE_NEUTRAL_PUB_CACHE"
+          cd "$TOPIAFORGE_NEUTRAL_SOURCE/apps/topiaforge_cli"
+          dart pub get --enforce-lockfile
+          suffix=''
+          if [ "$RUNNER_OS" = Windows ]; then
+            suffix='.exe'
+          fi
+          temp="${RUNNER_TEMP//\\//}"
+          dart compile exe bin/topiaforge.dart -o "$temp/topiaforge-neutral-cli$suffix"
 
       - name: Download launcher artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -432,6 +498,12 @@ jobs:
           )
           if [ "${{ matrix.platform }}" = "macos" ]; then
             args+=(--prebuilt-cli "$temp/topiaforge-macos-cli")
+          else
+            suffix=''
+            if [ "$RUNNER_OS" = Windows ]; then
+              suffix='.exe'
+            fi
+            args+=(--prebuilt-cli "$temp/topiaforge-neutral-cli$suffix")
           fi
           dart run bin/topiaforge.dart "${args[@]}"
 
@@ -498,7 +570,7 @@ jobs:
             "$fake_game/Robotopia_Data/Managed"
           printf 'game fixture\n' >"$fake_game/Robotopia.exe"
           printf 'managed fixture\n' >"$fake_game/Robotopia_Data/Managed/UnityEngine.dll"
-          printf '{"id":"2309"}\n' >"$fake_game/installed-build.json"
+          printf '{"id":"2409"}\n' >"$fake_game/installed-build.json"
           game_for_cli="$fake_game"
           if [ "${{ matrix.platform }}" = "windows" ]; then
             game_for_cli="$(cygpath -w "$fake_game")"

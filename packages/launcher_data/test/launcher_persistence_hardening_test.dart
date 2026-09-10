@@ -172,7 +172,7 @@ void main() {
 
     final decoded = jsonDecode(await output.readAsString());
     expect(decoded, isA<Map<String, Object?>>());
-    expect((decoded as Map<String, Object?>)['schemaVersion'], 2);
+    expect((decoded as Map<String, Object?>)['schemaVersion'], 3);
     expect(((decoded['profile'] as Map<String, Object?>)['name']), 'Portable');
     expect(
       root.listSync().whereType<File>().where(
@@ -189,7 +189,7 @@ void main() {
     final profile = LauncherProfile(
       id: 'unsafe-world',
       name: 'Unsafe world',
-      worldSelection: WorldSelection(worldId: retired),
+      enabledMods: {retired},
     );
     final output = File(p.join(root.path, 'unsafe.topiaforgeprofile.json'));
 

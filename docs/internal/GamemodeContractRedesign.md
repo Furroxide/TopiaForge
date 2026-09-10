@@ -1,0 +1,621 @@
+# Gamemode contract redesign
+
+Status: implementation specification approved 5 September 2026; qualification
+contract updated 8 September 2026. The maintainer authorized unsigned Windows
+`0.1.0-rc.1` construction on that date; update signing, checksums, provenance,
+protected approval and release qualification remain required. This document
+supersedes the external ManifestV6 stage-1 brief and stage-2 prompt. It describes
+the required result, not a claim that the result exists. Read the
+[evidence ledger](gamemode-contract/Status.md) for implementation and verification
+status and the [execution prompts](gamemode-contract/prompts/README.md) for the
+next bounded slice.
+
+## 1. Authority and outcome
+
+The launcher, CLI, in-game manager, and direct-game startup must select and
+execute the same manifest-declared launch target against the exact effective
+profile. The runtime owns one session lifecycle, reports success only after
+world and gameplay readiness, and releases session resources even when startup
+or cleanup fails. Declarations that cannot execute remain visible with reasons.
+
+The accepted decisions below supersede contradictory historical prose:
+
+- V6 replaces V5. Retire V5 with rejecting schemas, actionable readers and
+  validators, and a one-time author migration. Do not preserve old binaries by
+  retaining the old gamemode startup API.
+- V6 contains worlds, gamemodes, and launch targets under `contributions`.
+  `options`, `optionValues`, and `sessionExtensions` are excluded. Do not restore
+  these speculative shapes while repairing the contract.
+- Retire `GamemodeHost`, observer-driven startup, imperative launch declarations,
+  and the two legacy transition preference/fallback flags at the scheduled
+  activation boundaries. Notifications observe committed state only.
+- The Worlds contract assembly keeps `AssemblyVersion` 0.1.0.0. The additive
+  constraint applies to types compiled into `TopiaForge.Mods.Abstractions`, not
+  every source file located in its directory. Amend `AGENTS.md` with that assembly
+  distinction when changing the Worlds API.
+- Preserve `.topiaforgemod`, the `topiaforge.mod.json` filename, package dependency
+  ordering, profiles, inbox, logs, enablement, and restart-required semantics.
+- Keep domain/resolution/state-machine logic Unity-free. Keep native adapters in
+  the manager and existing game-side provider modules. Flutter state remains
+  Bloc-based. Non-generated Dart files, including tests, stay at most 500 lines.
+- All native in-game presentation uses the TopiaForgeUi kit and its accessibility,
+  ownership, scrolling, and confirmation conventions. Clean-room rules apply.
+
+The [architecture report](../GamemodeArchitectureReport.md) is historical problem
+evidence. Its line numbers, proposed option shapes, and compatibility statements
+are not normative. The ledger maps GM-01 through GM-10 to acceptance evidence.
+
+## 2. Manifest and conformance contract
+
+Use the V6 schema from the reviewed source stack as the starting point, keeping
+the V5 common contract unchanged except for explicit V6 additions and retirement.
+Package IDs remain at most 64 ASCII characters; declaration IDs have the separate
+96-character ASCII grammar. Discovered-family declarations are capped at 94
+characters so `familyId + "." + nonemptySuffix` can form a concrete instance
+within 96 characters. Static world, gamemode and target IDs retain the 96-character
+limit. A trailing separator alone is never an instance. Preserve the top-level
+`gamemodes` retired sentinel; it must not become the declaration wrapper.
+
+Give these rules descriptive names in diagnostics/docs instead of unexplained
+historical R-numbers:
+
+| Rule | Required behavior |
+| --- | --- |
+| Ownership | A declaration belongs beneath `package.name + "."`, with a nonempty suffix, and cannot occupy a longer required/optional dependency namespace already known to that manifest. Reference ownership uses the longest matching self/required/optional prefix; an optional owner never qualifies through a shorter required owner. |
+| Uniqueness | Declaration IDs are unique across all contribution arrays, ordinal case-insensitive. |
+| Binding | Omitted assembly means entryAssembly; explicit assembly is a safe package-relative DLL present in hashes. |
+| Required references | Foreign manifest references belong to a required dependency, never an optional dependency. |
+| Typed local references | Target modes and world consent name gamemodes; policy default/allow name worlds. Missing or wrong-kind local references fail. |
+| Reachability | A mode without a local target is a warning, allowing another package to target it. |
+| Policy | Fixed prohibits allow and overrides; list includes its default; default and allow never name discovered families or instances. |
+| Pairing | Validate locally knowable spawn and transition requirements; validate complete cross-package pairings during resolution. |
+
+Before constructing typed models, both readers enforce JSON primitive types,
+presence, explicit-null rejection, conditional fields, bounds, and collection
+uniqueness. An empty value does not make a prohibited field absent. Never coerce
+strings to numbers, numbers to strings, or fractional sort keys to integers.
+ASCII identifiers/type names and Unicode character-count limits must agree with
+the schema. Optional false/zero values survive parsing and round trips.
+
+The harness is a prerequisite for validation fixes:
+
+- Enumerate every file in the fixture directory recursively, excluding only the
+  root `index.json` and root `fixture.schema.json`. Unexpected non-JSON files,
+  unknown/misspelled channel directories, misplaced cases, and root-level cases
+  fail rather than disappear.
+- Every manifest fixture states schema validity separately from shared semantic
+  reader expectations. Execute the actual pinned Dart JSON Schema validator on
+  the payload, including `contains`. Schema-valid semantic failures are normal.
+- Equivalent reader operations share accept/reject, error-code, and structured
+  normalized expectations. Successful cases require every contribution field,
+  including display metadata, to appear in normalization with presence preserved.
+  Do not add per-language exemptions to make a failing case pass.
+- Wire producer/consumer differences must be explicit operations, not a general
+  allowance for same-operation drift. Resolution reasons have ordered full tuples.
+- Keep full-run C# registration and index/envelope self-tests. Add a regression
+  before fixing each confirmed defect; show the intended pre-fix failure.
+
+## 3. Resolution and observations
+
+`EffectiveProfile` contains the exact enabled package selection, disabled installed
+packages for diagnostics, profile identity/revision, and installation facts. Build
+it from the installed package catalog and existing dependency planner; registry
+entries cannot supply declarations or satisfy an installed dependency. Preserve the full
+installation content-target set; compatibility accepts an intersection with that set,
+not whichever target happens to be enumerated first. Snapshot caller-owned collections.
+
+Keep duplicate selected identities visible and ambiguous; never choose the first or last
+package to make the profile appear valid. Load unrelated healthy packages without activating
+an ambiguous owner. Preserve malformed installed identities as diagnostic records with their
+original path, ID, version, enablement, and validation errors. An enabled rejected selection
+blocks gameplay before scene work while diagnostics and main-menu operations remain usable.
+A disabled rejected selection remains visible without blocking an otherwise valid launch.
+
+`LaunchRequest` selects a target and optional world/transition overrides.
+`LaunchResolution` returns either an immutable `LaunchPlan` or all determinable
+blocking reasons. A plan carries target, mode, concrete world ID, optional family
+ID, selected transition, sorted immutable package identities, and package digest.
+Keep the established deterministic package digest as a consistency check; package
+integrity remains the installer's hash/receipt responsibility. Never retain mutable
+caller lists, manifests, or selected declaration references underneath a precomputed
+digest. Snapshot identities and any plan data needed after resolution.
+
+Use an immutable transport descriptor distinct from an authoritative resolved plan.
+Its fields are `targetId`, original `request` (`targetId`, optional `worldOverride`
+and `transitionOverride`), `gamemodeId`, concrete `worldId`, optional
+`worldFamilyId`, `transition`, sorted `packages` (`id`, `version`), and `digest`.
+The canonical target identity is separate from the original request's spelling;
+they agree ordinally ignoring case. Preserve the original override presence so
+re-resolution does not mistake a default for a player override. Decoding a
+transport descriptor does not establish that it is launchable.
+
+The established digest is FNV-1a 64-bit over ordinally sorted `id@version` strings,
+UTF-16 low byte then high byte for each code unit, with one LF byte between entries,
+rendered as sixteen lowercase hexadecimal digits. Pin exact shared digest values;
+self-consistency alone cannot prove language parity. Revalidation compares exact
+sorted identities as well as digest, resolves the original request against the
+loaded immutable snapshots, and compares the newly resolved canonical tuple.
+
+Apply one longest-prefix owner lookup everywhere, including target selection and
+disabled-package diagnostics. A longer installed owner or manifest-known required
+or optional namespace cannot be bypassed to find a declaration in a shorter
+package, including when that longer package is absent. Distinct prefix lengths
+have a unique longest owner; a shorter declaration cannot make it ambiguous.
+Require one enabled identity per logical package. Duplicate selected identities
+or duplicate declarations within the actual owner are ambiguous; diagnostic
+disabled versions cannot compete with an enabled selection. Do not fabricate
+missing-declaration reasons when the owner itself is ambiguous.
+
+Required dependency edges and pinned ranges govern references written in
+manifests: target mode, policy default/allow, and explicit world consent. A
+player-selected open-policy world needs enabled ownership, compatibility, and
+consent; it does not create a target-to-world dependency requirement.
+
+`allowPlayerOverride` defaults to false. A policy's admissible set does not itself
+grant permission to change the default. Open-policy consent applies to the default
+too. Explicit `openTo` requires the world package's dependency on the mode owner
+and its satisfied range; `openToAnyCompatible` does not invent such a reference.
+
+Intersect world transitions with mode requirements. Auto prefers scene replacement
+then additive arena. Only `player-choice` admits a player transition override.
+Accumulate independent compatibility, consent, spawn, availability, and binding
+failures before returning. Sort by ordinal code, subject, then subject version and
+deduplicate complete tuples. Do not derive later checks from missing prerequisites.
+
+Discovered families are declarations; concrete instances are observations. A
+policy always has a static default. Only permitted player overrides can select an
+observed instance. The plan's world ID is that instance, never its family prefix.
+Emit WorldUnavailable for an explicitly unavailable selected world. Add
+NoAvailableTarget only when matching availability observations explicitly cover
+every world the request/policy admits. An explicit override restricts that set;
+absent override permission restricts it to the default. Unknown availability does
+not prove all candidates unavailable. Missing/disabled ownership, binding and static
+compatibility failures keep their specific reasons without this derived code.
+
+Replace diagnostic `catalog.json` with an atomic, versioned observation envelope
+containing profile identity/revision, producer package identity/version, effective
+package-set digest, observation revision, discovered instances, and availability
+reasons. Use the existing guarded filesystem boundaries and size limits. Ignore
+observations whose provenance no longer matches. Observations enrich/narrow current
+installed declarations; they never create launch targets or re-enable packages.
+First run offers static content and explains why discovered content is unavailable.
+
+At runtime, compare the immutable plan package set and digest to loaded packages,
+then resolve the requested tuple against loaded manifests and bindings before
+Preparing. A mismatch prevents all scene effects. Static resolution treats binding
+as unknown unless a matching observation records a failure; runtime binding is
+mandatory. Use GamemodeUnbound for modes and add WorldUnbound for failed provider
+bindings rather than pretending the declaration is absent. Runtime revalidation
+requires fresh binding evidence matching the profile identity, revision and digest.
+A mismatched binding snapshot produces PlanPackageSetMismatch without guessing
+which bindings failed. A matching snapshot must prove each selected binding;
+cached binding success cannot establish availability in the current process.
+
+## 4. Runtime ownership and execution
+
+Session-bound restart and main-menu commands validate the actual caller scope and current
+session before admission. Once accepted, tearing down the old scope must not cancel its own
+transition; retain explicit caller cancellation separately. A callback from a stale or stopped
+session is a terminal no-op, including while a newer session is busy: it must never reschedule
+itself indefinitely. Local content imports share session and native admission, retain owned
+results until teardown, and keep Busy until native drain even after public cancellation.
+Reservation failures, cancellation callbacks, returned-resource disposal, and lease release
+are independent cleanup attempts; aggregate their failures without losing the primary cause.
+
+Native adapters validate exact member signatures and readiness values before effects. Match
+parameter types and count, generic arity, visibility, staticness, and property accessors against
+verified metadata. Reject invalid transforms and malformed awaiters before gameplay startup;
+readiness failure still disposes returned world ownership. Metadata and synthetic engine tests
+do not establish actual scene timing, geometry, or spawn placement in the game.
+
+### Public Worlds interfaces
+
+- `IGamemodeFactory.StartAsync(IGamemodeSession, CancellationToken)` returns
+  `Task<OperationResult<IGamemodeController>>`. Remove the redundant factory mode
+  ID: the verified manifest declaration owns identity.
+- `IWorldContentProvider.LoadAsync(IWorldLoadContext, CancellationToken)` returns
+  `Task<OperationResult<IWorldInstance>>`.
+- `IWorldDiscoverySource` extends the provider with bounded asynchronous discovery
+  of immutable family-instance descriptors (identity and display metadata, never
+  targets). Cancellation/limits apply to discovery as well as loading.
+- `IWorldInstance` owns actual scene identity, optional placed content, resolved
+  spawn, and disposal. Native objects stay behind game-side adapters.
+- `IGamemodeSession` exposes immutable session/target/world identity, cancellation,
+  child lifetime, a session-scoped mod context, and session-bound stop, restart,
+  and return-to-menu operations. World load context carries the selected transition,
+  spawn policy, instance/family identity, and the world owner's scoped context.
+
+Bind only public, concrete types with public parameterless constructors from the
+declared package assembly. Verify exact interface compatibility and package/hash
+ownership without instantiating at catalog time. Create instances within the owned
+startup scope. Publish successful bindings and removals atomically; a fault blocks
+dependent targets with diagnostic attribution instead of hiding them.
+
+Discovery acquires an owner work lease before constructing a temporary child
+scope or a source. Each family receives its own scope and an explicit result
+budget; the package observation contains at most 4096 instances. Sources cannot
+use discovery scope access to reserve native scene transitions. Dispose the source
+and drain every family resource before atomically publishing the completed package
+observation. A malformed or failed family remains unavailable while independent
+valid families survive. A newer attempt or owner removal revokes publication from
+old callbacks. Cancellation requests do not abandon an ignoring callback: retain
+its scope and delay package teardown until it returns and cleanup completes. The
+manager requests discovery cancellation after 30 seconds and reports TimedOut only
+after drain; a timeout never turns an uncompleted callback into completed work.
+Caller and deadline cancellation invoke provider callbacks on the host dispatcher;
+throwing cancellation callbacks remain cleanup evidence rather than escaping the
+caller or timer thread. Cancellation combined with a cleanup fault reports failure
+and retains both reasons. The discovery work barrier preserves cleanup failures
+for package shutdown, including failures recorded before shutdown began. A handled
+family discovery error remains structured unavailability rather than a teardown fault.
+
+Create a unique session ID and child scope before any provider/factory callback.
+Rebuild resource-producing facades against that scope with unchanged package ID,
+paths, permissions, capability checks, and dependency visibility. Forward scoped
+events from the parent event source. Reusing services that captured the parent
+lifetime would preserve partial-start leaks even with a new Lifetime property.
+Parent unload cancels all children and waits for callback/native drain before
+package callbacks and service disposal. Native asset work is included: register
+bundle/prefab requests with the owning lifetime before engine allocation, independently
+of their public cancellation result. Complete ownership only after native completion
+and any late-result cleanup. A pending prefab request retains its backing bundle.
+Failed context construction must drain registered native work before releasing its
+parent registration, even when no initialized child context can be returned. A child asset facade may spawn from its
+own prefab or the explicitly attached parent package facade's prefab; sibling and
+foreign handles remain rejected. Spawned instances belong to the child, while the
+parent retains its prefab/bundle lifetime. Package registrations and session
+resources remain separate ownership categories.
+
+A failed package constructor or OnLoad retains its context and partial entrypoint
+in a cleanup transaction before cancellation can reenter the runtime. Drain its
+native assets and owned scene operation before OnUnload, lifetime disposal and
+service removal. Compose this pending-cleanup admission gate with session admission:
+both launch and direct scene requests remain Busy until cleanup releases ownership.
+Core scene requests enroll in the same owner native-work lifetime before dispatch.
+Their early caller outcome cannot erase a later engine or cleanup failure; expected
+operation failures already delivered to the caller do not become teardown failures.
+
+### Lifecycle and scene authority
+
+The single orchestrator commits `Idle -> Preparing -> LoadingWorld -> StartingMode
+-> Running -> Stopping`. Start completes successfully only at Running. A failed or
+cancelled launch has one operation outcome; a session has one terminal notification
+after stop. The terminal session is cancelled when cancellation prevents Running,
+failed when startup or cleanup faults, and successful after an ordinary Running
+session stops cleanly. It is emitted only after callback and native drain; an early
+cancelled launch outcome is separate. Notifications never start gameplay. Session
+handles reject stale IDs.
+`StopAsync` acknowledges acceptance of the captured session's stop request; terminal
+session outcome records completed cleanup. This distinction also lets startup code
+request and await its own stop without waiting for its own callback to return.
+Restart/menu operations still require the corresponding Running/Idle result and
+reject competing requests during startup.
+
+Validate a replacement before stopping a Running session. Preparing, loading,
+starting, stopping, and quarantined native work reject all competing requests as
+Busy/Conflict; there is no implicit queue or priority-based supersession. Preserve
+existing multiplayer authority policy when admitting a transition.
+
+One executor owns every framework scene dispatch: core scene API, Worlds, local
+worlds, restart, and main-menu. Reuse generation matching and late-arrival quarantine.
+Caller cancellation may finish its task but cannot release native busy ownership
+until the engine operation actually drains or reaches a terminal failure. An
+uncancellable load must not be treated as rolled back. Report an explicit recovery
+to a known menu state after irreversible failure.
+
+World adapters wait for scene completion, content placement, player readiness, and
+the declared spawn to be applied before gameplay starts. Missing/ambiguous authored
+markers fail startup. Implement generated Open Sandbox through its provider with
+the existing arena, environment, and kill plane; loading the UgcPlay host scene
+alone is not equivalent. Restore level and build-settings discovery sources.
+
+Teardown cancels session work before invoking extension disposers, then attempts
+every controller/content/resource/claim cleanup,
+aggregate failures, clear owned references before extension callbacks, and publish
+terminal notification in finally. Native scene changes apply sceneChangePolicy;
+they do not silently create another controller. Move pause actions and Sandbox
+creator-host registration into session scope. Free Play imposes no gameplay rules
+after world readiness and must work without the Sandbox package.
+
+## 5. Launcher, wire, state, and author tooling
+
+Home, Setup, CLI, and the manager overlay consume the same launch-target catalog
+and resolver. Offer only permitted world and transition changes. Keep unavailable
+saved choices visible with their reasons and explicit repair actions. Common
+presentation remains in Bloc/widgets and the UI kit; filesystem/process work stays
+in data services.
+
+Resolve again immediately before process creation. Reject a blocked target before
+writing a launch instruction or spawning a process. Preserve exact empty profiles,
+selected versions, and inherited manager state according to the existing package
+selection rules. Safe mode explicitly starts at main-menu.
+
+Profile launch wire version 4 replaces version 3. Every command carries a request
+ID, profile revision, immutable package identities and digest; its explicit command
+is main-menu or launch-target. Launch-target additionally carries a resolved plan
+descriptor whose package identities and digest must match the envelope. Main-menu
+forbids a plan. Existing profile enablement/pin/safe-mode fields remain explicit.
+For explicit non-safe-mode selections, enabled IDs equal the envelope package
+set. A pin for an actual envelope package must match its version; pins for disabled
+packages may remain. Safe mode preserves enabled preferences while carrying
+an empty package set and an explicit main-menu command. The main-menu command
+cannot fall through to remembered autoload. Only direct startup without a launcher command
+may use the manager's own remembered target. Consume the guarded one-shot request
+once; never modify a mod's config to convey launch intent.
+
+Write atomic request-correlated progress/outcome documents under manager staging.
+Expose them through the repository to Bloc/CLI and diagnostics. Process creation
+success is distinct from session readiness. Missing acknowledgement is
+unknown/unconfirmed, never proof of gameplay success. Runtime failures include
+structured reasons and retain request/session attribution. Do not accept arbitrary
+output paths from profile data.
+
+Inactive progress/outcome models land with slice 3, before their slice 7 filesystem
+consumers. Version-one outcomes require `kind` (`launch` or `session`), `requestId`,
+`sequence`, canonical `phase`, `status` (`succeeded`, `failed`, `cancelled`) and
+`blocks`, with optional `sessionId` and structured `error`. Only launch outcomes
+carry `command`. A successful launch-target outcome is Running with a session ID;
+a successful main-menu outcome is Idle without one. A terminal session outcome is
+Idle with a session ID. Retain launch acknowledgement separately from later session
+termination so teardown never overwrites the start result. Progress uses the same
+six lifecycle phases and ordered sequence; optional `nativeBusy` describes executor
+ownership independently instead of inventing a seventh lifecycle phase. Explicit
+nulls and empty values for present optional IDs are invalid on the wire.
+
+Process admission spans independent launcher and CLI instances for one install.
+Hold a guarded, nonblocking staging-file lease through preparation and process
+creation; release it on every exit. A complete process probe establishes absence;
+query failures, unreadable candidates and uncertain identities retain Busy.
+Compare canonical image paths, including install aliases and relative Wine targets.
+
+A Windows creation receipt captures PID, UTC creation time, exact native creation
+token and executable identity from the original suspended process handle before
+resuming its thread. A later PID lookup cannot establish initial ownership.
+Restart verifies and stops that same recorded generation through one held handle.
+On platforms without creation proof, retain process-start evidence but refuse
+owned restart; never manufacture ownership from a detached PID. Native Linux
+process verification requires pidfd support and glibc 2.36 or newer; its display
+UTC epoch stays stable within the launcher lifetime. Process exit without runtime
+acknowledgement or a terminal record remains unconfirmed. A successful main-menu
+acknowledgement does not require a terminal gameplay-session record.
+
+Bind progress to the authoritative process receipt's request, profile, revision,
+install, package digest, command and available process identity. Reject foreign,
+stale or changed-session callbacks. Launch and terminal outcomes are independently
+monotonic and may arrive out of order; retain both. Waiting for acknowledgement
+must not block the Bloc event queue that receives progress. Use monotonic deadlines.
+
+The launcher profile store and exported profiles use schema version 3; durable
+`launchSelection` has its own version 1. Profile revisions are nonnegative integers
+bounded by the shared wire limit. Preserve absent versus explicit legacy values
+before applying defaults. Reject malformed present arrays/maps/flags and duplicate
+package selections rather than coercing or dropping entries. Refuse a profile
+conversion without writing when numeric values cannot survive an exact JSON
+round trip. Fence stale whole-list saves so concurrent profile additions, edits
+and deletions cannot be erased or resurrected by another client.
+
+Malformed manager-state content is retained unchanged. Ordinary launcher commands
+remain blocked; explicit safe-mode main-menu can use an empty read-only recovery
+state. Do not rotate a stale backup over the primary or apply inbox/uninstall and
+durable overlay mutations during that recovery. Linked or nonordinary state and
+staging paths remain blocking; content recovery does not bypass filesystem guards.
+
+Version durable target selection and migrate prior profile/manager selections
+without losing unrelated state. A legacy mode/world tuple maps automatically only
+when exactly one current target represents it and its policy permits the selection.
+Otherwise retain the original tuple as unresolved. Never alias the retired Worlds
+Sandbox mode to Free Play or the creator mode. Offer target reselection or explicit
+main-menu as repair. Old diagnostic caches may be discarded.
+
+V3/V4/V5 manifest migration first validates original legacy entry types/indexes,
+then carries mechanically derivable data. Malformed legacy entries refuse even
+with --stub; author incompleteness is not permission to discard malformed data.
+Preserve unmodified JSON values and
+presence; document formatting changes honestly. Missing implementation, target,
+world, ownership, or spawn information requires author input. Do not invent values
+from entryType, configuration defaults, menu code, or filenames. Optional world
+requirements remain optional. Refusal writes nothing and names file/index/ID/field.
+Write successful migrations atomically too. With --stub, atomically write retained
+identities and x-migration-todo data while
+leaving genuinely required data absent so validation rejects packing/publication.
+
+Retire metadata-only --gamemode and mod add/remove gamemode interfaces with an
+early actionable error pointing at the gamemode template and contribution fields.
+Reject obsolete ModScaffoldOptions inputs before any directory/file creation.
+Generated template tests must load declarations through production binding and
+orchestration, not manually register the thing the template omitted.
+
+## 6. Sequential delivery
+
+All slices target dev and must be independently green. Reuse reviewed source
+commits from the unmerged stack without merging the old broken sequence. Preserve
+source branches and useful review history. Create each next branch only after the
+preceding slice merges. Fetch/compare before work, before each push, and after long
+builds; rebase rather than merge dev into feature branches. Explicitly name push
+targets. Stage owned paths only; never use git add -A in the shared environment.
+
+| Slice | Deliverable and activation boundary |
+| --- | --- |
+| 1 | This brief, status/evidence ledger, prompts, and corrected completion claims. |
+| 2 | Unused V6 schema/readers/validators and complete conformance; alias and first-party manifests remain V5. |
+| 3 | Corrected pure resolver, immutable plans, transport models/fixtures; no production switch. |
+| 4 | Scoped contexts, lifecycle machinery, shared scene executor, fault-injection tests. |
+| 5 | Bindings, real world providers/discovery/readiness, synthetic-package integration, and the native asset/core scene/failed-entry cleanup needed to own provider allocations. |
+| 6 | Atomic V6 alias/manifest/template flip, live declaration activation, consumer migration, old SDK startup API removal. |
+| 7 | Launcher/CLI/overlay target selection, preflight, wire/state migration, observations/outcomes. |
+| 7a | Separate release preparation: unsigned Windows policy, private-build prerequisites and detached exact-byte qualification; all publication gates preserved. |
+| 8a | V5 retirement, lossless author migration/refusal, obsolete model removal, complete manifest reference and authored-world validation fixes. |
+| 8b | Isolated acceptance admission, retained native ownership, schema3 evidence/release integration, and actual game/editor acceptance. |
+
+The release request adds slice 7a as a separately reviewable PR after launcher
+integration and before final acceptance. Slice 8 is re-cut into 8a and 8b because
+measured OS identity, guarded runtime acknowledgement and release-script admission
+form a separate reviewable change from manifest retirement. Preserve that prepared
+source, but create the 8b delivery branch only after 8a merges. Both require fresh
+CI against `dev`; neither local preparation nor integration substitutes for game evidence.
+RC1 is unsigned Windows x64 `0.1.0-rc.1`; update metadata remains Ed25519 signed.
+Separate private-build prerequisites from final release permission: the four
+non-game blocking gates must already have reviewed approval before building, and
+all five must be approved before publication. Final game approval binds the frozen
+source SHA and exact tested payload/handoff/evidence bytes through a detached
+strict contract. Never prefill approval to break the build/acceptance ordering
+cycle, promote rehearsal output, or repack qualified bytes. The
+[release-preparation prompt](gamemode-contract/prompts/07a-release-preparation.md)
+defines the bounded repair, qualification state machine and regression matrix.
+
+During slice 6 only, an internal old-wire adapter may translate an unambiguous
+legacy request into the new orchestrator. It is not another startup protocol and
+must disappear in slice 7. Keep templates functional until their declarations have
+a production consumer. Re-cut again if a slice exceeds a reviewable cohesive scope;
+record the changed boundary before expanding work.
+
+The old external briefs become supersession pointers. Internal execution prompts
+describe prerequisites/deliverables rather than embedding stale remote SHAs, check
+counts, permissions, or supposed permanent machine failures. The status ledger
+records observed evidence at an exact revision, separately from required behavior.
+
+ManifestV6.md becomes the complete public contract including common fields and
+deliberate exclusions. V5 remains a retirement/migration page. Correct active
+guides, compatibility policy, template READMEs, CLI help, website page catalog and
+navigation in the slice that changes their behavior. Derive README guide counts
+from the tree; internal documents do not add top-level guides.
+
+## 7. Acceptance and evidence
+
+Every slice records its changed-path scope, exact revision, test command/results,
+known limitations, and remaining integration dependencies. Tests must detect the
+defect before its fix. Do not claim a fresh build from a pre-existing binary probe.
+
+- Contract: required/present/null/wrong-type cases; every conditional branch;
+  ownership and dependency failures; 65/96/97-char IDs, 94/95/96-char discovery
+  families and nonempty instance suffixes; Unicode text boundaries;
+  full normalization; schema semantics; fixture omission/placement failures.
+- Resolution: input-order invariance; nested owners; denied overrides; open consent
+  and ranges; independent simultaneous failures; discovered instances; immutability;
+  package-set revalidation against loaded state.
+- Runtime: constructor/start allocations then throw; cancellation at every phase;
+  throwing cleanup; unload; stale callbacks; synchronous and late native completion;
+  shared scene admission; marker readiness; exactly one controller/outcome.
+- Launcher: no process on blocked plan; exact-empty/pinned/disabled profiles;
+  profile changes invalidating observations; explicit main-menu precedence; unknown
+  runtime acknowledgement; durable unresolved choices; template end-to-end loading.
+- Migration: all legacy selectors; malformed/mixed arrays; untouched values and
+  extensions; indexed diagnostics; atomic writes; invalid stubs; no-write failures.
+
+Run applicable `AGENTS.md` builds/tests, the freshly rebuilt seven-harness release
+surface verification, C# formatting verification, pinned Flutter Dart formatting
+and fatal-info analysis, Dart line-count audit, fixture/repository/legal audits,
+docs publication check, and Flutter tests/Windows build for application changes.
+Rebuild after changing embedded API baselines before any --no-build harness run.
+Use a bounded short PATH for Windows Flutter child processes when needed. Compare
+local launcher_data failures against the same clean revision/environment; never
+inherit the old seven-failure claim as a permanent exemption.
+
+Live acceptance uses an isolated profile and test content against the installed
+game, with user assistance for visual checks. Capture cold launch, generated arena
+geometry/spawn, both discovered sources, authored-marker maps, Zombies, Sandbox
+F5/pause, Free Play without Sandbox, restart, main-menu return, and injected
+startup/teardown faults. Record game build, package revisions, logs, outcomes, and
+what was actually observed. Do not overwrite a normal player's profile or save.
+Launcher-profile separation alone does not establish native-save isolation. Verify
+the actual loader, manager and native persistent-data roots before gameplay; use
+a separate native user environment when no supported save-root override exists.
+Retain the launched process identity and stop only that owned process.
+
+Acceptance uses an explicit private provisioning record before any staging,
+installation or launch writes. Read the primary process token and OS known
+folders; environment paths cannot substitute for them. Check the suspended
+child's original native handle before resume and constrain bootstrap configuration
+before native loader writes. The private schema-1 sidecar binds the exact V4
+profile bytes, request ID, challenge, provisioning-record hash, expected identity
+and four runtime roots. The plugin checks its actual identity/roots before manager
+persistence or package loading, consumes only the admitted profile and writes one
+correlated acknowledgement. Malformed/denied acceptance cannot fall through normal
+safe startup. Native cancellation does not grant permission to stop an unrelated
+process or discard a layout whose owned process may still be running.
+
+The private schema-3 acceptance result retains the full acknowledgement, its exact
+byte hash, the provisioning-record hash and confirmed owned-process exit. Runtime
+admission is separate from confirmed Running and the manual case matrix. Public
+qualification includes reviewed results and hashes without SID, paths or raw logs.
+
+
+Completion requires integrated slices, removed obsolete launch paths, published
+replacement guidance, passing automated evidence, and recorded game acceptance.
+Unavailable native-timing or visual checks stay explicitly pending.
+
+
+## 8. Exact candidate qualification
+
+Private preparation and permission to publish are separate assessments. The
+tracked register retains all twelve gates. `release validate-prerequisites
+--version <version> --target-sha <sha>` loads the exact Git blobs, requiring the
+four non-game blocking approvals and deferring only `P0-GAME-01`. Its successful
+status is `eligible-for-private-build`; it never returns a publishable decision.
+Git replacement refs and working-tree drift cannot change the resolved contracts.
+
+After the frozen payloads and aggregate handoff exist, actual acceptance and
+review produce two bounded, redacted JSON records in the candidate asset folder:
+
+- `release-candidate-readiness-v1.json`: schema identifier, canonical repository
+  `Furroxide/TopiaForge`, release version, exact lowercase source SHA, ready status,
+  all twelve gate rows, exact sorted payload name/positive integer size/SHA-256
+  records, and base readiness/schema/policy/catalog/contract/handoff/acceptance
+  digests. Only GAME may supersede its tracked row; the complete effective gate
+  register is validated again. Signed mode also requires
+  `handoffSignatureSha256`; unsigned mode omits that field and the P7S file.
+- `release-candidate-acceptance-v1.json`: the same source, contract, handoff and
+  payload identities; pinned game build; passed result; ten game cycles and
+  sixteen authoring cycles; every case from the tracked 36-case redesign matrix;
+  bound SDK/game/authoring receipts; isolated Windows-user or VM attestation; and
+  approved GAME evidence IDs, required roles, opaque `review:<id>` references and
+  evidence digests. No paths, host names, authentication data or raw logs belong
+  in the public record. Every reference must identify an actual reviewed record.
+
+Their complete schemas are
+`schemas/topiaforge.release-candidate-readiness-v1.schema.json` and
+`schemas/topiaforge.release-candidate-acceptance-v1.schema.json`. Decision input is
+limited to 128 KiB and acceptance input to 256 KiB. Duplicate JSON properties,
+unknown fields, wrong raw types, fractional integers, missing evidence and
+incomplete/failed cases are refused. The validator verifies evidence structure and
+bindings; it cannot establish a human reviewer's identity or manufacture consent.
+
+`contractSha256` hashes UTF-8 records consisting of the fixed tracked path, a NUL,
+its exact blob SHA-256 and LF, in ordinal path order. The path set is defined in
+`release_candidate_contract.dart`: readiness, policy, catalog and their schemas;
+both detached schemas; platform toolchains; pinned game-build metadata; and the
+SDK and redesign acceptance inventories. Missing/oversized blobs fail before
+buffering. Handoff verification reads an owned snapshot of these exact blobs.
+It cannot follow a candidate-supplied metadata path into the surrounding machine.
+
+The payload namespace is exactly the catalog platform archives plus declared
+mod/version packages. Generated metadata is a separate fixed namespace. Catalog
+`ready` means the inventory has been reviewed, never that release approval exists.
+Qualification rehashes actual payloads, verifies the archive's canonical ecosystem,
+and checks separately distributed mod bytes against that embedded ecosystem.
+Decision, acceptance, handoff, bundle and signed-mode P7S identities are reread
+before success; independently generated BOM/SBOM/update metadata/checksums remain
+downstream of qualification so there is no recursive hash dependency. Existing
+platform signature, timestamp, chain and package validation remains required;
+P7S hash identity does not replace CMS trust verification.
+
+The administrator lifecycle is `preflight -> platforms-built -> built -> accepted
+-> staged -> dispatch-requested -> published`. `qualify` validates the reviewed
+records and atomically freezes the complete normalized summary at `accepted`.
+Matching retries are idempotent; mismatched retries fail. Stage, dispatch and
+resume revalidate source and bytes. Accepted candidates cannot be rebuilt or
+repacked. Rehearsals are permanently non-publishable.
+
+Publication-grade `release validate-readiness --version <version> --target-sha
+<sha> --assets <dir>` requires detached qualification with no tracked-ready
+fallback. Metadata generation/verification binds the full qualification summary
+in BOM v4 and rejects source drift. Hosted verification downloads and validates
+human-owned candidate records before approval, compares the same decision and
+acceptance digests after protected approval, and verifies them again immediately
+before publication. The strict asset allowlist and uploader/no-replacement rules
+apply to both records. Ed25519 update signing remains mandatory in either Windows
+distribution mode.
+
+This specification does not close the live acceptance or human approval gates.
+The ledger distinguishes implemented machinery, connected callers, automated
+verification, and actual isolated game observations at each revision.

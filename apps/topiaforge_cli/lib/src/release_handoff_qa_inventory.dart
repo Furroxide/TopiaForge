@@ -84,23 +84,15 @@ _ReleaseQaCaseInventory _loadReleaseQaCaseInventory(
     throw StateError('Tagged live QA inventory must be a JSON object.');
   }
   final json = decoded.cast<String, Object?>();
-  final creator = (json['creatorAcceptance'] as Map?)?.cast<String, Object?>();
   if (json['schemaVersion'] != 1 ||
-      creator == null ||
-      creator['gameBuild'] != '$expectedGameBuildId' ||
-      creator['minimumLifecycleCycles'] is! int ||
-      (creator['minimumLifecycleCycles'] as int) < 10) {
+      json['gameBuild'] != '$expectedGameBuildId') {
     throw StateError('Tagged live QA inventory policy is invalid.');
   }
   final liveCases = _qaInventoryIds(json['cases'], 'live cases');
-  final creatorCases = _qaInventoryIds(creator['cases'], 'Creator cases');
   return _ReleaseQaCaseInventory(
     sha256: sha256.convert(bytes).toString(),
     liveCases: liveCases,
     liveCasesSha256: _qaCaseSetSha256(liveCases),
-    creatorCases: creatorCases,
-    creatorCasesSha256: _qaCaseSetSha256(creatorCases),
-    creatorMinimumCycles: creator['minimumLifecycleCycles']! as int,
   );
 }
 

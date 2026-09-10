@@ -1,6 +1,6 @@
 part of '../models.dart';
 
-enum _ManifestSchemaContract { v5 }
+enum _ManifestSchemaContract { v6 }
 
 _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
   if (!json.containsKey('schemaVersion')) {
@@ -15,20 +15,19 @@ _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
       "Manifest field 'schemaVersion' must be an integer.",
     );
   }
-  if (schemaVersion == 4) {
-    throw const FormatException(
-      'Manifest schemaVersion 4 was retired before TopiaForge 1.0. Run '
-      '`topiaforge migrate-manifest` to migrate to schemaVersion 5; omit '
+  if (schemaVersion == 4 || schemaVersion == 5) {
+    throw FormatException(
+      'Manifest schemaVersion $schemaVersion was retired before TopiaForge 1.0. Run '
+      '`topiaforge migrate-manifest` to migrate to schemaVersion 6; omit '
       'multiplayer for a standalone-only mod.',
     );
   }
   switch (schemaVersion) {
-    case ModManifest.manifestV5SchemaVersion:
-      return _ManifestSchemaContract.v5;
+    case ModManifest.manifestV6SchemaVersion:
+      return _ManifestSchemaContract.v6;
     default:
       throw FormatException(
-        'Unsupported manifest schemaVersion $schemaVersion; schemaVersion 5 '
-        'is required.',
+        'Unsupported manifest schemaVersion $schemaVersion; schemaVersion 6 is required.',
       );
   }
 }

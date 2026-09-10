@@ -29,10 +29,11 @@ namespace TopiaForge.Chronos
             public TimeMode Mode => service.Mode;
 
             public OperationResult<ITimeLease> Freeze(string usage, bool suspendPlayer = false) =>
-                Track(service.Freeze(consumerId, usage, suspendPlayer));
+                lifetime.IsStopping ? Stopping<ITimeLease>() : Track(service.Freeze(consumerId, usage, suspendPlayer));
 
             public OperationResult<ITimeLease> Slow(string usage, float scale)
             {
+                if (lifetime.IsStopping) return Stopping<ITimeLease>();
                 if (float.IsNaN(scale) || float.IsInfinity(scale) || scale < 0f || scale > 1f)
                 {
                     return OperationResult<ITimeLease>.Failure(
@@ -44,10 +45,11 @@ namespace TopiaForge.Chronos
             }
 
             public OperationResult<ITimeLease> ExemptPlayer(string usage) =>
-                Track(service.ExemptPlayer(consumerId, usage));
+                lifetime.IsStopping ? Stopping<ITimeLease>() : Track(service.ExemptPlayer(consumerId, usage));
 
             public OperationResult<ITimeLease> SetDriver(string usage, ITimeDriver driver)
             {
+                if (lifetime.IsStopping) return Stopping<ITimeLease>();
                 if (driver == null)
                 {
                     throw new ArgumentNullException(nameof(driver));
@@ -87,23 +89,16 @@ namespace TopiaForge.Chronos
                 try
                 {
                     return OperationResult<ITurnScheduler>.Success(
-                        new OwnerTurnScheduler(scheduler, lifetime.Track(scheduler)));
+                        new OwnerTurnScheduler(scheduler, lifetime.Track(scheduler), lifetime));
                 }
                 catch (ObjectDisposedException)
                 {
-                    scheduler.Dispose();
                     return OperationResult<ITurnScheduler>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
                 }
             }
 
             private OperationResult<ITimeLease> Track(ITimeLease lease)
             {
-                if (lifetime.IsStopping)
-                {
-                    lease.Dispose();
-                    return OperationResult<ITimeLease>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
-                }
-
                 try
                 {
                     return OperationResult<ITimeLease>.Success(
@@ -111,10 +106,12 @@ namespace TopiaForge.Chronos
                 }
                 catch (ObjectDisposedException)
                 {
-                    lease.Dispose();
                     return OperationResult<ITimeLease>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.");
                 }
             }
+
+            private static OperationResult<T> Stopping<T>() where T : notnull =>
+                OperationResult<T>.Failure(ModErrorCode.InvalidState, "The owning context is stopping.");
 
             private sealed class OwnerTimeLease : ITimeLease
             {
@@ -140,23 +137,25 @@ namespace TopiaForge.Chronos
             private sealed class OwnerTurnScheduler : ITurnScheduler
             {
                 private readonly ITurnScheduler scheduler;
+                private readonly IModLifetime lifetime;
                 private IDisposable? lifetimeLease;
 
-                public OwnerTurnScheduler(ITurnScheduler scheduler, IDisposable lifetimeLease)
+                public OwnerTurnScheduler(ITurnScheduler scheduler, IDisposable lifetimeLease, IModLifetime lifetime)
                 {
                     this.scheduler = scheduler;
                     this.lifetimeLease = lifetimeLease;
+                    this.lifetime = lifetime;
                 }
 
                 public TurnState State => scheduler.State;
                 public TurnActorId? CurrentActor => scheduler.CurrentActor;
                 public int ActorCount => scheduler.ActorCount;
                 public OperationResult<bool> Register(TurnActorId actor, float speed) =>
-                    scheduler.Register(actor, speed);
-                public OperationResult<bool> Unregister(TurnActorId actor) => scheduler.Unregister(actor);
-                public OperationResult<bool> BeginAction() => scheduler.BeginAction();
-                public OperationResult<bool> EndAction() => scheduler.EndAction();
-                public void Tick(float controlDeltaTime) => scheduler.Tick(controlDeltaTime);
+                    lifetime.IsStopping ? Stopping<bool>() : scheduler.Register(actor, speed);
+                public OperationResult<bool> Unregister(TurnActorId actor) => lifetime.IsStopping ? Stopping<bool>() : scheduler.Unregister(actor);
+                public OperationResult<bool> BeginAction() => lifetime.IsStopping ? Stopping<bool>() : scheduler.BeginAction();
+                public OperationResult<bool> EndAction() => lifetime.IsStopping ? Stopping<bool>() : scheduler.EndAction();
+                public void Tick(float controlDeltaTime) { if (!lifetime.IsStopping) scheduler.Tick(controlDeltaTime); }
 
                 public void Dispose()
                 {

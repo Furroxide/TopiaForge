@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
-using TopiaForge.UgcCompanion.Editor;
 using TopiaForge.VpmResolver;
 using TopiaForge.WorldCompanion.Editor;
 
@@ -15,11 +14,9 @@ namespace TopiaForge.ModManager.Tests
             var directory = Path.Combine(root, "unity-tooling-file-io");
             Directory.CreateDirectory(directory);
             WorldConfigSchemaRejectsPriorFormats();
-            UgcSeedSchemaRejectsPriorFormats();
             VpmPackageIdsRejectRetiredRoots();
             StableReadersRejectHostileInputs(directory);
             WorldPublicationRollsBackAsOneTransaction(directory);
-            SeedWritesAreAtomicAndRollbackSafe(directory);
             SourceContractsRemainWired();
             Console.WriteLine("UnityToolingFileIoTests passed.");
         }
@@ -35,16 +32,6 @@ namespace TopiaForge.ModManager.Tests
                 "world config with no schemaVersion must be rejected");
         }
 
-        private static void UgcSeedSchemaRejectsPriorFormats()
-        {
-            UgcCompanionSeedFileIo.RequireCurrentSeedSchema(2);
-            AssertThrows<InvalidDataException>(
-                () => UgcCompanionSeedFileIo.RequireCurrentSeedSchema(1),
-                "UGC seed schemaVersion 1 must be rejected");
-            AssertThrows<InvalidDataException>(
-                () => UgcCompanionSeedFileIo.RequireCurrentSeedSchema(0),
-                "UGC seed with no schemaVersion must be rejected");
-        }
 
         private static void VpmPackageIdsRejectRetiredRoots()
         {
@@ -85,8 +72,6 @@ namespace TopiaForge.ModManager.Tests
                 "world config reader should accept bounded strict UTF-8");
             Assert(VpmSafeFileReader.ReadStableUtf8(valid, 1024, "VPM manifest") == "{\"value\":1}",
                 "VPM reader should accept bounded strict UTF-8");
-            Assert(UgcCompanionSeedFileIo.ReadStableUtf8(valid, 1024, "UGC seed") == "{\"value\":1}",
-                "UGC seed reader should accept bounded strict UTF-8");
 
             var invalidUtf8 = Path.Combine(directory, "invalid-utf8.json");
             File.WriteAllBytes(invalidUtf8, new byte[] { 0xC3, 0x28 });
@@ -96,9 +81,6 @@ namespace TopiaForge.ModManager.Tests
             AssertThrows<InvalidDataException>(
                 () => VpmSafeFileReader.ReadStableUtf8(invalidUtf8, 1024, "VPM manifest"),
                 "VPM manifest must reject malformed UTF-8");
-            AssertThrows<InvalidDataException>(
-                () => UgcCompanionSeedFileIo.ReadStableUtf8(invalidUtf8, 1024, "UGC seed"),
-                "UGC seed must reject malformed UTF-8");
 
             var oversized = Path.Combine(directory, "oversized.json");
             File.WriteAllBytes(oversized, new byte[1025]);
@@ -119,9 +101,6 @@ namespace TopiaForge.ModManager.Tests
                 AssertThrows<InvalidDataException>(
                     () => VpmSafeFileReader.ReadStableUtf8(link, 1024, "VPM manifest"),
                     "VPM manifest must reject symbolic links");
-                AssertThrows<InvalidDataException>(
-                    () => UgcCompanionSeedFileIo.ReadStableUtf8(link, 1024, "UGC seed"),
-                    "UGC seed must reject symbolic links");
             }
 
             var race = Path.Combine(directory, "replacement-race.json");
@@ -141,14 +120,6 @@ namespace TopiaForge.ModManager.Tests
                     "VPM manifest",
                     () => File.WriteAllText(race, "{\"value\":2}", new UTF8Encoding(false))),
                 "VPM reader must detect same-length replacement races");
-            File.WriteAllText(race, "{\"value\":1}", new UTF8Encoding(false));
-            AssertThrows<IOException>(
-                () => UgcCompanionSeedFileIo.ReadStableUtf8(
-                    race,
-                    1024,
-                    "UGC seed",
-                    () => File.WriteAllText(race, "{\"value\":2}", new UTF8Encoding(false))),
-                "UGC seed reader must detect same-length replacement races");
         }
 
         private static void WorldPublicationRollsBackAsOneTransaction(string directory)
@@ -184,47 +155,6 @@ namespace TopiaForge.ModManager.Tests
             AssertNoTransactionFiles(directory);
         }
 
-        private static void SeedWritesAreAtomicAndRollbackSafe(string directory)
-        {
-            var seed = Path.Combine(directory, "TopiaForgeUgcCompanion.json");
-            File.WriteAllText(seed, "old seed");
-            AssertThrows<InvalidOperationException>(
-                () => UgcCompanionSeedFileIo.RewriteAtomicUtf8(
-                    seed,
-                    "old seed",
-                    "new seed",
-                    1024,
-                    "UGC seed",
-                    () => { },
-                    () => throw new InvalidOperationException("injected post-commit failure")),
-                "post-commit seed failures should surface");
-            Assert(File.ReadAllText(seed) == "old seed",
-                "post-commit failure must restore the previous seed");
-
-            AssertThrows<InvalidDataException>(
-                () => UgcCompanionSeedFileIo.RewriteAtomicUtf8(
-                    seed, "old seed", new string('x', 1025), 1024, "UGC seed"),
-                "oversized seed rewrites must fail before replacement");
-            Assert(File.ReadAllText(seed) == "old seed",
-                "rejected seed content must preserve the previous file");
-
-            UgcCompanionSeedFileIo.RewriteAtomicUtf8(seed, "old seed", "new seed", 1024, "UGC seed");
-            Assert(File.ReadAllText(seed) == "new seed", "valid seed rewrites should commit atomically");
-
-            AssertThrows<IOException>(
-                () => UgcCompanionSeedFileIo.RewriteAtomicUtf8(
-                    seed,
-                    "new seed",
-                    "applied seed",
-                    1024,
-                    "UGC seed",
-                    () => File.WriteAllText(seed, "newer CLI seed"),
-                    () => { }),
-                "seed rewrite must refuse to overwrite a concurrent CLI update");
-            Assert(File.ReadAllText(seed) == "newer CLI seed",
-                "concurrent seed replacement must win instead of being silently clobbered");
-            AssertNoTransactionFiles(directory);
-        }
 
         private static void SourceContractsRemainWired()
         {
@@ -237,10 +167,6 @@ namespace TopiaForge.ModManager.Tests
                 root,
                 "templates", "TopiaForge.UnityWorldTemplate", "Packages",
                 "io.github.furroxide.topiaforge.vpm-resolver", "Editor", "VpmResolver.cs"));
-            var seed = File.ReadAllText(Path.Combine(
-                root,
-                "templates", "unity-companion", "Packages",
-                "io.github.furroxide.topiaforge.ugc-companion", "Editor", "UgcCompanionSeed.cs"));
 
             Assert(world.Contains("WorldCompanionFileIo.ReadStableUtf8", StringComparison.Ordinal)
                    && world.Contains("WorldCompanionFileIo.RequireCurrentWorldConfigSchema(config.schemaVersion)", StringComparison.Ordinal)
@@ -253,14 +179,6 @@ namespace TopiaForge.ModManager.Tests
                    && !vpm.Contains("PackageIdPattern.IsMatch", StringComparison.Ordinal)
                    && !vpm.Contains("File.ReadAllText", StringComparison.Ordinal),
                 "embedded VPM inspection must use the safe regular-file reader");
-            Assert(seed.Contains("UgcCompanionSeedFileIo.ReadStableUtf8", StringComparison.Ordinal)
-                   && seed.Contains("UgcCompanionSeedFileIo.RequireCurrentSeedSchema(seed.schemaVersion)", StringComparison.Ordinal)
-                   && seed.Contains("UgcCompanionSeedFileIo.RewriteAtomicUtf8", StringComparison.Ordinal)
-                   && seed.Contains("Debug.LogError", StringComparison.Ordinal)
-                   && seed.Contains("throw new InvalidOperationException", StringComparison.Ordinal)
-                   && !seed.Contains("File.ReadAllText", StringComparison.Ordinal)
-                   && !seed.Contains("File.WriteAllText", StringComparison.Ordinal),
-                "UGC seed failures must be secure, atomic, and surfaced");
         }
 
         private static bool TryCreateSymbolicLink(string link, string target)

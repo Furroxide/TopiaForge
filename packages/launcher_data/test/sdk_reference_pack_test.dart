@@ -48,7 +48,7 @@ void main() {
     );
 
     expect(pack.version, '1.0.0');
-    expect(pack.gameVersion, '0.0.2309');
+    expect(pack.gameVersion, '0.0.2409');
     expect(pack.toolVersion, '1.0.0');
     expect(pack.packages, hasLength(2));
     expect(pack.feed.existsSync(), isTrue);

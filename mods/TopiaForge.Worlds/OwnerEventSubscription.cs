@@ -23,7 +23,8 @@ namespace TopiaForge.Worlds
             Action<T> handler,
             Action<Action<T>> subscribe,
             Action<Action<T>> unsubscribe,
-            Action onDisposed)
+            Action onDisposed,
+            Func<bool>? canInvoke = null)
         {
             this.handler = handler ?? throw new ArgumentNullException(nameof(handler));
             this.subscribe = subscribe ?? throw new ArgumentNullException(nameof(subscribe));
@@ -31,7 +32,7 @@ namespace TopiaForge.Worlds
             this.onDisposed = onDisposed ?? throw new ArgumentNullException(nameof(onDisposed));
             Wrapper = value =>
             {
-                if (Volatile.Read(ref disposed) == 0)
+                if (Volatile.Read(ref disposed) == 0 && (canInvoke == null || canInvoke()))
                 {
                     this.handler(value);
                 }

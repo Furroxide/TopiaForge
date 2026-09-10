@@ -1,6 +1,6 @@
 # Launcher updates
 
-TopiaForge `1.0.0-rc.1` introduces signed whole-package updates so a later
+TopiaForge `0.1.0-rc.1` introduces signed whole-package updates so a later
 candidate can validate an installed `rc.1` to `rc.2` upgrade. Updates are
 explicitly confirmed, never silent, and never elevate privileges.
 
@@ -85,25 +85,32 @@ appropriate to the already-installed trust root.
 
 ## `rc.2` validation procedure
 
-Before creating `1.0.0-rc.2`:
+Before creating `0.1.0-rc.2`:
 
 1. Reuse the existing Ed25519 update key; do not rotate it for this test.
-2. Confirm release policy still forbids every unsigned/ad-hoc code-signing
-   exception.
-3. Require Authenticode signing and timestamping for Windows.
+2. Review and record the next candidate's platform and distribution policy; RC1's
+   unsigned Windows authorization does not decide the next release's mode.
+3. Verify Windows output against that declared mode: exact pinned Authenticode
+   signatures/timestamps and handoff CMS when signed; proved unsigned executables
+   and no CMS asset/digest only when the reviewed policy explicitly permits unsigned.
+   Never infer unsigned mode from missing credentials.
 4. If macOS is added to that release, require Developer ID signing,
    notarization, and stapling before adding its archive to policy.
-5. Bump every catalogued product/component/package version and the launcher
-   build constant.
+5. Set the next product release version and launcher build constant. Version
+   changed components and packages independently, keeping their manifests and
+   catalog entries consistent with the artifacts being released.
 6. Build all archives from the exact protected release SHA.
 7. Generate and independently verify the signed update payload and sidecar.
-8. Install the immutable public `rc.1` archive on clean Windows and Linux
-   hosts.
-9. Use the in-app beta check, download, confirmation, helper swap, relaunch,
+8. Install the immutable public `rc.1` Windows archive on a clean Windows host.
+   RC1 has no Linux archive. If Linux is introduced in the next candidate, validate
+   it as a first installation with the required native/Proton acceptance; do not
+   claim a Linux upgrade or rollback from an unavailable RC1 package.
+9. On Windows, use the in-app beta check, download, confirmation, helper swap, relaunch,
    and health handshake to reach `rc.2`.
-10. Repeat with an injected startup failure and retain evidence that `rc.1`
+10. Repeat that Windows update with an injected startup failure and retain evidence that `rc.1`
     was restored with the failed `rc.2` package preserved.
 
-The `rc.2` release is blocked if any platform uses the `rc.1` exception, the
-signature is not accepted by an installed `rc.1`, the helper elevates, rollback
+The `rc.2` release is blocked if any platform violates its reviewed distribution
+policy, the update signature is not accepted by an installed Windows `rc.1`,
+the helper elevates, rollback
 fails, or the final package differs from the signed inventory.

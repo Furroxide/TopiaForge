@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Authors Condition="'$(Authors)' == ''">TopiaForge</Authors>
     <Description Condition="'$(Description)' == ''">TopiaForge V1 mod SDK contract package.</Description>
-    <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">MIT</PackageLicenseExpression>
+    <PackageLicenseExpression Condition="'$(PackageLicenseExpression)' == ''">AGPL-3.0-or-later</PackageLicenseExpression>
     <_TopiaForgeUsesDefaultReadme Condition="'$(PackageReadmeFile)' == ''">true</_TopiaForgeUsesDefaultReadme>
     <PackageReadmeFile Condition="'$(PackageReadmeFile)' == ''">README.md</PackageReadmeFile>
     <TopiaForgePackDefaultBuildTransitiveProps Condition="'$(TopiaForgePackDefaultBuildTransitiveProps)' == ''">true</TopiaForgePackDefaultBuildTransitiveProps>

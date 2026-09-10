@@ -23,18 +23,48 @@ test('complete Pages workflow has trusted CI, manual, and stable-release entrypo
   assert.match(build.if, /event == 'push'/u);
   assert.match(build.if, /head_branch == 'main'/u);
   assert.match(build.if, /startsWith\(github\.ref, 'refs\/tags\/v'\)/u);
-  const checkout = build.steps.find((step) => step.name === 'Checkout exact triggering revision');
-  assert.match(checkout.with.ref, /workflow_run\.head_sha/u);
-  assert.match(checkout.uses, /^actions\/checkout@9c091bb/u);
-  assert.equal(checkout.with.lfs, true);
+  const checkouts = build.steps.filter((step) => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkouts.length, 2);
+  assert.equal(checkouts[0].if, "github.event_name == 'workflow_run'");
+  assert.equal(checkouts[0].with.ref, 'refs/heads/main');
+  assert.equal(checkouts[0].with.repository, '${{ github.repository }}');
+  assert.equal(checkouts[1].if, "github.event_name == 'workflow_dispatch'");
+  assert.equal(checkouts[1].with.ref, '${{ github.sha }}');
+  assert.match(build.if, /head_repository.full_name == github.repository/u);
+  for (const checkout of checkouts) {
+    assert.match(checkout.uses, /^actions\/checkout@9c091bb/u);
+    assert.equal(checkout.with.lfs, true);
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
   const trustedSource = build.steps.find(
     (step) => step.name === 'Require a trusted Pages source',
   );
+  assert.ok(build.steps.indexOf(trustedSource) < build.steps.indexOf(checkouts[0]));
   assert.match(trustedSource.run, /refs\/heads\/main/u);
   assert.match(trustedSource.run, /releases\/tags\/\$SOURCE_TAG/u);
   assert.match(trustedSource.run, /\.immutable == true/u);
   assert.equal(build.permissions.contents, 'read');
   assert.equal(build.permissions.pages, 'read');
+});
+
+test('completed CI must match current protected main before repository execution', () => {
+  const steps = workflow.jobs['build-pages'].steps;
+  const checkoutIndex = steps.findIndex(
+    (step) => step.name === 'Checkout protected main for completed CI',
+  );
+  assert.ok(checkoutIndex >= 0);
+  const admission = steps[checkoutIndex + 1];
+  assert.equal(admission.name, 'Require completed CI to match protected main');
+  assert.equal(admission.if, "github.event_name == 'workflow_run'");
+  assert.equal(admission.env.EXPECTED_CI_SHA, '${{ github.event.workflow_run.head_sha }}');
+  assert.ok(admission.run.includes('[[ "$EXPECTED_CI_SHA" =~ ^[0-9a-f]{40}$ ]]'));
+  assert.ok(admission.run.includes(
+    'test "$(git --no-replace-objects rev-parse HEAD)" = "$EXPECTED_CI_SHA"',
+  ));
+  const localAction = steps.findIndex((step) => step.uses?.startsWith('./'));
+  assert.ok(checkoutIndex + 1 < localAction);
+  // A newer main commit may finish CI first; this check rejects the older run
+  // rather than publishing its stale documentation after the newer revision.
 });
 
 test('stable releases dispatch their exact immutable tags without checkout', () => {

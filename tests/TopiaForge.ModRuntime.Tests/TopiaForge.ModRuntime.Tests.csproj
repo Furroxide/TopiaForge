@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../TopiaForge.SecondTestMod/TopiaForge.SecondTestMod.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,8 +27,19 @@
     <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.UIModule.dll" Private="true" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../TopiaForge.BindingTestMod/TopiaForge.BindingTestMod.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../TopiaForge.GeneratedWorldsTestMod/TopiaForge.GeneratedWorldsTestMod.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../TopiaForge.BindingForwarderTestMod/TopiaForge.BindingForwarderTestMod.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
   <Target Name="CopySyntheticMod" AfterTargets="Build">
+    <Copy SourceFiles="../TopiaForge.GeneratedWorldsTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.GeneratedWorldsTestMod.dll" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="../TopiaForge.BindingTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.BindingTestMod.dll" DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="../TopiaForge.BindingForwarderTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.BindingForwarderTestMod.dll" DestinationFolder="$(OutDir)" />
     <Copy SourceFiles="..\TopiaForge.ValidTestMod\bin\$(Configuration)\netstandard2.1\TopiaForge.ValidTestMod.dll"
+          DestinationFolder="$(OutDir)" />
+    <Copy SourceFiles="../TopiaForge.SecondTestMod/bin/$(Configuration)/netstandard2.1/TopiaForge.SecondTestMod.dll"
           DestinationFolder="$(OutDir)" />
   </Target>
 </Project>

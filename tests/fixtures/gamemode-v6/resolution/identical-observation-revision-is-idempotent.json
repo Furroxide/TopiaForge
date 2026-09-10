@@ -1,0 +1,184 @@
+{
+  "id": "identical-observation-revision-is-idempotent",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "identical observation revision is idempotent",
+  "profile": {
+    "packages": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.worlds",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.level",
+                "name": "level",
+                "content": {
+                  "kind": "discovered",
+                  "implementation": {
+                    "type": "Fixture.LevelSource"
+                  }
+                },
+                "transitions": [
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              },
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena",
+                  "scene-replacement"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ],
+            "gamemodes": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+                "title": "menu",
+                "gamemode": "io.github.furroxide.topiaforge.worlds.freeplay",
+                "world": {
+                  "policy": "open",
+                  "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ]
+  },
+  "request": {
+    "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+    "worldOverride": "io.github.furroxide.topiaforge.worlds.level.city"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "worldId": "io.github.furroxide.topiaforge.worlds.level.city",
+        "worldFamilyId": "io.github.furroxide.topiaforge.worlds.level",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+          "worldOverride": "io.github.furroxide.topiaforge.worlds.level.city"
+        },
+        "packages": [
+          {
+            "id": "io.github.furroxide.topiaforge.worlds",
+            "version": "0.1.0"
+          }
+        ],
+        "digest": "b120af2b5ac73450"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "gamemodeId": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "worldId": "io.github.furroxide.topiaforge.worlds.level.city",
+        "worldFamilyId": "io.github.furroxide.topiaforge.worlds.level",
+        "transition": "scene-replacement",
+        "request": {
+          "targetId": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+          "worldOverride": "io.github.furroxide.topiaforge.worlds.level.city"
+        },
+        "packages": [
+          {
+            "id": "io.github.furroxide.topiaforge.worlds",
+            "version": "0.1.0"
+          }
+        ],
+        "digest": "b120af2b5ac73450"
+      }
+    }
+  },
+  "observation": {
+    "envelopes": [
+      {
+        "schemaVersion": 1,
+        "profileId": "fixture",
+        "profileRevision": 1,
+        "producer": {
+          "id": "io.github.furroxide.topiaforge.worlds",
+          "version": "0.1.0"
+        },
+        "packageSetDigest": "b120af2b5ac73450",
+        "observationRevision": 1,
+        "discoveredWorlds": [
+          {
+            "id": "io.github.furroxide.topiaforge.worlds.level.city",
+            "familyId": "io.github.furroxide.topiaforge.worlds.level",
+            "name": "Observed instance"
+          }
+        ],
+        "availability": []
+      },
+      {
+        "schemaVersion": 1,
+        "profileId": "fixture",
+        "profileRevision": 1,
+        "producer": {
+          "id": "io.github.furroxide.topiaforge.worlds",
+          "version": "0.1.0"
+        },
+        "packageSetDigest": "b120af2b5ac73450",
+        "observationRevision": 1,
+        "discoveredWorlds": [
+          {
+            "id": "io.github.furroxide.topiaforge.worlds.level.city",
+            "familyId": "io.github.furroxide.topiaforge.worlds.level",
+            "name": "Observed instance"
+          }
+        ],
+        "availability": []
+      }
+    ]
+  }
+}

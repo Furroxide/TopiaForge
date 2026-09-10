@@ -1,0 +1,79 @@
+{
+  "id": "v6-model-missing-content",
+  "channel": "serialization",
+  "kind": "manifest-model-rejects",
+  "summary": "Programmatic DTO validation rejects missing-content.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.arena",
+          "name": "Arena",
+          "content": {
+            "kind": "bundle",
+            "bundle": "Content/arena.bundle",
+            "prefab": "Arena"
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.survival",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.play",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        }
+      ]
+    }
+  },
+  "schemaOutcome": "accept",
+  "modelMutation": "missing-content",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    }
+  }
+}

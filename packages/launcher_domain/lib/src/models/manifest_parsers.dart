@@ -16,14 +16,3 @@ List<ModDependency> _dependencyMapList(Object? value, {bool optional = false}) {
       )
       .toList(growable: false);
 }
-
-List<GamemodeDefinition> _gamemodeList(Object? value) {
-  if (value is! List) {
-    return const [];
-  }
-
-  return value
-      .whereType<Map>()
-      .map((item) => GamemodeDefinition.fromJson(_objectMap(item)))
-      .toList(growable: false);
-}

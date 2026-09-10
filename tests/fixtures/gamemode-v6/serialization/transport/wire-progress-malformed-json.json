@@ -1,0 +1,22 @@
+{
+  "id": "wire-progress-malformed-json",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Strict progress malformed-json",
+  "transport": "progress",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  },
+  "wireJson": "{\"schemaVersion\":1,"
+}

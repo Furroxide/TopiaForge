@@ -36,16 +36,33 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-String _worldNameFor(LauncherState state, WorldSelection selection) {
-  final worlds = state.worldCatalog.worlds;
-  for (final world in worlds) {
-    if (world.id == selection.worldId) {
-      return world.name;
-    }
+String _launchSelectionLabel(LauncherState state, LauncherProfile profile) {
+  if (profile.launchSettings.safeMode) return 'Main menu (safe mode)';
+  final selection = _visibleLaunchSelection(state, profile);
+  if (selection.kind == LaunchSelectionKind.mainMenu) return 'Main menu';
+  if (selection.kind == LaunchSelectionKind.unresolvedLegacy) {
+    return 'Unavailable launch selection';
   }
-  return worlds.isEmpty ? 'Default world' : worlds.first.name;
+  final id = selection.request!.targetId;
+  for (final target
+      in state.previewFor(profile)?.targets ?? const <LaunchTargetChoice>[]) {
+    if (target.id == id) return target.title;
+  }
+  return 'Unavailable: $id';
 }
 
 int _updatesAvailable(LauncherState state) {
   return state.registryMods.where((mod) => mod.updateAvailable).length;
+}
+
+LaunchSelection _visibleLaunchSelection(
+  LauncherState state,
+  LauncherProfile profile,
+) {
+  final requested = profile.launchSelection;
+  final effective = state.previewFor(profile)?.effectiveSelection;
+  return requested.kind == LaunchSelectionKind.unresolvedLegacy &&
+          effective?.kind == LaunchSelectionKind.target
+      ? effective!
+      : requested;
 }

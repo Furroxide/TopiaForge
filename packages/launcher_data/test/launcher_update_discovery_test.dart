@@ -23,7 +23,7 @@ void main() {
   });
 
   test('discovers a newer beta only after signature verification', () async {
-    await _publishFixture(transport, key, version: '1.0.0-rc.2');
+    await _publishFixture(transport, key, version: '0.1.0-rc.2');
     final repository = LocalLauncherUpdateRepository(
       dataRoot: root.path,
       transport: transport,
@@ -32,20 +32,20 @@ void main() {
     addTearDown(repository.dispose);
 
     final status = await repository.checkForUpdate(
-      currentVersion: '1.0.0-rc.1',
+      currentVersion: '0.1.0-rc.1',
       channel: LauncherUpdateChannel.beta,
       force: true,
     );
 
     expect(status.phase, LauncherUpdatePhase.available);
-    expect(status.candidate?.version, '1.0.0-rc.2');
+    expect(status.candidate?.version, '0.1.0-rc.2');
     expect(status.candidate?.signingKeyId, key.publicKey.id);
     expect(
       transport.fetched,
       containsAll([
         LocalLauncherUpdateRepository.releasesApi,
-        _assetUri('1.0.0-rc.2', 'topiaforge-update-v1.json'),
-        _assetUri('1.0.0-rc.2', 'topiaforge-update-v1.json.sig'),
+        _assetUri('0.1.0-rc.2', 'topiaforge-update-v1.json'),
+        _assetUri('0.1.0-rc.2', 'topiaforge-update-v1.json.sig'),
       ]),
     );
   });
@@ -53,7 +53,7 @@ void main() {
   test(
     'stable channel ignores prereleases without fetching their payload',
     () async {
-      await _publishFixture(transport, key, version: '1.0.0-rc.2');
+      await _publishFixture(transport, key, version: '0.1.0-rc.2');
       final repository = LocalLauncherUpdateRepository(
         dataRoot: root.path,
         transport: transport,
@@ -62,7 +62,7 @@ void main() {
       addTearDown(repository.dispose);
 
       final status = await repository.checkForUpdate(
-        currentVersion: '1.0.0-rc.1',
+        currentVersion: '0.1.0-rc.1',
         channel: LauncherUpdateChannel.release,
         force: true,
       );
@@ -76,7 +76,7 @@ void main() {
     await _publishFixture(
       transport,
       key,
-      version: '1.0.0-rc.2',
+      version: '0.1.0-rc.2',
       signedReleaseUrl:
           'https://github.com/furroxide/TopiaForge/releases/tag/v1.0.0-rc.3',
     );
@@ -88,16 +88,16 @@ void main() {
     addTearDown(repository.dispose);
 
     final mismatch = await repository.checkForUpdate(
-      currentVersion: '1.0.0-rc.1',
+      currentVersion: '0.1.0-rc.1',
       channel: LauncherUpdateChannel.beta,
       force: true,
     );
     expect(mismatch.phase, LauncherUpdatePhase.failed);
     expect(mismatch.message, contains('does not match its GitHub release'));
 
-    await _publishFixture(transport, key, version: '1.0.0-rc.2');
+    await _publishFixture(transport, key, version: '0.1.0-rc.2');
     final signatureUri = _assetUri(
-      '1.0.0-rc.2',
+      '0.1.0-rc.2',
       'topiaforge-update-v1.json.sig',
     );
     final changedSignature = Uint8List.fromList(
@@ -113,7 +113,7 @@ void main() {
       utf8.encode('${const JsonEncoder.withIndent('  ').convert(sidecar)}\n'),
     );
     final tampered = await repository.checkForUpdate(
-      currentVersion: '1.0.0-rc.1',
+      currentVersion: '0.1.0-rc.1',
       channel: LauncherUpdateChannel.beta,
       force: true,
     );
@@ -131,16 +131,16 @@ void main() {
     addTearDown(repository.dispose);
     expect(
       (await repository.checkForUpdate(
-        currentVersion: '1.0.0-rc.1',
+        currentVersion: '0.1.0-rc.1',
         channel: LauncherUpdateChannel.beta,
         force: true,
       )).phase,
       LauncherUpdatePhase.available,
     );
 
-    await _publishFixture(transport, key, version: '1.0.0-rc.2');
+    await _publishFixture(transport, key, version: '0.1.0-rc.2');
     final replay = await repository.checkForUpdate(
-      currentVersion: '1.0.0-rc.1',
+      currentVersion: '0.1.0-rc.1',
       channel: LauncherUpdateChannel.beta,
       force: true,
     );
@@ -159,7 +159,7 @@ void main() {
     addTearDown(repository.dispose);
 
     final status = await repository.checkForUpdate(
-      currentVersion: '1.0.0-rc.1',
+      currentVersion: '0.1.0-rc.1',
       channel: LauncherUpdateChannel.beta,
       force: true,
     );
@@ -188,7 +188,7 @@ Future<void> _publishFixture(
       'version': version,
       'tag': signedTag ?? tag,
       'channel': 'beta',
-      'minimumUpdaterVersion': '1.0.0-rc.1',
+      'minimumUpdaterVersion': '0.1.0-rc.1',
       'releaseUrl': signedReleaseUrl ?? 'https://github.com/furroxide/TopiaForge/releases/tag/$tag',
       'platforms': {
         for (final entry in const {'windows-x64': (asset: 'TopiaForge-windows-x64.zip', layout: 'portable-root'), 'linux-x64': (asset: 'TopiaForge-linux-x64.zip', layout: 'portable-root'), 'macos-universal': (asset: 'TopiaForge-macos-universal.zip', layout: 'app-bundle')}.entries) entry.key: {'assetName': entry.value.asset, 'url': _assetUri(version, entry.value.asset).toString(), 'sha256': archiveHash, 'size': 4096, 'entryCount': 10, 'expandedSize': 8192, 'installLayout': entry.value.layout},

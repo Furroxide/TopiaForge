@@ -301,7 +301,7 @@ class _RepairHarness {
         ArchiveFile.string(
           'topiaforge.mod.json',
           jsonEncode({
-            'schemaVersion': 5,
+            'schemaVersion': 6,
             'name': id,
             'displayName': id,
             'version': version,

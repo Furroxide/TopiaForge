@@ -16,7 +16,6 @@ namespace TopiaForge.ModManager.Tests
             TestGlobalIsolationRevocationRestoresOwnedState();
             TestGraphStopLeavesManualSpawn();
             TestContentSourceUnloadReconcilesRoster();
-            TestGlobalHostEligibilityAndRemoteJoinCleanup();
             Console.WriteLine("CreatorWorkbenchLifecycleTests passed.");
         }
 
@@ -272,87 +271,6 @@ namespace TopiaForge.ModManager.Tests
             workbench.Dispose();
             context.Dispose();
             context.AssertNoLeaks();
-        }
-
-        private static void TestGlobalHostEligibilityAndRemoteJoinCleanup()
-        {
-            using var context = CreateGameplayContext();
-            using var content = new FakeCreatorContentService(context.Lifetime);
-            using var multiplayer = MultiplayerTestRig.CreateListenServer();
-            var robots = new FakeRobotKit(context.Lifetime);
-            var worlds = new FakeWorldGamemodeService(context.Lifetime);
-            var worldExtension = context.Extensions.Register<IWorldGamemodeService>(worlds).Value!;
-            var multiplayerExtension = context.Extensions.Register<IMultiplayerSession>(multiplayer.Server.Session).Value!;
-            var router = new PassiveCreatorRouter();
-            using var host = new GlobalCreatorToolsHost(
-                context,
-                new CreatorToolsConfig(),
-                content,
-                router,
-                robots.Agents);
-
-            Assert(!host.CanOpen(new CreatorToolOpenContext(string.Empty))
-                && !host.CanOpen(new CreatorToolOpenContext(GameScenes.MainMenuSceneName))
-                && host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "global host should require a stable non-menu gameplay scene");
-
-            var worldRegistration = worlds.RegisterWorld(new WorldDefinition(
-                "test.world",
-                "Test world",
-                "Creator eligibility fixture.",
-                "RobotopiaCity")).Value!;
-            var modeRegistration = worlds.RegisterGamemode(new GamemodeDefinition(
-                "test.mode",
-                "Test mode",
-                "Creator eligibility fixture.")).Value!;
-            worlds.AutoCompleteLoads = false;
-            var transition = worlds.LoadAsync(new WorldLoadRequest("test.world", "test.mode"));
-            Assert(!host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "global host should reject an in-flight Worlds transition");
-            Assert(worlds.CompletePendingLoad() && transition.Result.Succeeded
-                && !host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "global host should reject an active Worlds gamemode session");
-            worlds.EndSession(WorldSessionEndReason.EndedByGamemode);
-
-            Assert(host.Open(new CreatorToolOpenContext("RobotopiaCity")).Succeeded
-                && host.IsOpen
-                && content.ActiveSessionCount == 1
-                && context.LocalPlayer.ActiveControlLeaseCount == 1,
-                "single-local interactive standalone/listen-server state should permit the global host");
-            multiplayer.AddRemoteClient("remote-creator-test");
-            Assert(!host.IsOpen
-                && content.ActiveSessionCount == 0
-                && context.LocalPlayer.ActiveControlLeaseCount == 0
-                && !host.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "a connected remote participant should fail closed and restore an already-open global session");
-
-            host.Dispose();
-            modeRegistration.Dispose();
-            worldRegistration.Dispose();
-            multiplayerExtension.Dispose();
-            worldExtension.Dispose();
-            context.Dispose();
-            context.AssertNoLeaks();
-
-            using var headlessContext = CreateGameplayContext();
-            using var headlessContent = new FakeCreatorContentService(headlessContext.Lifetime);
-            using var dedicated = MultiplayerTestRig.CreateDedicatedServer();
-            var headlessWorlds = new FakeWorldGamemodeService(headlessContext.Lifetime);
-            var headlessWorldExtension = headlessContext.Extensions.Register<IWorldGamemodeService>(headlessWorlds).Value!;
-            var headlessMultiplayerExtension = headlessContext.Extensions.Register<IMultiplayerSession>(dedicated.Server.Session).Value!;
-            using var headlessHost = new GlobalCreatorToolsHost(
-                headlessContext,
-                new CreatorToolsConfig(),
-                headlessContent,
-                new PassiveCreatorRouter(),
-                new FakeRobotKit(headlessContext.Lifetime).Agents);
-            Assert(!headlessHost.CanOpen(new CreatorToolOpenContext("RobotopiaCity")),
-                "headless multiplayer processes should never expose the global creator UI");
-            headlessHost.Dispose();
-            headlessMultiplayerExtension.Dispose();
-            headlessWorldExtension.Dispose();
-            headlessContext.Dispose();
-            headlessContext.AssertNoLeaks();
         }
 
         private static FakeModContext CreateGameplayContext()

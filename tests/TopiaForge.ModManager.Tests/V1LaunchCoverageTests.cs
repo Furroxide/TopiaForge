@@ -18,12 +18,11 @@ namespace TopiaForge.ModManager.Tests
         {
             typeof(IModContext).Assembly,
             typeof(IRobotAgentService).Assembly,
-            typeof(IWorldGamemodeService).Assembly,
+            typeof(IWorldSessionService).Assembly,
             typeof(ITimeControlService).Assembly,
             typeof(ICreatorContentService).Assembly,
             typeof(IMultiplayerSession).Assembly,
             typeof(IPromptOverrideRegistry).Assembly,
-            typeof(IUgcLiveSyncService).Assembly,
             typeof(FakeModContext).Assembly
         };
 
@@ -35,7 +34,6 @@ namespace TopiaForge.ModManager.Tests
             "src/TopiaForge.Mods.Multiplayer/TopiaForge.Mods.Multiplayer.csproj",
             "src/TopiaForge.Mods.Prompts/TopiaForge.Mods.Prompts.csproj",
             "src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj",
-            "src/TopiaForge.Mods.Ugc/TopiaForge.Mods.Ugc.csproj",
             "src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj",
             "src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj",
             "src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj"
@@ -93,7 +91,7 @@ namespace TopiaForge.ModManager.Tests
                 acceptanceSource,
                 requiredCycles);
 
-            var harness = File.ReadAllText(harnessPath);
+            var harness = ReadDartLibrarySources(harnessPath);
             var acceptanceCommand = File.ReadAllText(acceptanceCommandPath);
             Assert(harness.Contains("options.requiredCases.isEmpty", StringComparison.Ordinal)
                    && harness.Contains("spec.caseIds", StringComparison.Ordinal)
@@ -172,6 +170,30 @@ namespace TopiaForge.ModManager.Tests
             Console.WriteLine("All V1 launch coverage tests passed.");
         }
 
+        private static string ReadDartLibrarySources(string libraryPath)
+        {
+            var library = File.ReadAllText(libraryPath);
+            var sources = new List<string> { library };
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var directory = Path.GetDirectoryName(libraryPath)!;
+            // Follow only actual part directives, never similarly named files that are
+            // not compiled into this production library. Each part must point back.
+            foreach (Match directive in Regex.Matches(library,
+                @"^\s*part\s+['""](?<name>[^'""]+)['""]\s*;", RegexOptions.Multiline))
+            {
+                var name = directive.Groups["name"].Value;
+                Assert(Regex.IsMatch(name, @"\A[a-z][a-z0-9_]*\.dart\z") && names.Add(name),
+                    "acceptance harness parts must be unique immediate Dart files: " + name);
+                var part = File.ReadAllText(Path.Combine(directory, name));
+                Assert(Regex.IsMatch(part,
+                    @"^\s*part\s+of\s+['""]" + Regex.Escape(Path.GetFileName(libraryPath)) + @"['""]\s*;",
+                    RegexOptions.Multiline),
+                    "acceptance harness part must belong to its production library: " + name);
+                sources.Add(part);
+            }
+            return string.Join("\n", sources);
+        }
+
         private static void ValidateAcceptanceProbeMappings(
             IReadOnlyList<JsonElement> cases,
             string source)
@@ -197,7 +219,6 @@ namespace TopiaForge.ModManager.Tests
             string manifestPath)
         {
             const string caseId = "integration.provider-scope";
-            const string ugcProviderId = "io.github.furroxide.topiaforge.ugc.livesync";
             const string missingProviderId = "dev.topiaforge.sdk-acceptance.missing-provider";
             var acceptanceCase = cases.Single(value =>
                 string.Equals(RequiredText(value, "id"), caseId, StringComparison.Ordinal));
@@ -207,7 +228,6 @@ namespace TopiaForge.ModManager.Tests
             Assert(behaviors.SetEquals(new[]
                 {
                     "required-provider-singletons",
-                    "optional-present-provider",
                     "optional-absent-nonblocking",
                     "singleton-conflict",
                     "multiple-cardinality",
@@ -220,7 +240,6 @@ namespace TopiaForge.ModManager.Tests
             {
                 "Context.Extensions.GetAll<ITimeControlService>()",
                 "Context.Extensions.GetAll<ICreatorContentService>()",
-                "Context.Extensions.GetAll<IUgcLiveSyncService>()",
                 "Context.Extensions.GetAll<IMissingOptionalProvider>()",
                 "ModErrorCode.Conflict",
                 "ExtensionCardinality.Multiple",
@@ -232,10 +251,6 @@ namespace TopiaForge.ModManager.Tests
             using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
             var required = manifest.RootElement.GetProperty("dependencies");
             var optional = manifest.RootElement.GetProperty("optionalDependencies");
-            Assert(!required.TryGetProperty(ugcProviderId, out _),
-                "the live UGC provider must be optional for the provider-scope probe");
-            Assert(optional.TryGetProperty(ugcProviderId, out _),
-                "the provider-scope probe must declare an installed optional provider");
             Assert(optional.TryGetProperty(missingProviderId, out _),
                 "the provider-scope probe must declare a deliberately absent optional provider");
             Assert(source.Contains(
@@ -284,8 +299,7 @@ namespace TopiaForge.ModManager.Tests
                     "prompt-overrides",
                     "robot-targets",
                     "creator-sessions",
-                    "ugc-asset-overrides",
-                    "world-registrations"
+                    "session-resources"
                 }), caseId + " resourceFamilies must exactly describe the automatable live cycle coverage");
 
             var body = ExtractMethodBody(source, RequiredText(acceptanceCase, "probeMethod"));
@@ -308,7 +322,7 @@ namespace TopiaForge.ModManager.Tests
                 "RegisterCyclePrompt(resources, cycle)",
                 "RegisterCycleRobotTarget(resources, player, cycle)",
                 "RegisterCycleCreatorSession(resources, cycle)",
-                "RegisterCycleWorlds(resources, out world, out gamemode, out menu)",
+                "RegisterCycleSessionResources(resources)",
                 "LoadCycleAssetsAsync(resources, player, cycle)",
                 "WaitForCycleCallbacksAsync(counters, cycle)",
                 "DisposeCycleResources(resources)",
@@ -360,8 +374,7 @@ namespace TopiaForge.ModManager.Tests
                 "Context.Assets.LoadBundleAsync",
                 "Context.Assets.LoadPrefabAsync",
                 "Context.Assets.Spawn",
-                "Context.Interactions.Register",
-                "RegisterCycleUgcOverride(resources, prefab)"
+                "Context.Interactions.Register"
             });
             ValidateProbeMethod(source, "ProbeAudio", new[]
             {
@@ -416,28 +429,38 @@ namespace TopiaForge.ModManager.Tests
                 "service.TryResolveTarget",
                 "registration.IsActive"
             });
-            ValidateProbeMethod(source, "RegisterCycleUgcOverride", new[]
+            ValidateProbeMethod(source, "RegisterCycleSessionResources", new[]
             {
-                "service.RegisterAssetOverride",
-                "lease.IsActive",
-                "ContainsUgcOverride"
+                "WorldSessionPhase.Running",
+                "session.SessionId",
+                "CycleContext.Events.SubscribeUpdate",
+                "pause.RegisterAction",
+                "resources.Push(owned)"
             });
-            ValidateProbeMethod(source, "RegisterCycleWorlds", new[]
+            ValidateProbeMethod(source, "BeginAcceptanceSession", new[]
             {
-                "service.RegisterWorld",
-                "service.RegisterGamemode",
-                "service.RegisterMenuEntry",
-                "world.IsActive"
+                "IGamemodeController",
+                "session.Lifetime.Track(record.ScopeCleanup)",
+                "RegisterPauseAcceptance(session)",
+                "new AcceptanceController(record)"
+            });
+            ValidateProbeMethod(source, "ObserveAcceptanceSession", new[]
+            {
+                "WorldSessionPhase.Running",
+                "WorldSessionPhase.Idle",
+                "record.ControllerDisposed",
+                "record.ScopeCleanup.DisposeCount == 1",
+                "record.Session.Lifetime.IsStopping"
             });
             ValidateProbeMethod(source, "AssertCycleReleasedAsync", new[]
             {
                 "!extension.IsActive",
                 "prompt.IsDisposed",
                 "!target.IsActive",
-                "!world.IsActive",
+                "sessionResources.IsDisposed",
+                "sessionCallbacks == sessionResources.Callbacks",
                 "!assets.Bundle.IsAlive",
                 "!assets.Interaction.IsActive",
-                "!assets.UgcOverride.IsActive",
                 "Context.Scheduler.DelayAsync",
                 "event or scheduled callback fired after early release"
             });
@@ -826,10 +849,24 @@ namespace TopiaForge.ModManager.Tests
                 && live.Contains("cannot mark a live", StringComparison.Ordinal)
                 && live.Contains("exact frozen candidate package hashes", StringComparison.Ordinal),
                 "live acceptance docs must distinguish real game evidence from offline/static checks");
+            Assert(live.Contains("separate Windows user/session or VM", StringComparison.Ordinal)
+                && live.Contains("isolates Unity persistent data", StringComparison.Ordinal)
+                && live.Contains("BepInEx profile alone is insufficient", StringComparison.Ordinal)
+                && live.Contains("original process-creation identity", StringComparison.Ordinal),
+                "live acceptance docs must require native Windows isolation and owned-process identity");
             Assert(live.Contains("release-handoff-v1", StringComparison.Ordinal)
-                && live.Contains("WSL2", StringComparison.Ordinal)
-                && live.Contains("same-host and non-independent", StringComparison.Ordinal),
-                "live acceptance docs must bind current-host Proton evidence to the release handoff");
+                && live.Contains("`acceptance-result.json` schema 3", StringComparison.Ordinal)
+                && live.Contains("acknowledgement byte hashes", StringComparison.Ordinal)
+                && live.Contains("full correlated runtime acknowledgement", StringComparison.Ordinal)
+                && live.Contains("`processExitConfirmed: true`", StringComparison.Ordinal),
+                "live acceptance docs must bind correlated isolation evidence and confirmed exit to the release handoff");
+            Assert(live.Contains("Linux/Proton", StringComparison.Ordinal)
+                && live.Contains("unavailable until native isolation", StringComparison.Ordinal)
+                && live.Contains("schema2 evidence path are retired", StringComparison.Ordinal)
+                && live.Contains("cannot restore them", StringComparison.Ordinal)
+                && live.Contains("future same-host evidence", StringComparison.Ordinal)
+                && live.Contains("non-independent", StringComparison.Ordinal),
+                "live acceptance docs must disclose retired Proton evidence and conditions on future same-host acceptance");
         }
 
         private static bool IsBuildOutput(string path)

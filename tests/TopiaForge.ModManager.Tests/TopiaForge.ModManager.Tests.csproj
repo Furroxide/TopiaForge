@@ -16,13 +16,13 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
     <!-- Unity-free, GameCode-free game-compat core: lets the offline CI gate (GameCompatTests) diff the checked-in
          binding manifests against the checked-in surface baseline without ever loading the game DLL. -->
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Surface\TopiaForge.GameCompat.Surface.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.GameCompat.Extractor\TopiaForge.GameCompat.Extractor.csproj" />
+    <ProjectReference Include="..\TopiaForge.SdkAcceptanceMod\TopiaForge.SdkAcceptanceMod.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod\TopiaForge.ValidTestMod.csproj" />
     <ProjectReference Include="..\TopiaForge.ValidTestMod.Api\TopiaForge.ValidTestMod.Api.csproj" />
     <ProjectReference Include="..\..\mods\TopiaForge.CreatorContent\TopiaForge.CreatorContent.csproj" />
@@ -47,23 +47,14 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Prompts\TopiaForge.Mods.Prompts.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.RobotKit\TopiaForge.Mods.RobotKit.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
-    <ProjectReference Include="..\..\src\TopiaForge.Mods.Ugc\TopiaForge.Mods.Ugc.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Worlds\TopiaForge.Mods.Worlds.csproj" />
   </ItemGroup>
 
-  <!-- Compile the UGC live-sync mod's Unity-free logic directly into the test assembly so the service state
-       machine can be unit-tested on net10.0 without loading the mod's UnityEngine-referencing assembly. Only the
-       Unity-free files are included; UgcGameBridge/overlay/mod entry (which touch UnityEngine) are excluded. -->
+  <!-- Compile shared Unity-free mod helpers directly into the test assembly so they can be unit-tested
+       on net10.0 without loading a UnityEngine-referencing assembly. -->
   <ItemGroup>
     <Compile Include="..\..\mods\Shared\SafeEvent.cs" />
     <Compile Include="..\..\mods\Shared\UgcNoOpLaunchRequest.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncBridge.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcCommandPollGate.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncCommandFile.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncConfig.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncService.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcSnapshotPayloadValidator.cs" />
-    <Compile Include="..\..\mods\TopiaForge.UgcLiveSync\UgcLiveSyncStatusFile.cs" />
   </ItemGroup>
 
   <!-- Same pattern for the OVERRIDE feature: its Unity-free pieces (the RoboAPI wire protocol + JSON, and the
@@ -136,13 +127,10 @@
     <Compile Include="..\..\mods\TopiaForge.RobotKit\ObjectiveRunner.cs" />
     <Compile Include="..\..\mods\TopiaForge.RobotKit\RobotObjectiveService.cs" />
     <Compile Include="..\..\mods\TopiaForge.Sandbox\SandboxConfig.cs" />
-    <!-- The shared creator workbench is deliberately Unity-free. Compile the real linked implementation into the
-         offline test executable so lifecycle, rollback, and host-eligibility behavior are exercised without the game. -->
-    <Compile Include="..\..\mods\Shared\CreatorTools\*.cs" />
-    <!-- Globbed, not enumerated: CreatorTools is Unity-free, so every file in it compiles offline. The previous
-         by-name list silently left CreatorToolsMod.cs (the entry point) out of test scope, and would have done the
-         same for any file added later. -->
-    <Compile Include="..\..\mods\TopiaForge.CreatorTools\*.cs" />
+    <!-- The Sandbox creator workbench is deliberately Unity-free. Compile the real implementation into the
+         offline test executable so lifecycle, rollback, and host-eligibility behavior are exercised without the game.
+         Globbed, not enumerated, so a file added later cannot silently fall out of test scope. -->
+    <Compile Include="..\..\mods\TopiaForge.Sandbox\CreatorTools\*.cs" />
   </ItemGroup>
 
   <!-- Chronos time-control: lease/logical-state derivation, native-pause ownership, fixedDeltaTime math, and
@@ -169,15 +157,51 @@
   <ItemGroup>
     <Compile Include="..\..\mods\TopiaForge.Worlds\OpenSandboxFallbackPolicy.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\OwnerEventSubscription.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\PauseMenuBridge.Ownership.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\TimeControlService.OwnerFacade.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\UgcImportCompletionPolicy.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\LocalWorldImportOperation.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />
-    <Compile Include="..\..\mods\TopiaForge.Worlds\WorldAutoLoadRouter.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Worlds\RoboWorldImportPlan.cs" />
   </ItemGroup>
 
   <!-- The manager's scene-transition arbiter is deliberately Unity-free claim bookkeeping, so the real
        implementation is compiled in and unit-tested (SceneCoordinatorTests + the live-sync deferral tests). -->
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\SceneCoordinator.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/PluginInitializationLifetime.cs" Link="Runtime/PluginInitializationLifetime.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerSceneTransitionService.cs" Link="Runtime/OwnerSceneTransitionService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerCheckpointSubscription.cs" Link="Runtime/OwnerCheckpointSubscription.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldNativeDispatchResult.cs" Link="Worlds/WorldNativeDispatchResult.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetScopeOwnership.cs" Link="Runtime/AssetScopeOwnership.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetSpawnTransaction.cs" Link="Runtime/AssetSpawnTransaction.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.ScopedGameplay.cs" Link="Runtime/ModContext.ScopedGameplay.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/IRuntimeSessionSceneObserver.cs" Link="Runtime/IRuntimeSessionSceneObserver.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionEnvironment.cs" Link="Runtime/RuntimeSessionEnvironment.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionViews.cs" Link="Runtime/GamemodeSessionViews.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.cs" Link="Runtime/GamemodeSessionOrchestrator.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Startup.cs" Link="Runtime/GamemodeSessionOrchestrator.Startup.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Cleanup.cs" Link="Runtime/GamemodeSessionOrchestrator.Cleanup.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Operations.cs" Link="Runtime/GamemodeSessionOrchestrator.Operations.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.MainMenu.cs" Link="Runtime/GamemodeSessionOrchestrator.MainMenu.cs" />
+    <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeKey.cs" Link="Runtime/TopiaForgeKey.cs" />
+    <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/HotkeyRegistrationStore.cs" Link="Runtime/HotkeyRegistrationStore.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\NativeTransitionContracts.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\NativeTransitionReservation.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\NativeSceneOperation.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\IHostDispatcher.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\HostDispatcher.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\IRuntimeSessionShutdown.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContextScope.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ScopedModLifetime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.Scopes.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\ModContext.ScopedPersistence.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\MultiplayerSceneTransitionAuthorityPolicy.cs" />
+    <!-- Compiling the menu census here both unit-tests it and mechanically keeps it Unity-free, so the
+         reporting that explains a missing main-menu entry point cannot regain a UnityEngine dependency. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\MenuSurfaceCensus.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\WorldLaunchArming.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\ModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerBoundModServiceRegistry.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\OwnerModLifetime.cs" />
@@ -209,8 +233,8 @@
        rollback behavior remain executable on the ordinary test runner. -->
   <ItemGroup>
     <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.world-companion\Editor\WorldCompanionFileIo.cs" />
+    <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.world-companion\Editor\WorldMarkerHierarchy.cs" />
     <Compile Include="..\..\templates\TopiaForge.UnityWorldTemplate\Packages\io.github.furroxide.topiaforge.vpm-resolver\Editor\VpmSafeFileReader.cs" />
-    <Compile Include="..\..\templates\unity-companion\Packages\io.github.furroxide.topiaforge.ugc-companion\Editor\UgcCompanionSeedFileIo.cs" />
     <Compile Include="..\..\tools\unity-ui-bundle\Assets\Editor\UiSmokeAssemblyFileIo.cs" />
   </ItemGroup>
 
@@ -231,8 +255,6 @@
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.multiplayer.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.prompts.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.prompts.api.txt" />
-    <EmbeddedResource Include="..\..\baselines\topiaforge.mods.ugc.api.txt"
-                      LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.ugc.api.txt" />
     <EmbeddedResource Include="..\..\baselines\topiaforge.mods.testing.api.txt"
                       LogicalName="TopiaForge.ModManager.Tests.topiaforge.mods.testing.api.txt" />
   </ItemGroup>
@@ -242,5 +264,60 @@
     <EmbeddedResource Remove="@(EmbeddedResource)" />
     <Compile Include="TestingKitTests*.cs" />
     <Compile Include="TestingKitFocusedProgram.cs" />
+  </ItemGroup>
+  <!-- Production binding and world-provider adapters exercised by the full offline harness. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Commands.cs" Link="Runtime/GamemodeSessionOrchestrator.Commands.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.Observations.cs" Link="Runtime/RuntimeBindingRegistry.Observations.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeLaunchPublisher.cs" Link="Runtime/RuntimeLaunchPublisher.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionImplementation.cs" Link="Runtime/RuntimeSessionImplementation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingModels.cs" Link="Runtime/RuntimeBindingModels.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingAttempts.cs" Link="Runtime/RuntimeBindingAttempts.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.cs" Link="Runtime/RuntimeBindingRegistry.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.DiscoveryWork.cs" Link="Runtime/RuntimeBindingRegistry.DiscoveryWork.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeWorldDiscovery.cs" Link="Runtime/RuntimeWorldDiscovery.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.Discovery.cs" Link="Runtime/RuntimeBindingRegistry.Discovery.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/VerifiedPackageAssemblyLoader.cs" Link="Runtime/VerifiedPackageAssemblyLoader.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeDeclarationBinder.cs" Link="Runtime/RuntimeDeclarationBinder.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/BuiltinWorldImplementation.cs" Link="Runtime/BuiltinWorldImplementation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeOperation.cs" Link="Runtime/AssetNativeOperation.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeResource.cs" Link="Runtime/AssetNativeResource.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/AssetNativeWorkTracker.cs" Link="Runtime/AssetNativeWorkTracker.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerNativeSceneLoad.cs" Link="Runtime/OwnerNativeSceneLoad.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnedWorldContent.cs" Link="Runtime/OwnedWorldContent.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldRuntimeBackend.cs" Link="Runtime/WorldRuntimeBackend.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/OwnerWorldRuntimeService.cs" Link="Runtime/OwnerWorldRuntimeService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/WorldPreparation.cs" Link="Runtime/WorldPreparation.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/GeneratedArenaGeometry.cs" Link="Worlds/GeneratedArenaGeometry.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldDiscoveryIdentity.cs" Link="Worlds/WorldDiscoveryIdentity.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldResourceScope.cs" Link="Worlds/WorldResourceScope.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/ScopedWorldInstance.cs" Link="Worlds/ScopedWorldInstance.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldProviderLoader.cs" Link="Worlds/WorldProviderLoader.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/NativeWorldDiscoveryProvider.cs" Link="Worlds/NativeWorldDiscoveryProvider.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/CuratedLevelDiscoverySource.cs" Link="Worlds/CuratedLevelDiscoverySource.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/BuildSceneDiscoverySource.cs" Link="Worlds/BuildSceneDiscoverySource.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/WorldPlayerPlacement.cs" Link="Worlds/WorldPlayerPlacement.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxMod.cs" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxController.cs" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxGamemode.cs" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/SandboxSessionCommands.cs" />
+    <Compile Include="../../mods/TopiaForge.Zombies/ZombiesGamemode.cs" />
+    <Compile Include="../../mods/TopiaForge.Zombies/ZombiesSessionCommands.cs" />
+    <Compile Include="../../mods/TopiaForge.Zombies/ZombiesController.Cleanup.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/PauseExitOperation.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/LocalImportOwnership.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/LocalImportContracts.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/NativeImportOverrides.cs" />
+    <Compile Include="../../mods/TopiaForge.Worlds/FreePlayGamemode.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ContextWorldSessionService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.Sessions.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Observers.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Content.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionSelection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/NativeWorldReflection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/LaunchDiscoveryGate.cs" />
   </ItemGroup>
 </Project>

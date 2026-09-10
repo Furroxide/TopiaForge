@@ -7,140 +7,6 @@ using InputSystemKey = UnityEngine.InputSystem.Key;
 
 namespace TopiaForge.Mods.UnityUi
 {
-    /// <summary>Backend-neutral key identifiers for hotkeys and keybind capture.</summary>
-    public enum TopiaForgeKey
-    {
-        /// <summary>No key is assigned.</summary>
-        None,
-
-        /// <summary>The A key.</summary>
-        A,
-        /// <summary>The B key.</summary>
-        B,
-        /// <summary>The C key.</summary>
-        C,
-        /// <summary>The D key.</summary>
-        D,
-        /// <summary>The E key.</summary>
-        E,
-        /// <summary>The F key.</summary>
-        F,
-        /// <summary>The G key.</summary>
-        G,
-        /// <summary>The H key.</summary>
-        H,
-        /// <summary>The I key.</summary>
-        I,
-        /// <summary>The J key.</summary>
-        J,
-        /// <summary>The K key.</summary>
-        K,
-        /// <summary>The L key.</summary>
-        L,
-        /// <summary>The M key.</summary>
-        M,
-        /// <summary>The N key.</summary>
-        N,
-        /// <summary>The O key.</summary>
-        O,
-        /// <summary>The P key.</summary>
-        P,
-        /// <summary>The Q key.</summary>
-        Q,
-        /// <summary>The R key.</summary>
-        R,
-        /// <summary>The S key.</summary>
-        S,
-        /// <summary>The T key.</summary>
-        T,
-        /// <summary>The U key.</summary>
-        U,
-        /// <summary>The V key.</summary>
-        V,
-        /// <summary>The W key.</summary>
-        W,
-        /// <summary>The X key.</summary>
-        X,
-        /// <summary>The Y key.</summary>
-        Y,
-        /// <summary>The Z key.</summary>
-        Z,
-
-        /// <summary>The top-row 0 key.</summary>
-        Alpha0,
-        /// <summary>The top-row 1 key.</summary>
-        Alpha1,
-        /// <summary>The top-row 2 key.</summary>
-        Alpha2,
-        /// <summary>The top-row 3 key.</summary>
-        Alpha3,
-        /// <summary>The top-row 4 key.</summary>
-        Alpha4,
-        /// <summary>The top-row 5 key.</summary>
-        Alpha5,
-        /// <summary>The top-row 6 key.</summary>
-        Alpha6,
-        /// <summary>The top-row 7 key.</summary>
-        Alpha7,
-        /// <summary>The top-row 8 key.</summary>
-        Alpha8,
-        /// <summary>The top-row 9 key.</summary>
-        Alpha9,
-
-        /// <summary>The F1 function key.</summary>
-        F1,
-        /// <summary>The F2 function key.</summary>
-        F2,
-        /// <summary>The F3 function key.</summary>
-        F3,
-        /// <summary>The F4 function key.</summary>
-        F4,
-        /// <summary>The F5 function key.</summary>
-        F5,
-        /// <summary>The F6 function key.</summary>
-        F6,
-        /// <summary>The F7 function key.</summary>
-        F7,
-        /// <summary>The F8 function key.</summary>
-        F8,
-        /// <summary>The F9 function key.</summary>
-        F9,
-        /// <summary>The F10 function key.</summary>
-        F10,
-        /// <summary>The F11 function key.</summary>
-        F11,
-        /// <summary>The F12 function key.</summary>
-        F12,
-
-        /// <summary>The Tab key.</summary>
-        Tab,
-        /// <summary>The Space key.</summary>
-        Space,
-        /// <summary>The Enter key.</summary>
-        Enter,
-        /// <summary>The Backspace key.</summary>
-        Backspace,
-        /// <summary>The Delete key.</summary>
-        Delete,
-        /// <summary>The Home key.</summary>
-        Home,
-        /// <summary>The End key.</summary>
-        End,
-        /// <summary>The Page Up key.</summary>
-        PageUp,
-        /// <summary>The Page Down key.</summary>
-        PageDown,
-
-        /// <summary>The up-arrow key.</summary>
-        UpArrow,
-        /// <summary>The down-arrow key.</summary>
-        DownArrow,
-        /// <summary>The left-arrow key.</summary>
-        LeftArrow,
-        /// <summary>The right-arrow key.</summary>
-        RightArrow,
-    }
-
     /// <summary>
     /// Global hotkey registry polled once per frame by TopiaForgeRuntime through whichever
     /// input backend is alive. Replaces scattered Input.GetKeyDown calls; pairs with
@@ -149,21 +15,7 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeHotkeys
     {
-        private sealed class Registration
-        {
-            public Registration(string owner, TopiaForgeKey key, Action action)
-            {
-                Owner = owner;
-                Key = key;
-                Action = action;
-            }
-
-            public string Owner { get; }
-            public TopiaForgeKey Key { get; set; }
-            public Action Action { get; }
-        }
-
-        private static readonly List<Registration> Registrations = new List<Registration>();
+        private static readonly HotkeyRegistrationStore Registrations = new HotkeyRegistrationStore();
 
         /// <summary>Registers a hotkey; returns a handle whose Key can be rebound.</summary>
         public static object Register(string owner, TopiaForgeKey key, Action action)
@@ -178,16 +30,16 @@ namespace TopiaForge.Mods.UnityUi
                 throw new ArgumentNullException(nameof(action));
             }
 
-            var registration = new Registration(owner, key, action);
-            Registrations.Add(registration);
-            TopiaForgeRuntime.Ensure();
+            var registration = Registrations.Add(owner, key, action);
+            try { TopiaForgeRuntime.Ensure(); }
+            catch { Registrations.Remove(registration); throw; }
             return registration;
         }
 
         /// <summary>Rebinds a registration returned by Register.</summary>
         public static void Rebind(object handle, TopiaForgeKey key)
         {
-            if (handle is Registration registration)
+            if (handle is HotkeyRegistration registration)
             {
                 registration.Key = key;
             }
@@ -196,21 +48,24 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Removes every hotkey registered by the specified owner.</summary>
         public static void UnregisterOwner(string owner)
         {
-            Registrations.RemoveAll(r => string.Equals(r.Owner, owner, StringComparison.Ordinal));
+            Registrations.RemoveOwner(owner);
         }
+
+        internal static void Unregister(object handle) => Registrations.Remove(handle);
 
         internal static void Tick()
         {
-            if (Registrations.Count == 0)
+            var snapshot = Registrations.Snapshot;
+            if (snapshot.Length == 0)
             {
                 return;
             }
 
             var typing = IsTextFieldFocused();
-            for (var index = 0; index < Registrations.Count; index++)
+            for (var index = 0; index < snapshot.Length; index++)
             {
-                var registration = Registrations[index];
-                if (registration.Key == TopiaForgeKey.None)
+                var registration = snapshot[index];
+                if (!registration.IsActive || registration.Key == TopiaForgeKey.None)
                 {
                     continue;
                 }

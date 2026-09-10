@@ -1,0 +1,53 @@
+{
+  "id": "wire-observation-null-packagesetdigest",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive observation codec null packagesetdigest",
+  "transport": "observation",
+  "payload": {
+    "schemaVersion": 1,
+    "profileId": "profile-01",
+    "profileRevision": 7,
+    "producer": {
+      "id": "base.mod",
+      "version": "1.0.0"
+    },
+    "packageSetDigest": null,
+    "observationRevision": 3,
+    "discoveredWorlds": [
+      {
+        "id": "base.mod.family.level",
+        "familyId": "base.mod.family",
+        "name": "Level",
+        "description": ""
+      }
+    ],
+    "availability": [
+      {
+        "kind": "world",
+        "id": "base.mod.world",
+        "blocks": [
+          {
+            "code": "worldUnavailable",
+            "subject": "base.mod.world",
+            "subjectVersion": "1.0.0"
+          }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

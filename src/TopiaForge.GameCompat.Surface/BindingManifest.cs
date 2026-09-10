@@ -96,6 +96,17 @@ namespace TopiaForge.GameCompat
         // Method/constructor parameter discriminator (ordered). Empty for non-callable kinds.
         public IList<ParameterSpec> Parameters { get; } = new List<ParameterSpec>();
 
+        // Explicit zero-arity differs from a legacy name-only lookup. Omit access constraints when the
+        // runtime binder accepts either visibility/static shape.
+        public bool ExactParameters { get; set; }
+        public int? GenericArity { get; set; }
+        public int? IndexParameterCount { get; set; }
+        public bool? IsPublic { get; set; }
+        public bool? IsStatic { get; set; }
+        public bool RequireReadable { get; set; }
+        public bool RequireWritable { get; set; }
+        public bool HasStrictAccess => IsPublic.HasValue || IsStatic.HasValue || RequireReadable || RequireWritable || IndexParameterCount.HasValue;
+
         // Return / field / property type (best-known), for a ChangedSignature signal. Empty when name-only.
         public string ReturnType { get; set; } = string.Empty;
 
@@ -148,6 +159,14 @@ namespace TopiaForge.GameCompat
                 json.Set("parameters", array);
             }
 
+            if (ExactParameters) json.Set("exactParameters", true);
+            if (GenericArity.HasValue) json.Set("genericArity", GenericArity.Value);
+            if (IndexParameterCount.HasValue) json.Set("indexParameterCount", IndexParameterCount.Value);
+            if (IsPublic.HasValue) json.Set("isPublic", IsPublic.Value);
+            if (IsStatic.HasValue) json.Set("isStatic", IsStatic.Value);
+            if (RequireReadable) json.Set("requireReadable", true);
+            if (RequireWritable) json.Set("requireWritable", true);
+
             if (HasExpectedOrdinal)
             {
                 json.Set("expectedOrdinal", ExpectedOrdinal);
@@ -176,6 +195,13 @@ namespace TopiaForge.GameCompat
                 SourceRef = json.GetString("sourceRef"),
                 ReturnType = json.GetString("returnType"),
                 ContractValue = json.GetString("contractValue"),
+                ExactParameters = OptionalBoolean(json, "exactParameters") ?? false,
+                GenericArity = OptionalCount(json, "genericArity"),
+                IndexParameterCount = OptionalCount(json, "indexParameterCount"),
+                IsPublic = OptionalBoolean(json, "isPublic"),
+                IsStatic = OptionalBoolean(json, "isStatic"),
+                RequireReadable = OptionalBoolean(json, "requireReadable") ?? false,
+                RequireWritable = OptionalBoolean(json, "requireWritable") ?? false,
             };
 
             if (json.Has("expectedOrdinal"))
@@ -193,6 +219,20 @@ namespace TopiaForge.GameCompat
             return binding;
         }
 
+        private static int? OptionalCount(JsonObject json, string key)
+        {
+            if (!json.Has(key)) return null;
+            if (json.Get(key) is JsonNumber number && int.TryParse(number.ToCanonical().Trim(),
+                System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var arity)) return arity;
+            throw new FormatException("Binding constraint '" + key + "' must be a nonnegative JSON integer.");
+        }
+        private static bool? OptionalBoolean(JsonObject json, string key)
+        {
+            if (!json.Has(key)) return null;
+            if (json.Get(key) is JsonBool value) return value.Value;
+            throw new FormatException("Binding constraint '" + key + "' must be a JSON boolean.");
+        }
+
         private static TEnum ParseEnum<TEnum>(string value, TEnum fallback) where TEnum : struct
         {
             return Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) ? parsed : fallback;
@@ -203,7 +243,7 @@ namespace TopiaForge.GameCompat
     // bindings/<mod-id>.gamebindings.json.
     public sealed class BindingManifest
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 

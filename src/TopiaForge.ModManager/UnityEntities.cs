@@ -67,6 +67,7 @@ namespace TopiaForge.ModManager
             private readonly UnityEntity entity;
             private readonly Rigidbody body;
             private readonly bool originalUseGravity;
+            private readonly bool originalIsKinematic;
             private readonly float originalLinearDamping;
             private readonly float originalAngularDamping;
             private readonly RigidbodyInterpolation originalInterpolation;
@@ -79,11 +80,18 @@ namespace TopiaForge.ModManager
                 this.entity = entity;
                 this.body = body;
                 originalUseGravity = body.useGravity;
+                originalIsKinematic = body.isKinematic;
                 originalLinearDamping = body.linearDamping;
                 originalAngularDamping = body.angularDamping;
                 originalInterpolation = body.interpolation;
                 originalCollisionDetection = body.collisionDetectionMode;
                 body.useGravity = false;
+                // Robotopia's props are kinematic rigidbodies, which velocity control cannot move. Taking
+                // them out of kinematic mode for the duration of the lease is what makes them grabbable at
+                // all; the captured value is restored on every release path below. Refusing them instead --
+                // which is what this did before -- meant the Gravity Gun rejected every object in the game
+                // and looked broken while working exactly as written.
+                body.isKinematic = false;
                 body.interpolation = RigidbodyInterpolation.Interpolate;
                 body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             }
@@ -143,7 +151,11 @@ namespace TopiaForge.ModManager
                 }
 
                 var velocity = direction.Normalized * speed;
-                Release();
+                // A throw deliberately hands the entity to physics, so this is the one release path that
+                // does not put a kinematic body back: restoring it here would freeze the object in mid-air
+                // the instant it was thrown. Every other path -- dispose, scene teardown, mod unload --
+                // restores the captured value exactly.
+                Release(restoreKinematic: false);
                 if (body != null)
                 {
                     body.linearVelocity = UnityPhysicsBackend.ToUnity(velocity);
@@ -163,7 +175,7 @@ namespace TopiaForge.ModManager
                 Release(removeFromOwner: false);
             }
 
-            private void Release(bool removeFromOwner = true)
+            private void Release(bool removeFromOwner = true, bool restoreKinematic = true)
             {
                 if (Interlocked.Exchange(ref released, 1) != 0)
                 {
@@ -182,6 +194,11 @@ namespace TopiaForge.ModManager
                 }
 
                 body.useGravity = originalUseGravity;
+                if (restoreKinematic)
+                {
+                    body.isKinematic = originalIsKinematic;
+                }
+
                 body.linearDamping = originalLinearDamping;
                 body.angularDamping = originalAngularDamping;
                 body.interpolation = originalInterpolation;

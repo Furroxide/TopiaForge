@@ -3,7 +3,7 @@
 # Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.testing
 # Review every change. Breaking changes require explicit V1 compatibility approval.
 
-assembly TopiaForge.Mods.Testing, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+assembly TopiaForge.Mods.Testing, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
 type public sealed class TopiaForge.Mods.Testing.CapturedLogEntry : System.Object
@@ -211,6 +211,27 @@ type public sealed class TopiaForge.Mods.Testing.FakeExtensionService : System.O
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IExtensionRegistration> Register<T>(T provider, TopiaForge.Mods.ExtensionCardinality cardinality = 0 (Singleton)) where T : class
   property System.Int32 ActiveProviderCount { get; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeGamemodeSession : System.Object, TopiaForge.Mods.IGamemodeSession, TopiaForge.Mods.IWorldSession
+  constructor .ctor(TopiaForge.Mods.IModContext context, TopiaForge.Mods.WorldReadiness world, System.String sessionId = "test.session", System.String targetId = "test.target", System.String gamemodeId = "test.mode", System.String worldId = "test.world", System.String? worldFamilyId = null, System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> RestartAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> ReturnToMainMenuAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> StopAsync(System.Threading.CancellationToken cancellationToken = null)
+  property System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>>>? OnRestart { get; set; }
+  property System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>>>? OnReturnToMainMenu { get; set; }
+  property System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>>>? OnStop { get; set; }
+  property System.Int32 MainMenuRequests { get; }
+  property System.Int32 RestartRequests { get; }
+  property System.Int32 StopRequests { get; }
+  property System.String GamemodeId { get [virtual,final,newslot]; }
+  property System.String SessionId { get [virtual,final,newslot]; }
+  property System.String TargetId { get [virtual,final,newslot]; }
+  property System.String WorldId { get [virtual,final,newslot]; }
+  property System.String? WorldFamilyId { get [virtual,final,newslot]; }
+  property System.Threading.CancellationToken CancellationToken { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.IModContext Context { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.IModLifetime Lifetime { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.WorldReadiness World { get [virtual,final,newslot]; }
+
 type public sealed class TopiaForge.Mods.Testing.FakeInputAction : System.Object, System.IDisposable, TopiaForge.Mods.IInputAction
   method System.Void FinishFrame()
   method System.Void SetState(System.Single value, System.Boolean wasPressed, System.Boolean wasReleased)
@@ -273,6 +294,17 @@ type public sealed class TopiaForge.Mods.Testing.FakeLocalPlayerService : System
   property TopiaForge.Mods.PlayerDamageRequest? LastDamageRequest { get; }
   property TopiaForge.Mods.PlayerHealthSnapshot? Health { get; set; }
   property TopiaForge.Mods.PlayerSnapshot? Snapshot { get; set; }
+
+type public sealed class TopiaForge.Mods.Testing.FakeLocalWorldService : System.Object, TopiaForge.Mods.ILocalWorldService
+  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> ImportAsync(System.String sessionId, System.String requestedPath, System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.LocalWorldFile>> ListLocalWorlds()
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAssetOverride(TopiaForge.Mods.WorldAssetOverride assetOverride)
+  property System.Boolean LocalWorldsAvailable { get; set; }
+  property System.Collections.Generic.IReadOnlyList<System.String> ImportedLocalWorlds { get; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldAssetOverride> AssetOverrides { get; }
+  property System.Collections.Generic.List<TopiaForge.Mods.LocalWorldFile> LocalWorlds { get; }
+  property System.String? SessionId { get; set; }
 
 type public sealed class TopiaForge.Mods.Testing.FakeLocalizationService : System.Object, TopiaForge.Mods.ILocalizationService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
@@ -549,25 +581,6 @@ type public sealed class TopiaForge.Mods.Testing.FakeToast : System.Object
   property System.String Message { get; }
   property TopiaForge.Mods.UiTone Tone { get; }
 
-type public sealed class TopiaForge.Mods.Testing.FakeUgcLiveSyncService : System.Object, TopiaForge.Mods.IUgcLiveSyncService
-  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
-  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? PatchApplied { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSnapshotInfo>? SnapshotImported { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSyncError>? SyncError { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStarted { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.UgcSyncSession>? SessionStopped { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  method System.Void RaiseSyncError(System.String phase, System.String message)
-  method TopiaForge.Mods.OperationResult<TopiaForge.Mods.UgcSnapshotInfo> ApplyPatch(System.String projectName, System.String sceneId, System.String sceneName, System.Int32 entityCount, System.String revisionLabel, System.Boolean isFullRebuild = false)
-  method TopiaForge.Mods.OperationResult<TopiaForge.Mods.UgcSnapshotInfo> ImportSnapshot(System.String projectName, System.String sceneId, System.String sceneName, System.Int32 entityCount, System.String revisionLabel)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcAssetOverrideLease> RegisterAssetOverride(TopiaForge.Mods.UgcAssetOverride assetOverride)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcSyncLease> StartAutomergeSession(TopiaForge.Mods.UgcLiveSyncRequest request)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUgcSyncLease> StartLocalSession(TopiaForge.Mods.UgcLiveSyncRequest request)
-  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UgcAssetOverride> AssetOverrides { get [virtual,final,newslot]; }
-  property System.DateTime CurrentUtc { get; set; }
-  property System.Int32 ActiveLeaseCount { get; }
-  property TopiaForge.Mods.UgcLiveSyncStatus Status { get [virtual,final,newslot]; }
-  property TopiaForge.Mods.UgcSyncSession? CurrentSession { get [virtual,final,newslot]; }
-
 type public sealed class TopiaForge.Mods.Testing.FakeUiModal : System.Object, System.IDisposable, TopiaForge.Mods.IUiModal
   method System.Void Confirm()
   method [virtual,final,newslot] System.Void Close()
@@ -621,38 +634,22 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, 
   property TopiaForge.Mods.UiNode? Content { get; }
   property TopiaForge.Mods.UiSurfaceRequest Request { get; }
 
-type public sealed class TopiaForge.Mods.Testing.FakeWorldGamemodeService : System.Object, TopiaForge.Mods.IWorldGamemodeService, TopiaForge.Mods.IWorldTransitionState
-  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
-  event System.Action<TopiaForge.Mods.WorldSession>? SessionChanged { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  event System.Action<TopiaForge.Mods.WorldSessionEnd>? SessionEnded { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
-  method System.Boolean CompletePendingLoad()
-  method System.Boolean FailPendingLoad(TopiaForge.Mods.ModErrorCode errorCode, System.String message)
-  method System.Boolean TryGetWorldContent(System.String worldId, out TopiaForge.Mods.ICustomWorldContent? content)
-  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.WorldSession>> LaunchMenuEntryAsync(System.String entryId, System.Threading.CancellationToken cancellationToken = null)
-  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.WorldSession>> LoadAsync(TopiaForge.Mods.WorldLoadRequest request, System.Threading.CancellationToken cancellationToken = null)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> EndSession(TopiaForge.Mods.WorldSessionEndReason reason)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterGamemode(TopiaForge.Mods.GamemodeDefinition gamemode)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterMenuEntry(TopiaForge.Mods.GamemodeMenuEntry entry)
-  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IWorldRegistration> RegisterWorld(TopiaForge.Mods.WorldDefinition world, TopiaForge.Mods.ICustomWorldContent? content = null)
-  property System.Boolean AutoCompleteLoads { get; set; }
-  property System.Boolean HasPendingLoad { get; }
-  property System.Boolean IsTransitionInFlight { get [virtual,final,newslot]; }
-  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeDefinition> Gamemodes { get [virtual,final,newslot]; }
-  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.GamemodeMenuEntry> MenuEntries { get [virtual,final,newslot]; }
-  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.WorldDefinition> Worlds { get [virtual,final,newslot]; }
-  property System.Int32 ActiveRegistrationCount { get; }
-  property TopiaForge.Mods.WorldSession? CurrentSession { get [virtual,final,newslot]; }
-
 type public sealed class TopiaForge.Mods.Testing.FakeWorldPauseMenuService : System.Object, TopiaForge.Mods.IWorldPauseMenuService
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   method System.Boolean Invoke(System.String id)
-  method TopiaForge.Mods.WorldPauseExitDecision InvokeExit(TopiaForge.Mods.WorldSession session)
+  method TopiaForge.Mods.WorldPauseExitDecision InvokeExit(TopiaForge.Mods.IWorldSession session)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> InterceptExit(System.Func<TopiaForge.Mods.WorldPauseExitContext, TopiaForge.Mods.WorldPauseExitDecision> interceptor)
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterAction(TopiaForge.Mods.WorldPauseAction action)
   property System.Boolean HasExitInterceptor { get; }
   property System.Boolean IsAvailable { get [virtual,final,newslot]; set; }
   property System.Boolean SupportsExitInterception { get; set; }
   property System.Int32 ActiveActionCount { get; }
+
+type public sealed class TopiaForge.Mods.Testing.FakeWorldSessionService : System.Object, TopiaForge.Mods.IWorldSessionService
+  constructor .ctor()
+  event System.Action<TopiaForge.Mods.WorldSessionSnapshot> StateChanged { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
+  method System.Void Publish(TopiaForge.Mods.WorldSessionPhase phase, TopiaForge.Mods.IWorldSession? session = null, TopiaForge.Mods.WorldReadiness? world = null)
+  property TopiaForge.Mods.WorldSessionSnapshot Current { get [virtual,final,newslot]; }
 
 type public sealed class TopiaForge.Mods.Testing.InMemoryLocalModStorageService : System.Object, TopiaForge.Mods.ILocalModStorageService
   constructor .ctor()

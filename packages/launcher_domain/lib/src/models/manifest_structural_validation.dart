@@ -142,7 +142,11 @@ List<String> _manifestStructuralIssues(Map<String, Object?> json) {
     'supportedLoaderVersionRange',
     'supportedSdkVersionRange',
   ]) {
-    stringValue(rangeField, json[rangeField], maximum: 256);
+    final value = json[rangeField];
+    stringValue(rangeField, value, minimum: 1, maximum: 256, required: true);
+    if (value is String && value.isNotEmpty && value.trim().isEmpty) {
+      issues.add('$rangeField must contain a range; use * for any version.');
+    }
   }
 
   dependencyMap('dependencies', json['dependencies']);
@@ -257,31 +261,17 @@ List<String> _manifestStructuralIssues(Map<String, Object?> json) {
       stringValue('conflicts[$index].reason', conflict['reason'], maximum: 512);
     }
   }
-  closedObjectArray(
-    'worldGamemodes',
-    json['worldGamemodes'],
-    const {'id', 'name', 'description'},
-    const {'id', 'name'},
-  );
-  final gamemodes = json['worldGamemodes'];
-  if (gamemodes is List) {
-    if (gamemodes.length > 64) {
-      issues.add('worldGamemodes cannot contain more than 64 entries.');
-    }
-    for (var index = 0; index < gamemodes.length; index++) {
-      final gamemode = gamemodes[index];
-      if (gamemode is! Map) continue;
-      stringValue(
-        'worldGamemodes[$index].name',
-        gamemode['name'],
-        maximum: 128,
-      );
-      stringValue(
-        'worldGamemodes[$index].description',
-        gamemode['description'],
-        maximum: 1024,
-      );
-    }
+  if (json.containsKey('worldGamemodes')) {
+    issues.add(
+      'worldGamemodes was retired in schemaVersion 6. Split it into '
+      'contributions.gamemodes (identity, implementation binding and world '
+      'requirements) and contributions.launchTargets (what the player picks, '
+      'and which world it starts in). Run `topiaforge migrate-manifest '
+      '--project <path>`.',
+    );
+  }
+  if (json.containsKey('contributions')) {
+    _contributionStructuralIssues(json['contributions'], issues);
   }
 
   final multiplayer = json['multiplayer'];

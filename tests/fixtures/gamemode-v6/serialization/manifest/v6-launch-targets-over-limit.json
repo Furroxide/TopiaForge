@@ -1,0 +1,654 @@
+{
+  "id": "v6-launch-targets-over-limit",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "v6 launchTargets over limit.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.arena",
+          "name": "Arena",
+          "content": {
+            "kind": "bundle",
+            "bundle": "Content/arena.bundle",
+            "prefab": "Arena"
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.survival",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.play",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra0",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra1",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra2",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra3",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra4",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra5",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra6",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra7",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra8",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra9",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra10",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra11",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra12",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra13",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra14",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra15",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra16",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra17",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra18",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra19",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra20",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra21",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra22",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra23",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra24",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra25",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra26",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra27",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra28",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra29",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra30",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra31",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra32",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra33",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra34",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra35",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra36",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra37",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra38",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra39",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra40",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra41",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra42",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra43",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra44",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra45",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra46",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra47",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra48",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra49",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra50",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra51",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra52",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra53",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra54",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra55",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra56",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra57",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra58",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra59",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra60",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra61",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra62",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        },
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.extra63",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        }
+      ]
+    }
+  },
+  "schemaOutcome": "reject",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    }
+  }
+}

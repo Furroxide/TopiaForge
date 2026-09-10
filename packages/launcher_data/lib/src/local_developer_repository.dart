@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+import 'agpl_3_0_text.g.dart';
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
@@ -16,7 +17,6 @@ import 'public_url.dart';
 import 'safe_zip_archive.dart';
 import 'secure_http.dart';
 import 'sdk_reference_pack.dart';
-import 'ugc_sidecar_runtime.dart';
 
 part 'local_developer_repository/io_helpers.dart';
 part 'local_developer_repository/template_copy.dart';
@@ -51,6 +51,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     UnityEditorVersionProbe? unityEditorVersionProbe,
     UnityEditorLauncher? unityEditorLauncher,
     RepositoryDotnetSdkResolver? dotnetSdkResolver,
+    DeveloperExecutableLookup? executableLookup,
     Duration unityEditorProbeTimeout = const Duration(seconds: 5),
   }) : _repositoryRoot = Directory(
          repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory),
@@ -60,6 +61,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
        _unityEditorVersionProbe = unityEditorVersionProbe,
        _unityEditorLauncher = unityEditorLauncher,
        _dotnetSdkResolver = dotnetSdkResolver ?? resolveRepositoryDotnetSdk,
+       _executableLookup = executableLookup,
        _unityEditorProbeTimeout = unityEditorProbeTimeout,
        super(Directory(dataRoot ?? resolveTopiaForgeDataRoot()));
 
@@ -69,6 +71,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
   final UnityEditorVersionProbe? _unityEditorVersionProbe;
   final UnityEditorLauncher? _unityEditorLauncher;
   final RepositoryDotnetSdkResolver _dotnetSdkResolver;
+  final DeveloperExecutableLookup? _executableLookup;
   final Duration _unityEditorProbeTimeout;
 
   @override
@@ -119,16 +122,16 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     if (root.existsSync()) {
       throw StateError('Project already exists: ${root.path}');
     }
-    // Live sync implies the Unity companion; some templates scaffold it too.
+    // The explicit flag, the scaffold option, or the template can each ask for the companion.
     final templates = await _listModTemplates();
     final templateInfo = templates.firstWhere(
       (template) => template.id == options.template,
       orElse: () => ModTemplateInfo(id: options.template),
     );
+    options.validateForScaffolding(templateInfo.manifestDefaults);
     final withCompanion =
         includeUnityCompanion ||
         options.includeUnityCompanion ||
-        options.liveSync != null ||
         templateInfo.includeUnityCompanion;
     root.createSync(recursive: true);
 
@@ -144,17 +147,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
             )
           : const UnityCompanionSettings(),
     );
-    if (options.liveSync != null) {
-      project = project.copyWith(
-        unityCompanion: UnityCompanionSettings(
-          enabled: true,
-          projectPath: project.unityCompanion.projectPath,
-          unityVersion: project.unityCompanion.unityVersion,
-          assetBundleOutputPath: project.unityCompanion.assetBundleOutputPath,
-          liveSync: options.liveSync!,
-        ),
-      );
-    }
     await _writeProject(root.path, project);
     await _scaffoldModFromTemplate(root.path, id, name, options, withCompanion);
     final sdk = await _initializeSdkProject(root.path);
@@ -319,43 +311,6 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     String projectPath,
     ModManifest manifest,
   ) => _updateModManifest(projectPath, manifest);
-
-  @override
-  Future<bool> ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  }) => _ensureUgcCompanionPackage(projectPath, update: update);
-
-  @override
-  Future<String> writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  }) => _writeUgcCompanionSeed(
-    projectPath,
-    watchFolder: watchFolder,
-    projectName: projectName,
-    sceneId: sceneId,
-    sceneName: sceneName,
-    environment: environment,
-    liveSync: liveSync,
-  );
-
-  @override
-  Future<DeveloperProject> updateUgcLiveSync(
-    String projectPath,
-    UgcLiveSyncSettings settings,
-  ) async {
-    final root = _requireProjectRoot(projectPath);
-    final project = await _readProject(root.path);
-    final updated = project.withUgcLiveSync(settings);
-    await _writeProject(root.path, updated);
-    return updated;
-  }
 
   @override
   Future<String> packProject(

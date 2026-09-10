@@ -7,10 +7,11 @@ import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_handoff_models.dart';
 import 'package:topiaforge/src/release_policy.dart';
 
+import 'release_handoff_policy_fixture.dart';
 import 'release_handoff_qa_fixture.dart';
 
 void main() {
-  const version = '1.0.0-rc.1';
+  const version = '0.1.0-rc.1';
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   const ecosystemSha =
       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -18,8 +19,8 @@ void main() {
   late String root;
 
   setUp(() {
-    root = _repositoryRoot();
     temp = Directory.systemTemp.createTempSync('topiaforge-game-identity-');
+    root = writeSignedReleaseHandoffRoot(temp);
     for (final platform in const ['windows-x64']) {
       File(
         p.join(temp.path, releaseArchiveForPlatform(platform)),
@@ -61,7 +62,7 @@ Future<void> _expectGameIdentityFailure(
   await expectLater(
     const TopiaForgeReleaseHandoff().buildPlatformBundle(
       repositoryRoot: root,
-      version: '1.0.0-rc.1',
+      version: '0.1.0-rc.1',
       targetSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       platform: platform,
       archivePath: p.join(assets.path, releaseArchiveForPlatform(platform)),
@@ -89,15 +90,4 @@ Map<String, Object?> _readJson(File file) =>
 
 void _writeJson(File file, Map<String, Object?> value) {
   file.writeAsStringSync('${jsonEncode(value)}\n');
-}
-
-String _repositoryRoot() {
-  var directory = Directory.current.absolute;
-  while (!File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
-    if (directory.parent.path == directory.path) {
-      throw StateError('Repository root not found.');
-    }
-    directory = directory.parent;
-  }
-  return directory.path;
 }

@@ -25,19 +25,6 @@ class DeveloperProject {
   final VersionRange loaderVersionRange;
   final UnityCompanionSettings unityCompanion;
 
-  /// Returns a copy with [liveSync] merged into the Unity companion settings (enabling the companion).
-  DeveloperProject withUgcLiveSync(UgcLiveSyncSettings liveSync) {
-    return copyWith(
-      unityCompanion: UnityCompanionSettings(
-        enabled: true,
-        projectPath: unityCompanion.projectPath,
-        unityVersion: unityCompanion.unityVersion,
-        assetBundleOutputPath: unityCompanion.assetBundleOutputPath,
-        liveSync: liveSync,
-      ),
-    );
-  }
-
   factory DeveloperProject.fromJson(Map<String, Object?> json) {
     return DeveloperProject(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
@@ -322,7 +309,7 @@ class ModTemplateInfo {
 
 /// Everything `new mod` can customize at scaffold time: the template plus per-field manifest overrides. A null
 /// scalar / empty list means "not specified — keep the template's default".
-/// `hashes` (pack-time) and `schemaVersion` (pinned to 5) are deliberately not
+/// `hashes` (pack-time) and `schemaVersion` (pinned to the current contract) are deliberately not
 /// scaffoldable.
 class ModScaffoldOptions {
   const ModScaffoldOptions({
@@ -343,7 +330,6 @@ class ModScaffoldOptions {
     this.dependencies = const [],
     this.optionalDependencies = const [],
     this.conflicts = const [],
-    this.gamemodes = const [],
     this.entryAssembly,
     this.entryType,
     this.gameVersionRange,
@@ -353,7 +339,6 @@ class ModScaffoldOptions {
     this.homepage,
     this.source,
     this.includeUnityCompanion = false,
-    this.liveSync,
   });
 
   final String template;
@@ -376,7 +361,6 @@ class ModScaffoldOptions {
   final List<ModDependency> dependencies;
   final List<ModDependency> optionalDependencies;
   final List<ModConflict> conflicts;
-  final List<GamemodeDefinition> gamemodes;
   final String? entryAssembly;
   final String? entryType;
   final VersionRange? gameVersionRange;
@@ -387,12 +371,23 @@ class ModScaffoldOptions {
   final String? source;
   final bool includeUnityCompanion;
 
-  /// When set, the project is scaffolded with UGC live sync preconfigured (implies the Unity companion).
-  final UgcLiveSyncSettings? liveSync;
+  /// Refuses retired fields in template defaults before any scaffold output.
+  void validateForScaffolding(Map<String, Object?> manifest) {
+    for (final field in const ['worldGamemodes', 'gamemodes']) {
+      if (!manifest.containsKey(field)) continue;
+      throw ArgumentError(
+        'Metadata-only $field inputs are retired. Use --template gamemode '
+        'and declare contributions.gamemodes with a factory implementation, '
+        'plus contributions.launchTargets in topiaforge.mod.json.',
+        field,
+      );
+    }
+  }
 
   /// Applies the specified overrides on top of [manifest] (a template-default or generated manifest map),
   /// returning the merged `topiaforge.mod.json` map. List/map fields replace wholesale when specified.
   Map<String, Object?> applyTo(Map<String, Object?> manifest) {
+    validateForScaffolding(manifest);
     final merged = Map<String, Object?>.of(manifest);
     void set(String key, Object? value) {
       if (value != null) merged[key] = value;
@@ -462,11 +457,7 @@ class ModScaffoldOptions {
     if (conflicts.isNotEmpty) {
       merged['conflicts'] = conflicts.map((item) => item.toJson()).toList();
     }
-    if (gamemodes.isNotEmpty) {
-      merged['worldGamemodes'] = gamemodes
-          .map((item) => item.toJson())
-          .toList();
-    }
+
     return merged;
   }
 }

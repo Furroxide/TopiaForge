@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager
     {
         private sealed class ModEvents : IModEvents, ISceneLoadEventSource, ISceneLifecycleEventSource
         {
+            private readonly IModLifetime lifetime;
             private readonly EventChannel<float> updates;
             private readonly EventChannel<GameTimeSample> fixedUpdates;
             private readonly EventChannel<GameTimeSample> lateUpdates;
@@ -25,6 +26,7 @@ namespace TopiaForge.ModManager
 
             public ModEvents(IModLifetime lifetime, IModLogger logger)
             {
+                this.lifetime = lifetime;
                 updates = new EventChannel<float>(lifetime, logger, "Update");
                 fixedUpdates = new EventChannel<GameTimeSample>(lifetime, logger, "FixedUpdate");
                 lateUpdates = new EventChannel<GameTimeSample>(lifetime, logger, "LateUpdate");
@@ -33,14 +35,25 @@ namespace TopiaForge.ModManager
                 sceneLifecycle = new EventChannel<SceneLifecycleEvent>(lifetime, logger, "SceneLifecycle");
             }
 
-            public IDisposable SubscribeUpdate(Action<float> handler) => updates.Subscribe(handler);
-            public IDisposable SubscribeFixedUpdate(Action<GameTimeSample> handler) => fixedUpdates.Subscribe(handler);
-            public IDisposable SubscribeLateUpdate(Action<GameTimeSample> handler) => lateUpdates.Subscribe(handler);
-            public IDisposable SubscribeSceneLoaded(Action<string> handler) => scenes.Subscribe(handler);
+            public ModEvents(ModEvents parent, IModLifetime lifetime)
+            {
+                this.lifetime = lifetime;
+                updates = parent.updates;
+                fixedUpdates = parent.fixedUpdates;
+                lateUpdates = parent.lateUpdates;
+                scenes = parent.scenes;
+                detailedScenes = parent.detailedScenes;
+                sceneLifecycle = parent.sceneLifecycle;
+            }
+
+            public IDisposable SubscribeUpdate(Action<float> handler) => updates.Subscribe(handler, lifetime);
+            public IDisposable SubscribeFixedUpdate(Action<GameTimeSample> handler) => fixedUpdates.Subscribe(handler, lifetime);
+            public IDisposable SubscribeLateUpdate(Action<GameTimeSample> handler) => lateUpdates.Subscribe(handler, lifetime);
+            public IDisposable SubscribeSceneLoaded(Action<string> handler) => scenes.Subscribe(handler, lifetime);
             public IDisposable SubscribeSceneLoaded(Action<SceneLoadEvent> handler) =>
-                detailedScenes.Subscribe(handler);
+                detailedScenes.Subscribe(handler, lifetime);
             public IDisposable SubscribeSceneLifecycle(Action<SceneLifecycleEvent> handler) =>
-                sceneLifecycle.Subscribe(handler);
+                sceneLifecycle.Subscribe(handler, lifetime);
 
             public void RaiseUpdate(float value) => updates.Raise(value);
             public void RaiseFixedUpdate(GameTimeSample value) => fixedUpdates.Raise(value);
@@ -77,11 +90,12 @@ namespace TopiaForge.ModManager
                     this.phase = phase;
                 }
 
-                public IDisposable Subscribe(Action<T> handler)
+                public IDisposable Subscribe(Action<T> handler, IModLifetime subscriptionLifetime)
                 {
                     if (handler == null) throw new ArgumentNullException(nameof(handler));
 
-                    var subscriber = new EventSubscriber<T>(handler, logger);
+                    if (subscriptionLifetime.IsStopping) throw new ObjectDisposedException(nameof(IModLifetime));
+                    var subscriber = new EventSubscriber<T>(handler, logger, subscriptionLifetime);
                     var subscription = new EventSubscription<T>(this, subscriber);
                     lock (sync)
                     {
@@ -94,7 +108,7 @@ namespace TopiaForge.ModManager
                     {
                         // The subscriber remains pending while lifetime ownership is established. A dispatch may
                         // observe the new snapshot, but it cannot invoke the callback unless tracking succeeds.
-                        tracking = lifetime.Track(subscription);
+                        tracking = subscriptionLifetime.Track(subscription);
                     }
                     catch
                     {
@@ -102,7 +116,7 @@ namespace TopiaForge.ModManager
                         throw;
                     }
 
-                    if (!subscriber.Activate())
+                    if (subscriptionLifetime.IsStopping || !subscriber.Activate())
                     {
                         tracking.Dispose();
                         throw new ObjectDisposedException(
@@ -154,6 +168,7 @@ namespace TopiaForge.ModManager
             {
                 private const int ConsecutiveFailureLimit = 3;
                 private const int SuccessfulCallsToRearmFailureLog = 60;
+                private readonly IModLifetime lifetime;
                 private readonly Action<T> handler;
                 private readonly IModLogger logger;
                 private readonly string description;
@@ -163,8 +178,9 @@ namespace TopiaForge.ModManager
                 private int disabled;
                 private int registrationState;
 
-                public EventSubscriber(Action<T> handler, IModLogger logger)
+                public EventSubscriber(Action<T> handler, IModLogger logger, IModLifetime lifetime)
                 {
+                    this.lifetime = lifetime;
                     this.handler = handler;
                     this.logger = logger;
                     description = Describe(handler);
@@ -172,7 +188,7 @@ namespace TopiaForge.ModManager
 
                 public void Invoke(T value, string phase)
                 {
-                    if (Volatile.Read(ref registrationState) != 1 ||
+                    if (lifetime.IsStopping || Volatile.Read(ref registrationState) != 1 ||
                         Volatile.Read(ref disabled) != 0)
                     {
                         return;

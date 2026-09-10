@@ -60,35 +60,12 @@ namespace TopiaForge.ModManager.Tests
             Assert(context.Lifetime.TrackedResourceCount == baseline,
                 "stopped zombie voice captures release their lifetime entries immediately");
 
-            var worlds = new FakeWorldGamemodeService(context.Lifetime);
-            var world = worlds.RegisterWorld(new WorldDefinition(
-                "zombies.test.world",
-                "Zombie Test World",
-                "Lifetime regression world."));
-            var gamemode = worlds.RegisterGamemode(new GamemodeDefinition(
-                "zombies.test.mode",
-                "Zombie Test Mode",
-                "Lifetime regression mode."));
-            var menuEntry = worlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                "zombies.test.menu",
-                "Zombie Test",
-                "Lifetime regression entry.",
-                "zombies.test.mode",
-                "zombies.test.world"));
-            var hasWorldRegistration = world.TryGetValue(out var worldRegistration);
-            var hasGamemodeRegistration = gamemode.TryGetValue(out var gamemodeRegistration);
-            var hasMenuRegistration = menuEntry.TryGetValue(out var menuRegistration);
-            Assert(hasWorldRegistration
-                && hasGamemodeRegistration
-                && hasMenuRegistration
-                && worlds.ActiveRegistrationCount == 3,
-                "the Zombies Worlds registrations are inspectable before early release");
-            menuRegistration!.Dispose();
-            gamemodeRegistration!.Dispose();
-            worldRegistration!.Dispose();
-            Assert(worlds.ActiveRegistrationCount == 0
-                && context.Lifetime.TrackedResourceCount == baseline,
-                "released world, gamemode, and menu registrations unregister immediately");
+            var pause = new FakeWorldPauseMenuService(context.Lifetime);
+            var action = pause.RegisterAction(new WorldPauseAction("zombies.test.restart", "Restart", () => { }));
+            Assert(action.Succeeded && pause.ActiveActionCount == 1, "session pause actions retain explicit ownership");
+            action.Value!.Dispose();
+            Assert(pause.ActiveActionCount == 0 && context.Lifetime.TrackedResourceCount == baseline,
+                "released session pause actions unregister immediately");
 
             var command = context.Commands.Register(
                 new CommandDefinition("zombies-test", "Lifetime regression command."),
@@ -159,10 +136,8 @@ namespace TopiaForge.ModManager.Tests
                 "owner shutdown suppresses a dispatched scene result without discarding the native replacement");
             lifetimeSceneContext.AssertNoLeaks();
 
-            var worlds = new FakeWorldGamemodeService(context.Lifetime);
-            worlds.RegisterWorld(new WorldDefinition("cancel.world", "Cancel", "Cancel", sceneName: "Cancel"));
-            worlds.RegisterGamemode(new GamemodeDefinition("cancel.mode", "Cancel", "Cancel"));
-            var world = worlds.LoadAsync(new WorldLoadRequest("cancel.world", "cancel.mode"), token);
+            var worlds = new FakeLocalWorldService(context.Lifetime) { SessionId = "cancel-session" };
+            var world = worlds.ImportAsync("cancel-session", "cancel.roboworld", token);
             var robotKit = new FakeRobotKit(context.Lifetime);
             var query = robotKit.BrainQueries.QueryAsync(new BrainQueryRequest(
                 "Cancel",
@@ -173,64 +148,11 @@ namespace TopiaForge.ModManager.Tests
             Assert(world.IsCompletedSuccessfully && world.Result.ErrorCode == ModErrorCode.Cancelled &&
                    query.IsCompletedSuccessfully && query.Result.ErrorCode == ModErrorCode.Cancelled &&
                    reachable.IsCompletedSuccessfully && reachable.Result.ErrorCode == ModErrorCode.Cancelled &&
-                   !worlds.HasPendingLoad && robotKit.BrainQueries.PendingQueryCount == 0,
+                   worlds.ImportedLocalWorlds.Count == 0 && robotKit.BrainQueries.PendingQueryCount == 0,
                 "specialist async fakes use the same stable cancellation convention");
 
             context.Dispose();
             context.AssertNoLeaks();
-        }
-
-        private static void TestBundleWorldContentOwnership()
-        {
-            var successContext = new FakeModContext();
-            var factory = new BundleWorldContent(
-                successContext.Assets,
-                "worlds/test.bundle",
-                "WorldRoot",
-                TransformState.Identity);
-            var created = factory.CreateAsync().Result;
-            Assert(created.TryGetValue(out var content) && content.IsAlive &&
-                   successContext.Assets.ActiveBundleCount == 1 &&
-                   successContext.Assets.ActivePrefabCount == 1 &&
-                   successContext.Assets.ActiveSpawnCount == 1,
-                "bundle world content retains every handle needed by the live SDK entity tree");
-            content!.Dispose();
-            Assert(!content.IsAlive && successContext.Assets.ActiveSpawnCount == 0 &&
-                   successContext.Assets.ActivePrefabCount == 0 &&
-                   successContext.Assets.ActiveBundleCount == 0,
-                "disposing bundle world content releases spawn, prefab, and bundle handles");
-            successContext.Dispose();
-            successContext.AssertNoLeaks();
-
-            var prefabFailureContext = new FakeModContext();
-            prefabFailureContext.Assets.PrefabLoadErrorCode = ModErrorCode.NotFound;
-            var prefabFailure = new BundleWorldContent(
-                prefabFailureContext.Assets,
-                "worlds/test.bundle",
-                "MissingRoot",
-                TransformState.Identity).CreateAsync().Result;
-            Assert(prefabFailure.ErrorCode == ModErrorCode.NotFound &&
-                   prefabFailureContext.Assets.ActiveBundleCount == 0 &&
-                   prefabFailureContext.Assets.ActivePrefabCount == 0 &&
-                   prefabFailureContext.Assets.ActiveSpawnCount == 0,
-                "prefab load failure releases the bundle acquired earlier in world creation");
-            prefabFailureContext.Dispose();
-            prefabFailureContext.AssertNoLeaks();
-
-            var spawnFailureContext = new FakeModContext();
-            spawnFailureContext.Assets.SpawnErrorCode = ModErrorCode.External;
-            var spawnFailure = new BundleWorldContent(
-                spawnFailureContext.Assets,
-                "worlds/test.bundle",
-                "WorldRoot",
-                TransformState.Identity).CreateAsync().Result;
-            Assert(spawnFailure.ErrorCode == ModErrorCode.External &&
-                   spawnFailureContext.Assets.ActiveBundleCount == 0 &&
-                   spawnFailureContext.Assets.ActivePrefabCount == 0 &&
-                   spawnFailureContext.Assets.ActiveSpawnCount == 0,
-                "spawn failure releases both prefab and bundle handles acquired earlier");
-            spawnFailureContext.Dispose();
-            spawnFailureContext.AssertNoLeaks();
         }
 
         private static void TestPartialLoadFailureCleanup()

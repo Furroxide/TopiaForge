@@ -1,5 +1,17 @@
 # Third Party Notices
 
+## Trademarks and affiliation
+
+This file ships inside the release archive, so it states the notice for readers who never see the
+repository. The canonical wording is [TRADEMARKS.md](TRADEMARKS.md).
+
+TopiaForge is an independent, community-built modding toolkit. It is not developed, published, or
+endorsed by Tomato Cake or the Robotopia development team, and is not otherwise affiliated with
+them. "Robotopia" and "Tomato Cake" are the property of their respective owners and are used here
+only to identify the game this toolkit works with.
+
+## Bundled runtimes and assets
+
 This repository bundles BepInEx 5.4.23.5 binary runtime files under
 `third_party/BepInEx/win_x64_5.4.23.5` and `third_party/BepInEx/macos_universal_5.4.23.5` for local Robotopia
 loader installation.
@@ -26,22 +38,77 @@ RoboPatch was used only as behavior prior art for clean-room compatibility plann
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
 
-TopiaForge launcher UI bundles Robotopia web brand assets from `https://robotopia.gg/` and local
-TopiaForge artwork for offline launcher theming.
+TopiaForge launcher UI bundles CC0 pixel artwork for offline launcher theming. These three files
+replaced Robotopia web brand assets taken from `https://robotopia.gg/` that carried no
+redistribution grant; the replacement was made on 2026-09-09 and no Robotopia web asset remains in
+the launcher.
 
-- Web-derived raster files: `topiaforge-city-header.webp`, `baby-stitch.webp`, and `sheriff.webp`
-- Source: `https://robotopia.gg/`
-- Rights basis: **unresolved.** These files originate from Robotopia's own web brand assets and no
-  redistribution licence has been identified. Permission has been requested from Tomato Cake. Until a
-  written grant is recorded here, these three files have no distributable rights basis and block
-  `P0-IP-01`. If permission is declined or not received, they must be removed or replaced.
-- Local changes: filenames were normalized for launcher packaging.
+- Files: `packages/launcher_ui/assets/brand/topiaforge-city-header.webp`,
+  `packages/launcher_ui/assets/brand/baby-stitch.webp`, and
+  `packages/launcher_ui/assets/brand/sheriff.webp`
+- Artist: **GrafxKid**, via OpenGameArt.
+- License: **CC0 1.0 Universal (public domain dedication)**. No attribution is required and no
+  share-alike term applies, so these files raise no compatibility question against this project's
+  AGPL-3.0-or-later grant. The attribution below is recorded as provenance, not as an obligation.
+- Sources and upstream SHA-256:
+  - `topiaforge-city-header.webp` from *City Mega Pack*,
+    `https://opengameart.org/content/city-mega-pack`, upstream file `SHIPPING_DOCKS_AREA.png`
+    (SHA-256 `984030543b9f7fcf0197c07eba9ad4f8768cb8f705e3ee1673fa7f685ae65b00`).
+  - `baby-stitch.webp` and `sheriff.webp` from *Gum Bot sprites*,
+    `https://opengameart.org/content/gum-bot-sprites`, upstream file `Gum Bot sprites.png`
+    (SHA-256 `8ed4706fd6a339b31d951a7b78e5ce56c1bd95c9bbcb7763dfddb4161570060f`).
+- Local changes:
+  - `topiaforge-city-header.webp`: cropped from `SHIPPING_DOCKS_AREA.png` at `(64, 768)-(832, 1056)`
+    to 768x288, then the plain sky band was repeated upward by 144 rows to reach 768x432 (16:9).
+    No repainting or recolouring.
+  - `baby-stitch.webp`: the 32x32 cell at row 1, column 1 of `Gum Bot sprites.png`, keyed from its
+    flat `#F5BAFE` sheet background to binary alpha and trimmed to its bounding box (14x18).
+  - `sheriff.webp`: the same, for the cell at row 1, column 2 (16x18).
+  - All three re-encoded as lossless WebP. Filenames are unchanged because
+    `TopiaForgeBrandAssets.cityHeader`, `.babyStitch` and `.sheriff` in
+    `packages/launcher_ui/lib/src/launcher_theme.dart` refer to them by name.
+- Installed SHA-256: `topiaforge-city-header.webp`
+  `a3f642ad8ef8b817b96257df670d0d5773fb40ead5da7ebf4699d84022d940dd`; `baby-stitch.webp`
+  `36328e54cb9c7382b06ba81ed568e6b1553f8a3791735afd792d4a0daadb2978`; `sheriff.webp`
+  `dc488ee07c3244356c707882cdeb5c3b4f2943c109edad0996cd444887d90378`.
+- The two character sprites are pixel art drawn on a small grid and are rendered with
+  `FilterQuality.none`, matching `packages/launcher_ui/lib/src/pixel_robot.dart`.
+
+## First-party binary and generated assets
+
+These ship in the release archive, are not third-party redistribution, and are recorded here so the
+inventory covers every non-source file a user receives rather than only the ones with licence texts.
+
+- `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle` and
+  `mods/TopiaForge.Worlds/AssetBundles/topiaforge-representative-world.bundle` are compiled from this
+  repository's own Unity sources with editor `6000.0.23f1`. Each carries a sibling
+  `*.manifest.json` recording the editor version, the contained asset paths, and a SHA-256, and release
+  validation rebuilds them twice and compares bytes. A compiled AssetBundle is opaque to inspection, so
+  that reproducible rebuild is what establishes the contents, not a reading of the file. The UI bundle
+  bakes in glyph data derived from the OFL fonts noted below; those notices apply to it.
+- `templates/TopiaForge.UnityWorldTemplate/Assets/HDRPDefaultResources/*.asset` are Unity YAML
+  configuration assets authored by this project. They hold settings values and reference HDRP script
+  GUIDs; the HDRP package itself is resolved by the consumer's Unity and is not redistributed here.
 
 The TopiaForge pixel-art wordmark, icon, generated platform icon variants, and the drawn pixel-art robot
 in `packages/launcher_ui/lib/src/pixel_robot.dart` are first-party project assets, not Robotopia-derived
 third-party artwork. The robot replaced a previously bundled `robot.webp` taken from the Robotopia web
 bundle; it is defined as a checked-in pixel grid rather than a raster file so its provenance is
 unambiguous.
+
+Those marks are the following files. They are listed by path because a prose description cannot be
+checked, and this section claims to cover every non-source file a user receives:
+
+- `packages/launcher_ui/assets/brand/topiaforge-icon.png` and
+  `packages/launcher_ui/assets/brand/topiaforge-wordmark.png` — the source marks. Clean pixel art with
+  six opaque colours and no anti-aliasing, which is what lets `assets/readme/source/pixel_marks.py`
+  convert them to exact SVG paths for the repository homepage.
+- `apps/topiaforge_launcher_flutter/assets/brand/topiaforge-app-icon.png` and
+  `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
+- `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
+  the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
+  site's copies of the same marks.
 
 TopiaForge bundles the Quicksand font for body typography in the launcher UI and Unity brand bundle.
 
@@ -142,7 +209,7 @@ Both signed NuGet packages declare MIT and record dotnet/dotnet commit
 `901ca941248413c79832d2fdbd709da0c4386353`. Release packaging verifies the
 exact netstandard2.0 DLL and notice hashes, then emits their license, notices,
 and machine-readable provenance under `third_party/dotnet/runtime-loader`.
-Robotopia build 2309 supplies the referenced `System.Memory`, `System.Buffers`,
+Robotopia build 2409 supplies the referenced `System.Memory`, `System.Buffers`,
 and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.

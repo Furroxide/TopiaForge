@@ -17,6 +17,9 @@ namespace TopiaForge.ModManager
             bool publishDetailedLoadEvent)
         {
             RefreshRuntimeCapabilities();
+            var lifecycle = new SceneLifecycleEvent(sceneInstanceId, scene.SceneName,
+                SceneLifecyclePhase.Activated, scene.Mode, isActive: true);
+            PublishSessionSceneLifecycle(lifecycle);
             var count = loadedMods.Count;
             for (var index = 0; index < count && index < loadedMods.Count; index++)
             {
@@ -30,12 +33,7 @@ namespace TopiaForge.ModManager
                     {
                         loaded.Context.RaiseSceneActivated(scene);
                     }
-                    loaded.Context.RaiseSceneLifecycle(new SceneLifecycleEvent(
-                        sceneInstanceId,
-                        scene.SceneName,
-                        SceneLifecyclePhase.Activated,
-                        scene.Mode,
-                        isActive: true));
+                    loaded.Context.RaiseSceneLifecycle(lifecycle);
                     sceneFailureLogged.Remove(loaded.Manifest.Id);
                 }
                 catch (Exception ex)
@@ -61,6 +59,7 @@ namespace TopiaForge.ModManager
         private void DispatchSceneLifecycleCore(SceneLifecycleEvent scene, string phase)
         {
             RefreshRuntimeCapabilities();
+            PublishSessionSceneLifecycle(scene);
             var count = loadedMods.Count;
             for (var index = 0; index < count && index < loadedMods.Count; index++)
             {
@@ -80,6 +79,17 @@ namespace TopiaForge.ModManager
             }
 
             RefreshRuntimeCapabilities();
+        }
+
+        private void PublishSessionSceneLifecycle(SceneLifecycleEvent scene)
+        {
+            if (!(sessionShutdown is IRuntimeSessionSceneObserver observer)) return;
+            try { observer.OnSceneLifecycle(scene); }
+            catch (Exception exception)
+            {
+                try { logger.Error(exception, "Session scene-policy observation failed."); }
+                catch { /* Independent package scene delivery must still proceed. */ }
+            }
         }
 
         private void DispatchFixedUpdate(GameTimeSample sample)

@@ -58,7 +58,7 @@ try {
     $filelistSha = Get-Sha256 $filelist
     $metadata = Join-Path $root "robotopia-game-build.json"
     $metadataBody = [ordered]@{
-        buildId = [Int64]2309
+        buildId = [Int64]2409
         baseUrl = "https://example.invalid"
         manifestUrl = "https://example.invalid/latest.json"
         sourcePlatform = "windows"

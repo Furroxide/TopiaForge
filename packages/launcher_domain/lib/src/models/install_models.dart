@@ -354,11 +354,22 @@ class LaunchResult {
     required this.started,
     required this.message,
     this.processId,
+    this.requestId,
+    this.process,
+    this.issues = const [],
+    this.blocks = const [],
+    this.latestActivity,
   });
 
   final bool started;
   final String message;
   final int? processId;
+  bool get processStarted => started;
+  final String? requestId;
+  final LaunchProcessIdentity? process;
+  final List<LauncherIssue> issues;
+  final List<LaunchBlock> blocks;
+  final LaunchActivity? latestActivity;
 }
 
 class LauncherSnapshot {
@@ -368,7 +379,6 @@ class LauncherSnapshot {
     required this.installedMods,
     required this.registryMods,
     required this.packageSources,
-    required this.worldCatalog,
     required this.recentLog,
     this.gameInstall,
     this.gameInstallCandidates = const [],
@@ -376,8 +386,10 @@ class LauncherSnapshot {
     this.developerMode = false,
     this.sourceStatuses = const [],
     this.launcherLog = '',
+    this.previewsByProfile = const {},
   });
 
+  final Map<String, LaunchPreview> previewsByProfile;
   final GameInstall? gameInstall;
   final List<GameInstallCandidate> gameInstallCandidates;
   final List<LauncherProfile> profiles;
@@ -385,12 +397,11 @@ class LauncherSnapshot {
   final List<InstalledMod> installedMods;
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
-  final WorldCatalog worldCatalog;
   final String recentLog;
   final LauncherUpdateSettings launcherUpdates;
 
   /// Opt-in developer mode. Off by default so the launcher is a clean install-and-play app for the majority of
-  /// users, who never build a mod. When on, the Developer tab (project tools, UGC live-sync) is revealed.
+  /// users, who never build a mod. When on, the Developer tab (project tools, world authoring) is revealed.
   final bool developerMode;
 
   /// Per-source load health from the most recent catalog load (enabled

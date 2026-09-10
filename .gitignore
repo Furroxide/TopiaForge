@@ -64,6 +64,7 @@ topiaforge.dev.props
 .codex-tmp/
 .claude/skills
 .claude/settings.local.json
+.claude/worktrees/
 
 # CI pack-smoke scratch (release.yml scaffolds here)
 .pack-smoke/

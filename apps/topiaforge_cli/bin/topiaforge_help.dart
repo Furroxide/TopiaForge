@@ -23,7 +23,6 @@ const _commands = [
   'doctor',
   'compat',
   'setup',
-  'ugc',
   'world',
   'projects',
   'unity',
@@ -103,7 +102,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod set <field> <value>     Update a manifest field (validated on write).',
     );
     stdout.writeln(
-      '  topiaforge mod add|remove <kind> <v>   Add/remove capability, dependency, conflict, gamemode, ...',
+      '  topiaforge mod add|remove <kind> <v>   Add/remove capability, dependency, conflict, ...',
     );
     stdout.writeln(
       '  topiaforge mod add|remove <module>     Couple a V1 module PackageReference with its runtime dependency.',
@@ -115,7 +114,7 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge mod bump [major|minor|patch]  Increment the manifest version.',
     );
     stdout.writeln(
-      '  topiaforge migrate-manifest            Convert a schema-V3 or retired V4 manifest to V5.',
+      '  topiaforge migrate-manifest            Migrate V3/V4/V5 to V6; --stub writes invalid author TODOs.',
     );
     stdout.writeln(
       '  topiaforge check project [path]        Validate a developer project.',
@@ -164,39 +163,31 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge dev-install [--game-dir p]  Install the loader + dev mods into the game.',
     );
     stdout.writeln(
-      '  topiaforge launch [--game-dir p]       Launch Robotopia.',
+      '  topiaforge launch [--game-dir p] [--profile id] [--target id | --main-menu]',
     );
     stdout.writeln(
-      '  topiaforge restart                     Restart Robotopia.',
+      '  topiaforge restart [--target id | --main-menu] Restart and confirm the requested start.',
+    );
+    stdout.writeln(
+      '      --target selects a declared launch target for one run; --main-menu overrides remembered autoload.',
+    );
+    stdout.writeln(
+      '      --world id and --transition scene-replacement|additive-arena require --target and permitted policy.',
+    );
+    stdout.writeln(
+      '      --wait-seconds 1..300 bounds acknowledgement wait (default 30); exit 3 means unconfirmed.',
+    );
+    stdout.writeln(
+      '      --no-wait reports process creation only; it never confirms session startup.',
     );
     stdout.writeln(
       '  topiaforge compat [--json]             Resolve declared game bindings against the install.',
     );
     stdout.writeln(
+      '  topiaforge compat bump --build <id>    Retarget every pinned Robotopia build reference.',
+    );
+    stdout.writeln(
       '  topiaforge acceptance run              Run the instrumented Robotopia V1 live gate.',
-    );
-    stdout.writeln('');
-    stdout.writeln('UGC live-sync:');
-    stdout.writeln(
-      '  topiaforge ugc setup                   Configure live-sync (transport, watch folder).',
-    );
-    stdout.writeln(
-      '  topiaforge ugc dev [--project p]       One-command UGC dev loop (watch + deploy).',
-    );
-    stdout.writeln(
-      '  topiaforge ugc publish --file <p>      Publish a UGC project.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc watch <folder>          Watch a folder and sync changes into the game.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc status                  Show live-sync status.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc cleanup                 Stop live sync and clear transient state.',
-    );
-    stdout.writeln(
-      '  topiaforge ugc go-live                 Promote the current UGC session.',
     );
     stdout.writeln('');
     stdout.writeln('Unity & worlds:');
@@ -204,13 +195,13 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge new unity-world <name>      Scaffold a Unity world project paired with a mod.',
     );
     stdout.writeln(
-      '  topiaforge world link --project <p> --mod <m>  Pair a Unity project with a world mod.',
+      '  topiaforge world link --project <p> --mod <m> [--world id] Pair a declared bundle world.',
     );
     stdout.writeln(
       '  topiaforge world build [--project p]   Build the world asset bundle via Unity.',
     );
     stdout.writeln(
-      '  topiaforge world play [--project p]    Build, install, and launch the world mod.',
+      '  topiaforge world play --target <id> [--project p] Build, install, and confirm that target.',
     );
     stdout.writeln(
       '  topiaforge unity <subcommand>          Unity package management (new-package, resolve, add, remove,',
@@ -256,7 +247,10 @@ extension _HelpCommand on _TopiaForgeCli {
       '  topiaforge release validate-policy ... Check catalog, pins, licensing, and provenance.',
     );
     stdout.writeln(
-      '  topiaforge release validate-readiness ... Check exact-SHA human decision gates.',
+      '  topiaforge release validate-prerequisites ... Check private build eligibility.',
+    );
+    stdout.writeln(
+      '  topiaforge release validate-readiness ... Verify exact candidate qualification.',
     );
     stdout.writeln(
       '  topiaforge release build-metadata ...  Build deterministic BOM, SBOM, and checksums.',

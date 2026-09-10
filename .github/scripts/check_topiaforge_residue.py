@@ -36,6 +36,7 @@ ROBOTOPIA_GAME_INTEGRATION_CONTENT_ALLOWLIST = {
     "apps/topiaforge_cli/test/release_handoff_game_identity_test.dart",
     "apps/topiaforge_cli/test/release_handoff_qa_fixture.dart",
     "apps/topiaforge_cli/test/release_handoff_test.dart",
+    "apps/topiaforge_cli/test/release_handoff_unsigned_test.dart",
     "tools/release-admin.ps1",
     "tools/release/build-windows.ps1",
     "tools/release/test-verify-robotopia-install.ps1",
@@ -153,6 +154,11 @@ TEXT_ONLY_BYTE_RULES = (
 # are game files, compatibility identifiers, managed-reference plumbing,
 # verified in-game asset ids, or tags.
 LOWERCASE_ROBOTOPIA_ALLOWLIST = (
+    # The Windows acceptance runner's actual game-evidence directory.
+    re.compile(
+        r"(?<![A-Za-z0-9_.-])evidence[/\\]windows[/\\]robotopia"
+        r"(?![A-Za-z0-9_.-])"
+    ),
     re.compile(r"robotopia\.gg", re.IGNORECASE),
     re.compile(r"@robotopia(?:-parts)?/", re.IGNORECASE),
     re.compile(
@@ -203,7 +209,11 @@ MAX_ARCHIVE_DEPTH = 8
 MAX_ARCHIVE_UNCOMPRESSED_BYTES = 8 * 1024 * 1024 * 1024
 
 LOWERCASE_LITERAL_ALLOWLIST = {
-    "apps/topiaforge_cli/lib/src/creator_persistence_probe.dart",
+    # Exact quoted QA keys read from the verified target-game handoff. Other
+    # lowercase uses and every retired-identity rule remain enforced.
+    "apps/topiaforge_cli/lib/src/release_candidate_acceptance.dart",
+    "apps/topiaforge_cli/test/release_candidate_acceptance_fixture.dart",
+    "apps/topiaforge_cli/test/release_candidate_acceptance_test.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_layout.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_runtime_helpers.dart",
     "packages/launcher_data/test/game_layout_test.dart",

@@ -20,34 +20,10 @@ namespace TopiaForge.ModManager.Tests
                    prompt!.ReplacementText == "WELCOME" && prompts.GetConflicts().Count == 1,
                 "prompt fake resolves deterministic priority conflicts");
 
-            var worlds = new FakeWorldGamemodeService(context.Lifetime)
-            {
-                AutoCompleteLoads = false,
-            };
-            var worldContent = new BundleWorldContent(
-                context.Assets,
-                "worlds/testing.bundle",
-                "WorldRoot",
-                TransformState.Identity);
-            var worldRegistration = worlds.RegisterWorld(new WorldDefinition(
-                "test.world",
-                "Test World",
-                "Deterministic",
-                sceneName: "TestScene"),
-                worldContent);
-            var modeRegistration = worlds.RegisterGamemode(new GamemodeDefinition(
-                "test.mode",
-                "Test Mode",
-                "Deterministic"));
-            var sessionChanged = 0;
-            worlds.SessionChanged += _ => sessionChanged++;
-            var load = worlds.LoadAsync(new WorldLoadRequest("test.world", "test.mode"));
-            Assert(worldRegistration.Succeeded && modeRegistration.Succeeded &&
-                   worlds.TryGetWorldContent("test.world", out var registeredContent) &&
-                   ReferenceEquals(registeredContent, worldContent) &&
-                   !load.IsCompleted && worlds.HasPendingLoad && worlds.CompletePendingLoad() &&
-                   load.Result.Succeeded && sessionChanged == 1,
-                "world fake exposes controlled asynchronous completion and session events");
+            var worlds = new FakeLocalWorldService(context.Lifetime) { SessionId = "test-session" };
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/testing.roboworld", "testing.roboworld", "Testing", string.Empty));
+            Assert(worlds.ImportAsync("test-session", "testing.roboworld").Result.Succeeded
+                && worlds.ImportedLocalWorlds.Count == 1, "local world fake imports into its explicitly bound running session");
 
             var chronos = new FakeTimeControlService(context.Lifetime);
             var freezeResult = chronos.Freeze("test");
@@ -72,18 +48,6 @@ namespace TopiaForge.ModManager.Tests
             turns.Dispose();
             Assert(!chronos.IsFrozen && chronos.Mode == TimeMode.Slowed,
                 "disposing the turn scheduler restores the preceding time state");
-
-            var bundle = context.Assets.LoadBundleAsync("content/test.bundle").Result.Value!;
-            var prefab = context.Assets.LoadPrefabAsync(bundle, "TestPrefab").Result.Value!;
-            var ugc = new FakeUgcLiveSyncService(context.Lifetime);
-            var overrideResult = ugc.RegisterAssetOverride(new UgcAssetOverride("@test/prefab", prefab));
-            var sessionResult = ugc.StartLocalSession(new UgcLiveSyncRequest(watchFolder: "exports"));
-            var snapshots = 0;
-            ugc.SnapshotImported += _ => snapshots++;
-            Assert(overrideResult.Succeeded && sessionResult.Succeeded &&
-                   ugc.ImportSnapshot("Project", "scene", "Scene", 3, "r1").Succeeded &&
-                   snapshots == 1,
-                "UGC fake owns sessions and injects snapshot notifications");
 
             var robotKit = new FakeRobotKit(context.Lifetime);
             var spawn = robotKit.Agents.Spawn(new RobotAgentSpawnRequest(
@@ -137,25 +101,104 @@ namespace TopiaForge.ModManager.Tests
                    voice.StopAsync().Result.Value!.Text == "hello robot",
                 "RobotKit dialogue-input fake returns deterministic voice transcripts");
 
-            var lifetimeCancelledLoad = worlds.LoadAsync(
-                new WorldLoadRequest("test.world", "test.mode"));
-            Assert(!lifetimeCancelledLoad.IsCompleted && worlds.HasPendingLoad,
-                "controlled world loads remain pending until completed or cancelled");
             context.Dispose();
             var rejectedPrompt = prompts.Register(new PromptOverrideRequest("robot.after-stop", "LATE"));
             Assert(prompts.ActiveRegistrationCount == 0 &&
                    rejectedPrompt.ErrorCode == ModErrorCode.Cancelled &&
-                   worlds.ActiveRegistrationCount == 0 &&
-                   lifetimeCancelledLoad.Result.ErrorCode == ModErrorCode.Cancelled &&
-                   !worlds.HasPendingLoad &&
+                   worlds.ImportAsync("test-session", "testing.roboworld").Result.ErrorCode == ModErrorCode.Cancelled &&
                    chronos.ActiveLeaseCount == 0 &&
-                   ugc.ActiveLeaseCount == 0 &&
                    robotKit.Agents.ActiveAgents.Count == 0 &&
                    robotKit.Objectives.ActiveHandleCount == 0 &&
                    robotKit.Conversations.ActiveConversationCount == 0 &&
                    robotKit.DialogueInput.ActiveCaptureCount == 0,
                 "specialist fake resources are released after lifetime teardown");
             context.AssertNoLeaks();
+        }
+
+        private static void TestWorldAssetOverrideFake()
+        {
+            var context = new FakeModContext();
+            var worlds = new FakeLocalWorldService(context.Lifetime) { SessionId = "test-session" };
+            var bundle = context.Assets.LoadBundleAsync("worlds/testing.bundle").Result.Value!;
+            var first = context.Assets.LoadPrefabAsync(bundle, "Tree").Result.Value!;
+            var second = context.Assets.LoadPrefabAsync(bundle, "Rock").Result.Value!;
+
+            var registered = worlds.RegisterAssetOverride(
+                new WorldAssetOverride("@author/tree", first, new Vec3(0f, 1f, 0f)));
+            Assert(registered.TryGetValue(out var lease) && worlds.AssetOverrides.Count == 1 &&
+                   worlds.AssetOverrides[0].AssetId == "@author/tree" &&
+                   worlds.AssetOverrides[0].LocalPositionOffset.HasValue,
+                "Registering an asset override should expose it with its offset.");
+
+            // One prefab per id, matching the game's own table: the second registration wins.
+            var replaced = worlds.RegisterAssetOverride(new WorldAssetOverride("@author/tree", second));
+            Assert(replaced.TryGetValue(out var replacementLease) && worlds.AssetOverrides.Count == 1 &&
+                   ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
+                "Re-registering an asset id should replace the earlier override rather than fail.");
+
+            // The superseded lease is inert: disposing it must not evict the override that replaced it.
+            lease!.Dispose();
+            Assert(worlds.AssetOverrides.Count == 1 &&
+                   ReferenceEquals(worlds.AssetOverrides[0].Prefab, second),
+                "Disposing a superseded override lease should not remove its replacement.");
+
+            // Registration order is a documented guarantee of the fake, and a replacement keeps the slot
+            // it replaced rather than moving to the end.
+            var third = worlds.RegisterAssetOverride(new WorldAssetOverride("@author/rock", first));
+            Assert(worlds.AssetOverrides.Count == 2 &&
+                   worlds.AssetOverrides[0].AssetId == "@author/tree" &&
+                   worlds.AssetOverrides[1].AssetId == "@author/rock",
+                "Overrides should be reported in registration order.");
+            worlds.RegisterAssetOverride(new WorldAssetOverride("@author/tree", first));
+            Assert(worlds.AssetOverrides[0].AssetId == "@author/tree",
+                "Replacing an override should keep its position.");
+            third!.Value!.Dispose();
+
+            replacementLease!.Dispose();
+            Assert(worlds.AssetOverrides.Count == 1,
+                "Disposing a superseded lease should not remove the override that replaced it.");
+
+            var rejected = false;
+            try
+            {
+                worlds.RegisterAssetOverride(new WorldAssetOverride(" ", first));
+            }
+            catch (ArgumentException)
+            {
+                rejected = true;
+            }
+
+            Assert(rejected, "A blank asset id should be rejected at construction.");
+        }
+
+        private static void TestLocalWorldFake()
+        {
+            var context = new FakeModContext();
+            var worlds = new FakeLocalWorldService(context.Lifetime) { SessionId = "test-session" };
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/town.roboworld", "town.roboworld", "Town", string.Empty));
+            worlds.LocalWorlds.Add(new LocalWorldFile("/worlds/broken.roboworld", "broken.roboworld", string.Empty, "Unexpected end of input."));
+
+            var listed = worlds.ListLocalWorlds();
+            Assert(listed.TryGetValue(out var files) && files!.Count == 2 &&
+                   files[0].IsLoadable && !files[1].IsLoadable,
+                "Listing local worlds should include unreadable exports with their error.");
+
+            Assert(worlds.ImportAsync("test-session", "town.roboworld").Result.Succeeded &&
+                   worlds.ImportedLocalWorlds.Count == 1,
+                "Loading a listed local world should succeed and be recorded.");
+
+            // An export the scanner could not parse is refused with the scanner's own reason, not silently skipped.
+            var brokenLoad = worlds.ImportAsync("test-session", "broken.roboworld").Result;
+            Assert(!brokenLoad.Succeeded && brokenLoad.ErrorCode == ModErrorCode.InvalidArgument,
+                "Loading an unreadable export should fail with the scanner's reason.");
+
+            Assert(worlds.ImportAsync("test-session", "missing.roboworld").Result.ErrorCode == ModErrorCode.NotFound,
+                "Loading an unlisted file should report NotFound.");
+
+            worlds.LocalWorldsAvailable = false;
+            Assert(worlds.ListLocalWorlds().ErrorCode == ModErrorCode.Unavailable &&
+                   worlds.ImportAsync("test-session", "town.roboworld").Result.ErrorCode == ModErrorCode.Unavailable,
+                "A build without the importer should report Unavailable rather than an empty list.");
         }
 
         private static void TestWorldPauseMenuFake()
@@ -182,16 +225,25 @@ namespace TopiaForge.ModManager.Tests
             var intercepted = pauseMenu.InterceptExit(_ => WorldPauseExitDecision.Block);
             Assert(intercepted.TryGetValue(out var interceptorHandle) && pauseMenu.HasExitInterceptor,
                 "an exit interceptor registers");
-            Assert(pauseMenu.InvokeExit(WorldSessionFixture()) == WorldPauseExitDecision.Block,
+            Assert(pauseMenu.InvokeExit(WorldSessionFixture(context)) == WorldPauseExitDecision.Block,
                 "the registered interceptor decides the vanilla exit");
+
+            // The slot is exclusive. A silent replacement would leave the first gamemode believing it still had
+            // a veto over an exit it no longer sees, which is what the live provider used to do.
+            var second = pauseMenu.InterceptExit(_ => WorldPauseExitDecision.ReturnToMainMenu);
+            Assert(!second.Succeeded && second.ErrorCode == ModErrorCode.Conflict,
+                "a second exit interceptor is a conflict, not a silent replacement");
+            Assert(pauseMenu.InvokeExit(WorldSessionFixture(context)) == WorldPauseExitDecision.Block,
+                "the rejected interceptor never displaces the incumbent");
+
             interceptorHandle!.Dispose();
             Assert(!pauseMenu.HasExitInterceptor &&
-                   pauseMenu.InvokeExit(WorldSessionFixture()) == WorldPauseExitDecision.EndSessionAndExit,
+                   pauseMenu.InvokeExit(WorldSessionFixture(context)) == WorldPauseExitDecision.ReturnToMainMenu,
                 "releasing the interceptor restores the default exit decision");
 
             var throwingHandle = pauseMenu.InterceptExit(_ => throw new InvalidOperationException("bad"));
             Assert(throwingHandle.Succeeded &&
-                   pauseMenu.InvokeExit(WorldSessionFixture()) == WorldPauseExitDecision.EndSessionAndExit,
+                   pauseMenu.InvokeExit(WorldSessionFixture(context)) == WorldPauseExitDecision.ReturnToMainMenu,
                 "a throwing interceptor can never eat the vanilla exit button");
             throwingHandle.Value!.Dispose();
 
@@ -277,11 +329,7 @@ namespace TopiaForge.ModManager.Tests
             context.AssertNoLeaks();
         }
 
-        private static WorldSession WorldSessionFixture() => new WorldSession(
-            "probe.world",
-            "probe.gamemode",
-            "Single",
-            "ProbeScene",
-            DateTimeOffset.UnixEpoch);
+        private static IWorldSession WorldSessionFixture(FakeModContext context) => new FakeGamemodeSession(context,
+            new WorldReadiness(new WorldSceneIdentity(1, "TestWorld"), TransformState.Identity));
     }
 }

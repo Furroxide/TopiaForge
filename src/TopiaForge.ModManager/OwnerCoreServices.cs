@@ -12,11 +12,13 @@ namespace TopiaForge.ModManager
     {
         private readonly object sync = new object();
         private readonly IModLifetime lifetime;
+        private readonly OwnerLocalizationService? parent;
         private readonly List<CatalogRegistration> catalogs = new List<CatalogRegistration>();
 
-        public OwnerLocalizationService(IModLifetime lifetime)
+        public OwnerLocalizationService(IModLifetime lifetime, OwnerLocalizationService? parent = null)
         {
             this.lifetime = lifetime;
+            this.parent = parent;
         }
 
         public string CurrentLocale => CultureInfo.CurrentUICulture.Name;
@@ -28,6 +30,8 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(catalog));
             }
 
+            if (lifetime.IsStopping) return OperationResult<ILocalizationRegistration>.Failure(
+                ModErrorCode.Cancelled, "The context is stopping.");
             var registration = new CatalogRegistration(this, catalog);
             lock (sync)
             {
@@ -41,7 +45,6 @@ namespace TopiaForge.ModManager
             }
             catch (ObjectDisposedException)
             {
-                registration.Dispose();
                 return OperationResult<ILocalizationRegistration>.Failure(
                     ModErrorCode.Cancelled,
                     "The mod stopped before its localization catalog could be registered.");
@@ -56,11 +59,7 @@ namespace TopiaForge.ModManager
                 return false;
             }
 
-            CatalogRegistration[] snapshot;
-            lock (sync)
-            {
-                snapshot = catalogs.Where(item => item.IsActive).ToArray();
-            }
+            var snapshot = GetVisibleCatalogs();
 
             foreach (var locale in CandidateLocales(CurrentLocale, snapshot))
             {
@@ -77,6 +76,15 @@ namespace TopiaForge.ModManager
 
             text = null;
             return false;
+        }
+
+        private CatalogRegistration[] GetVisibleCatalogs()
+        {
+            var inherited = parent?.GetVisibleCatalogs() ?? Array.Empty<CatalogRegistration>();
+            lock (sync)
+            {
+                return inherited.Concat(catalogs.Where(item => item.IsActive && !lifetime.IsStopping)).ToArray();
+            }
         }
 
         public string Get(string key, string fallback)
@@ -189,6 +197,8 @@ namespace TopiaForge.ModManager
 
             var result = registry.RegisterCommand(ownerModId, definition, invocation =>
             {
+                if (lifetime.IsStopping) return OperationResult<string>.Failure(
+                    ModErrorCode.Cancelled, "The command owner is stopping.");
                 try
                 {
                     return handler(invocation)
@@ -223,6 +233,11 @@ namespace TopiaForge.ModManager
                 throw new ArgumentNullException(nameof(arguments));
             }
 
+            if (lifetime.IsStopping)
+            {
+                result = OperationResult<string>.Failure(ModErrorCode.Cancelled, "The context is stopping.");
+                return false;
+            }
             return registry.TryExecuteCommand(ownerModId, name, arguments, out result);
         }
     }
@@ -296,16 +311,18 @@ namespace TopiaForge.ModManager
         private readonly ModServiceRegistry registry;
         private readonly HashSet<string> accessibleOwnerIds;
         private readonly List<FacadeEntry> facadeCache = new List<FacadeEntry>();
+        private readonly IModContext? consumerContext;
 
         public OwnerExtensionService(
             string ownerModId,
             IEnumerable<string> dependencyIds,
             IModLifetime lifetime,
-            ModServiceRegistry registry)
+            ModServiceRegistry registry, IModContext? consumerContext = null)
         {
             this.ownerModId = ownerModId;
             this.lifetime = lifetime;
             this.registry = registry;
+            this.consumerContext = consumerContext;
             accessibleOwnerIds = new HashSet<string>(dependencyIds, StringComparer.OrdinalIgnoreCase)
             {
                 ownerModId
@@ -346,6 +363,7 @@ namespace TopiaForge.ModManager
 
         public IReadOnlyList<T> GetAll<T>() where T : class
         {
+            if (lifetime.IsStopping) return Array.Empty<T>();
             var providers = registry.GetExtensions<T>(accessibleOwnerIds);
             if (providers.Count == 0)
             {
@@ -363,7 +381,9 @@ namespace TopiaForge.ModManager
 
         private T GetOwnerFacade<T>(T provider) where T : class
         {
-            if (!(provider is IOwnerBoundExtensionFactory factory))
+            var contextFactory = provider as IOwnerContextBoundExtensionFactory;
+            var factory = provider as IOwnerBoundExtensionFactory;
+            if (contextFactory == null && factory == null)
             {
                 return provider;
             }
@@ -371,6 +391,7 @@ namespace TopiaForge.ModManager
             var contractType = typeof(T);
             lock (facadeSync)
             {
+                if (lifetime.IsStopping) throw new ObjectDisposedException(nameof(IModLifetime));
                 foreach (var entry in facadeCache)
                 {
                     if (entry.ContractType == contractType && ReferenceEquals(entry.Provider, provider))
@@ -379,7 +400,10 @@ namespace TopiaForge.ModManager
                     }
                 }
 
-                var facade = factory.CreateOwnerFacade(contractType, ownerModId, lifetime);
+                var facade = contextFactory != null
+                    ? contextFactory.CreateOwnerFacade(contractType, consumerContext
+                        ?? throw new InvalidOperationException("A context-bound provider requires the exact consuming mod context."))
+                    : factory!.CreateOwnerFacade(contractType, ownerModId, lifetime);
                 if (!(facade is T typedFacade))
                 {
                     throw new InvalidOperationException(

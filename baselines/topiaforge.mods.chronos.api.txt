@@ -3,7 +3,7 @@
 # Regenerate with: dotnet run --project tests/TopiaForge.ModManager.Tests -c Release -- --print-sdk-api-baseline topiaforge.mods.chronos
 # Review every change. Breaking changes require explicit V1 compatibility approval.
 
-assembly TopiaForge.Mods.Chronos, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+assembly TopiaForge.Mods.Chronos, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
 type public interface TopiaForge.Mods.ITimeControlService

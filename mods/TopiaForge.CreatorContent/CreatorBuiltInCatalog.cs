@@ -11,7 +11,7 @@ using UnityEngine;
 namespace TopiaForge.CreatorContent
 {
     /// <summary>
-    /// Clean-room build-2309 catalog adapters. Discovery is deliberately limited to the game's equippable-item
+    /// Clean-room build-2409 catalog adapters. Discovery is deliberately limited to the game's equippable-item
     /// registry and the exact active UGC import host maps. It never walks Resources or clones live scene objects.
     /// </summary>
     internal sealed partial class CreatorBuiltInCatalog : IDisposable
@@ -43,7 +43,7 @@ namespace TopiaForge.CreatorContent
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             gameVersion = runtime != null && runtime.TryGetGameVersion(out var version)
                 ? version.ToString()
-                : "0.0.2309";
+                : "0.0.2409";
         }
 
         public OperationResult<bool> Refresh()
@@ -88,7 +88,7 @@ namespace TopiaForge.CreatorContent
                 "robotopia.vehicles",
                 "Robotopia vehicles",
                 CreatorCatalogSourceState.Unavailable,
-                "No validated build-2309 vehicle registry adapter is available; arbitrary native scanning is disabled.",
+                "No validated build-2409 vehicle registry adapter is available; arbitrary native scanning is disabled.",
                 0);
             result.Statuses["robotopia.characters"] = new CreatorCatalogSourceStatus(
                 "robotopia.characters",
@@ -117,7 +117,7 @@ namespace TopiaForge.CreatorContent
                         ItemsSourceId,
                         displayName,
                         CreatorCatalogSourceState.Unavailable,
-                        "The build-2309 equippable-item registry binding is missing or changed.",
+                        "The build-2409 equippable-item registry binding is missing or changed.",
                         0);
                     return;
                 }
@@ -146,7 +146,7 @@ namespace TopiaForge.CreatorContent
                             ItemsSourceId,
                             MakeLocalId("item", key),
                             DisplayName(key, "Item"),
-                            "Robotopia equippable item exposed by the build-2309 item registry.",
+                            "Robotopia equippable item exposed by the build-2409 item registry.",
                             CreatorContentKind.Item,
                             prefab));
                     }
@@ -211,7 +211,7 @@ namespace TopiaForge.CreatorContent
                         PropsSourceId,
                         displayName,
                         CreatorCatalogSourceState.Unavailable,
-                        "The curated build-2309 UGC prefab-map binding is missing or changed.",
+                        "The curated build-2409 UGC prefab-map binding is missing or changed.",
                         0);
                     return;
                 }

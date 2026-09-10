@@ -10,7 +10,7 @@ not merely build projects. Update it whenever a public contract, generator, or r
 | `TopiaForge.ModManager.Core` | Manifest, version, dependency, path, state, package, and profile-domain logic | Unity-free `netstandard2.1`; consumed by the BepInEx runtime and C# tests |
 | `TopiaForge.ModManager` | BepInEx plugin, startup/shutdown, runtime install state, mod loading/isolation, scenes, logs, package inbox, manager overlay | May reference Unity/BepInEx; ships as the Robotopia-side loader |
 | `TopiaForge.Mods.Abstractions` | V1 safe authoring contracts and manager-owned core services | Unity-free `netstandard2.1`; AssemblyVersion remains `1.0.0.0` throughout V1 |
-| `TopiaForge.Mods.Chronos`, `.CreatorContent`, `.Multiplayer`, `.Prompts`, `.RobotKit`, `.Ugc`, `.Worlds` | Optional specialist contract modules | Unity-free reference packages coupled to runtime dependencies by `topiaforge mod add`; Multiplayer is a stable API preview with loopback only |
+| `TopiaForge.Mods.Chronos`, `.CreatorContent`, `.Multiplayer`, `.Prompts`, `.RobotKit`, `.Worlds` | Optional specialist contract modules | Unity-free reference packages coupled to runtime dependencies by `topiaforge mod add`; Multiplayer is a stable API preview with loopback only |
 | `TopiaForge.Mods.Multiplayer.Generators` | Multiplayer codecs, registration, protocol descriptors, and prediction-safety diagnostics | Compile-time analyzer package; no transport or native engine surface |
 | `TopiaForge.Mods.Testing` / `.Analyzers` | Runner-neutral fakes/lifecycle harness and safe-project diagnostics | Packaged with every SDK release; generated tests use NUnit |
 | `TopiaForge.Mods.Interop.Unity` | Explicitly unstable native escape hatch | Requires `unsafe-native`; excluded from V1 compatibility guarantees and normal templates |
@@ -19,43 +19,41 @@ not merely build projects. Update it whenever a public contract, generator, or r
 | `TopiaForge.GameCompat.Extractor` | Metadata-only installed-Robotopia inspection | Self-contained developer/release executable; never loads Robotopia code for execution |
 | `TopiaForge.ModManager.Tests` | Cross-component C# harness | Exercises Core, SDK, GameCompat, runtime source conventions, and pure mod seams |
 
-The canonical Robotopia-side loader payload contains fourteen managed assemblies: twelve
+The canonical Robotopia-side loader payload contains thirteen managed assemblies: eleven
 `TopiaForge.*` implementations/contracts plus pinned `System.Reflection.Metadata`
-and `System.Collections.Immutable` 10.0.9. Robotopia build 2309 supplies the
+and `System.Collections.Immutable` 10.0.9. Robotopia build 2409 supplies the
 required `System.Memory`, `System.Buffers`, and
 `System.Runtime.CompilerServices.Unsafe` Unity/Mono profile assemblies; release
 tests verify their exact identities and hashes instead of shadowing them in the
 plugin directory. Launcher repair and CLI release packaging consume the same
 inventory from `launcher_data`.
 
-The primary solution builds sixteen first-party mods: Chronos, CreatorContent, CreatorTools, GravityGun, Multiplayer,
-NoFeedbackUrl, OppositeDay, PerfFixes, Performance, Prompts, RobotKit, Sandbox, UgcLiveSync, UiGallery, Worlds, and
+The primary solution builds fourteen first-party mods: Chronos, CreatorContent, GravityGun, Multiplayer,
+NoFeedbackUrl, OppositeDay, PerfFixes, Performance, Prompts, RobotKit, Sandbox, UiGallery, Worlds, and
 Zombies. Assets are now a manager-owned core service,
 not a globally mutable framework mod. Runtime dependencies are expressed only through `topiaforge.mod.json`;
 project references to safe contracts are compile-time-only. UiGallery is a validated developer catalog and is excluded
-from the fourteen-package normal non-DevTool payload and the fifteen-package release payload.
+from the thirteen-package release payload.
 
 ## Launcher and developer tooling
 
 | Component | Responsibility | Allowed dependencies |
 | --- | --- | --- |
 | `launcher_domain` | Immutable models, SemVer/ranges, manifests, profiles, dependency/install planning, registry contracts | Dart only; no Flutter, filesystem, network, archive, or process APIs |
-| `launcher_data` | Local repositories and services for storage, downloads, archives, processes, runtime repair, diagnostics, UGC, and Unity/VPM tooling | Depends on `launcher_domain`; returns domain-ready typed data |
+| `launcher_data` | Local repositories and services for storage, downloads, archives, processes, runtime repair, diagnostics, and Unity/VPM tooling | Depends on `launcher_domain`; returns domain-ready typed data |
 | `launcher_ui` | Shared Flutter theme, motion, and presentation widgets | Flutter only; no application state or data access |
 | `topiaforge_launcher_flutter` | Desktop application and `LauncherBloc` event/state coordination | Depends on all launcher packages; widgets dispatch events and never perform data I/O |
 | `topiaforge` CLI | Mod/template/registry/VPM/world/UI/release commands and deterministic packaging | Reuses domain/data services; is not a second implementation of archive or process policy |
-| UGC Automerge sidecar | Optional Node 24.16+ publisher and session lease | Lockfile-backed, separate process; never required for ordinary mod/player flows |
 
 ## Package and serialization contracts
 
 | Contract | Version / compatibility rule | Producers and consumers |
 | --- | --- | --- |
-| `.topiaforgemod` ZIP + `topiaforge.mod.json` | Manifest V5 is the sole 1.0 schema; omitted multiplayer metadata means standalone-only, while an explicit block opts into bounded protocol/content metadata; retired V4 is rejected with migration guidance | CLI/scaffolds/first-party builds produce; launcher and runtime dispatch/validate/consume |
+| `.topiaforgemod` ZIP + `topiaforge.mod.json` | Manifest V6 is the sole 1.0 schema; omitted multiplayer metadata means standalone-only, while an explicit block opts into bounded protocol/content metadata; retired V4 is rejected with migration guidance | CLI/scaffolds/first-party builds produce; launcher and runtime dispatch/validate/consume |
 | SemVer and version ranges | SemVer 2.0 precedence; exact, wildcard, and comparator-set ranges | C# Core and Dart domain must pass shared parity fixtures |
-| Robotopia build version | Numeric build `N` maps to `0.0.N`; initial release is exactly `0.0.2309` | Extractor/runtime detect; launcher plans; manifests constrain |
+| Robotopia build version | Numeric build `N` maps to `0.0.N`; the supported build is `0.0.2409` | Extractor/runtime detect; launcher plans; manifests constrain |
 | Manager/profile/session state | Versioned, normalized, bounded, atomic, and strict; installed versions coexist, exact profile pins fail closed, and unpinned profiles select the highest compatible SemVer | Launcher data writes; runtime reads process-scoped session state |
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
-| UGC config/status/command/session | Explicit schema versions, bounded JSON, atomic writers, unknown fields tolerated where documented | Launcher/CLI/sidecar/`TopiaForge.UgcLiveSync` |
 | World and TopiaForgeUi bundle manifests | Exact Unity `6000.0.23f1`, target, inputs, and SHA-256 provenance | Unity batch builders produce; CLI/package/runtime validate |
 | Release policy/BOM/catalog | Product/component versions, signing trust, expected artifacts, and local handoff evidence are checked against source metadata; stable Pages metadata remains manual-only | Admin orchestrator and CLI produce; protected GitHub finalizer verifies |
 | Launcher update metadata V1 | Ed25519-signed exact UTF-8 payload with immutable GitHub asset URLs, hashes, sizes, entry inventory, and complete install layouts | Protected GitHub finalizer signs after verifying admin-built bytes; launcher verifies before parsing and reconciles with GitHub |
@@ -64,17 +62,17 @@ from the fourteen-package normal non-DevTool payload and the fifteen-package rel
 
 - Seven C# mod templates: minimal, gameplay, gamemode, service, UI, asset, and world.
 - Unity world project template with the world companion and embedded VPM resolver.
-- Standalone Unity package template and UGC companion package.
+- Standalone Unity package template.
 - TopiaForgeUi bundle source project under `tools/unity-ui-bundle`.
-- Three first-party VPM packages/listings generated and validated by the CLI.
+- Two first-party VPM packages/listings generated and validated by the CLI.
 
 Templates are release inputs, not documentation snippets: every template is scaffolded, built, packed twice, and
-validated from its resulting archive. Default scaffolds are deliberately non-publishable until author and license
-identity are supplied.
+validated from its resulting archive. Default scaffolds adopt the project license and stay non-publishable until
+author identity is supplied.
 
 ## Compatibility, registry, and repository support data
 
-- `baselines/gamecode.surface.baseline.json` is the reviewed build-2309 compatibility surface. The extractor may
+- `baselines/gamecode.surface.baseline.json` is the reviewed build-2409 compatibility surface. The extractor may
   propose an update, but release validation rejects an unexplained or different-build baseline.
 - `bindings/*.gamebindings.json` are the nine first-party provider/advanced-mod runtime binding declarations
   consumed by the compatibility audit. Safe consumer mods such as GravityGun, OppositeDay, Sandbox, and Zombies have no binding
@@ -95,19 +93,23 @@ identity are supplied.
   pin; proprietary assemblies are never committed or released.
 - Flutter platform registrants, lock files, Unity `.meta` files, bundle manifests, prefab assets, and VPM listings are
   generated artifacts whose source/provenance must agree with their generators.
-- The RC1 candidate consists of one canonical deterministic ecosystem payload plus Windows x64 and Linux x64
-  platform archives. Nested mod/VPM hashes must be identical between the two archives. Generic macOS packaging
-  remains in source for a later release but is not part of RC1's exact asset inventory.
-- Production Windows bytes are built and validated on the administrator workstation; Linux x64 is built in Ubuntu
-  24.04 under WSL2 on that same workstation. RC1 also runs Robotopia through pinned Proton under WSLg and records that
-  the evidence is same-host and non-independent. `release-platform-bundle-v1` and `release-handoff-v1` bind both
-  outputs and scrubbed QA evidence to one source SHA.
-- Candidate metadata includes `release-bom.json`, `SHA256SUMS`, SPDX SBOMs,
-  project/third-party notices, BepInEx provenance, two platform manifests, the
-  aggregate handoff manifest and its detached pinned-certificate CMS
-  signature, signed launcher-update metadata and sidecar, and checked-in
-  release notes. The manual release catalog is future stable-only Pages output,
-  not an RC1 asset.
+- RC1 declares one Windows x64 archive plus thirteen mod packages: fourteen catalog payloads. The canonical
+  ecosystem embeds the two VPM packages and the same thirteen mods. Two independent ecosystem builds must be
+  byte-identical, and nested payload hashes must match the reviewed ecosystem inventory.
+- Production Windows bytes and isolated Unity/Robotopia acceptance are produced on administrator-controlled
+  machines. RC1 has no Linux or macOS archive. Retained WSL2/Proton and generic macOS tooling require a separately
+  reviewed policy change before use in a future candidate, and publication requires platform acceptance.
+  Same-host evidence must be identified accurately where applicable.
+- RC1 stages eighteen human-owned assets: the fourteen catalog payloads, one Windows
+  `release-platform-bundle-v1` manifest, the aggregate `release-handoff-v1` manifest and both detached candidate
+  qualification records. The current explicit unsigned policy requires all three Windows executables verified
+  unsigned and the handoff CMS asset/digest absent. A future signed Windows policy requires its pinned certificate,
+  timestamps and detached CMS verification.
+- Protected finalization adds the five policy-declared metadata assets: `release-bom.json`,
+  `release-sbom.spdx.json`, `SHA256SUMS`, `topiaforge-update-v1.json` and its Ed25519 sidecar, bringing the current
+  public inventory to twenty-three assets. Project/third-party notices and BepInEx provenance remain in the
+  validated payloads. The checked-in release notes feed the release; the manual catalog is future stable-only
+  Pages output, not an RC1 asset. Inventory readiness does not authorize construction or publication.
 
 ## CI and privilege boundaries
 

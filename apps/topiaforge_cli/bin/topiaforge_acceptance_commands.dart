@@ -3,20 +3,15 @@ part of 'topiaforge.dart';
 extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
   static const _acceptanceUsage =
       'Usage: topiaforge acceptance run [--game-dir path] [--package path] '
-      '[--output dir] [--case id ...] [--all] [--timeout-seconds 30..3600] '
+      '--isolation-record path [--output dir] [--case id ...] [--all] [--timeout-seconds 30..3600] '
       '[--skip-runtime-install] [--skip-launch]';
 
-  static const _creatorUsage =
-      'Usage: topiaforge acceptance creator --creator-package path '
-      '[--game-dir path] [--output dir] [--case id ...] [--all] '
-      '[--timeout-seconds 30..3600] [--skip-runtime-install] [--skip-launch]';
-
   Future<int> _acceptance(List<String> args) async {
-    if (args.firstOrNull == 'creator') {
-      return _acceptanceCreator(args.skip(1).toList(growable: false));
+    if (args.firstOrNull == 'verify-isolation') {
+      return _verifyAcceptanceIsolation(args.skip(1).toList());
     }
     if (args.firstOrNull != 'run') {
-      throw UsageError('$_acceptanceUsage\n$_creatorUsage');
+      throw UsageError(_acceptanceUsage);
     }
     final runArgs = args.skip(1).toList(growable: false);
     if (runArgs.contains('--help')) {
@@ -61,6 +56,7 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
           ? ''
           : p.normalize(p.absolute(gameDirectory)),
       packagePath: absoluteIfPresent('--package'),
+      isolationRecordPath: absoluteIfPresent('--isolation-record'),
       outputDirectory: output,
       requiredCases: parsed.cases,
       timeout: Duration(seconds: timeoutSeconds),
@@ -74,6 +70,10 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
     );
     final runner = LiveAcceptanceRunner(
       commandRunner: (arguments) => run(arguments),
+      isolatedCommandRunner: (arguments, context) => _TopiaForgeCli(
+        developerRepository,
+        acceptanceIsolation: context,
+      ).run(arguments),
     );
     final evidence = await runner.run(options);
     stdout.writeln(
@@ -84,88 +84,28 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
     return 0;
   }
 
-  /// Runs the interactive Creator workbench acceptance journey.
-  ///
-  /// Unlike `acceptance run`, every case here is proven by a challenge-bound
-  /// marker the native recorder emits from a real observed workbench
-  /// transition, so this command cannot be satisfied by a source-only harness.
-  Future<int> _acceptanceCreator(List<String> args) async {
+  Future<int> _verifyAcceptanceIsolation(List<String> args) async {
+    const usage =
+        'Usage: topiaforge acceptance verify-isolation --evidence path --isolation-record path';
     if (args.contains('--help')) {
-      stdout.writeln(_creatorUsage);
-      stdout.writeln(
-        'Requires an authorized interactive Robotopia build-2309 session. '
-        'With no --case, every creatorAcceptance case is required.',
-      );
+      stdout.writeln(usage);
       return 0;
     }
-    final parsed = _parseCreatorArguments(args);
-    final repoRoot = _findRepoRoot() ?? Directory.current.absolute.path;
-    final gameDirectory = parsed.values['--game-dir']?.trim().isNotEmpty == true
-        ? parsed.values['--game-dir']!
-        : Platform.environment['ROBOTOPIA_GAME_DIR'] ?? '';
-    final timeoutSeconds = int.tryParse(
-      parsed.values['--timeout-seconds'] ?? '1800',
+    final parsed = _parseFlagArguments(
+      args,
+      {'--evidence', '--isolation-record'},
+      {},
+      usage,
     );
-    if (timeoutSeconds == null ||
-        timeoutSeconds < 30 ||
-        timeoutSeconds > 3600) {
-      throw UsageError(
-        '--timeout-seconds must be an integer from 30 through 3600.\n'
-        '$_creatorUsage',
-      );
-    }
-    final creatorPackage = parsed.values['--creator-package'] ?? '';
-    if (creatorPackage.trim().isEmpty) {
-      throw UsageError('--creator-package is required.\n$_creatorUsage');
-    }
-    final output = parsed.values['--output']?.trim().isNotEmpty == true
-        ? p.normalize(p.absolute(parsed.values['--output']!))
-        : p.join(Directory.systemTemp.path, 'topiaforge-creator-acceptance');
-    final options = CreatorAcceptanceOptions(
-      repositoryRoot: repoRoot,
-      gameDirectory: gameDirectory.trim().isEmpty
-          ? ''
-          : p.normalize(p.absolute(gameDirectory)),
-      outputDirectory: output,
-      requiredCases: parsed.cases,
-      timeout: Duration(seconds: timeoutSeconds),
-      requireAll: parsed.flags.contains('--all'),
-      skipRuntimeInstall: parsed.flags.contains('--skip-runtime-install'),
-      skipLaunch: parsed.flags.contains('--skip-launch'),
+    if (parsed.values.length != 2) throw UsageError(usage);
+    final summary = await verifyLiveAcceptanceIsolation(
+      evidencePath: p.normalize(p.absolute(parsed.values['--evidence']!)),
+      isolationRecordPath: p.normalize(
+        p.absolute(parsed.values['--isolation-record']!),
+      ),
     );
-    final runner = CreatorAcceptanceRunner(
-      commandRunner: (arguments) => run(arguments),
-    );
-    final evidence = await runner.run(
-      options,
-      p.normalize(p.absolute(creatorPackage)),
-    );
-    stdout.writeln(
-      'TopiaForge Creator acceptance passed '
-      '${evidence.requiredCases.length} required cases across '
-      '${evidence.lifecycleCycles} lifecycle cycles.',
-    );
-    stdout.writeln(
-      'Evidence: ${p.join(output, 'creator-acceptance-result.json')}',
-    );
+    stdout.writeln(jsonEncode(summary));
     return 0;
-  }
-
-  _AcceptanceArguments _parseCreatorArguments(List<String> args) {
-    const valueFlags = {
-      '--game-dir',
-      '--creator-package',
-      '--output',
-      '--case',
-      '--timeout-seconds',
-    };
-    const booleanFlags = {
-      '--all',
-      '--require-all',
-      '--skip-runtime-install',
-      '--skip-launch',
-    };
-    return _parseFlagArguments(args, valueFlags, booleanFlags, _creatorUsage);
   }
 
   _AcceptanceArguments _parseFlagArguments(
@@ -203,6 +143,7 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
     const valueFlags = {
       '--game-dir',
       '--package',
+      '--isolation-record',
       '--output',
       '--case',
       '--timeout-seconds',

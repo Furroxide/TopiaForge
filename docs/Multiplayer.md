@@ -5,9 +5,9 @@ description: Build and deterministically test server-canonical TopiaForge mods f
 
 # Multiplayer API preview
 
-TopiaForge 1.0 remains standalone-only. `TopiaForge.Mods.Multiplayer` 1.0 freezes the future-facing public contract,
+TopiaForge remains standalone-only. `TopiaForge.Mods.Multiplayer` freezes the future-facing public contract,
 generated wire format, real-game loopback provider, and deterministic multi-peer test rig before a supported live
-transport exists. Ordinary V5 mods keep standalone behavior when `multiplayer` is omitted; multiplayer support is an explicit
+transport exists. Ordinary V6 mods keep standalone behavior when `multiplayer` is omitted; multiplayer support is an explicit
 module and manifest opt-in, not a claim that arbitrary local mutations can be synchronized safely.
 
 `IMultiplayerSession` is a stable owner-scoped facade, not one match object. Bind the generated contract once for the
@@ -16,7 +16,7 @@ when a match is replaced, while a new session starts from each replicated state'
 
 The architecture preserves the normal TopiaForge boundary: one BepInEx runtime sits behind Unity-free, owner-scoped
 contracts, deterministic launcher/profile tooling, and optional specialist modules. Multiplayer identities and roles
-therefore live in this module, not on `IModContext`, `IEntity`, `PlayerSnapshot`, or `WorldSession`.
+therefore live in this module, not on `IModContext`, `IEntity`, `PlayerSnapshot`, or `IGamemodeSession`.
 
 ## Authority and sides
 
@@ -37,7 +37,7 @@ topiaforge restore
 topiaforge mod sync multiplayer
 ```
 
-This adds the stable contract, source generator, provider dependency, Manifest V5 metadata, and generated contract
+This adds the stable contract, source generator, provider dependency, Manifest V6 metadata, and generated contract
 lock. Resolve the provider through the existing extension boundary:
 
 ```csharp

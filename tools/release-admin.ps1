@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Position = 0, Mandatory = $true)]
-    [ValidateSet("preflight", "build", "stage", "dispatch", "resume", "all")]
+    [ValidateSet("preflight", "build", "qualify", "stage", "dispatch", "resume", "all")]
     [string]$Command,
 
     [string]$Version,
@@ -10,17 +10,22 @@ param(
     [string]$ProtonExecutable = $env:TOPIAFORGE_PROTON_EXECUTABLE,
     [string]$SteamRoot = $env:TOPIAFORGE_STEAM_ROOT,
     [string]$CompatDataRoot = $env:TOPIAFORGE_COMPAT_DATA_ROOT,
-    [string]$WindowsCreatorEvidence,
-    [string]$WindowsCreatorEvidenceBundle,
     [string]$UnityPath = "C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe",
     [string]$GameDirectory = "$env:LOCALAPPDATA\Tomato Cake\launcher\Robotopia",
+    [string]$AcceptanceIsolationRecord,
     [string]$PythonPath = $env:TOPIAFORGE_PYTHON,
     [string]$StateRoot,
     [switch]$Rehearsal
 )
 
+. (Join-Path $PSScriptRoot "release/acceptance-isolation.ps1")
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+# Invocation paths follow the caller CWD, then remain stable across build worktrees.
+if (-not [string]::IsNullOrWhiteSpace($AcceptanceIsolationRecord)) {
+    $AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
+}
 if ($WhatIfPreference) {
     throw "Use -Rehearsal for a non-publishing run; -WhatIf cannot persist a resumable release state."
 }
@@ -38,10 +43,10 @@ if (-not (Test-Path -LiteralPath $platformToolchainsPath -PathType Leaf)) {
 }
 $platformToolchains = Get-Content -LiteralPath $platformToolchainsPath -Raw |
     ConvertFrom-Json
-# Linux is descoped from 1.0.0-rc.1 and returns in rc.2, so the WSL build,
-# Proton acceptance, and their preflight checks are gated on the policy rather
-# than deleted. Re-adding the Linux archive to release-policy.json restores the
-# whole path. See P0-LINUX-01 in docs/LaunchBlockers.md.
+# Windows is the only supported RC1 target. The future RC2 toolchain pins remain,
+# but restoring Linux archives also requires a native isolation implementation;
+# the retired Proton runner and schema2 evidence cannot qualify publication.
+# See P0-LINUX-01 in docs/LaunchBlockers.md.
 $targetsLinux =
     @($policy.artifactPolicy.platformArchives) -contains "TopiaForge-linux-x64.zip"
 if ([string]::IsNullOrWhiteSpace($Version)) {
@@ -88,6 +93,25 @@ function Enter-ReleaseLock {
     }
 }
 
+# Resolves the recorded Windows distribution mode from a parsed release policy.
+#
+# Absent means "signed". Shipping unsigned is a decision that has to be written
+# into the policy, so a certificate that simply went missing can never be
+# mistaken for a deliberate choice to ship without one.
+function Get-WindowsDistributionMode {
+    param([Parameter(Mandatory = $true)][object]$PolicyObject)
+
+    $mode = "signed"
+    if ($PolicyObject.signingIdentities.PSObject.Properties.Name -contains
+        "windowsDistribution") {
+        $mode = [string]$PolicyObject.signingIdentities.windowsDistribution
+    }
+    if ($mode -cne "signed" -and $mode -cne "unsigned") {
+        throw "Unknown Windows distribution mode '$mode'; expected 'signed' or 'unsigned'."
+    }
+    return $mode
+}
+
 function Invoke-Checked {
     param(
         [Parameter(Mandatory = $true)]
@@ -96,13 +120,20 @@ function Invoke-Checked {
         [string[]]$Arguments = @(),
         [Parameter()]
         [string]$WorkingDirectory = $repositoryRoot,
-        [switch]$Capture
+        [switch]$Capture,
+        [switch]$StandardOutputOnly
     )
 
     Push-Location $WorkingDirectory
     try {
         if ($Capture) {
-            $result = & $FilePath @Arguments 2>&1
+            $result = if ($StandardOutputOnly) {
+                # Readiness emits JSON on stdout and advisory diagnostics on stderr.
+                & $FilePath @Arguments
+            }
+            else {
+                & $FilePath @Arguments 2>&1
+            }
             if ($LASTEXITCODE -ne 0) {
                 throw "'$FilePath' failed with exit code $LASTEXITCODE.`n$($result | Out-String)"
             }
@@ -739,7 +770,8 @@ function Use-StateConfiguration {
         @("SteamRoot", "steamRoot"),
         @("CompatDataRoot", "compatDataRoot"),
         @("UnityPath", "unityPath"),
-        @("GameDirectory", "gameDirectory")
+        @("GameDirectory", "gameDirectory"),
+        @("AcceptanceIsolationRecord", "acceptanceIsolationRecord")
     )
     foreach ($binding in $immutableBindings) {
         $parameterName = $binding[0]
@@ -763,16 +795,20 @@ function Use-StateConfiguration {
         }
     }
 
+    if ($State.PSObject.Properties.Name -contains "acceptanceIsolationRecordSha256" -and
+        -not [string]::IsNullOrWhiteSpace([string]$State.acceptanceIsolationRecordSha256)) {
+        $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+            -ExpectedSha256 ([string]$State.acceptanceIsolationRecordSha256)
+    }
+
     foreach ($binding in @(
-            @("WindowsCreatorEvidence", "windowsCreatorEvidence"),
-            @("WindowsCreatorEvidenceBundle", "windowsCreatorEvidenceBundle")
         )) {
         $parameterName = $binding[0]
         $stateName = $binding[1]
         $hasStoredValue = $State.PSObject.Properties.Name -contains $stateName -and
             -not [string]::IsNullOrWhiteSpace([string]$State.$stateName)
         $evidenceIsFrozen = [string]$State.phase -in @(
-            "built", "staged", "dispatch-requested", "published"
+            "built", "accepted", "staged", "dispatch-requested", "published"
         )
         if ($explicitParameters.ContainsKey($parameterName)) {
             $requestedValue = [string](Get-Variable -Scope Script -Name $parameterName).Value
@@ -807,6 +843,16 @@ function Write-State {
         [Parameter(Mandatory = $true)][string]$SourceSha,
         [hashtable]$Additional = @{}
     )
+    $isolationHash = ""
+    if (-not [string]::IsNullOrWhiteSpace($AcceptanceIsolationRecord)) {
+        $previous = Read-State
+        $expectedHash = if ($null -ne $previous -and
+            $previous.PSObject.Properties.Name -contains "acceptanceIsolationRecordSha256") {
+            [string]$previous.acceptanceIsolationRecordSha256
+        } else { "" }
+        $isolationHash = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+            -ExpectedSha256 $expectedHash
+    }
     New-Item -ItemType Directory -Force -Path $stateDirectory | Out-Null
     $body = [ordered]@{
         schema = "release-admin-state-v1"
@@ -822,16 +868,16 @@ function Write-State {
         compatDataRoot = $CompatDataRoot
         unityPath = $UnityPath
         gameDirectory = $GameDirectory
-        windowsCreatorEvidence = $WindowsCreatorEvidence
-        windowsCreatorEvidenceBundle = $WindowsCreatorEvidenceBundle
+        acceptanceIsolationRecord = $AcceptanceIsolationRecord
+        acceptanceIsolationRecordSha256 = $isolationHash
     }
     foreach ($entry in $Additional.GetEnumerator()) {
         $body[$entry.Key] = $entry.Value
     }
     $temporary = "$statePath.tmp"
-    $body | ConvertTo-Json -Depth 8 |
+    $body | ConvertTo-Json -Depth 32 |
         Set-Content -LiteralPath $temporary -Encoding utf8NoBOM
-    Move-Item -LiteralPath $temporary -Destination $statePath -Force
+    [System.IO.File]::Move($temporary, $statePath, $true)
 }
 
 function Assert-SourceStillExact {
@@ -962,6 +1008,132 @@ function Get-DartAndFlutter {
     }
 }
 
+function ConvertTo-CanonicalReleaseJson {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) { return "null" }
+    if ($Value -is [System.Collections.IDictionary] -or $Value -is [pscustomobject]) {
+        $names = if ($Value -is [System.Collections.IDictionary]) {
+            [string[]]@($Value.Keys)
+        } else { [string[]]@($Value.PSObject.Properties.Name) }
+        [Array]::Sort($names, [StringComparer]::Ordinal)
+        $pairs = foreach ($name in $names) {
+            $entry = if ($Value -is [System.Collections.IDictionary]) { $Value[$name] } else { $Value.$name }
+            ($name | ConvertTo-Json -Compress) + ':' + (ConvertTo-CanonicalReleaseJson $entry)
+        }
+        return '{' + [string]::Join(',', @($pairs)) + '}'
+    }
+    if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+        $items = foreach ($entry in $Value) { ConvertTo-CanonicalReleaseJson $entry }
+        return '[' + [string]::Join(',', @($items)) + ']'
+    }
+    return ConvertTo-Json -InputObject $Value -Compress -Depth 32
+}
+
+function Get-ReleaseAssessment {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceSha,
+        [ValidateSet("prerequisites", "readiness")][string]$Kind = "readiness"
+    )
+    $sdk = Get-DartAndFlutter
+    $arguments = @(
+        "run", "bin/topiaforge.dart", "release", "validate-$Kind",
+        "--version", $Version, "--target-sha", $SourceSha
+    )
+    if ($Kind -ceq "readiness") { $arguments += @("--assets", $assetsDirectory) }
+    $assessment = Invoke-Checked $sdk.Dart $arguments `
+        -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli") `
+        -Capture -StandardOutputOnly |
+        ConvertFrom-Json
+    $expectedSchema = if ($Kind -ceq "readiness") {
+        "release-candidate-readiness-summary-v1"
+    } else { "release-prerequisites-summary-v1" }
+    $expectedStatus = if ($Kind -ceq "readiness") { "ready" } else { "eligible-for-private-build" }
+    foreach ($identity in @(
+            @("schema", $expectedSchema), @("status", $expectedStatus),
+            @("targetSha", $SourceSha), @("releaseVersion", $Version)
+        )) {
+        if ($null -eq $assessment -or
+            $assessment.PSObject.Properties.Name -notcontains $identity[0] -or
+            $assessment.($identity[0]) -isnot [string] -or
+            $assessment.($identity[0]) -cne $identity[1]) {
+            throw "Release $Kind assessment does not match the exact candidate."
+        }
+    }
+    $digestNames = @("baseReadinessSha256")
+    if ($Kind -ceq "readiness") {
+        $digestNames += @("decisionSha256", "acceptanceSha256", "handoffSha256",
+            "baseSchemaSha256", "policySha256", "catalogSha256", "contractSha256")
+        Assert-ExactJsonProperties -Value $assessment -Expected (
+            @("schema", "repository", "releaseVersion", "targetSha", "status", "payloads", "gates") + $digestNames
+        ) -Label "Release qualification summary"
+        if ($assessment.repository -isnot [string] -or $assessment.repository -ine $Repository -or
+            $assessment.payloads -isnot [array] -or $assessment.payloads.Count -eq 0 -or
+            $assessment.gates -isnot [array] -or $assessment.gates.Count -eq 0) {
+            throw "Release qualification summary is not a complete candidate assessment."
+        }
+    }
+    foreach ($name in $digestNames) {
+        if ($assessment.PSObject.Properties.Name -notcontains $name -or
+            $assessment.$name -isnot [string] -or $assessment.$name -cnotmatch '^[0-9a-f]{64}$') {
+            throw "Release $Kind summary has an invalid $name."
+        }
+    }
+    return $assessment
+}
+
+function Assert-CandidateBuild {
+    param([Parameter(Mandatory = $true)][psobject]$State)
+    if ($State.schema -cne "release-admin-state-v1" -or $State.version -cne $Version -or
+        $State.tag -cne $tag -or $State.sourceSha -cnotmatch '^[0-9a-f]{40}$') {
+        throw "Release state does not identify the exact candidate."
+    }
+    Assert-SourceStillExact ([string]$State.sourceSha)
+    Assert-OriginStillExact ([string]$State.sourceSha)
+    Build-Handoff -SourceSha $State.sourceSha -CanonicalSha $State.canonicalSha256 `
+        -CanonicalArchiveSha $State.canonicalArchiveSha256 `
+        -EcosystemEvidenceSha $State.ecosystemEvidenceSha256 -VerifyOnly
+}
+
+function Assert-CandidateQualification {
+    param([Parameter(Mandatory = $true)][psobject]$State)
+    if ($State.phase -notin @("accepted", "staged", "dispatch-requested", "published") -or
+        $State.PSObject.Properties.Name -notcontains "qualification" -or $null -eq $State.qualification) {
+        throw "Run release-admin.ps1 qualify before publication; accepted qualification is missing."
+    }
+    Assert-CandidateBuild -State $State
+    $current = Get-ReleaseAssessment -SourceSha ([string]$State.sourceSha)
+    if ((ConvertTo-CanonicalReleaseJson $current) -cne
+        (ConvertTo-CanonicalReleaseJson $State.qualification)) {
+        throw "The accepted candidate qualification changed; publication is forbidden."
+    }
+}
+
+function Invoke-Qualify {
+    $state = Read-State
+    if ($null -eq $state -or $state.phase -notin @("built", "accepted")) {
+        throw "A fully verified built candidate is required before qualify."
+    }
+    Use-StateConfiguration $state
+    if ($Rehearsal -or [bool]$state.rehearsal) {
+        throw "A rehearsal can never qualify for publication."
+    }
+    if ($state.phase -ceq "accepted") {
+        Assert-CandidateQualification -State $state
+        Write-Host "The exact candidate qualification already exists and verifies."
+        return [string]$state.sourceSha
+    }
+    Assert-CandidateBuild -State $state
+    $assessment = Get-ReleaseAssessment -SourceSha ([string]$state.sourceSha)
+    Write-State -Phase "accepted" -SourceSha ([string]$state.sourceSha) -Additional @{
+        canonicalSha256 = [string]$state.canonicalSha256
+        canonicalArchiveSha256 = [string]$state.canonicalArchiveSha256
+        ecosystemEvidenceSha256 = [string]$state.ecosystemEvidenceSha256
+        qualification = $assessment
+    }
+    Write-Host "Exact candidate payloads, handoff, acceptance and decision are qualified."
+    return [string]$state.sourceSha
+}
+
 function Invoke-Preflight {
     $existingState = Read-State
     if ($null -ne $existingState) {
@@ -969,13 +1141,17 @@ function Invoke-Preflight {
             $existingState.version -ne $Version -or
             $existingState.tag -ne $tag -or
             $existingState.phase -notin @(
-                "preflight", "platforms-built", "built", "staged",
+                "preflight", "platforms-built", "built", "accepted", "staged",
                 "dispatch-requested", "published"
             )) {
             throw "Existing release state is invalid or belongs to another candidate."
         }
         Use-StateConfiguration $existingState
     }
+    if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
+    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
+    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+        -OutputDirectories @($assetsDirectory, $evidenceDirectory)
     Require-Command git | Out-Null
     Require-Command git-lfs | Out-Null
 
@@ -1032,42 +1208,44 @@ function Invoke-Preflight {
     if ($policyAtHead.versioning.productVersion -ne $Version) {
         throw "Version $Version does not match release policy at $head."
     }
-    if ($Version -ne "1.0.0-rc.1" -or
-        $policyAtHead.publication.PSObject.Properties.Name -contains
+    # The version is already checked against policy immediately above; the rule here is about signing
+    # exceptions, not about which release line is being cut, so it must not be gated on a version literal.
+    if ($policyAtHead.publication.PSObject.Properties.Name -contains
             "codeSigningException") {
-        throw "RC1 production forbids every code-signing exception."
+        throw "Production release forbids every code-signing exception."
     }
     $sdk = Get-DartAndFlutter
-    Invoke-Checked $sdk.Dart @(
-        "run",
-        "bin/topiaforge.dart",
-        "release",
-        "validate-readiness",
-        "--version",
-        $Version,
-        "--target-sha",
-        $head
-    ) -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli")
+    Get-ReleaseAssessment -SourceSha $head -Kind prerequisites | Out-Null
     $windowsCertificatePin = ""
     if ($policyAtHead.signingIdentities.PSObject.Properties.Name -contains
         "windowsCertificateSha256") {
         $windowsCertificatePin =
             [string]$policyAtHead.signingIdentities.windowsCertificateSha256
     }
-    if ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
-        throw "RC1 requires a reviewed nonzero Windows certificate SHA-256 pin."
+    $windowsDistributionAtHead = Get-WindowsDistributionMode -PolicyObject $policyAtHead
+    if ($windowsDistributionAtHead -ceq "unsigned") {
+        if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+            throw "An unsigned Windows distribution must not also pin a signing certificate."
+        }
+        Write-Host ("Release policy records an UNSIGNED Windows distribution: " +
+            "Authenticode signing and the detached CMS handoff signature are skipped.")
     }
-    Invoke-Checked $powerShellExecutable @(
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-File",
-        $handoffSignatureScript,
-        "-Mode",
-        "ValidateCredentials",
-        "-ExpectedCertificateSha256",
-        $windowsCertificatePin
-    )
+    else {
+        if ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+            throw "A signed release requires a reviewed nonzero Windows certificate SHA-256 pin."
+        }
+        Invoke-Checked $powerShellExecutable @(
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            $handoffSignatureScript,
+            "-Mode",
+            "ValidateCredentials",
+            "-ExpectedCertificateSha256",
+            $windowsCertificatePin
+        )
+    }
 
     Invoke-Checked $gitHubCli @("auth", "status", "--hostname", "github.com")
     $githubLogin = Invoke-Checked $gitHubCli @(
@@ -1332,19 +1510,35 @@ function New-CanonicalEcosystem {
         "--output", $Output, "--configuration", "Release"
     ) -WorkingDirectory $cliProject
     Invoke-Checked $Dart @(
-        "run", "bin/topiaforge.dart", "pack",
-        "--project", (Join-Path $SourceRoot "mods/TopiaForge.CreatorTools"),
-        "--output", $Output, "--configuration", "Release"
-    ) -WorkingDirectory $cliProject
-    Invoke-Checked $Dart @(
         "run", "bin/topiaforge.dart", "unity", "pack-packages",
         "--output", (Join-Path $Output "vpm")
     ) -WorkingDirectory $cliProject
 
+    # Derived from the candidate's own catalog rather than hard-coded. A literal
+    # pair here goes stale the moment the payload changes, and no test or CI job
+    # reaches this function, so a wrong literal would surface for the first time
+    # part-way through a real release.
+    $expectedCatalog = Get-Content -LiteralPath (
+        Join-Path $SourceRoot "release/catalog.json"
+    ) -Raw | ConvertFrom-Json
+    $expectedRelease = @(
+        $expectedCatalog.releases |
+            Where-Object { $_.version -eq $policy.versioning.productVersion }
+    )
+    if ($expectedRelease.Count -ne 1) {
+        throw "release/catalog.json must contain exactly one entry for $($policy.versioning.productVersion)."
+    }
+    $expectedModCount = @($expectedRelease[0].mods.PSObject.Properties).Count
+    $expectedVpmCount = @($expectedRelease[0].vpmPackages.PSObject.Properties).Count
+    if ($expectedModCount -lt 1 -or $expectedVpmCount -lt 1) {
+        throw "release/catalog.json declares no mod or VPM packages for $($policy.versioning.productVersion)."
+    }
+
     $packages = @(Get-ChildItem -LiteralPath $Output -File -Filter "*.topiaforgemod")
     $vpmPackages = @(Get-ChildItem -LiteralPath (Join-Path $Output "vpm") -File -Filter "*.zip")
-    if ($packages.Count -ne 15 -or $vpmPackages.Count -ne 3) {
-        throw "Canonical ecosystem must contain exactly 15 mod and 3 VPM packages."
+    if ($packages.Count -ne $expectedModCount -or $vpmPackages.Count -ne $expectedVpmCount) {
+        throw ("Canonical ecosystem must contain exactly $expectedModCount mod and " +
+            "$expectedVpmCount VPM packages; built $($packages.Count) and $($vpmPackages.Count).")
     }
     foreach ($package in $packages) {
         Invoke-Checked $Dart @(
@@ -1549,6 +1743,11 @@ function Assert-WindowsRuntimeEvidence {
         "windows/robotopia/acceptance-result.json"
     $null = Assert-BoundedRegularFile -Path $robotopiaPath `
         -MaximumBytes 16777216 -Label "Retained Robotopia acceptance evidence"
+    $sdk = Get-DartAndFlutter
+    $isolation = Get-VerifiedReleaseAcceptanceIsolation -EvidencePath $robotopiaPath `
+        -IsolationRecordPath $AcceptanceIsolationRecord -CliPath $sdk.Dart `
+        -PrefixArguments @("run", "bin/topiaforge.dart") `
+        -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli")
     $robotopia = Get-Content -LiteralPath $robotopiaPath -Raw |
         ConvertFrom-Json -DateKind String
     Assert-ExactJsonProperties -Value $robotopia -Expected @(
@@ -1558,6 +1757,7 @@ function Assert-WindowsRuntimeEvidence {
         "completedAtUtc",
         "failures",
         "gameDirectory",
+        "isolation",
         "lastRunSessionId",
         "missingCases",
         "package",
@@ -1625,9 +1825,9 @@ function Assert-WindowsRuntimeEvidence {
     $storedGameDirectory = [System.IO.Path]::GetFullPath(
         [string]$robotopia.gameDirectory
     )
-    $expectedGameDirectory = [System.IO.Path]::GetFullPath($GameDirectory)
+    $expectedGameDirectory = [System.IO.Path]::GetFullPath([string]$isolation.gameDirectory)
     if ($robotopia.schemaVersion -isnot [Int64] -or
-        [Int64]$robotopia.schemaVersion -ne 2 -or
+        [Int64]$robotopia.schemaVersion -ne 3 -or
         [string]$robotopia.acceptanceChallenge -cnotmatch
             "^[0-9a-f]{64}$" -or
         $robotopia.succeeded -ne $true -or
@@ -1662,1113 +1862,10 @@ function Assert-WindowsRuntimeEvidence {
     }
 }
 
-function Assert-NoDuplicateJsonProperties {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.Text.Json.JsonElement]$Element,
-        [Parameter(Mandatory = $true)][string]$Label
-    )
-    if ($Element.ValueKind -eq [System.Text.Json.JsonValueKind]::Object) {
-        $names = [System.Collections.Generic.HashSet[string]]::new(
-            [System.StringComparer]::Ordinal
-        )
-        foreach ($property in $Element.EnumerateObject()) {
-            if (-not $names.Add($property.Name)) {
-                throw "$Label contains a duplicate JSON property."
-            }
-            Assert-NoDuplicateJsonProperties -Element $property.Value `
-                -Label $Label
-        }
-    }
-    elseif ($Element.ValueKind -eq [System.Text.Json.JsonValueKind]::Array) {
-        foreach ($item in $Element.EnumerateArray()) {
-            Assert-NoDuplicateJsonProperties -Element $item -Label $Label
-        }
-    }
-}
-
-function ConvertFrom-StrictJsonBytes {
-    param(
-        [Parameter(Mandatory = $true)][byte[]]$Bytes,
-        [Parameter(Mandatory = $true)][string]$Label,
-        [Parameter(Mandatory = $true)][Int64]$MaximumBytes
-    )
-    if ($Bytes.Length -le 0 -or $Bytes.Length -gt $MaximumBytes -or
-        ($Bytes.Length -ge 3 -and
-            $Bytes[0] -eq 0xef -and
-            $Bytes[1] -eq 0xbb -and
-            $Bytes[2] -eq 0xbf)) {
-        throw "$Label must be bounded UTF-8 JSON without a byte-order mark."
-    }
-    try {
-        $text = [System.Text.UTF8Encoding]::new($false, $true).
-            GetString($Bytes)
-        $document = [System.Text.Json.JsonDocument]::Parse(
-            $text,
-            [System.Text.Json.JsonDocumentOptions]@{
-                AllowTrailingCommas = $false
-                CommentHandling =
-                    [System.Text.Json.JsonCommentHandling]::Disallow
-                MaxDepth = 24
-            }
-        )
-    }
-    catch {
-        throw "$Label is not strict JSON."
-    }
-    try {
-        if ($document.RootElement.ValueKind -ne
-            [System.Text.Json.JsonValueKind]::Object) {
-            throw "$Label must be a JSON object."
-        }
-        Assert-NoDuplicateJsonProperties -Element $document.RootElement `
-            -Label $Label
-    }
-    finally {
-        $document.Dispose()
-    }
-    try {
-        return $text | ConvertFrom-Json
-    }
-    catch {
-        throw "$Label is not valid UTF-8 JSON."
-    }
-}
-
-function Get-ZipEntrySha256 {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.IO.Compression.ZipArchiveEntry]$Entry
-    )
-    $stream = $Entry.Open()
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        return [Convert]::ToHexString(
-            $sha.ComputeHash($stream)
-        ).ToLowerInvariant()
-    }
-    finally {
-        $sha.Dispose()
-        $stream.Dispose()
-    }
-}
-
-function Assert-WindowsCreatorEvidencePair {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$WindowsArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha,
-        [Parameter(Mandatory = $true)][string]$DescriptorPath,
-        [Parameter(Mandatory = $true)][string]$BundlePath
-    )
-    $descriptorFile = Assert-BoundedRegularFile -Path $DescriptorPath `
-        -MaximumBytes 2097152 -Label "Windows Creator acceptance descriptor"
-    $bundleFile = Assert-BoundedRegularFile -Path $BundlePath `
-        -MaximumBytes 268435456 -Label "Windows Creator acceptance bundle"
-    $descriptorBytes = [System.IO.File]::ReadAllBytes(
-        $descriptorFile.FullName
-    )
-    $descriptor = ConvertFrom-StrictJsonBytes -Bytes $descriptorBytes `
-        -Label "Windows Creator acceptance descriptor" `
-        -MaximumBytes 2097152
-    $descriptorText = [System.Text.UTF8Encoding]::new($false, $true).
-        GetString($descriptorBytes)
-    Assert-ExactJsonProperties -Value $descriptor -Expected @(
-        "acceptanceChallenge",
-        "acceptanceResultSha256",
-        "archiveSha256",
-        "archiveSize",
-        "canonicalEcosystemSha256",
-        "caseInventorySha256",
-        "caseResults",
-        "checkpointStateUnchanged",
-        "creatorPackageReceipt",
-        "evidenceSha256",
-        "evidenceSize",
-        "gameBuildId",
-        "lastRunSessionId",
-        "lifecycleCycles",
-        "platform",
-        "result",
-        "saveStateUnchanged",
-        "schema",
-        "suite",
-        "targetSha",
-        "version"
-    ) -Label "Windows Creator acceptance descriptor"
-    Assert-ExactJsonProperties -Value $descriptor.creatorPackageReceipt `
-        -Expected @("criticalFiles", "sourceSha256") `
-        -Label "Windows Creator package receipt"
-    $windowsSha = Get-Sha256 $WindowsArchive
-    $windowsSize = (Get-Item -LiteralPath $WindowsArchive).Length
-    $bundleSha = Get-Sha256 $BundlePath
-    $bundleSize = $bundleFile.Length
-    $caseInventoryBytes = Get-GitBlobBytes -SourceSha $SourceSha `
-        -GitPath "tests/live-game-acceptance.json"
-    $caseInventorySha = Get-BytesSha256 $caseInventoryBytes
-    $caseInventory = ConvertFrom-StrictJsonBytes -Bytes $caseInventoryBytes `
-        -Label "Source-SHA Creator case inventory" -MaximumBytes 2097152
-    $sourcePolicyBytes = Get-GitBlobBytes -SourceSha $SourceSha `
-        -GitPath "release/release-policy.json"
-    $sourcePolicy = ConvertFrom-StrictJsonBytes -Bytes $sourcePolicyBytes `
-        -Label "Source-SHA release policy" -MaximumBytes 2097152
-    $expectedGameBuildId = [string]$sourcePolicy.gameBuild.id
-    $expectedCaseIds = @(
-        $caseInventory.creatorAcceptance.cases |
-            ForEach-Object { [string]$_.id }
-    )
-    $uniqueExpectedCaseIds = @($expectedCaseIds | Sort-Object -Unique)
-    if ($expectedCaseIds.Count -eq 0 -or
-        $uniqueExpectedCaseIds.Count -ne $expectedCaseIds.Count -or
-        @($expectedCaseIds | Where-Object {
-                $_ -cnotmatch "^[a-z0-9][a-z0-9._-]{0,127}$"
-            }).Count -ne 0 -or
-        [string]$caseInventory.creatorAcceptance.gameBuild -ne
-            $expectedGameBuildId) {
-        throw "The Creator acceptance inventory is invalid for this release."
-    }
-    # v2 binds the descriptor to one interactive run: a one-run challenge the
-    # recorder had to echo, the exact manager session that loaded the mod, the
-    # exact CreatorTools payload receipt, and the acceptance result digest.
-    # None of these can be produced by inspecting a directory of artifacts.
-    $creatorReceipt = $descriptor.creatorPackageReceipt
-    $receiptFiles = @($creatorReceipt.criticalFiles)
-    $receiptValid = $receiptFiles.Count -ge 1 -and $receiptFiles.Count -le 8192
-    $previousReceiptPath = $null
-    foreach ($receiptFile in $receiptFiles) {
-        try {
-            Assert-ExactJsonProperties -Value $receiptFile `
-                -Expected @("path", "sha256") `
-                -Label "Windows Creator package receipt file"
-        }
-        catch {
-            $receiptValid = $false
-            break
-        }
-        $receiptPath = [string]$receiptFile.path
-        if ([string]$receiptFile.sha256 -cnotmatch "^[0-9a-f]{64}$" -or
-            $receiptPath -cnotmatch "^[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$" -or
-            $receiptPath.Contains("//") -or
-            @($receiptPath -split "/" | Where-Object {
-                    $_ -in @(".", "..")
-                }).Count -ne 0 -or
-            ($null -ne $previousReceiptPath -and
-                [StringComparer]::Ordinal.Compare(
-                    $previousReceiptPath,
-                    $receiptPath
-                ) -ge 0)) {
-            $receiptValid = $false
-            break
-        }
-        $previousReceiptPath = $receiptPath
-    }
-
-    $actualCaseResults = @($descriptor.caseResults)
-    $caseResultsMatch = $actualCaseResults.Count -eq $expectedCaseIds.Count
-    if ($caseResultsMatch) {
-        foreach ($caseResult in $actualCaseResults) {
-            try {
-                Assert-ExactJsonProperties -Value $caseResult `
-                    -Expected @("id", "result") `
-                    -Label "Windows Creator case result"
-            }
-            catch {
-                $caseResultsMatch = $false
-                break
-            }
-        }
-    }
-    if ($caseResultsMatch) {
-        for ($caseIndex = 0;
-            $caseIndex -lt $expectedCaseIds.Count;
-            $caseIndex++) {
-            if ([string]$actualCaseResults[$caseIndex].id -cne
-                    $expectedCaseIds[$caseIndex] -or
-                [string]$actualCaseResults[$caseIndex].result -cne "pass") {
-                $caseResultsMatch = $false
-                break
-            }
-        }
-    }
-    if ($descriptor.schema -ne "release-windows-creator-evidence-v2" -or
-        [string]$descriptor.acceptanceChallenge -cnotmatch "^[0-9a-f]{64}$" -or
-        [string]$descriptor.acceptanceResultSha256 -cnotmatch
-            "^[0-9a-f]{64}$" -or
-        [string]$creatorReceipt.sourceSha256 -cnotmatch "^[0-9a-f]{64}$" -or
-        -not $receiptValid -or
-        [string]$descriptor.lastRunSessionId -cnotmatch
-            "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$" -or
-        $descriptor.version -ne $Version -or
-        $descriptor.targetSha -ne $SourceSha -or
-        $descriptor.platform -ne "windows" -or
-        $descriptor.archiveSha256 -ne $windowsSha -or
-        $descriptor.archiveSize -isnot [Int64] -or
-        [Int64]$descriptor.archiveSize -ne $windowsSize -or
-        $descriptor.canonicalEcosystemSha256 -ne $CanonicalSha -or
-        [string]$descriptor.gameBuildId -ne $expectedGameBuildId -or
-        $descriptor.result -ne "pass" -or
-        $descriptor.suite -ne "creator-full" -or
-        $descriptor.caseInventorySha256 -ne $caseInventorySha -or
-        -not $caseResultsMatch -or
-        $descriptor.lifecycleCycles -isnot [Int64] -or
-        [int]$descriptor.lifecycleCycles -lt
-            [int]$caseInventory.creatorAcceptance.minimumLifecycleCycles -or
-        $descriptor.saveStateUnchanged -ne $true -or
-        $descriptor.checkpointStateUnchanged -ne $true -or
-        $descriptor.evidenceSha256 -ne $bundleSha -or
-        $descriptor.evidenceSize -isnot [Int64] -or
-        [Int64]$descriptor.evidenceSize -ne $bundleSize) {
-        throw "Windows Creator acceptance evidence does not match this exact candidate."
-    }
-    if ($descriptorText -match
-        '(?i)"(?:username|hostname|machine|localPath|timestamp|startedAt|completedAt|credential|password|secret|token|rawLog)"\s*:') {
-        throw "Windows Creator evidence contains forbidden machine-specific or sensitive fields."
-    }
-
-    $bundleStream = [System.IO.File]::Open(
-        $bundleFile.FullName,
-        [System.IO.FileMode]::Open,
-        [System.IO.FileAccess]::Read,
-        [System.IO.FileShare]::Read
-    )
-    try {
-        $lockedBundleSha = [System.Security.Cryptography.SHA256]::HashData(
-            $bundleStream
-        )
-        if ($bundleStream.Length -ne $bundleSize -or
-            [Convert]::ToHexString($lockedBundleSha).ToLowerInvariant() -cne
-                $bundleSha) {
-            throw "Windows Creator evidence bundle changed while it was being validated."
-        }
-        $bundleStream.Position = 0
-        try {
-            $zip = [System.IO.Compression.ZipArchive]::new(
-                $bundleStream,
-                [System.IO.Compression.ZipArchiveMode]::Read,
-                $false,
-                [System.Text.UTF8Encoding]::new($false, $true)
-            )
-        }
-        catch {
-            throw "Windows Creator evidence bundle is not a valid ZIP."
-        }
-        try {
-            $zipEntries = @($zip.Entries)
-            if ($zipEntries.Count -lt 6 -or $zipEntries.Count -gt 518) {
-                throw "Windows Creator evidence bundle entry count is invalid."
-            }
-            $entryByName = @{}
-            $caseInsensitiveNames =
-                [System.Collections.Generic.HashSet[string]]::new(
-                    [System.StringComparer]::OrdinalIgnoreCase
-                )
-            $totalUncompressedBytes = [Int64]0
-            foreach ($entry in $zipEntries) {
-                $entryName = [string]$entry.FullName
-                $segments = @($entryName -split "/")
-                if ($entryName.Length -gt 240 -or
-                    $entryName.Contains("\") -or
-                    $entryName.StartsWith("/") -or
-                    $entryName.EndsWith("/") -or
-                    $entryName.Contains("//") -or
-                    @($segments | Where-Object {
-                            $_ -in @(".", "..") -or
-                            $_ -cnotmatch
-                                "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-                        }).Count -ne 0 -or
-                    $entry.ExternalAttributes -ne 0 -or
-                    $entry.Length -le 0 -or
-                    $entry.Length -gt 67108864 -or
-                    $entry.CompressedLength -ne $entry.Length -or
-                    $entry.LastWriteTime.Year -ne 1980 -or
-                    $entry.LastWriteTime.Month -ne 1 -or
-                    $entry.LastWriteTime.Day -ne 1 -or
-                    $entry.LastWriteTime.Hour -ne 0 -or
-                    $entry.LastWriteTime.Minute -ne 0 -or
-                    $entry.LastWriteTime.Second -ne 0) {
-                    throw "Windows Creator evidence bundle contains a non-deterministic, unsafe, compressed, reparse-like, or oversized entry."
-                }
-                if ($entryByName.ContainsKey($entryName) -or
-                    -not $caseInsensitiveNames.Add($entryName)) {
-                    throw "Windows Creator evidence bundle contains duplicate or case-colliding entries."
-                }
-                $entryByName[$entryName] = $entry
-                $totalUncompressedBytes += [Int64]$entry.Length
-                if ($totalUncompressedBytes -gt 250000000) {
-                    throw "Windows Creator evidence bundle exceeds its uncompressed size limit."
-                }
-            }
-
-            if (-not $entryByName.ContainsKey("bundle-manifest.json") -or
-                $entryByName["bundle-manifest.json"].Length -gt 2097152) {
-                throw "Windows Creator evidence bundle manifest is missing or oversized."
-            }
-            $manifestStream = $entryByName["bundle-manifest.json"].Open()
-            $manifestMemory = [System.IO.MemoryStream]::new()
-            try {
-                $manifestStream.CopyTo($manifestMemory)
-                $manifestBytes = $manifestMemory.ToArray()
-            }
-            finally {
-                $manifestMemory.Dispose()
-                $manifestStream.Dispose()
-            }
-            $bundleManifest = ConvertFrom-StrictJsonBytes `
-                -Bytes $manifestBytes `
-                -Label "Windows Creator evidence bundle manifest" `
-                -MaximumBytes 2097152
-            Assert-ExactJsonProperties -Value $bundleManifest -Expected @(
-                "acceptanceChallenge",
-                "acceptanceResult",
-                "archiveSha256",
-                "archiveSize",
-                "canonicalEcosystemSha256",
-                "caseInventorySha256",
-                "cases",
-                "gameBuildId",
-                "lastRunSessionId",
-                "lifecycleCycles",
-                "platform",
-                "schema",
-                "stateSnapshots",
-                "targetSha",
-                "version"
-            ) -Label "Windows Creator evidence bundle manifest"
-            Assert-ExactJsonProperties -Value $bundleManifest.stateSnapshots `
-                -Expected @("checkpoint", "layout", "save") `
-                -Label "Windows Creator state-snapshot inventory"
-            # The declared persistence layout travels with the evidence so a
-            # game build that relocates or renames its persisted state is
-            # rejected instead of silently reported as "unchanged".
-            Assert-ExactJsonProperties `
-                -Value $bundleManifest.stateSnapshots.layout `
-                -Expected @("exclusions", "roots", "version") `
-                -Label "Windows Creator persistence layout"
-            Assert-ExactJsonProperties -Value $bundleManifest.acceptanceResult `
-                -Expected @("entry", "sha256", "size") `
-                -Label "Windows Creator acceptance result"
-            foreach ($stateKind in @("save", "checkpoint")) {
-                $statePair = $bundleManifest.stateSnapshots.$stateKind
-                Assert-ExactJsonProperties -Value $statePair `
-                    -Expected @("after", "before", "unchanged") `
-                    -Label "Windows Creator $stateKind state inventory"
-                foreach ($stateMoment in @("before", "after")) {
-                    Assert-ExactJsonProperties `
-                        -Value $statePair.$stateMoment `
-                        -Expected @("entry", "sha256", "size") `
-                        -Label "Windows Creator $stateKind-$stateMoment snapshot"
-                }
-            }
-            $layoutRoots = @($bundleManifest.stateSnapshots.layout.roots)
-            $layoutExclusions = @(
-                $bundleManifest.stateSnapshots.layout.exclusions
-            )
-            if ($bundleManifest.schema -cne
-                    "release-windows-creator-evidence-bundle-v2" -or
-                [string]$bundleManifest.acceptanceChallenge -cne
-                    [string]$descriptor.acceptanceChallenge -or
-                [string]$bundleManifest.lastRunSessionId -cne
-                    [string]$descriptor.lastRunSessionId -or
-                [string]$bundleManifest.acceptanceResult.entry -cne
-                    "acceptance/creator-acceptance-result.json" -or
-                [string]$bundleManifest.acceptanceResult.sha256 -cne
-                    [string]$descriptor.acceptanceResultSha256 -or
-                $bundleManifest.acceptanceResult.size -isnot [Int64] -or
-                [Int64]$bundleManifest.acceptanceResult.size -le 0 -or
-                [Int64]$bundleManifest.acceptanceResult.size -gt 8388608 -or
-                $bundleManifest.stateSnapshots.layout.version -isnot [Int64] -or
-                [Int64]$bundleManifest.stateSnapshots.layout.version -lt 1 -or
-                $layoutRoots.Count -lt 1 -or $layoutRoots.Count -gt 64 -or
-                $layoutExclusions.Count -gt 256 -or
-                @($layoutRoots | Where-Object {
-                        [string]::IsNullOrWhiteSpace([string]$_)
-                    }).Count -ne 0 -or
-                @($layoutExclusions | Where-Object {
-                        [string]::IsNullOrWhiteSpace([string]$_)
-                    }).Count -ne 0 -or
-                $bundleManifest.version -cne [string]$descriptor.version -or
-                $bundleManifest.targetSha -cne [string]$descriptor.targetSha -or
-                $bundleManifest.platform -cne "windows" -or
-                $bundleManifest.archiveSha256 -cne
-                    [string]$descriptor.archiveSha256 -or
-                $bundleManifest.archiveSize -isnot [Int64] -or
-                [Int64]$bundleManifest.archiveSize -ne
-                    [Int64]$descriptor.archiveSize -or
-                $bundleManifest.canonicalEcosystemSha256 -cne
-                    [string]$descriptor.canonicalEcosystemSha256 -or
-                [string]$bundleManifest.gameBuildId -cne
-                    [string]$descriptor.gameBuildId -or
-                $bundleManifest.caseInventorySha256 -cne
-                    $caseInventorySha -or
-                $bundleManifest.lifecycleCycles -isnot [Int64] -or
-                [Int64]$bundleManifest.lifecycleCycles -ne
-                    [Int64]$descriptor.lifecycleCycles) {
-                throw "Windows Creator evidence bundle manifest does not match the public descriptor and exact candidate."
-            }
-
-            $referencedEntries = @{}
-            $expectedCaseBundles = @($bundleManifest.cases)
-            if ($expectedCaseBundles.Count -ne $expectedCaseIds.Count) {
-                throw "Windows Creator evidence bundle has an incomplete case inventory."
-            }
-            for ($caseIndex = 0;
-                $caseIndex -lt $expectedCaseIds.Count;
-                $caseIndex++) {
-                $caseBundle = $expectedCaseBundles[$caseIndex]
-                Assert-ExactJsonProperties -Value $caseBundle `
-                    -Expected @("artifacts", "id", "result") `
-                    -Label "Windows Creator bundle case"
-                if ([string]$caseBundle.id -cne
-                        $expectedCaseIds[$caseIndex] -or
-                    [string]$caseBundle.result -cne "pass" -or
-                    [string]$caseBundle.id -cne
-                        [string]$actualCaseResults[$caseIndex].id -or
-                    [string]$caseBundle.result -cne
-                        [string]$actualCaseResults[$caseIndex].result) {
-                    throw "Windows Creator bundle case does not match the source-SHA inventory and public descriptor."
-                }
-                $artifacts = @($caseBundle.artifacts)
-                if ($artifacts.Count -eq 0) {
-                    throw "Every Windows Creator case must retain at least one evidence artifact."
-                }
-                $previousArtifactEntry = $null
-                foreach ($artifact in $artifacts) {
-                    Assert-ExactJsonProperties -Value $artifact `
-                        -Expected @("entry", "sha256", "size") `
-                        -Label "Windows Creator case artifact"
-                    $artifactEntry = [string]$artifact.entry
-                    $artifactPrefix = "artifacts/$($caseBundle.id)/"
-                    $artifactSuffix = if ($artifactEntry.StartsWith(
-                            $artifactPrefix,
-                            [System.StringComparison]::Ordinal
-                        )) {
-                        $artifactEntry.Substring($artifactPrefix.Length)
-                    }
-                    else {
-                        ""
-                    }
-                    if ([string]::IsNullOrWhiteSpace($artifactSuffix) -or
-                        $artifact.sha256 -cnotmatch "^[0-9a-f]{64}$" -or
-                        $artifact.size -isnot [Int64] -or
-                        [Int64]$artifact.size -le 0 -or
-                        [Int64]$artifact.size -gt 33554432 -or
-                        $null -ne $previousArtifactEntry -and
-                        [StringComparer]::Ordinal.Compare(
-                            $previousArtifactEntry,
-                            $artifactEntry
-                        ) -ge 0 -or
-                        $referencedEntries.ContainsKey($artifactEntry)) {
-                        throw "Windows Creator case artifact inventory is unsafe or non-deterministic."
-                    }
-                    $artifactSegments = @($artifactSuffix -split "/")
-                    if (@($artifactSegments | Where-Object {
-                                $_ -in @(".", "..") -or
-                                $_ -cnotmatch
-                                    "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
-                            }).Count -ne 0) {
-                        throw "Windows Creator case artifact path is unsafe."
-                    }
-                    $referencedEntries[$artifactEntry] = $artifact
-                    $previousArtifactEntry = $artifactEntry
-                }
-            }
-
-            $expectedStateEntries = [ordered]@{
-                "state/checkpoint-after.bin" =
-                    $bundleManifest.stateSnapshots.checkpoint.after
-                "state/checkpoint-before.bin" =
-                    $bundleManifest.stateSnapshots.checkpoint.before
-                "state/save-after.bin" =
-                    $bundleManifest.stateSnapshots.save.after
-                "state/save-before.bin" =
-                    $bundleManifest.stateSnapshots.save.before
-            }
-            foreach ($stateEntryName in $expectedStateEntries.Keys) {
-                $stateRecord = $expectedStateEntries[$stateEntryName]
-                if ([string]$stateRecord.entry -cne $stateEntryName -or
-                    $stateRecord.sha256 -cnotmatch "^[0-9a-f]{64}$" -or
-                    $stateRecord.size -isnot [Int64] -or
-                    [Int64]$stateRecord.size -le 0 -or
-                    [Int64]$stateRecord.size -gt 67108864) {
-                    throw "Windows Creator state snapshot inventory is invalid."
-                }
-                $referencedEntries[$stateEntryName] = $stateRecord
-            }
-            $referencedEntries["acceptance/creator-acceptance-result.json"] =
-                $bundleManifest.acceptanceResult
-            $saveSnapshots = $bundleManifest.stateSnapshots.save
-            $checkpointSnapshots =
-                $bundleManifest.stateSnapshots.checkpoint
-            if ($saveSnapshots.unchanged -ne $true -or
-                $checkpointSnapshots.unchanged -ne $true -or
-                $saveSnapshots.before.sha256 -cne
-                    [string]$saveSnapshots.after.sha256 -or
-                [Int64]$saveSnapshots.before.size -ne
-                    [Int64]$saveSnapshots.after.size -or
-                $checkpointSnapshots.before.sha256 -cne
-                    [string]$checkpointSnapshots.after.sha256 -or
-                [Int64]$checkpointSnapshots.before.size -ne
-                    [Int64]$checkpointSnapshots.after.size -or
-                $descriptor.saveStateUnchanged -ne $true -or
-                $descriptor.checkpointStateUnchanged -ne $true) {
-                throw "Windows Creator save or checkpoint state changed."
-            }
-
-            foreach ($referencedEntryName in $referencedEntries.Keys) {
-                if (-not $entryByName.ContainsKey($referencedEntryName)) {
-                    throw "Windows Creator evidence bundle is missing an inventoried entry."
-                }
-                $record = $referencedEntries[$referencedEntryName]
-                $entry = $entryByName[$referencedEntryName]
-                if ([Int64]$entry.Length -ne [Int64]$record.size -or
-                    (Get-ZipEntrySha256 $entry) -cne
-                        [string]$record.sha256) {
-                    throw "Windows Creator embedded evidence bytes do not match their exact digest inventory."
-                }
-            }
-
-            # The acceptance result is the recorder's own output. Re-derive its
-            # claims here so the public descriptor cannot assert a pass the
-            # interactive run never produced.
-            $acceptanceEntry =
-                $entryByName["acceptance/creator-acceptance-result.json"]
-            $acceptanceStream = $acceptanceEntry.Open()
-            $acceptanceMemory = [System.IO.MemoryStream]::new()
-            try {
-                $acceptanceStream.CopyTo($acceptanceMemory)
-                $acceptanceBytes = $acceptanceMemory.ToArray()
-            }
-            finally {
-                $acceptanceMemory.Dispose()
-                $acceptanceStream.Dispose()
-            }
-            $acceptanceResult = ConvertFrom-StrictJsonBytes `
-                -Bytes $acceptanceBytes `
-                -Label "Windows Creator acceptance result" `
-                -MaximumBytes 8388608
-            $acceptancePassed = @(
-                $acceptanceResult.passedCases | ForEach-Object { [string]$_ }
-            )
-            $acceptanceRequired = @(
-                $acceptanceResult.requiredCases | ForEach-Object { [string]$_ }
-            )
-            $acceptanceReceiptFiles = @(
-                $acceptanceResult.creatorPackageReceipt.criticalFiles |
-                    ForEach-Object {
-                        [string]$_.path + "=" + [string]$_.sha256
-                    }
-            )
-            $descriptorReceiptFiles = @(
-                $receiptFiles | ForEach-Object {
-                    [string]$_.path + "=" + [string]$_.sha256
-                }
-            )
-            if ($acceptanceResult.schemaVersion -ne 1 -or
-                [string]$acceptanceResult.suite -cne "creator-full" -or
-                $acceptanceResult.succeeded -ne $true -or
-                [string]$acceptanceResult.acceptanceChallenge -cne
-                    [string]$descriptor.acceptanceChallenge -or
-                [string]$acceptanceResult.lastRunSessionId -cne
-                    [string]$descriptor.lastRunSessionId -or
-                [string]$acceptanceResult.creatorPackageReceipt.sourceSha256 `
-                    -cne [string]$creatorReceipt.sourceSha256 -or
-                $acceptanceReceiptFiles.Count -ne
-                    $descriptorReceiptFiles.Count -or
-                $null -ne (Compare-Object $acceptanceReceiptFiles `
-                        $descriptorReceiptFiles -SyncWindow 0) -or
-                [string]$acceptanceResult.gameBuild -cne
-                    $expectedGameBuildId -or
-                $acceptanceResult.lifecycleCycles -isnot [Int64] -or
-                [Int64]$acceptanceResult.lifecycleCycles -ne
-                    [Int64]$descriptor.lifecycleCycles -or
-                $acceptanceResult.saveStateUnchanged -ne $true -or
-                $acceptanceResult.checkpointStateUnchanged -ne $true -or
-                @($acceptanceResult.failures).Count -ne 0 -or
-                @($acceptanceResult.missingCases).Count -ne 0 -or
-                $acceptancePassed.Count -ne $expectedCaseIds.Count -or
-                $acceptanceRequired.Count -ne $expectedCaseIds.Count -or
-                $null -ne (Compare-Object $acceptancePassed `
-                        @($expectedCaseIds | Sort-Object) -SyncWindow 0) -or
-                $null -ne (Compare-Object $acceptanceRequired `
-                        @($expectedCaseIds | Sort-Object) -SyncWindow 0)) {
-                throw "The retained Creator acceptance result does not prove this exact challenge-bound interactive run."
-            }
-
-            $expectedZipEntryNames = [string[]]@(
-                @("bundle-manifest.json") + @($referencedEntries.Keys)
-            )
-            $sortedPayloadNames = [string[]]@($expectedZipEntryNames[1..(
-                        $expectedZipEntryNames.Count - 1
-                    )])
-            [Array]::Sort($sortedPayloadNames, [StringComparer]::Ordinal)
-            $expectedZipEntryNames =
-                [string[]]@("bundle-manifest.json") + $sortedPayloadNames
-            if ($zipEntries.Count -ne $expectedZipEntryNames.Count) {
-                throw "Windows Creator evidence bundle contains unexpected entries."
-            }
-            for ($entryIndex = 0;
-                $entryIndex -lt $expectedZipEntryNames.Count;
-                $entryIndex++) {
-                if ([string]$zipEntries[$entryIndex].FullName -cne
-                    $expectedZipEntryNames[$entryIndex]) {
-                    throw "Windows Creator evidence bundle contains unexpected or non-deterministically ordered entries."
-                }
-            }
-        }
-        finally {
-            $zip.Dispose()
-        }
-    }
-    finally {
-        $bundleStream.Dispose()
-    }
-    return $descriptor
-}
-
-function Assert-WindowsCreatorEvidence {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$WindowsArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha
-    )
-    if ([string]::IsNullOrWhiteSpace($WindowsCreatorEvidence) -or
-        -not (Test-Path -LiteralPath $WindowsCreatorEvidence -PathType Leaf)) {
-        throw "The local Windows Creator acceptance descriptor is required. " +
-            "Builds are retained; provide -WindowsCreatorEvidence and run resume."
-    }
-    if ([string]::IsNullOrWhiteSpace($WindowsCreatorEvidenceBundle) -or
-        -not (Test-Path -LiteralPath $WindowsCreatorEvidenceBundle -PathType Leaf)) {
-        throw "The retained Windows Creator acceptance bundle is required. " +
-            "Provide -WindowsCreatorEvidenceBundle and run resume."
-    }
-    $null = Assert-WindowsCreatorEvidencePair -SourceSha $SourceSha `
-        -WindowsArchive $WindowsArchive -CanonicalSha $CanonicalSha `
-        -DescriptorPath $WindowsCreatorEvidence `
-        -BundlePath $WindowsCreatorEvidenceBundle
-    $destination = Join-Path $evidenceDirectory "windows-creator"
-    New-Item -ItemType Directory -Force -Path $destination | Out-Null
-    $retainedDescriptor = Join-Path $destination "creator-evidence.json"
-    $retainedBundle = Join-Path $destination "creator-evidence.bundle"
-    Copy-Item -LiteralPath $WindowsCreatorEvidence `
-        -Destination $retainedDescriptor -Force
-    Copy-Item -LiteralPath $WindowsCreatorEvidenceBundle `
-        -Destination $retainedBundle -Force
-    Assert-ByteIdenticalMetadata -ExpectedPath $WindowsCreatorEvidence `
-        -ActualPath $retainedDescriptor `
-        -Label "Retained Windows Creator acceptance descriptor"
-    if ((Get-Sha256 $WindowsCreatorEvidenceBundle) -cne
-            (Get-Sha256 $retainedBundle) -or
-        (Get-Item -LiteralPath $WindowsCreatorEvidenceBundle).Length -ne
-            (Get-Item -LiteralPath $retainedBundle).Length) {
-        throw "Retained Windows Creator acceptance bundle changed while it was copied."
-    }
-    $null = Assert-WindowsCreatorEvidencePair -SourceSha $SourceSha `
-        -WindowsArchive $WindowsArchive -CanonicalSha $CanonicalSha `
-        -DescriptorPath $retainedDescriptor -BundlePath $retainedBundle
-}
-
-function Assert-RetainedWindowsCreatorEvidence {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$WindowsArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha
-    )
-    $destination = Join-Path $evidenceDirectory "windows-creator"
-    return Assert-WindowsCreatorEvidencePair -SourceSha $SourceSha `
-        -WindowsArchive $WindowsArchive -CanonicalSha $CanonicalSha `
-        -DescriptorPath (Join-Path $destination "creator-evidence.json") `
-        -BundlePath (Join-Path $destination "creator-evidence.bundle")
-}
-
 function Assert-ProtonEvidence {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$LinuxArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha
-    )
-    $protonDirectory = Join-Path $evidenceDirectory "proton"
-    $descriptorPath = Join-Path $protonDirectory "proton-evidence.json"
-    $bundlePath = Join-Path $protonDirectory "proton-evidence.bundle"
-    $null = Assert-BoundedRegularFile -Path $descriptorPath `
-        -MaximumBytes 2097152 `
-        -Label "Automatic same-host WSL2/WSLg Proton descriptor"
-    $bundleFile = Assert-BoundedRegularFile -Path $bundlePath `
-        -MaximumBytes 268435456 `
-        -Label "Automatic same-host WSL2/WSLg Proton evidence bundle"
-    $descriptorText = Get-Content -LiteralPath $descriptorPath -Raw
-    $descriptor = $descriptorText | ConvertFrom-Json
-    $linuxSha = Get-Sha256 $LinuxArchive
-    $linuxSize = (Get-Item -LiteralPath $LinuxArchive).Length
-    $bundleSha = Get-Sha256 $bundlePath
-    $bundleSize = $bundleFile.Length
-    $caseInventoryBytes = Get-GitBlobBytes -SourceSha $SourceSha `
-        -GitPath "tests/live-game-acceptance.json"
-    $caseInventorySha = Get-BytesSha256 $caseInventoryBytes
-    try {
-        $caseInventory = [System.Text.UTF8Encoding]::new(
-            $false,
-            $true
-        ).GetString($caseInventoryBytes) | ConvertFrom-Json
-    }
-    catch {
-        throw "The source-SHA Proton case inventory is not valid UTF-8 JSON."
-    }
-    $expectedCases = @(
-        $caseInventory.cases |
-            ForEach-Object { [string]$_.id } |
-            Sort-Object
-    )
-    if ($expectedCases.Count -eq 0 -or
-        @($expectedCases | Sort-Object -Unique).Count -ne $expectedCases.Count) {
-        throw "The Proton acceptance case inventory is invalid."
-    }
-    $caseSetText = ($expectedCases -join "`n") + "`n"
-    $caseSetSha = Get-Utf8Sha256 $caseSetText
-    $requiredCases = @($descriptor.requiredCases | ForEach-Object { [string]$_ })
-    $passedCases = @($descriptor.passedCases | ForEach-Object { [string]$_ })
-    $caseSetsMatch =
-        $requiredCases.Count -eq $expectedCases.Count -and
-        $passedCases.Count -eq $expectedCases.Count -and
-        -not (Compare-Object $requiredCases $expectedCases -SyncWindow 0) -and
-        -not (Compare-Object $passedCases $expectedCases -SyncWindow 0)
-    $expectedDescriptorKeys = @(
-        "acceptanceResultSha256",
-        "archiveSha256",
-        "archiveSize",
-        "canonicalEcosystemSha256",
-        "caseInventorySha256",
-        "evidenceSha256",
-        "evidenceSize",
-        "executionEnvironment",
-        "failures",
-        "gameArchiveSha256",
-        "gameBuildId",
-        "gameExecutableSha256",
-        "gameFilesManifestSha256",
-        "gameFilesVerified",
-        "independentQa",
-        "passedCases",
-        "passedCasesSha256",
-        "platform",
-        "protonAppId",
-        "protonBuildId",
-        "protonDepotId",
-        "protonManifestId",
-        "protonRuntimeSha256",
-        "protonSourceCommit",
-        "protonVersion",
-        "releaseJourney",
-        "requiredCases",
-        "requiredCasesSha256",
-        "result",
-        "runtime",
-        "runtimeConfigurationSha256",
-        "schema",
-        "suite",
-        "targetSha",
-        "version",
-        "winDllOverrides",
-        "wineCommandSha256"
-    ) | Sort-Object
-    $actualDescriptorKeys = @($descriptor.PSObject.Properties.Name | Sort-Object)
-    $descriptorKeysMatch =
-        -not (Compare-Object $actualDescriptorKeys $expectedDescriptorKeys -SyncWindow 0)
-    $digestNames = @(
-        "acceptanceResultSha256",
-        "archiveSha256",
-        "canonicalEcosystemSha256",
-        "caseInventorySha256",
-        "evidenceSha256",
-        "gameArchiveSha256",
-        "gameExecutableSha256",
-        "gameFilesManifestSha256",
-        "passedCasesSha256",
-        "protonRuntimeSha256",
-        "requiredCasesSha256",
-        "runtimeConfigurationSha256",
-        "wineCommandSha256"
-    )
-    $digestsValid = $true
-    foreach ($digestName in $digestNames) {
-        if ([string]$descriptor.$digestName -cnotmatch "^[0-9a-f]{64}$") {
-            $digestsValid = $false
-        }
-    }
-    $journeyKeys = @($descriptor.releaseJourney.PSObject.Properties.Name | Sort-Object)
-    $expectedJourneyKeys = @(
-        "authoringCommandCount",
-        "enabled",
-        "loadedPackageStatus",
-        "logMarkerObserved"
-    ) | Sort-Object
-    $journeyMatches =
-        -not (Compare-Object $journeyKeys $expectedJourneyKeys -SyncWindow 0) -and
-        $descriptor.releaseJourney.enabled -eq $true -and
-        [int]$descriptor.releaseJourney.authoringCommandCount -eq 2 -and
-        [string]$descriptor.releaseJourney.loadedPackageStatus -ceq "loaded" -and
-        $descriptor.releaseJourney.logMarkerObserved -eq $true
-    $gameMetadataBytes = Get-GitBlobBytes -SourceSha $SourceSha `
-        -GitPath ([string]$policy.gameBuild.metadataFile)
-    try {
-        $gameMetadata = [System.Text.UTF8Encoding]::new(
-            $false,
-            $true
-        ).GetString($gameMetadataBytes) | ConvertFrom-Json
-    }
-    catch {
-        throw "The source-SHA Robotopia build metadata is not valid UTF-8 JSON."
-    }
-    if ($descriptor.schema -ne "release-proton-evidence-v1" -or
-        $descriptor.version -ne $Version -or
-        $descriptor.targetSha -ne $SourceSha -or
-        $descriptor.platform -ne "linux-proton" -or
-        $descriptor.archiveSha256 -ne $linuxSha -or
-        $descriptor.archiveSize -isnot [Int64] -or
-        [Int64]$descriptor.archiveSize -ne $linuxSize -or
-        $descriptor.canonicalEcosystemSha256 -ne $CanonicalSha -or
-        $descriptor.gameBuildId -isnot [Int64] -or
-        [Int64]$descriptor.gameBuildId -ne [Int64]$policy.gameBuild.id -or
-        [string]$descriptor.gameArchiveSha256 -cne
-            [string]$gameMetadata.archives.windows.sha256 -or
-        [string]$descriptor.gameFilesManifestSha256 -cne
-            [string]$gameMetadata.windowsFilesManifest.sha256 -or
-        $descriptor.gameFilesVerified -isnot [Int64] -or
-        [Int64]$descriptor.gameFilesVerified -ne
-            [Int64]$gameMetadata.windowsFilesManifest.fileCount -or
-        [string]$descriptor.gameExecutableSha256 -cne
-            [string]$gameMetadata.windowsFilesManifest.gameExecutableSha256 -or
-        $descriptor.result -ne "pass" -or
-        $descriptor.suite -ne "full" -or
-        $descriptor.protonVersion -ne
-            [string]$platformToolchains.linux.proton -or
-        $descriptor.protonAppId -isnot [Int64] -or
-        [Int64]$descriptor.protonAppId -ne
-            [Int64]$platformToolchains.linux.protonSteamAppId -or
-        $descriptor.protonDepotId -isnot [Int64] -or
-        [Int64]$descriptor.protonDepotId -ne
-            [Int64]$platformToolchains.linux.protonSteamDepotId -or
-        [string]$descriptor.protonManifestId -cne
-            [string]$platformToolchains.linux.protonSteamManifestId -or
-        $descriptor.protonBuildId -isnot [Int64] -or
-        [Int64]$descriptor.protonBuildId -ne
-            [Int64]$platformToolchains.linux.protonSteamBuildId -or
-        [string]$descriptor.protonSourceCommit -cne
-            [string]$platformToolchains.linux.protonSourceCommit -or
-        $descriptor.executionEnvironment -ne
-            [string]$platformToolchains.linux.executionEnvironment -or
-        $descriptor.runtime -ne "windows-x64-via-proton" -or
-        $descriptor.winDllOverrides -ne "winhttp=n,b" -or
-        $descriptor.independentQa -ne $false -or
-        $descriptor.caseInventorySha256 -ne $caseInventorySha -or
-        $descriptor.requiredCasesSha256 -ne $caseSetSha -or
-        $descriptor.passedCasesSha256 -ne $caseSetSha -or
-        -not $descriptorKeysMatch -or
-        -not $digestsValid -or
-        -not $caseSetsMatch -or
-        @($descriptor.failures).Count -ne 0 -or
-        -not $journeyMatches -or
-        $descriptor.evidenceSha256 -ne $bundleSha -or
-        $descriptor.evidenceSize -isnot [Int64] -or
-        [Int64]$descriptor.evidenceSize -ne $bundleSize) {
-        throw "Same-host WSL2/WSLg Proton evidence does not match this exact candidate."
-    }
-    if ($descriptorText -match
-        '(?i)"(?:username|hostname|path|timestamp|credential|password|rawLog)"\s*:') {
-        throw "The public Proton descriptor contains machine-specific or sensitive fields."
-    }
-
-    $bundleEntries = @(
-        (Invoke-Checked tar @("-tf", $bundlePath) -Capture) -split "\r?\n" |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-    )
-    $expectedBundleEntries = @(
-        "acceptance-result.json",
-        "cli-help.txt",
-        "game-build-marker.json",
-        "last-run.json",
-        "manager.log",
-        "new-mod.txt",
-        "proton-version.txt",
-        "runtime-context.txt"
-    )
-    if ($bundleEntries.Count -ne $expectedBundleEntries.Count -or
-        (Compare-Object $bundleEntries $expectedBundleEntries -SyncWindow 0)) {
-        throw "The private Proton evidence bundle inventory is invalid."
-    }
-    $inspectionDirectory = Join-Path $stateDirectory "proton-evidence-check"
-    Clear-ReleaseDirectory -Path $inspectionDirectory -AllowedParent $stateDirectory
-    try {
-        Invoke-Checked tar @("-xf", $bundlePath, "-C", $inspectionDirectory)
-        $acceptancePath = Join-Path $inspectionDirectory "acceptance-result.json"
-        if ((Get-Sha256 $acceptancePath) -ne
-            [string]$descriptor.acceptanceResultSha256) {
-            throw "The bundled Proton acceptance result digest does not match."
-        }
-        $acceptance = Get-Content -LiteralPath $acceptancePath -Raw |
-            ConvertFrom-Json -DateKind String
-        Assert-ExactJsonProperties -Value $acceptance -Expected @(
-            "acceptanceChallenge",
-            "acceptancePackageReceipt",
-            "acceptancePackageStatus",
-            "completedAtUtc",
-            "failures",
-            "gameDirectory",
-            "lastRunSessionId",
-            "missingCases",
-            "package",
-            "passedCases",
-            "releaseJourneyAuthoringCommandCount",
-            "releaseJourneyCli",
-            "releaseJourneyEnabled",
-            "releaseJourneyProject",
-            "requiredCases",
-            "requiredLoadedPackageId",
-            "requiredLoadedPackageReceipt",
-            "requiredLoadedPackageStatus",
-            "requiredLogMarker",
-            "requiredLogMarkerObserved",
-            "schemaVersion",
-            "startedAtUtc",
-            "succeeded"
-        ) -Label "Bundled Proton acceptance result"
-        Assert-LiveAcceptancePackageReceipt `
-            -Receipt $acceptance.acceptancePackageReceipt `
-            -Label "Bundled Proton acceptance-package receipt"
-        Assert-LiveAcceptancePackageReceipt `
-            -Receipt $acceptance.requiredLoadedPackageReceipt `
-            -Label "Bundled Proton journey-package receipt"
-        $acceptanceRequired = @(
-            $acceptance.requiredCases | ForEach-Object { [string]$_ } | Sort-Object
-        )
-        $acceptancePassed = @(
-            $acceptance.passedCases | ForEach-Object { [string]$_ } | Sort-Object
-        )
-        $journeyId = "dev.topiaforge.release-$($SourceSha.Substring(0, 12))"
-        $journeyName = "TopiaForge release $Version"
-        $expectedMarker =
-            "$journeyName loaded. Run '$journeyId`:greet' to try its command."
-        try {
-            $started = [DateTimeOffset]::Parse([string]$acceptance.startedAtUtc)
-            $completed = [DateTimeOffset]::Parse([string]$acceptance.completedAtUtc)
-        }
-        catch {
-            throw "The bundled Proton acceptance timestamps are invalid."
-        }
-        if ($acceptance.schemaVersion -isnot [Int64] -or
-            [Int64]$acceptance.schemaVersion -ne 2 -or
-            [string]$acceptance.acceptanceChallenge -cnotmatch
-                "^[0-9a-f]{64}$" -or
-            $acceptance.succeeded -ne $true -or
-            @($acceptance.missingCases).Count -ne 0 -or
-            @($acceptance.failures).Count -ne 0 -or
-            @($acceptanceRequired).Count -ne $expectedCases.Count -or
-            @($acceptancePassed).Count -ne $expectedCases.Count -or
-            (Compare-Object $acceptanceRequired $expectedCases -SyncWindow 0) -or
-            (Compare-Object $acceptancePassed $expectedCases -SyncWindow 0) -or
-            $acceptance.releaseJourneyEnabled -ne $true -or
-            [int]$acceptance.releaseJourneyAuthoringCommandCount -ne 2 -or
-            [string]$acceptance.requiredLoadedPackageStatus -cne "loaded" -or
-            $acceptance.requiredLogMarkerObserved -ne $true -or
-            [string]$acceptance.acceptancePackageStatus -cne "loaded" -or
-            [string]::IsNullOrWhiteSpace([string]$acceptance.lastRunSessionId) -or
-            [string]$acceptance.requiredLoadedPackageId -cne $journeyId -or
-            [string]$acceptance.requiredLogMarker -cne $expectedMarker -or
-            (Split-Path -Leaf ([string]$acceptance.releaseJourneyCli)) -cne
-                "topiaforge" -or
-            (Split-Path -Leaf ([string]$acceptance.releaseJourneyProject)) -cne
-                $journeyId -or
-            [string]$acceptance.startedAtUtc -cnotmatch "Z$" -or
-            [string]$acceptance.completedAtUtc -cnotmatch "Z$" -or
-            $completed -lt $started) {
-            throw "The bundled Proton acceptance result is incomplete."
-        }
-        $runtimeContext = @(
-            "executionEnvironment=$($descriptor.executionEnvironment)",
-            "gameBuildId=$($descriptor.gameBuildId)",
-            "gameArchiveSha256=$($descriptor.gameArchiveSha256)",
-            "gameExecutableSha256=$($descriptor.gameExecutableSha256)",
-            "gameFilesManifestSha256=$($descriptor.gameFilesManifestSha256)",
-            "gameFilesVerified=$($descriptor.gameFilesVerified)",
-            "independentQa=false",
-            "protonRuntimeSha256=$($descriptor.protonRuntimeSha256)",
-            "protonVersion=$($descriptor.protonVersion)",
-            "runtime=$($descriptor.runtime)",
-            "winDllOverrides=$($descriptor.winDllOverrides)",
-            "wineCommandSha256=$($descriptor.wineCommandSha256)"
-        ) -join "`n"
-        $runtimeContext += "`n"
-        $runtimeContextPath = Join-Path $inspectionDirectory "runtime-context.txt"
-        $actualRuntimeContext = [System.IO.File]::ReadAllText($runtimeContextPath).
-            Replace("`r`n", "`n").
-            Replace("`r", "`n")
-        if ($actualRuntimeContext -cne $runtimeContext) {
-            throw "The bundled Proton runtime configuration content is invalid."
-        }
-        if ((Get-Utf8Sha256 $runtimeContext) -ne
-            [string]$descriptor.runtimeConfigurationSha256) {
-            throw "The bundled Proton runtime configuration digest is invalid."
-        }
-        $gameMarker = Get-Content -LiteralPath (
-            Join-Path $inspectionDirectory "game-build-marker.json"
-        ) -Raw | ConvertFrom-Json
-        if ([string]$gameMarker.id -ne [string]$policy.gameBuild.id) {
-            throw "The bundled Proton game-build marker is invalid."
-        }
-        $protonVersion = [System.IO.File]::ReadAllText(
-            (Join-Path $inspectionDirectory "proton-version.txt")
-        ).Replace("`r`n", "`n").Replace("`r", "`n")
-        if ($protonVersion -cne "Proton $($descriptor.protonVersion)`n") {
-            throw "The bundled Proton version evidence is invalid."
-        }
-        $lastRun = Get-Content -LiteralPath (
-            Join-Path $inspectionDirectory "last-run.json"
-        ) -Raw | ConvertFrom-Json
-        $acceptanceRunPackage = @(
-            $lastRun.packages | Where-Object {
-                [string]$_.id -ceq "dev.topiaforge.sdk-acceptance"
-            }
-        )
-        $journeyRunPackage = @(
-            $lastRun.packages | Where-Object {
-                [string]$_.id -ceq $journeyId
-            }
-        )
-        if ($lastRun.schemaVersion -isnot [Int64] -or
-            [Int64]$lastRun.schemaVersion -ne 1 -or
-            [string]$lastRun.sessionId -cne
-                [string]$acceptance.lastRunSessionId -or
-            $acceptanceRunPackage.Count -ne 1 -or
-            $journeyRunPackage.Count -ne 1 -or
-            [string]$acceptanceRunPackage[0].sourceSha256 -cne
-                [string]$acceptance.acceptancePackageReceipt.sourceSha256 -or
-            (($acceptanceRunPackage[0].criticalFiles |
-                    ConvertTo-Json -Compress) -cne
-                ($acceptance.acceptancePackageReceipt.criticalFiles |
-                    ConvertTo-Json -Compress)) -or
-            [string]$journeyRunPackage[0].sourceSha256 -cne
-                [string]$acceptance.requiredLoadedPackageReceipt.sourceSha256 -or
-            (($journeyRunPackage[0].criticalFiles |
-                    ConvertTo-Json -Compress) -cne
-                ($acceptance.requiredLoadedPackageReceipt.criticalFiles |
-                    ConvertTo-Json -Compress))) {
-            throw "The bundled Proton last-run package receipts are for a different session or package."
-        }
-        foreach ($requiredNonemptyEntry in @(
-                "cli-help.txt",
-                "manager.log",
-                "new-mod.txt"
-            )) {
-            $null = Assert-BoundedRegularFile -Path (
-                Join-Path $inspectionDirectory $requiredNonemptyEntry
-            ) -MaximumBytes 134217728 `
-                -Label "Bundled Proton $requiredNonemptyEntry evidence"
-        }
-    }
-    finally {
-        if (Test-Path -LiteralPath $inspectionDirectory) {
-            Remove-Item -LiteralPath $inspectionDirectory -Recurse -Force
-        }
-    }
+    param([string]$SourceSha, [string]$LinuxArchive, [string]$CanonicalSha)
+    $null = @($SourceSha, $LinuxArchive, $CanonicalSha)
+    throw "Proton acceptance isolation is not supported; legacy evidence cannot qualify Linux RC2."
 }
 
 function Repair-PartialProtonEvidence {
@@ -2793,7 +1890,7 @@ function Repair-PartialProtonEvidence {
         Remove-Item -LiteralPath $orphanPath -Force
         Write-Host (
             "Removed one unfrozen Proton evidence file left by an interrupted " +
-            "publication; the exact acceptance run will be repeated."
+            "publication; native isolation must be implemented before another run."
         )
         $hasDescriptor = $false
         $hasBundle = $false
@@ -2805,56 +1902,9 @@ function Repair-PartialProtonEvidence {
 }
 
 function Invoke-WslProtonAcceptance {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceSha,
-        [Parameter(Mandatory = $true)][string]$LinuxArchive,
-        [Parameter(Mandatory = $true)][string]$CanonicalSha
-    )
-    $protonDirectory = Join-Path $evidenceDirectory "proton"
-    $evidenceState = Repair-PartialProtonEvidence `
-        -ProtonDirectory $protonDirectory
-    $hasDescriptor = [bool]$evidenceState.HasDescriptor
-    $hasBundle = [bool]$evidenceState.HasBundle
-    if ($hasDescriptor -and $hasBundle) {
-        Assert-ProtonEvidence -SourceSha $SourceSha -LinuxArchive $LinuxArchive `
-            -CanonicalSha $CanonicalSha
-        Write-Host "Existing same-host WSL2/WSLg Proton evidence verifies."
-        return
-    }
-    New-Item -ItemType Directory -Force -Path $protonDirectory | Out-Null
-    $repositoryWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $repositoryRoot
-    ) -Capture
-    $archiveWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $LinuxArchive
-    ) -Capture
-    $gameDirectoryWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $GameDirectory
-    ) -Capture
-    $outputWslPath = Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec",
-        "wslpath", "-a", "-u", $protonDirectory
-    ) -Capture
-    Invoke-Checked wsl @(
-        "--distribution", $WslDistribution, "--exec", "/bin/bash",
-        "$repositoryWslPath/tools/release/test-proton.sh",
-        "--repo", $repositoryWslPath,
-        "--source-sha", $SourceSha,
-        "--version", $Version,
-        "--archive", $archiveWslPath,
-        "--canonical-ecosystem-sha256", $CanonicalSha,
-        "--game-dir", $gameDirectoryWslPath,
-        "--game-build-id", ([string]$policy.gameBuild.id),
-        "--proton-executable", $ProtonExecutable,
-        "--steam-root", $SteamRoot,
-        "--compat-data-root", $CompatDataRoot,
-        "--output", $outputWslPath
-    )
-    Assert-ProtonEvidence -SourceSha $SourceSha -LinuxArchive $LinuxArchive `
-        -CanonicalSha $CanonicalSha
+    param([string]$SourceSha, [string]$LinuxArchive, [string]$CanonicalSha)
+    $null = @($SourceSha, $LinuxArchive, $CanonicalSha)
+    throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked."
 }
 
 function New-WindowsQaSummary {
@@ -2873,13 +1923,9 @@ function New-WindowsQaSummary {
     )
     Assert-WindowsRuntimeEvidence -SourceSha $SourceSha `
         -Validation $Validation
-    $creator = Assert-RetainedWindowsCreatorEvidence -SourceSha $SourceSha `
-        -WindowsArchive $WindowsArchive -CanonicalSha $CanonicalSha
     $unityPath = Join-Path $evidenceDirectory "windows/unity/lifecycle.json"
     $robotopiaPath = Join-Path $evidenceDirectory `
         "windows/robotopia/acceptance-result.json"
-    $creatorPath = Join-Path $evidenceDirectory `
-        "windows-creator/creator-evidence.json"
     $unity = Get-Content -LiteralPath $unityPath -Raw | ConvertFrom-Json
     $robotopia = Get-Content -LiteralPath $robotopiaPath -Raw |
         ConvertFrom-Json -DateKind String
@@ -2900,13 +1946,7 @@ function New-WindowsQaSummary {
             ForEach-Object { [string]$_.id } |
             Sort-Object
     )
-    $creatorCases = @(
-        $caseInventory.creatorAcceptance.cases |
-            ForEach-Object { [string]$_.id } |
-            Sort-Object
-    )
     $liveCasesSha = Get-Utf8Sha256 (($liveCases -join "`n") + "`n")
-    $creatorCasesSha = Get-Utf8Sha256 (($creatorCases -join "`n") + "`n")
     $summary = [ordered]@{
         schema = "release-windows-qa-summary-v1"
         version = $Version
@@ -2961,23 +2001,6 @@ function New-WindowsQaSummary {
             }
             evidenceSha256 = Get-Sha256 $robotopiaPath
         }
-        creator = [ordered]@{
-            result = [string]$creator.result
-            suite = [string]$creator.suite
-            caseInventorySha256 = $caseInventorySha
-            requiredCases = $creatorCases
-            requiredCasesSha256 = $creatorCasesSha
-            passedCases = $creatorCases
-            passedCasesSha256 = $creatorCasesSha
-            lifecycleCycles = [Int64]$creator.lifecycleCycles
-            saveStateUnchanged = [bool]$creator.saveStateUnchanged
-            checkpointStateUnchanged =
-                [bool]$creator.checkpointStateUnchanged
-            failures = @()
-            descriptorSha256 = Get-Sha256 $creatorPath
-            evidenceSha256 = [string]$creator.evidenceSha256
-            evidenceSize = [Int64]$creator.evidenceSize
-        }
     }
     $parent = Split-Path -Parent $OutputPath
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
@@ -2999,10 +2022,16 @@ function Build-Handoff {
         $windowsCertificatePin =
             [string]$policy.signingIdentities.windowsCertificateSha256
     }
-    if ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+    $windowsDistribution = Get-WindowsDistributionMode -PolicyObject $policy
+    if ($windowsDistribution -ceq "unsigned") {
+        if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+            throw "An unsigned Windows distribution must not also pin a signing certificate."
+        }
+    }
+    elseif ($windowsCertificatePin -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
         throw "A reviewed nonzero Windows certificate SHA-256 pin is required."
     }
-    if (-not $VerifyOnly) {
+    if (-not $VerifyOnly -and $windowsDistribution -cne "unsigned") {
         Invoke-Checked $powerShellExecutable @(
             "-NoLogo",
             "-NoProfile",
@@ -3028,27 +2057,42 @@ function Build-Handoff {
         $EcosystemEvidenceSha -ne $CanonicalSha) {
         throw "Canonical ecosystem identity or reproducibility evidence changed."
     }
+    # The expected record follows the recorded distribution mode, so an unsigned
+    # build is required to declare itself unsigned rather than being compared
+    # against an Authenticode claim it never made.
+    $expectedSigningState = if ($windowsDistribution -ceq "unsigned") {
+        "unsigned"
+    }
+    else {
+        "authenticode-timestamped"
+    }
+    $expectedWindowsChecks = [System.Collections.Generic.List[string]]::new()
+    $expectedWindowsChecks.AddRange([string[]]@(
+            "archive-smoke",
+            "embedded-cli",
+            "packaged-launcher-health",
+            "canonical-ecosystem"
+        ))
+    if ($windowsDistribution -cne "unsigned") {
+        $expectedWindowsChecks.Add("authenticode")
+    }
+    $expectedWindowsChecks.AddRange([string[]]@(
+            "unity-reproducibility",
+            "unity-lifecycle",
+            "official-game-bytes",
+            "robotopia-acceptance"
+        ))
     $platforms = @(
         @{
             Name = "windows-x64"
             ValidationPlatform = "windows"
             Archive = "TopiaForge-windows-x64.zip"
             Validation = "validation-windows.json"
-            SigningState = "authenticode-timestamped"
-            ExpectedChecks = @(
-                "archive-smoke",
-                "embedded-cli",
-                "packaged-launcher-health",
-                "canonical-ecosystem",
-                "authenticode",
-                "unity-reproducibility",
-                "unity-lifecycle",
-                "official-game-bytes",
-                "robotopia-acceptance"
-            )
+            SigningState = $expectedSigningState
+            ExpectedChecks = @($expectedWindowsChecks.ToArray())
         }
     )
-    # Linux is descoped from 1.0.0-rc.1, so the handoff platform set follows
+    # Linux is descoped from 0.1.0-rc.1, so the handoff platform set follows
     # the policy instead of assuming both archives exist. Re-adding the Linux
     # archive to release-policy.json restores this entry. See P0-LINUX-01.
     if ($targetsLinux) {
@@ -3186,11 +2230,6 @@ function Build-Handoff {
         if ($platform.Name -eq "windows-x64") {
             Assert-WindowsRuntimeEvidence -SourceSha $SourceSha `
                 -Validation $validation
-            $creatorPath = Join-Path $evidenceDirectory `
-                "windows-creator/creator-evidence.json"
-            $null = Assert-RetainedWindowsCreatorEvidence `
-                -SourceSha $SourceSha -WindowsArchive $archivePath `
-                -CanonicalSha $CanonicalSha
             $retainedQaPath = Join-Path $evidenceDirectory `
                 "windows/windows-qa-summary.json"
             $qaPath = if ($VerifyOnly) {
@@ -3208,12 +2247,17 @@ function Build-Handoff {
                     -ActualPath $retainedQaPath `
                     -Label "Frozen Windows QA summary"
             }
+            $arguments += @("--qa", $qaPath)
+            # The evidence set follows the recorded distribution mode, exactly as
+            # _requiredEvidenceFor does on the Dart side. The bundle validator
+            # compares the two sets for equality, so an unsigned build that sent
+            # this key anyway would fail on the extra entry.
+            if ($windowsDistribution -cne "unsigned") {
+                $arguments += @("--evidence", "authenticode=$validationSha")
+            }
             $arguments += @(
-                "--qa", $qaPath,
-                "--evidence", "authenticode=$validationSha",
                 "--evidence", "unity=$($validation.evidenceSha256.unity)",
-                "--evidence", "robotopia=$($validation.evidenceSha256.robotopia)",
-                "--evidence", "creator=$(Get-Sha256 $creatorPath)"
+                "--evidence", "robotopia=$($validation.evidenceSha256.robotopia)"
             )
         }
         elseif ($platform.Name -eq "linux-x64") {
@@ -3277,22 +2321,36 @@ function Build-Handoff {
     $handoffPath = Join-Path $assetsDirectory "release-handoff-v1.json"
     $handoffSignaturePath = Join-Path $assetsDirectory `
         "release-handoff-v1.json.p7s"
-    $handoffSignatureMode = if ($VerifyOnly) { "Verify" } else { "Sign" }
-    Invoke-Checked $powerShellExecutable @(
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-File",
-        $handoffSignatureScript,
-        "-Mode",
-        $handoffSignatureMode,
-        "-ExpectedCertificateSha256",
-        $windowsCertificatePin,
-        "-HandoffPath",
-        $handoffPath,
-        "-SignaturePath",
-        $handoffSignaturePath
-    )
+    # An unsigned distribution has no code-signing certificate, so it also has no
+    # detached CMS handoff signature. The hosted finalizer reads the same policy
+    # field at the same target SHA and expects the P7S to be absent, so this is a
+    # declared difference in the trust path rather than a skipped step.
+    if ($windowsDistribution -ceq "unsigned") {
+        if (Test-Path -LiteralPath $handoffSignaturePath) {
+            throw ("An unsigned Windows distribution must not stage " +
+                "release-handoff-v1.json.p7s.")
+        }
+        Write-Host ("Unsigned Windows distribution: the detached CMS handoff " +
+            "signature is intentionally not produced.")
+    }
+    else {
+        $handoffSignatureMode = if ($VerifyOnly) { "Verify" } else { "Sign" }
+        Invoke-Checked $powerShellExecutable @(
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            $handoffSignatureScript,
+            "-Mode",
+            $handoffSignatureMode,
+            "-ExpectedCertificateSha256",
+            $windowsCertificatePin,
+            "-HandoffPath",
+            $handoffPath,
+            "-SignaturePath",
+            $handoffSignaturePath
+        )
+    }
     Invoke-Checked $sdk.Dart @(
         "run", "bin/topiaforge.dart", "release", "verify-handoff",
         "--version", $Version, "--target-sha", $SourceSha,
@@ -3306,18 +2364,23 @@ function Build-Handoff {
 function Invoke-Build {
     $state = Read-State
     if ($null -eq $state -or $state.phase -notin @(
-            "preflight", "platforms-built", "built", "staged",
+            "preflight", "platforms-built", "built", "accepted", "staged",
             "dispatch-requested", "published"
         )) {
         throw "Run release-admin.ps1 preflight before build."
     }
     Use-StateConfiguration $state
+    if ($state.phase -in @("accepted", "staged", "dispatch-requested", "published")) {
+        throw "An accepted candidate cannot be rebuilt or repacked; resume its qualified bytes."
+    }
+    if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
+    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
+    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+        -OutputDirectories @($assetsDirectory, $evidenceDirectory)
     $sourceSha = [string]$state.sourceSha
     Assert-SourceStillExact $sourceSha
     Assert-OriginStillExact $sourceSha
-    if ($state.phase -in @(
-            "built", "staged", "dispatch-requested", "published"
-        )) {
+    if ($state.phase -ceq "built") {
         Build-Handoff -SourceSha $sourceSha -CanonicalSha $state.canonicalSha256 `
             -CanonicalArchiveSha $state.canonicalArchiveSha256 `
             -EcosystemEvidenceSha $state.ecosystemEvidenceSha256 -VerifyOnly
@@ -3388,6 +2451,7 @@ function Invoke-Build {
                 "-PrivateEvidenceDirectory", $evidenceDirectory,
                 "-UnityPath", $UnityPath,
                 "-GameDirectory", $GameDirectory,
+                "-AcceptanceIsolationRecord", $AcceptanceIsolationRecord,
                 "-DartPath", $sdk.Dart,
                 "-FlutterPath", $sdk.Flutter
             )
@@ -3430,10 +2494,6 @@ function Invoke-Build {
             -LinuxArchive $linuxArchive `
             -CanonicalSha ([string]$state.canonicalSha256)
     }
-    $windowsArchive = Join-Path $assetsDirectory "TopiaForge-windows-x64.zip"
-    Assert-WindowsCreatorEvidence -SourceSha $sourceSha `
-        -WindowsArchive $windowsArchive `
-        -CanonicalSha ([string]$state.canonicalSha256)
     Build-Handoff -SourceSha $sourceSha -CanonicalSha $state.canonicalSha256 `
         -CanonicalArchiveSha $state.canonicalArchiveSha256 `
         -EcosystemEvidenceSha $state.ecosystemEvidenceSha256
@@ -3462,12 +2522,26 @@ function Get-ReleaseCatalogEntry {
 
 function Get-StagedAssetPaths {
     $release = Get-ReleaseCatalogEntry
-    $names = @($release.artifacts) + @(
-        "release-platform-bundle-v1-windows-x64.json",
-        "release-platform-bundle-v1-linux-x64.json",
-        "release-handoff-v1.json",
-        "release-handoff-v1.json.p7s"
+    # The bundle manifests follow artifactPolicy. Listing both unconditionally
+    # demanded a Linux manifest the Windows-only RC1 build never produces.
+    $bundleNames = @(
+        @($policy.artifactPolicy.platformArchives) | ForEach-Object {
+            $target = [string]$_ -replace '^TopiaForge-', '' -replace '[.]zip$', ''
+            "release-platform-bundle-v1-$target.json"
+        }
     )
+    # An unsigned distribution has no detached CMS signature, and Build-Handoff
+    # refuses to stage one. Demanding it here made the run abort at -Stage rather
+    # than at the documented hosted guard.
+    $handoffNames = @("release-handoff-v1.json")
+    if ((Get-WindowsDistributionMode -PolicyObject $policy) -cne "unsigned") {
+        $handoffNames += "release-handoff-v1.json.p7s"
+    }
+    $qualificationNames = @(
+        "release-candidate-readiness-v1.json",
+        "release-candidate-acceptance-v1.json"
+    )
+    $names = @($release.artifacts) + $bundleNames + $handoffNames + $qualificationNames
     return @($names | ForEach-Object {
             $path = Join-Path $assetsDirectory $_
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -3593,22 +2667,18 @@ function Invoke-Stage {
 
     $state = Read-State
     if ($null -eq $state -or $state.phase -notin @(
-            "built", "staged", "dispatch-requested", "published"
+            "accepted", "staged", "dispatch-requested", "published"
         )) {
-        throw "A fully verified local build is required before staging."
+        throw "Run release-admin.ps1 qualify for the exact built candidate before staging."
     }
     Use-StateConfiguration $state
     if ($Rehearsal -or [bool]$state.rehearsal) {
         throw "A rehearsal can never create tags or mutate GitHub releases."
     }
     $originalPhase = [string]$state.phase
-    $allowMutation = $originalPhase -eq "built"
+    $allowMutation = $originalPhase -eq "accepted"
     $sourceSha = [string]$state.sourceSha
-    Assert-SourceStillExact $sourceSha
-    Assert-OriginStillExact $sourceSha
-    Build-Handoff -SourceSha $sourceSha -CanonicalSha $state.canonicalSha256 `
-        -CanonicalArchiveSha $state.canonicalArchiveSha256 `
-        -EcosystemEvidenceSha $state.ecosystemEvidenceSha256 -VerifyOnly
+    Assert-CandidateQualification -State $state
     Invoke-Checked $gitHubCli @("auth", "status", "--hostname", "github.com")
     $isAdmin = Invoke-Checked $gitHubCli @(
         "api", "repos/$Repository", "--jq", ".permissions.admin"
@@ -3649,16 +2719,7 @@ function Invoke-Stage {
         "api", "user", "--jq", ".login"
     ) -Capture
     Assert-GitHubTagSigningIdentity -GitHubLogin $stageGitHubLogin
-    Invoke-Checked $sdk.Dart @(
-        "run",
-        "bin/topiaforge.dart",
-        "release",
-        "validate-readiness",
-        "--version",
-        $Version,
-        "--target-sha",
-        $sourceSha
-    ) -WorkingDirectory (Join-Path $repositoryRoot "apps/topiaforge_cli")
+    Assert-CandidateQualification -State $state
     Assert-ExactSignedTag -SourceSha $sourceSha -AllowCreation $allowMutation
 
     $releaseJson = & $gitHubCli release view $tag --repo $Repository `
@@ -3726,7 +2787,8 @@ function Invoke-Stage {
         Join-Path $repositoryRoot ".github/repository-governance.json"
     ) -Raw | ConvertFrom-Json
     if ([int]$governance.schema_version -ne 2 -or
-        [string]$governance.repository_full_name -cne $Repository) {
+        -not (Test-GitHubIdentityEquals -Actual $governance.repository_full_name `
+            -Expected $Repository)) {
         throw "Release asset authority governance is invalid."
     }
     $workflowPrincipal = $governance.release_workflow_principal
@@ -3781,8 +2843,8 @@ function Invoke-Stage {
         if ($isAllowedFinalizerMetadata) {
             if ($asset.PSObject.Properties.Name -notcontains "uploader" -or
                 $null -eq $asset.uploader -or
-                [string]$asset.uploader.login -cne
-                    [string]$workflowPrincipal.login -or
+                -not (Test-GitHubIdentityEquals -Actual $asset.uploader.login `
+                    -Expected $workflowPrincipal.login) -or
                 [string]$asset.uploader.id -cne
                     [string]$workflowPrincipal.actor_id -or
                 [string]$asset.uploader.type -cne
@@ -3876,11 +2938,13 @@ function Invoke-Stage {
             Assert-RemoteAssetMatches -AssetName $name -LocalPath $localAsset
         }
     }
-    if ($originalPhase -eq "built") {
+    Assert-CandidateQualification -State $state
+    if ($originalPhase -eq "accepted") {
         Write-State -Phase "staged" -SourceSha $sourceSha -Additional @{
             canonicalSha256 = [string]$state.canonicalSha256
             canonicalArchiveSha256 = [string]$state.canonicalArchiveSha256
             ecosystemEvidenceSha256 = [string]$state.ecosystemEvidenceSha256
+            qualification = $state.qualification
         }
     }
     Write-Host "Exact local handoff is staged on the GitHub draft."
@@ -3987,10 +3051,24 @@ function Write-FinalizerState {
                 [string]$State.canonicalArchiveSha256
             ecosystemEvidenceSha256 =
                 [string]$State.ecosystemEvidenceSha256
+            qualification = $State.qualification
             finalizerRequestId = $RequestId
             finalizerRunId = $RunId
             finalizerDispatchAttempt = $DispatchAttempt
         }
+}
+
+function Test-GitHubIdentityEquals {
+    param(
+        [AllowNull()][AllowEmptyString()][string]$Actual,
+        [AllowNull()][AllowEmptyString()][string]$Expected
+    )
+
+    # GitHub owner/repository/login spelling is ASCII and case-insensitive.
+    # Never apply this comparison to refs, artifact names, paths, hashes or IDs.
+    return $Actual -cmatch "\A[\x21-\x7E]+\z" -and
+        $Expected -cmatch "\A[\x21-\x7E]+\z" -and
+        [string]::Equals($Actual, $Expected, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Assert-FinalizerRunIdentity {
@@ -4022,7 +3100,8 @@ function Assert-FinalizerRunIdentity {
         [string]$Run.event -cne "workflow_dispatch" -or
         [string]$Run.headBranch -cne $tag -or
         [string]$Run.headSha -cne $SourceSha -or
-        [string]$Run.repository -cne $Repository -or
+        -not (Test-GitHubIdentityEquals -Actual $Run.repository `
+            -Expected $Repository) -or
         [string]$Run.workflowPath -cne ".github/workflows/release.yml") {
         throw (
             "GitHub finalizer run $runId does not exactly match request " +
@@ -4315,6 +3394,8 @@ function Invoke-Dispatch {
         throw "A rehearsal can never dispatch the protected publisher."
     }
 
+    Assert-CandidateQualification -State $state
+
     if ($state.phase -eq "published") {
         $publishedRequestId = Get-FinalizerRequestId -State $state
         $publishedRunId = Get-FinalizerRunId -State $state -Required
@@ -4455,6 +3536,9 @@ function Invoke-All {
         return
     }
     if ($state.phase -eq "built") {
+        throw "Candidate bytes are built. Run release-admin.ps1 qualify with reviewed detached evidence before publication."
+    }
+    if ($state.phase -eq "accepted") {
         Invoke-Stage | Out-Null
         $state = Read-State
     }
@@ -4471,6 +3555,7 @@ if ($env:TOPIAFORGE_RELEASE_TEST_IMPORT -ne "1") {
         switch ($Command) {
             "preflight" { Invoke-Preflight | Out-Null }
             "build" { Invoke-Build | Out-Null }
+            "qualify" { Invoke-Qualify | Out-Null }
             "stage" { Invoke-Stage | Out-Null }
             "dispatch" { Invoke-Dispatch }
             "resume" { Invoke-All }

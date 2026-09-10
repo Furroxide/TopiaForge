@@ -259,7 +259,7 @@ namespace TopiaForge.ModRuntime.Tests
             return new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = 6,
                     Id = "tests.events." + name,
                     Name = "Event dispatch " + name,
                     Version = "1.0.0",

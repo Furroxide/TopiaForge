@@ -25,11 +25,14 @@ namespace TopiaForge.ModManager
         private readonly DependencyResolver dependencyResolver = new DependencyResolver();
         private ManagerPaths paths = null!;
         private ManagerState state = null!;
+        private ManagerStateStartupStore stateStore = null!;
+        public bool CanSaveState => stateStore?.CanSave == true;
+        public string StatePersistenceError => stateStore?.Failure ?? "Manager state is not ready.";
         private ManagerFileLogger managerLogger = null!;
         private ModRuntime runtime = null!;
         private ManagerOverlay overlay = null!;
         private MenuButtonInjector menuButtonInjector = null!;
-        private ProfileLaunchConfiguration? launchProfile;
+        private ProfileLaunchConfigurationV4? launchProfile;
         private ManifestValidationContext validationContext = ManifestValidationContext.Current;
         private IReadOnlyList<ModPackage> packages = Array.Empty<ModPackage>();
         private LoadOrderResult loadOrder = new LoadOrderResult(Array.Empty<ModPackage>(), new Dictionary<string, IReadOnlyList<string>>());
@@ -45,6 +48,7 @@ namespace TopiaForge.ModManager
         private string startupStartedAtUtc = string.Empty;
         private bool startupCompleted;
         private bool ready;
+        private readonly PluginInitializationLifetime initializationLifetime = new PluginInitializationLifetime();
 
         public ManagerPaths Paths => paths;
         public ManagerState State => state;
@@ -59,10 +63,16 @@ namespace TopiaForge.ModManager
         {
             startupStartedAtUtc = DateTime.UtcNow.ToString("O");
             startupStopwatch.Restart();
-            DontDestroyOnLoad(gameObject);
             paths = new ManagerPaths(BepInEx.Paths.BepInExRootPath);
-            paths.EnsureCreated();
-            managerLogger = new ManagerFileLogger(paths.ManagerLogFile, Logger);
+            try
+            {
+                initializationLifetime.Start(AdmitStartup, () => DontDestroyOnLoad(gameObject), () =>
+                {
+                    paths.EnsureCreated();
+                    managerLogger = new ManagerFileLogger(paths.ManagerLogFile, Logger);
+                });
+            }
+            catch (Exception error) { Logger.LogError("TopiaForge storage was rejected: " + error); return; }
 
             try
             {
@@ -86,20 +96,26 @@ namespace TopiaForge.ModManager
                 RecordStartupStage("environment", stageStart);
 
                 stageStart = startupStopwatch.ElapsedMilliseconds;
-                state = JsonUtil.LoadPersistentFile(paths.StateFile, new ManagerState());
-                state.Normalize();
                 launchProfile = ConsumeLaunchProfile();
+                stateStore = ManagerStateStartupStore.Open(paths.StateFile);
+                state = stateStore.State;
+                if (!stateStore.CanSave)
+                {
+                    managerLogger.Warn(stateStore.Failure);
+                    if (launchProfile != null && !launchProfile.SafeMode)
+                    { rejectedLauncherCommand = true; rejectionReason = stateStore.Failure; }
+                }
                 ApplyStartupRecovery();
                 try
                 {
-                    registry.ApplyPendingUninstalls(paths, state);
+                    if (CanSaveState) registry.ApplyPendingUninstalls(paths, state);
                 }
                 catch (Exception ex)
                 {
                     managerLogger.Error(ex, "Failed to apply pending uninstalls.");
                 }
 
-                if (launchProfile == null)
+                if (!hasLauncherCommand && CanSaveState)
                 {
                     InstallInboxAtStartup();
                 }
@@ -123,9 +139,18 @@ namespace TopiaForge.ModManager
                     managerLogger,
                     validationContext,
                     startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
-                runtime.Load(loadOrder.OrderedPackages);
+                var selection = RuntimeSessionSelection.Create(launchProfile?.ProfileId ?? "direct-game", launchProfile?.ProfileRevision ?? 0,
+                    packages, loadOrder, validationContext);
+                runtime.ActivateSessionRuntime(selection.Profile, rejectedSelections: selection.RejectedSelections);
+                launchPublisher = new RuntimeLaunchPublisher(runtime.Sessions, launchStaging,
+                    launchProfile?.RequestId ?? rejectedCorrelation?.RequestId,
+                    error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."));
+                initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
+                PublishRuntimeObservations();
+                // Every selected package now has a binding result, including failed owners.
+                ArmWorldLaunch();
                 RecordStartupStage("mod-loading", stageStart);
-                if (launchProfile == null)
+                if (!hasLauncherCommand)
                 {
                     state.ClearAppliedRestartRequirements();
                 }
@@ -147,7 +172,8 @@ namespace TopiaForge.ModManager
                 startupCompleted = true;
                 TryMarkStartupComplete();
                 WriteLastRunReport(null);
-                managerLogger.Info("TopiaForge ready. Press F10 to open the overlay.");
+                managerLogger.Info(
+                    "TopiaForge ready. Use the GAMEMODES and TOPIAFORGE buttons on the main menu, or press F10.");
             }
             catch (Exception ex)
             {
@@ -172,30 +198,6 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private void ApplyStartupRecovery()
-        {
-            if (!string.IsNullOrEmpty(startupRecovery.QuarantineModId))
-            {
-                managerLogger.Warn(
-                    "Automatically quarantined " + startupRecovery.QuarantineModId + ": " + startupRecovery.Reason);
-            }
-
-            if (startupRecovery.SafeMode)
-            {
-                managerLogger.Warn("Automatic startup recovery enabled safe mode: " + startupRecovery.Reason);
-            }
-
-            // Recovery is evaluated after consuming the launcher's one-shot profile. It must therefore be
-            // layered over that profile: ambiguous crashes force temporary safe mode, while precise blame
-            // removes only the quarantined owner from an exact profile. The policy clones caller input so all
-            // unrelated profile selections remain intact.
-            launchProfile = StartupRecoveryPolicy.Apply(
-                launchProfile,
-                state,
-                startupRecovery,
-                DateTime.UtcNow);
-        }
-
         private void TryMarkStartupComplete()
         {
             try
@@ -205,71 +207,6 @@ namespace TopiaForge.ModManager
             catch (Exception ex)
             {
                 managerLogger.Warn("Startup journal could not record completion: " + ex.Message);
-            }
-        }
-
-        private ProfileLaunchConfiguration? ConsumeLaunchProfile()
-        {
-            var configuredPath = Environment.GetEnvironmentVariable(ProfileLaunchConfiguration.EnvironmentVariable);
-            if (string.IsNullOrWhiteSpace(configuredPath))
-            {
-                return null;
-            }
-
-            try
-            {
-                var staging = Path.GetFullPath(paths.Staging)
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                var fullPath = Path.GetFullPath(configuredPath);
-                var comparison = Environment.OSVersion.Platform == PlatformID.Win32NT
-                    ? StringComparison.OrdinalIgnoreCase
-                    : StringComparison.Ordinal;
-                if (!string.Equals(Path.GetDirectoryName(fullPath), staging, comparison)
-                    || !Path.GetFileName(fullPath).StartsWith("launch-profile-", comparison)
-                    || !fullPath.EndsWith(".json", comparison))
-                {
-                    throw new InvalidDataException("Profile launch file must be an immediate child of manager staging.");
-                }
-
-                try
-                {
-                    if ((File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
-                    {
-                        throw new InvalidDataException("Profile launch file cannot be a symbolic link or reparse point.");
-                    }
-
-                    var configuration = JsonUtil.LoadFile(fullPath, new ProfileLaunchConfiguration());
-                    var errors = configuration.Validate();
-                    if (errors.Count != 0)
-                    {
-                        throw new InvalidDataException(string.Join(" ", errors));
-                    }
-
-                    managerLogger.Info("Using one-shot launch profile " + configuration.ProfileId + ".");
-                    return configuration;
-                }
-                finally
-                {
-                    try
-                    {
-                        File.Delete(fullPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        managerLogger.Warn("Profile launch file could not be consumed: " + ex.Message);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                managerLogger.Error(ex, "Profile launch configuration was rejected; entering safe mode.");
-                return new ProfileLaunchConfiguration
-                {
-                    SchemaVersion = ProfileLaunchConfiguration.CurrentSchemaVersion,
-                    ProfileId = "rejected-launch-profile",
-                    SafeMode = true,
-                    InheritManagerModState = false
-                };
             }
         }
 
@@ -286,12 +223,16 @@ namespace TopiaForge.ModManager
             }
 
             runtime.DispatchUpdate(Time.deltaTime);
+            UpdatePendingWorldLaunch(Time.deltaTime);
+            PublishRuntimeObservations();
             overlay.Tick();
             menuButtonInjector.Update();
         }
 
         private void OnDestroy()
         {
+            if (!initializationLifetime.TryBeginTeardown()) return;
+            ready = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
@@ -313,17 +254,30 @@ namespace TopiaForge.ModManager
                 LogCleanupFailure(ex, "Menu button teardown failed.");
             }
 
+            if (runtime == null)
+            {
+                FinishPluginTeardown(OperationResult<bool>.Success(true));
+                return;
+            }
+            try
+            {
+                _ = RuntimeShutdownCompletion.Observe(runtime.NativeDispatcher, runtime.UnloadAllAsync(),
+                    FinishPluginTeardown, exception => LogCleanupFailure(exception, "Runtime shutdown completion failed."));
+            }
+            catch (Exception exception)
+            {
+                LogCleanupFailure(exception, "Runtime teardown could not be scheduled on the process host.");
+            }
+        }
+
+        private void FinishPluginTeardown(OperationResult<bool> shutdown)
+        {
+            PublishRuntimeObservations();
+            launchPublisher?.Dispose();
+            if (!shutdown.Succeeded)
+                LogCleanupFailure(new InvalidOperationException(shutdown.ErrorMessage), "Mod runtime teardown completed with failures.");
             if (runtime != null)
             {
-                try
-                {
-                    runtime.UnloadAll();
-                }
-                catch (Exception ex)
-                {
-                    LogCleanupFailure(ex, "Mod runtime teardown failed.");
-                }
-
                 try
                 {
                     SaveState();
@@ -336,7 +290,7 @@ namespace TopiaForge.ModManager
 
             try
             {
-                TopiaForgeUi.Shutdown();
+                initializationLifetime.ShutdownUi(() => { TopiaForgeUi.Shutdown(); });
             }
             catch (Exception ex)
             {
@@ -367,14 +321,12 @@ namespace TopiaForge.ModManager
 
         private void LogCleanupFailure(Exception exception, string message)
         {
-            if (managerLogger != null)
+            try
             {
-                managerLogger.Error(exception, message);
+                if (managerLogger != null) managerLogger.Error(exception, message);
+                else Logger.LogError(message + " " + exception);
             }
-            else
-            {
-                Logger.LogError(message + " " + exception);
-            }
+            catch { /* Teardown must attempt every independent cleanup even after logging stops. */ }
         }
     }
 }

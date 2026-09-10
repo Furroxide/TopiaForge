@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "name": "io.github.furroxide.topiaforge.worlds",
   "displayName": "TopiaForge Worlds",
-  "version": "1.0.0-rc.1",
+  "version": "0.1.0-rc.1",
   "author": {
     "name": "TopiaForge"
   },
@@ -11,9 +11,9 @@
   "entryAssembly": "TopiaForge.Worlds.dll",
   "entryType": "TopiaForge.Worlds.WorldsMod",
   "dependencies": {},
-  "supportedGameVersionRange": "0.0.2309",
-  "supportedLoaderVersionRange": ">=1.0.0-rc.1 <2.0.0",
-  "supportedSdkVersionRange": ">=1.0.0-rc.1 <2.0.0",
+  "supportedGameVersionRange": "0.0.2409",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "category": "Framework",
   "tags": [
     "worlds",
@@ -21,7 +21,7 @@
     "sdk",
     "sandbox"
   ],
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "licenseFiles": [
     "LICENSE"
   ],
@@ -29,5 +29,90 @@
     "scene-management",
     "world-service",
     "hud"
-  ]
+  ],
+  "contributions": {
+    "worlds": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+        "name": "Open Sandbox",
+        "description": "Generated open-world sandbox arena.",
+        "content": {
+          "kind": "provider",
+          "implementation": {
+            "type": "TopiaForge.Worlds.OpenSandboxProvider"
+          }
+        },
+        "transitions": [
+          "additive-arena"
+        ],
+        "spawn": {
+          "kind": "provider-default"
+        },
+        "openToAnyCompatible": true
+      },
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.level",
+        "name": "Curated Levels",
+        "description": "Playable levels discovered from the installed game.",
+        "content": {
+          "kind": "discovered",
+          "implementation": {
+            "type": "TopiaForge.Worlds.CuratedLevelDiscoverySource"
+          }
+        },
+        "transitions": [
+          "scene-replacement"
+        ],
+        "spawn": {
+          "kind": "provider-default"
+        },
+        "openToAnyCompatible": true
+      },
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.first-party",
+        "name": "Build Scenes",
+        "description": "Available first-party scenes discovered from the installed game.",
+        "content": {
+          "kind": "discovered",
+          "implementation": {
+            "type": "TopiaForge.Worlds.BuildSceneDiscoverySource"
+          }
+        },
+        "transitions": [
+          "scene-replacement",
+          "additive-arena"
+        ],
+        "spawn": {
+          "kind": "provider-default"
+        },
+        "openToAnyCompatible": true
+      }
+    ],
+    "gamemodes": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "name": "Free Play",
+        "description": "Explore a world with no gameplay rules.",
+        "implementation": {
+          "type": "TopiaForge.Worlds.FreePlayGamemode"
+        },
+        "sceneChangePolicy": "end-session"
+      }
+    ],
+    "launchTargets": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds.freeplay.menu",
+        "title": "Free Play",
+        "description": "Explore a world with no gameplay rules.",
+        "sortKey": 90,
+        "gamemode": "io.github.furroxide.topiaforge.worlds.freeplay",
+        "world": {
+          "policy": "open",
+          "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "allowPlayerOverride": true
+        },
+        "transition": "auto"
+      }
+    ]
+  }
 }

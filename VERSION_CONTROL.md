@@ -30,6 +30,10 @@ git lfs install --local
 git config core.hooksPath .githooks
 ```
 
+If you keep your own hooks directory, point `core.hooksPath` at it instead and have it forward to
+`.githooks` so the Git LFS integration still runs. `tools/bootstrap-dev.ps1` leaves an existing
+setting alone rather than replacing it.
+
 Optional Unity Smart Merge setup, with the Unity editor path adjusted for your
 installed version:
 

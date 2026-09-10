@@ -4,8 +4,8 @@
     <AssemblyName>TopiaForge.ValidTestMod.Api</AssemblyName>
     <RootNamespace>TopiaForge.ValidTestMod</RootNamespace>
     <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
     <InformationalVersion>1.0.0</InformationalVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>

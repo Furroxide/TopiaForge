@@ -1,6 +1,92 @@
 part of 'topiaforge_cli_test.dart';
 
 void _scaffoldCliTests(_CliTestHarness Function() currentHarness) {
+  for (final flags in [
+    ['--gamemode', 't.obsolete.round:Round'],
+    ['--gamemode'],
+    ['--gamemode='],
+  ]) {
+    test(
+      'obsolete new-mod input ${flags.join(' ')} refuses before writes',
+      () async {
+        final parent = p.join(currentHarness().temp.path, 'missing-parent');
+        final result = await currentHarness().runCli([
+          'new',
+          'mod',
+          't.obsolete',
+          '--dir',
+          parent,
+          '--unity-companion',
+          ...flags,
+        ]);
+        expect(
+          Directory(parent).existsSync(),
+          isFalse,
+          reason: 'No project or Unity companion may be created.',
+        );
+        expect(
+          Directory(p.join(currentHarness().temp.path, 'data')).existsSync(),
+          isFalse,
+          reason: 'No SDK cache or project registry may be created.',
+        );
+        expect(result.exitCode, 2);
+        expect(
+          result.stderr.toString(),
+          allOf(
+            contains('--template gamemode'),
+            contains('contributions.gamemodes'),
+          ),
+        );
+        expect(result.stderr.toString(), isNot(contains('Stack trace')));
+      },
+    );
+  }
+
+  for (final malformed in [false, true]) {
+    test(
+      'migrate current V6 ${malformed ? 'rejects malformed input' : 'is a no-op'} without writes',
+      () async {
+        final created = await currentHarness().runCli([
+          'new',
+          'mod',
+          't.current',
+          '--dir',
+          currentHarness().temp.path,
+        ]);
+        expect(
+          created.exitCode,
+          0,
+          reason: '${created.stdout}\n${created.stderr}',
+        );
+        final project = p.join(currentHarness().temp.path, 't.current');
+        final file = File(p.join(project, 'topiaforge.mod.json'));
+        if (malformed) {
+          final map =
+              jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+          map['contributions'] = {'gamemodes': 'invalid-scalar'};
+          file.writeAsStringSync(jsonEncode(map));
+        }
+        final before = file.readAsBytesSync();
+        final result = await currentHarness().runCli([
+          'migrate-manifest',
+          '--project',
+          project,
+        ]);
+        expect(file.readAsBytesSync(), before);
+        expect(
+          result.exitCode,
+          malformed ? 1 : 0,
+          reason: '${result.stdout}\n${result.stderr}',
+        );
+        if (malformed) {
+          expect(result.stdout, isNot(contains('already uses')));
+          expect(result.stderr, contains('gamemodes'));
+        } else {
+          expect(result.stdout, contains('valid schema V6; no files changed'));
+        }
+      },
+    );
+  }
   test('check scaffold requires paired install evidence paths', () async {
     final result = await currentHarness().runCli([
       'check',

@@ -92,7 +92,15 @@ jobs:
       - name: Build solution
         run: dotnet build TopiaForge.slnx -c Release --no-restore
 
-      - name: Audit 12 SDK packages and run all 7 C# harnesses
+      - name: Restore pinned Dart dependencies for generated runtime acceptance
+        working-directory: apps/topiaforge_cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart --version 2>&1 | grep -F 'Dart SDK version: 3.12.2 '
+          dart pub get --enforce-lockfile
+
+      - name: Audit 11 SDK packages and run all 7 C# harnesses
         shell: bash
         run: bash tools/verify-csharp-release-surface.sh
 
@@ -125,15 +133,32 @@ jobs:
 
   dart-tests:
     name: Analyze and test Dart packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ${{ matrix.os }}
+    # Windows legs pay a cold managed-refs download the first time their
+    # OS-scoped cache key is populated, which does not fit in 20 minutes.
+    timeout-minutes: 30
+    defaults:
+      run:
+        # Windows runners default to pwsh; every step body here is bash.
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        package:
-          - packages/launcher_domain
-          - packages/launcher_data
-          - apps/topiaforge_cli
+        # Explicit legs rather than a package x os product. Only
+        # packages/launcher_data has Windows-only code paths worth a 2x-billed
+        # runner: multiplayer_contract_lock.dart sets runInShell for .bat/.cmd
+        # dotnet shims, and its test writes a .cmd/.ps1 fake dotnet there.
+        # packages/launcher_domain is pure Dart with no process spawning, and
+        # apps/topiaforge_cli would need the whole solution built on Windows.
+        include:
+          - package: packages/launcher_domain
+            os: ubuntu-latest
+          - package: packages/launcher_data
+            os: ubuntu-latest
+          - package: apps/topiaforge_cli
+            os: ubuntu-latest
+          - package: packages/launcher_data
+            os: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -153,10 +178,19 @@ jobs:
           dotnet-version: "10.0.301"
 
       - name: Install managed-reference archive dependency
-        if: matrix.package != 'packages/launcher_domain'
+        if: matrix.package != 'packages/launcher_domain' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full
+
+      - name: Install Windows managed-reference archive dependency
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Get-Command 7z -ErrorAction SilentlyContinue) -and
+              !(Test-Path -LiteralPath (Join-Path $env:ProgramFiles "7-Zip/7z.exe"))) {
+            choco install 7zip -y --no-progress
+          }
 
       - name: Resolve Robotopia refs cache key
         if: matrix.package != 'packages/launcher_domain'
@@ -243,38 +277,6 @@ jobs:
           flutter analyze
           flutter test
 
-  sidecar-checks:
-    name: Validate UGC Automerge sidecar
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          lfs: true
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24.16.0"
-          cache: npm
-          cache-dependency-path: tools/ugc-automerge-sidecar/package-lock.json
-
-      - name: Restore and check sidecar
-        working-directory: tools/ugc-automerge-sidecar
-        run: |
-          node -e 'process.exit(process.versions.node === "24.16.0" ? 0 : 1)'
-          npm ci --ignore-scripts --no-audit --no-fund
-          find . -path ./node_modules -prune -o -name '*.mjs' -print0 |
-            xargs -0 -n1 node --check
-          npm test
-          npm ls --omit=dev
-          npm audit --omit=dev --audit-level=moderate
-          output="$(node index.mjs --check)"
-          echo "$output"
-          grep -F "deps        : installed" <<< "$output"
-
   repository-audits:
     name: Validate workflows and repository file hygiene
     runs-on: ubuntu-latest
@@ -304,9 +306,39 @@ jobs:
       - name: Test generated-payload residue scanning
         run: python3 .github/scripts/test_check_topiaforge_residue.py
 
+      - name: Require every redistributed asset to be accounted for
+        run: python3 .github/scripts/check_asset_licence_coverage.py
+
+      - name: Test asset licence coverage audit
+        run: python3 .github/scripts/test_check_asset_licence_coverage.py
+
+      - name: Keep the trademark notice identical across surfaces
+        run: python3 .github/scripts/check_trademark_notice.py
+
+      - name: Test trademark notice audit
+        run: python3 .github/scripts/test_check_trademark_notice.py
+
+      - name: Keep the counts README.md states true
+        run: python3 .github/scripts/check_readme_counts.py
+
+      - name: Test README count audit
+        run: python3 .github/scripts/test_check_readme_counts.py
+
+      - name: Keep the gamemode contract fixture index closed over its fixtures
+        run: python3 .github/scripts/check_fixture_index.py
+
+      - name: Test fixture index audit
+        run: python3 .github/scripts/test_check_fixture_index.py
+
       - name: Test pinned Flutter setup
         shell: pwsh
         run: ./.github/actions/setup-flutter/test-setup-flutter.ps1
+
+      - name: Test neutral release workspaces
+        run: bash tools/test-prepare-neutral-build-root.sh
+
+      - name: Test executable workflow source trust
+        run: python3 .github/scripts/test_workflow_source_trust.py
 
       - name: Test repository governance audit
         run: python3 .github/scripts/test_audit_repository_governance.py
@@ -318,6 +350,7 @@ jobs:
           bash tools/test-verify-release-governance.sh
           pwsh -NoProfile -File tools/release/test-verify-robotopia-install.ps1
           pwsh -NoProfile -File tools/release/test-handoff-signature.ps1
+          pwsh -NoProfile -File tools/release/test-windows-signing-policy.ps1
 
       - name: Test release tag and draft publication safety
         run: |
@@ -613,7 +646,6 @@ jobs:
       - csharp-tests
       - dart-tests
       - flutter-tests
-      - sidecar-checks
       - repository-audits
       - docs
       - template-matrix
@@ -625,12 +657,11 @@ jobs:
           CSHARP: ${{ needs.csharp-tests.result }}
           DART: ${{ needs.dart-tests.result }}
           FLUTTER: ${{ needs.flutter-tests.result }}
-          SIDECAR: ${{ needs.sidecar-checks.result }}
           REPOSITORY: ${{ needs.repository-audits.result }}
           DOCS: ${{ needs.docs.result }}
           TEMPLATES: ${{ needs.template-matrix.result }}
         run: |
           set -euo pipefail
-          for result in "$CSHARP" "$DART" "$FLUTTER" "$SIDECAR" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
+          for result in "$CSHARP" "$DART" "$FLUTTER" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
             test "$result" = success
           done

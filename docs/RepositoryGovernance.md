@@ -56,10 +56,10 @@ Each aggregate job uses `if: always()` and fails unless all jobs it represents s
 new dependency with a moderate-or-higher known vulnerability in runtime,
 development, or unknown scope. License and notice validation is
 release-blocking. DCO enforcement is grandfathered through the immutable
-`v1.0.0-rc.1` cutover and applies to every commit introduced afterward.
+`v0.1.0-rc.1` cutover and applies to every commit introduced afterward.
 
 CodeQL is an independent ruleset gate at high-or-critical severity. For the
-Windows/Linux-only RC1, default setup covers Actions, C/C++, C#, and
+Windows x64 RC1, default setup covers Actions, C/C++, C#, and
 JavaScript/TypeScript with the default query suite on a weekly schedule. Swift
 default setup cannot create Flutter's generated Xcode inputs and is therefore
 out of the RC1 release scope together with the macOS archive. Before a macOS
@@ -130,7 +130,7 @@ The stable PR-policy check enforces these routing rules:
   from that head's `release/release-policy.json`.
 - Direct `main` or `release/*` backflow to `dev` is rejected; `sync/main-v<semver>` is required and must contain the
   current `main` tip as an ancestor.
-- Once `v1.0.0-rc.1` exists, every introduced commit must contain a valid
+- Once `v0.1.0-rc.1` exists, every introduced commit must contain a valid
   `Signed-off-by` trailer matching an author or committer identity. Existing
   history reachable from the cutover tag is grandfathered.
 
@@ -147,7 +147,7 @@ because there is one maintainer.
 | Environment | Allowed ref | Purpose |
 | --- | --- | --- |
 | `release` | `v*` tags | Update-metadata signing, verification attestation, and automatic release publication |
-| `github-pages` | published `v*` tags | Deployment of release-derived Pages content |
+| `github-pages` | `main` and published immutable stable `v*` tags | Deployment of the complete documentation site |
 
 Every GitHub job that can read the update-signing key, read the protected
 governance-audit token, or mutate a release declares the protected `release`
@@ -172,39 +172,56 @@ not a durable environment secret.
 Unity and Robotopia credentials remain only on the administrator-controlled workstation. Future production signing
 credentials also remain off GitHub. They are represented to GitHub by deterministic, scrubbed handoff manifests
 rather than Actions secrets or self-hosted runners. The retired `unity-validation` and `game-acceptance`
-environments must remain live until one non-publishing two-platform rehearsal proves the replacement flow; delete
+environments must remain live until one non-publishing rehearsal covering every platform in
+`artifactPolicy` proves the replacement flow. RC1 declares Windows x64 only. Delete
 them only after that rehearsal, then rerun the governance audit.
 
 ## Release sequence
 
-1. Merge the fully green release PR into `main` with a merge commit.
-2. On an administrator-controlled Windows workstation, run `release-admin.ps1`. It requires clean `main` equal to
-   `origin/main`, repository-administrator GitHub authentication, live immutable-release/environment/ref governance
-   matching the checked-in release controls, and every applicable pinned toolchain.
-3. Build the canonical ecosystem twice byte-identically, then build and validate Windows locally, Linux x64 in
-   Ubuntu 24.04 under WSL2 on the same physical host.
-4. Run exact Unity and Robotopia acceptance on Windows, attach the same-host Creator evidence bundle, and let the
-   orchestrator run the exact Linux archive through pinned Proton under WSLg. The public evidence identifies this
-   RC1 Proton result as same-host and non-independent.
-5. After every local gate passes, create and push the signed annotated `v<semver>` tag, create or resume the exact
-   matching draft, upload all 17 catalog assets plus the two
-   `release-platform-bundle-v1` manifests and one `release-handoff-v1`
-   manifest and its detached CMS signature, and dispatch the finalizer.
-6. After protected-environment approval unlocks the update key and publication authority, GitHub verifies live
-   governance, the tag, `main`, release PR, each hosted check's exact workflow ID/path, event, head ref/SHA and current
-   successful run attempt, draft inventory, the release author and per-asset
-   uploader identities, the exact timestamped Authenticode trust state, the
-   exact-SHA readiness decision, and all evidence.
-7. GitHub signs update metadata, deterministically produces BOM/SBOM/checksums, records a custom verification
-   attestation that names GitHub as verifier rather than platform-archive builder, rechecks governance and every byte,
-   and publishes automatically.
-   Exact reruns are verification-only no-ops; any mismatch fails closed. Verify the immutable result with
-   `gh release verify` and asset verification.
+1. Merge the fully green release PR into `main` with a merge commit and freeze that final merge SHA.
+2. On the administrator-controlled Windows workstation, run `release-admin.ps1 preflight`. It requires clean `main`
+   equal to `origin/main`, the four approved non-game blocking gates at that SHA, repository-administrator GitHub
+   authentication, matching live governance, and the applicable pinned toolchains. Use the explicit source-game,
+   external state and approved isolated-QA record paths described in [`AdminRelease.md`](AdminRelease.md).
+   Only the game gate may await the candidate; catalog `ready` approves inventory only.
+3. Build the canonical ecosystem twice byte-identically, then build and validate the Windows x64 archive. Perform
+   the exact SDK, Unity authoring and Robotopia acceptance in the admitted isolated Windows user/session or VM.
+   Private evidence stays outside public assets. A successful `build` stops at `built`; it does not authorize staging.
+4. Prepare and review `release-candidate-readiness-v1.json` and `release-candidate-acceptance-v1.json` for those exact
+   source, contract, payload and evidence bytes. Run `qualify` to validate them and atomically record `accepted`.
+   Only the game row may supersede the tracked register; accepted payloads cannot be rebuilt or repacked.
+5. Run `stage` only for that accepted candidate. It creates or verifies the signed annotated `v<semver>` tag and the
+   matching draft, then uploads the exact human-owned allowlist. For current RC1 this is **18 assets**: the catalog's
+   **14 payloads** (one Windows archive and thirteen mods), one `release-platform-bundle-v1-windows-x64.json`,
+   `release-handoff-v1.json`, and both detached candidate records. The two VPM packages are embedded in the canonical
+   ecosystem; they are not extra catalog assets. Unsigned RC1 has no detached CMS handoff asset or
+   `handoffSignatureSha256` field in the candidate decision.
+6. Run `dispatch` explicitly. The orchestrator journals and correlates the finalizer request; `resume` follows the
+   same request/run rather than silently creating another publication. The protected `release` environment remains
+   the final human checkpoint.
+7. After approval, GitHub verifies live governance, tag and `main`, the release PR, each hosted check's exact
+   workflow/run provenance, the draft allowlist and uploader identities, detached qualification, and QA evidence.
+   It verifies the distribution mode declared by policy: RC1 requires all three Windows executables to be unsigned
+   and the CMS asset/digest absent. If a future reviewed policy selects signed Windows distribution, the exact
+   certificate pin, Authenticode signatures, RFC 3161 timestamps and detached CMS signature remain mandatory.
+8. GitHub signs update metadata with Ed25519, deterministically produces BOM/SBOM/checksums, records a verification
+   attestation naming GitHub as verifier, rechecks governance and every byte, and publishes. The five
+   policy-declared generated metadata assets bring the current RC1 public inventory to **23 assets**. Exact reruns
+   verify identical state; mismatches fail closed. Verify the immutable result with `gh release verify` and asset
+   verification.
 
-The unsigned hosted release dry run is secretless and executes on every `release/*` update. Production building
-happens only on the administrator-controlled workstation and its WSL2 environment; GitHub's protected `release` job
-is the verifier, attester, and publisher. Pages builds from published immutable releases only; its build phase is
-read-only, and the Pages/OIDC deployment job neither checks out nor executes repository code.
+RC1 has no Linux or macOS archive. The Linux/Proton acceptance runner is retired; enabling an archive in policy
+does not restore it. Review native isolation and exact-candidate evidence verification before separately
+enabling Linux in policy for private candidate construction. Require actual acceptance of the resulting bytes
+before qualification or publication. Disclose same-host/non-independent evidence where applicable. A future macOS release requires reviewed signing/notarization
+and advanced Swift CodeQL checks. See the [future Linux prerequisites](AdminRelease.md#future-linux-acceptance).
+
+The unsigned hosted release dry run is secretless and executes on every `release/*` update. Production archives
+are built only on administrator-controlled machines for the platforms declared by policy; GitHub's protected
+`release` job verifies, attests and publishes them. Pages also builds from trusted `main`: successful same-repository
+main-push CI must match the checked-out protected main SHA before any repository code executes. Manual main runs
+and verified published immutable stable release tags are supported. Prereleases do not enter stable Pages feeds.
+The build phase is read-only; the separate Pages/OIDC deployment job neither checks out nor executes repository code.
 
 ## Repository security settings
 
@@ -225,7 +242,7 @@ The desired live settings are:
 - Immutable releases are enabled before publication. The repository push limit
   is five refs per push, preventing accidental mirror pushes. Wiki is disabled;
   Issues remain enabled. GitHub web commit sign-off is enabled immediately
-  after the `v1.0.0-rc.1` cutover so future browser-created commits satisfy the
+  after the `v0.1.0-rc.1` cutover so future browser-created commits satisfy the
   DCO policy.
 
 The five-ref push limit and owner-account security posture require manual verification because GitHub does not expose

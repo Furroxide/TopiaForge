@@ -1,0 +1,36 @@
+{
+  "id": "wire-progress-complete-round-trip",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec complete round trip",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "request-01",
+    "sequence": 3,
+    "phase": "loading-world",
+    "nativeBusy": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "request-01",
+        "sequence": 3,
+        "phase": "loading-world",
+        "nativeBusy": true
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "request-01",
+        "sequence": 3,
+        "phase": "loading-world",
+        "nativeBusy": true
+      }
+    }
+  }
+}

@@ -33,6 +33,7 @@ const _knownManifestJsonKeys = <String>{
   'contentTargets',
   'builtWith',
   'worldGamemodes',
+  'contributions',
   'apiAssemblies',
   'multiplayer',
 };
