@@ -421,10 +421,7 @@ namespace TopiaForge
                 var theme = assembly.GetType("TopiaForge.Mods.UnityUi.TopiaForgeTheme", true);
                 var changed = theme.GetField("Changed", BindingFlags.Static | BindingFlags.NonPublic)
                     ?.GetValue(null) as Delegate;
-                var registrations = (ICollection)assembly
-                    .GetType("TopiaForge.Mods.UnityUi.TopiaForgeHotkeys", true)
-                    .GetField("Registrations", BindingFlags.Static | BindingFlags.NonPublic)
-                    .GetValue(null);
+                var hotkeys = UiSmokeRuntimeSnapshot.HotkeyCount(assembly);
                 var hosts = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeUi", "Hosts");
                 var toastViews = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeToasts", "Views");
                 var queuedToasts = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeToasts", "Queue");
@@ -435,7 +432,7 @@ namespace TopiaForge
                     StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeTween", "ActiveCount"),
                     StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeCursor", "ActiveLeases"),
                     StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeDismissStack", "Count"),
-                    registrations.Count,
+                    hotkeys,
                     changed?.GetInvocationList().Length ?? 0,
                     hosts.Count,
                     toastViews.Count,

@@ -1,7 +1,7 @@
 # Launcher updates
 
-TopiaForge `0.1.0-rc.1` introduces signed whole-package updates so a later
-candidate can validate an installed `rc.1` to `rc.2` upgrade. Updates are
+TopiaForge's `0.1.0-rc.1` implementation supports signed whole-package updates so a later
+candidate can validate an upgrade from installed `rc.1` to a newer release. Updates are
 explicitly confirmed, never silent, and never elevate privileges.
 
 ## Discovery and trust
@@ -19,7 +19,8 @@ Every update release contains:
 
 The payload identifies the product, SemVer, tag, channel, minimum updater
 version, release URL, and the exact immutable platform set in release policy
-(Windows x64 and Linux x64 for RC1). Each archive
+(Windows x64 only for RC1). Future platforms require separate policy approval and exact-archive
+qualification before publication. Each archive
 record includes its GitHub URL, SHA-256, byte size, entry count, expanded size,
 and install layout. The sidecar names its public key by SHA-256-derived key ID.
 The initial embedded key is `ed25519:26229e3d2b54e81c`.
@@ -77,15 +78,16 @@ committed. The private seed is stored as
 `TOPIAFORGE_UPDATE_ED25519_PRIVATE_KEY_B64` in the protected GitHub `release`
 environment. Release jobs never print the seed.
 
-The owner must retain an encrypted recovery copy before temporary key material
-is removed. Loss of every private-key copy prevents installed `rc.1` launchers
-from trusting `rc.2`; a replacement key cannot silently recover that trust.
+The owner must retain an encrypted recovery copy, independently test recovery, and confirm
+the protected secret before removing plaintext local duplicates. Loss of every private-key
+copy prevents installed `rc.1` launchers from trusting a later release signed with a new key;
+a replacement key cannot silently recover that trust.
 Compromise requires an incident response, release halt, and a recovery path
 appropriate to the already-installed trust root.
 
-## `rc.2` validation procedure
+## Next-candidate validation procedure
 
-Before creating `0.1.0-rc.2`:
+Before approving a later release that updates an installed `0.1.0-rc.1`:
 
 1. Reuse the existing Ed25519 update key; do not rotate it for this test.
 2. Review and record the next candidate's platform and distribution policy; RC1's
@@ -101,16 +103,17 @@ Before creating `0.1.0-rc.2`:
    catalog entries consistent with the artifacts being released.
 6. Build all archives from the exact protected release SHA.
 7. Generate and independently verify the signed update payload and sidecar.
-8. Install the immutable public `rc.1` Windows archive on a clean Windows host.
+8. After RC1 is published, install its immutable public Windows archive on a clean Windows host.
    RC1 has no Linux archive. If Linux is introduced in the next candidate, validate
-   it as a first installation with the required native/Proton acceptance; do not
+   it as a first installation after separate platform approval and implementation of isolated
+   native/Proton acceptance; do not
    claim a Linux upgrade or rollback from an unavailable RC1 package.
 9. On Windows, use the in-app beta check, download, confirmation, helper swap, relaunch,
-   and health handshake to reach `rc.2`.
+   and health handshake to reach the next candidate.
 10. Repeat that Windows update with an injected startup failure and retain evidence that `rc.1`
-    was restored with the failed `rc.2` package preserved.
+    was restored with the failed update package preserved.
 
-The `rc.2` release is blocked if any platform violates its reviewed distribution
+The later release is blocked if any platform violates its reviewed distribution
 policy, the update signature is not accepted by an installed Windows `rc.1`,
 the helper elevates, rollback
 fails, or the final package differs from the signed inventory.

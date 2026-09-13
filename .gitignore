@@ -71,3 +71,5 @@ topiaforge.dev.props
 
 # FVM Version Cache
 .fvm/
+/tools/TopiaForge.Acceptance.Windows/[Bb]in/
+/tools/TopiaForge.Acceptance.Windows/[Oo]bj/

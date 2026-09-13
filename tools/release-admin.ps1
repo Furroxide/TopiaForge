@@ -1350,9 +1350,9 @@ function Invoke-Preflight {
             "SDK; found $foundWindowsSdk."
     }
 
-    # The entire WSL builder and Proton preflight is skipped when Linux is not a
-    # target platform. Re-adding TopiaForge-linux-x64.zip to the policy turns it
-    # back on unchanged.
+    # Windows-only RC1 skips this WSL/Proton block, though preflight still requires
+    # the wsl executable. Linux admission above refuses unsupported isolation;
+    # restoring Linux requires reviewed implementation and policy changes.
     if ($targetsLinux) {
     $wslInventory = Invoke-Checked wsl @("--list", "--verbose") -Capture
     if ($wslInventory -notmatch "(?m)^\s*\*?\s*$([regex]::Escape($WslDistribution))\s+\S+\s+2\s*$") {

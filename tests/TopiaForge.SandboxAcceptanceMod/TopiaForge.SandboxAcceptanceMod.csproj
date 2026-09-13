@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>netstandard2.1</TargetFramework><AssemblyName>TopiaForge.SandboxAcceptanceMod</AssemblyName><RootNamespace>TopiaForge.SandboxAcceptance</RootNamespace><Version>0.1.0-rc.1</Version><AssemblyVersion>0.1.0.0</AssemblyVersion><TopiaForgeSafeProject>true</TopiaForgeSafeProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.CreatorContent/TopiaForge.Mods.CreatorContent.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Analyzers/TopiaForge.Mods.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="topiaforge.mod.json" />
+  </ItemGroup>
+</Project>

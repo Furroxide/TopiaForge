@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--provisioning-observation") { ProvisioningRuntimeObservationTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--harness-workspaces") { HarnessWorkspaceTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
@@ -145,12 +146,14 @@ namespace TopiaForge.ModManager.Tests
             {
                 CreatorWorkbenchLifecycleTests.Run();
                 CreatorWorkbenchCleanupFailureTests.Run();
+                SandboxWorkbenchRollbackTests.Run();
                 return 0;
             }
 
             if (args.Length == 1 && string.Equals(args[0], "--creator-event-graph", StringComparison.Ordinal))
             {
                 CreatorEventGraphRunnerTests.Run();
+                SandboxGraphLifecycleTests.Run();
                 return 0;
             }
 
@@ -231,8 +234,10 @@ namespace TopiaForge.ModManager.Tests
                 CreatorContentTests.Run();
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
+                SandboxGraphLifecycleTests.Run();
                 CreatorWorkbenchLifecycleTests.Run();
                 CreatorWorkbenchCleanupFailureTests.Run();
+                SandboxWorkbenchRollbackTests.Run();
                 WorldsSafetyTests.Run();
                 return 0;
             }
@@ -408,6 +413,7 @@ namespace TopiaForge.ModManager.Tests
                 ManifestActivationSerializationTests.Run();
                 LaunchStorageKeyTests.Run(FindRepoRoot());
                 LaunchStagingTests.Run();
+                ProvisioningRuntimeObservationTests.Run();
                 AcceptanceIsolationTests.Run();
                 AcceptanceIsolationStagingTests.Run();
                 AcceptancePluginLifecycleTests.Run();
@@ -428,8 +434,10 @@ namespace TopiaForge.ModManager.Tests
                 CreatorContentTests.Run();
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
+                SandboxGraphLifecycleTests.Run();
                 CreatorWorkbenchLifecycleTests.Run();
                 CreatorWorkbenchCleanupFailureTests.Run();
+                SandboxWorkbenchRollbackTests.Run();
                 ShopTests.Run();
                 GameCompatTests.Run();
                 GameCompatActivationTests.Run();

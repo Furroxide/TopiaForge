@@ -199,14 +199,16 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiRow(
                     new UiButton("load-project", "Load", () => Execute(LoadSelectedProject), enabled: selectedProject != null),
                     new UiButton("delete-project", "Delete", ConfirmDeleteSelectedProject, UiButtonStyle.Danger, selectedProject != null && projectDeleteTask == null),
-                    new UiButton("new-project", "New project", () => Execute(CreateProject), UiButtonStyle.Secondary),
+                    new UiButton("new-project", "New project", () => Execute(CreateProject), UiButtonStyle.Secondary)),
+                new UiRow(
                     new UiButton("save-project", "Save", () => Execute(SaveProject), UiButtonStyle.Secondary, activeProject != null),
                     new UiButton(
                         "confirm-native-bindings",
                         "Confirm native bindings",
                         ConfirmNativeBindings,
                         UiButtonStyle.Secondary,
-                        activeProject?.NativeBindings.Count > 0),
+                        activeProject?.NativeBindings.Count > 0)),
+                new UiRow(
                     new UiButton("run-project", "Run", () => Execute(RunProject), enabled: activeProject != null && CanMutate),
                     new UiButton("stop-project", "Stop", () => Execute(() => StopProject(true)), UiButtonStyle.Danger, runner != null))
             };
@@ -240,11 +242,9 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void Execute(Func<OperationResult<string>> action)
         {
-            var session = creatorSession;
             var result = action();
-            if (ReferenceEquals(creatorSession, session))
-                status = result.Succeeded ? result.Value ?? "Done." : result.ErrorMessage;
-            if (!result.Succeeded) context.Ui.ShowToast(result.ErrorMessage, UiTone.Danger);
+            status = result.Succeeded ? result.Value ?? "Done." : result.ErrorMessage;
+            if (!result.Succeeded) context.Ui.ShowToast(status, UiTone.Danger);
             RefreshUi();
         }
 
@@ -263,19 +263,13 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void ConfirmEndSession()
         {
-            if (confirmation?.IsOpen == true) return;
-            var result = context.Ui.ShowModal(
-                new UiModalRequest(
-                    "END SESSION & RESTORE?",
-                    "Owned content will be removed and every native transform, brain, and personality preview will be restored.",
-                    "END SESSION & RESTORE",
-                    destructive: true),
-                confirmed =>
-                {
-                    confirmation = null;
-                    if (confirmed) requestEnd();
-                });
-            result.TryGetValue(out confirmation);
+            ShowConfirmation(new UiModalRequest(
+                "END SESSION & RESTORE?",
+                "Owned content will be removed and temporary native edits restored. Conflicting outside changes are preserved and reported.",
+                "END SESSION & RESTORE", destructive: true), confirmed =>
+            {
+                if (confirmed) requestEnd();
+            });
         }
     }
 }
