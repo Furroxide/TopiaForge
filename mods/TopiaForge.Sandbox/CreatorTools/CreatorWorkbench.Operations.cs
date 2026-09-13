@@ -334,15 +334,22 @@ namespace TopiaForge.CreatorTools.Shared
                 RecordNativeHidden(entry);
                 return OperationResult<string>.Success(entry.DisplayName + " temporarily hidden; End Session & Restore restores it.");
             }
+            var generation = sessionGeneration;
             var projectId = ProjectIdForRoster(entry.Id);
-            if (TryGetTransform(entry, out var previous)) RecordDespawn(entry, previous, projectId);
+            var hasTransform = TryGetTransform(entry, out var previous);
             var cleanup = RetireRosterEntry(entry, despawn: true);
+            // Source disposal and removal events can synchronously end or replace this session;
+            // a stale removal result must neither record history nor overwrite the newer status.
+            if (!IsCurrentSession(generation))
+                return cleanup.Succeeded ? OperationResult<string>.Success(status)
+                    : OperationResult<string>.Failure(cleanup.ErrorCode, cleanup.ErrorMessage);
             if (!cleanup.Succeeded)
             {
                 ReportCleanupFailure(entry.DisplayName + " removal completed with cleanup problems", cleanup);
                 RefreshUi();
                 return OperationResult<string>.Failure(cleanup.ErrorCode, status);
             }
+            if (hasTransform) RecordDespawn(entry, previous, projectId);
             status = entry.DisplayName + " removed.";
             RefreshUi();
             return OperationResult<string>.Success(status);

@@ -43,7 +43,8 @@ namespace TopiaForge.CreatorTools.Shared
 
         private OperationResult<string> CreateProject()
         {
-            StopProject(removeProjectEntities: true, removeProjectBindings: true);
+            var stopped = StopProject(removeProjectEntities: true, removeProjectBindings: true);
+            if (!stopped.Succeeded) return stopped;
             var stamp = DateTimeOffset.UtcNow;
             var start = new CreatorGraphNode("start", CreatorGraphNodeKind.ProjectStart, new Vec2(80f, 100f));
             var toast = new CreatorGraphNode(

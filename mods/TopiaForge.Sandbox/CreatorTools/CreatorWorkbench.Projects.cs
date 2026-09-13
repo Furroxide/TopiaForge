@@ -44,7 +44,13 @@ namespace TopiaForge.CreatorTools.Shared
                 projectLoadTask = null;
                 if (result.TryGetValue(out var project))
                 {
-                    StopProject(removeProjectEntities: true, removeProjectBindings: true);
+                    var stopped = StopProject(removeProjectEntities: true, removeProjectBindings: true);
+                    if (!stopped.Succeeded)
+                    {
+                        context.Ui.ShowToast(stopped.ErrorMessage, UiTone.Danger);
+                        RefreshUi();
+                        return;
+                    }
                     activeProject = project;
                     confirmedNativeProjectId = string.Empty;
                     graphViewport = UiGraphViewport.Default;
@@ -148,33 +154,30 @@ namespace TopiaForge.CreatorTools.Shared
             foreach (var entity in activeProject.Entities.Where(item => item.SpawnOnStart))
             {
                 var spawned = SpawnProjectEntity(entity);
-                if (!spawned.Succeeded)
-                {
-                    StopProject(removeProjectEntities: true);
-                    return OperationResult<string>.Failure(spawned.ErrorCode, spawned.ErrorMessage);
-                }
+                if (!spawned.Succeeded) return FailProjectStart(spawned.ErrorCode, spawned.ErrorMessage);
             }
             runner = new CreatorEventGraphRunner(activeProject, this);
             var interactions = RegisterProjectInteractions();
-            if (!interactions.Succeeded)
-            {
-                StopProject(removeProjectEntities: true);
-                return OperationResult<string>.Failure(interactions.ErrorCode, interactions.ErrorMessage);
-            }
+            if (!interactions.Succeeded) return FailProjectStart(interactions.ErrorCode, interactions.ErrorMessage);
             var started = runner.Start();
             if (!started.Succeeded)
             {
-                var errorCode = started.ErrorCode;
-                var errorMessage = started.ErrorMessage;
-                StopProject(removeProjectEntities: true, removeProjectBindings: false);
-                status = errorMessage;
+                var failed = FailProjectStart(started.ErrorCode, started.ErrorMessage);
+                status = failed.ErrorMessage;
                 RefreshUi();
-                return OperationResult<string>.Failure(errorCode, errorMessage);
+                return failed;
             }
 
             status = "Running " + activeProject.DisplayName + ".";
             RefreshUi();
             return OperationResult<string>.Success(status);
+        }
+
+        private OperationResult<string> FailProjectStart(ModErrorCode error, string message)
+        {
+            // The original startup failure stays first; a failed rollback is appended, never hidden.
+            var cleanup = StopProject(removeProjectEntities: true);
+            return OperationResult<string>.Failure(error, message + (cleanup.Succeeded ? string.Empty : " " + cleanup.ErrorMessage));
         }
 
         private OperationResult<string> StopProject(bool removeProjectEntities, bool removeProjectBindings = false)
