@@ -22,18 +22,17 @@ dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tes
 dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
-dart test packages\launcher_domain
-dart test packages\launcher_data
-dart test apps\topiaforge_cli
 dart analyze packages\launcher_domain
 dart analyze packages\launcher_data
 dart analyze apps\topiaforge_cli
-flutter test packages\launcher_ui
 flutter analyze packages\launcher_ui
 flutter analyze apps\topiaforge_launcher_flutter
-flutter test apps\topiaforge_launcher_flutter
+foreach ($package in 'packages\launcher_domain', 'packages\launcher_data', 'apps\topiaforge_cli') { Push-Location $package; dart test; Pop-Location }
+foreach ($package in 'packages\launcher_ui', 'apps\topiaforge_launcher_flutter') { Push-Location $package; flutter test; Pop-Location }
 flutter build windows --debug
 ```
+
+`dart test` and `flutter test` must run inside the package directory (the root has no `pubspec.yaml`). If `dart.bat` or `flutter.bat` fails instantly with an empty `PATH`, the interactive `PATH` exceeds the `cmd.exe` limit: run the checks with a short process-local `PATH` instead of blaming the code.
 
 Line-count audit:
 

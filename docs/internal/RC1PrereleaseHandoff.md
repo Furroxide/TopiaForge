@@ -94,11 +94,14 @@ timeouts returned in 2.060 and 7.014 seconds, preserving the original failure.
 The final local Runtime suite passed in 22.26 seconds, and the same helper in
 the original development checkout passed in 24.58 seconds.
 
-The original development checkout retains separate unfinished Sandbox automation
-and provisioning work. Its source tests and earlier pinned-Editor results are
-not candidate acceptance. Full native automation, a successful runtime provisioning
-retry, reviewed QA admission and the final candidate authoring/game matrix
-remain incomplete. The user has not answered the full-versus-reduced experimental
+The development checkout's Sandbox automation and provisioning work is
+reconciled with the release head on the isolated branch `fix/rc1-sandbox-automation`,
+where protocol v2 completes the native matrix in source and the pinned Editor
+lane passed on 2026-09-13; the [launch hub](launch/README.md) records the exact
+state. Its source tests and Editor results are not candidate acceptance. A
+successful runtime provisioning retry (staged, awaiting one operator session),
+reviewed QA admission, admitted native execution and the final candidate
+authoring/game matrix remain incomplete. The user has not answered the full-versus-reduced experimental
 scope question; no requirement or deferred decision has been changed.
 
 ## After the user merges
@@ -143,4 +146,4 @@ Its failed receipt is retained and the one-time task was removed. It supplies
 no native verification of the shutdown correction or isolation admission.
 No new native attempt was dispatched during this release stabilization.
 
-The 2026-09-11 retry ran the game and reached Unity OnApplicationQuit, but again exceeded the 90-second deadline. Original-game exit was confirmed after forced cleanup; the task was removed. Successful provisioning and admission remain blocked; investigate the shutdown diagnostics before another operator session. No further attempt is queued. See the [current observer runbook](launch/runtime-provisioning-observer.md).
+The 2026-09-11 retry ran the game and reached Unity OnApplicationQuit, but again exceeded the 90-second deadline. Original-game exit was confirmed after forced cleanup; the task was removed. The diagnostic launch mode that retains the Unity log and read-only runtime snapshots is verified on a fixture player, and retry `20260911T183026Z` is staged and refusal-checked without dispatch. No attempt is queued; one bounded operator session, confirmed by the user, comes next. See the [current observer runbook](launch/runtime-provisioning-observer.md).
