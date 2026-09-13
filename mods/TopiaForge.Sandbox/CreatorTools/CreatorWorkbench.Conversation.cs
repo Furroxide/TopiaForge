@@ -132,6 +132,7 @@ namespace TopiaForge.CreatorTools.Shared
             if (!result.TryGetValue(out var turn) || conversationRobot?.Robot == null)
             {
                 chatStatus = result.ErrorMessage;
+                EndConversation(keepStatus: true);
                 RefreshUi();
                 return;
             }
@@ -205,13 +206,15 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void EndConversation(bool keepStatus = false)
         {
-            activeConversation?.Dispose();
+            var ended = activeConversation;
             activeConversation = null;
             conversationRobot = null;
             conversationTask = null;
             submittedChatText = string.Empty;
             graphConversationOwned = false;
             if (!keepStatus) chatStatus = string.Empty;
+            // Retire state first so a throwing or re-entrant disposer cannot retain a stale reply.
+            ended?.Dispose();
         }
     }
 }

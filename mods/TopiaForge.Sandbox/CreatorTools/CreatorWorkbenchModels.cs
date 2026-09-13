@@ -21,7 +21,7 @@ namespace TopiaForge.CreatorTools.Shared
         public string SourceId => IsRobotKit ? Id.Substring("robotkit:".Length) : Id.Substring("content:".Length);
     }
 
-    internal sealed class CreatorRosterEntry : IDisposable
+    internal sealed class CreatorRosterEntry
     {
         private IDisposable? cleanup;
 
@@ -58,16 +58,55 @@ namespace TopiaForge.CreatorTools.Shared
         public bool IsAlive => Robot?.IsAlive ?? Spawn?.IsAlive ?? NativeTarget?.IsAlive ?? RobotTarget?.IsAlive ?? false;
         public bool IsRobot => Robot != null || RobotTarget != null || Kind == CreatorContentKind.Robot;
 
-        public void Dispose()
+        public OperationResult<bool> RestoreEdits()
         {
-            RobotEdit?.Dispose();
-            NativeEdit?.Dispose();
-            TargetRegistration?.Dispose();
-            cleanup?.Dispose();
+            var robotEdit = RobotEdit;
+            var nativeEdit = NativeEdit;
             RobotEdit = null;
             NativeEdit = null;
+            NativeHidden = false;
+            var result = OperationResult<bool>.Success(robotEdit != null || nativeEdit != null);
+            Restore(robotEdit, robotEdit == null ? null : new Func<OperationResult<bool>>(robotEdit.Restore));
+            Restore(nativeEdit, nativeEdit == null ? null : new Func<OperationResult<bool>>(nativeEdit.Restore));
+            return result;
+
+            void Restore(IDisposable? lease, Func<OperationResult<bool>>? restore)
+            {
+                if (lease == null || restore == null) return;
+                try { result = Merge(result, restore()); }
+                catch (Exception exception) { result = Merge(result, OperationResult<bool>.Failure(ModErrorCode.External, exception.Message)); }
+                try { lease.Dispose(); }
+                catch (Exception exception) { result = Merge(result, OperationResult<bool>.Failure(ModErrorCode.External, exception.Message)); }
+            }
+        }
+
+        public OperationResult<bool> RestoreAndDispose()
+        {
+            // Detach first: providers may re-enter cleanup synchronously.
+            var registration = TargetRegistration;
+            var owned = cleanup;
             TargetRegistration = null;
             cleanup = null;
+            var result = RestoreEdits();
+            Release(registration);
+            Release(owned);
+            return result;
+
+            void Release(IDisposable? resource)
+            {
+                try { resource?.Dispose(); }
+                catch (Exception exception) { result = Merge(result, OperationResult<bool>.Failure(ModErrorCode.External, exception.Message)); }
+            }
         }
+
+        private static OperationResult<bool> Merge(OperationResult<bool> current, OperationResult<bool> next)
+        {
+            if (next.Succeeded) return current;
+            if (current.Succeeded) return next;
+            return OperationResult<bool>.Failure(
+                current.ErrorCode == ModErrorCode.Conflict ? next.ErrorCode : current.ErrorCode,
+                current.ErrorMessage + " " + next.ErrorMessage);
+        }
+
     }
 }

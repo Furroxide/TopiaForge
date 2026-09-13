@@ -60,14 +60,26 @@ namespace TopiaForge.CreatorTools.Shared
                 {
                     return OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, "Interaction distance must be greater than zero and no more than 10.");
                 }
+                var owningRunner = runner;
+                IInteractableRegistration? ownedRegistration = null;
                 var registered = context.Interactions.Register(
                     entity,
                     new InteractableDefinition(prompt, distance),
-                    interaction => runner?.Fire(CreatorGraphNodeKind.InteractionTrigger, targetId));
+                    interaction =>
+                    {
+                        // Queued service callbacks belong to their original run, never a later restart.
+                        if (ReferenceEquals(runner, owningRunner) && owningRunner?.IsRunning == true
+                            && projectInteractions.TryGetValue(node.Id, out var currentRegistration)
+                            && ReferenceEquals(currentRegistration, ownedRegistration))
+                        {
+                            owningRunner.Fire(CreatorGraphNodeKind.InteractionTrigger, targetId);
+                        }
+                    });
                 if (!registered.TryGetValue(out var registration))
                 {
                     return OperationResult<bool>.Failure(registered.ErrorCode, registered.ErrorMessage);
                 }
+                ownedRegistration = registration;
                 projectInteractions[node.Id] = registration;
                 changed = true;
             }
@@ -76,14 +88,17 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void DisposeProjectInteractions(string targetId = "")
         {
+            var problems = new List<Exception>();
             foreach (var pair in new List<KeyValuePair<string, IInteractableRegistration>>(projectInteractions))
             {
                 var node = activeProject?.Nodes.FirstOrDefault(item => item.Id == pair.Key);
                 if (!string.IsNullOrEmpty(targetId)
                     && !string.Equals(node == null ? string.Empty : CreatorEventGraphRunner.TargetParameter(node), targetId, StringComparison.Ordinal)) continue;
-                pair.Value.Dispose();
                 projectInteractions.Remove(pair.Key);
+                try { pair.Value.Dispose(); }
+                catch (Exception exception) { problems.Add(exception); }
             }
+            if (problems.Count > 0) throw new AggregateException("Project interaction cleanup failed.", problems);
         }
     }
 }

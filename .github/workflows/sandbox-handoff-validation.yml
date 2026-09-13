@@ -1,0 +1,40 @@
+name: Sandbox Handoff Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      handoff_json:
+        description: "Reviewed sandbox-ci-handoff-v1 JSON only. Never paste raw logs, profiles, identities or credentials."
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-handoff-validation
+  cancel-in-progress: false
+
+# Secretless hosted verification of an already scrubbed local handoff.
+# No self-hosted runner, credentials, protected environment or native actuation.
+jobs:
+  validate:
+    name: Validate supplementary handoff (no native execution)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Validate bounded scrubbed handoff
+        shell: pwsh
+        env:
+          SANDBOX_HANDOFF_JSON: ${{ inputs.handoff_json }}
+        run: |
+          if ([Text.Encoding]::UTF8.GetByteCount($env:SANDBOX_HANDOFF_JSON) -gt 8192) {
+            throw 'Scrubbed Sandbox handoff exceeds its bound.'
+          }
+          $recordPath = Join-Path $env:RUNNER_TEMP 'sandbox-scrubbed-handoff.json'
+          [IO.File]::WriteAllText($recordPath, $env:SANDBOX_HANDOFF_JSON, [Text.UTF8Encoding]::new($false))
+          ./tools/verify-sandbox-ci-handoff.ps1 -HandoffPath $recordPath -ExpectedSourceRevision $env:GITHUB_SHA

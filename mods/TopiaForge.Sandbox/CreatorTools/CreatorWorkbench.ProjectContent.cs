@@ -140,8 +140,10 @@ namespace TopiaForge.CreatorTools.Shared
                 : RegisterProjectInteractionsFor(definition.Id);
             if (!interactions.Succeeded)
             {
-                var cleanup = RemoveOwnedEntry(entry, fireRemoved: false);
-                return WithCleanupFailure(interactions.ErrorCode, interactions.ErrorMessage, cleanup);
+                var cleanup = RetireRosterEntry(entry, despawn: true, fireRemoved: false);
+                if (!cleanup.Succeeded) ReportCleanupFailure("Failed spawn cleanup completed with problems", cleanup);
+                return OperationResult<string>.Failure(interactions.ErrorCode,
+                    interactions.ErrorMessage + (cleanup.Succeeded ? string.Empty : " " + cleanup.ErrorMessage));
             }
             return OperationResult<string>.Success(definition.DisplayName + " spawned.");
         }

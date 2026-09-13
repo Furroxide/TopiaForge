@@ -1,21 +1,50 @@
 # Initial release blocker register
 
-Last audited: 2026-07-31. Reconciled against the 2409 tree on 2026-08-27; see
+Preparation status refreshed: 2026-09-09. Historical audit baseline: 2026-07-31. Reconciled against the 2409 tree on 2026-08-27; see
 [Reconciliation](#reconciliation-2026-08-27). Reconciled again on 2026-08-28 after a
 working session that closed two advisory gates and moved engineering work on four
 others; see [Second reconciliation](#second-reconciliation-2026-08-28).
 Product candidate: `0.1.0-rc.1`. Recommendation: **NO-SHIP**.
 
-**Current redesign checkpoint, 8 September 2026:** source slices 1-7, release
-preparation 7a, retirement/world fixes 8a and isolated acceptance 8b are integrated
-through `0182e19`. Final #116 CI, Windows/Linux tests, full documentation publication
-and CodeQL pass; all redesign review threads are resolved. The superseded #102-105
-source stack is archived and closed. Candidate qualification and live acceptance
-remain pending. The pinned Editor installer and disposable fourteen-case project
-are prepared; actual setup/test execution awaits the requested authorization.
-The dated evidence below is historical and does not certify this candidate.
-Current revision-specific results are in
-[`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
+**Current preparation checkpoint, 9 September 2026:** redesign slices through
+8b and the release repairs are integrated through release source
+`437733854795c11e684eac9d59d6bc52ada9516e` (PR #124). Its two exact-source CI
+runs passed 16/16 jobs, full documentation publication and CodeQL passed, and the
+packaging dry run passed 11/11 jobs. Those are source/synthetic results, not a
+qualified administrator candidate. PR #119 remains draft at the last observation.
+
+The user authorized exact Unity setup and its prepared test suite: Editor
+`6000.0.23f1_1c4764c07fb4` is installed and all fourteen actual EditMode cases passed
+with confirmed exit 0. Sixteen candidate authoring cycles and the full isolated
+game matrix remain pending. Reviewer requests, QA and token setup plans, signing
+recovery checklist, Sandbox automation plan and independent-tester handoff are
+prepared in the [launch hub](internal/launch/README.md). Actual approvals and native admission
+remain pending; credential closure is deferred, neutral build setup stays a plan,
+and the native UX/accessibility operator handoff is prepared but unexecuted. See [current actions](internal/launch/NextActions.md)
+and [evidence boundaries](internal/launch/Evidence.md). The user subsequently authorized
+stages 1–2 of Sandbox automation (specification/verifier and offline lifecycle/rollback
+regressions, including applicable tests). Those two stages are implemented and verified
+locally; see the [implementation handoff](internal/launch/sandbox-automation-stages-1-2.md).
+The later explicit reply “Implement all remaining stages” authorized stages 3–6.
+The [native implementation handoff](internal/launch/sandbox-automation-stages-3-6.md)
+records the Editor fixture, Windows broker, native observer, independent verifier
+and hosted/offline plus admitted local lanes. A standard QA account, restricted
+roots, two verified binary copies and independently verified development inputs are
+provisioned on `D:\TopiaForgeQA`; the
+user confirmed the source, themselves as operator, main display and default
+output audio, with microphone recording off. Normal first sign-in and native
+host/device measurements are confirmed; the exact QA-game outbound block is verified.
+The authorized [inert headless provisioning observer](internal/launch/runtime-provisioning-observer.md)
+recorded the actual Unity path privately, but its first attempt **failed** on shutdown
+timeout and required original-game termination before exit was confirmed. Preserve
+the failure; a validated correction, clean retry, isolation/device admission and
+game acceptance remain pending. Full native matrix
+implementation remains unfinished as listed in the handoff. Recorded Editor
+and source-test results do not close candidate acceptance or reviewer gates.
+
+Dated entries below describe their original observations. The [redesign ledger](internal/gamemode-contract/Status.md)
+retains failed runs and subsequent corrections; neither a historical pass nor a
+prepared document certifies a future candidate.
 
 Private build eligibility requires the four non-game blocking approvals from the
 frozen register. Final publication requires detached candidate qualification,
@@ -86,10 +115,9 @@ Priority meanings:
 Priority says how serious a gate is. **Enforcement** says whether an unmet one stops the release, and on a `0.x` line
 those are no longer the same question.
 
-TopiaForge has never shipped. Eight of the twelve recorded gates wait on organizational evidence — IP counsel
-sign-off, a paid code-signing certificate, GitHub organization administration, external QA participants — that an
-alpha with no users cannot obtain, and a register where every gate is fatal is a register that says nothing about
-which gate matters. So five gates stay **blocking** and seven become **advisory**:
+The 0.x readiness contract distinguishes release-fatal rights, privacy, credential
+and game evidence from preview limitations and process observations that permit
+an explicit owner disposition. Five gates are **blocking** and seven are **advisory**:
 
 | Gate | Enforcement | Why |
 | --- | --- | --- |
@@ -99,12 +127,12 @@ which gate matters. So five gates stay **blocking** and seven become **advisory*
 | `P0-CRED-01` | blocking | Exposed credentials stay exposed regardless of version number. |
 | `P0-GAME-01` | blocking | Obtainable by the maintainer alone, and it is the claim the product *is*. |
 | `P0-WIN-01` | advisory | Unsigned RC1 is authorized and recorded; exact unsigned artifacts and candidate QA still require verification. |
-| `P0-TRUST-01` | advisory | The trust model is disclosed, not enforced; approving it is a `1.0` question. |
-| `P0-HOST-01` | advisory | Protected-host configuration is org administration, not product state. |
-| `P0-CAND-01` | advisory | Freeze discipline is process; a `0.x` prerelease is not immutable-forever. |
+| `P0-TRUST-01` | advisory | The recorded 0.x trust-model disposition is approved; changed scope needs renewed review. |
+| `P0-HOST-01` | advisory | Host readiness is dispositionable in the register; enforced protected publication checks still apply. |
+| `P0-CAND-01` | advisory | Candidate process is advisory in the register; qualification, final-main provenance and immutable release checks still apply. |
 | `P1-UX-01` | advisory | Was already dispositionable; it is now dispositionable by default. |
 | `P1-E2E-01` | advisory | Needs external participants an unshipped alpha has none of. |
-| `P1-SUPPORT-01` | advisory | One named interim owner is honest for `0.x`. |
+| `P1-SUPPORT-01` | advisory | Interim ownership is approved for 0.x; verify the recorded channels remain monitored. |
 
 Advisory does not mean removed. Every gate keeps its entry in
 [`release/release-readiness.json`](../release/release-readiness.json) with its status and reason code,
@@ -715,14 +743,16 @@ automated tests cannot close Unity object lifetime.
 
   Owner: GitHub administrator, security, and credential owners.
 
-  Current state: the protected `release` environment has the required reviewer,
-  a `v*` deployment restriction, and the GitHub-held Ed25519 update key. The
-  dedicated protected `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN` is not configured,
-  and a plaintext duplicate of the update-signing seed remains on the
-  administrator workstation pending independently verified recovery/removal.
-  The local GitHub CLI is authenticated with repository-admin permission. The
-  replacement path still needs a non-publishing rehearsal and
-  immutable-release verification.
+  Recorded governance checks found the required `release` reviewer, a `v*`
+  deployment restriction and administrator GitHub CLI access. The September 9
+  name-only observation found the update-signing secret name and no protected
+  `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN` name. Secret-name presence does not prove
+  the stored signing key's identity or recoverability. Older host notes reported
+  a plaintext workstation duplicate; its current existence remains unverified.
+  Follow the [recovery and cleanup checklist](internal/launch/update-signing-recovery-cleanup-checklist.md)
+  for separately authorized verification and finite cleanup targets. Recheck
+  current governance and configuration before execution; the non-publishing
+  rehearsal and immutable-release verification remain pending.
 
   Exit criteria: configure required aggregate contexts (`Required / CI validation`,
   `Required / PR policy`, `Required / Dependency review`,
@@ -764,13 +794,21 @@ automated tests cannot close Unity object lifetime.
   this register does not designate either commit as the frozen candidate. No tag, release, signature, or publication
   has been created.
 
-  Exit criteria: integrate the topic through `dev`, cut and stabilize `release/0.1.0-rc.1`, merge it to `main`, and
-  approve the release notes; create the protected annotated `v0.1.0-rc.1` tag on the exact verified `main` SHA through
-  the authorized process; run every local/native/Unity gate without unexplained
-  warnings or skips; generate and independently verify the candidate BOM, SPDX SBOM, `SHA256SUMS`, nested digests,
-  sizes, signatures, provenance, platform manifests, handoff manifest, and manual-release index. The administrator
-  may stage only a matching draft, and GitHub may publish it automatically only after protected release-environment
-  approval and exact-byte verification. Neither path may create/mutate the tag or replace mismatched assets.
+  Exit criteria: integrate reviewed source and gate changes through the approved
+  `dev` and `release/0.1.0-rc.1` process, approve the release notes, and freeze the
+  final two-parent `main` merge SHA in a clean checkout equal to `origin/main`.
+  Build those exact candidate bytes and complete every required local/native/Unity
+  check without unexplained warnings or skips. Review the detached decision and
+  acceptance records, then run `release-admin.ps1 qualify` to record `accepted`.
+  Only afterward may authorized administrator staging create and push the signed
+  annotated `v0.1.0-rc.1` tag at that SHA and stage its exact matching draft.
+  Generate and independently verify the required BOM, SPDX SBOM, `SHA256SUMS`,
+  nested digests, sizes, signatures, provenance, platform/handoff manifests and
+  manual-release index at their documented stages. GitHub verifies the staged
+  bytes, produces the policy-declared generated metadata, and publishes only
+  after protected release-environment approval and final exact-byte verification.
+  GitHub never creates or mutates the tag; neither path may move an existing tag
+  or replace mismatched assets. See [AdminRelease](AdminRelease.md).
 
 ## P1 acceptance gates
 
@@ -781,8 +819,7 @@ automated tests cannot close Unity object lifetime.
   Exit criteria: capture and review Home, Setup, Mods, Browse, Profiles, Diagnostics, Settings, and Developer flows on
   every supported native host at 800x600 and larger; cover empty/loading/warning/error/destructive/recovery states,
   keyboard-only navigation, focus restoration, 100–200% text scaling, high contrast, reduced motion, screen readers,
-  long paths, and no-overflow behavior. Local automated coverage is green, but macOS denied Screen Recording to this
-  audit, so screenshot comparison was not fabricated.
+  long paths, and no-overflow behavior. RC1 currently targets Windows x64. The earlier macOS Screen Recording denial is historical; no Windows native acceptance is inferred from source/widget tests. The [operator handoff](internal/launch/native-ux-accessibility-handoff.md) is prepared; actual host/operator admission, captures, screen-reader observations and reviewer disposition remain pending.
 
 - [ ] **P1-E2E-01 — Run independent clean-machine player and author journeys.** *(advisory)*
 
@@ -822,7 +859,7 @@ automated tests cannot close Unity object lifetime.
 - [x] **P2-REGISTRY-01 — Official community submissions remain closed.** Official indexes contain first-party entries
   only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
   revocation, appeal, and installed-user response governance plus tests.
-- [x] **P2-WORLDS-01 — Custom worlds are Windows/Proton-only for v1.** Do not advertise native macOS Robotopia support.
+- [x] **P2-WORLDS-01 — RC1 custom-world support is Windows x64 only.** Future Linux/Proton support requires reviewed native isolation and separate platform approval; no release version is promised. Do not advertise native macOS Robotopia support.
 - [x] **P2-COMPAT-01 — Build `2409` is the supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
   Compatibility is declared per mod: mods with native `GameCode` bindings pin `0.0.2409`; SDK-only mods declare the
   bounded range `>=0.0.2409 <0.0.2600`. See [the compatibility policy](CompatibilityPolicy.md).

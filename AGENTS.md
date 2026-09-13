@@ -79,3 +79,10 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 - Keep Unity/BepInEx-specific work in `src/TopiaForge.ModManager`.
 - Keep `src/TopiaForge.ModManager.Core` free of Unity references.
 - SDK conveniences compiled into the `TopiaForge.Mods.Abstractions` assembly must remain additive and clean-room. Source files in that directory compiled into `TopiaForge.Mods.Worlds` follow the approved gamemode contract redesign; its retired startup API is removed while assembly identity remains `0.1.0.0`.
+
+## Launch preparation and pending user decisions
+
+- Start launch/blocker/checklist work at `docs/internal/launch/README.md`; keep its actions, decisions, evidence summary and related runbooks consistent.
+- Retain raw logs, actual private review/provisioning records and credentials outside Git. Prepared reviewer requests and setup plans are not approvals or completed execution.
+- Wait indefinitely for an explicit reply to any question asked of the user. Never select a default or treat elapsed time as an answer or authorization. Continue independent already-authorized work while dependent work waits.
+- Preserve the explicit choices in `docs/internal/launch/Decisions.md`; do not reopen deferred work or infer an answer from another item's reply.

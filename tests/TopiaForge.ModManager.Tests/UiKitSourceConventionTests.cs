@@ -173,7 +173,10 @@ namespace TopiaForge.ModManager.Tests
             {
                 "mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj",
                 "mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj",
-                "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj"
+                "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj",
+                // Non-distributable harnesses observe the production renderer and real Editor host.
+                "tests/TopiaForge.SandboxAcceptanceNative/TopiaForge.SandboxAcceptanceNative.csproj",
+                "tests/TopiaForge.SandboxAutomation.Unity/TopiaForge.SandboxAutomation.Unity.csproj"
             }, StringComparer.Ordinal);
             var unityUiReference = new Regex(
                 @"<(?:Project|Package)Reference\b[^>]*\bInclude\s*=\s*""[^""]*TopiaForge\.Mods\.UnityUi(?:\.csproj)?""",
@@ -198,7 +201,7 @@ namespace TopiaForge.ModManager.Tests
             if (!actual.SetEquals(expected))
             {
                 throw new InvalidOperationException(
-                    "UnityUi references must remain restricted to loader-owned providers and the QA gallery. " +
+                    "UnityUi references must remain restricted to loader-owned providers and the explicitly listed QA harnesses. " +
                     "Expected: " + string.Join(", ", expected.OrderBy(value => value, StringComparer.Ordinal)) +
                     "; actual: " + string.Join(", ", actual.OrderBy(value => value, StringComparer.Ordinal)) + ".");
             }

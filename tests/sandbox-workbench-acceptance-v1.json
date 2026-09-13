@@ -1,0 +1,616 @@
+{
+  "schemaVersion": 1,
+  "kind": "sandbox-workbench-acceptance-v1",
+  "gameBuild": 2409,
+  "scope": "supplementary-offline-contracts",
+  "scenarios": [
+    {
+      "id": "routing",
+      "title": "One elected workbench host per accepted input edge",
+      "fixture": "Deterministic offline contract, not observed game evidence: FakeModContext, CreatorWorkbenchRouter and two authenticated competing hosts; count actual callback invocations and snapshot registration identities before acquisition and after disposal. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Register a running Sandbox host and lower-priority competing host with the configurable shared binding.",
+        "Dispatch one accepted synthetic input edge and independently count the elected callback; reject non-running, stale, headless and incompatible-host paths in separate negative fixtures.",
+        "Dispose both registrations and dispatch the old binding again; measure callbacks and router registrations."
+      ],
+      "cleanup": [
+        "Dispose registrations in reverse acquisition order, then the router and test context.",
+        "Compare owned input and host registrations with the captured baseline; assert no fake context leaks."
+      ],
+      "negativeTests": [
+        "Give both hosts a callback recorder: a second invocation from one edge must fail the count oracle.",
+        "Retain a stale callback after unregistering its host and fail if it invokes the retired host.",
+        "Exercise wrong gamemode, loading/stopping and simulated remote admission without treating a fake participant as native multiplayer."
+      ],
+      "oracles": [
+        {
+          "metric": "accepted-toggle-callbacks",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 1
+        },
+        {
+          "metric": "retired-host-callbacks",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "owned-routing-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "routing-native-f5",
+          "lane": "os-input",
+          "availability": "requires-environment",
+          "oracle": "Send a real F5 down/up pair to the receipt-bound foreground game and correlate one elected Sandbox toggle with actual visibility.",
+          "negativeTest": "Hold or duplicate the edge, lose foreground, or target the wrong process; abort actuation or detect duplicate/wrong toggles.",
+          "cleanup": "Release all held keys and verify the original owned process and control baseline."
+        },
+        {
+          "id": "routing-remote-session",
+          "lane": "game",
+          "availability": "not-implemented",
+          "oracle": "A genuinely connected remote participant must exercise the declared host policy when a supported live transport exists.",
+          "negativeTest": "A fake participant or local loopback must remain classified as offline, never a real remote pass.",
+          "cleanup": "Disconnect only fixture-owned peers and verify session, registration and input cleanup."
+        },
+        {
+          "id": "routing-usable-toggle",
+          "lane": "human",
+          "availability": "requires-human",
+          "oracle": "Observe that the correct tool opens once, identifies its owner and can be closed through accessible controls.",
+          "negativeTest": "Have the operator identify a wrong owner or visually duplicated surface independently of a callback count.",
+          "cleanup": "Close fixture surfaces and confirm player control/cursor recovery."
+        }
+      ]
+    },
+    {
+      "id": "catalog-editing",
+      "title": "Catalog spawn, transform, duplicate and temporary visibility",
+      "fixture": "Deterministic offline contract: one authenticated prop source and borrowed scene target through CreatorContentService or its testing fake; record actual factory/adapter calls, entity identity and owner-tagged roster state. Required counts specify fixture behavior only. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Browse and select the pinned source-qualified prop entry through captured workbench controls.",
+        "Spawn one owned object, apply one transform, duplicate once and temporarily hide one borrowed target; independently observe four successful fixture operations.",
+        "End the session and compare borrowed transform/visibility and foreign-owner objects with their pre-session snapshots."
+      ],
+      "cleanup": [
+        "Restore borrowed edits before disposing owned objects and registrations.",
+        "Dispose the source/session/context and verify the original borrowed-state fingerprint and resource baseline."
+      ],
+      "negativeTests": [
+        "Remove the source or expected catalog entry before selection and require a bounded unavailable outcome.",
+        "Return a foreign-owner duplicate recipe, a throwing factory or a partial transform failure; reject false success and release reservations.",
+        "Seed one missing restore or retained duplicate and require the restoration or owned-count oracle to fail."
+      ],
+      "oracles": [
+        {
+          "metric": "completed-fixture-operations",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 4
+        },
+        {
+          "metric": "retained-owned-objects",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "borrowed-and-foreign-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "catalog-editor-controls",
+          "lane": "editor",
+          "availability": "requires-environment",
+          "oracle": "Production widgets in the pinned Editor must expose the intended search, list, selection, transform, visibility and duplicate controls with usable hit regions.",
+          "negativeTest": "Render a clipped or disabled required control and fail visual/semantic assertions despite successful controller calls.",
+          "cleanup": "Dispose UI hosts, pooled elements and subscriptions to their measured baselines."
+        },
+        {
+          "id": "catalog-native-inventory",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "Exercise every admitted item, prop and RobotKit type from the exact candidate inventory and inspect native identities, transforms, visibility and roster membership.",
+          "negativeTest": "Omit an expected type or make the rendered selection disagree with the mutated native target; fail the mapped case.",
+          "cleanup": "End the session and confirm owned native objects disappear while borrowed/foreign objects restore."
+        },
+        {
+          "id": "catalog-keyboard-selection",
+          "lane": "os-input",
+          "availability": "requires-environment",
+          "oracle": "Use real keyboard and pointer dispatch to search, select and edit through production hit regions.",
+          "negativeTest": "Invoke a controller callback without matching focused control/input evidence and refuse a native UI claim.",
+          "cleanup": "Release device input and restore the prior focus and player-control state."
+        }
+      ]
+    },
+    {
+      "id": "borrowed-robot",
+      "title": "Borrowed robot previews and conflict-aware restoration",
+      "fixture": "Deterministic offline contract: FakeRobotSceneEditorService with a preexisting robot whose transform, personality fields/identity and brain data are independently snapshotable. The positive fixture has no external writer; conflict and disappearing-target behavior are separate negative fixtures. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Acquire one exclusive borrowed-robot edit lease.",
+        "Apply one transform, one personality preview and one brain preview, independently checking three accepted mutations against the fake robot state.",
+        "End the session and compare the non-conflicting robot snapshot with its baseline; inspect retained temporary objects and leases."
+      ],
+      "cleanup": [
+        "Attempt every owned restoration even if another disposer throws, then release the edit reservation.",
+        "Dispose workbench and fake context after recording the restoration result; retain external-writer state in the separate conflict fixture."
+      ],
+      "negativeTests": [
+        "Write different robot state outside the lease after preview; require Conflict, preserved outside changes and visible failure propagation instead of a false restored message.",
+        "Destroy the borrowed target or fail halfway through preview; require bounded failure and released ownership without resurrecting it.",
+        "Seed a leaked temporary personality or stale brain snapshot and fail the independent state/resource oracle."
+      ],
+      "oracles": [
+        {
+          "metric": "accepted-preview-mutations",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 3
+        },
+        {
+          "metric": "retained-temporary-personalities",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "borrowed-robot-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        },
+        {
+          "metric": "edit-reservation-count",
+          "type": "count",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "robot-native-restoration",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "Capture the real isolated robot transform, personality identity/fields and brain state before preview and after End Session; verify temporary Unity objects are destroyed.",
+          "negativeTest": "Inject a native external writer or disappearing target and require preservation/refusal without claiming unconditional exact restoration.",
+          "cleanup": "Release native edit ownership; retain original conflict evidence and preserve all unrelated state."
+        },
+        {
+          "id": "robot-conflict-feedback",
+          "lane": "human",
+          "availability": "requires-human",
+          "oracle": "Observe that a restore conflict or incomplete restoration is described accurately to the player, with no success message hiding it.",
+          "negativeTest": "Present a conflict behind a generic restored toast and require a recorded usability failure.",
+          "cleanup": "Dismiss notifications without deleting evidence and return the fixture to its approved known state."
+        }
+      ]
+    },
+    {
+      "id": "source-unload",
+      "title": "Source unregister and reentrant teardown preserve other owners",
+      "fixture": "Deterministic offline contract: an authenticated source owns two spawned fake instances while a second source owns one control instance. Record exact factory disposal callbacks, catalog identities and foreign state; no fake vehicle is a native vehicle claim. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Register both sources and spawn two objects from the source that will unload plus one foreign control object.",
+        "Unregister the first source, including a reentrant callback fixture, then advance the defined fake frame barrier.",
+        "Observe exactly two owned-instance disposals and compare the control source/instance fingerprint with its baseline."
+      ],
+      "cleanup": [
+        "Prune retired source entries and stale roster references, releasing every source edit and instance exactly once.",
+        "After measurements, dispose the foreign control source and context and assert no leaks."
+      ],
+      "negativeTests": [
+        "Reenter unregister or End Session from the first disposal callback; fail duplicate disposal or skipped later cleanup.",
+        "Make one source disposer throw; require the remaining owned disposals to run and report the failure.",
+        "Attempt stale catalog selection after unregister; it must not spawn from the retired factory."
+      ],
+      "oracles": [
+        {
+          "metric": "owned-instance-disposals",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 2
+        },
+        {
+          "metric": "retired-source-roster-entries",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "foreign-source-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "source-native-character-unload",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "Unload a fixture package through supported manager lifecycle and observe native character objects, catalog entries and edit leases retire once.",
+          "negativeTest": "Keep one native object or stale entry after owner unload and fail even if the registry count is zero.",
+          "cleanup": "Unload only fixture-owned packages and verify unrelated content survives."
+        },
+        {
+          "id": "source-native-vehicle",
+          "lane": "game",
+          "availability": "not-implemented",
+          "oracle": "Exercise a validated native vehicle factory only after such an adapter is implemented and admitted for build 2409.",
+          "negativeTest": "A fake vehicle or empty category cannot pass vehicle creation/unload; record unavailable capability.",
+          "cleanup": "Release every admitted vehicle object and registration, or verify refusal left no mutation."
+        }
+      ]
+    },
+    {
+      "id": "hide-reopen",
+      "title": "Hiding retains the session while releasing player-control ownership",
+      "fixture": "Deterministic offline contract: one CreatorWorkbench, one manual robot and a stable fake session identity; record control leases, captured warning HUD and object identity. One sample covers one open/hide/reopen/end sequence. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Open, create the manual robot and record session and robot identities.",
+        "Hide once and observe retained session/content, zero workbench control leases and the captured reopen warning HUD.",
+        "Reopen once without replacing the session, then End Session; count one accepted reopen and measure final ownership."
+      ],
+      "cleanup": [
+        "End rather than merely hide the session, dispose the workbench and compare the fake lifetime/UI/input baseline.",
+        "Release any test-owned source registrations and assert no context leaks."
+      ],
+      "negativeTests": [
+        "Replace the session or robot on reopen and fail the identity observation.",
+        "Retain a control lease while hidden, omit the warning HUD or invoke recursive dismissal; fail the corresponding assertion.",
+        "Invoke a retired hide/reopen callback after disposal and require it to produce no new surface or session."
+      ],
+      "oracles": [
+        {
+          "metric": "accepted-reopen-count",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 1
+        },
+        {
+          "metric": "session-replacement-count",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "retained-owned-resources",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "lifetime-and-input-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "hide-native-controls",
+          "lane": "os-input",
+          "availability": "requires-environment",
+          "oracle": "Measure actual movement/camera input while visible, hidden and reopened; confirm hide restores controls and reopening suppresses the appropriate framework actions.",
+          "negativeTest": "A zero lease count with blocked movement or a visible workbench with unintended gameplay input must fail.",
+          "cleanup": "Release keys/buttons, end the owning session and verify native cursor/control restoration."
+        },
+        {
+          "id": "hide-editor-hud",
+          "lane": "editor",
+          "availability": "requires-environment",
+          "oracle": "Render the production hidden-session warning HUD at supported UI scales, contrast and reduced-motion settings.",
+          "negativeTest": "Hide or clip the warning while the session remains active and fail the image/semantic oracle.",
+          "cleanup": "Dispose the HUD/window and verify allocator, tween and subscription baselines."
+        },
+        {
+          "id": "hide-warning-understanding",
+          "lane": "human",
+          "availability": "requires-human",
+          "oracle": "Confirm a player can tell temporary edits remain active while the workbench is hidden and discover how to reopen or restore them.",
+          "negativeTest": "Present an ambiguous or missing warning and record failure even when session retention is correct.",
+          "cleanup": "End the fixture session explicitly and verify the warning retires."
+        }
+      ]
+    },
+    {
+      "id": "persistence-refusal",
+      "title": "Unavailable mutation isolation refuses global writes",
+      "fixture": "Deterministic offline contract: a global workbench fixture with unavailable mutation safety, a write-recording fake persistence boundary and a fixed synthetic state fingerprint. The shipped Sandbox has no global persistence-isolation lease; fake ready/revoked cases are separate contract checks. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Attempt one global mutation without a valid persistence-isolation lease and record its explicit refusal.",
+        "Read the fake persistence write log and state snapshot independently of the returned status.",
+        "In separate negative fixtures cover denied acknowledgement and ready-then-revoked fake safety, keeping their scope explicitly offline."
+      ],
+      "cleanup": [
+        "Release acknowledgements, safety registrations, sessions and control ownership even on refusal.",
+        "Verify the refused fixture state fingerprint and write counter are unchanged before disposing its context."
+      ],
+      "negativeTests": [
+        "Supply an unavailable or revoked bridge and fail if any mutation or write is accepted.",
+        "Dismiss acknowledgement instead of confirming and require refusal with no lease acquisition.",
+        "Fabricate a successful native-global result from a fake lease and require scope rejection."
+      ],
+      "oracles": [
+        {
+          "metric": "refused-global-mutations",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 1
+        },
+        {
+          "metric": "persistence-write-count",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "mutation-outcome",
+          "type": "label",
+          "comparison": "equals",
+          "expected": "refused"
+        },
+        {
+          "metric": "synthetic-persistence-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "persistence-native-refusal",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "On the isolated game, hash an approved synthetic save/checkpoint allowlist and observe refused unsupported global mutation with no unexpected create/delete/write.",
+          "negativeTest": "Allow one write or an unexplained success despite the unavailable bridge and fail the refusal case.",
+          "cleanup": "Preserve private before/after evidence and touch only the approved QA persistence roots."
+        },
+        {
+          "id": "persistence-native-global-bridge",
+          "lane": "game",
+          "availability": "not-implemented",
+          "oracle": "A separately approved native bridge must demonstrate acknowledgement, real write isolation, mutation and revocation restoration before successful global coverage exists.",
+          "negativeTest": "A fake lease, in-memory copy or untouched save path cannot stand in for native persistence isolation.",
+          "cleanup": "Revoke and restore every admitted lease; preserve failed layouts until owned process exit is confirmed."
+        }
+      ]
+    },
+    {
+      "id": "graph-rollback",
+      "title": "Graph Stop removes graph effects and preserves manual content",
+      "fixture": "Deterministic offline contract: a branching graph with one graph-owned object, one borrowed edit, one interaction, one synthetic conversation and one audio handle beside a separately owned manual object. Inspect actual fake service records, not graph success labels. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Start the bounded branching graph and independently count five acquired graph effect handles.",
+        "Stop through the captured production workbench control and run the defined cancellation/frame barrier.",
+        "Observe all graph handles/callbacks stopped while the manual object identity and state remain unchanged."
+      ],
+      "cleanup": [
+        "Attempt all graph cleanup in reverse ownership order, restoring borrowed edits and stopping conversation/audio.",
+        "Retain manual content until after the Stop assertions, then End Session and dispose the fixture context."
+      ],
+      "negativeTests": [
+        "Throw in an early disposer and require later cleanup plus explicit failure reporting.",
+        "Deliver a late conversation/audio completion or reentrant entity removal after Stop; fail resurrected handles or callbacks.",
+        "Stop before Start, exceed a graph budget or inject a graph fault; require bounded cancellation and no foreign-content loss."
+      ],
+      "oracles": [
+        {
+          "metric": "acquired-graph-effect-handles",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 5
+        },
+        {
+          "metric": "retained-graph-handles",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "post-stop-graph-callbacks",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "manual-content-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "graph-native-effects",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "Observe actual spawned objects, borrowed state, interactions, conversations and audio handles cease after real UI Stop while manual content survives.",
+          "negativeTest": "Leave one native effect active after Stop and fail despite fake runner or callback success.",
+          "cleanup": "Cancel every fixture effect, end its session and verify native resources and player controls restore."
+        },
+        {
+          "id": "graph-audio-capture",
+          "lane": "physical-device",
+          "availability": "requires-environment",
+          "oracle": "Capture a distinct synthetic cue on an approved device and verify bounded post-Stop silence while an unrelated control cue remains detectable.",
+          "negativeTest": "A disconnected recorder, silent input or continuing graph cue must not produce a passing audio observation.",
+          "cleanup": "Stop fixture audio/capture and restore approved device settings without recording personal speech."
+        },
+        {
+          "id": "graph-audibility-review",
+          "lane": "human",
+          "availability": "requires-human",
+          "oracle": "Have the operator hear the synthetic cue and its cessation through the intended output and assess understandable Stop feedback.",
+          "negativeTest": "A passing loopback waveform with inaudible physical output remains an unresolved device/usability case.",
+          "cleanup": "End playback, release device ownership and retain only approved synthetic recordings."
+        }
+      ]
+    },
+    {
+      "id": "lifecycle-routes",
+      "title": "Scene, provider and session transitions retire only their owners",
+      "fixture": "Deterministic offline contract: three independent fresh fake contexts for scene replacement, creator provider/source loss and Sandbox session end. Record retired controller/owner identities and one unrelated control owner; reset the fixture between routes. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 1,
+      "actions": [
+        "Exercise the three declared routes against fresh owned workbench sessions and independently count completed teardown routes.",
+        "Advance each route through its fixed lifecycle barrier and reject callbacks from the retired owner.",
+        "Aggregate zero stale callbacks and compare each unrelated-owner snapshot with its baseline."
+      ],
+      "cleanup": [
+        "Restore surviving borrowed targets before transfer; release destroyed-target reservations without resurrection.",
+        "Dispose all route fixtures and compare context ownership baselines, retaining thrown cleanup failures."
+      ],
+      "negativeTests": [
+        "Deliver a stale callback after a scene or session change and fail any new state under the retired owner.",
+        "Lose the content provider or throw during start/stop and require cleanup of already acquired resources.",
+        "Simulate a remote policy change only as an offline refusal fixture; never label it actual connected-client evidence."
+      ],
+      "oracles": [
+        {
+          "metric": "completed-teardown-routes",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 3
+        },
+        {
+          "metric": "retired-owner-callbacks",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "unrelated-owner-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "lifecycle-native-routes",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "Exercise real scene replacement, Worlds transition, source unload and Sandbox unload with correlated committed phases, retired owner identity and native resource observations.",
+          "negativeTest": "A requested transition without native scene change, failed cleanup or resurrected destroyed target must fail.",
+          "cleanup": "Stop the original owned session/process as required and retain the layout if exit is unconfirmed."
+        },
+        {
+          "id": "lifecycle-remote-admission",
+          "lane": "game",
+          "availability": "not-implemented",
+          "oracle": "Where supported live transport exists, admit a real remote participant and verify the declared workbench/session policy and cleanup.",
+          "negativeTest": "A simulated participant or loopback cannot count as this native route.",
+          "cleanup": "Disconnect only test peers and verify host/session/control ownership returns to baseline."
+        },
+        {
+          "id": "lifecycle-player-recovery",
+          "lane": "human",
+          "availability": "requires-human",
+          "oracle": "Observe that transition failure or return to menu leaves understandable status and usable player controls.",
+          "negativeTest": "An apparently closed overlay with trapped focus, stuck cursor or misleading success is a recorded failure.",
+          "cleanup": "Restore the approved QA starting scene and controls without touching normal-player data."
+        }
+      ]
+    },
+    {
+      "id": "ten-cycles",
+      "title": "Ten complete offline cycles preserve the same restoration baseline",
+      "fixture": "Deterministic offline contract: ten ordered samples with the same fixture shape and measured restoration baseline. Each sample opens, spawns, edits, hides, reopens, starts/stops a graph and ends its session. Expected counts are requirements, never fabricated measurements. Positive equals/count exercise counters start at zero for each sample; their expected values count only that sample's exercised actions.",
+      "requiredSamples": 10,
+      "actions": [
+        "For each sequence 1 through 10 run exactly one complete open/spawn/edit/hide/reopen/graph/Stop/End cycle with fixed fake inputs.",
+        "Record one completed-cycle count and all post-barrier resource counts separately for every sample.",
+        "Fingerprint owned object, edit, UI, input, graph, interaction, conversation, audio, callback and synthetic persistence state before and after each cycle; retain intermediate failures."
+      ],
+      "cleanup": [
+        "Apply documented synchronous/cancellation barriers before measuring; do not use repeated garbage collection or retries to hide leaks.",
+        "Dispose fixture services after all samples, assert no leaks and keep first-failure observations immutable."
+      ],
+      "negativeTests": [
+        "Omit or reorder a sample, repeat a sequence number or supply only final aggregate counts; require parser or cycle-count failure.",
+        "Leak one resource only on an intermediate cycle and require that sample to fail even if later cleanup succeeds.",
+        "Change an unchanged-metric baseline between cycles and require drift failure; reject post-Stop late callbacks."
+      ],
+      "oracles": [
+        {
+          "metric": "completed-cycle-count",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 1
+        },
+        {
+          "metric": "retained-session-resources",
+          "type": "count",
+          "comparison": "equals",
+          "expected": 0
+        },
+        {
+          "metric": "restoration-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        },
+        {
+          "metric": "synthetic-persistence-state",
+          "type": "fingerprint",
+          "comparison": "unchanged",
+          "expected": null
+        }
+      ],
+      "residualRequirements": [
+        {
+          "id": "cycles-editor-resources",
+          "lane": "editor",
+          "availability": "requires-environment",
+          "oracle": "Run production UI create/clear/dispose with measured canvas, allocator, tween and subscription baselines; keep the existing sixteen authoring cycles separate.",
+          "negativeTest": "Seed a hidden canvas/subscriber leak and fail the affected cycle instead of relying on a final garbage collection.",
+          "cleanup": "Dispose owned Editor fixture hosts and retain diagnostic artifacts without changing the required authoring matrix."
+        },
+        {
+          "id": "cycles-native-ten",
+          "lane": "game",
+          "availability": "requires-environment",
+          "oracle": "Run all ten full native Sandbox cycles against exact candidate bytes and observe independent per-cycle object, lease, input, callback and QA persistence baselines.",
+          "negativeTest": "A fake cycle, final-only resource total or unconfirmed process exit cannot satisfy native lifecycle evidence.",
+          "cleanup": "Release all session/fixture owners and confirm original process exit before any approved layout cleanup."
+        },
+        {
+          "id": "cycles-device-input",
+          "lane": "physical-device",
+          "availability": "requires-environment",
+          "oracle": "Use admitted physical input/audio devices throughout repeated cycles and record device availability, foreground identity and actual control response.",
+          "negativeTest": "A lost/disconnected device or replayed callbacks without native input observations leaves the affected branch incomplete.",
+          "cleanup": "Release every held key/button, stop capture and restore approved device settings."
+        },
+        {
+          "id": "cycles-usability-review",
+          "lane": "human",
+          "availability": "requires-human",
+          "oracle": "Review sustained usability, warning visibility, focus recovery and actual audio/device quality over repeated sessions.",
+          "negativeTest": "Declining responsiveness or confusing recovery despite stable counters is an observed failure.",
+          "cleanup": "Restore QA preferences and submit attributable review with all failed and blocked subcases."
+        }
+      ]
+    }
+  ]
+}

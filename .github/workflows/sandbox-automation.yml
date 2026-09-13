@@ -1,0 +1,62 @@
+name: Sandbox Automation
+
+on:
+  pull_request:
+    branches: [main, dev, "release/**"]
+  push:
+    branches: [main, dev, "release/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-offline-${{ github.ref }}
+  cancel-in-progress: true
+
+# Licensed Editor/game execution is local and admitted, never a PR runner.
+# This workflow has no secrets, environments, native input or release authority.
+jobs:
+  offline-contracts:
+    name: Sandbox offline contracts and admission refusal
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up pinned Dart
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: "3.12.2"
+      - name: Restore exact CLI dependencies
+        working-directory: apps/topiaforge_cli
+        run: dart pub get --enforce-lockfile
+      - name: Test Sandbox specification and independent verifiers
+        working-directory: apps/topiaforge_cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(test/sandbox_acceptance_*_test.dart test/sandbox_native_*_test.dart)
+          for file in "${tests[@]}"; do test -f "$file"; done
+          dart test "${tests[@]}"
+      - name: Check local admission refusal contracts
+        shell: pwsh
+        run: ./tools/test-sandbox-ci.ps1
+
+  broker-contracts:
+    name: Sandbox broker offline contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up pinned .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: "10.0.301"
+      - name: Exercise no-OS broker self-tests
+        run: dotnet run --project tools/TopiaForge.Acceptance.Windows -c Release -- --self-test

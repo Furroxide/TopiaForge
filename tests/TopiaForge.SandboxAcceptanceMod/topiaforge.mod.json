@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+  "schemaVersion": 6,
+  "name": "dev.topiaforge.sandbox-acceptance",
+  "displayName": "Sandbox Acceptance Fixtures",
+  "version": "0.1.0-rc.1",
+  "author": {
+    "name": "TopiaForge"
+  },
+  "description": "Non-distributable admitted-QA Sandbox automation fixture provider.",
+  "entryAssembly": "TopiaForge.SandboxAcceptanceMod.dll",
+  "entryType": "TopiaForge.SandboxAcceptance.SandboxAcceptanceMod",
+  "dependencies": {
+    "io.github.furroxide.topiaforge.creatorcontent": "0.1.0-rc.1",
+    "io.github.furroxide.topiaforge.robotkit": "0.1.0-rc.1",
+    "io.github.furroxide.topiaforge.worlds": "0.1.0-rc.1",
+    "io.github.furroxide.topiaforge.sandbox": "0.1.0-rc.1"
+  },
+  "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
+  "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+  "platforms": [
+    "windows"
+  ],
+  "architectures": [
+    "x64"
+  ],
+  "contentTargets": [
+    "code"
+  ],
+  "category": "Developer",
+  "tags": [
+    "acceptance",
+    "non-distributable"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "licenseFiles": [
+    "LICENSE"
+  ],
+  "capabilities": [
+    "world-service",
+    "robot-spawning",
+    "filesystem"
+  ],
+  "x-topiaforge-non-distributable": true
+}

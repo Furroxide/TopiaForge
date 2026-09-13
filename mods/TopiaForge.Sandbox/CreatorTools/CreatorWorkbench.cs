@@ -62,6 +62,8 @@ namespace TopiaForge.CreatorTools.Shared
         private Vec3 projectRunOrigin;
         private int nextOwnedNumber = 1;
         private bool disposed;
+        private bool endingSession;
+        private int sessionGeneration;
 
         public CreatorWorkbench(
             IModContext context,
@@ -90,7 +92,7 @@ namespace TopiaForge.CreatorTools.Shared
 
         public OperationResult<bool> Open()
         {
-            if (disposed)
+            if (disposed || endingSession)
             {
                 return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "Creator Tools is disposed.");
             }
@@ -148,20 +150,6 @@ namespace TopiaForge.CreatorTools.Shared
             return OperationResult<bool>.Success(changed);
         }
 
-        public void Dispose()
-        {
-            if (disposed) return;
-            EndSession();
-            disposed = true;
-            updateSubscription.Dispose();
-            confirmation?.Dispose();
-            window?.Dispose();
-            hud?.Dispose();
-            confirmation = null;
-            window = null;
-            hud = null;
-        }
-
         private OperationResult<bool> EnsureSession()
         {
             if (creatorSession?.IsAlive == true) return OperationResult<bool>.Success(false);
@@ -171,6 +159,7 @@ namespace TopiaForge.CreatorTools.Shared
                 return OperationResult<bool>.Failure(started.ErrorCode, started.ErrorMessage);
             }
 
+            sessionGeneration++;
             RefreshCatalog();
             RefreshNativeRoster();
             if (objectives != null)
@@ -189,11 +178,11 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void Update(float deltaTime)
         {
-            if (disposed) return;
+            if (disposed || endingSession) return;
             if (options.ProjectScope == CreatorProjectScope.Global && mutationLease != null
                 && (!mutationLease.IsAlive || !mutationLease.IsPersistenceIsolated))
             {
-                var problem = "Global persistence isolation was lost; temporary content and edits were restored.";
+                var problem = "Global persistence isolation was lost; the creator session was ended. Review any restoration warnings.";
                 requestEnd();
                 status = problem;
                 context.Ui.ShowToast(problem, UiTone.Danger);
@@ -201,7 +190,7 @@ namespace TopiaForge.CreatorTools.Shared
             }
             if (creatorSession != null && !creatorSession.IsAlive)
             {
-                var problem = "Creator session became unavailable; temporary content and edits were restored.";
+                var problem = "Creator session became unavailable; the creator session was ended. Review any restoration warnings.";
                 requestEnd();
                 status = problem;
                 context.Ui.ShowToast(problem, UiTone.Danger);
@@ -228,37 +217,11 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void RemoveDeadRosterEntries()
         {
-            var changed = false;
-            // Snapshot first, in the reverse/LIFO order the source-unload case requires. runner.Fire below is a
-            // synchronous re-entrant callback into consumer graph nodes, and those can both add to and remove
-            // from `roster` (CreatorWorkbench.ProjectBindings.cs:135 and :150), so any index held across it is
-            // stale afterwards: it either walks off the end or names a different, still-live entry that then gets
-            // disposed and dropped. Everything past the snapshot works by reference, matching the established
-            // pattern in CreatorWorkbench.Operations.cs:389.
-            var dead = new List<CreatorRosterEntry>();
-            for (var index = roster.Count - 1; index >= 0; index--)
-            {
-                if (!roster[index].IsAlive) dead.Add(roster[index]);
-            }
-
-            foreach (var entry in dead)
-            {
-                // A re-entrant callback from an earlier iteration may already have pruned this one.
-                if (!roster.Contains(entry)) continue;
-                var projectId = ProjectTargetIdForRoster(entry.Id);
-                if (!string.IsNullOrEmpty(projectId))
-                {
-                    DisposeProjectInteractions(projectId);
-                    projectEntities.Remove(projectId);
-                    if (projectBindings.Remove(projectId)) confirmedNativeProjectId = string.Empty;
-                    runner?.Fire(CreatorGraphNodeKind.EntityRemoved, projectId);
-                }
-                if (string.Equals(selectedRosterId, entry.Id, StringComparison.Ordinal)) selectedRosterId = string.Empty;
-                roster.Remove(entry);
-                entry.Dispose();
-                changed = true;
-            }
-            if (changed && window?.IsVisible == true) RefreshUi();
+            var dead = roster.Where(entry => !entry.IsAlive).Reverse().ToArray();
+            var result = OperationResult<bool>.Success(false);
+            foreach (var entry in dead) result = MergeCleanup(result, RetireRosterEntry(entry, despawn: false));
+            if (!result.Succeeded) ReportCleanupFailure("Retired target cleanup completed with problems", result);
+            if (dead.Length > 0 && window?.IsVisible == true) RefreshUi();
         }
 
         private CreatorCatalogEntry? FindCatalog(string id) =>
@@ -275,6 +238,8 @@ namespace TopiaForge.CreatorTools.Shared
 
         private OperationResult<bool> EnsureMutationAllowed()
         {
+            if (disposed || endingSession)
+                return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "Creator Tools is stopping or disposed.");
             if (CanMutate) return OperationResult<bool>.Success(true);
             var message = mutationSafety?.Status.Message;
             return OperationResult<bool>.Failure(
@@ -300,34 +265,46 @@ namespace TopiaForge.CreatorTools.Shared
                 context.Ui.ShowToast(MutationStatusText(), UiTone.Warning);
                 return;
             }
-            if (confirmation?.IsOpen == true) return;
-            var shown = context.Ui.ShowModal(
-                new UiModalRequest(
-                    "ENABLE TEMPORARY GLOBAL CHANGES?",
-                    "Creator Tools will isolate persistent save state. Owned content is removed and borrowed edits are restored when you explicitly end the session or leave the scene.",
-                    "ENABLE ISOLATION",
-                    destructive: false),
-                confirmed =>
+            var requestedGeneration = sessionGeneration;
+            ShowConfirmation(new UiModalRequest(
+                "ENABLE TEMPORARY GLOBAL CHANGES?",
+                "Creator Tools will isolate persistent save state. Owned content is removed and borrowed edits are restored when you explicitly end the session or leave the scene.",
+                "ENABLE ISOLATION", destructive: false), confirmed =>
+            {
+                if (!confirmed) return;
+                var acquired = mutationSafety.Acquire(new CreatorMutationLeaseRequest(
+                    "Global Creator Tools session", userAcknowledgedTemporaryChanges: true));
+                if (acquired.TryGetValue(out var lease))
                 {
-                    confirmation = null;
-                    if (!confirmed) return;
-                    var acquired = mutationSafety.Acquire(new CreatorMutationLeaseRequest(
-                        "Global Creator Tools session",
-                        userAcknowledgedTemporaryChanges: true));
-                    if (acquired.TryGetValue(out var lease))
+                    // Provider acquisition and disposal can synchronously end or replace this session.
+                    if (!IsCurrentSession(requestedGeneration)) { DisposeRejectedMutationLease(lease); return; }
+                    var previous = mutationLease;
+                    mutationLease = null;
+                    try { previous?.Dispose(); }
+                    catch (Exception exception)
                     {
-                        mutationLease?.Dispose();
-                        mutationLease = lease;
-                        status = "Persistence isolation enabled for this session.";
+                        DisposeRejectedMutationLease(lease);
+                        ReportCleanupFailure("Persistence isolation cleanup failed", OperationResult<bool>.Failure(ModErrorCode.External, exception.Message));
+                        return;
                     }
-                    else
-                    {
-                        status = acquired.ErrorMessage;
-                        context.Ui.ShowToast(status, UiTone.Danger);
-                    }
-                    RefreshUi();
-                });
-            shown.TryGetValue(out confirmation);
+                    if (!IsCurrentSession(requestedGeneration)) { DisposeRejectedMutationLease(lease); return; }
+                    mutationLease = lease;
+                    status = "Persistence isolation enabled for this session.";
+                }
+                else
+                {
+                    if (!IsCurrentSession(requestedGeneration)) return;
+                    status = acquired.ErrorMessage;
+                    context.Ui.ShowToast(status, UiTone.Danger);
+                }
+                RefreshUi();
+            });
+        }
+
+        private void DisposeRejectedMutationLease(ICreatorMutationLease lease)
+        {
+            try { lease.Dispose(); }
+            catch (Exception exception) { context.Logger.Warn("Retired persistence isolation lease cleanup failed: " + exception.Message); }
         }
 
         private RobotTargetSnapshot? ResolvePlayerTarget() =>

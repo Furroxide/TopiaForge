@@ -13,25 +13,27 @@ namespace TopiaForge.ModManager
             UiNode node,
             TopiaForgeContainer parent,
             UiCallbackGate callbacks,
-            UiGraphRetentionTransaction graphs)
+            UiGraphRetentionTransaction graphs,
+            string surfaceId)
         {
             if (node is UiText text)
             {
-                parent.Label(text.Text, ToNativeTextStyle(text.Style)).Tone(ToNativeTone(text.Tone));
+                var native = parent.Label(text.Text, ToNativeTextStyle(text.Style)).Tone(ToNativeTone(text.Tone));
+                if (text.Id != null) TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, text.Id, "text", text.Text, text.Style.ToString());
                 return;
             }
 
             if (node is UiColumn column)
             {
                 var container = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
-                foreach (var child in column.Children) RenderNode(child, container, callbacks, graphs);
+                foreach (var child in column.Children) RenderNode(child, container, callbacks, graphs, surfaceId);
                 return;
             }
 
             if (node is UiRow row)
             {
                 var container = parent.Row(TopiaForgeGap.Sm, TopiaForgeGap.None);
-                foreach (var child in row.Children) RenderNode(child, container, callbacks, graphs);
+                foreach (var child in row.Children) RenderNode(child, container, callbacks, graphs, surfaceId);
                 return;
             }
 
@@ -39,7 +41,7 @@ namespace TopiaForge.ModManager
             {
                 var scroll = parent.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None)
                     .FixedHeight(scrollNode.Height);
-                RenderNode(scrollNode.Content, scroll.Content, callbacks, graphs);
+                RenderNode(scrollNode.Content, scroll.Content, callbacks, graphs, surfaceId);
                 return;
             }
 
@@ -52,8 +54,8 @@ namespace TopiaForge.ModManager
                         .Flex(split.PrimaryFraction, 1f);
                     var secondary = splitRow.Column(TopiaForgeGap.Sm, TopiaForgeGap.None)
                         .Flex(1f - split.PrimaryFraction, 1f);
-                    RenderNode(split.Primary, primary, callbacks, graphs);
-                    RenderNode(split.Secondary, secondary, callbacks, graphs);
+                    RenderNode(split.Primary, primary, callbacks, graphs, surfaceId);
+                    RenderNode(split.Secondary, secondary, callbacks, graphs, surfaceId);
                 }
                 else
                 {
@@ -62,8 +64,8 @@ namespace TopiaForge.ModManager
                         .Flex(1f, split.PrimaryFraction);
                     var secondary = splitColumn.Column(TopiaForgeGap.Sm, TopiaForgeGap.None)
                         .Flex(1f, 1f - split.PrimaryFraction);
-                    RenderNode(split.Primary, primary, callbacks, graphs);
-                    RenderNode(split.Secondary, secondary, callbacks, graphs);
+                    RenderNode(split.Primary, primary, callbacks, graphs, surfaceId);
+                    RenderNode(split.Secondary, secondary, callbacks, graphs, surfaceId);
                 }
 
                 return;
@@ -82,6 +84,7 @@ namespace TopiaForge.ModManager
                     callbacks.Wrap(button.Activated, "button '" + button.Id + "'"),
                     ToNativeButtonStyle(button.Style));
                 native.SetEnabled(button.Enabled);
+                TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, button.Id!, "button", button.Label);
                 return;
             }
 
@@ -92,6 +95,7 @@ namespace TopiaForge.ModManager
                     toggle.Value,
                     callbacks.Wrap(toggle.Changed, "toggle '" + toggle.Id + "'"));
                 native.SetEnabled(toggle.Enabled);
+                TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, toggle.Id!, "toggle", toggle.Label);
                 return;
             }
 
@@ -104,6 +108,7 @@ namespace TopiaForge.ModManager
                     slider.Value,
                     callbacks.Wrap(slider.Changed, "slider '" + slider.Id + "'"));
                 native.SetEnabled(slider.Enabled);
+                TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, slider.Id!, "slider", slider.Label);
                 return;
             }
 
@@ -117,6 +122,7 @@ namespace TopiaForge.ModManager
                     callbacks.Wrap(input.Changed, "text input '" + input.Id + "'"));
                 native.SetCharacterLimit(input.MaximumLength);
                 native.SetEnabled(input.Enabled);
+                TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, input.Id!, "input", input.Label);
                 return;
             }
 
@@ -146,6 +152,7 @@ namespace TopiaForge.ModManager
                     }
                 });
                 native.SetEnabled(dropdown.Enabled);
+                TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, dropdown.Id!, "dropdown", dropdown.Label);
                 return;
             }
 
@@ -155,6 +162,7 @@ namespace TopiaForge.ModManager
                     .FixedHeight(list.VisibleRows * (TopiaForgeTokens.ListRowHeight + 4f));
                 native.Bind((row, item, _) =>
                 {
+                    TopiaForgeUiDiagnostics.TagWidget(row, surfaceId, list.Id + "/" + item.Id, "list-item", item.Title);
                     row.Title.SetText(item.Title);
                     row.Subtitle.SetText(item.Subtitle);
                     row.Badge.Set(item.Badge, TopiaForgeTone.Neutral);
@@ -168,6 +176,7 @@ namespace TopiaForge.ModManager
                 });
                 native.SetItems(list.Items);
                 native.SetEnabled(list.Enabled);
+                TopiaForgeUiDiagnostics.TagWidget(native, surfaceId, list.Id!, "list", "");
                 if (list.SelectedItemId != null)
                 {
                     for (var index = 0; index < list.Items.Count; index++)

@@ -1,0 +1,515 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.sandbox-workbench-acceptance-v1.schema.json",
+  "title": "TopiaForge supplementary Sandbox workbench offline specification V1",
+  "description": "Requirements inventory only: nine fixed ordered manual-matrix scenarios with deterministic offline fixture oracles and explicit residual native, Editor, device and human requirements. This document supplies no observed result, process attestation or release qualification.",
+  "$comment": "Input is capped at 262144 bytes by the application parser. The byte parser additionally rejects duplicate JSON property names, more than 12000 structural nodes, depth greater than 16, oversized property names, repeated oracle metric IDs and globally repeated residual IDs. These application checks remain required; JSON Schema alone is not the admission mechanism. For each positive equals/count exercise oracle, the verifier requires a zero before value and the prescribed positive after value in every sample; stale nonzero counters cannot prove an exercised action.",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 5,
+  "maxProperties": 5,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "gameBuild",
+    "scope",
+    "scenarios"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "kind": {
+      "const": "sandbox-workbench-acceptance-v1"
+    },
+    "gameBuild": {
+      "type": "integer",
+      "const": 2409
+    },
+    "scope": {
+      "const": "supplementary-offline-contracts"
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "additionalItems": false,
+      "items": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "routing"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "catalog-editing"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "borrowed-robot"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "source-unload"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "hide-reopen"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "persistence-refusal"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "graph-rollback"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "lifecycle-routes"
+                },
+                "requiredSamples": {
+                  "const": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/scenario"
+            },
+            {
+              "properties": {
+                "id": {
+                  "const": "ten-cycles"
+                },
+                "requiredSamples": {
+                  "const": 10
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "allOf": [
+        {
+          "pattern": "[^\\s]"
+        },
+        {
+          "not": {
+            "pattern": "[\\u0000-\\u001F\\u007F]"
+          }
+        }
+      ]
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9-]{0,79}$"
+    },
+    "texts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/text"
+      }
+    },
+    "oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 4,
+      "maxProperties": 4,
+      "required": [
+        "metric",
+        "type",
+        "comparison",
+        "expected"
+      ],
+      "properties": {
+        "metric": {
+          "$ref": "#/definitions/identifier"
+        },
+        "type": {
+          "enum": [
+            "count",
+            "fingerprint",
+            "label"
+          ]
+        },
+        "comparison": {
+          "enum": [
+            "equals",
+            "unchanged"
+          ]
+        },
+        "expected": {}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "comparison": {
+                "const": "unchanged"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "count"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "expected": {
+                      "$ref": "#/definitions/count"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "fingerprint"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "expected": {
+                      "$ref": "#/definitions/fingerprint"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "label"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "expected": {
+                      "$ref": "#/definitions/label"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "residualRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 6,
+      "maxProperties": 6,
+      "required": [
+        "id",
+        "lane",
+        "availability",
+        "oracle",
+        "negativeTest",
+        "cleanup"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "lane": {
+          "enum": [
+            "editor",
+            "game",
+            "os-input",
+            "physical-device",
+            "human"
+          ]
+        },
+        "availability": {
+          "enum": [
+            "requires-environment",
+            "not-implemented",
+            "requires-human"
+          ]
+        },
+        "oracle": {
+          "$ref": "#/definitions/text"
+        },
+        "negativeTest": {
+          "$ref": "#/definitions/text"
+        },
+        "cleanup": {
+          "$ref": "#/definitions/text"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "lane": {
+                "const": "human"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "availability": {
+                "const": "requires-human"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "availability": {
+                "enum": [
+                  "requires-environment",
+                  "not-implemented"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 9,
+      "maxProperties": 9,
+      "required": [
+        "id",
+        "title",
+        "fixture",
+        "requiredSamples",
+        "actions",
+        "cleanup",
+        "negativeTests",
+        "oracles",
+        "residualRequirements"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "title": {
+          "$ref": "#/definitions/text"
+        },
+        "fixture": {
+          "$ref": "#/definitions/text"
+        },
+        "requiredSamples": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "actions": {
+          "$ref": "#/definitions/texts"
+        },
+        "cleanup": {
+          "$ref": "#/definitions/texts"
+        },
+        "negativeTests": {
+          "$ref": "#/definitions/texts"
+        },
+        "oracles": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/oracle"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "comparison",
+                  "expected"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "count"
+                  },
+                  "comparison": {
+                    "const": "equals"
+                  },
+                  "expected": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000
+                  }
+                }
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "required": [
+                  "comparison"
+                ],
+                "properties": {
+                  "comparison": {
+                    "const": "unchanged"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "residualRequirements": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/residualRequirement"
+          }
+        }
+      }
+    }
+  }
+}
