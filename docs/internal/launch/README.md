@@ -1,6 +1,6 @@
 # RC1 launch preparation
 
-Updated 2026-09-11. **Release readiness remains blocked.** This is the maintainer entry point for `0.1.0-rc.1` preparation, the user's decisions, review requests, setup plans and retained evidence. Prepared documents are not completed reviews or executed acceptance.
+Updated 2026-09-13. **Release readiness remains blocked.** This is the maintainer entry point for `0.1.0-rc.1` preparation, the user's decisions, review requests, setup plans and retained evidence. Prepared documents are not completed reviews or executed acceptance.
 
 The source/evidence baseline is release commit `437733854795c11e684eac9d59d6bc52ada9516e`, tree `976326d02fd68b19a2e10bde923e15510df441a6`. It is not the final `main` candidate. The local documentation refresh and Sandbox source changes need normal review and integration; earlier CI applies to its recorded source only.
 
@@ -19,7 +19,7 @@ clarification and limited PR #130 merge authorization, and [Evidence](Evidence.m
 for source-specific results, the subsequent native shutdown failure and remaining
 requirements. The final `main` merge remains the user's action in PR #119.
 
-The 2026-09-11 retry ran the game and reached Unity OnApplicationQuit, but again exceeded the 90-second deadline. Original-game exit was confirmed after forced cleanup; the task was removed. Successful provisioning and admission remain blocked; investigate the shutdown diagnostics before another operator session. See the [observer runbook](runtime-provisioning-observer.md).
+The 2026-09-11 retry ran the game and reached Unity OnApplicationQuit, but again exceeded the 90-second deadline. Original-game exit was confirmed after forced cleanup; the task was removed. A diagnostic launch mode that retains the Unity log and read-only runtime snapshots is now verified on a fixture player, and retry `20260911T183026Z` is staged and refusal-checked without being dispatched. Successful provisioning and admission remain blocked until one bounded operator session, confirmed by the user, produces an unforced exit. See the [observer runbook](runtime-provisioning-observer.md).
 
 ## Start here
 
@@ -37,11 +37,11 @@ The 2026-09-11 retry ran the game and reached Unity OnApplicationQuit, but again
 | Third-party redistribution | [Reviewer request](oss-redistribution-review-request.md) | Prepared; decisions pending |
 | Remote AI/token/audio privacy and backend use | [Reviewer request](privacy-backend-review-request.md) | Prepared; decisions pending |
 | Separate Windows QA context and neutral build paths | [Setup plan](isolated-qa-setup-plan.md) | QA account/roots, verified game copies and development inputs provisioned; privately chosen password confirmed set. Normal first sign-in and native host/device measurements confirmed; Unity persistence recorded privately during a failed shutdown attempt; clean retry and isolation admission pending. Neutral release build remains a plan |
-| Actual Unity persistence before admission | [Provisioning observer](runtime-provisioning-observer.md) | Actual path recorded privately; first headless attempt **failed** on shutdown timeout and required owned-process termination. Correction reached Update and OnApplicationQuit on September 11, but shutdown still timed out. All failures and cleanup are retained; diagnose before a new run, then obtain successful completion and attributable review |
+| Actual Unity persistence before admission | [Provisioning observer](runtime-provisioning-observer.md) | Actual path recorded privately; first headless attempt **failed** on shutdown timeout and required owned-process termination. Correction reached Update and OnApplicationQuit on September 11, but shutdown still timed out. All failures and cleanup are retained. The diagnostic launch mode is verified on a fixture player and retry `20260911T183026Z` is staged; one confirmed operator session, then successful completion and attributable review remain required |
 | Complete continuation instructions | [Full completion prompt](CompletionPrompt.md) | Current scope, remaining implementation, approvals, QA state and final release sequence; reverify before acting |
 | Protected governance audit token | [Secure setup instructions](governance-audit-token-setup.md) | Prepared; configuration pending |
 | Update-signing seed recovery and duplicate cleanup | [Administrator checklist](update-signing-recovery-cleanup-checklist.md) | Prepared; no recovery or cleanup executed |
-| All nine Sandbox workbench scenarios | [Implementation plan](sandbox-automation-implementation-plan.md), [stages 1–2](sandbox-automation-stages-1-2.md) and [stages 3–6 handoff](sandbox-automation-stages-3-6.md) | Offline and Editor evidence recorded; native runner/broker/CI tooling exists. Full native matrix implementation/execution and exact-source Editor rerun remain incomplete |
+| All nine Sandbox workbench scenarios | [Implementation plan](sandbox-automation-implementation-plan.md), [stages 1–2](sandbox-automation-stages-1-2.md), [stages 3–6 handoff](sandbox-automation-stages-3-6.md) and [native matrix completion contract](sandbox-native-matrix-completion.md) | Offline and Editor evidence recorded; native runner/broker/CI tooling exists. Protocol v2 closes the nine-row gap table in source and the exact-source Editor rerun passed on 2026-09-13; admitted native execution remains pending |
 | Native launcher and in-game UX/accessibility | [Operator handoff](native-ux-accessibility-handoff.md) | Prepared; user nominated as operator, QA account/roots provisioned; admission, reviewer roles and execution pending |
 | Independent player and author journeys | [Tester handoff](independent-tester-handoff.md) | Prepared; testers and execution pending |
 
