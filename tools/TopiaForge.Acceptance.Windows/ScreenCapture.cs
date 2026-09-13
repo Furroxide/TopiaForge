@@ -37,7 +37,8 @@ internal static class ScreenCapture
         return info.Device;
     }
 
-    internal static ScreenFact Capture(OwnedGameProbe game, DeviceProfile profile, string root, string relative)
+    /// Returns the retained fact and the captured BGRA pixels for reviewed baseline comparison.
+    internal static (ScreenFact Fact, byte[] Pixels) Capture(OwnedGameProbe game, DeviceProfile profile, string root, string relative)
     {
         game.RequireForeground(profile.Width, profile.Height, profile.Dpi);
         RequireMonitor(game.Window, profile.DisplayName);
@@ -69,7 +70,7 @@ internal static class ScreenCapture
                 writer.Write(0); writer.Write(pixels.Length); writer.Write(0); writer.Write(0); writer.Write(0); writer.Write(0); writer.Write(pixels);
                 writer.Flush(); stream.Flush(true);
             }
-            return new(relative, profile.Width, profile.Height, CountColors(pixels), BoundedJson.Hash(path), new FileInfo(path).Length);
+            return (new(relative, profile.Width, profile.Height, CountColors(pixels), BoundedJson.Hash(path), new FileInfo(path).Length), pixels);
         }
         finally
         {

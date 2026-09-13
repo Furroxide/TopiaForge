@@ -20,11 +20,13 @@ namespace TopiaForge.SandboxAcceptance.Native
         internal static readonly string[] Ids = { "routing", "catalog-editing", "borrowed-robot", "source-unload", "hide-reopen",
             "persistence-refusal", "graph-rollback", "lifecycle-routes", "ten-cycles" };
         private readonly Dictionary<string, int> completed = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly HashSet<int> graphAudioIds = new HashSet<int>();
         private List<SandboxNativeStep> steps = new List<SandboxNativeStep>();
         private Dictionary<string, object?> baseline = new Dictionary<string, object?>();
         private Dictionary<string, object?> prior = new Dictionary<string, object?>();
         private Dictionary<string, object?>? preGraph;
         private Dictionary<string, object?>? opened;
+        private Dictionary<string, object?>? externalWrite;
         private string scenario = "";
         private int cycle;
         private int index;
@@ -34,7 +36,19 @@ namespace TopiaForge.SandboxAcceptance.Native
         private string state = "idle";
         private string reason = "";
         private bool selectingBorrowed;
-        internal static int Cycles(string id) => id == "ten-cycles" ? 10 : id == "lifecycle-routes" ? 3 : 1;
+        private int lastAddedInstanceId;
+        private int previewedPersonalityId;
+        internal static int Cycles(string id)
+        {
+            switch (id)
+            {
+                case "routing": case "source-unload": case "graph-rollback": return 2;
+                case "borrowed-robot": case "lifecycle-routes": return 3;
+                case "ten-cycles": return 10;
+                default: return 1;
+            }
+        }
+        internal IReadOnlyList<SandboxNativeStep> Steps => steps;
         internal void Begin(string id, int requestedCycle, long observedFrame, long milliseconds, Dictionary<string, object?> facts)
         {
             if (state == "waiting") throw new InvalidDataException("The current scenario has not ended.");
@@ -44,9 +58,10 @@ namespace TopiaForge.SandboxAcceptance.Native
             if (Text(facts, "targetId") != SandboxAcceptanceMod.SandboxTargetId || Text(facts, "sessionPhase") != "Running")
                 throw new InvalidDataException("The actual Sandbox session must be running.");
             if (Text(facts, "worldSessionId").Length == 0) throw new InvalidDataException("No actual Worlds session identity.");
-            steps = Expand(id, facts);
+            steps = Expand(id, requestedCycle, facts);
             scenario = id; cycle = requestedCycle; index = 0; frame = observedFrame; beganAt = stepAt = milliseconds;
-            baseline = prior = facts; preGraph = null; opened = null; selectingBorrowed = false; reason = ""; state = "waiting";
+            baseline = prior = facts; preGraph = null; opened = null; externalWrite = null; selectingBorrowed = false;
+            lastAddedInstanceId = 0; previewedPersonalityId = 0; graphAudioIds.Clear(); reason = ""; state = "waiting";
         }
         internal bool Matches(string id, int requestedCycle) => scenario == id && cycle == requestedCycle && state == "waiting";
         internal string ExpectedAction => state == "waiting" ? steps[index].Action : "";
@@ -59,10 +74,10 @@ namespace TopiaForge.SandboxAcceptance.Native
             try
             {
                 if (Rows(facts, "cleanupErrors").Length != 0) { state = "failed"; reason = "fixture-cleanup-error"; return; }
-                if (!Observe(steps[index].Action, facts)) { reason = "waiting-for-native-postcondition:" + steps[index].Action; return; }
-                if (steps[index].Action == "open") opened = facts;
-                if (steps[index].Action == "select-borrowed") selectingBorrowed = true;
-                if (steps[index].Action == "run-graph") preGraph = prior;
+                TrackGraphAudio(facts);
+                var action = steps[index].Action;
+                if (!Observe(action, facts)) { reason = "waiting-for-native-postcondition:" + action; return; }
+                Record(action, facts);
                 frame = observedFrame; stepAt = milliseconds; prior = facts; reason = ""; index++;
                 if (index == steps.Count) { completed[scenario] = cycle; state = "observed"; }
             }
@@ -74,50 +89,26 @@ namespace TopiaForge.SandboxAcceptance.Native
             facts["nextAction"] = ExpectedAction; facts["completedCycles"] = completed.TryGetValue(scenario, out var count) ? count : 0;
             facts["actionCatalogRowId"] = state == "waiting" ? steps[index].RowId : "";
             facts["actionCatalogDisplayName"] = state == "waiting" ? steps[index].Label : "";
+            // Measured identities the verifier recomputes independently: graph audio hosts seen while the cycle's
+            // graph ran and the personality asset previewed on the borrowed robot.
+            facts["graphAudioIds"] = graphAudioIds.OrderBy(value => value).ToArray();
+            facts["previewedPersonalityId"] = previewedPersonalityId;
         }
-        private static List<SandboxNativeStep> Expand(string id, Dictionary<string, object?> facts)
+        // Step-boundary bookkeeping; only a satisfied postcondition reaches here.
+        private void Record(string action, Dictionary<string, object?> facts)
         {
-            var result = new List<SandboxNativeStep>();
-            void Add(params string[] actions) { result.AddRange(actions.Select(a => new SandboxNativeStep(a))); }
-            if (id == "persistence-refusal") { Add("observe-refusal"); return result; }
-            Add("open");
-            switch (id)
-            {
-                case "routing": Add("hide", "reopen", "end-session"); break;
-                case "catalog-editing":
-                    var entries = Maps(facts, "catalog").Concat(Maps(facts, "robotCatalog")).ToArray();
-                    if (entries.Length == 0 || entries.Length > 256) throw new InvalidDataException("Admitted catalog must contain 1–256 entries.");
-                    foreach (var entry in entries)
-                    {
-                        var row = Text(entry, "rowId"); var label = Text(entry, "displayName");
-                        // Native vehicle absence is explicit metadata; custom validated vehicle adapters remain testable.
-                        result.Add(new SandboxNativeStep("spawn-catalog", row, label));
-                        var caps = Number(entry, "transformCapabilities");
-                        if ((caps & 1) != 0) result.Add(new SandboxNativeStep("edit-transform", row, label));
-                        if ((caps & 2) != 0) result.Add(new SandboxNativeStep("edit-rotation", row, label));
-                        if ((caps & 4) != 0) result.Add(new SandboxNativeStep("edit-scale", row, label));
-                        result.Add(new SandboxNativeStep("duplicate", row, label));
-                        result.Add(new SandboxNativeStep("remove", row, label));
-                        result.Add(new SandboxNativeStep("remove", row, label));
-                    }
-                    Add("end-session"); break;
-                case "borrowed-robot": Add("select-borrowed", "edit-transform", "edit-personality", "edit-brain", "end-session"); break;
-                case "source-unload": Add("spawn-prop", "duplicate", "unregister-source", "end-session"); break;
-                case "hide-reopen": Add("spawn-prop", "hide", "move-player", "reopen", "end-session"); break;
-                case "graph-rollback": Add("spawn-prop", "run-graph", "stop-graph", "end-session"); break;
-                case "lifecycle-routes": Add("spawn-prop", "stop-world-session"); break;
-                case "ten-cycles": Add("spawn-prop", "select-borrowed", "edit-transform", "edit-personality", "edit-brain", "hide", "move-player", "reopen", "run-graph", "stop-graph", "end-session"); break;
-            }
-            return result;
+            if (action == "open") opened = facts;
+            if (action == "select-borrowed") selectingBorrowed = true;
+            if (action == "run-graph") preGraph = prior;
+            if (action == "external-write") externalWrite = facts;
+            if (action == "edit-personality") previewedPersonalityId = Number(Map(Map(facts, "borrowedRobot"), "brain"), "hackedPersonalityId");
+        }
+        private void TrackGraphAudio(Dictionary<string, object?> facts)
+        {
+            if (!facts.TryGetValue("graphAudioSources", out var value) || !(value is IEnumerable rows)) return;
+            foreach (var row in rows)
+                if (row is Dictionary<string, object?> map && map.TryGetValue("instanceId", out var id) && id is int instanceId) graphAudioIds.Add(instanceId);
         }
         private sealed class MissingObservation : Exception { internal MissingObservation(string message) : base(message) { } }
-        private static object Required(Dictionary<string, object?> map, string key) => map.TryGetValue(key, out var value) && value != null ? value : throw new MissingObservation("native-observation-unavailable:" + key);
-        private static string Text(Dictionary<string, object?> map, string key) => Required(map, key) is string value ? value : throw new MissingObservation("native-string-unavailable:" + key);
-        private static int Number(Dictionary<string, object?> map, string key) => Required(map, key) is int value ? value : throw new MissingObservation("native-counter-unavailable:" + key);
-        private static bool Boolean(Dictionary<string, object?> map, string key) => Required(map, key) is bool value ? value : throw new MissingObservation("native-boolean-unavailable:" + key);
-        private static Dictionary<string, object?> Map(Dictionary<string, object?> map, string key) => Required(map, key) as Dictionary<string, object?> ?? throw new MissingObservation("native-object-unavailable:" + key);
-        private static object[] Rows(Dictionary<string, object?> map, string key) => Required(map, key) is IEnumerable values ? values.Cast<object>().ToArray() : throw new MissingObservation("native-array-unavailable:" + key);
-        private static Dictionary<string, object?>[] Maps(Dictionary<string, object?> map, string key) => Rows(map, key).Select(value => value as Dictionary<string, object?> ?? throw new MissingObservation("native-row-unavailable:" + key)).ToArray();
-        private static bool Same(object? a, object? b) => SandboxWireCodec.Serialize(a).SequenceEqual(SandboxWireCodec.Serialize(b));
     }
 }

@@ -16,6 +16,8 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText("SCENE ROSTER", UiTextStyle.Heading),
                 new UiText("Owned objects can be duplicated or removed. Native scene targets are temporary, reversible edits only.", UiTextStyle.Caption),
                 BuildRosterList(),
+                // Roster action row. Native discovery sits on its own row so the narrow left pane never clips
+                // the trailing action (the seven project actions were split for the same reason).
                 new UiRow(
                     new UiButton("duplicate-selected", "Duplicate", () => Execute(DuplicateSelected), UiButtonStyle.Secondary, selected != null && CanMutate),
                     new UiButton(
@@ -25,6 +27,8 @@ namespace TopiaForge.CreatorTools.Shared
                         UiButtonStyle.Danger,
                         selected?.Owned == true || selected?.NativeTarget != null
                             && (selected.NativeTarget.Capabilities & CreatorSceneTargetCapabilities.TemporaryVisibility) != 0),
+                    new UiButton("undo-last", "Undo", () => Execute(Undo), UiButtonStyle.Ghost, history.Count > 0)),
+                new UiRow(
                     new UiButton("refresh-native", "Discover native targets", () => ExecuteBool(RefreshNativeRoster), UiButtonStyle.Ghost)));
             var center = new UiColumn(BuildProjectContent());
             var right = new UiColumn(

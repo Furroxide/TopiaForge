@@ -38,10 +38,14 @@ namespace TopiaForge.Mods.UnityUi
             public float Duration;
         }
 
+        /// <summary>Owner id of the process-wide toast host; enable diagnostics for it to observe "$toast" nodes.</summary>
+        public const string DiagnosticsOwnerId = "io.github.furroxide.topiaforge.ui.toasts";
+
         private static readonly List<ToastView> Views = new List<ToastView>();
         private static readonly Queue<Pending> Queue = new Queue<Pending>();
         private static TopiaForgeContainer? layer;
         private static bool queueOverflowLogged;
+        private static long presentedSequence;
 
         /// <summary>Shows a toast (queues when 4 are already visible).</summary>
         public static void Show(string text, TopiaForgeTone tone = TopiaForgeTone.Neutral, float duration = DefaultDuration)
@@ -200,7 +204,18 @@ namespace TopiaForge.Mods.UnityUi
             view.Leaving = false;
             view.RemainingSeconds = pending.Duration;
             view.Root.Go.SetActive(true);
+            // Every presentation is a fresh entrance: a pooled view keeps the exit position and zero alpha of its
+            // last dismissal, and Restack only slides in and fades in views parked at the origin.
+            view.Root.Rect.anchoredPosition = Vector2.zero;
             view.Label!.text = pending.Text;
+            // Process-monotonic node ids: a pooled view re-presented later carries a new sequence, and an
+            // inactive pooled view keeps its last tag so observers see it as visible: false.
+            var sequence = ++presentedSequence;
+            if (TopiaForgeUiDiagnostics.IsObserved(DiagnosticsOwnerId))
+            {
+                TopiaForgeUiDiagnostics.TagWidget(view.Root, TopiaForgeUiDiagnosticFormat.ToastSurface,
+                    TopiaForgeUiDiagnosticFormat.ToastNode(sequence), TopiaForgeUiDiagnosticFormat.ToastKind, pending.Text, pending.Tone.ToString());
+            }
 
             // Dark chip styling with a tone-colored ring; readable over anything.
             var hudTheme = new TopiaForgeResolvedTheme(TopiaForgeScheme.Hud, null);
@@ -295,7 +310,7 @@ namespace TopiaForge.Mods.UnityUi
 
         public static UiHost Instance => instance ??= TopiaForgeUi.Create(new TopiaForgeUiOptions
         {
-            OwnerId = "io.github.furroxide.topiaforge.ui.toasts"
+            OwnerId = TopiaForgeToasts.DiagnosticsOwnerId
         });
 
         public static void Reset()

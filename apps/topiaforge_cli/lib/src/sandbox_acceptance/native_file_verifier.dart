@@ -5,6 +5,7 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 import 'native_annex.dart';
 import 'native_annex_verifier.dart';
+import 'native_expected_catalog.dart';
 import 'native_io.dart';
 import 'native_options.dart';
 import 'native_transcript_oracles.dart';
@@ -193,6 +194,15 @@ Future<SandboxNativeVerification> verifySandboxNativeFiles(
     ),
   );
   final spec = SandboxSpecification.parse(read(paths.specPath));
+  final deviceProfile = sandboxDocument(
+    read(paths.deviceProfilePath),
+    'device',
+  );
+  final expectedCatalog = SandboxExpectedCatalog.parse(
+    read(
+      nativeChild(p.dirname(paths.driverManifestPath), expectedCatalogFileName),
+    ),
+  );
   final oracles = evaluateSandboxNativeTranscript(
     annex: annex,
     transcriptBytes: transcriptBytes,
@@ -200,11 +210,9 @@ Future<SandboxNativeVerification> verifySandboxNativeFiles(
     audioMeasurements: audioMeasurements,
     screenMeasurements: screenMeasurements,
     audioEndpointId:
-        sandboxObject(
-              sandboxDocument(read(paths.deviceProfilePath), 'device')['audio'],
-              'audio',
-            )['endpointId']!
-            as String,
+        sandboxObject(deviceProfile['audio'], 'audio')['endpointId']! as String,
+    expectedCatalog: expectedCatalog,
+    screenBaselineSteps: nativeScreenBaselineSteps(deviceProfile),
   );
   final result = SandboxNativeAnnexVerifier().verify(
     annex,

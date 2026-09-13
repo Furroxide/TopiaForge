@@ -131,6 +131,8 @@ namespace TopiaForge.SandboxAcceptance
             var result = UnregisterSource();
             foreach (var source in sources.ToArray())
                 try { source.Dispose(); } catch (Exception exception) { errors.Add(exception.Message); }
+            // Protocol v2 control owners (competing host, control cue, control robot) are reversed here as well.
+            ReleaseControls();
             if (save != null) return OperationResult<bool>.Failure(ModErrorCode.Conflict, "Fixture save must finish before cleanup can delete its own project.");
             if (library != null && IsChallenge(Challenge) && deletion == null) deletion = library.DeleteAsync(ProjectId);
             ownedSession = null;
@@ -155,10 +157,16 @@ namespace TopiaForge.SandboxAcceptance
                 RobotTypes = robots?.RobotTypes.Select(t => t.Id).OrderBy(id => id, StringComparer.Ordinal).Take(256).ToArray() ?? Array.Empty<string>(),
                 Objects = sources.Select(s => s.Snapshot()).ToArray(), CreatedObjects = sources.Count,
                 DisposedObjects = sources.Count(s => s.Disposed), CleanupErrors = errors.Take(64).ToArray(), UnavailableReasons = unavailable.ToArray(),
-                MutationSafetyState = safety?.Status.State.ToString() ?? "Unavailable", PersistenceIsolationAvailable = safety?.Status.PersistenceIsolationAvailable == true
+                MutationSafetyState = safety?.Status.State.ToString() ?? "Unavailable", PersistenceIsolationAvailable = safety?.Status.PersistenceIsolationAvailable == true,
+                CompetingHostRegistered = CompetingHostRegistered, CompetingHostCanOpenCalls = competing.CanOpenCalls,
+                CompetingHostOpenCalls = competing.OpenCalls, CompetingHostCloseCalls = competing.CloseCalls,
+                ControlCuePlaying = ControlCuePlaying, ControlRobotEntityId = controlRobot?.Id ?? "", ControlRobotAlive = ControlRobot != null
             };
             if (Context.LocalPlayer.TryGetSnapshot(out var player) && player != null)
+            {
                 snapshot.PlayerPosition = new[] { player.Position.X, player.Position.Y, player.Position.Z };
+                snapshot.PlayerAim = new[] { player.AimRay.Direction.X, player.AimRay.Direction.Y, player.AimRay.Direction.Z };
+            }
             return snapshot;
         }
         private static bool IsChallenge(string value) => value != null && value.Length == 64 && value.All(c => c >= '0' && c <= '9' || c >= 'a' && c <= 'f');

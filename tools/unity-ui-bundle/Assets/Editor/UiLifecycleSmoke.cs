@@ -26,6 +26,7 @@ namespace TopiaForge
         private static Snapshot baseline;
         private static int verificationAttempts;
         private static string evidencePath;
+        private static IDisposable toastObservation;
 
         public static void Run()
         {
@@ -89,9 +90,13 @@ namespace TopiaForge
                 Snapshot.Capture(uiAssembly).AssertRuntimeStateEquals(baseline, Cycles);
 
                 var toneType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeTone");
+                // Observe the toast host explicitly: the presented toast must surface as a "$toast" node with the
+                // measured fields of the diagnostics contract, and shutdown must leave that owner empty.
+                toastObservation = UiSmokeRuntimeSnapshot.EnableToastDiagnostics(uiAssembly);
                 RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeToasts")
                     .GetMethod("Show", BindingFlags.Public | BindingFlags.Static)
                     .Invoke(null, new object[] { "Lifecycle smoke toast", Enum.Parse(toneType, "Success"), 1f });
+                UiSmokeRuntimeSnapshot.AssertToastObserved(uiAssembly, "Lifecycle smoke toast", "Success");
                 RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeUi")
                     .GetMethod("Shutdown", BindingFlags.Public | BindingFlags.Static)
                     .Invoke(null, null);
@@ -196,6 +201,14 @@ namespace TopiaForge
 
                 EditorApplication.update -= VerifyDestroyedCanvases;
                 current.AssertEquals(baseline, "post-destroy verification");
+                var retainedToasts = UiSmokeRuntimeSnapshot.ToastDiagnosticWidgetCount(uiAssembly);
+                if (retainedToasts != 0)
+                {
+                    throw new InvalidOperationException("Toast diagnostics retained " + retainedToasts + " node(s) after shutdown.");
+                }
+
+                toastObservation?.Dispose();
+                toastObservation = null;
                 WriteEvidence();
                 Debug.Log("[UiLifecycleSmoke] PASS: " + Cycles
                     + " create/show/modal/clear/dispose cycles returned every tracked baseline.");
@@ -324,6 +337,7 @@ namespace TopiaForge
                 + "  \"editorVersion\": \"" + Application.unityVersion + "\",\n"
                 + "  \"cycles\": " + Cycles + ",\n"
                 + "  \"validatorSmoke\": true,\n"
+                + "  \"toastDiagnostics\": true,\n"
                 + "  \"worldsAssemblyVersion\": \"" + worldsAssembly.GetName().Version + "\",\n"
                 + "  \"uiAssemblyVersion\": \"" + uiAssembly.GetName().Version + "\"\n"
                 + "}\n";

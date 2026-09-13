@@ -147,6 +147,16 @@ namespace TopiaForge.ModManager.Tests
                 CreatorWorkbenchLifecycleTests.Run();
                 CreatorWorkbenchCleanupFailureTests.Run();
                 SandboxWorkbenchRollbackTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--ui-diagnostics", StringComparison.Ordinal))
+            {
+                UiKitCoreTests.Run();
+                UiDiagnosticsContractTests.Run();
+                UiKitSourceConventionTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
                 return 0;
             }
 
@@ -238,6 +248,7 @@ namespace TopiaForge.ModManager.Tests
                 CreatorWorkbenchLifecycleTests.Run();
                 CreatorWorkbenchCleanupFailureTests.Run();
                 SandboxWorkbenchRollbackTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
                 WorldsSafetyTests.Run();
                 return 0;
             }
@@ -443,6 +454,8 @@ namespace TopiaForge.ModManager.Tests
                 GameCompatActivationTests.Run();
                 GameVersionLabelReaderTests.Run();
                 UiKitCoreTests.Run();
+                UiDiagnosticsContractTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
                 TopiaForgeStateFileTests.Run(root);
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();

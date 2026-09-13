@@ -5,7 +5,7 @@ namespace TopiaForge.Acceptance.Windows;
 
 /// Actuation is restricted to this fixture's measured controls. Native progress
 /// is a scheduling hint; only the separate verifier computes acceptance results.
-internal sealed class BrokerDriver
+internal sealed partial class BrokerDriver
 {
     private readonly BrokerRequest request;
     private readonly DeviceProfile profile;
@@ -18,6 +18,7 @@ internal sealed class BrokerDriver
     private string scenario = "routing", step = "prepare";
     private int cycle = 1, stepIndex, artifactIndex;
     private JsonElement Facts => reply.GetProperty("facts");
+    private int Frame => BoundedJson.Integer(reply, "frame", 0, int.MaxValue);
     internal BrokerDriver(BrokerRequest request, DeviceProfile profile, DriverManifest manifest, BrokerTranscript transcript, OwnedGameProbe game, NativePipe pipe, WindowsInput input)
     { this.request = request; this.profile = profile; this.manifest = manifest; this.transcript = transcript; this.game = game; this.pipe = pipe; this.input = input; }
 
@@ -47,6 +48,7 @@ internal sealed class BrokerDriver
                     RecordPersistence("before", persistence.Snapshot());
                     await Observe("begin", token);
                     Capture();
+                    RecordPersistence("during", persistence.Snapshot());
                     var actionCount = 0;
                     while (Text(Facts, "scenarioState") == "waiting")
                     {
@@ -57,8 +59,8 @@ internal sealed class BrokerDriver
                         stepDeadline.CancelAfter(TimeSpan.FromSeconds(10));
                         await Act(step, stepDeadline.Token);
                         await Barrier(2, stepDeadline.Token);
-                        if (step is "run-graph" or "stop-graph") await CaptureAudio(stepDeadline.Token);
-                        if (step is "open" or "reopen" or "hide" or "end-session" or "stop-world-session") Capture();
+                        if (DriverVocabulary.AudioSteps.Contains(step)) await CaptureAudio(stepDeadline.Token);
+                        if (DriverVocabulary.CapturedSteps.Contains(step)) Capture();
                         do
                         {
                             await Observe("advance", stepDeadline.Token);
@@ -98,9 +100,9 @@ internal sealed class BrokerDriver
     }
     private async Task Barrier(int minimumFrames, CancellationToken cancellation)
     {
-        var frame = BoundedJson.Integer(reply, "frame", 0, int.MaxValue);
+        var frame = Frame;
         do { await Task.Delay(50, cancellation); await Observe("capture", cancellation); }
-        while (BoundedJson.Integer(reply, "frame", 0, int.MaxValue) - frame < minimumFrames);
+        while (Frame - frame < minimumFrames);
     }
     private async Task Act(string action, CancellationToken cancellation)
     {
@@ -111,7 +113,7 @@ internal sealed class BrokerDriver
             var kind = Text(atom, "kind");
             var surface = atom.TryGetProperty("surfaceId", out _) ? Text(atom, "surfaceId") : "sandbox-creator-window";
             var node = atom.TryGetProperty("nodeId", out _) ? Text(atom, "nodeId") : "";
-            var frame = BoundedJson.Integer(reply, "frame", 0, int.MaxValue);
+            var frame = Frame;
             var before = input.SentEvents;
             switch (kind)
             {
@@ -121,7 +123,7 @@ internal sealed class BrokerDriver
                     await Click(surface, node, cancellation); await Barrier(2, cancellation);
                     var field = Widget(surface, node);
                     if (!field.GetProperty("focused").GetBoolean()) throw new InvalidOperationException("Text entry did not receive actual focus.");
-                    var text = atom.TryGetProperty("textFromFact", out _) ? Text(actionFacts, Text(atom, "textFromFact")) : Text(atom, "text");
+                    var text = atom.TryGetProperty("textFromFact", out _) ? Text(actionFacts, Text(atom, "textFromFact")) : DriverVocabulary.ReplacementText(atom);
                     await input.ReplaceText(text, cancellation); break;
                 case "select-list-item":
                     var row = atom.TryGetProperty("itemIdFromFact", out _) ? Text(actionFacts, Text(atom, "itemIdFromFact")) : Text(atom, "itemId");
@@ -129,6 +131,10 @@ internal sealed class BrokerDriver
                 case "barrier": await Barrier(BoundedJson.Integer(atom, "minimumFrames", 2, 10), cancellation); break;
                 case "request": await Observe(Text(atom, "operation"), cancellation); break;
                 case "capture": await Observe("capture", cancellation); break;
+                case "scroll-into-view": await ScrollIntoView(atom, surface, node, actionFacts, cancellation); break;
+                case "mouse-move": await MouseMove(atom, cancellation); break;
+                case "key-hold": await KeyHold(atom, cancellation); break;
+                case "aim": await Aim(atom, cancellation); break;
                 default: throw new InvalidDataException("Undeclared actuation kind.");
             }
             transcript.Add(scenario, cycle, stepIndex, step, "input", new { action, kind, surfaceId = surface, nodeId = node, observedFrame = frame, sentEvents = input.SentEvents - before });
@@ -142,20 +148,29 @@ internal sealed class BrokerDriver
     }
     private JsonElement Widget(string surface, string node)
     {
-        if (node.Length > 768 || node.Any(char.IsControl)) throw new InvalidDataException("Invalid dynamic widget ID.");
+        var found = FindWidget(surface, node);
+        if (found == null || !found.Value.GetProperty("visible").GetBoolean() || !found.Value.GetProperty("enabled").GetBoolean() || found.Value.GetProperty("clipped").GetBoolean()) throw new InvalidOperationException("Requested widget is absent, disabled, duplicated or clipped.");
+        return found.Value;
+    }
+    /// The measured widget row or null when absent; clipped and hidden rows are returned for scroll decisions.
+    private JsonElement? FindWidget(string surface, string node)
+    {
+        if (node.Length == 0 || node.Length > 768 || node.Any(char.IsControl)) throw new InvalidDataException("Invalid dynamic widget ID.");
         var ui = Facts.GetProperty("ui");
         if (BoundedJson.Integer(ui, "width", profile.Width, profile.Width) != profile.Width || BoundedJson.Integer(ui, "height", profile.Height, profile.Height) != profile.Height) throw new InvalidDataException("Native and Windows client geometry disagree.");
         var widgets = ui.GetProperty("widgets");
         if (widgets.GetArrayLength() > 2048) throw new InvalidDataException("Widget observation bound exceeded.");
         var found = widgets.EnumerateArray().Where(w => w.GetProperty("surfaceId").GetString() == surface && w.GetProperty("nodeId").GetString() == node).ToArray();
-        if (found.Length != 1 || !found[0].GetProperty("visible").GetBoolean() || !found[0].GetProperty("enabled").GetBoolean() || found[0].GetProperty("clipped").GetBoolean()) throw new InvalidOperationException("Requested widget is absent, disabled, duplicated or clipped.");
-        return found[0];
+        if (found.Length > 1) throw new InvalidOperationException("Requested widget is duplicated.");
+        return found.Length == 1 ? found[0] : (JsonElement?)null;
     }
     private void Capture()
     {
-        var capture = ScreenCapture.Capture(game, profile, request.OutputRoot, "screen-" + (++artifactIndex).ToString("D4") + ".bmp");
+        var (capture, pixels) = ScreenCapture.Capture(game, profile, request.OutputRoot, "screen-" + (++artifactIndex).ToString("D4") + ".bmp");
         transcript.Artifact(capture.Path, capture.Sha256, capture.Length);
-        transcript.Add(scenario, cycle, stepIndex, step, "capture", capture);
+        // A reviewed baseline is compared and recorded only; the verifier decides what a mismatch means.
+        var baseline = profile.ScreenBaselines?.Compare(scenario, cycle, step, pixels, profile.Width, profile.Height);
+        transcript.Add(scenario, cycle, stepIndex, step, "capture", new { capture.Path, capture.Width, capture.Height, capture.DistinctSampleColors, capture.Sha256, capture.Length, baseline });
         if (capture.DistinctSampleColors < 8) throw new InvalidOperationException("Native screenshot is blank or unusable.");
     }
     private async Task CaptureAudio(CancellationToken cancellation)

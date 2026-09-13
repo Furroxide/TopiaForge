@@ -9,6 +9,7 @@ import '../live_acceptance_models.dart';
 import '../live_acceptance_session.dart';
 import 'native_annex.dart';
 import 'native_annex_verifier.dart';
+import 'native_expected_catalog.dart';
 import 'native_file_verifier.dart';
 import 'native_io.dart';
 import 'native_options.dart';
@@ -66,7 +67,13 @@ Future<Map<String, Object?>> runSandboxNative(SandboxNativePaths paths) async {
     maximum: 4 * 1024 * 1024,
   );
   final deviceBytes = readNativeFile(paths.deviceProfilePath);
-  sandboxDocument(deviceBytes, 'native device profile');
+  final deviceProfile = sandboxDocument(deviceBytes, 'native device profile');
+  final screenBaselineSteps = nativeScreenBaselineSteps(deviceProfile);
+  final expectedCatalog = SandboxExpectedCatalog.parse(
+    readNativeFile(
+      nativeChild(p.dirname(paths.driverManifestPath), expectedCatalogFileName),
+    ),
+  );
   final brokerHash = nativeFileHash(paths.brokerPath);
   List<int> sourceSnapshot() => paths.sourceWorkspacePath.isEmpty
       ? captureSandboxSourceWorkspace(paths.repositoryRoot)
@@ -352,11 +359,10 @@ Future<Map<String, Object?>> runSandboxNative(SandboxNativePaths paths) async {
       audioMeasurements: audioMeasurements,
       screenMeasurements: screenMeasurements,
       audioEndpointId:
-          sandboxObject(
-                sandboxDocument(deviceBytes, 'device')['audio'],
-                'audio',
-              )['endpointId']!
+          sandboxObject(deviceProfile['audio'], 'audio')['endpointId']!
               as String,
+      expectedCatalog: expectedCatalog,
+      screenBaselineSteps: screenBaselineSteps,
     );
     raw['scenarioResults'] = [
       for (final result in observed)

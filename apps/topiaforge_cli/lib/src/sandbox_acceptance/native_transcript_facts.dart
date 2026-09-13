@@ -1,6 +1,16 @@
 import 'native_annex.dart';
 import 'native_transcript_protocol.dart';
 
+/// Raised when a required protocol-v2 fact is missing or malformed. The
+/// evaluator maps this to an `unavailable` scenario result naming the fact,
+/// never a substitute default or zero (spec section 3).
+final class NativeFactUnavailable implements Exception {
+  NativeFactUnavailable(this.reason);
+  final String reason;
+  @override
+  String toString() => reason;
+}
+
 const resourceCounters = [
   'creatorSessionCount',
   'creatorEditLeaseCount',
@@ -19,9 +29,10 @@ const uiCounters = [
   'dismissScopeCount',
 ];
 Map<String, Object?> ui(Map<String, Object?> facts) => objectMap(facts['ui']);
-bool visible(Map<String, Object?> facts) => mapRows(
-  ui(facts),
-  'widgets',
+List<Map<String, Object?>> widgets(Map<String, Object?> facts) =>
+    mapRows(ui(facts), 'widgets');
+bool visible(Map<String, Object?> facts) => widgets(
+  facts,
 ).any((w) => w['surfaceId'] == nativeSurface && w['visible'] == true);
 Map<int, Map<String, Object?>> entities(Map<String, Object?> facts) {
   final result = <int, Map<String, Object?>>{};
@@ -83,171 +94,14 @@ bool restoredBorrowed(Map<String, Object?> a, Map<String, Object?> b) {
       ).every((v) => v < 0.0001);
 }
 
-bool checkNativePostcondition(
-  String action,
-  int cycle,
-  Map<String, Object?> initial,
-  Map<String, Object?> before,
-  Map<String, Object?> after, {
-  Map<String, Object?>? graphBaseline,
-  required bool borrowedSelected,
-  Map<String, Object?>? openedUi,
-}) {
-  if ((after['cleanupErrors'] as List?)?.isNotEmpty != false) return false;
-  switch (action) {
-    case 'open':
-    case 'reopen':
-      return visible(after) &&
-          after['activeHostId'] == nativeOwner &&
-          after['worldSessionId'] == initial['worldSessionId'] &&
-          number(after, 'creatorSessionCount') ==
-              number(initial, 'creatorSessionCount') + 1;
-    case 'hide':
-      return !visible(after) &&
-          hud(after, "SESSION ACTIVE") &&
-          sameEntities(before, after) &&
-          after['worldSessionId'] == initial['worldSessionId'] &&
-          number(ui(after), 'cursorLeaseCount') ==
-              number(ui(initial), 'cursorLeaseCount');
-    case 'move-player':
-      final oldPosition = before['playerPosition'],
-          newPosition = after['playerPosition'];
-      if (oldPosition is! List ||
-          newPosition is! List ||
-          oldPosition.length != 3 ||
-          newPosition.length != 3 ||
-          [
-            ...oldPosition,
-            ...newPosition,
-          ].any((v) => v is! num || !v.isFinite)) {
-        throw StateError('Actual player position is unavailable.');
-      }
-      return !visible(after) &&
-          after['worldSessionId'] == initial['worldSessionId'] &&
-          sameEntities(before, after) &&
-          resourcesEqual(before, after) &&
-          ((oldPosition[0] - newPosition[0]).abs() > 0.005 ||
-              (oldPosition[2] - newPosition[2]).abs() > 0.005);
-    case 'spawn-prop':
-    case 'spawn-catalog':
-    case 'duplicate':
-      final old = entities(before), now = entities(after);
-      return now.length == old.length + 1 &&
-          now.keys.toSet().containsAll(old.keys);
-    case 'remove':
-      final old = entities(before), now = entities(after);
-      return old.length == now.length + 1 &&
-          old.keys.toSet().containsAll(now.keys);
-    case 'select-borrowed':
-      final id = text(after, 'borrowedRosterId');
-      return id.isNotEmpty &&
-          mapRows(ui(after), 'widgets').any(
-            (w) => w['nodeId'] == 'roster-list/$id' && w['focused'] == true,
-          );
-    case 'edit-transform':
-    case 'edit-rotation':
-    case 'edit-scale':
-      final old = borrowedSelected
-          ? [objectMap(before['borrowedRobot'])]
-          : entities(before).values;
-      final now = borrowedSelected
-          ? [objectMap(after['borrowedRobot'])]
-          : entities(after).values;
-      final offset = action == 'edit-transform'
-          ? 0
-          : action == 'edit-rotation'
-          ? 3
-          : 7;
-      final count = action == 'edit-rotation' ? 4 : 3;
-      return old.any(
-        (a) => now.any(
-          (b) =>
-              a['instanceId'] == b['instanceId'] &&
-              List.generate(
-                count,
-                (i) =>
-                    (transform(a)[i + offset] - transform(b)[i + offset]).abs(),
-              ).any((v) => v > 0.001),
-        ),
-      );
-    case 'edit-personality':
-      final a = objectMap(objectMap(before['borrowedRobot'])['brain']);
-      final b = objectMap(objectMap(after['borrowedRobot'])['brain']);
-      return b['hackedPersonalityId'] is int &&
-          b['hackedPersonalityId'] != 0 &&
-          b['hackedPersonalityFingerprint'] is String &&
-          b['hackedPersonalityFingerprint'] != 'unavailable' &&
-          b['hackedPersonalityFingerprint'] !=
-              a['hackedPersonalityFingerprint'];
-    case 'edit-brain':
-      final a = objectMap(objectMap(before['borrowedRobot'])['brain']);
-      final b = objectMap(objectMap(after['borrowedRobot'])['brain']);
-      return [
-        'state',
-        'initialState',
-        'llmDisabled',
-        'behaviorTrees',
-      ].any((k) => a[k] != null && b[k] != null && !nativeSame(a[k], b[k]));
-    case 'run-graph':
-      return entities(after).length >= entities(before).length + 2 &&
-          number(after, 'graphPlayingAudioCount') > 0 &&
-          number(after, 'interactionCount') >
-              number(before, 'interactionCount') &&
-          number(after, 'conversationCount') >
-              number(before, 'conversationCount');
-    case 'stop-graph':
-      return graphBaseline != null &&
-          sameEntities(graphBaseline, after) &&
-          resourcesEqual(graphBaseline, after) &&
-          number(after, 'graphPlayingAudioCount') ==
-              number(graphBaseline, 'graphPlayingAudioCount');
-    case 'unregister-source':
-      final catalog = after['catalogIds'];
-      return catalog is List &&
-          catalog.every(
-            (id) =>
-                id is String &&
-                !id.startsWith('dev.topiaforge.sandbox-acceptance:'),
-          ) &&
-          mapRows(after, 'nativeProps').isEmpty &&
-          number(after, 'ownedObjectCount') == 0;
-    case 'end-session':
-      return !visible(after) &&
-          sameEntities(initial, after) &&
-          resourcesEqual(initial, after) &&
-          cachedUiReleased(initial, openedUi, after) &&
-          hud(after, "NO ACTIVE CREATOR SESSION") &&
-          restoredBorrowed(initial, after);
-    case 'stop-world-session':
-      final transition = cycle == 2
-          ? after['sessionPhase'] == 'Running' &&
-                after['targetId'] == nativeTarget &&
-                after['worldSessionId'] != initial['worldSessionId']
-          : after['sessionPhase'] == 'Idle' && after['worldSessionId'] == '';
-      return transition &&
-          !visible(after) &&
-          number(after, 'ownedObjectCount') == 0 &&
-          mapRows(after, 'nativeProps').isEmpty &&
-          number(after, 'graphPlayingAudioCount') == 0 &&
-          number(after, 'creatorSessionCount') ==
-              number(initial, 'creatorSessionCount');
-    case 'observe-refusal':
-      return after['mutationSafetyState'] == 'Unavailable' &&
-          after['persistenceIsolationAvailable'] == false;
-    default:
-      throw StateError('Unknown semantic native action.');
-  }
-}
-
-bool hud(Map<String, Object?> facts, String marker) =>
-    mapRows(ui(facts), 'widgets').any(
-      (w) =>
-          w['surfaceId'] == 'sandbox-creator-hud' &&
-          w['visible'] == true &&
-          w['clipped'] == false &&
-          w['text'] is String &&
-          (w['text']! as String).contains(marker),
-    );
+bool hud(Map<String, Object?> facts, String marker) => widgets(facts).any(
+  (w) =>
+      w['surfaceId'] == 'sandbox-creator-hud' &&
+      w['visible'] == true &&
+      w['clipped'] == false &&
+      w['text'] is String &&
+      (w['text']! as String).contains(marker),
+);
 bool cachedUiReleased(
   Map<String, Object?> initial,
   Map<String, Object?>? opened,
@@ -265,3 +119,187 @@ bool cachedUiReleased(
         'dismissScopeCount',
       ].every((key) => number(ui(initial), key) == number(ui(after), key));
 }
+
+// --- Protocol-v2 facts (spec section 3). Missing/malformed -> unavailable. ---
+
+Never _unavailable(String fact) =>
+    throw NativeFactUnavailable('Native fact $fact is unavailable.');
+
+int factInt(Map<String, Object?> facts, String key) {
+  final value = facts[key];
+  if (value is! int) _unavailable(key);
+  return value;
+}
+
+bool factBool(Map<String, Object?> facts, String key) {
+  final value = facts[key];
+  if (value is! bool) _unavailable(key);
+  return value;
+}
+
+num factNum(Map<String, Object?> facts, String key) {
+  final value = facts[key];
+  if (value is! num || !value.isFinite) _unavailable(key);
+  return value;
+}
+
+Map<String, Object?> factObject(Map<String, Object?> facts, String key) {
+  final value = facts[key];
+  if (value is! Map<String, Object?>) _unavailable(key);
+  return value;
+}
+
+/// A `controllerInstanceId` of null is a legitimate observation (no live
+/// controller), but a non-integer, non-null value is malformed.
+int? factNullableInt(Map<String, Object?> facts, String key) {
+  final value = facts[key];
+  if (value != null && value is! int) _unavailable(key);
+  return value as int?;
+}
+
+List<int> factIntList(Map<String, Object?> facts, String key) {
+  final value = facts[key];
+  if (value is! List || value.length > 512 || value.any((v) => v is! int)) {
+    _unavailable(key);
+  }
+  return value.cast<int>();
+}
+
+List<num> playerAim(Map<String, Object?> facts) {
+  final value = facts['playerAim'];
+  if (value is! List ||
+      value.length != 3 ||
+      value.any((v) => v is! num || !v.isFinite)) {
+    _unavailable('playerAim');
+  }
+  return value.cast<num>();
+}
+
+Map<String, Object?> accessibility(Map<String, Object?> facts) {
+  final value = factObject(facts, 'accessibility');
+  if (value['highContrast'] is! bool ||
+      value['reducedMotion'] is! bool ||
+      value['uiScale'] is! num ||
+      !(value['uiScale']! as num).isFinite ||
+      value['motionIntensity'] is! num ||
+      !(value['motionIntensity']! as num).isFinite) {
+    _unavailable('accessibility');
+  }
+  return value;
+}
+
+Map<String, Object?> competingHost(Map<String, Object?> facts) {
+  final value = factObject(facts, 'competingHost');
+  if (value['registered'] is! bool ||
+      value['canOpenCalls'] is! int ||
+      value['openCalls'] is! int ||
+      value['closeCalls'] is! int) {
+    _unavailable('competingHost');
+  }
+  return value;
+}
+
+Map<String, Object?> aimToGraphProp(Map<String, Object?> facts) {
+  final value = factObject(facts, 'aimToGraphProp');
+  // The observer's unavailable form (no graph prop registered) is a legitimate
+  // shape, reported as unavailable rather than malformed.
+  if (value['available'] == false &&
+      value['focused'] == false &&
+      value['yawDegrees'] == null &&
+      value['pitchDegrees'] == null &&
+      value['distance'] == null) {
+    throw NativeFactUnavailable(
+      'Native fact aimToGraphProp reports available:false.',
+    );
+  }
+  if (value['available'] is! bool ||
+      value['focused'] is! bool ||
+      value['yawDegrees'] is! num ||
+      value['pitchDegrees'] is! num ||
+      value['distance'] is! num) {
+    _unavailable('aimToGraphProp');
+  }
+  return value;
+}
+
+Map<String, Object?> focusedInteraction(Map<String, Object?> facts) {
+  final value = factObject(facts, 'focusedInteraction');
+  if (value['available'] is! bool ||
+      (value['entityInstanceId'] != null &&
+          value['entityInstanceId'] is! int)) {
+    _unavailable('focusedInteraction');
+  }
+  return value;
+}
+
+/// Toast rows serialised on the toast host owner (spec section 1).
+List<Map<String, Object?>> toasts(Map<String, Object?> facts) {
+  final value = facts['toasts'];
+  if (value is! List || value.length > 512) _unavailable('toasts');
+  final rows = <Map<String, Object?>>[];
+  for (final row in value) {
+    if (row is! Map<String, Object?> ||
+        row['nodeId'] is! String ||
+        row['text'] is! String ||
+        row['style'] is! String ||
+        row['visible'] is! bool) {
+      _unavailable('toasts');
+    }
+    rows.add(row);
+  }
+  return rows;
+}
+
+bool visibleToastMatches(
+  Map<String, Object?> facts,
+  bool Function(Map<String, Object?>) predicate,
+) => toasts(facts).any((t) => t['visible'] == true && predicate(t));
+
+/// Catalog source rows from `ICreatorContentService.Catalog.Sources`.
+List<Map<String, Object?>> catalogSources(Map<String, Object?> facts) {
+  final value = facts['catalogSources'];
+  if (value is! List || value.length > 512) _unavailable('catalogSources');
+  final rows = <Map<String, Object?>>[];
+  for (final row in value) {
+    if (row is! Map<String, Object?> ||
+        row['id'] is! String ||
+        row['displayName'] is! String ||
+        row['state'] is! String ||
+        row['entryCount'] is! int) {
+      _unavailable('catalogSources');
+    }
+    rows.add(row);
+  }
+  return rows;
+}
+
+/// True when [id] appears exactly once in `catalogSources` with the given
+/// [state]. Missing rows are a postcondition failure, not a default.
+bool catalogSourceHasState(
+  Map<String, Object?> facts,
+  String id,
+  String state,
+) {
+  final rows = catalogSources(facts).where((s) => s['id'] == id).toList();
+  return rows.length == 1 && rows.single['state'] == state;
+}
+
+/// Single widget matching [surfaceId]/[nodeId], or null when absent.
+Map<String, Object?>? widgetAt(
+  Map<String, Object?> facts,
+  String surfaceId,
+  String nodeId,
+) {
+  final rows = widgets(
+    facts,
+  ).where((w) => w['surfaceId'] == surfaceId && w['nodeId'] == nodeId).toList();
+  return rows.length == 1 ? rows.single : null;
+}
+
+/// Widgets rendered on any Sandbox creator surface (window or HUD).
+Iterable<Map<String, Object?>> sandboxWidgets(Map<String, Object?> facts) =>
+    widgets(facts).where(
+      (w) =>
+          w['surfaceId'] is String &&
+          (w['surfaceId']! as String).startsWith('sandbox-creator'),
+    );

@@ -55,8 +55,7 @@ void main() {
       'missing value': (v) => v.removeLast(),
       'blank value': (v) => v[2] = ' ',
       'relative path': (v) => v[2] = 'relative.json',
-      'aliased path': (v) =>
-          v[2] = '$root${p.separator}..${p.separator}input',
+      'aliased path': (v) => v[2] = '$root${p.separator}..${p.separator}input',
     }.entries) {
       test('$operation refuses ${mutation.key}', () {
         final args = command(operation);

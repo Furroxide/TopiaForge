@@ -28,7 +28,7 @@ internal sealed class NativePipe : IAsyncDisposable
     }
     internal async Task<(JsonElement Request, JsonElement Response)> Exchange(string operation, string scenarioId, int cycle, CancellationToken cancellation)
     {
-        if (!new[] { "prepare", "begin", "capture", "advance", "unregister-source", "request-session-stop", "cleanup" }.Contains(operation)) throw new InvalidDataException("Undeclared native operation.");
+        if (!DriverVocabulary.WireOperations.Contains(operation)) throw new InvalidDataException("Undeclared native operation.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
         cancellation = deadline.Token;

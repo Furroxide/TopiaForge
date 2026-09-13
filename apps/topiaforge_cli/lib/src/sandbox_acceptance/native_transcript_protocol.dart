@@ -3,21 +3,13 @@ import 'native_audio_oracle.dart';
 import 'package:crypto/crypto.dart';
 import '../release_strict_json.dart';
 import 'native_annex.dart';
+import 'native_driver_manifest.dart';
 import 'sandbox_json.dart';
 import 'sandbox_specification.dart';
 
 const nativeTarget = 'io.github.furroxide.topiaforge.sandbox.creator.menu';
 const nativeOwner = 'io.github.furroxide.topiaforge.sandbox';
 const nativeSurface = 'sandbox-creator-window';
-const nativeOperations = {
-  'prepare',
-  'begin',
-  'capture',
-  'advance',
-  'unregister-source',
-  'request-session-stop',
-  'cleanup',
-};
 
 final class NativeTranscriptData {
   NativeTranscriptData(
@@ -86,8 +78,14 @@ NativeTranscriptData readNativeTranscript(
   nativeHex(document['managerSessionId'], 32);
   nativeReasons(document['failures']);
   final driver = sandboxDocument(driverBytes, 'Sandbox native driver');
-  if (driver['schemaVersion'] != 1 ||
-      driver['kind'] != 'sandbox-native-driver-actions-v1' ||
+  if (driver['kind'] == 'sandbox-native-driver-actions-v1') {
+    throw StateError(
+      'Driver manifest kind sandbox-native-driver-actions-v1 is retired; '
+      'sandbox-native-driver-actions-v2 (schemaVersion 2) is required.',
+    );
+  }
+  if (driver['schemaVersion'] != 2 ||
+      driver['kind'] != 'sandbox-native-driver-actions-v2' ||
       driver['targetId'] != nativeTarget ||
       driver['geometryOrigin'] != 'bottom-left') {
     throw StateError('Unexpected native driver identity.');
@@ -96,6 +94,7 @@ NativeTranscriptData readNativeTranscript(
   if (!nativeSame(scenarios.map((s) => s['id']).toList(), sandboxScenarioIds)) {
     throw StateError('Missing, duplicate or reordered driver scenario.');
   }
+  validateNativeDriverActions(driver['actions']);
   final events = nativeRows(document['events'], 12000);
   final observations = <NativeTranscriptObservation>[];
   var milliseconds = -1, frame = -1, wireSequence = 0;
@@ -189,6 +188,11 @@ NativeTranscriptData readNativeTranscript(
         }, 'native input');
         nativeInteger(data['observedFrame'], 0, 2147483647);
         nativeInteger(data['sentEvents'], 0, 32768);
+      case 'scroll':
+      case 'mouse-move':
+      case 'key-hold':
+      case 'aim':
+        validateNativeMeasuredEvent(event['kind']! as String, data);
       case 'capture':
         sandboxFields(data, {
           'path',
@@ -197,11 +201,13 @@ NativeTranscriptData readNativeTranscript(
           'distinctSampleColors',
           'sha256',
           'length',
+          'baseline',
         }, 'screen observation');
         _artifact(annex, data);
         nativeInteger(data['width'], 1, 16384);
         nativeInteger(data['height'], 1, 16384);
         nativeInteger(data['distinctSampleColors'], 0, 16777216);
+        validateNativeScreenBaseline(data['baseline']);
       case 'audio':
         sandboxFields(data, {
           'path',
@@ -234,7 +240,7 @@ NativeTranscriptData readNativeTranscript(
           'overflow',
           'unexpectedWrite',
         }, 'persistence observation');
-        if (!['before', 'after'].contains(data['phase']) ||
+        if (!['before', 'during', 'after'].contains(data['phase']) ||
             data['overflow'] is! bool ||
             data['unexpectedWrite'] is! bool) {
           throw StateError('Invalid persistence observation.');
