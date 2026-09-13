@@ -33,9 +33,14 @@ namespace TopiaForge.CreatorTools.Shared
                 controlLease = null;
                 Clean(() => controls?.Dispose());
                 var entries = roster.ToArray();
-                roster.Clear();
                 for (var index = entries.Length - 1; index >= 0; index--)
-                    Record(entries[index].RestoreAndDispose());
+                {
+                    // Owned content despawns through its creator source handle so that a failing source is
+                    // reported, then leases and registrations release; borrowed targets only restore.
+                    if (!roster.Contains(entries[index])) continue;
+                    Record(RetireRosterEntry(entries[index], despawn: entries[index].Owned, fireRemoved: false));
+                }
+                roster.Clear();
                 ClearHistory();
                 var session = creatorSession;
                 creatorSession = null;
@@ -106,8 +111,8 @@ namespace TopiaForge.CreatorTools.Shared
                 catch (Exception exception) { result = MergeCleanup(result, OperationResult<bool>.Failure(ModErrorCode.External, exception.Message)); }
             }
             if (!string.IsNullOrEmpty(projectId)) Attempt(() => DisposeProjectInteractions(projectId));
-            if (despawn) Attempt(() => result = MergeCleanup(result,
-                entry.Robot?.Despawn() ?? entry.Spawn?.Despawn() ?? OperationResult<bool>.Success(false)));
+            // A catalog robot may expose both handles; the creator source handle owns its cleanup.
+            if (despawn) Attempt(() => result = MergeCleanup(result, Despawn(entry)));
             result = MergeCleanup(result, entry.RestoreAndDispose());
             if (fireRemoved && !string.IsNullOrEmpty(projectId) && ReferenceEquals(runner, owningRunner))
                 Attempt(() => owningRunner?.Fire(CreatorGraphNodeKind.EntityRemoved, projectId));
