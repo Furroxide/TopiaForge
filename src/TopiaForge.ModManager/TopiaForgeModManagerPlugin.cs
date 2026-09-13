@@ -233,6 +233,7 @@ namespace TopiaForge.ModManager
 
         private void OnDestroy()
         {
+            LogProvisioningDestroyPhase();
             if (!initializationLifetime.TryBeginTeardown()) return;
             ready = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;

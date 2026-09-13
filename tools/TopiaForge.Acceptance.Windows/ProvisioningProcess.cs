@@ -8,20 +8,53 @@ namespace TopiaForge.Acceptance.Windows;
 /// Original CreateProcess handles own all resume/exit/termination actions; no PID reopening.
 internal sealed class ProvisioningProcess : IDisposable
 {
+    /// Fixed headless flags. The Unity log destination is the only per-run argument; it is computed
+    /// from the run directory, never operator-supplied, and never replaces the graphics mode.
+    internal const string FixedArguments = "-batchmode -nographics -noaudio";
+    internal const string PlayerLogName = "player.log";
     private readonly SafeProcessHandle process;
     private readonly SafeWaitHandle thread;
     private readonly SafeFileHandle job;
     internal ProcessStamp Stamp { get; private set; }
-    private ProvisioningProcess(SafeProcessHandle process, SafeWaitHandle thread, SafeFileHandle job, ProcessStamp stamp)
-    { this.process = process; this.thread = thread; this.job = job; Stamp = stamp; }
-    internal static ProvisioningProcess StartSuspended(string executable, string gameRoot, string requestId)
+    internal string CommandLine { get; }
+    internal string PlayerLogPath { get; }
+    internal SafeProcessHandle Handle => process;
+    internal int Pid => Stamp.Pid;
+    private ProvisioningProcess(SafeProcessHandle process, SafeWaitHandle thread, SafeFileHandle job, ProcessStamp stamp, string commandLine, string playerLogPath)
+    { this.process = process; this.thread = thread; this.job = job; Stamp = stamp; CommandLine = commandLine; PlayerLogPath = playerLogPath; }
+    /// The log must be the fixed name directly inside the existing run directory and must not exist yet.
+    internal static string ValidatePlayerLogPath(string path, string runRoot)
     {
+        var full = BoundedJson.PhysicalPath(path);
+        var root = BoundedJson.PhysicalPath(runRoot);
+        if (!string.Equals(Path.GetFileName(full), PlayerLogName, StringComparison.Ordinal) || full.Contains('"'))
+            throw new InvalidDataException("The player log must be the fixed player.log inside the run directory.");
+        if (!Directory.Exists(root) || !BoundedJson.SamePath(Path.GetDirectoryName(full)!, root))
+            throw new InvalidDataException("The player log must be a direct child of the existing run directory.");
+        if (File.Exists(full) || Directory.Exists(full)) throw new InvalidDataException("The player log destination must be new.");
+        return full;
+    }
+    internal static string BuildCommandLine(string executable, string playerLogPath)
+    {
+        if (!Path.IsPathFullyQualified(executable) || executable.Contains('"') || executable.Any(char.IsControl)
+            || !executable.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The provisioning executable must be an absolute .exe path.");
+        if (!Path.IsPathFullyQualified(playerLogPath) || playerLogPath.Contains('"') || playerLogPath.Any(char.IsControl)
+            || !string.Equals(Path.GetFileName(playerLogPath), PlayerLogName, StringComparison.Ordinal))
+            throw new InvalidDataException("The player log must be an absolute quotable player.log path.");
+        return "\"" + executable + "\" " + FixedArguments + " -logFile \"" + playerLogPath + "\"";
+    }
+    internal static string[] LaunchArguments(string playerLogPath) => new[] { "-batchmode", "-nographics", "-noaudio", "-logFile", playerLogPath };
+    internal static ProvisioningProcess StartSuspended(string executable, string gameRoot, string requestId, string playerLogPath)
+    {
+        var commandLine = BuildCommandLine(executable, playerLogPath);
         var environment = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (DictionaryEntry item in Environment.GetEnvironmentVariables()) environment[(string)item.Key] = (string)item.Value!;
         foreach (var forbidden in new[] { "TOPIAFORGE_LAUNCH_PROFILE", "TOPIAFORGE_ACCEPTANCE_REQUEST_ID", "TOPIAFORGE_PROVISIONING_PROBE_ID" })
             if (environment.ContainsKey(forbidden)) throw new InvalidDataException("Conflicting inherited launch mode.");
         environment.Add("TOPIAFORGE_PROVISIONING_PROBE_ID", requestId);
-        var block = Marshal.StringToHGlobalUni(string.Join('\0', environment.Select(pair => pair.Key + "=" + pair.Value)) + "\0\0");
+        var separator = new string('\0', 1);
+        var block = Marshal.StringToHGlobalUni(string.Join(separator, environment.Select(pair => pair.Key + "=" + pair.Value)) + separator + separator);
         var job = CreateJobObject(IntPtr.Zero, null);
         if (job.IsInvalid) { job.Dispose(); Marshal.FreeHGlobal(block); throw new InvalidOperationException("Provisioning job could not be created."); }
         SafeProcessHandle? process = null; SafeWaitHandle? thread = null;
@@ -43,12 +76,12 @@ internal sealed class ProvisioningProcess : IDisposable
                 throw new InvalidOperationException("Atomic provisioning job assignment unavailable.");
             var startup = new StartupInfoEx { Startup = new StartupInfo { Size = Marshal.SizeOf<StartupInfoEx>(), Desktop = @"winsta0\default", Flags = 1, ShowWindow = 0 }, Attributes = attributes };
             // No command interpreter, arbitrary arguments, inherited handles or interactive input.
-            if (!CreateProcess(executable, new StringBuilder("\"" + executable + "\" -batchmode -nographics -noaudio"),
+            if (!CreateProcess(executable, new StringBuilder(commandLine),
                 IntPtr.Zero, IntPtr.Zero, false, 0x4 | 0x400 | 0x80000, block, gameRoot, ref startup, out var information))
                 throw new InvalidOperationException("Suspended provisioning process could not be created.");
             process = new SafeProcessHandle(information.Process, true);
             thread = new SafeWaitHandle(information.Thread, true);
-            return new(process, thread, job, new(checked((int)information.Pid), "", executable));
+            return new(process, thread, job, new(checked((int)information.Pid), "", executable), commandLine, playerLogPath);
         }
         catch
         {
@@ -84,6 +117,8 @@ internal sealed class ProvisioningProcess : IDisposable
     }
     internal bool HasExited => NativeMethods.WaitForSingleObject(process, 0) switch
     { 0 => true, 258 => false, _ => throw new InvalidOperationException("Original process liveness unavailable.") };
+    /// Exit code of the original process after its exit is observed; null while it runs or when unreadable.
+    internal int? ExitCode => HasExited && NativeMethods.GetExitCodeProcess(process, out var code) && code != 259 ? unchecked((int)code) : null;
     internal bool TerminateAndConfirm()
     {
         if (HasExited) return true;

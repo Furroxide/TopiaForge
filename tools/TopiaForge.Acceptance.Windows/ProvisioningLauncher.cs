@@ -46,7 +46,6 @@ internal static class ProvisioningLauncher
 
     private static ProvisioningResult Execute(ProvisioningLaunch input, string id, string challenge, string runRoot)
     {
-        var timer = Stopwatch.StartNew();
         var interrupted = 0;
         ConsoleCancelEventHandler cancel = (_, args) => { args.Cancel = true; Interlocked.Exchange(ref interrupted, 1); };
         Console.CancelKeyPress += cancel;
@@ -56,15 +55,18 @@ internal static class ProvisioningLauncher
         string? observationSha = null; ProcessStamp? stamp = null;
         var requestPath = Path.Combine(input.ManagerRoot, "staging", "provisioning-request-" + id + ".json");
         var observationPath = Path.Combine(input.ManagerRoot, "staging", "provisioning-observation-" + id + ".json");
+        string? playerLogPath = null; string? diagnosticsPath = null; long? runtimeMilliseconds = null; int? exitCode = null;
         try
         {
+            // The Unity log lands directly in this run directory; its path is computed here, never supplied.
+            playerLogPath = ProvisioningProcess.ValidatePlayerLogPath(Path.Combine(runRoot, ProvisioningProcess.PlayerLogName), runRoot);
             // This is fresh provisioning storage only; no manager state/package/config tree is allowed.
             if (Directory.Exists(input.ManagerRoot)) throw new InvalidDataException("Provisioning needs an unused manager-state root.");
             Directory.CreateDirectory(Path.GetDirectoryName(requestPath)!);
             WindowsIdentityProbe.RequireMatch(input.Identity, WindowsIdentityProbe.Read(NativeMethods.GetCurrentProcess()));
             WindowsIdentityProbe.RequireInteractiveDesktop(input.Identity.SessionId);
             ProvisioningFirewall.Require(input.OutboundBlockRuleName, input.Executable);
-            process = ProvisioningProcess.StartSuspended(input.Executable, input.GameRoot, id);
+            process = ProvisioningProcess.StartSuspended(input.Executable, input.GameRoot, id, playerLogPath);
             processStarted = true;
             process.Prepare(input.Identity);
             stamp = process.Stamp;
@@ -81,11 +83,21 @@ internal static class ProvisioningLauncher
             {
                 schemaVersion = 1, kind = "sandbox-provisioning-owned-launch-v1", requestId = id, challenge,
                 inputSha256 = input.InputSha256, requestSha256 = requestSha, process = stamp, identity = input.Identity,
+                launchArguments = ProvisioningProcess.LaunchArguments(playerLogPath), deadlineSeconds = (int)ProvisioningRuntimeWait.Deadline.TotalSeconds,
                 gameFiles = input.Files, outboundBlockRuleName = input.OutboundBlockRuleName, isolationAdmitted = false, qualifiesRelease = false
             });
             process.Resume(input.Identity);
-            while (!process.HasExited && Volatile.Read(ref interrupted) == 0 && timer.Elapsed < TimeSpan.FromSeconds(90)) Thread.Sleep(50);
-            if (Volatile.Read(ref interrupted) != 0) failures.Add("operator-interruption");
+            var wait = ProvisioningRuntimeWait.Wait(process, () => Volatile.Read(ref interrupted) != 0);
+            runtimeMilliseconds = wait.ElapsedMilliseconds; exitCode = wait.ExitCode;
+            // Diagnostics are retained before any termination decision; they describe a stall, never a pass.
+            BoundedJson.WriteNew(Path.Combine(runRoot, "runtime-diagnostics.json"), new
+            {
+                schemaVersion = 1, kind = "sandbox-provisioning-runtime-diagnostics-v1", requestId = id, process = stamp,
+                deadlineSeconds = (int)ProvisioningRuntimeWait.Deadline.TotalSeconds, exited = wait.Exited, interrupted = wait.Interrupted,
+                elapsedMilliseconds = wait.ElapsedMilliseconds, exitCode = wait.ExitCode, snapshots = wait.Snapshots, isolationAdmitted = false, qualifiesRelease = false
+            });
+            diagnosticsPath = "runtime-diagnostics.json";
+            if (wait.Interrupted) failures.Add("operator-interruption");
             if (!process.HasExited) { forced = true; failures.Add("original-process-timeout"); }
             originalExit = process.HasExited;
             if (!originalExit) failures.Add("original-process-exit-unconfirmed");
@@ -124,10 +136,12 @@ internal static class ProvisioningLauncher
             else originalExit = !processStarted;
         }
         if (forced && !failures.Contains("original-process-timeout")) failures.Add("original-process-force-terminated");
-        return new(1, "sandbox-provisioning-result-v1", id, challenge, input.InputSha256,
+        return new(2, "sandbox-provisioning-result-v2", id, challenge, input.InputSha256,
             observation != null && originalExit && !forced && failures.Count == 0 ? "observed" : "failed",
             DateTime.UtcNow, processStarted, stamp, originalExit, forced, observationSha,
-            failures.AsReadOnly(), false, false);
+            failures.AsReadOnly(), false, false,
+            new ProvisioningRuntimeFacts(playerLogPath == null ? Array.Empty<string>() : ProvisioningProcess.LaunchArguments(playerLogPath),
+                (int)ProvisioningRuntimeWait.Deadline.TotalSeconds, runtimeMilliseconds, exitCode, PlayerLogFact.Read(playerLogPath), diagnosticsPath));
     }
 
     internal static void VerifyObservation(JsonElement root, string id, string challenge, string requestSha,
@@ -164,4 +178,7 @@ internal static class ProvisioningLauncher
 internal sealed record ProvisioningResult(int SchemaVersion, string Kind, string RequestId, string Challenge,
     string InputSha256, string Status, DateTime CompletedAtUtc, bool ProcessStarted, ProcessStamp? Process,
     bool OriginalProcessExitConfirmed, bool ForceTerminated, string? ObservationSha256, IReadOnlyList<string> Failures,
-    bool IsolationAdmitted, bool QualifiesRelease);
+    bool IsolationAdmitted, bool QualifiesRelease, ProvisioningRuntimeFacts Runtime);
+/// Launch/log/exit facts retained with a result. A retained log or exit code never converts a failed status.
+internal sealed record ProvisioningRuntimeFacts(string[] LaunchArguments, int DeadlineSeconds, long? RuntimeMilliseconds,
+    int? OriginalProcessExitCode, PlayerLogFact PlayerLog, string? DiagnosticsPath);
