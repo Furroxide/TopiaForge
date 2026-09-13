@@ -68,7 +68,9 @@ try {
     [void](OpenReadLease $PSCommandPath 128KB)
     $outputRoot = Physical $requestValue.outputRoot
     $launchPath = Physical $requestValue.launchInputPath
-    if (!$toolRoot.StartsWith('D:\TopiaForgeQA\tools\',[StringComparison]::OrdinalIgnoreCase) -or !$outputRoot.StartsWith('D:\TopiaForgeQA\state\',[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetDirectoryName($launchPath) -cne $toolRoot -or !(Test-Path -LiteralPath $outputRoot -PathType Container)) { throw 'Provisioning roots are outside their approved layout.' }
+    # The launch input lives either in the read-only tool bundle or in this attempt's bound state root (a driver may generate it there).
+    $launchParent = [IO.Path]::GetDirectoryName($launchPath)
+    if (!$toolRoot.StartsWith('D:\TopiaForgeQA\tools\',[StringComparison]::OrdinalIgnoreCase) -or !$outputRoot.StartsWith('D:\TopiaForgeQA\state\',[StringComparison]::OrdinalIgnoreCase) -or ($launchParent -cne $toolRoot -and $launchParent -cne $outputRoot) -or !(Test-Path -LiteralPath $outputRoot -PathType Container)) { throw 'Provisioning roots are outside their approved layout.' }
     if ($requestValue.launchInputSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Invalid provisioning launch input digest.' }
     [void](OpenReadLease $launchPath 4MB $requestValue.launchInputSha256)
     $timeout = $requestValue.readyTimeoutSeconds

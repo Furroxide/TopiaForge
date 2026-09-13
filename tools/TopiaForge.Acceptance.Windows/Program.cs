@@ -5,9 +5,22 @@ if (args.Length == 1 && args[0] == "--self-test")
     try { BrokerContractTests.Run(); LoopbackCaptureTests.Run(); ProvisioningContractTests.Run(); return 0; }
     catch (Exception error) { Console.Error.WriteLine("Broker contract test failed: " + error.Message); return 1; }
 }
+if (args.Length == 3 && args[0] == "--fixture-shutdown")
+{
+    try
+    {
+        if (!OperatingSystem.IsWindows() || !Environment.Is64BitProcess) throw new PlatformNotSupportedException("Windows x64 is required.");
+        return ProvisioningFixtureShutdown.Run(args[1], args[2]);
+    }
+    catch (Exception error)
+    {
+        Console.Error.WriteLine("Fixture shutdown verification refused or stopped (" + error.GetType().Name + "): " + error.Message);
+        return 1;
+    }
+}
 if (args.Length != 2 || args[0] is not ("--request" or "--probe" or "--observe-runtime"))
 {
-    Console.Error.WriteLine("Usage: TopiaForge.Acceptance.Windows --request <private-request.json> | --probe <new-private-observation.json> | --observe-runtime <private-launch.json> | --self-test");
+    Console.Error.WriteLine("Usage: TopiaForge.Acceptance.Windows --request <private-request.json> | --probe <new-private-observation.json> | --observe-runtime <private-launch.json> | --fixture-shutdown <fixture-player.exe> <new-run-directory> | --self-test");
     return 64;
 }
 try

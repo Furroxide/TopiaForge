@@ -116,6 +116,46 @@ internal static class ProvisioningContractTests
         var wrongIdentity = root.DeepClone(); wrongIdentity["observedOsIdentity"]!["sessionId"] = 99; Refuse(() => Verify(wrongIdentity));
         var wrongRoot = root.DeepClone(); wrongRoot["observedRoots"]!["persistentDataRoot"] = fixture.Root; Refuse(() => Verify(wrongRoot));
         var extraClaim = root.DeepClone(); extraClaim["acceptanceAcknowledgement"] = true; Refuse(() => Verify(extraClaim));
+
+        // Diagnostic launch mode: one computed log destination, fixed headless flags, no operator arguments.
+        var logRun = Directory.CreateTempSubdirectory("TopiaForgeProvisioningLog-").FullName;
+        try
+        {
+            // The game executable is a fully qualified .exe path on the host running the checks; the contract is platform-neutral.
+            var gameDirectory = Path.Combine(logRun, "Game");
+            var executable = Path.Combine(gameDirectory, "Robotopia.exe");
+            var log = ProvisioningProcess.ValidatePlayerLogPath(Path.Combine(logRun, "player.log"), logRun); count++;
+            Check(ProvisioningProcess.BuildCommandLine(executable, log) == "\"" + executable + "\" -batchmode -nographics -noaudio -logFile \"" + log + "\"",
+                "Fixed headless command line with the computed log destination.");
+            Check(ProvisioningProcess.LaunchArguments(log).SequenceEqual(new[] { "-batchmode", "-nographics", "-noaudio", "-logFile", log }), "Recorded launch arguments.");
+            Refuse(() => ProvisioningProcess.ValidatePlayerLogPath(Path.Combine(logRun, "other.log"), logRun));
+            Refuse(() => ProvisioningProcess.ValidatePlayerLogPath(Path.Combine(logRun, "nested", "player.log"), logRun));
+            Refuse(() => ProvisioningProcess.ValidatePlayerLogPath(Path.Combine(Path.GetTempPath(), "player.log"), logRun));
+            File.WriteAllText(Path.Combine(logRun, "player.log"), "");
+            Refuse(() => ProvisioningProcess.ValidatePlayerLogPath(Path.Combine(logRun, "player.log"), logRun));
+            File.Delete(Path.Combine(logRun, "player.log"));
+            Refuse(() => ProvisioningProcess.BuildCommandLine("Robotopia.exe", log));
+            Refuse(() => ProvisioningProcess.BuildCommandLine(executable + " -extra", log));
+            Refuse(() => ProvisioningProcess.BuildCommandLine(executable, Path.Combine(gameDirectory, "pl\"ayer.log")));
+            Refuse(() => ProvisioningProcess.BuildCommandLine(executable, Path.Combine(gameDirectory, "other.log")));
+            Refuse(() => ProvisioningProcess.BuildCommandLine(executable, "player.log"));
+        }
+        finally { Directory.Delete(logRun, true); }
+        Check(ProvisioningDiagnostics.Port(0x5000) == 80 && ProvisioningDiagnostics.Port(0xbb01) == 443, "Endpoint ports decode from network byte order.");
+        Check(ProvisioningDiagnostics.TcpState(3) == "SYN_SENT" && ProvisioningDiagnostics.TcpState(5) == "ESTABLISHED" && ProvisioningDiagnostics.TcpState(99) == "UNKNOWN_99", "TCP state names.");
+        Check(ProvisioningRuntimeWait.Deadline == TimeSpan.FromSeconds(90) && ProvisioningRuntimeWait.SnapshotSeconds.SequenceEqual(new[] { 15, 45, 75 }), "Unchanged deadline with bounded snapshot schedule.");
+        if (OperatingSystem.IsWindows())
+        {
+            // The read-only snapshot uses Windows process, Toolhelp and IP-helper APIs; hosted Linux contract runs skip only this self-observation.
+            var self = System.Text.Json.JsonSerializer.SerializeToElement(ProvisioningDiagnostics.Snapshot(
+                new Microsoft.Win32.SafeHandles.SafeProcessHandle(NativeMethods.GetCurrentProcess(), false), Environment.ProcessId, null, "self-test", 0, false, null), BoundedJson.Options);
+            Check(self.GetProperty("threads").GetProperty("count").GetInt32() >= 1 && self.GetProperty("handleCount").GetUInt32() > 0
+                && self.GetProperty("tcp").GetProperty("count").GetInt32() >= 0 && self.GetProperty("udp").GetProperty("count").GetInt32() >= 0
+                && self.GetProperty("cpu").GetProperty("userMilliseconds").GetUInt64() >= 0 && self.GetProperty("memory").GetProperty("workingSetBytes").GetUInt64() > 0
+                && self.GetProperty("playerLog").ValueKind == System.Text.Json.JsonValueKind.Null && self.GetProperty("notes").GetArrayLength() == 0,
+                "Read-only self snapshot covers threads, handles, memory, endpoints and windows without failures.");
+        }
+        Check(PlayerLogFact.Read(null).Exists == false && PlayerLogFact.Read(Path.Combine(logRun, "player.log")).Exists == false, "Absent player log is recorded as absent.");
         Console.WriteLine("Provisioning launcher contract checks passed: " + count + ".");
     }
 

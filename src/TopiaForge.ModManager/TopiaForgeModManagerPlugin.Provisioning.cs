@@ -55,9 +55,16 @@ namespace TopiaForge.ModManager
                 LogProvisioningPhase("Unity OnApplicationQuit reached; original process exit remains unconfirmed.");
         }
 
+        private void LogProvisioningDestroyPhase()
+        {
+            if (initializationLifetime.ProvisioningObservationRecorded)
+                LogProvisioningPhase("Unity OnDestroy reached; original process exit remains unconfirmed.");
+        }
+
         private void LogProvisioningPhase(string phase)
         {
-            try { Logger.LogInfo("Provisioning: " + phase); }
+            // UTC stamps order the quit phases against the parent's diagnostics; they are not exit receipts.
+            try { Logger.LogInfo("Provisioning: " + DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + " " + phase); }
             catch { /* Diagnostics cannot prevent a quit request or create another startup path. */ }
         }
     }
