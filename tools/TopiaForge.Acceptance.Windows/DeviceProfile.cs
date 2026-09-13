@@ -2,12 +2,15 @@ using System.Text.Json;
 
 namespace TopiaForge.Acceptance.Windows;
 
-internal sealed record DeviceProfile(int Width, int Height, int Dpi, string DisplayName, string AudioEndpointId, bool LoopbackEnabled, string[] PersistenceFiles)
+internal sealed record DeviceProfile(int Width, int Height, int Dpi, string DisplayName, string AudioEndpointId, bool LoopbackEnabled, string[] PersistenceFiles, ScreenBaselineSet? ScreenBaselines = null)
 {
-    internal static DeviceProfile Read(string path)
+    internal static DeviceProfile Read(string path) => Parse(BoundedJson.Read(path));
+    internal static DeviceProfile Parse(JsonElement root)
     {
-        var root = BoundedJson.Read(path);
-        BoundedJson.Keys(root, "schemaVersion", "kind", "operatorReference", "reviewerEvidence", "display", "audio", "persistenceFiles");
+        var keys = new List<string> { "schemaVersion", "kind", "operatorReference", "reviewerEvidence", "display", "audio", "persistenceFiles" };
+        var baselines = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("screenBaselines", out _);
+        if (baselines) keys.Add("screenBaselines");
+        BoundedJson.Keys(root, keys.ToArray());
         if (BoundedJson.Integer(root, "schemaVersion", 1, 1) != 1 || BoundedJson.Text(root, "kind") != "sandbox-device-profile-v1") throw new InvalidDataException("Unsupported device profile.");
         _ = BoundedJson.Text(root, "operatorReference", 1024);
         _ = BoundedJson.Text(root, "reviewerEvidence", 1024);
@@ -21,6 +24,9 @@ internal sealed record DeviceProfile(int Width, int Height, int Dpi, string Disp
         if (files.ValueKind != JsonValueKind.Array || files.GetArrayLength() > 128) throw new InvalidDataException("Persistence allowlist exceeds its bound.");
         var paths = files.EnumerateArray().Select(f => f.GetString() ?? throw new InvalidDataException("Invalid persistence path.")).ToArray();
         if (paths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != paths.Length) throw new InvalidDataException("Duplicate persistence file.");
-        return new(BoundedJson.Integer(display, "width", 640, 7680), BoundedJson.Integer(display, "height", 480, 4320), BoundedJson.Integer(display, "dpi", 96, 384), BoundedJson.Text(display, "deviceName", 128), BoundedJson.Text(audio, "endpointId", 1024), enabled.GetBoolean(), paths);
+        var width = BoundedJson.Integer(display, "width", 640, 7680);
+        var height = BoundedJson.Integer(display, "height", 480, 4320);
+        return new(width, height, BoundedJson.Integer(display, "dpi", 96, 384), BoundedJson.Text(display, "deviceName", 128), BoundedJson.Text(audio, "endpointId", 1024), enabled.GetBoolean(), paths,
+            baselines ? ScreenBaselineSet.Read(root.GetProperty("screenBaselines"), width, height) : null);
     }
 }

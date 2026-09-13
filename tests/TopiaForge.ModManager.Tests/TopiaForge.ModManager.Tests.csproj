@@ -227,6 +227,9 @@
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\*.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Runtime\TopiaForgeStateFileCodec.cs" />
+    <!-- The explicit-observation model is Unity-free by design: compiling it here pins the measured widget
+         fields (selected, value, colour text) and their bounding without an Editor. -->
+    <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Diagnostics\TopiaForgeUiDiagnosticSnapshot.cs" />
   </ItemGroup>
 
   <!-- Unity editor tooling keeps filesystem primitives in Unity-free helpers so adversarial reads and

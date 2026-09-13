@@ -10,13 +10,14 @@ using UnityEngine;
 
 namespace TopiaForge.SandboxAcceptance.Native
 {
-    public sealed class SandboxAcceptanceNativeMod : TopiaForgeMod
+    public sealed partial class SandboxAcceptanceNativeMod : TopiaForgeMod
     {
         private ISandboxAcceptanceFixture? fixture;
         private NativeFixtureObjects? objects;
         private NativeSandboxObservations? observations;
         private SandboxPipeServer? server;
         private IDisposable? uiObservation;
+        private IDisposable? toastObservation;
         private readonly Stopwatch elapsed = Stopwatch.StartNew();
         private readonly SandboxNativeScenarios scenarios = new SandboxNativeScenarios();
         private string challenge = "";
@@ -38,8 +39,10 @@ namespace TopiaForge.SandboxAcceptance.Native
                 throw new InvalidOperationException("The enabled safe fixture must share this challenge.");
             challenge = config.Challenge;
             objects = new NativeFixtureObjects(Context);
-            observations = new NativeSandboxObservations(Context, objects);
+            observations = new NativeSandboxObservations(Context, objects, fixture);
             uiObservation = TopiaForgeUiDiagnostics.Enable(NativeSandboxObservations.SandboxOwner);
+            // Toast nodes exist only for an owner enabled before the toast is presented.
+            toastObservation = TopiaForgeUiDiagnostics.Enable(TopiaForgeToasts.DiagnosticsOwnerId);
             Context.Events.SubscribeUpdate(_ => { ProgressPreparation(); server?.Pump(); });
             server = new SandboxPipeServer(challenge, Execute);
         }
@@ -50,40 +53,12 @@ namespace TopiaForge.SandboxAcceptance.Native
             if (managerSession.Length != 0 && currentManager != managerSession) throw new InvalidDataException("Actual manager generation changed.");
             managerSession = currentManager;
             OperationResult<bool>? result = null;
-            if (request.Operation == "prepare")
+            switch (request.Operation)
             {
-                if (preparedScenario.Length != 0) throw new InvalidDataException("Cleanup is required before preparing another scenario cycle.");
-                if (request.Cycle > SandboxNativeScenarios.Cycles(request.ScenarioId)) throw new InvalidDataException("Unsupported cycle.");
-                // Preparation is bound to the actual current Sandbox session, not to an arbitrary scene.
-                var safe = fixture.Capture();
-                if (safe.SessionPhase != "Idle" && (safe.TargetId != SandboxAcceptanceMod.SandboxTargetId || safe.SessionPhase != "Running"))
-                    throw new InvalidDataException("Preparation requires Idle or the actual running Sandbox target.");
-                preparedScenario = request.ScenarioId; preparedCycle = request.Cycle;
-                preparationPending = true; preparationDeadline = elapsed.ElapsedMilliseconds + 120000;
-                if (safe.SessionPhase == "Idle") launch = NativeOwnerObservations.StartSandbox();
-                ProgressPreparation();
-                result = OperationResult<bool>.Success(true);
-            }
-            else if (request.Operation == "cleanup")
-            {
-                preparationPending = false;
-                result = fixture.Cleanup();
-                try { objects.Dispose(); } catch (Exception exception) { failures.Add("native-fixture-cleanup:" + exception.GetType().Name); }
-                if (result.Succeeded) { preparedScenario = ""; preparedCycle = 0; }
-            }
-            else if (request.Operation != "capture")
-            {
-                if (preparedScenario != request.ScenarioId || preparedCycle != request.Cycle) throw new InvalidDataException("Request is not bound to the prepared cycle.");
-                if (request.Operation == "unregister-source")
-                {
-                    if (!scenarios.Matches(request.ScenarioId, request.Cycle) || scenarios.ExpectedAction != "unregister-source") throw new InvalidDataException("Source disposal is out of sequence.");
-                    result = fixture.UnregisterSource();
-                }
-                if (request.Operation == "request-session-stop")
-                {
-                    if (!scenarios.Matches(request.ScenarioId, request.Cycle) || scenarios.ExpectedAction != "stop-world-session") throw new InvalidDataException("Session lifecycle request is out of sequence.");
-                    result = request.Cycle == 1 ? fixture.RequestSessionStop() : request.Cycle == 2 ? fixture.RequestSessionRestart() : fixture.RequestReturnToMainMenu();
-                }
+                case "prepare": result = Prepare(request); break;
+                case "cleanup": result = Cleanup(); break;
+                case "begin": case "capture": case "advance": break;
+                default: result = ExecuteBounded(request); break;
             }
             var reasons = new List<string>(fixture.Capture().UnavailableReasons);
             reasons.AddRange(failures);
@@ -134,8 +109,20 @@ namespace TopiaForge.SandboxAcceptance.Native
         protected override void OnUnload()
         {
             // Each disposer is attempted independently; transport failure never skips owned native cleanup.
-            try { server?.Dispose(); } finally
-            { try { fixture?.Cleanup(); } finally { try { objects?.Dispose(); } finally { uiObservation?.Dispose(); } } }
+            try { server?.Dispose(); }
+            finally
+            {
+                try { fixture?.Cleanup(); }
+                finally
+                {
+                    try { objects?.Dispose(); }
+                    finally
+                    {
+                        try { NativeAccessibility.Reset(); }
+                        finally { try { uiObservation?.Dispose(); } finally { toastObservation?.Dispose(); } }
+                    }
+                }
+            }
         }
     }
 }

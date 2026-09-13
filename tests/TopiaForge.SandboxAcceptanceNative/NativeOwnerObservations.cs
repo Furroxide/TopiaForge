@@ -12,17 +12,34 @@ using UnityEngine;
 
 namespace TopiaForge.SandboxAcceptance.Native
 {
+    /// <summary>One production interaction bridge with its measured activity and definition prompt.</summary>
+    internal sealed class InteractionObservation
+    {
+        internal InteractionObservation(Component bridge, bool active, string? prompt) { Bridge = bridge; Active = active; Prompt = prompt; }
+        internal Component Bridge { get; }
+        internal bool Active { get; }
+        /// <summary>Definition prompt; empty for a disposed bridge, null when the definition field is unobservable.</summary>
+        internal string? Prompt { get; }
+        internal Dictionary<string, object?> Row() => new Dictionary<string, object?>
+        {
+            ["instanceId"] = Bridge.GetInstanceID(), ["entityInstanceId"] = Bridge.gameObject.GetInstanceID(),
+            ["active"] = Active, ["prompt"] = Prompt, ["scope"] = "global-runtime"
+        };
+    }
+
     // This test-only observer reads a fixed allowlist of production fields. Missing/version-changed
     // fields are unavailable evidence, never a substitute zero or a successful lifecycle claim.
     internal static class NativeOwnerObservations
     {
         private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+        private const BindingFlags Public = BindingFlags.Instance | BindingFlags.Public;
         internal static object? Unwrap(object? value, string expected)
         {
             if (value?.GetType().FullName == expected + "+OwnerFacade")
                 value = value.GetType().GetField("service", Private)?.GetValue(value);
             return value?.GetType().FullName == expected ? value : null;
         }
+        internal static void AddOnce(List<string> reasons, string reason) { if (!reasons.Contains(reason)) reasons.Add(reason); }
         internal static object[] Content(IModContext context, object? facade, List<string> unavailable)
         {
             var service = Unwrap(facade, "TopiaForge.CreatorContent.CreatorContentService");
@@ -47,17 +64,37 @@ namespace TopiaForge.SandboxAcceptance.Native
             }
             return result.ToArray();
         }
+        // The owner facade lists only this mod's agents; the process-wide population behind it is the actual
+        // robot set that Sandbox spawns, fixture characters and the unrelated control robot belong to.
         internal static object[] Robots(IModContext context, List<string> unavailable)
         {
-            if (!context.Extensions.TryGet<IRobotAgentService>(out var service) || service == null)
+            if (!context.Extensions.TryGet<IRobotAgentService>(out var facade) || facade == null)
             { unavailable.Add("robot-agent-observation-unavailable"); return Array.Empty<object>(); }
-            if (service.ActiveAgents.Count > 4096) throw new InvalidDataException("Robot observation bound exceeded.");
-            return service.ActiveAgents.Select(agent => { var item = Entity(context, agent, unavailable); item["scope"] = "global-robotkit";
-                item["brainMode"] = agent.BrainMode.ToString(); return (object)item; }).ToArray();
+            var service = Unwrap(facade, "TopiaForge.RobotKit.RobotAgentService");
+            var agents = (service?.GetType().GetProperty("ActiveAgents", Public)?.GetValue(service) as IEnumerable)?.Cast<object>().ToArray();
+            if (agents == null) { unavailable.Add("global-robot-observation-unavailable"); return Array.Empty<object>(); }
+            if (agents.Length > 4096) throw new InvalidDataException("Robot observation bound exceeded.");
+            return agents.Select(agent =>
+            {
+                if (!(agent is IRobotAgent robot)) throw new InvalidDataException("Unexpected robot agent type.");
+                var item = Entity(context, robot, unavailable);
+                item["scope"] = "global-robotkit";
+                item["brainMode"] = robot.BrainMode.ToString();
+                return (object)item;
+            }).ToArray();
+        }
+        /// <summary>Resolves an entity's actual GameObject through the shared registry or the trusted RobotKit surfaces only.</summary>
+        internal static GameObject? Resolve(IModContext context, IEntity entity)
+        {
+            if (context.RequireUnityInterop().TryGetGameObject(entity, out var registered) && registered != null) return registered;
+            var type = entity.GetType();
+            var trusted = type.FullName == "TopiaForge.RobotKit.RobotAgent"
+                || type.GetInterfaces().Any(i => i.FullName == "TopiaForge.RobotKit.INativeEntityAdapter");
+            return trusted ? type.GetProperty("NativeGameObject", Public)?.GetValue(entity) as GameObject : null;
         }
         private static Dictionary<string, object?> Entity(IModContext context, IEntity entity, List<string> unavailable)
         {
-            var native = context.RequireUnityInterop().TryGetGameObject(entity, out var go) && go != null ? go : null;
+            var native = Resolve(context, entity);
             if (entity.IsAlive && native == null) unavailable.Add("live-entity-native-identity-unavailable:" + entity.Id);
             return new Dictionary<string, object?> { ["id"] = entity.Id, ["alive"] = entity.IsAlive,
                 ["instanceId"] = native != null ? native.GetInstanceID() : (object?)null,
@@ -78,16 +115,24 @@ namespace TopiaForge.SandboxAcceptance.Native
             }
             catch { unavailable.Add("player-control-counter-unavailable"); return null; }
         }
-        internal static object[] Interactions()
+        internal static List<InteractionObservation> Interactions(List<string> unavailable)
         {
             var assembly = AppDomain.CurrentDomain.GetAssemblies().SingleOrDefault(a => a.GetName().Name == "TopiaForge.ModManager");
             var type = assembly?.GetType("TopiaForge.ModManager.UnityInteractionBridge", false);
             if (type == null) throw new InvalidDataException("Production interaction bridge type is unavailable.");
             var components = Resources.FindObjectsOfTypeAll(type);
             if (components.Length > 4096) throw new InvalidDataException("Interaction observation bound exceeded.");
-            return components.OfType<Component>().Where(c => c != null).Select(c => (object)new Dictionary<string, object?> {
-                ["instanceId"] = c.GetInstanceID(), ["entityInstanceId"] = c.gameObject.GetInstanceID(),
-                ["active"] = (bool)type.GetProperty("IsActive")!.GetValue(c)!, ["scope"] = "global-runtime" }).ToArray();
+            var active = type.GetProperty("IsActive", Public) ?? throw new InvalidDataException("Production interaction bridge activity is unavailable.");
+            var definition = type.GetField("definition", Private);
+            if (definition == null && components.Length != 0) AddOnce(unavailable, "interaction-prompt-unavailable");
+            var result = new List<InteractionObservation>();
+            foreach (var component in components.OfType<Component>())
+            {
+                if (component == null) continue;
+                var prompt = definition == null ? null : (definition.GetValue(component) as InteractableDefinition)?.Prompt ?? "";
+                result.Add(new InteractionObservation(component, (bool)active.GetValue(component)!, prompt));
+            }
+            return result;
         }
         internal static Task<(bool Ok, string Message)> StartSandbox()
         {

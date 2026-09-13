@@ -41,6 +41,12 @@ namespace TopiaForge.ModManager
                 Id = id;
                 TopiaForgeUiDiagnostics.TagWidget(widget, id, "$surface", "surface");
                 TopiaForgeUiDiagnostics.TagWidget(body, id, "$body", "text");
+                var closeButton = window != null ? window.CloseButton : fullscreen?.CloseButton;
+                if (closeButton != null)
+                {
+                    TopiaForgeUiDiagnostics.TagWidget(closeButton, id, TopiaForgeUiDiagnosticFormat.CloseTag, "button");
+                }
+
                 this.widget = widget;
                 this.window = window;
                 this.fullscreen = fullscreen;
@@ -197,7 +203,7 @@ namespace TopiaForge.ModManager
                     UiComposition.Validate(content);
                     next = parent.Column(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     graphTransaction = new UiGraphRetentionTransaction(retainedGraphs);
-                    RenderNode(content, next, callbacks, graphTransaction, Id);
+                    RenderNode(content, next, callbacks, graphTransaction, new UiRenderPass(Id));
                 }
                 catch (ArgumentException exception)
                 {

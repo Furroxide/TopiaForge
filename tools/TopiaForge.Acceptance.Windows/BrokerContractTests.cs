@@ -31,15 +31,17 @@ internal static class BrokerContractTests
         Assert(ScreenCapture.CountColors(new byte[] { 0, 0, 0, 255, 1, 2, 3, 0 }) == 2, "alpha excluded from visible color");
         Refuse(() => ScreenCapture.CountColors(new byte[3]), "invalid pixel layout");
         foreach (var json in new[] { "{\"kind\":\"shell\",\"command\":\"anything\"}", "{\"kind\":\"key\",\"key\":\"LWin\"}", "{\"kind\":\"click\",\"nodeId\":\"launch-personal-game\"}", "{\"kind\":\"request\",\"operation\":\"invoke\"}", "{\"kind\":\"replace-text\",\"nodeId\":\"persona-name\",\"textFromFact\":\"secret\"}" })
-            Refuse(() => DriverManifest.ValidateStep(BoundedJson.Parse(Encoding.UTF8.GetBytes(json))), "closed actuation vocabulary");
+            Refuse(() => DriverVocabulary.ValidateStep(BoundedJson.Parse(Encoding.UTF8.GetBytes(json))), "closed actuation vocabulary");
         Assert(DriverManifest.Cycles("ten-cycles") == 10 && DriverManifest.Cycles("lifecycle-routes") == 3, "mandatory cycle counts");
-        var manifest = new DriverManifest(Path.Combine(Environment.CurrentDirectory, "tests", "TopiaForge.SandboxAcceptanceNative", "driver-actions-v1.json"));
-        Assert(manifest.Action("spawn-catalog").Length == 3, "actual dynamic catalog manifest");
+        var manifest = new DriverManifest(Path.Combine(Environment.CurrentDirectory, "tests", "TopiaForge.SandboxAcceptanceNative", "driver-actions-v2.json"));
+        Assert(manifest.Action("spawn-catalog").Length == 4, "actual dynamic catalog manifest");
         Refuse(() => manifest.Action("external-action"), "untrusted native next action");
         var cancel = BoundedJson.Parse(Encoding.UTF8.GetBytes("{\"schemaVersion\":1,\"kind\":\"sandbox-broker-cancel-v1\",\"challenge\":\"" + new string('a', 64) + "\"}"));
         BrokerCancellation.Validate(cancel, new string('a', 64)); count++;
         Refuse(() => BrokerCancellation.Validate(cancel, new string('b', 64)), "foreign cancellation challenge");
         Refuse(() => BrokerCancellation.Validate(BoundedJson.Parse(Encoding.UTF8.GetBytes("{}")), new string('a', 64)), "incomplete cancellation");
+        BrokerContractTestsV2.Run(Assert, Refuse);
+        ScreenBaselineTests.Run(Assert, Refuse);
         Console.WriteLine($"Broker contract checks passed: {count}.");
     }
 }

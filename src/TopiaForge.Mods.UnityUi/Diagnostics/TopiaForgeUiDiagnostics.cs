@@ -73,11 +73,46 @@ namespace TopiaForge.Mods.UnityUi
                 && (hit == tag.Widget.Go || hit.transform.IsChildOf(tag.Widget.Go.transform)));
         }
 
+        /// <summary>Whether an owner currently holds an observation lease (so producers can skip tag work).</summary>
+        internal static bool IsObserved(string ownerId) => ownerId != null && Owners.ContainsKey(ownerId);
+
         private static void Prune(Owner owner)
         {
             foreach (var item in owner.Tags.Where(pair => pair.Key == null).ToArray()) owner.Tags.Remove(item.Key);
         }
-        private static string Bound(string value) => value == null ? "" : value.Length <= 256 ? value : value.Substring(0, 256);
+        private static string Bound(string value) => TopiaForgeUiDiagnosticFormat.Bound(value);
+        private static string ValueOf(TopiaForgeWidget widget)
+        {
+            switch (widget)
+            {
+                case TopiaForgeDropdown dropdown: return dropdown.SelectedCaption;
+                case TopiaForgeToggle toggle: return toggle.Value ? "true" : "false";
+                case TopiaForgeSlider slider: return TopiaForgeUiDiagnosticFormat.InvariantNumber(slider.Value);
+                case TopiaForgeInputField input: return input.Text;
+                default: return "";
+            }
+        }
+        // The first TMP_Text of the subtree in hierarchy order whose component is enabled: TMP_InputField disables
+        // its placeholder while text is present, so the enabled label is the one actually rendered.
+        private static string Foreground(GameObject root)
+        {
+            foreach (var text in root.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (text.enabled) return Hex(text.color);
+            }
+            return "";
+        }
+        // The widget's own Image when opaque enough, else the nearest ancestor Image that is; decor children never count.
+        private static string Background(GameObject root)
+        {
+            for (var current = root.transform; current != null; current = current.parent)
+            {
+                var image = current.GetComponent<Image>();
+                if (image != null && TopiaForgeUiDiagnosticFormat.IsOpaqueBackground(image.color.a)) return Hex(image.color);
+            }
+            return "";
+        }
+        private static string Hex(Color color) => TopiaForgeUiDiagnosticFormat.Hex(color.r, color.g, color.b);
         private static Rect Bounds(RectTransform rect)
         {
             var corners = new Vector3[4];
@@ -121,7 +156,8 @@ namespace TopiaForge.Mods.UnityUi
             var text = input != null ? input.text : label != null ? label.text : tag.Text;
             return new TopiaForgeUiDiagnosticWidget(tag.Surface, tag.Id, tag.Kind, Bound(text), tag.Style,
                 bounds.x, bounds.y, bounds.width, bounds.height, visible, enabled && visible, focused, clipped,
-                widget.Host.EffectiveHighContrast, widget.Host.EffectiveReducedMotion, widget.Host.EffectiveUiScale, widget.Host.EffectiveMotion);
+                widget.Host.EffectiveHighContrast, widget.Host.EffectiveReducedMotion, widget.Host.EffectiveUiScale, widget.Host.EffectiveMotion,
+                widget is TopiaForgeListRow row && row.Selected, Bound(ValueOf(widget)), Foreground(widget.Go), Background(widget.Go));
         }
     }
 }

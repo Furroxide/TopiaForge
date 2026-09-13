@@ -35,10 +35,14 @@ namespace TopiaForge.Mods.UnityUi
     {
         internal TopiaForgeUiDiagnosticWidget(string surface, string id, string kind, string text, string style,
             float x, float y, float width, float height, bool visible, bool enabled, bool focused, bool clipped,
-            bool contrast, bool reduced, float scale, float motion)
-        { SurfaceId = surface; NodeId = id; Kind = kind; Text = text; Style = style; X = x; Y = y; Width = width; Height = height;
+            bool contrast, bool reduced, float scale, float motion,
+            bool selected = false, string? value = null, string? foreground = null, string? background = null)
+        { SurfaceId = surface; NodeId = id; Kind = kind; Text = TopiaForgeUiDiagnosticFormat.Bound(text); Style = style;
+          X = x; Y = y; Width = width; Height = height;
           Visible = visible; Enabled = enabled; Focused = focused; Clipped = clipped; HighContrast = contrast;
-          ReducedMotion = reduced; UiScale = scale; MotionIntensity = motion; }
+          ReducedMotion = reduced; UiScale = scale; MotionIntensity = motion;
+          Selected = selected; Value = TopiaForgeUiDiagnosticFormat.Bound(value);
+          Foreground = foreground ?? string.Empty; Background = background ?? string.Empty; }
         /// <summary>Safe SDK surface id; modals use $modal.</summary>
         public string SurfaceId { get; }
         /// <summary>Safe SDK node id; virtual rows use list-id/item-id.</summary>
@@ -73,5 +77,19 @@ namespace TopiaForge.Mods.UnityUi
         public float UiScale { get; }
         /// <summary>Effective host motion intensity.</summary>
         public float MotionIntensity { get; }
+        /// <summary>List rows: the rendered selected state of the row. Other widgets: false.</summary>
+        public bool Selected { get; }
+        /// <summary>
+        /// Dropdown: caption text of the current option. Toggle: "true"/"false". Slider: invariant value text.
+        /// Input: current text. Otherwise empty. Bounded to 256 characters.
+        /// </summary>
+        public string Value { get; }
+        /// <summary>#rrggbb of the first rendered TMP_Text in the widget subtree, or empty.</summary>
+        public string Foreground { get; }
+        /// <summary>
+        /// #rrggbb of the widget's own Image when its alpha is at least 0.5, else of the nearest ancestor Image
+        /// with alpha at least 0.5, or empty.
+        /// </summary>
+        public string Background { get; }
     }
 }

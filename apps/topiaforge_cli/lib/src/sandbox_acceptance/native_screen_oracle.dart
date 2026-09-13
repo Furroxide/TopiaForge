@@ -1,8 +1,52 @@
 import 'dart:typed_data';
 
+import 'native_annex.dart';
+import 'sandbox_json.dart';
+
 final class NativeScreenMeasurement {
   const NativeScreenMeasurement(this.width, this.height, this.colors);
   final int width, height, colors;
+}
+
+/// Builds the set of `scenarioId|cycle|step` keys with a reviewed device-profile
+/// baseline entry (spec section 2). A missing `screenBaselines` block yields an
+/// empty set, which makes every visual check `unavailable` (never passed).
+Set<String> nativeScreenBaselineSteps(Map<String, Object?> deviceProfile) {
+  final baselines = deviceProfile['screenBaselines'];
+  if (baselines == null) return const {};
+  final root = sandboxObject(baselines, 'screen baselines');
+  sandboxFields(root, {'root', 'entries'}, 'screen baselines');
+  sandboxText(root['root'], 'screen baseline root', maximum: 1024);
+  final keys = <String>{};
+  for (final entry in nativeRows(root['entries'], 4096)) {
+    sandboxFields(entry, {
+      'scenarioId',
+      'cycle',
+      'step',
+      'path',
+      'sha256',
+      'tolerance',
+      'masks',
+    }, 'screen baseline entry');
+    final scenario = sandboxText(entry['scenarioId'], 'baseline scenario');
+    final cycle = nativeInteger(entry['cycle'], 1, 10);
+    final step = sandboxText(entry['step'], 'baseline step', maximum: 128);
+    nativeRelativePath(entry['path']);
+    nativeHex(entry['sha256'], 64);
+    final tolerance = entry['tolerance'];
+    if (tolerance is! num ||
+        !tolerance.isFinite ||
+        tolerance < 0 ||
+        tolerance > 1 ||
+        entry['masks'] is! List ||
+        (entry['masks']! as List).length > 256) {
+      throw StateError('Invalid native screen baseline entry.');
+    }
+    if (!keys.add('$scenario|$cycle|$step')) {
+      throw StateError('Duplicate native screen baseline entry.');
+    }
+  }
+  return keys;
 }
 
 /// Validates and measures the broker's exact top-down 32-bit BMP format.

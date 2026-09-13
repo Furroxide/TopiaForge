@@ -2,10 +2,23 @@ import 'native_screen_oracle.dart';
 import 'native_audio_oracle.dart';
 import 'native_annex.dart';
 import 'native_annex_verifier.dart';
+import 'native_expected_catalog.dart';
+import 'native_transcript_evidence.dart';
+import 'native_postconditions.dart';
 import 'native_transcript_actions.dart';
 import 'native_transcript_facts.dart';
 import 'native_transcript_protocol.dart';
 import 'sandbox_specification.dart';
+
+const _screenSteps = {
+  'open',
+  'reopen',
+  'hide',
+  'hide-f5',
+  'hide-close',
+  'end-session',
+  'stop-world-session',
+};
 
 /// Computes supplementary native results from the actual bound exchanges and OS
 /// records. Driver scenarioState, completedCycles and annex claims are ignored.
@@ -16,6 +29,8 @@ List<SandboxNativeOracleResult> evaluateSandboxNativeTranscript({
   Map<String, NativeAudioMeasurement> audioMeasurements = const {},
   Map<String, NativeScreenMeasurement> screenMeasurements = const {},
   String audioEndpointId = '',
+  SandboxExpectedCatalog? expectedCatalog,
+  Set<String> screenBaselineSteps = const {},
 }) {
   final data = readNativeTranscript(
     annex,
@@ -43,22 +58,19 @@ List<SandboxNativeOracleResult> evaluateSandboxNativeTranscript({
         );
       }
       if (records.isNotEmpty) {
-        final cycles = id == 'ten-cycles'
-            ? 10
-            : id == 'lifecycle-routes'
-            ? 3
-            : 1;
+        final cycles = nativeCycleCount(id);
         final actualCycles = records.map((r) => r.cycle).toSet();
         if (actualCycles.any((c) => c < 1 || c > cycles)) {
           throw StateError('Unknown native cycle.');
         }
         Map<String, Object?>? firstBaseline;
+        _CycleOutcome? previous;
         for (var cycle = 1; cycle <= cycles; cycle++) {
           final observations = records.where((r) => r.cycle == cycle).toList();
           if (observations.isEmpty) {
             throw StateError('Missing native cycle $cycle of $cycles.');
           }
-          final baseline = _cycle(
+          final outcome = _cycle(
             data,
             id,
             cycle,
@@ -66,38 +78,28 @@ List<SandboxNativeOracleResult> evaluateSandboxNativeTranscript({
             audioMeasurements,
             screenMeasurements,
             audioEndpointId,
+            expectedCatalog,
+            screenBaselineSteps,
           );
-          if (firstBaseline != null &&
-              id == 'ten-cycles' &&
-              !resourcesEqual(firstBaseline, baseline, includeUi: true)) {
-            throw StateError(
-              'Intermediate lifecycle cycle leaked resources into its successor.',
-            );
+          if (id == 'ten-cycles') {
+            _tenCycleInvariants(firstBaseline, previous, outcome);
           }
-          firstBaseline ??= baseline;
+          firstBaseline ??= outcome.begin;
+          previous = outcome;
           completed++;
         }
         status = SandboxNativeStatus.passed;
         reason = '';
-        // These implemented recipes establish their actual supported branches;
-        // they cannot establish a native capability that production does not expose.
-        const residuals = {
-          'routing':
-              'Global-mode host routing remains unavailable; Sandbox routing was observed.',
-          'catalog-editing':
-              'Built-in native vehicle adapter remains unavailable; admitted catalog entries were exercised.',
-          'source-unload':
-              'Source registrations were disposed; production package-specific live unload is unavailable.',
-          'graph-rollback':
-              'Graph resources were observed; native interaction actuation and asynchronous backend completion remain unavailable.',
-          'lifecycle-routes':
-              'Worlds Stop/Restart/ReturnToMainMenu were observed; package-specific live unload is unavailable.',
-        };
-        if (residuals.containsKey(id)) {
+        if (id == 'catalog-editing' &&
+            expectedCatalog != null &&
+            !expectedCatalog.reviewed) {
           status = SandboxNativeStatus.unavailable;
-          reason = residuals[id]!;
+          reason = SandboxExpectedCatalog.reviewedGateReason;
         }
       }
+    } on NativeFactUnavailable catch (error) {
+      status = SandboxNativeStatus.unavailable;
+      reason = error.reason;
     } on StateError catch (error) {
       status = SandboxNativeStatus.failed;
       reason = error.message;
@@ -116,7 +118,62 @@ List<SandboxNativeOracleResult> evaluateSandboxNativeTranscript({
   return List.unmodifiable(results);
 }
 
-Map<String, Object?> _cycle(
+final class _CycleOutcome {
+  _CycleOutcome(
+    this.begin,
+    this.previewedPersonalityId,
+    this.graphAudioIds,
+    this.controllerId,
+    this.activeInteractionIds,
+  );
+  final Map<String, Object?> begin;
+  final int? previewedPersonalityId, controllerId;
+  final List<int> graphAudioIds;
+  final Set<int> activeInteractionIds;
+}
+
+/// Cross-cycle ten-cycle invariants: no resource leak into a successor, and the
+/// previous cycle's active interaction registrations must be inactive.
+void _tenCycleInvariants(
+  Map<String, Object?>? firstBaseline,
+  _CycleOutcome? previous,
+  _CycleOutcome outcome,
+) {
+  if (firstBaseline != null &&
+      !resourcesEqual(firstBaseline, outcome.begin, includeUi: true)) {
+    throw StateError(
+      'Intermediate lifecycle cycle leaked resources into its successor.',
+    );
+  }
+  if (previous != null) {
+    final active = _activeInteractions(outcome.begin);
+    if (previous.activeInteractionIds.any(active.contains)) {
+      throw StateError(
+        "The previous cycle's interaction registration is still active.",
+      );
+    }
+  }
+}
+
+Set<int> _activeInteractions(Map<String, Object?> facts) {
+  final value = facts['interactions'];
+  if (value is! List || value.length > 4096) {
+    throw NativeFactUnavailable('Native fact interactions is unavailable.');
+  }
+  final ids = <int>{};
+  for (final row in value) {
+    if (row is! Map<String, Object?> ||
+        row['instanceId'] is! int ||
+        row['active'] is! bool ||
+        (row['prompt'] != null && row['prompt'] is! String)) {
+      throw NativeFactUnavailable('Native fact interactions is unavailable.');
+    }
+    if (row['active'] == true) ids.add(row['instanceId']! as int);
+  }
+  return ids;
+}
+
+_CycleOutcome _cycle(
   NativeTranscriptData data,
   String id,
   int cycle,
@@ -124,6 +181,8 @@ Map<String, Object?> _cycle(
   Map<String, NativeAudioMeasurement> audioMeasurements,
   Map<String, NativeScreenMeasurement> screenMeasurements,
   String audioEndpointId,
+  SandboxExpectedCatalog? expectedCatalog,
+  Set<String> screenBaselineSteps,
 ) {
   final begins = observations.where((o) => o.operation == 'begin').toList();
   if (begins.length != 1) {
@@ -143,14 +202,23 @@ Map<String, Object?> _cycle(
       preparation.single.facts['operationAccepted'] != true) {
     throw StateError('Missing/duplicate native preparation.');
   }
-  final expected = nativeExpectedSteps(id, data.driver, begin.facts);
+  final expected = nativeExpectedSteps(
+    id,
+    cycle,
+    data.driver,
+    begin.facts,
+    expectedCatalog,
+  );
   final events = data.events
       .where((e) => e['scenarioId'] == id && e['cycle'] == cycle)
       .toList();
   NativeTranscriptObservation previous = begin;
-  Map<String, Object?>? graphBaseline;
-  Map<String, Object?>? openedUi;
+  Map<String, Object?>? graphBaseline, openedUi, externalWrite;
   var borrowed = false;
+  int? previewedPersonalityId;
+  final graphAudioIds = <int>[];
+  var ranGraph = false;
+  final activeInteractionIds = <int>{};
   NativeAudioMeasurement? runningAudio;
   final usedAdvances = <int>{};
   for (var index = 0; index < expected.length; index++) {
@@ -171,23 +239,36 @@ Map<String, Object?> _cycle(
     }
     NativeTranscriptObservation? accepted;
     for (final candidate in candidates) {
-      if (candidate.frame <= previous.frame ||
-          candidate.facts['operationAccepted'] != true) {
+      if (candidate.frame <= previous.frame) continue;
+      if (candidate.facts['operationAccepted'] != true) {
+        _requireNoFixtureFailure(candidate);
         continue;
       }
       if (candidate.milliseconds - previous.milliseconds > 10000) {
         throw StateError('Native step observation exceeded deadline.');
       }
-      if (checkNativePostcondition(
-        action.action,
-        cycle,
-        begin.facts,
-        previous.facts,
-        candidate.facts,
-        graphBaseline: graphBaseline,
-        borrowedSelected: borrowed,
-        openedUi: openedUi,
-      )) {
+      final bool satisfied;
+      try {
+        satisfied = checkNativePostcondition(
+          NativePostcondition(
+            scenario: id,
+            action: action.action,
+            cycle: cycle,
+            initial: begin.facts,
+            before: previous.facts,
+            graphBaseline: graphBaseline,
+            borrowedSelected: borrowed,
+            openedUi: openedUi,
+            externalWrite: externalWrite,
+          ),
+          candidate.facts,
+        );
+      } on NativeFactUnavailable catch (error) {
+        throw NativeFactUnavailable(
+          _withObserverReasons(error.reason, candidate),
+        );
+      }
+      if (satisfied) {
         accepted = candidate;
         break;
       }
@@ -205,35 +286,20 @@ Map<String, Object?> _cycle(
         )
         .toList();
     checkNativeInputs(data, stepEvents, action, previous.facts, accepted.order);
-    if ([
-      'open',
-      'hide',
-      'reopen',
-      'end-session',
-      'stop-world-session',
-    ].contains(action.action)) {
-      final screens = stepEvents.where((e) => e['kind'] == 'capture').toList();
-      if (screens.isEmpty ||
-          screens.any(
-            (e) => number(objectMap(e['data']), 'distinctSampleColors') < 8,
-          )) {
-        throw StateError('Native visual observation is missing or blank.');
-      }
-      for (final screen in screens) {
-        final sample = objectMap(screen['data']);
-        final actual = screenMeasurements[sample['path']];
-        if (actual == null) {
-          throw StateError('Actual native BMP bytes are missing.');
-        }
-        verifyNativeScreenClaim(sample, actual);
-        if (sample['width'] != ui(accepted.facts)['width'] ||
-            sample['height'] != ui(accepted.facts)['height']) {
-          throw StateError('Screenshot and actual client geometry differ.');
-        }
-      }
+    checkNativeMeasuredEvents(stepEvents, previous.facts);
+    if (_screenSteps.contains(action.action)) {
+      checkNativeScreens(
+        id,
+        cycle,
+        action.action,
+        stepEvents,
+        accepted,
+        screenMeasurements,
+        screenBaselineSteps,
+      );
     }
     if (['run-graph', 'stop-graph'].contains(action.action)) {
-      final actualAudio = _audio(
+      final actualAudio = checkNativeAudio(
         stepEvents,
         action.action,
         audioMeasurements,
@@ -248,9 +314,25 @@ Map<String, Object?> _cycle(
         );
       }
     }
-    if (action.action == 'open') openedUi = accepted.facts;
-    if (action.action == 'run-graph') graphBaseline = previous.facts;
-    if (action.action == 'select-borrowed') borrowed = true;
+    switch (action.action) {
+      case 'open':
+        openedUi = accepted.facts;
+      case 'run-graph':
+        graphBaseline = previous.facts;
+        ranGraph = true;
+        graphAudioIds.addAll(nativeGraphAudioIds(accepted.facts));
+      case 'select-borrowed':
+        borrowed = true;
+      case 'edit-personality':
+        previewedPersonalityId =
+            objectMap(
+                  objectMap(accepted.facts['borrowedRobot'])['brain'],
+                )['hackedPersonalityId']
+                as int?;
+      case 'external-write':
+        externalWrite = accepted.facts;
+    }
+    activeInteractionIds.addAll(_activeInteractions(accepted.facts));
     for (final candidate in candidates.where(
       (c) => c.order <= accepted!.order,
     )) {
@@ -263,101 +345,78 @@ Map<String, Object?> _cycle(
   )) {
     throw StateError('Extra, repeated or reordered native action.');
   }
-  final cleanups = observations
-      .where((o) => o.operation == 'cleanup' && o.order > previous.order)
-      .toList();
-  if (cleanups.isEmpty) {
-    throw StateError('Native fixture cleanup operation is missing.');
-  }
-  final cleanup = cleanups.last;
-  final barriers = observations
-      .where(
-        (o) =>
-            o.operation == 'capture' &&
-            o.order > cleanup.order &&
-            o.frame >= cleanup.frame + 2,
-      )
-      .toList();
-  if (barriers.isEmpty ||
-      !barriers.any(
-        (o) =>
-            o.facts['prepared'] == false &&
-            number(o.facts, 'ownedObjectCount') == 0 &&
-            number(o.facts, 'nativeCleanupPendingObjects') == 0 &&
-            mapRows(o.facts, 'nativeProps').isEmpty &&
-            (o.facts['cleanupErrors'] as List?)?.isEmpty == true,
-      )) {
-    throw StateError(
-      'Actual native destruction did not cross the cleanup frame barrier.',
-    );
-  }
-  _persistence(events);
-  return begin.facts;
+  checkNativeCleanupBarrier(
+    observations,
+    previous,
+    previewedPersonalityId,
+    graphAudioIds,
+    ranGraph: ranGraph,
+  );
+  checkNativePersistence(events);
+  final controllerId = id == 'ten-cycles'
+      ? _constantController(observations)
+      : null;
+  return _CycleOutcome(
+    begin.facts,
+    previewedPersonalityId,
+    graphAudioIds,
+    controllerId,
+    activeInteractionIds,
+  );
 }
 
-NativeAudioMeasurement _audio(
-  List<Map<String, Object?>> events,
-  String action,
-  Map<String, NativeAudioMeasurement> measurements,
-  String endpointId,
+/// Observer-reported unavailable reasons the verifier surfaces verbatim: a
+/// refused bounded fixture operation (`fixture-operation-failed:<code>`) or
+/// missing toast diagnostics (`toast-diagnostics-unavailable`).
+List<String> _observerReasons(NativeTranscriptObservation observation) => [
+  for (final reason
+      in observation.response['unavailableReasons'] as List? ?? const [])
+    if (reason is String &&
+        (reason == 'toast-diagnostics-unavailable' ||
+            reason.startsWith('fixture-operation-failed:')))
+      reason,
+];
+
+/// A reply that refused a bounded operation carries `operationErrorCode` and
+/// the matching reason; that step is unavailable, never a substitute pass.
+void _requireNoFixtureFailure(NativeTranscriptObservation observation) {
+  final code = observation.facts['operationErrorCode'];
+  if (code != null && code is! String) {
+    throw NativeFactUnavailable(
+      'Native fact operationErrorCode is unavailable.',
+    );
+  }
+  final failed = _observerReasons(
+    observation,
+  ).where((r) => r.startsWith('fixture-operation-failed:')).toList();
+  if (failed.isNotEmpty) {
+    throw NativeFactUnavailable(
+      'Native fixture operation failed: ${failed.join(', ')}.',
+    );
+  }
+}
+
+String _withObserverReasons(
+  String reason,
+  NativeTranscriptObservation observation,
 ) {
-  final samples = events.where((e) => e['kind'] == 'audio').toList();
-  if (samples.length != 1) {
-    throw StateError('Native loopback audio sample is missing or repeated.');
-  }
-  final audio = objectMap(samples.single['data']);
-  final actual = measurements[audio['path']];
-  if (actual == null ||
-      endpointId.isEmpty ||
-      audio['endpointId'] != endpointId) {
-    throw StateError(
-      'Actual WAV bytes or the admitted render endpoint are unconfirmed.',
-    );
-  }
-  verifyNativeAudioClaim(audio, actual);
-  for (final key in ['rms', 'peak', 'capturedMilliseconds']) {
-    if (audio[key] is! num ||
-        !(audio[key]! as num).isFinite ||
-        (audio[key]! as num) < 0) {
-      throw StateError('Invalid actual audio measurement.');
-    }
-  }
-  if (number(audio, 'frames') == 0 ||
-      number(audio, 'discontinuities') >
-          (audio['initialDiscontinuity'] == true ? 1 : 0) ||
-      number(audio, 'timestampErrors') != 0 ||
-      (audio['capturedMilliseconds']! as num) < 500 ||
-      number(audio, 'channels') < 1 ||
-      number(audio, 'sampleRate') < 8000) {
-    throw StateError('Native loopback audio coverage is insufficient.');
-  }
-  if (action == 'run-graph' && !actual.containsCue) {
-    throw StateError('The fixture cue is absent from actual loopback bytes.');
-  }
-  return actual;
+  final named = _observerReasons(observation);
+  return named.isEmpty ? reason : '$reason (${named.join(', ')})';
 }
 
-void _persistence(List<Map<String, Object?>> events) {
-  final snapshots = events
-      .where((e) => e['kind'] == 'persistence')
-      .map((e) => objectMap(e['data']))
-      .toList();
-  if (snapshots.length != 2 ||
-      snapshots[0]['phase'] != 'before' ||
-      snapshots[1]['phase'] != 'after') {
-    throw StateError('Persistence before/after observations are incomplete.');
-  }
-  for (final sample in snapshots) {
-    if (sample['overflow'] != false ||
-        sample['unexpectedWrite'] != false ||
-        (sample['changedPaths'] as List?)?.isNotEmpty != false) {
-      throw StateError('Persistent write or monitoring overflow occurred.');
+int _constantController(List<NativeTranscriptObservation> observations) {
+  int? controller;
+  for (final observation in observations) {
+    final value = observation.facts['controllerInstanceId'];
+    if (value is! int) {
+      throw NativeFactUnavailable(
+        'Native fact controllerInstanceId is unavailable.',
+      );
     }
+    if (controller != null && value != controller) {
+      throw StateError('The controller identity changed within the cycle.');
+    }
+    controller = value;
   }
-  if ((snapshots[0]['files'] as List?)?.isEmpty != false ||
-      !nativeSame(snapshots[0]['files'], snapshots[1]['files'])) {
-    throw StateError(
-      'Synthetic save/checkpoint bytes changed or no paths were monitored.',
-    );
-  }
+  return controller!;
 }

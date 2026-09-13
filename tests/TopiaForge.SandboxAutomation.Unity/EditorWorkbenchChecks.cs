@@ -32,6 +32,7 @@ namespace TopiaForge.SandboxAutomation.Unity
             Require(Screen.width == 1920 && Screen.height == 1080, "measured-viewport-1920x1080");
             UnityMainThreadGuard.CaptureCurrentThread();
             using var observation = TopiaForgeUiDiagnostics.Enable(Owner);
+            using var toastObservation = TopiaForgeUiDiagnostics.Enable(TopiaForgeToasts.DiagnosticsOwnerId);
             var baseline = Capture();
             using var fake = new FakeModContext(new ModIdentity(Owner, "Editor Sandbox", SemanticVersion.Parse("1.0.0")));
             fake.Scenes.Load("RobotopiaCity");
@@ -86,6 +87,8 @@ namespace TopiaForge.SandboxAutomation.Unity
                     searchRect.anchoredPosition += new Vector2(100000f, 0);
                     AssertUsable("catalog-search");
                 }, () => searchRect.anchoredPosition = position);
+                var diagnostics = ObserveDiagnostics(workbench, content, ui);
+                while (diagnostics.MoveNext()) yield return null;
                 Click("hide-workbench");
                 for (var frame = 0; frame < 3; frame++) yield return null;
                 Require(!workbench.IsVisible && workbench.IsSessionActive && fake.LocalPlayer.ActiveControlLeaseCount == 0,

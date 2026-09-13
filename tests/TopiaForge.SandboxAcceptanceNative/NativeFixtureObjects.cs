@@ -19,10 +19,32 @@ namespace TopiaForge.SandboxAcceptance.Native
         internal NativeFixtureObjects(IModContext context) { interop = context.RequireUnityInterop(); }
         internal GameObject? Borrowed => borrowed;
         internal string BorrowedRosterId => borrowed == null ? "" : "robot-native:robot-scene:" + borrowed.GetInstanceID();
+        /// <summary>Whether the current cycle's borrowed robot was destroyed by the bounded destroy-borrowed operation.</summary>
+        internal bool BorrowedDestroyed { get; private set; }
+        /// <summary>A native writer outside any Creator Tools lease: +2 m on X applied directly to the borrowed transform.</summary>
+        internal OperationResult<bool> ExternalWrite()
+        {
+            if (borrowed == null) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "No borrowed fixture robot exists.");
+            borrowed.transform.position += new Vector3(2f, 0f, 0f);
+            return OperationResult<bool>.Success(true);
+        }
+        /// <summary>Destroys the borrowed robot now and retires it; cleanup treats the absent robot as complete.</summary>
+        internal OperationResult<bool> DestroyBorrowed()
+        {
+            var current = borrowed;
+            if (current == null) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "No borrowed fixture robot exists.");
+            borrowed = null;
+            BorrowedDestroyed = true;
+            // Retained until Unity has really destroyed the object so the pending count crosses a frame barrier.
+            retiredBorrowed.Add(current);
+            UnityEngine.Object.Destroy(current);
+            return OperationResult<bool>.Success(true);
+        }
         internal OperationResult<bool> PrepareBorrowed(IModContext context)
         {
             props.RemoveAll(p => p == null);
             retiredBorrowed.RemoveAll(p => p == null);
+            BorrowedDestroyed = false;
             if (borrowed != null) return OperationResult<bool>.Failure(ModErrorCode.Conflict, "A native fixture robot already exists.");
             if (!context.Extensions.TryGet<IRobotAgentService>(out var robots) || robots == null
                 || !context.LocalPlayer.TryGetSnapshot(out var player) || player == null)

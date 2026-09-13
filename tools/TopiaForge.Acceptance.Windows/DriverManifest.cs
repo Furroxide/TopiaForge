@@ -2,66 +2,98 @@ using System.Text.Json;
 
 namespace TopiaForge.Acceptance.Windows;
 
+/// Reviewed v2 driver recipes. Scenario step lists declare per-cycle order for the
+/// verifier; actuation stays bounded to the closed vocabulary regardless of native hints.
 internal sealed class DriverManifest
 {
+    internal const string Kind = "sandbox-native-driver-actions-v2", RetiredKind = "sandbox-native-driver-actions-v1";
     internal static readonly string[] ScenarioIds = ["routing", "catalog-editing", "borrowed-robot", "source-unload", "hide-reopen", "persistence-refusal", "graph-rollback", "lifecycle-routes", "ten-cycles"];
-    private static readonly string[] AllowedActions = ["open", "hide", "reopen", "move-player", "spawn-prop", "spawn-catalog", "duplicate", "remove", "edit-transform", "edit-rotation", "edit-scale", "select-borrowed", "edit-personality", "edit-brain", "run-graph", "stop-graph", "end-session", "unregister-source", "stop-world-session", "observe-refusal"];
-    private static readonly string[] AllowedNodes = ["hide-workbench", "catalog-search", "catalog-list", "spawn-selected", "duplicate-selected", "remove-selected", "nudge-up", "rotation-y", "rotation-w", "scale-x", "scale-y", "scale-z", "apply-transform", "refresh-native", "roster-list", "persona-name", "persona-instructions", "apply-personality", "brain-dormant", "project-list", "load-project", "run-project", "stop-project", "end-session", "confirm"];
-    private readonly Dictionary<string, JsonElement[]> actions;
-    internal DriverManifest(string path)
+    private static readonly Dictionary<string, int> CycleCounts = new(StringComparer.Ordinal) { ["routing"] = 2, ["catalog-editing"] = 1, ["borrowed-robot"] = 3, ["source-unload"] = 2, ["hide-reopen"] = 1, ["persistence-refusal"] = 1, ["graph-rollback"] = 2, ["lifecycle-routes"] = 3, ["ten-cycles"] = 10 };
+    private readonly Dictionary<string, JsonElement[]> actions = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Id, int Cycle), string[]> steps = new();
+    internal DriverManifest(string path) : this(BoundedJson.Read(path)) { }
+    internal DriverManifest(JsonElement document)
     {
-        var document = BoundedJson.Read(path);
+        if (document.ValueKind == JsonValueKind.Object && document.TryGetProperty("kind", out var declared) && declared.ValueKind == JsonValueKind.String && declared.GetString() == RetiredKind)
+            throw new InvalidDataException("Driver manifest kind " + RetiredKind + " is retired; " + Kind + " (schemaVersion 2) is required.");
         BoundedJson.Keys(document, "schemaVersion", "kind", "targetId", "surfaceId", "geometryOrigin", "maximumStepMilliseconds", "maximumScenarioMilliseconds", "operations", "actions", "scenarios", "unavailable", "externalEvidenceRequired", "maximumCatalogScenarioMilliseconds");
-        if (BoundedJson.Integer(document, "schemaVersion", 1, 1) != 1 || BoundedJson.Text(document, "kind") != "sandbox-native-driver-actions-v1" || BoundedJson.Text(document, "targetId") != "io.github.furroxide.topiaforge.sandbox.creator.menu" || BoundedJson.Text(document, "surfaceId") != "sandbox-creator-window" || BoundedJson.Text(document, "geometryOrigin") != "bottom-left") throw new InvalidDataException("Unexpected native driver identity.");
+        if (BoundedJson.Integer(document, "schemaVersion", 2, 2) != 2 || BoundedJson.Text(document, "kind") != Kind || BoundedJson.Text(document, "targetId") != "io.github.furroxide.topiaforge.sandbox.creator.menu" || BoundedJson.Text(document, "surfaceId") != "sandbox-creator-window" || BoundedJson.Text(document, "geometryOrigin") != "bottom-left") throw new InvalidDataException("Unexpected native driver identity.");
         _ = BoundedJson.Integer(document, "maximumStepMilliseconds", 10000, 10000);
         _ = BoundedJson.Integer(document, "maximumScenarioMilliseconds", 180000, 180000);
+        _ = BoundedJson.Integer(document, "maximumCatalogScenarioMilliseconds", 7200000, 7200000);
+        if (!Strings(document, "operations", 32).SequenceEqual(DriverVocabulary.WireOperations)) throw new InvalidDataException("Driver operations differ from the closed wire vocabulary.");
+        _ = Strings(document, "unavailable", 32); _ = Strings(document, "externalEvidenceRequired", 32);
         var scenarios = document.GetProperty("scenarios").EnumerateArray().ToArray();
         if (!scenarios.Select(s => BoundedJson.Text(s, "id")).SequenceEqual(ScenarioIds)) throw new InvalidDataException("Driver scenarios are missing or reordered.");
-        foreach (var scenario in scenarios)
-        {
-            BoundedJson.Keys(scenario, new[] { "id", "cycles", "steps" }.Concat(scenario.TryGetProperty("inventoryExpansion", out _) ? new[] { "inventoryExpansion" } : Array.Empty<string>()).Concat(scenario.TryGetProperty("routes", out _) ? new[] { "routes", "freshSessionPerCycle" } : Array.Empty<string>()).ToArray());
-            var id = BoundedJson.Text(scenario, "id");
-            _ = BoundedJson.Integer(scenario, "cycles", Cycles(id), Cycles(id));
-            if (scenario.GetProperty("steps").GetArrayLength() is < 1 or > 32) throw new InvalidDataException("Scenario step bound exceeded.");
-            foreach (var step in scenario.GetProperty("steps").EnumerateArray()) if (!AllowedActions.Contains(step.GetString()) && !(id == "catalog-editing" && step.GetString() == "$catalog")) throw new InvalidDataException("Undeclared driver action.");
-        }
-        actions = new(StringComparer.Ordinal);
+        foreach (var scenario in scenarios) ReadScenario(scenario);
         foreach (var action in document.GetProperty("actions").EnumerateObject())
         {
-            if (!AllowedActions.Contains(action.Name) || action.Value.GetArrayLength() is < 1 or > 12) throw new InvalidDataException("Undeclared or oversized action.");
+            if (!DriverVocabulary.Actions.Contains(action.Name) || action.Value.ValueKind != JsonValueKind.Array || action.Value.GetArrayLength() is < 1 or > 12) throw new InvalidDataException("Undeclared or oversized action.");
             var rows = action.Value.EnumerateArray().ToArray();
-            foreach (var row in rows) ValidateStep(row);
+            foreach (var row in rows) DriverVocabulary.ValidateStep(row);
             actions.Add(action.Name, rows);
         }
-        if (!AllowedActions.All(actions.ContainsKey)) throw new InvalidDataException("Driver action inventory is incomplete.");
+        if (!DriverVocabulary.Actions.All(actions.ContainsKey)) throw new InvalidDataException("Driver action inventory is incomplete.");
     }
-    internal static int Cycles(string id) => id == "ten-cycles" ? 10 : id == "lifecycle-routes" ? 3 : 1;
-    internal JsonElement[] Action(string name) => actions.TryGetValue(name, out var rows) ? rows : throw new InvalidDataException("Observer requested an undeclared action.");
-    internal static void ValidateStep(JsonElement step)
+    private void ReadScenario(JsonElement scenario)
     {
-        var kind = BoundedJson.Text(step, "kind", 32);
-        var optionalSurface = step.TryGetProperty("surfaceId", out _) ? new[] { "surfaceId" } : Array.Empty<string>();
-        if (optionalSurface.Length != 0 && !new[] { "sandbox-creator-window", "$modal" }.Contains(BoundedJson.Text(step, "surfaceId"))) throw new InvalidDataException("Undeclared surface.");
-        void Keys(params string[] fields) => BoundedJson.Keys(step, new[] { "kind" }.Concat(fields).Concat(optionalSurface).ToArray());
-        void Node() { if (!AllowedNodes.Contains(BoundedJson.Text(step, "nodeId"))) throw new InvalidDataException("Undeclared widget."); }
-        switch (kind)
+        var id = BoundedJson.Text(scenario, "id");
+        var perCycle = scenario.TryGetProperty("cycleSteps", out _);
+        var keys = new List<string> { "id", "cycles", perCycle ? "cycleSteps" : "steps" };
+        if (id == "catalog-editing") keys.Add("inventoryExpansion");
+        if (id == "lifecycle-routes") keys.AddRange(["routes", "freshSessionPerCycle"]);
+        BoundedJson.Keys(scenario, keys.ToArray());
+        var cycles = BoundedJson.Integer(scenario, "cycles", Cycles(id), Cycles(id));
+        if (perCycle)
         {
-            case "key": Keys("key"); if (!new[] { "F5", "Escape", "Tab", "W" }.Contains(BoundedJson.Text(step, "key"))) throw new InvalidDataException("Undeclared key."); break;
-            case "click": Keys("nodeId"); Node(); break;
-            case "replace-text":
-                var textKey = step.TryGetProperty("textFromFact", out _) ? "textFromFact" : "text";
-                Keys("nodeId", textKey); Node();
-                if (textKey == "textFromFact" && BoundedJson.Text(step, textKey) != "actionCatalogDisplayName") throw new InvalidDataException("Undeclared dynamic text.");
-                _ = BoundedJson.Text(step, textKey, 1024); break;
-            case "select-list-item":
-                var itemKey = step.TryGetProperty("itemIdFromFact", out _) ? "itemIdFromFact" : "itemId";
-                Keys("nodeId", itemKey); Node();
-                if (itemKey == "itemIdFromFact" && !new[] { "borrowedRosterId", "projectId", "actionCatalogRowId" }.Contains(BoundedJson.Text(step, itemKey))) throw new InvalidDataException("Undeclared dynamic row.");
-                _ = BoundedJson.Text(step, itemKey, 512); break;
-            case "barrier": Keys("minimumFrames"); _ = BoundedJson.Integer(step, "minimumFrames", 2, 10); break;
-            case "request": Keys("operation"); if (!new[] { "unregister-source", "request-session-stop" }.Contains(BoundedJson.Text(step, "operation"))) throw new InvalidDataException("Undeclared lifecycle request."); break;
-            case "capture": Keys(); break;
-            default: throw new InvalidDataException("Undeclared input operation.");
+            var entries = scenario.GetProperty("cycleSteps").EnumerateArray().ToArray();
+            if (entries.Length != cycles) throw new InvalidDataException("Per-cycle steps must cover every declared cycle.");
+            for (var index = 0; index < entries.Length; index++)
+            {
+                BoundedJson.Keys(entries[index], "cycle", "steps");
+                if (BoundedJson.Integer(entries[index], "cycle", 1, cycles) != index + 1) throw new InvalidDataException("Per-cycle steps are out of order.");
+                steps.Add((id, index + 1), ReadSteps(id, entries[index]));
+            }
+        }
+        else { var shared = ReadSteps(id, scenario); for (var cycle = 1; cycle <= cycles; cycle++) steps.Add((id, cycle), shared); }
+        if (id == "catalog-editing") ReadInventoryExpansion(scenario.GetProperty("inventoryExpansion"));
+        if (id != "lifecycle-routes") return;
+        if (scenario.GetProperty("freshSessionPerCycle").ValueKind != JsonValueKind.True) throw new InvalidDataException("Lifecycle routes require fresh sessions.");
+        var routes = scenario.GetProperty("routes").EnumerateArray().ToArray();
+        if (routes.Length != cycles) throw new InvalidDataException("Lifecycle routes must cover every cycle.");
+        for (var index = 0; index < routes.Length; index++)
+        {
+            BoundedJson.Keys(routes[index], "cycle", "operation", "method");
+            if (BoundedJson.Integer(routes[index], "cycle", 1, cycles) != index + 1 || BoundedJson.Text(routes[index], "operation") != "request-session-stop") throw new InvalidDataException("Undeclared lifecycle route.");
+            _ = BoundedJson.Text(routes[index], "method", 64);
         }
     }
+    private static string[] ReadSteps(string id, JsonElement owner)
+    {
+        var list = Strings(owner, "steps", 32);
+        foreach (var step in list) if (!DriverVocabulary.Actions.Contains(step) && !(id == "catalog-editing" && step == "$catalog")) throw new InvalidDataException("Undeclared driver action.");
+        return list;
+    }
+    private static void ReadInventoryExpansion(JsonElement expansion)
+    {
+        BoundedJson.Keys(expansion, "facts", "maximumEntries", "perEntry", "rowFact", "labelFact");
+        if (!Strings(expansion, "facts", 2).SequenceEqual(["catalog", "robotCatalog"]) || BoundedJson.Integer(expansion, "maximumEntries", 256, 256) != 256 || BoundedJson.Text(expansion, "rowFact") != "actionCatalogRowId" || BoundedJson.Text(expansion, "labelFact") != "actionCatalogDisplayName") throw new InvalidDataException("Undeclared catalog expansion.");
+        var perEntry = expansion.GetProperty("perEntry").EnumerateArray().ToArray();
+        if (perEntry.Length is < 1 or > 12) throw new InvalidDataException("Catalog expansion bound exceeded.");
+        foreach (var item in perEntry)
+        {
+            if (item.ValueKind == JsonValueKind.String) { if (!DriverVocabulary.Actions.Contains(item.GetString())) throw new InvalidDataException("Undeclared driver action."); continue; }
+            BoundedJson.Keys(item, "ifTransformCapability", "action");
+            if (BoundedJson.Integer(item, "ifTransformCapability", 1, 4) is not (1 or 2 or 4) || !DriverVocabulary.Actions.Contains(BoundedJson.Text(item, "action"))) throw new InvalidDataException("Undeclared conditional catalog action.");
+        }
+    }
+    private static string[] Strings(JsonElement owner, string name, int maximum)
+    {
+        var field = owner.GetProperty(name);
+        if (field.ValueKind != JsonValueKind.Array || field.GetArrayLength() < 1 || field.GetArrayLength() > maximum) throw new InvalidDataException("Invalid list: " + name);
+        return field.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 and <= 256 } text && !text.Any(char.IsControl) ? text : throw new InvalidDataException("Invalid list entry: " + name)).ToArray();
+    }
+    internal static int Cycles(string id) => CycleCounts.TryGetValue(id, out var count) ? count : throw new InvalidDataException("Unknown scenario.");
+    internal JsonElement[] Action(string name) => actions.TryGetValue(name, out var rows) ? rows : throw new InvalidDataException("Observer requested an undeclared action.");
+    internal string[] Steps(string id, int cycle) => steps.TryGetValue((id, cycle), out var list) ? list : throw new InvalidDataException("Undeclared scenario cycle.");
 }

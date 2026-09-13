@@ -3,6 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 
@@ -90,10 +91,31 @@ namespace TopiaForge
                 if (checks.MoveNext()) return;
                 EditorApplication.update -= Step;
                 (checks as IDisposable)?.Dispose();
+                RequireRecordedChecks();
                 Debug.Log("[SandboxEditorAutomation] Production UI and seeded-negative checks completed; no native game proof.");
                 EditorApplication.Exit(0);
             }
             catch (Exception exception) { Fail(exception); }
+        }
+        // The staged fixture must have asserted the stage-5 diagnostics contract; a stale fixture build that
+        // still passes its older checks is not evidence for the new fields and tags.
+        private static readonly string[] RequiredChecks =
+        {
+            "close-chrome-tagged", "scroll-container-tagged:0", "scroll-container-tagged:2", "scroll-containers-count-in-render-order",
+            "dropdown-reports-caption-value", "colour-text-well-formed", "row-colours-measured", "rendered-row-selected",
+            "input-reports-text-value", "toast-observed", "pooled-toast-reports-hidden", "undo-last-after-duplicate",
+            "undo-last-disabled-when-history-empty"
+        };
+        private static void RequireRecordedChecks()
+        {
+            var path = Path.Combine(Argument("-topiaforgeSandboxEvidence"), "editor-observations.json");
+            if (!File.Exists(path)) throw new InvalidOperationException("Editor observations were not recorded: " + path);
+            var json = Encoding.UTF8.GetString(UiSmokeAssemblyFileIo.ReadStableBytes(path, 4 * 1024 * 1024, "Editor observations"));
+            if (!json.Contains("\"status\":\"passed\"")) throw new InvalidOperationException("Editor observations did not record a passed status.");
+            foreach (var id in RequiredChecks)
+            {
+                if (!json.Contains("\"" + id + "\"")) throw new InvalidOperationException("Editor observations lack the required check '" + id + "'.");
+            }
         }
         private static string Argument(string name)
         {

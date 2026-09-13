@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace TopiaForge.Acceptance.Windows;
 
-internal sealed class WindowsInput : IDisposable
+internal sealed partial class WindowsInput : IDisposable
 {
     [StructLayout(LayoutKind.Sequential)] private struct Mouse { internal int X, Y; internal uint Data, Flags, Time; internal UIntPtr Extra; }
     [StructLayout(LayoutKind.Sequential)] private struct Keyboard { internal ushort Key, Scan; internal uint Flags, Time; internal UIntPtr Extra; }
@@ -11,6 +11,7 @@ internal sealed class WindowsInput : IDisposable
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    private const ushort MouseLeftCode = 0x01;
     private readonly OwnedGameProbe game;
     private readonly DeviceProfile profile;
     private readonly HashSet<ushort> heldKeys = new();
@@ -32,22 +33,48 @@ internal sealed class WindowsInput : IDisposable
         SentEvents++;
     }
     private static Input Key(ushort key, bool up = false) => new() { Type = 1, Data = new Union { Keyboard = new Keyboard { Key = key, Flags = up ? 2u : 0u } } };
-    private static Input MouseEvent(uint flags, int x = 0, int y = 0) => new() { Type = 0, Data = new Union { Mouse = new Mouse { X = x, Y = y, Flags = flags } } };
+    private static Input MouseEvent(uint flags, int x = 0, int y = 0, uint data = 0) => new() { Type = 0, Data = new Union { Mouse = new Mouse { X = x, Y = y, Data = data, Flags = flags } } };
+    /// Virtual-key code for a declared key; MouseLeft names the left button rather than a keyboard key.
+    internal static ushort KeyCode(string key) => key switch
+    {
+        "F5" => (ushort)0x74, "Escape" => (ushort)0x1b, "Tab" => (ushort)0x09, "W" => (ushort)0x57, "Down" => (ushort)0x28, "Up" => (ushort)0x26, "Return" => (ushort)0x0d, "Space" => (ushort)0x20, "MouseLeft" => MouseLeftCode,
+        _ => throw new InvalidDataException("Undeclared key.")
+    };
+    private void UpdateReleased() => Released = heldKeys.Count == 0 && heldUnicode.Count == 0 && !heldMouse;
+    private void Press(ushort code)
+    {
+        if (GetAsyncKeyState(code) < 0) throw new InvalidOperationException("A requested key or button is already held by the operator.");
+        if (code == MouseLeftCode) { heldMouse = true; Released = false; Send(MouseEvent(2)); return; }
+        heldKeys.Add(code); Released = false; Send(Key(code));
+    }
+    private void Release(ushort code)
+    {
+        // A refused release keeps the key recorded as held so Dispose retries it.
+        Send(code == MouseLeftCode ? MouseEvent(4) : Key(code, true));
+        if (code == MouseLeftCode) heldMouse = false; else heldKeys.Remove(code);
+        UpdateReleased();
+    }
     internal async Task Tap(string key, CancellationToken cancellation)
     {
-        var code = key switch { "F5" => (ushort)0x74, "Escape" => (ushort)0x1b, "Tab" => (ushort)9, "W" => (ushort)0x57, _ => throw new InvalidDataException("Undeclared key.") };
+        var code = KeyCode(key);
         cancellation.ThrowIfCancellationRequested();
         Guard();
-        if (GetAsyncKeyState(code) < 0) throw new InvalidOperationException("A requested key is already held by the operator.");
-        heldKeys.Add(code); Released = false;
-        try { Send(Key(code)); await Task.Delay(100, cancellation); Guard(); }
-        finally { Send(Key(code, true)); heldKeys.Remove(code); Released = heldKeys.Count == 0 && heldUnicode.Count == 0 && !heldMouse; }
+        Press(code);
+        try { await Task.Delay(100, cancellation); Guard(); }
+        finally { Release(code); }
     }
     internal async Task Click(double x, double y, double width, double height, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         Guard();
-        var point = TargetPoint(x, y, width, height, profile.Width, profile.Height);
+        MoveCursorTo(TargetPoint(x, y, width, height, profile.Width, profile.Height));
+        Guard(); heldMouse = true; Released = false;
+        try { Send(MouseEvent(2)); await Task.Delay(70, cancellation); Guard(); }
+        finally { Send(MouseEvent(4)); heldMouse = false; UpdateReleased(); }
+    }
+    /// Absolute move to a top-left client point derived only from observed geometry (a widget centre or a planned wheel probe).
+    private void MoveCursorTo(NativeMethods.Point point)
+    {
         if (!NativeMethods.ClientToScreen(game.Window, ref point)) throw new InvalidOperationException("Client screen transform failed.");
         var left = GetSystemMetrics(76); var top = GetSystemMetrics(77);
         var virtualWidth = GetSystemMetrics(78); var virtualHeight = GetSystemMetrics(79);
@@ -55,10 +82,8 @@ internal sealed class WindowsInput : IDisposable
         if (GetAsyncKeyState(1) < 0 || GetAsyncKeyState(2) < 0) throw new InvalidOperationException("Operator mouse button is already held.");
         var absolute = AbsolutePoint(point.X, point.Y, left, top, virtualWidth, virtualHeight);
         Send(MouseEvent(0x8000 | 0x4000 | 1, absolute.X, absolute.Y));
-        Guard(); heldMouse = true; Released = false;
-        try { Send(MouseEvent(2)); await Task.Delay(70, cancellation); Guard(); }
-        finally { Send(MouseEvent(4)); heldMouse = false; Released = heldKeys.Count == 0; }
     }
+    /// Selects all and types the replacement; an empty replacement deletes the selection instead.
     internal async Task ReplaceText(string text, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
@@ -67,8 +92,14 @@ internal sealed class WindowsInput : IDisposable
         if (GetAsyncKeyState(0x11) < 0 || GetAsyncKeyState(0x41) < 0) throw new InvalidOperationException("Operator modifier is already held.");
         heldKeys.Add(0x11); heldKeys.Add(0x41); Released = false;
         try { Send(Key(0x11)); Send(Key(0x41)); }
-        finally { Send(Key(0x41, true)); heldKeys.Remove(0x41); Send(Key(0x11, true)); heldKeys.Remove(0x11); Released = true; }
+        finally { Send(Key(0x41, true)); heldKeys.Remove(0x41); Send(Key(0x11, true)); heldKeys.Remove(0x11); UpdateReleased(); }
         await Task.Delay(50, cancellation);
+        if (text.Length == 0)
+        {
+            Guard();
+            Press(0x08);
+            try { await Task.Delay(30, cancellation); } finally { Release(0x08); }
+        }
         foreach (var character in text)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -76,7 +107,7 @@ internal sealed class WindowsInput : IDisposable
             heldUnicode.Add(character); Released = false;
             Send(new Input { Type = 1, Data = new Union { Keyboard = new Keyboard { Scan = character, Flags = 4 } } });
             Send(new Input { Type = 1, Data = new Union { Keyboard = new Keyboard { Scan = character, Flags = 4 | 2 } } });
-            heldUnicode.Remove(character); Released = heldKeys.Count == 0 && heldUnicode.Count == 0 && !heldMouse;
+            heldUnicode.Remove(character); UpdateReleased();
         }
         await Task.Delay(100, cancellation);
     }
@@ -86,6 +117,13 @@ internal sealed class WindowsInput : IDisposable
         if (width < 2 || height < 2 || offsetX < 0 || offsetY < 0 || offsetX >= width || offsetY >= height)
             throw new InvalidOperationException("Input target is outside the actual virtual display.");
         return new NativeMethods.Point { X = (int)(offsetX * 65535L / (width - 1)), Y = (int)(offsetY * 65535L / (height - 1)) };
+    }
+    /// Bottom-left client point to a top-left client point; the point must lie strictly inside the admitted client.
+    internal static NativeMethods.Point PointTarget(double x, double y, int clientWidth, int clientHeight)
+    {
+        if (!double.IsFinite(x) || !double.IsFinite(y) || x < 1 || y < 1 || x > clientWidth - 1 || y > clientHeight - 1)
+            throw new InvalidDataException("Requested wheel point is outside the admitted client.");
+        return new NativeMethods.Point { X = (int)Math.Round(x), Y = (int)Math.Round(clientHeight - y) };
     }
     internal static NativeMethods.Point TargetPoint(double x, double y, double width, double height, int clientWidth, int clientHeight)
     {

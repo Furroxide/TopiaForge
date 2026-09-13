@@ -23,7 +23,7 @@ namespace TopiaForge.SandboxAcceptance.Native
         internal const int MaximumBytes = 262144;
         internal static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
         private static readonly string[] Keys = { "schemaVersion", "challenge", "sequence", "operation", "scenarioId", "cycle" };
-        internal static readonly string[] Operations = { "prepare", "begin", "capture", "advance", "unregister-source", "request-session-stop", "cleanup" };
+        internal static readonly string[] Operations = SandboxWireOperations.All;
         internal static SandboxWireRequest Parse(byte[] bytes, string challenge, int sequence)
         {
             if (bytes.Length == 0 || bytes.Length > MaximumBytes) throw new InvalidDataException("Invalid wire frame size.");
