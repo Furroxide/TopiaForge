@@ -22,7 +22,7 @@ $verified = [Collections.Generic.List[object]]::new()
 function Assert-SafeRelativePath([string]$Path) {
     if (!$Path -or $Path.Length -gt 240 -or $Path.Contains('\') -or $Path.StartsWith('/') -or $Path.EndsWith('/') -or $Path -match '[\x00-\x1f\x7f:*?"<>|]') { throw 'Unsafe relative game path.' }
     foreach ($segment in $Path.Split('/')) {
-        if (!$segment -or $segment -in @('.','..') -or $segment -match '[ .]$' -or $segment -match '^(?i:CON|PRN|AUX|NUL|CLOCK\$|CONIN\$|CONOUT\$|COM[0-9¹²³]|LPT[0-9¹²³])(?:\.|$)') { throw 'Unsafe game path segment.' }
+        if (!$segment -or $segment -in @('.','..') -or $segment -match '[ .]$' -or $segment -match '^(?i:CON|PRN|AUX|NUL|CLOCK\$|CONIN\$|CONOUT\$|COM[0-9\u00B9\u00B2\u00B3]|LPT[0-9\u00B9\u00B2\u00B3])(?:\.|$)') { throw 'Unsafe game path segment.' }
     }
 }
 function Assert-PhysicalPath([string]$Path) {
@@ -84,7 +84,10 @@ function Assert-TreeMatches($Tree,$Rows,$Directories) {
     }
     foreach ($directory in $Directories) { if (!$Tree.directories.Contains($directory)) { throw 'Unexpected game directory.' } }
 }
-function New-ProtectedGameRoot([string]$Path,$CreatorSid,$QaSid) {
+function New-ProtectedGameRoot {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([string]$Path,$CreatorSid,$QaSid)
+    if (!$PSCmdlet.ShouldProcess($Path,'Create the protected fresh game root')) { throw 'Protected game root creation was not confirmed.' }
     $acl = [Security.AccessControl.DirectorySecurity]::new()
     $acl.SetAccessRuleProtection($true,$false)
     $acl.SetOwner($CreatorSid)

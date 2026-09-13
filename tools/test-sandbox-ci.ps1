@@ -14,7 +14,7 @@ function Assert-Refused([scriptblock]$Action) {
     try { & $Action | Out-Null } catch { $refused = $true }
     if (!$refused) { throw 'Expected refusal.' }
 }
-function New-Fixture {
+function Build-Fixture {
     return @{
         schemaVersion = 1; kind = 'sandbox-local-lane-admission-v1'; lane = 'game'
         sourceRevision = 'a' * 40; operatorId = 'named-test-operator'
@@ -34,19 +34,19 @@ function New-Fixture {
 function Assert-Fixture($Record) {
     Assert-SandboxCiAdmission $Record 'game' ('a' * 40) 'D:\test-source' 'TEST-HOST' 'S-1-5-21-123-1001' ([DateTimeOffset]'2026-09-09T10:30:00Z')
 }
-Test-Case 'valid test-only admission shape' { Assert-Fixture (New-Fixture) }
+Test-Case 'valid test-only admission shape' { Assert-Fixture (Build-Fixture) }
 Test-Case 'reviewed game snapshot digest permits explicit dirty-source binding' {
-    $r=New-Fixture
+    $r=Build-Fixture
     $r.sourceWorkspaceSha256='e'*64
     Assert-SandboxCiAdmission $r 'game' ('a'*40) 'D:\test-source' 'TEST-HOST' 'S-1-5-21-123-1001' ([DateTimeOffset]'2026-09-09T10:30:00Z') -SourceWorkspaceSha256 ('e'*64)
 }
 Test-Case 'snapshot digest mismatch cannot enter reviewed lane' {
-    $r=New-Fixture
+    $r=Build-Fixture
     $r.sourceWorkspaceSha256='e'*64
     Assert-Refused { Assert-SandboxCiAdmission $r 'game' ('a'*40) 'D:\test-source' 'TEST-HOST' 'S-1-5-21-123-1001' ([DateTimeOffset]'2026-09-09T10:30:00Z') -SourceWorkspaceSha256 ('f'*64) }
 }
 Test-Case 'snapshot field cannot silently bypass clean Git mode' {
-    $r=New-Fixture
+    $r=Build-Fixture
     $r.sourceWorkspaceSha256='e'*64
     Assert-Refused { Assert-Fixture $r }
 }
@@ -75,20 +75,20 @@ $mutations = [ordered]@{
 }
 foreach ($entry in $mutations.GetEnumerator()) {
     Test-Case $entry.Key {
-        $record = New-Fixture
+        $record = Build-Fixture
         & $entry.Value $record | Out-Null
         Assert-Refused { Assert-Fixture $record }
     }
 }
 
 . (Join-Path $PSScriptRoot 'sandbox/ci-handoff.ps1')
-function New-HandoffFixture {
+function Build-HandoffFixture {
     return @{schemaVersion=1;kind='sandbox-ci-handoff-v1';sourceRevision=('a'*40)
         runId='test-only-run';lane='game';status='passed';cleanupConfirmed=$true
         qualifiesRelease=$false;evidenceSha256=('b'*64);verificationSha256=('c'*64)
         admissionSha256=('d'*64)}
 }
-Test-Case 'scrubbed handoff exact shape' { Assert-SandboxCiHandoff (New-HandoffFixture) ('a'*40) }
+Test-Case 'scrubbed handoff exact shape' { Assert-SandboxCiHandoff (Build-HandoffFixture) ('a'*40) }
 $handoffMutations = [ordered]@{
     'raw identity cannot enter handoff' = {param($r) $r.userSid='private'}
     'handoff cannot qualify release' = {param($r) $r.qualifiesRelease=$true}
@@ -101,13 +101,13 @@ $handoffMutations = [ordered]@{
 }
 foreach ($entry in $handoffMutations.GetEnumerator()) {
     Test-Case $entry.Key {
-        $r=New-HandoffFixture
+        $r=Build-HandoffFixture
         & $entry.Value $r | Out-Null
         Assert-Refused { Assert-SandboxCiHandoff $r ('a'*40) }
     }
 }
 Test-Case 'incomplete remains an explicit valid handoff status' {
-    $r=New-HandoffFixture
+    $r=Build-HandoffFixture
     $r.status='incomplete'
     Assert-SandboxCiHandoff $r ('a'*40)
 }
@@ -116,7 +116,7 @@ $owned = [IO.Directory]::CreateTempSubdirectory('sandbox-ci-regression-').FullNa
 try {
     $path = Join-Path $owned 'input.json'
     Test-Case 'bounded JSON reads shape' {
-        [IO.File]::WriteAllText($path, ((New-Fixture) | ConvertTo-Json -Depth 8))
+        [IO.File]::WriteAllText($path, ((Build-Fixture) | ConvertTo-Json -Depth 8))
         Assert-Fixture (Read-SandboxCiDocument $path)
     }
     Test-Case 'duplicate JSON property refused' {
@@ -142,7 +142,7 @@ try {
         finally { $env:GITHUB_ACTIONS = $previous }
     }
     Test-Case 'completed cleanup releases reservation even after test failure' {
-        $r=New-Fixture
+        $r=Build-Fixture
         $r.privateRoot=$owned
         $result=Invoke-SandboxCiReservedLane $r { return @{cleanupConfirmed=$true;status='failed'} }
         if ($result.status -cne 'failed' -or (Test-Path -LiteralPath (Join-Path $owned 'sandbox-recovery-required.json'))) {
@@ -150,7 +150,7 @@ try {
         }
     }
     Test-Case 'unknown cleanup preserves marker and blocks next action' {
-        $r=New-Fixture
+        $r=Build-Fixture
         $r.privateRoot=$owned
         Assert-Refused { Invoke-SandboxCiReservedLane $r { return @{cleanupConfirmed=$false;status='failed'} } }
         $marker=Join-Path $owned 'sandbox-recovery-required.json'
@@ -163,7 +163,7 @@ try {
     }
 
     Test-Case 'abandoned mutex creates a persistent recovery block across retries' {
-        $r=New-Fixture
+        $r=Build-Fixture
         $r.privateRoot=$owned
         $name='Global\TopiaForgeSandboxAcceptanceV1'
         $keepAlive=[Threading.Mutex]::new($false, $name)
