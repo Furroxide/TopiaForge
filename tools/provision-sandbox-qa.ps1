@@ -27,7 +27,10 @@ $systemSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
 $adminsSid = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
 $creatorSid = $identity.User
 $inheritance = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
-function Set-QADirectoryAcl([string]$Path, [Security.Principal.SecurityIdentifier]$QaSid, [string]$QaAccess) {
+function Set-QADirectoryAcl {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([string]$Path, [Security.Principal.SecurityIdentifier]$QaSid, [string]$QaAccess)
+    if (!$PSCmdlet.ShouldProcess($Path, 'Replace the directory ACL with the protected QA layout')) { throw 'QA directory ACL change was not confirmed.' }
     $security = [Security.AccessControl.DirectorySecurity]::new()
     $security.SetAccessRuleProtection($true, $false)
     foreach ($sid in @($systemSid, $adminsSid, $creatorSid)) {
@@ -54,9 +57,12 @@ try {
     # A generated bootstrap password never enters stdout, command arguments or Git.
     # Export-Clixml protects it with Windows DPAPI for this administrator identity.
     $randomBytes = [Security.Cryptography.RandomNumberGenerator]::GetBytes(48)
-    $passwordText = [Convert]::ToBase64String($randomBytes) + '!aA7'
-    $password = ConvertTo-SecureString -String $passwordText -AsPlainText -Force
-    $passwordText = $null
+    $passwordChars = ([Convert]::ToBase64String($randomBytes) + '!aA7').ToCharArray()
+    # The generated characters go straight into the protected string; no plaintext string object is retained.
+    $password = [Security.SecureString]::new()
+    foreach ($character in $passwordChars) { $password.AppendChar($character) }
+    $password.MakeReadOnly()
+    [Array]::Clear($passwordChars, 0, $passwordChars.Length)
     [Array]::Clear($randomBytes, 0, $randomBytes.Length)
     $user = New-LocalUser -Name $AccountName -Password $password -Disabled -AccountNeverExpires `
         -Description 'Isolated TopiaForge QA; no personal data'
