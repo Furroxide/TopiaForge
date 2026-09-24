@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 214 declared bindings across nine current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 218 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -67,9 +67,9 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2409 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
-metadata verification resolve 203 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
-bindings, errors, or warnings. All 29 Manager and 35 Worlds bindings are verifiable. The remaining uncheckable
+The build 2478 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
+metadata verification resolve 207 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
+bindings, errors, or warnings. All 33 Manager and 35 Worlds bindings are verifiable. The remaining uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
@@ -115,20 +115,26 @@ then the default launcher install path.
 
 ## Bumping the pinned build
 
-A Robotopia build bump touches ~34 files: the pin metadata and its zero-padded archive names, the release
-policy id, every mod manifest's game range, the scaffolder default, runtime version constants, acceptance
-metadata, and several build-locked test fixtures and guards. Doing that by hand is how a site gets missed.
+A Robotopia build bump touches about fifty files: the pin metadata and its zero-padded archive names, the
+release policy id, every mod manifest's game range, the scaffolder default, runtime version constants,
+acceptance metadata, several build-locked test fixtures and guards, and the documents that state the supported
+build. Doing that by hand is how a site gets missed.
 
 ```
 topiaforge compat bump --build <id>   --windows-sha256 <hex> --mac-sha256 <hex>   --files-manifest-sha256 <hex> --file-count <n> --game-exe-sha256 <hex>   [--dry-run]
 ```
 
-The hashes are not derivable from the repository, so they are supplied explicitly; the local install's
-values can be read with `tools/release/verify-robotopia-install.ps1`. Everything else is derived from the
-new build id.
+The hashes are not derivable from the repository, so they are supplied explicitly. Take the Windows and Mac
+archive SHA-256 values from the public `latest-build.json`. Take the other three from an official install of
+the new build: the SHA-256 and entry count of `%LOCALAPPDATA%\Tomato Cake\launcher\filelist.json`, and the
+SHA-256 of `Robotopia\Robotopia.exe`. `tools/release/verify-robotopia-install.ps1` cannot read them in
+advance, because it verifies an install against the current pin; run it after the bump to confirm the new pin.
+Everything else is derived from the new build id.
 
 Afterwards the command **re-scans every file it owns for the old build id** and fails if any remains, so a
-half-bumped tree is reported rather than committed. Two things it deliberately does not do: it never
+half-bumped tree is reported rather than committed. It also lists every other tracked file that still names
+the old build, outside `docs/internal/`: history, observations of how that build behaved and sample values
+may stay, while a pin-bound site belongs in its target list. Two things it deliberately does not do: it never
 touches `bindings/` or the baseline (that is the reviewed ritual below), and it does not move the SDK-only
 range ceiling, which is a judgement call about how far ahead to trust an unverified build.
 

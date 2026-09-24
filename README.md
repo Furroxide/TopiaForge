@@ -48,7 +48,7 @@ confirmation, and rolled back automatically if the startup health handshake fail
 
 ## Build your first mod
 
-Robotopia build 2409 ships **Robotopia Creator**, its own browser world editor, so the split is
+Robotopia build 2478 ships **Robotopia Creator**, its own browser world editor, so the split is
 worth knowing before you start: the Creator owns what is *in* a world — scene layout, personalities,
 publishing — and TopiaForge owns what a world *does* — C# behaviour, gamemodes, runtime control, and
 local/CI tooling. [docs/CreatorScope.md](docs/CreatorScope.md) draws the line in full.
@@ -129,7 +129,7 @@ TopiaForge is in early **0.x** development and has not had a stable release.
 | --- | --- |
 | Current candidate | `v0.1.0-rc.1` — prerelease, release readiness **blocked** |
 | Platforms | Windows x64 only in this candidate |
-| Robotopia target | build `2409` (canonical pin: [`.github/robotopia-game-build.json`](.github/robotopia-game-build.json)) |
+| Robotopia target | build `2478` (canonical pin: [`.github/robotopia-game-build.json`](.github/robotopia-game-build.json)) |
 | Registry | First-party artifacts only; community submissions closed pending moderation policy |
 | Multiplayer | API preview with loopback and deterministic multi-peer tests; no live transport yet |
 
