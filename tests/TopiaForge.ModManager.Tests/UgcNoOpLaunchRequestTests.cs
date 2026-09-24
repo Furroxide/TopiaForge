@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using TopiaForge.Mods.GameBridge;
 
 namespace TopiaForge.ModManager.Tests
@@ -21,6 +22,18 @@ namespace TopiaForge.ModManager.Tests
                 Assert(!string.IsNullOrWhiteSpace(firstPath) && Directory.Exists(firstPath),
                     "the queued request should point at an existing folder");
                 var requiredFirstPath = firstPath!;
+                Assert(FakeLaunchRequest.Last!.Mode == "SelectedFile", "the native launch must use its supported local-file mode");
+                var selected = FakeLaunchRequest.Last.SelectedExportFilePath;
+                Assert(selected == Path.Combine(requiredFirstPath, UgcNoOpLaunchRequest.EmptyExportName) && File.Exists(selected),
+                    "the native bootstrap rejects a missing selected export; supply the original empty scene");
+                using (var project = JsonDocument.Parse(File.ReadAllText(selected)))
+                {
+                    var root = project.RootElement;
+                    Assert(root.GetProperty("assets").GetRawText() == "{}" && root.GetProperty("local-assets").GetRawText() == "{}",
+                        "the bootstrap fixture must not contain user or remote assets");
+                    Assert(root.GetProperty("scenes").GetProperty("topiaforge-empty").GetProperty("entities").GetRawText() == "{}",
+                        "the bootstrap must supply one valid empty scene");
+                }
 
                 File.WriteAllText(Path.Combine(requiredFirstPath, "stale.json"), "{}");
                 Directory.CreateDirectory(Path.Combine(requiredFirstPath, "nested"));
@@ -31,8 +44,10 @@ namespace TopiaForge.ModManager.Tests
                     "re-queuing the no-op request should succeed");
                 Assert(string.Equals(firstPath, FakeLaunchRequest.Last?.ImportFolderPath, StringComparison.Ordinal),
                     "one caller should reuse its stable empty folder");
-                Assert(Directory.GetFileSystemEntries(requiredFirstPath).Length == 0,
-                    "the reused folder must be cleared before every request");
+                Assert(Directory.GetFileSystemEntries(requiredFirstPath).Length == 1 && File.ReadAllText(selected) == UgcNoOpLaunchRequest.EmptyProjectJson,
+                    "the reused folder must contain only the regenerated empty scene");
+                Assert(!UgcNoOpLaunchRequest.TryQueue(typeof(FakeLastRun), typeof(FakeLaunchRequest), "..", _ => { }),
+                    "parent traversal must be rejected before cleaning temporary storage");
 
                 Assert(UgcNoOpLaunchRequest.TryQueue(
                         typeof(FakeLastRun), typeof(FakeLaunchRequest), secondName, _ => { }),

@@ -91,16 +91,19 @@ namespace TopiaForge.ModManager.Tests
         }
 
         private static bool AssertGameCopySatisfies(string consumerPath, string managedDirectory, string dependency,
-            bool requireReferences)
+            bool consumerMustReference)
         {
             var gameCopy = Path.Combine(managedDirectory, dependency + ".dll");
             if (!File.Exists(gameCopy))
             {
+                // Without a game copy the loader binds its bundled copy, as on build 2409; the hash and identity
+                // assertions above already pin that copy, so absence is safe rather than a failure.
                 return false;
             }
 
             var missing = ManagedMemberReferenceChecker.FindUnsatisfied(consumerPath, dependency, gameCopy, out var count);
-            Assert(!requireReferences || count > 0,
+            // A consumer that must reference the dependency cannot pass vacuously against a present game copy.
+            Assert(!consumerMustReference || count > 0,
                 Path.GetFileName(consumerPath) + " should reference " + dependency + "; the binding check found nothing to verify.");
             Assert(missing.Count == 0,
                 Path.GetFileName(consumerPath) + " references " + dependency + " members that the game's own copy lacks: "
