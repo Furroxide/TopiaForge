@@ -154,7 +154,7 @@ class ReleasePackageNoticeWriter {
           'assembly': assembly.fileName,
           'assemblyVersion': assembly.assemblyVersion,
           'sha256': assembly.sha256,
-          'providedBy': 'Robotopia build 2409 Unity/Mono profile',
+          'providedBy': 'Robotopia build 2478 Unity/Mono profile',
         },
     ];
     File(p.join(destination.path, 'PROVENANCE.json')).writeAsStringSync(

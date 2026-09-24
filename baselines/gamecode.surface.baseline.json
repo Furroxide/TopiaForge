@@ -1,9 +1,9 @@
 {
-  "capturedUtc": "2026-09-06T03:11:01.2896292Z",
+  "capturedUtc": "2026-09-24T15:32:41.0194662Z",
   "extractorVersion": "1.1.0-rc.1",
-  "gameCodeMvid": "b01cf95e-d12d-4c36-951a-a5fc61889fd7",
-  "gameVersion": "0.0.2409",
-  "gameVersionLabel": "build 2409",
+  "gameCodeMvid": "6775eebf-1faf-4230-bd4d-2291f871625f",
+  "gameVersion": "0.0.2478",
+  "gameVersionLabel": "build 2478",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -36,9 +36,10 @@
     "Handlebars 2.1.6.0",
     "Hotel 0.0.0.0",
     "LinearTools 0.0.0.0",
-    "LiteDB 5.0.21.0",
     "Mall 0.0.0.0",
     "Microsoft.CSharp 4.0.0.0",
+    "Microsoft.CodeAnalysis 3.11.0.0",
+    "Microsoft.CodeAnalysis.CSharp 3.11.0.0",
     "Microsoft.Win32.Registry 5.0.0.0",
     "Mono.Security 4.0.0.0",
     "Mono.Unix 7.1.0.0",
@@ -72,6 +73,7 @@
     "System 4.0.0.0",
     "System.Buffers 4.0.99.0",
     "System.CodeDom 9.0.0.0",
+    "System.Collections.Immutable 8.0.0.0",
     "System.ComponentModel.Composition 4.0.0.0",
     "System.Configuration 4.0.0.0",
     "System.Configuration.ConfigurationManager 9.0.0.0",
@@ -85,6 +87,7 @@
     "System.Memory 4.0.99.0",
     "System.Net.Http 4.0.0.0",
     "System.Numerics 4.0.0.0",
+    "System.Reflection.Metadata 8.0.0.0",
     "System.Reflection.TypeExtensions 4.1.5.0",
     "System.Runtime 4.1.0.0",
     "System.Runtime.CompilerServices.Unsafe 6.0.0.0",
@@ -98,6 +101,7 @@
     "System.Text.Encoding.CodePages 9.0.0.0",
     "System.Text.Encodings.Web 9.0.0.0",
     "System.Threading.Channels 9.0.0.0",
+    "System.Threading.Tasks.Extensions 4.2.0.0",
     "System.Transactions 4.0.0.0",
     "System.Xml 4.0.0.0",
     "System.Xml.Linq 4.0.0.0",
@@ -121,6 +125,7 @@
     "Unity.Mathematics 0.0.0.0",
     "Unity.MemoryProfiler 0.0.0.0",
     "Unity.Multiplayer.Center.Common 0.0.0.0",
+    "Unity.Pipeline 0.0.0.0",
     "Unity.Polybrush 0.0.0.0",
     "Unity.ProBuilder 0.0.0.0",
     "Unity.ProBuilder.Csg 0.0.0.0",
@@ -247,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "46f76a8a3e9256a868309c6116e39fcdd5b667197207a32647d868502352a026",
+  "surfaceContentHash": "94069b36525490b4800d083ddce07b2af8a3df106e723f967cc59dad4933bc6b",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -1921,11 +1926,21 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<HandleInput>g__CalcDv|89_0",
+          "name": "<HandleInput>g__CalcDv|93_0",
           "parameters": [
             "System.Single"
           ],
           "returnType": "System.Single"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ApplyCameraLock",
+          "parameters": [
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
         },
         {
           "genericArity": 0,
@@ -1951,8 +1966,20 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
+          "name": "CalculateInspectLockDir",
+          "parameters": [
+            "Inspectable"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
           "name": "CalculateLockDir",
-          "parameters": [],
+          "parameters": [
+            "UnityEngine.GameObject"
+          ],
           "returnType": "System.Void"
         },
         {
@@ -1995,10 +2022,29 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
+          "name": "DoCameraLock",
+          "parameters": [
+            "System.Boolean",
+            "System.Action"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
           "name": "DoCameraZoomLock",
           "parameters": [
             "AgentHead"
           ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "DoInspectCameraLock",
+          "parameters": [],
           "returnType": "System.Void"
         },
         {
@@ -2151,6 +2197,16 @@
         },
         {
           "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnInspectTargetChange",
+          "parameters": [
+            "Inspectable"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
           "name": "OnJump",
@@ -2167,6 +2223,16 @@
           "parameters": [
             "UnityEngine.SceneManagement.Scene",
             "UnityEngine.SceneManagement.LoadSceneMode"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnLockColliderChange",
+          "parameters": [
+            "UnityEngine.Collider"
           ],
           "returnType": "System.Void"
         },
@@ -2958,7 +3024,7 @@
           "name": "ChangeHealth",
           "parameters": [
             "System.Single",
-            "System.String"
+            "UnityEngine.GameObject"
           ],
           "returnType": "System.Void"
         },
@@ -2970,7 +3036,7 @@
           "parameters": [
             "System.Single",
             "DamageType",
-            "System.String"
+            "UnityEngine.GameObject"
           ],
           "returnType": "System.Void"
         },
@@ -3397,17 +3463,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<FixedUpdate>b__166_0",
-          "parameters": [
-            "LLMAgent+UnhandledMessageData"
-          ],
-          "returnType": "System.Boolean"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": false,
-          "name": "<OnDisable>b__167_0",
+          "name": "<OnDisable>b__169_0",
           "parameters": [
             "IAgentStatusListener"
           ],
@@ -3573,6 +3629,16 @@
             "TaskGraph"
           ],
           "returnType": "LLMCallContext"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "DropUnhandledMessage",
+          "parameters": [
+            "System.Int32"
+          ],
+          "returnType": "System.Void"
         },
         {
           "genericArity": 0,
@@ -3858,6 +3924,16 @@
           "name": "MarkCritPassed",
           "parameters": [
             "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "MarkNoReplyExpected",
+          "parameters": [
+            "System.Int32"
           ],
           "returnType": "System.Void"
         },
@@ -6300,7 +6376,7 @@
           "isStatic": false,
           "name": "IterGlobalFacts",
           "parameters": [],
-          "returnType": "System.Collections.Generic.IEnumerable<Fact>"
+          "returnType": "System.Collections.Generic.IEnumerable<System.String>"
         },
         {
           "genericArity": 0,
@@ -6308,7 +6384,7 @@
           "isStatic": false,
           "name": "IterPrivateFacts",
           "parameters": [],
-          "returnType": "System.Collections.Generic.IEnumerable<Fact>"
+          "returnType": "System.Collections.Generic.IEnumerable<System.String>"
         },
         {
           "genericArity": 0,
@@ -6637,6 +6713,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "inspectUI",
+          "type": "GlobalButtonRoles"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "interactCastRaySeparation",
           "type": "System.Single"
         },
@@ -6773,6 +6855,14 @@
           "parameters": [
             "System.String"
           ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ExitInspect",
+          "parameters": [],
           "returnType": "System.Void"
         },
         {
@@ -7019,6 +7109,16 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
+          "name": "OnExitInspect",
+          "parameters": [
+            "UnityEngine.InputSystem.InputValue"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
           "name": "OnGiveItem",
           "parameters": [
             "UnityEngine.InputSystem.InputValue"
@@ -7245,6 +7345,16 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
+          "name": "TryEnterInspect",
+          "parameters": [
+            "Inspectable"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
           "name": "TryFindSpeakTargetOnHeldItem",
           "parameters": [
             "AgentHead&"
@@ -7318,6 +7428,16 @@
           "name": "HeldItem",
           "setterIsPublic": false,
           "type": "Grabbable"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "IsInspecting",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
         },
         {
           "canRead": true,
@@ -9164,6 +9284,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "disableSubtitlesToggle",
+          "type": "UnityEngine.UI.Toggle"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "fpsToggle",
           "type": "UnityEngine.UI.Toggle"
         },
@@ -9219,6 +9345,32 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
+          "name": "OnDisable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnDisableSubtitlesToggleChanged",
+          "parameters": [
+            "System.Boolean"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnEnable",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
           "name": "OnFpsToggleValueChanged",
           "parameters": [
             "System.Boolean"
@@ -9262,6 +9414,26 @@
           "name": "OnResolutionChanged",
           "parameters": [
             "System.Int32"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OnTokenInitialized",
+          "parameters": [
+            "RoboToken"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "RefreshDisableSubtitlesToggle",
+          "parameters": [
+            "System.Boolean"
           ],
           "returnType": "System.Void"
         },

@@ -70,7 +70,7 @@ installation. These records contain private paths and OS identities; keep them o
 the QA host. Public qualification carries reviewed evidence hashes and results,
 never the full acknowledgement, SID, user paths or raw logs.
 
-Run the complete launch-blocking matrix on an authorized Robotopia build-2409 host (all cases are
+Run the complete launch-blocking matrix on an authorized Robotopia build-2478 host (all cases are
 required by default):
 
 ```powershell
@@ -133,7 +133,7 @@ require a separately implemented and reviewed native bridge. Exercise refusal an
 unchanged persistence now; record unsupported success paths as unavailable, never
 as passed. Dormant creator recorder code is not a release evidence source.
 
-On an authorized build-2409 host, the workbench checks are:
+On an authorized build-2478 host, the workbench checks are:
 
 1. In Sandbox, press F5 and confirm Sandbox wins routing. Menus, scene transitions, Worlds
    sessions, connected remote multiplayer, and headless processes must reject the global host.
@@ -147,7 +147,7 @@ On an authorized build-2409 host, the workbench checks are:
    Independently verify the actual native state and visible warning on the admitted candidate.
    Passing fake-service assertions does not complete this native reporting check.
 4. Register test-mod character and validated vehicle factories, spawn them, then unload their source.
-   Verify instances and entries disappear safely. If build 2409 exposes no validated native vehicle
+   Verify instances and entries disappear safely. If build 2478 exposes no validated native vehicle
    adapter, verify that source is visibly empty or degraded.
 5. Hide the workbench with F5 and its close affordance. Player controls must return while the session,
    spawns, edits, graph state, and any acquired isolation lease remain; the warning HUD must remain visible. Current Sandbox acquires no global persistence lease. Reopen
@@ -245,7 +245,7 @@ No Robotopia directory was supplied. Set `ROBOTOPIA_GAME_DIR` or pass `--game-di
 
 ## TFACCEPT102
 
-The supplied Robotopia directory does not exist. Select the installed build-2409 directory.
+The supplied Robotopia directory does not exist. Select the installed build-2478 directory.
 
 ## TFACCEPT103
 

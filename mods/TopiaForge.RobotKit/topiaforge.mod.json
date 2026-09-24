@@ -17,7 +17,7 @@
   "loadAfter": [
     "io.github.furroxide.topiaforge.prompts"
   ],
-  "supportedGameVersionRange": "0.0.2409",
+  "supportedGameVersionRange": "0.0.2478",
   "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "category": "Framework",

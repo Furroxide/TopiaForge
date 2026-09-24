@@ -364,6 +364,7 @@ namespace TopiaForge.ModManager.Tests
                 ZombiesConfigTests.Run();
                 ZombiesControllerTests.Run();
                 UgcNoOpLaunchRequestTests.Run();
+                NativeDamageSourceTests.Run();
                 SdkSurfaceTests.Run();
                 RuntimeInfoTests.Run();
                 ModuleContractSurfaceTests.Run();
