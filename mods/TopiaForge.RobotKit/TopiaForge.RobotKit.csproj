@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <Compile Include="..\Shared\SafeEvent.cs" Link="Shared\SafeEvent.cs" />
+    <Compile Include="..\Shared\NativeDamageSource.cs" Link="Shared\NativeDamageSource.cs" />
   </ItemGroup>
 
   <ItemGroup>
