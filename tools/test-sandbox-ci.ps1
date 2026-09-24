@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'sandbox/ci-admission.ps1')
+. (Join-Path $PSScriptRoot 'sandbox/qa-game-copy.ps1')
 $passed = 0
 $failed = [Collections.Generic.List[string]]::new()
 function Test-Case([string]$Name, [scriptblock]$Action) {
@@ -110,6 +111,55 @@ Test-Case 'incomplete remains an explicit valid handoff status' {
     $r=Build-HandoffFixture
     $r.status='incomplete'
     Assert-SandboxCiHandoff $r ('a'*40)
+}
+
+function Build-CopyReceipt([int]$Version) {
+    $executable = 'c' * 64
+    $receipt = [ordered]@{
+        schemaVersion = $Version; kind = "sandbox-qa-game-copy-v$Version"; qaRoot = 'D:\TopiaForgeQA'
+        completed = $true; fileCount = 2; copiedFiles = 2; sourceBytes = 30
+        inventory = @(@{path = 'Robotopia.exe'; length = 10; sha256 = $executable}, @{path = 'Robotopia_Data/data.unity3d'; length = 20; sha256 = 'd' * 64})
+    }
+    if ($Version -eq 2) {
+        $receipt.buildId = 2478; $receipt.sourceGameRoot = 'D:\TopiaForgeQA\source-game-2478'; $receipt.gameRoot = 'D:\TopiaForgeQA\game-2478'
+        $receipt.filesManifestSha256 = 'a' * 64; $receipt.gameExecutableSha256 = $executable
+    }
+    return $receipt | ConvertTo-Json -Depth 5 | ConvertFrom-Json
+}
+Test-Case 'QA build copies are build-named siblings' {
+    $names = Get-SandboxQaBuildCopyNames 2478
+    if ($names.SourceGame -cne 'source-game-2478' -or $names.Game -cne 'game-2478' -or $names.Receipt -cne 'game-copy-2478.json') { throw 'Unexpected build copy names.' }
+    Assert-Refused { Get-SandboxQaBuildCopyNames 0 }
+    Assert-Refused { Get-SandboxQaBuildCopyNames 1000000 }
+}
+Test-Case 'QA copy receipt names are the original or build-named' {
+    foreach ($name in @('game-copy.json', 'game-copy-2478.json')) { if (!(Test-SandboxQaCopyReceiptName $name)) { throw "Refused $name." } }
+    foreach ($name in @('game-copy-0.json', 'game-copy-02478.json', 'Game-copy.json', 'game-copy-2478.json.bak', 'game-copy-x.json', '')) { if (Test-SandboxQaCopyReceiptName $name) { throw "Accepted $name." } }
+}
+Test-Case 'original copy receipt resolves to the original source tree' {
+    $resolved = Resolve-SandboxQaCopyReceipt (Build-CopyReceipt 1)
+    if ($null -ne $resolved.BuildId -or $resolved.SourceGameRoot -cne 'D:\TopiaForgeQA\source-game' -or $resolved.FileCount -ne 2 -or $resolved.SourceBytes -ne 30) { throw 'Unexpected original resolution.' }
+}
+Test-Case 'build copy receipt resolves to its build-named trees' {
+    $resolved = Resolve-SandboxQaCopyReceipt (Build-CopyReceipt 2)
+    if ($resolved.BuildId -ne 2478 -or $resolved.SourceGameRoot -cne 'D:\TopiaForgeQA\source-game-2478' -or $resolved.GameRoot -cne 'D:\TopiaForgeQA\game-2478') { throw 'Unexpected build resolution.' }
+}
+$copyReceiptMutations = [ordered]@{
+    'copy receipt must be complete' = {param($r) $r.completed = $false}
+    'copy receipt must name the QA root' = {param($r) $r.qaRoot = 'E:\TopiaForgeQA'}
+    'copy receipt inventory must match its count' = {param($r) $r.fileCount = 3}
+    'copy receipt kind must be known' = {param($r) $r.kind = 'sandbox-qa-game-copy-v3'}
+    'copy receipt version must match its kind' = {param($r) $r.schemaVersion = 1}
+    'build copy roots must match the build' = {param($r) $r.sourceGameRoot = 'D:\TopiaForgeQA\source-game'}
+    'build copy executable must match the inventory' = {param($r) $r.gameExecutableSha256 = 'e' * 64}
+    'build copy digests must be lowercase hex' = {param($r) $r.filesManifestSha256 = 'A' * 64}
+}
+foreach ($entry in $copyReceiptMutations.GetEnumerator()) {
+    Test-Case $entry.Key {
+        $r = Build-CopyReceipt 2
+        & $entry.Value $r | Out-Null
+        Assert-Refused { Resolve-SandboxQaCopyReceipt $r }
+    }
 }
 
 $owned = [IO.Directory]::CreateTempSubdirectory('sandbox-ci-regression-').FullName

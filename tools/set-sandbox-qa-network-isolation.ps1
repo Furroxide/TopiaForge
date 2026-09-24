@@ -4,22 +4,30 @@
 param(
     [Parameter(Mandatory)][string]$GameCopyReceipt,
     [Parameter(Mandatory)][string]$ReceiptPath,
+    [Parameter(Mandatory)][string]$PrivateEvidenceRoot,
+    # Digest of the reviewed copy receipt, as for the fresh-provisioning copier.
+    [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{64}$')][string]$TrustedReceiptSha256,
     [string]$GameRoot = 'D:\TopiaForgeQA\game'
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'sandbox/qa-game-copy.ps1')
 function ResolveQaProgram([string]$Root) {
     if ($Root -ceq 'D:\TopiaForgeQA\game') {
         return [pscustomobject]@{Executable='D:\TopiaForgeQA\game\Robotopia.exe';RuleName='TopiaForge-QA-Isolation-20260909'}
     }
+    $build = [regex]::Match($Root,'^D:\\TopiaForgeQA\\game-([1-9][0-9]{0,5})$',[Text.RegularExpressions.RegexOptions]::CultureInvariant)
+    if ($build.Success) {
+        return [pscustomobject]@{Executable=($Root+'\Robotopia.exe');RuleName=('TopiaForge-QA-Isolation-'+$build.Groups[1].Value)}
+    }
     $match = [regex]::Match($Root,'^D:\\TopiaForgeQA\\game-provisioning-([0-9]{8}T[0-9]{6}Z)$',[Text.RegularExpressions.RegexOptions]::CultureInvariant)
-    if (!$match.Success) { throw 'Use the original QA game or a fresh, timestamped provisioning-game child.' }
+    if (!$match.Success) { throw 'Use a QA game copy or a fresh, timestamped provisioning-game child.' }
     $stamp = $match.Groups[1].Value
     [void][DateTime]::ParseExact($stamp,'yyyyMMddTHHmmssZ',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal)
     return [pscustomobject]@{Executable=($Root+'\Robotopia.exe');RuleName=('TopiaForge-QA-Provisioning-'+$stamp)}
 }
 $scope = ResolveQaProgram $GameRoot
 $gameExecutable = $scope.Executable
-$sourceExecutable = 'D:\TopiaForgeQA\source-game\Robotopia.exe'
+$sourceExecutable = $null
 $ruleName = $scope.RuleName
 $result = [ordered]@{schemaVersion=1;kind='sandbox-qa-outbound-isolation-v1';startedAtUtc=[DateTime]::UtcNow.ToString('o');ruleName=$ruleName;program=$gameExecutable;ruleCreated=$false;verified=$false;gameExecuted=$false;isolationAdmitted=$false;qualifiesRelease=$false;errorType=$null}
 function RequirePhysical([string]$Path) {
@@ -31,12 +39,21 @@ function RequirePhysical([string]$Path) {
         $parent = [IO.Path]::GetDirectoryName($parent)
     }
 }
-foreach ($path in @($gameExecutable,$sourceExecutable,$GameCopyReceipt,$ReceiptPath)) { RequirePhysical $path }
+foreach ($path in @($gameExecutable,$GameCopyReceipt,$ReceiptPath,$PrivateEvidenceRoot)) { RequirePhysical $path }
+if ([IO.Path]::GetDirectoryName($GameCopyReceipt) -cne $PrivateEvidenceRoot -or !(Test-SandboxQaCopyReceiptName ([IO.Path]::GetFileName($GameCopyReceipt)))) { throw 'Only a reviewed game-copy receipt in the private QA record directory is accepted.' }
 if (Test-Path -LiteralPath $ReceiptPath) { throw 'Refusing existing firewall receipt.' }
 try {
     if ((Get-Item -LiteralPath $GameCopyReceipt).Length -gt 1MB) { throw 'Unbounded source copy receipt.' }
-    $copy = Get-Content -LiteralPath $GameCopyReceipt -Raw | ConvertFrom-Json
-    if ($copy.kind -ne 'sandbox-qa-game-copy-v1' -or !$copy.completed -or $copy.qaRoot -cne 'D:\TopiaForgeQA') { throw 'Verified approved source-copy receipt required.' }
+    # Hash and parse the same bytes, so the reviewed digest covers exactly what is used.
+    $copyBytes = [IO.File]::ReadAllBytes($GameCopyReceipt)
+    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($copyBytes)).ToLowerInvariant() -cne $TrustedReceiptSha256) { throw 'Reviewed source-copy receipt changed.' }
+    $copy = [Text.UTF8Encoding]::new($false, $true).GetString($copyBytes) | ConvertFrom-Json
+    $approved = Resolve-SandboxQaCopyReceipt -Receipt $copy
+    $result.approvedInventorySha256 = $TrustedReceiptSha256
+    # A build copy is scoped to its own receipt; provisioning copies are bound by the executable digest below.
+    if ($GameRoot -cmatch '^D:\\TopiaForgeQA\\game(-[1-9][0-9]{0,5})?$' -and $approved.GameRoot -cne $GameRoot) { throw 'QA game copy does not belong to this source-copy receipt.' }
+    $sourceExecutable = $approved.SourceGameRoot + '\Robotopia.exe'
+    RequirePhysical $sourceExecutable
     $expected = @($copy.inventory | Where-Object path -CEQ 'Robotopia.exe')
     if ($expected.Count -ne 1 -or $expected[0].sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Expected game executable identity missing.' }
     foreach ($path in @($gameExecutable,$sourceExecutable)) {

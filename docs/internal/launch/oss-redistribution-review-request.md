@@ -6,7 +6,7 @@
 
 Please review the retained third-party inventory and proposed redistribution method for TopiaForge `0.1.0-rc.1`, and provide an attributable decision for **P0-OSS-01**. The requested release scope is Windows x64, its thirteen released mods, and the two VPM packages embedded in the ecosystem. Repository coverage includes additional platform sources; their presence does not request approval to release those platforms.
 
-The source under review is commit `437733854795c11e684eac9d59d6bc52ada9516e`, tree `976326d02fd68b19a2e10bde923e15510df441a6`. This is a source review before candidate construction. The final integrated `main` SHA and actual candidate BOM, SBOM, notices, and archive bytes must be checked later; no future archive is represented as already inspected.
+The source under review is commit `79740dc1d747e75510ca477e7be0d5c0b109a085`, tree `10b55514193727d205fe84cb62e8e03d9aa4fb90`. This is the release branch after the 2026-09-24 stabilization, which retargeted RC1 to Robotopia build 2478 ([evidence](Evidence.md#build-2478-retarget-2026-09-24)). It supersedes the earlier baseline `4377338`. This is a source review before candidate construction. The final integrated `main` SHA and actual candidate BOM, SBOM, notices, and archive bytes must be checked later; no future archive is represented as already inspected.
 
 Please address the following points and identify any unsupported item by its repository or intended archive path:
 
@@ -18,7 +18,7 @@ Please address the following points and identify any unsupported item by its rep
 
 4. **Notice placement and inventory coverage.** Review the root/platform license and DCO placement, first-party mod and VPM package licenses, SDK package declarations, BepInEx license/source delivery, generated Flutter `NOTICES.Z`, CLI dependency license bundle, and exact .NET license/notice bundles. The [blocker entry](../../../docs/LaunchBlockers.md#p0-blockers) describes the historical allowlist gap and subsequent exhaustive source asset audit. Audit passes demonstrate mechanical coverage only. Please identify missing notices, incompatible or unsubstantiated terms, and any remove/replace or packaging instructions.
 
-5. **Retained art and review boundaries.** The notices identify three Robotopia web rasters with attribution and a dated project-owner risk disposition, but no recorded written redistribution grant. Please explicitly state whether these can fall within the scope you approve or require removal/replacement or a separate rights record. Do not treat the dated sub-item as a new grant or closure of [P0-IP-01](ReviewGates.md).
+5. **Replaced art and review boundaries.** The three Robotopia web rasters the launcher formerly bundled were replaced on 2026-09-09 with CC0 artwork by GrafxKid from OpenGameArt, under the same filenames. The notices record the source URLs, hashes and transformations. Please confirm that no Robotopia web asset remains in the proposed payload, and that the CC0 replacements need no further notice. Names, integration and other rights questions stay with [P0-IP-01](ReviewGates.md).
 
 Please return a signed or otherwise attributable private record. Suggested response fields below are a review aid, **not an enforced attestation schema**:
 

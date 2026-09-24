@@ -36,10 +36,10 @@ PRs and honest prerelease documentation are within this work. The final
 `main` merge remains the user's action; publication still follows its actual
 qualification and protected approval requirements.
 
-A clarification asking whether to retain the full launch requirements or
-prepare a reduced experimental-release scope is **awaiting an explicit reply**.
-Neither option has been selected. No gate or previous deferred item was changed
-by asking this question, and no reviewer approval was inferred from release intent.
+A clarification asked whether to retain the full launch requirements or
+prepare a reduced experimental-release scope. It stayed unanswered until
+2026-09-24; the answer is recorded below. No gate or previous deferred item was
+changed by asking it, and no reviewer approval was inferred from release intent.
 
 The user subsequently explicitly replied **“Authorize PR #130 merge only”**
 to the stabilization merge request. PR #130 was normally squash-merged into
@@ -47,3 +47,22 @@ to the stabilization merge request. PR #130 was normally squash-merged into
 select the experimental scope, clear a release gate or change a deferred item.
 
 For subsequent sessions, preserve these choices until the user changes them. A general request to update documentation is not approval to clear a gate, install a QA environment, access signing keys, send review requests to others, merge, tag or publish. Do not ask again for scope already authorized; do ask for genuinely missing inputs when the concrete next action needs them.
+
+## RC1 completion request (2026-09-24)
+
+The user asked to "Complete what is needed for the initial release". The
+replies below were given in that session. They are task-scope decisions and do
+not attest any reviewer role.
+
+| Topic | Explicit reply | Effect |
+| --- | --- | --- |
+| Full versus reduced scope (asked 2026-09-09) | **“Full requirements, but make QA optional”**; asked which QA, **“All game QA optional”** | IP, OSS, PRIV and CRED stay blocking. P0-GAME-01 becomes advisory with an owner disposition, removing the candidate live-acceptance requirement; P1-UX-01, P1-E2E-01 and the Sandbox native matrix get owner dispositions. The change is a policy PR the user reviews and merges personally; until it merges the register is unchanged |
+| Sixteen pinned-Unity authoring cycles | **“Keep them mandatory”** | They remain a required build check; only live in-game acceptance becomes optional |
+| Stabilization merges | **“Yes, merge when green”** | Squash-merge PR #131, the build-2478 retarget and the native world-loading fixes into `release/0.1.0-rc.1` once every required check and CodeQL pass, including replying to and resolving PR #131's two false-positive review threads. The approved plan extends the same rule to the newer-build guidance PR, the QA copy-script PR and this documentation PR. The final `main` merge and the policy PR remain the user's |
+| Game build | The user updated the official Robotopia install to build 2478 during the session (**“Update installed”**) | RC1 is retargeted to build 2478 under the kept `requireLatestAtRelease` policy (#137) |
+| QA copies | **“Yes, copy 2478”** | Fresh verified copies from the 2478 install may be made; the 2409 copies stay as failed-attempt evidence, and the provisioning retry may be re-staged but not dispatched |
+| FlyBrain | **“Leave it out, move to a separate worktree”**, then **“Clean it afterwards”** | The uncommitted FlyBrain Robot Laboratory work was snapshotted to local branch `feat/flybrain-robot-laboratory` (worktree `C:\Users\vanst\Code\TopiaForge-flybrain`, not pushed), verified, and the primary checkout restored to a clean `4377338`. It is not part of RC1 |
+
+The native world-loading fixes that FlyBrain's native runs exposed (native
+teleport spawn placement, an original empty UGC scene) are ordinary source
+fixes and are integrated separately; the rest of that work stays out of RC1.

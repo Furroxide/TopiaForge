@@ -1,91 +1,114 @@
 # RC1 completion continuation prompt
 
-Prepared 2026-09-11 from the current launch documents, local QA receipts and a live read of PR #119. This is a continuation prompt, not an approval, completed review or release decision. Reverify observations before acting. Copy the text below into the continuing task.
+Prepared 2026-09-24 from the current launch documents, local QA receipts and live reads of the RC1 pull requests. This is a continuation prompt, not an approval, completed review or release decision. Reverify observations before acting. Copy the text below into the continuing task.
 
 ---
 
-Continue TopiaForge RC1 preparation and finish all remaining authorized Sandbox automation and launch-checklist work. Work from `C:\Users\vanst\Code\TopiaForge`, including the original referenced review packet at `C:\Users\vanst\Code\TopiaForge-gm\.dart_tool\rc1-review\NextActions.md`. Carry the work through implementation, meaningful verification, integration preparation and the release prerequisites that can actually be completed. Do not declare the launch complete while required execution or owner decisions remain outstanding.
+Continue TopiaForge RC1 preparation for `0.1.0-rc.1` and finish the remaining launch-checklist work that is authorized. Work from `C:\Users\vanst\Code\TopiaForge`; the original referenced review packet is at `C:\Users\vanst\Code\TopiaForge-gm\.dart_tool\rc1-review\NextActions.md`. Carry the work through implementation, verification, integration preparation and whatever release prerequisites can actually be completed. Do not declare the launch complete while required execution or owner decisions remain outstanding.
 
 1. Establish the current state and preserve existing work.
 
-Read `AGENTS.md` and start at `docs/internal/launch/README.md`. Read `NextActions.md`, `Decisions.md`, `Evidence.md`, `ReviewGates.md`, `docs/internal/RC1PrereleaseHandoff.md`, `docs/LaunchBlockers.md`, `docs/ReleaseChecklist.md`, `docs/AdminRelease.md`, `docs/RepositoryGovernance.md`, `docs/LiveGameAcceptance.md`, and the machine readiness, policy and catalog files under `release/`. Follow all referenced nested reviewer requests, setup plans, Sandbox implementation/handoff documents, UX and independent-tester handoffs, signing recovery checklist and governance-token instructions.
+Read `AGENTS.md` and start at `docs/internal/launch/README.md`. Then read:
 
-Reverify Git state, worktrees, current remote refs, PRs and source-specific CI. At the latest inspection, the primary checkout was a dirty detached development tree at `437733854795c11e684eac9d59d6bc52ada9516e`. PR #119 was open and draft from `release/0.1.0-rc.1` to `main`, at `0ea59e7941b1d56f515ac34f89819f31f16c7137`, with all 62 reported checks successful. PRs #129 and #130 had integrated release stabilization; the documented full CI, CodeQL and packaging dry runs passed for that release head. The unfinished local automation/provisioning changes are separate and are not covered automatically by those results.
+- `NextActions.md`, `Decisions.md`, `Evidence.md` and `ReviewGates.md`.
+- `docs/internal/RC1PrereleaseHandoff.md`.
+- `docs/LaunchBlockers.md`, `docs/ReleaseChecklist.md`, `docs/AdminRelease.md`, `docs/RepositoryGovernance.md` and `docs/LiveGameAcceptance.md`.
+- The machine readiness, policy and catalog files under `release/`.
 
-Preserve unrelated local work, including `assets/launcher/`, other worktrees and branding changes. Reconcile overlapping production fixes before integrating local automation through ordinary reviewed changes. Use an isolated checkout where appropriate; do not reset or blindly switch the dirty checkout, overwrite snapshots, duplicate already integrated fixes or claim old test evidence covers new source.
+Follow the nested reviewer requests, setup plans and handoffs they reference.
+
+Reverify Git state, worktrees, remote refs, PRs and source-specific CI; the observations below may be stale. At the 2026-09-24 handoff:
+
+- The primary checkout was clean at `437733854795c11e684eac9d59d6bc52ada9516e`. The uncommitted FlyBrain Robot Laboratory work that had filled it was snapshotted to the local, unpushed branch `feat/flybrain-robot-laboratory` (worktree `C:\Users\vanst\Code\TopiaForge-flybrain`). It is not part of RC1.
+- `release/0.1.0-rc.1` had integrated the build-2478 retarget (#137), the newer-build launcher guidance (#139), the Sandbox automation and QA provisioning tooling (#131) and two native world-loading fixes (#138).
+- PR #119 (`release/0.1.0-rc.1` to `main`) remained a draft with auto-merge off.
+- The game-QA policy PR was open for the user's review.
+
+Preserve unrelated local work and other worktrees. Do not reset or blindly switch a checkout another session may be using. Do not claim old test evidence covers new source.
 
 2. Preserve my decisions and minimize interruptions.
 
-The remaining Sandbox stages, applicable tests and isolated QA provisioning are already authorized. Unity 6000.0.23f1 is installed and the original fourteen EditMode cases passed; do not reinstall it or repeat password/account setup unnecessarily. The standard account is `TopiaForgeQA`, with heavy QA storage on `D:\TopiaForgeQA`. The verified existing Robotopia build-2409 binary source, me as operator, main display and default output audio were approved. Microphone recording remains off. Do not import personal saves, tokens, configuration, caches or licence files.
+The 2026-09-24 replies are recorded in `Decisions.md`:
 
-Credential-incident closure remains explicitly deferred. Neutral release-build roots, fresh SDK and dedicated cache provisioning remain plan-only. Signing recovery and plaintext cleanup were authorized only as a prepared checklist. Do not treat this continuation request as reversal of those decisions. Identify how they block completion, keep them open and obtain an explicit scope change before dependent execution. Never read the QA bootstrap credential, signing seed, secret values or old incident logs into chat.
+- **Scope:** full requirements, with all game QA optional. IP, OSS, PRIV and CRED stay blocking. `P0-GAME-01` becomes advisory with an owner disposition; `P1-UX-01`, `P1-E2E-01` and the Sandbox native matrix get owner dispositions. That change exists only as the policy PR, and it takes effect only when I merge it; until then the register is unchanged.
+- **Unity cycles:** the sixteen pinned-Unity authoring cycles stay mandatory.
+- **Merge authorization:** "merge when green" covered only the named stabilization PRs, the QA copy-script PR and the launch-documentation PR. It never covers the policy PR or PR #119.
+- **QA copies:** fresh 2478 copies are authorized. The provisioning retry may be re-staged but not dispatched.
 
-The current decision ledger also records an unanswered full-versus-reduced experimental-release question and a merge authorization limited to PR #130. Verify the originating decision context if needed. Do not select an unanswered option, downgrade gates because this is a prerelease, or infer authority for the final main merge. Complete independent authorized work while required decisions wait.
+Earlier decisions stand:
 
-Wait indefinitely for my explicit reply to any question. Never choose a default or treat elapsed time as consent. Prepare concrete reviewable work before requesting a decision. Do not contact reviewers or send messages to others without explicit authorization. Keep final main merge for me; use actual authorization and protected approval for subsequent external release actions.
+- Credential-incident closure is deferred.
+- Neutral release-build roots, a fresh SDK and a dedicated cache stay plan-only.
+- Signing recovery and plaintext cleanup were authorized only as a prepared checklist.
 
-Avoid repeated five-minute account-switch rounds. Prepare and verify scripts, source, inputs, permissions, dependencies and diagnostics before involving me. Coordinate one bounded operator session for all ready checks where possible, with clear progress and completion signals. Confirm my availability before starting a short desktop-wait window. If another native attempt fails, preserve its diagnostics and investigate before requesting another switch. Execution deadlines remain bounded; those deadlines are not deadlines for my answers.
+Never read the QA bootstrap credential, signing seed, secret values or old incident logs into chat.
 
-3. Finish QA provisioning and prove the shutdown correction natively.
+Wait indefinitely for my explicit reply to any question. Never choose a default or treat elapsed time as consent. Prepare concrete reviewable work before requesting a decision. Do not contact reviewers or send messages to others without explicit authorization. Keep the policy PR and the final `main` merge for me.
 
-Read `docs/internal/launch/runtime-provisioning-observer.md` and the actual private receipts. Account initialization and host identity/known-folder/device metadata succeeded. The first runtime attempt wrote a correlated actual Unity persistence-path observation with the manager inactive, but the game exceeded its 90-second deadline. Its original process was force-terminated and exit was confirmed. That attempt remains failed.
+3. Keep the game build current.
 
-The deferred-first-Update quit correction passed 53 focused checks and all six required C# build/regression commands. Its v3 receipt is `.dart_tool/rc1-review/qa-provisioning-20260909/runtime-observer-quit-validation-v3/final-source-receipt-v3.json`. Source snapshots, exact loader hashes and the unchanged complete broker bundle are retained privately.
+`gameBuild.requireLatestAtRelease` stays on, and the finalizer re-probes `https://builds.tomatocake.dev/latest-build.json`. Robotopia has published several builds a month. Before every push and every release phase, compare the public latest id with `.github/robotopia-game-build.json`. If it moves past the pin, stop and ask me to update the official install. Then:
 
-The corrected retry was staged in `D:\TopiaForgeQA\tools\runtime-probe-20260909T215900Z` for the separate game at `D:\TopiaForgeQA\game-provisioning-20260909T215734Z`. It timed out at 22:13:23Z on September 9 waiting for an active, unlocked QA desktop. `brokerStarted` was false: neither broker nor game ran, so this attempt did not test the shutdown correction. The temporary task was removed. Preserve both failure records and the original failed game at `D:\TopiaForgeQA\game`.
+1. Measure the install read-only.
+2. Run `topiaforge compat bump` with its five inputs and review its unlisted-mention report.
+3. Repeat the P2-COMPAT-01 audit: `gamecompat verify`, `audit --strict`, a full surface diff and a reviewed baseline refresh.
+4. Adapt any binding or runtime change the diff shows.
 
-The September 11 retry completed with a failed result at 17:17:04Z. Fresh identity measurement passed; the game recorded the correlated observation, reached the first Update quit request and OnApplicationQuit, but still exceeded 90 seconds and required original-process termination. Exit was confirmed, the task was removed, and nineteen private files were retained under `runtime-retry-failed-20260911T171020Z`. No recovery marker or remaining game/broker was found. The broker console was empty and no current Player.log existed; the runbook records the -nographics diagnostic limitation. Diagnose and verify a logging-capable bounded approach before asking for another operator session; no further attempt is queued.
+Name-only bindings can hide signature changes, as the 2478 Health change showed. Constrain the signatures of anything the loader or mods call.
 
-Revalidate current identity, logon/session, physical roots, ACLs, source/runtime/package/broker hashes, network isolation and cleanup state. Old session identifiers and immutable request/output files must not be blindly reused. The game copy unused by the September 9 desktop-wait attempt was subsequently consumed by the failed September 11 runtime attempt. Preserve it as failed evidence; it now contains manager staging and must not be treated as an unused copy or wiped for a retry. Keep the exact-game outbound blocks effective, and preserve read leases, original-process ownership, bounded cleanup and failure receipts. Never substitute an expected path, forged acknowledgement, success flag or forced termination for successful unforced completion.
+4. Optional QA, only if I choose to run it.
 
-After actual successful measurement, obtain an attributable private provisioning review and device admission/reservation using the exact repository contracts. A valid JSON shape, operator nomination or raw path observation is not reviewer approval. Keep sensitive identity/device details and raw records in private storage, with only safe references in tracked documents.
+Under my decision, live game acceptance, native UX/accessibility, independent player/author journeys and the Sandbox native matrix are optional once the policy PR merges. The provisioning history is retained as evidence: three failed attempts, including forced termination after OnApplicationQuit on 2026-09-11, the verified diagnostic launch mode, and the staged but undispatched retry `20260911T183026Z`. Both existing QA game copies are build 2409 and no longer match the pin.
 
-4. Complete the remaining Sandbox automation implementation and execution.
+Optional execution needs:
 
-Read the full nine-row gap table in `docs/internal/launch/sandbox-automation-stages-3-6.md` and the implementation plan. Existing scenario names and repeated partial recipes do not constitute complete coverage. Finish the required native actions, independent observations and failure detection for:
+- The verified 2478 copies `source-game-2478` and `game-2478`, which already exist. Saves, tokens, personal configuration and microphone recording stay excluded.
+- A re-staged, refusal-checked retry, which needs a new source checkpoint (see the observer runbook).
+- One operator session that I confirm.
+- A successful unforced exit and an attributable provisioning review.
 
-- Routing across menu, loading/preparing/stopping, other modes, wrong/competing owners and duplicate toggles.
-- Catalog/editing, including expected inventories, categories, empty searches, offscreen scrolling, rendered selection, precise transforms, duplicate/remove and Undo.
-- Borrowed-robot restoration, external-writer conflicts, disappearing targets, partial application and temporary-asset destruction.
-- Source teardown, pending callbacks, borrowed/edited leases and unrelated owners that must survive.
-- Hide/F5/close/reopen behavior, retained edits and graphs, real movement/camera restoration and text-focus isolation.
-- Persistence refusal, rendered reasons, in-operation checkpoints and applicable native denial/revocation cases.
-- Graph branching, real interaction, borrowed-target rollback, cancellation/fault/reentrancy/late completion, conversation behavior and independent audio onset/cessation/control-cue checks.
-- All supported lifecycle routes, scene/target changes, retired controllers and callback identities, ownership and input cleanup.
-- Ten complete lifecycle cycles containing the required branches, with independently measured identities and destruction/restoration barriers rather than counts alone.
+Never substitute an expected path, forged acknowledgement, success flag or forced termination for successful completion. Development annexes stay `qualifiesRelease: false`.
 
-Implement reviewed visual baselines and tolerances, accessibility profiles, contrast/scale/reduced-motion/focus assertions, robust native control access and meaningful fault injection that proves the oracles detect failures. Keep genuine product limitations explicit: unsupported vehicles, global mutation, real remote sessions or unavailable backend behavior must not be turned into passing fake/loopback branches. Surface product-scope decisions where a required capability has no shipping implementation.
+5. Close the review prerequisites.
 
-Rerun the pinned Editor against the exact final fixture source, then run the complete admitted native matrix. Finish source tests, independent verifiers and CI integration. Preserve the distinction between offline regressions, Editor results, native development evidence and final-candidate acceptance. Development annexes remain `qualifiesRelease: false`.
+`P0-IP-01`, `P0-OSS-01` and `P0-PRIV-01` need real role-complete approval records. The three prepared requests are pinned to the stabilized release head, and I send them. Follow `ReviewGates.md`: prepared requests, ownership assumptions and disclaimers do not clear gates. Integrate only valid safe references through normal review before the final freeze. `P0-CRED-01` remains deferred until I resume it and the credential and security owners supply actual closure evidence.
 
-5. Close the engineering validation and review prerequisites.
+Several items need the administrator:
 
-Run the applicable `AGENTS.md` checks on the final integrated source, including the relevant C# harnesses, Dart/Flutter tests and analysis, Windows build and file-size conventions. Diagnose the dirty development tree's outstanding launcher-data SDK restore timeout and lack of a complete passing CLI suite without increasing limits, suppressing failures or erasing evidence merely to obtain green results. Explain any platform-only skips under the actual policy.
+- Configure `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN` if it is still absent.
+- Complete the protected signing-seed recovery and the verified plaintext cleanup, each under its own explicit authorization.
+- Authorize the plan-only neutral build resources before any `release-admin.ps1` phase.
 
-Reconcile the old Windows Dartdoc/partial-documentation failures with later passing full Linux documentation/reference/search CI at the separate release head. Update stale action wording by exact source coverage. New integrated automation still needs its own applicable fresh checks; already verified unchanged work need not be repeatedly rerun without cause. Verify payload exclusions, dependency provenance, notices and all links/examples affected by the final changes.
-
-Obtain real role-complete approval records for `P0-IP-01`, `P0-OSS-01` and `P0-PRIV-01`. `P0-CRED-01` also blocks private candidate preparation, but remains deferred until I explicitly resume it and the credential/security owners supply actual closure evidence. Follow `ReviewGates.md`; prepared requests, ownership assumptions and disclaimers do not clear gates. Integrate only valid safe references through normal review before the final freeze. Recheck actual candidate redistribution inventories and notices when those bytes exist.
-
-Complete or obtain policy-permitted dated owner dispositions for `P0-WIN-01`, `P0-HOST-01`, `P0-CAND-01`, `P1-UX-01` and `P1-E2E-01`. Preserve existing approved TRUST and SUPPORT dispositions unless their scope changes. Native UX/accessibility and independent player/author journeys need actual operators/reviewers, execution and attributable results; do not contact people or invent attestations.
-
-Have the administrator securely configure `TOPIAFORGE_GOVERNANCE_AUDIT_TOKEN` if still absent: a dedicated fine-grained PAT restricted to Furroxide/TopiaForge, Administration read and Actions read, with implicit Metadata read and no write permissions. Verify only safe configuration metadata. Complete protected signing-seed recovery and verified exact plaintext cleanup only under their required explicit authorizations. Never print secrets or silently rotate the verified GitHub-held seed. Obtain explicit authorization before provisioning the plan-only neutral release-build resources.
+`P0-WIN-01`, `P0-HOST-01` and `P0-CAND-01` need completion or policy-permitted dated owner dispositions at SHIP time; do not invent them. Preserve the approved TRUST and SUPPORT dispositions.
 
 6. Complete the actual release sequence when prerequisites permit.
 
-Keep the current RC1 scope: Windows x64, Robotopia build 2409, experimental prerelease, thirteen first-party mod packages and two embedded VPM packages. Unsigned Windows executables do not waive Ed25519 update signatures, checksums, signed annotated tags or exact-byte verification. Reverify these counts against the final catalog and policy.
+RC1 scope is Windows x64, Robotopia build 2478, experimental prerelease, thirteen first-party mod packages and two embedded VPM packages. Unsigned Windows executables do not waive Ed25519 update signatures, checksums, signed annotated tags or exact-byte verification. Reverify these counts against the final catalog and policy.
 
-Integrate reviewed source and genuine gate changes normally. Refresh PR #119 with the final source, validation and remaining decisions; leave auto-merge off and prepare the final main merge for me. After I merge, verify the required two-parent topology, exact checked release parent and matching tree. Follow the required normal main-to-dev synchronization PR process in `RepositoryGovernance.md`; do not push directly to protected branches.
+Refresh PR #119 with the final source, validation and remaining decisions; leave auto-merge off. After I merge:
 
-Freeze the actual final main SHA in a clean checkout equal to `origin/main`. All four non-game blocking approvals must be present before private candidate construction; only GAME may await the candidate. Use the reviewed isolated QA record and explicit neutral source/state/cache paths consistently. Run prerequisite validation and administrator preflight, require `eligible-for-private-build`, then build exact candidate bytes.
+1. Verify the two-parent topology, the exact checked release parent and the matching tree.
+2. Follow the normal `main`-to-`dev` synchronization in `RepositoryGovernance.md`.
+3. Freeze the actual final `main` SHA in a clean checkout equal to `origin/main`.
 
-Complete the required fifteen SDK cases, ten game lifecycle cycles, thirty-six gamemode cases, sixteen pinned-Unity candidate authoring cycles and all mandatory native acceptance. Obtain the actual detached readiness/acceptance records and complete `P0-GAME-01` for that candidate. Run qualification and require `accepted`; any payload/source change requires the appropriate new build and acceptance.
+All four non-game blocking approvals must be present before private candidate construction. Then run prerequisite validation and administrator preflight, which must report `eligible-for-private-build`, and build the exact candidate bytes.
 
-Complete the required nonpublishing rehearsal and governance audit. Do not delete obsolete environments before the rehearsal and separate applicable authorization. Require every blocking gate closed, advisory evidence/dispositions complete, no critical/high defects or unexplained failures/warnings/flakes, zero skips in required final acceptance, policy-compliant final test results, and explicit project-owner/release-manager SHIP approval.
+The sixteen Unity authoring cycles always run. The live game acceptance (fifteen SDK cases, ten game cycles, thirty-six gamemode cases) is required unless the policy PR has merged. After that merge it may run, or the build records `-LiveGameAcceptance not-run` truthfully with the owner disposition. Qualification must record `accepted`, and any payload change needs a new build.
 
-Only with actual authorization and all prerequisites satisfied, use the administrator stage/dispatch/resume flow. Stage the signed annotated tag and matching draft after qualification; use the protected release approval and exact run binding for publication. Verify the policy's eighteen human-owned assets plus five generated metadata assets, immutable published bytes, checksums, Ed25519 metadata, verifier attestation and prerelease exclusion from stable feeds. Revalidate readiness at every prescribed boundary. Never bypass protection, manually redispatch an uncertain request or present a dry run as publication.
+Complete the nonpublishing rehearsal and governance audit. SHIP requires all of:
+
+- Every blocking gate closed.
+- Advisory evidence or dispositions complete.
+- No critical or high defects, and no unexplained failures, warnings, flakes or skips.
+- An explicit project-owner and release-manager decision.
+
+Only with actual authorization, use the administrator stage, dispatch and resume flow. Verify the eighteen human-owned assets plus five generated metadata assets, immutable bytes, checksums, Ed25519 metadata, the verifier attestation and exclusion from stable feeds. The window from freeze to publication must close before Robotopia's next update, or step 3 repeats.
 
 7. Keep the repo and handoff accurate throughout.
 
-Keep the launch hub, actions, decisions, evidence, nested runbooks, prerelease handoff and original sibling review view consistent. Retain raw logs, actual review/provisioning records and credentials outside Git/public assets. Preserve failed attempts and source-specific receipts. Do not change readiness merely to make progress appear complete.
+Keep the launch hub, actions, decisions, evidence, nested runbooks and prerelease handoff consistent. Retain raw logs, actual review and provisioning records and credentials outside Git and public assets. Preserve failed attempts and source-specific receipts. Do not change readiness merely to make progress appear complete. At each real handoff, report:
 
-Use bounded independent subagents where useful. Give concise progress updates and continue all independent authorized work while waiting for explicit user input. At each real handoff report completed work, exact source/artifact identity, tests and actual outcomes, remaining implementation, external decisions and the next concrete action. Full completion requires the actual required implementation, execution, approvals and final release verification; otherwise state the remaining blockers precisely and leave them open.
+- Completed work and the exact source and artifact identities.
+- Tests and their actual outcomes.
+- Remaining implementation and external decisions.
+- The next concrete action.
