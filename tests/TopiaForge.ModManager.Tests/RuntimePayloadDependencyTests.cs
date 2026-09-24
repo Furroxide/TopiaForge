@@ -48,10 +48,15 @@ namespace TopiaForge.ModManager.Tests
             AssertReference(immutable, "System.Runtime.CompilerServices.Unsafe", new Version(6, 0, 0, 0));
 
             var managedDirectory = GetRobotopiaManagedDirectory();
-            Assert(!File.Exists(Path.Combine(managedDirectory, "System.Reflection.Metadata.dll")),
-                "Robotopia must not be assumed to provide System.Reflection.Metadata");
-            Assert(!File.Exists(Path.Combine(managedDirectory, "System.Collections.Immutable.dll")),
-                "Robotopia must not be assumed to provide System.Collections.Immutable");
+            // Build 2409 shipped neither assembly. Build 2478 preloads its own 8.0 copies through
+            // ScriptingAssemblies.json, before any plugin loads. Under Unity's Mono the first-loaded copy of an
+            // assembly name usually wins, so the loader may bind to the game's copies instead of the bundled 10.0
+            // ones, or bind the bundled Metadata against the game's Immutable. Whichever copy binds, every type and
+            // member the compiled references need must exist in it. The non-short-circuit & still checks every
+            // present copy, and the success line below claims the game copies only when all three checks ran.
+            var gameCopies = AssertGameCopySatisfies(corePath, managedDirectory, "System.Reflection.Metadata", true)
+                & AssertGameCopySatisfies(corePath, managedDirectory, "System.Collections.Immutable", false)
+                & AssertGameCopySatisfies(metadataPath, managedDirectory, "System.Collections.Immutable", true);
             var profile = new[]
             {
                 new ProfileExpectation(
@@ -82,7 +87,26 @@ namespace TopiaForge.ModManager.Tests
 
             AssertProfileResolves(metadata, available);
             AssertProfileResolves(immutable, available);
-            Console.WriteLine("RuntimePayloadDependencyTests passed (13-DLL payload; Unity profile closure verified).");
+            Console.WriteLine("RuntimePayloadDependencyTests passed (13-DLL payload; Unity profile closure verified"
+                + (gameCopies ? "; game-provided Metadata/Immutable satisfy every loader reference)." : ")."));
+        }
+
+        private static bool AssertGameCopySatisfies(string consumerPath, string managedDirectory, string dependency,
+            bool requireReferences)
+        {
+            var gameCopy = Path.Combine(managedDirectory, dependency + ".dll");
+            if (!File.Exists(gameCopy))
+            {
+                return false;
+            }
+
+            var missing = ManagedMemberReferenceChecker.FindUnsatisfied(consumerPath, dependency, gameCopy, out var count);
+            Assert(!requireReferences || count > 0,
+                Path.GetFileName(consumerPath) + " should reference " + dependency + "; the binding check found nothing to verify.");
+            Assert(missing.Count == 0,
+                Path.GetFileName(consumerPath) + " references " + dependency + " members that the game's own copy lacks: "
+                + string.Join("; ", missing.Take(12)));
+            return true;
         }
 
         private static void AssertProfileResolves(
@@ -169,7 +193,7 @@ namespace TopiaForge.ModManager.Tests
                 .Single(attribute => attribute.Key == "TopiaForge.RobotopiaManagedDir")
                 .Value;
             Assert(!string.IsNullOrWhiteSpace(value) && Directory.Exists(value),
-                "TopiaForge.RobotopiaManagedDir must identify the restored build-2309 Managed directory.");
+                "TopiaForge.RobotopiaManagedDir must identify the pinned build's Managed directory.");
             return Path.GetFullPath(value!);
         }
 

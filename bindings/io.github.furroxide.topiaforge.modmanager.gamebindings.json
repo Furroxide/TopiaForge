@@ -440,6 +440,62 @@
       "isPublic": true,
       "isStatic": false,
       "genericArity": 0
+    },
+    {
+      "id": "manager.type.Health",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "matchMode": "SimpleNameWalk",
+      "criticality": "Critical",
+      "feature": "Local player health (ILocalPlayerService)",
+      "sourceRef": "src/TopiaForge.ModManager/UnityPlayerService.cs:331"
+    },
+    {
+      "id": "manager.field.health.health",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "member": "health",
+      "matchMode": "DynamicInstance",
+      "criticality": "Critical",
+      "feature": "Local player health snapshot",
+      "sourceRef": "src/TopiaForge.ModManager/UnityPlayerService.cs:134",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "manager.field.health.maxhealth",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "member": "maxHealth",
+      "matchMode": "DynamicInstance",
+      "criticality": "Critical",
+      "feature": "Local player health snapshot",
+      "sourceRef": "src/TopiaForge.ModManager/UnityPlayerService.cs:135",
+      "returnType": "System.Single"
+    },
+    {
+      "id": "manager.method.health.changehealth",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "Health",
+      "member": "ChangeHealth",
+      "matchMode": "PredicateOverload",
+      "criticality": "Critical",
+      "feature": "Local player damage and healing",
+      "sourceRef": "src/TopiaForge.ModManager/UnityPlayerService.cs:158",
+      "parameters": [
+        {
+          "type": "System.Single",
+          "constrained": true
+        },
+        {
+          "type": "UnityEngine.GameObject",
+          "constrained": true
+        }
+      ],
+      "returnType": "System.Void"
     }
   ]
 }
