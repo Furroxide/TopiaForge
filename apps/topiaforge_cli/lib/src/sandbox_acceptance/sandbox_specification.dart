@@ -1,5 +1,6 @@
 import 'package:crypto/crypto.dart';
 
+import 'sandbox_game_build.dart';
 import 'sandbox_json.dart';
 
 const sandboxScenarioIds = [
@@ -32,7 +33,7 @@ class SandboxSpecification {
         json['kind'] != 'sandbox-workbench-acceptance-v1' ||
         json['scope'] != 'supplementary-offline-contracts' ||
         json['gameBuild'] is! int ||
-        json['gameBuild'] != 2409) {
+        json['gameBuild'] != sandboxGameBuild) {
       throw StateError('Unsupported Sandbox specification identity.');
     }
     final rows = sandboxList(json['scenarios'], 'scenarios', maximum: 9);

@@ -25,7 +25,7 @@
     },
     "gameBuild": {
       "type": "integer",
-      "const": 2409
+      "minimum": 1
     },
     "scope": {
       "const": "supplementary-offline-contracts"

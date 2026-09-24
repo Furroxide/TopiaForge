@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:topiaforge/src/sandbox_acceptance/native_expected_catalog.dart';
+import 'package:topiaforge/src/sandbox_acceptance/sandbox_game_build.dart';
 import 'sandbox_native_scene.dart';
 
 /// Mutates [scene] so its next snapshot satisfies exactly the postcondition for
@@ -307,7 +308,7 @@ SandboxExpectedCatalog sceneExpectedCatalog({
     jsonEncode({
       'schemaVersion': 1,
       'kind': 'sandbox-native-expected-catalog-v1',
-      'gameBuild': 2409,
+      'gameBuild': sandboxGameBuild,
       'reviewed': reviewed,
       'sources': sources ?? const [],
       'entries':

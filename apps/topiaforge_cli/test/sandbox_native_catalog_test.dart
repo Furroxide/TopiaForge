@@ -5,6 +5,7 @@ import 'package:topiaforge/src/sandbox_acceptance/native_annex_verifier.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_contrast.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_expected_catalog.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_screen_baseline.dart';
+import 'package:topiaforge/src/sandbox_acceptance/sandbox_game_build.dart';
 import 'sandbox_native_steps.dart';
 import 'sandbox_native_transcript_fixture.dart';
 
@@ -16,7 +17,7 @@ void main() {
       final catalog = SandboxExpectedCatalog.parse(
         File(
           '../../tests/TopiaForge.SandboxAcceptanceNative/'
-          'expected-catalog-2409-v1.json',
+          'expected-catalog-v1.json',
         ).readAsBytesSync(),
       );
       expect(catalog.reviewed, isFalse);
@@ -77,6 +78,8 @@ void main() {
       'unknown field': (j) => j..['extra'] = true,
       'wrong kind': (j) => j..['kind'] = 'other',
       'non-bool reviewed': (j) => j..['reviewed'] = 'yes',
+      // A review for another build must not carry across a retarget.
+      'another build': (j) => j..['gameBuild'] = sandboxGameBuild - 1,
       'bad capabilities': (j) => (j['entries'] = [
         {'rowId': 'r', 'kind': 'Prop', 'transformCapabilities': 99},
       ]),
@@ -85,7 +88,7 @@ void main() {
         final json = <String, Object?>{
           'schemaVersion': 1,
           'kind': 'sandbox-native-expected-catalog-v1',
-          'gameBuild': 2409,
+          'gameBuild': sandboxGameBuild,
           'reviewed': false,
           'sources': <Object?>[],
           'entries': <Object?>[],
