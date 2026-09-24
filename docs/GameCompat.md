@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 218 declared bindings across nine current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 223 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -67,9 +67,9 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2478 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
-metadata verification resolve 207 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
-bindings, errors, or warnings. All 33 Manager and 35 Worlds bindings are verifiable. The remaining uncheckable
+The build 2478 metadata capture currently contains 61 types and 15 simple-name lookups. Offline and installed
+metadata verification resolve 212 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
+bindings, errors, or warnings. All 38 Manager and 35 Worlds bindings are verifiable. The remaining uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
