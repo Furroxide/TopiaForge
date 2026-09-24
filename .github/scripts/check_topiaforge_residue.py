@@ -215,6 +215,7 @@ LOWERCASE_LITERAL_ALLOWLIST = {
     "apps/topiaforge_cli/lib/src/release_candidate_acceptance.dart",
     "apps/topiaforge_cli/test/release_candidate_acceptance_fixture.dart",
     "apps/topiaforge_cli/test/release_candidate_acceptance_test.dart",
+    "apps/topiaforge_cli/test/release_candidate_not_run_acceptance_test.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_layout.dart",
     "packages/launcher_data/lib/src/local_launcher_repository/game_runtime_helpers.dart",
     "packages/launcher_data/test/game_layout_test.dart",
