@@ -40,6 +40,7 @@ Map<String, Object?> _qaUnity(Object? value) {
 
 Map<String, Object?> _qaRobotopia(Object? value) {
   final json = _qaObject(value, 'Windows qa.robotopia');
+  if (json['result'] == 'not-run') return _qaRobotopiaNotRun(json);
   const fields = {
     'result',
     'suite',
@@ -119,6 +120,34 @@ Map<String, Object?> _qaRobotopia(Object? value) {
       'Windows qa.robotopia',
     ),
     'evidenceSha256': _qaString(json, 'evidenceSha256', 'Windows qa.robotopia'),
+  };
+}
+
+/// The game receipt of a candidate whose live acceptance was not run.
+///
+/// Exactly the game identity and the tagged inventory digest: no cases, no
+/// journey and no evidence, so it can neither be read as nor grown into a pass.
+Map<String, Object?> _qaRobotopiaNotRun(Map<String, Object?> json) {
+  const label = 'Windows qa.robotopia';
+  _qaExactKeys(json, const {
+    'result',
+    'gameArchiveSha256',
+    'gameExecutableSha256',
+    'gameFilesManifestSha256',
+    'gameFilesVerified',
+    'caseInventorySha256',
+  }, label);
+  return {
+    'result': 'not-run',
+    'gameArchiveSha256': _qaString(json, 'gameArchiveSha256', label),
+    'gameExecutableSha256': _qaString(json, 'gameExecutableSha256', label),
+    'gameFilesManifestSha256': _qaString(
+      json,
+      'gameFilesManifestSha256',
+      label,
+    ),
+    'gameFilesVerified': _qaPositiveInt(json, 'gameFilesVerified', label),
+    'caseInventorySha256': _qaString(json, 'caseInventorySha256', label),
   };
 }
 

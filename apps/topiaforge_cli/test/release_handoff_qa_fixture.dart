@@ -16,6 +16,7 @@ void writeReleaseQaFixtures({
   required String targetSha,
   required String ecosystemSha,
   String windowsDistribution = 'signed',
+  bool liveGameAcceptanceRun = true,
 }) {
   final inventoryBytes = File(
     p.join(repositoryRoot, 'tests', 'live-game-acceptance.json'),
@@ -115,23 +116,36 @@ void writeReleaseQaFixtures({
       'validatorSmoke': true,
       'evidenceSha256': _digest('windows-x64:unity'),
     },
-    'robotopia': {
-      'result': 'pass',
-      'suite': 'full',
-      'gameArchiveSha256': windowsGameArchive['sha256'],
-      'gameExecutableSha256': windowsFilesManifest['gameExecutableSha256'],
-      'gameFilesManifestSha256': windowsFilesManifest['sha256'],
-      'gameFilesVerified': windowsFilesManifest['fileCount'],
-      'caseInventorySha256': inventorySha,
-      'requiredCases': liveCases,
-      'requiredCasesSha256': _caseSetSha(liveCases),
-      'passedCases': liveCases,
-      'passedCasesSha256': _caseSetSha(liveCases),
-      'missingCases': <String>[],
-      'failures': <String>[],
-      'releaseJourney': _releaseJourney,
-      'evidenceSha256': _digest('windows-x64:robotopia'),
-    },
+    // Mirrors New-WindowsQaSummary: a candidate whose live acceptance was not
+    // run records exactly the verified game identity and tagged inventory.
+    'robotopia': liveGameAcceptanceRun
+        ? {
+            'result': 'pass',
+            'suite': 'full',
+            'gameArchiveSha256': windowsGameArchive['sha256'],
+            'gameExecutableSha256':
+                windowsFilesManifest['gameExecutableSha256'],
+            'gameFilesManifestSha256': windowsFilesManifest['sha256'],
+            'gameFilesVerified': windowsFilesManifest['fileCount'],
+            'caseInventorySha256': inventorySha,
+            'requiredCases': liveCases,
+            'requiredCasesSha256': _caseSetSha(liveCases),
+            'passedCases': liveCases,
+            'passedCasesSha256': _caseSetSha(liveCases),
+            'missingCases': <String>[],
+            'failures': <String>[],
+            'releaseJourney': _releaseJourney,
+            'evidenceSha256': _digest('windows-x64:robotopia'),
+          }
+        : {
+            'result': 'not-run',
+            'gameArchiveSha256': windowsGameArchive['sha256'],
+            'gameExecutableSha256':
+                windowsFilesManifest['gameExecutableSha256'],
+            'gameFilesManifestSha256': windowsFilesManifest['sha256'],
+            'gameFilesVerified': windowsFilesManifest['fileCount'],
+            'caseInventorySha256': inventorySha,
+          },
   });
 }
 
@@ -140,6 +154,7 @@ Map<String, String> releaseQaEvidenceFor(
   String platform, {
   required String ecosystemSha,
   String windowsDistribution = 'signed',
+  bool liveGameAcceptanceRun = true,
 }) {
   if (platform == 'linux-x64') {
     final validationSha = _digest('linux-x64:validation');
@@ -155,7 +170,8 @@ Map<String, String> releaseQaEvidenceFor(
     return {
       'ecosystem-reproducibility': ecosystemSha,
       'package': validationSha,
-      'robotopia': _digest('windows-x64:robotopia'),
+      // A run that did not happen produces no evidence to send.
+      if (liveGameAcceptanceRun) 'robotopia': _digest('windows-x64:robotopia'),
       'toolchains': validationSha,
       // An unsigned build produces no Authenticode evidence, so it sends no
       // key — the same condition release-admin.ps1 applies to the CLI argument.
