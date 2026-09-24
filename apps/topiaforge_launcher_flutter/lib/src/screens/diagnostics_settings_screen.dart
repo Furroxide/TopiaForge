@@ -190,24 +190,30 @@ class _GameCompatSection extends StatelessWidget {
     );
   }
 
-  String get _headline {
-    switch (compat.status) {
-      case 'ok':
-        final checkedVersion = compat.gameVersionLabel.isNotEmpty
-            ? compat.gameVersionLabel
-            : compat.gameVersion;
-        final version = checkedVersion != null && checkedVersion.isNotEmpty
-            ? ' ($checkedVersion)'
-            : '';
-        return 'All mod features are compatible with the installed game$version.';
-      case 'broken':
-        return '${compat.errorCount} mod feature(s) rely on game APIs that changed in this '
-            'version. Affected mods may partly stop working — the game still launches normally.';
-      case 'skipped':
-        return 'No game installation was detected to check.';
-      default:
-        return 'Compatibility could not be verified (the checker tool is unavailable).';
-    }
+  String get _headline => gameCompatHeadline(compat);
+}
+
+/// One-line summary of a game-compatibility check. A passing check proves only
+/// that every declared game API still resolves; each mod's supported Robotopia
+/// builds separately decide whether it loads.
+String gameCompatHeadline(GameCompatStatus compat) {
+  switch (compat.status) {
+    case 'ok':
+      final checkedVersion = compat.gameVersionLabel.isNotEmpty
+          ? compat.gameVersionLabel
+          : compat.gameVersion;
+      final version = checkedVersion != null && checkedVersion.isNotEmpty
+          ? ' ($checkedVersion)'
+          : '';
+      return 'No declared game API changed in the installed game$version. '
+          "Each mod's supported Robotopia builds still decide whether it loads.";
+    case 'broken':
+      return '${compat.errorCount} mod feature(s) rely on game APIs that changed in this '
+          'version. Affected mods may partly stop working — the game still launches normally.';
+    case 'skipped':
+      return 'No game installation was detected to check.';
+    default:
+      return 'Compatibility could not be verified (the checker tool is unavailable).';
   }
 }
 
