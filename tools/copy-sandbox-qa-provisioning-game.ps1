@@ -3,16 +3,18 @@
 param(
     [Parameter(Mandatory)][string]$GameCopyReceipt,
     [Parameter(Mandatory)][string]$GameRoot,
-    [Parameter(Mandatory)][string]$ReceiptPath
+    [Parameter(Mandatory)][string]$ReceiptPath,
+    [Parameter(Mandatory)][string]$PrivateEvidenceRoot,
+    # Digest of the reviewed copy receipt. The source tree, file count and byte
+    # total all come from that receipt, so no game build needs constants here.
+    [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{64}$')][string]$TrustedReceiptSha256
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'sandbox/qa-game-copy.ps1')
 $qaRoot = 'D:\TopiaForgeQA'
-$sourceRoot = 'D:\TopiaForgeQA\source-game'
-$expectedCount = 409
-$expectedBytes = 5428015421L
-$trustedReceiptSha256 = 'c6d577dfe8a8fb714a7dcb7dabe9f169e81fde2372d06e319c6a831fdd160118'
-$privateRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\.dart_tool\rc1-review\qa-provisioning-20260909'))
+$sourceRoot = $null
+$privateRoot = $PrivateEvidenceRoot
 $leases = [Collections.Generic.List[IO.FileStream]]::new()
 $targetLeases = [Collections.Generic.List[IO.FileStream]]::new()
 $result = $null
@@ -88,62 +90,36 @@ function New-ProtectedGameRoot {
     [CmdletBinding(SupportsShouldProcess)]
     param([string]$Path,$CreatorSid,$QaSid)
     if (!$PSCmdlet.ShouldProcess($Path,'Create the protected fresh game root')) { throw 'Protected game root creation was not confirmed.' }
-    $acl = [Security.AccessControl.DirectorySecurity]::new()
-    $acl.SetAccessRuleProtection($true,$false)
-    $acl.SetOwner($CreatorSid)
-    $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
-    foreach ($sid in @($CreatorSid,[Security.Principal.SecurityIdentifier]::new('S-1-5-18'),[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))) {
-        $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,[Security.AccessControl.FileSystemRights]::FullControl,$inherit,[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow))
-    }
-    $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($QaSid,[Security.AccessControl.FileSystemRights]::Modify,$inherit,[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow))
-    if (!('SandboxFreshGameDirectory' -as [type])) {
-        Add-Type -TypeDefinition @'
-using System;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
-public static class SandboxFreshGameDirectory {
-    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes {
-        public int Length; public IntPtr Descriptor;
-        [MarshalAs(UnmanagedType.Bool)] public bool InheritHandle;
-    }
-    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    static extern bool CreateDirectoryW(string path, ref SecurityAttributes attributes);
-    public static void CreateNew(string path, byte[] descriptor) {
-        var pinned = GCHandle.Alloc(descriptor, GCHandleType.Pinned);
-        try {
-            var attributes = new SecurityAttributes { Length=Marshal.SizeOf<SecurityAttributes>(), Descriptor=pinned.AddrOfPinnedObject(), InheritHandle=false };
-            if (!CreateDirectoryW(path, ref attributes)) throw new Win32Exception(Marshal.GetLastWin32Error());
-        } finally { pinned.Free(); }
-    }
-}
-'@
-    }
     Assert-FreshGameRoot $Path
-    [SandboxFreshGameDirectory]::CreateNew($Path,$acl.GetSecurityDescriptorBinaryForm())
+    $expectedAccess = New-SandboxQaProtectedDirectory -Path $Path -CreatorSid $CreatorSid -QaSid $QaSid -QaRights Modify -Confirm:$false
     $result.rootCreated = $true
-    $actual = Get-Acl -LiteralPath $Path
-    if (!$actual.AreAccessRulesProtected -or $actual.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $CreatorSid.Value -or $actual.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access) -cne $acl.GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::Access)) { throw 'Fresh root protected ACL verification failed.' }
+    Assert-SandboxQaProtectedDirectory -Path $Path -CreatorSid $CreatorSid -ExpectedAccessSddl $expectedAccess
 }
 
 # Invalid destinations and receipts fail before any directory or output is created.
 Assert-FreshGameRoot $GameRoot
-foreach ($path in @($sourceRoot,$qaRoot,$privateRoot,$GameCopyReceipt,$ReceiptPath)) { Assert-PhysicalPath $path }
-if ($GameCopyReceipt -cne (Join-Path $privateRoot 'game-copy.json')) { throw 'Only the original approved game-copy receipt is accepted.' }
+foreach ($path in @($qaRoot,$privateRoot,$GameCopyReceipt,$ReceiptPath)) { Assert-PhysicalPath $path }
+if ([IO.Path]::GetDirectoryName($GameCopyReceipt) -cne $privateRoot -or !(Test-SandboxQaCopyReceiptName ([IO.Path]::GetFileName($GameCopyReceipt)))) { throw 'Only a reviewed game-copy receipt in the private QA record directory is accepted.' }
 if ([IO.Path]::GetDirectoryName($ReceiptPath) -cne $privateRoot -or [IO.Path]::GetFileName($ReceiptPath) -cnotmatch '^game-provisioning-copy-[0-9]{8}T[0-9]{6}Z\.json$') { throw 'Result receipt must use a fresh timestamped name in the private QA record directory.' }
 if (!(Test-Path -LiteralPath $privateRoot -PathType Container) -or (Test-Path -LiteralPath $ReceiptPath)) { throw 'Receipt directory missing or immutable result receipt already exists.' }
 try {
-    $result = [ordered]@{schemaVersion=1;kind='sandbox-qa-fresh-provisioning-game-copy-v1';startedAtUtc=[DateTime]::UtcNow.ToString('o');qaRoot=$qaRoot;sourceGameRoot=$sourceRoot;gameRoot=$GameRoot;approvedInventorySha256=$trustedReceiptSha256;rootCreated=$false;completed=$false;copiedFiles=0;copiedBytes=0L;gameExecuted=$false;isolationAdmitted=$false;qualifiesRelease=$false;errorType=$null;inventory=@()}
+    $result = [ordered]@{schemaVersion=1;kind='sandbox-qa-fresh-provisioning-game-copy-v1';startedAtUtc=[DateTime]::UtcNow.ToString('o');qaRoot=$qaRoot;sourceGameRoot=$null;buildId=$null;gameRoot=$GameRoot;approvedInventorySha256=$TrustedReceiptSha256;rootCreated=$false;completed=$false;copiedFiles=0;copiedBytes=0L;gameExecuted=$false;isolationAdmitted=$false;qualifiesRelease=$false;errorType=$null;inventory=@()}
     # Reserve the unique receipt atomically before creating any destination content.
     $receiptLease = [IO.FileStream]::new($ReceiptPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
     $receiptSource = [IO.FileStream]::new($GameCopyReceipt,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     $leases.Add($receiptSource)
     if ($receiptSource.Length -gt 1MB) { throw 'Original inventory receipt is unbounded.' }
-    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($receiptSource)).ToLowerInvariant() -cne $trustedReceiptSha256) { throw 'Original inventory receipt changed.' }
+    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($receiptSource)).ToLowerInvariant() -cne $TrustedReceiptSha256) { throw 'Reviewed inventory receipt changed.' }
     $receiptSource.Position = 0
     $reader = [IO.StreamReader]::new($receiptSource,[Text.Encoding]::UTF8,$true,4096,$true)
     try { $copy = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
-    if ($copy.schemaVersion -ne 1 -or $copy.kind -cne 'sandbox-qa-game-copy-v1' -or $copy.completed -isnot [bool] -or !$copy.completed -or $copy.qaRoot -cne $qaRoot -or $copy.fileCount -ne $expectedCount -or $copy.copiedFiles -ne $expectedCount -or $copy.sourceBytes -ne $expectedBytes -or @($copy.inventory).Count -ne $expectedCount) { throw 'Approved inventory identity mismatch.' }
+    $approved = Resolve-SandboxQaCopyReceipt -Receipt $copy -QaRoot $qaRoot
+    $sourceRoot = $approved.SourceGameRoot
+    $expectedCount = $approved.FileCount
+    $expectedBytes = $approved.SourceBytes
+    $result.sourceGameRoot = $sourceRoot
+    $result.buildId = $approved.BuildId
+    Assert-PhysicalPath $sourceRoot
     $rows = @($copy.inventory)
     $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     $directories = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
