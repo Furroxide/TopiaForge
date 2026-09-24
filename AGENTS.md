@@ -22,6 +22,8 @@ dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tes
 dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ManagedRefs.Tests\TopiaForge.ManagedRefs.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ModPackageValidator.Tests\TopiaForge.ModPackageValidator.Tests.csproj -c Release
 dart analyze packages\launcher_domain
 dart analyze packages\launcher_data
 dart analyze apps\topiaforge_cli
