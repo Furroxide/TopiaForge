@@ -7,6 +7,8 @@ import 'package:test/test.dart';
 import 'package:topiaforge/src/release_candidate_acceptance.dart';
 import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_handoff_models.dart';
+import 'package:topiaforge/src/release_readiness.dart'
+    show gameAcceptanceDispositionEvidenceId;
 
 import 'release_candidate_acceptance_fixture.dart';
 
@@ -102,6 +104,8 @@ void main() {
         (v['disposition']! as Map)['role'] = 'runtime-mod-qa',
     'other-gate disposition': (v) =>
         (v['disposition']! as Map)['evidenceId'] = 'EVID-P0-IP-01-0001',
+    'unrecorded same-gate disposition': (v) =>
+        (v['disposition']! as Map)['evidenceId'] = 'EVID-P0-GAME-01-0002',
     'unscoped disposition reference': (v) =>
         (v['disposition']! as Map)['reference'] = r'C:\private\owner.txt',
     'zero disposition digest': (v) =>
@@ -116,6 +120,20 @@ void main() {
       expect(validate, throwsStateError);
     });
   }
+
+  test('the schema pins the disposition the reader requires', () {
+    final document = _json(
+      p.join(
+        root,
+        'schemas/topiaforge.release-candidate-acceptance-v1.schema.json',
+      ),
+    );
+    final properties = document['properties']! as Map;
+    final disposition = properties['disposition']! as Map;
+    final evidenceId =
+        (disposition['properties']! as Map)['evidenceId']! as Map;
+    expect(evidenceId['const'], gameAcceptanceDispositionEvidenceId);
+  });
 
   test('a passed record cannot carry a disposition', () {
     decision = {

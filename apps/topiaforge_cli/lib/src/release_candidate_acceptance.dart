@@ -1,4 +1,5 @@
 import 'release_handoff.dart';
+import 'release_readiness.dart' show gameAcceptanceDispositionEvidenceId;
 
 /// Checks scrubbed acceptance content after exact-source schema and handoff
 /// verification. Hashes and reviewer references bind evidence; they do not
@@ -251,6 +252,12 @@ void _disposition(Object? value) {
     RegExp(r'^EVID-P0-GAME-01-[0-9]{4}$'),
     'disposition evidence ID',
   );
+  if (disposition['evidenceId'] != gameAcceptanceDispositionEvidenceId) {
+    _fail(
+      'A not-run acceptance must cite the recorded P0-GAME-01 disposition '
+      '$gameAcceptanceDispositionEvidenceId.',
+    );
+  }
   if (disposition['role'] != 'project-owner') {
     _fail('Only the project owner can record the P0-GAME-01 disposition.');
   }

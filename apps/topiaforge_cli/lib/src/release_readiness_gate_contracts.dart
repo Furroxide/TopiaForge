@@ -1,5 +1,10 @@
 part of 'release_readiness.dart';
 
+/// The owner's disposition that makes live game acceptance optional for this
+/// release. A candidate recording `not-run` must cite exactly this record, so a
+/// new or different disposition is a reviewed change here, beside the gate.
+const gameAcceptanceDispositionEvidenceId = 'EVID-P0-GAME-01-0001';
+
 final class _GateContract {
   const _GateContract({
     required this.id,

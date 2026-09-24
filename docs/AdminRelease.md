@@ -199,7 +199,7 @@ exactly these fields:
 | `result` | The literal `not-run`. |
 | `authoringCycles` | `16`, the `requiredAuthoringCycles` of `tests/gamemode-release-acceptance.json`. |
 | `authoringEvidenceSha256` | The Windows handoff's Unity receipt digest: the SHA-256 of the retained `evidence/windows/unity/lifecycle.json`, recorded in `validation-windows.json` as `evidenceSha256.unity`. |
-| `disposition.evidenceId` | The owner's disposition, `EVID-P0-GAME-01-0001` for RC1. |
+| `disposition.evidenceId` | The owner's disposition, `EVID-P0-GAME-01-0001` for RC1. The gate contracts and the acceptance schema pin it, so a different disposition needs a reviewed change. |
 | `disposition.role` | `project-owner`. |
 | `disposition.reference` | An opaque `review:<id>` reference to the owner's retained decision record. |
 | `disposition.sha256` | The SHA-256 of that retained record, which stays outside Git. |

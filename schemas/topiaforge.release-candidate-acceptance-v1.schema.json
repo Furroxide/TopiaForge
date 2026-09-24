@@ -267,8 +267,7 @@
       ],
       "properties": {
         "evidenceId": {
-          "type": "string",
-          "pattern": "^EVID-P0-GAME-01-[0-9]{4}$"
+          "const": "EVID-P0-GAME-01-0001"
         },
         "role": {
           "const": "project-owner"
