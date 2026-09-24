@@ -33,7 +33,7 @@ namespace TopiaForge.CreatorTools.Shared
                 string.Empty,
                 UiSurfaceKind.Hud,
                 390f,
-                130f));
+                220f));
             if (created.TryGetValue(out hud)) hud.Show();
         }
 

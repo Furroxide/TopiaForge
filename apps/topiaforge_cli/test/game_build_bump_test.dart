@@ -69,6 +69,11 @@ void main() {
       'docs/ReleaseChecklist.md',
       '- [x] Robotopia support is build `2409` (`0.0.2409`).\n',
     );
+    _write(
+      root,
+      'tests/sandbox-workbench-acceptance-v1.json',
+      '{\n  "gameBuild": 2409,\n  "scope": "supplementary-offline-contracts"\n}\n',
+    );
   });
 
   tearDown(() {
@@ -143,6 +148,11 @@ void main() {
     expect(
       _read(root, 'docs/ReleaseChecklist.md'),
       contains('build `2509` (`0.0.2509`)'),
+    );
+    // The Sandbox contract pins the build as a bare JSON integer.
+    expect(
+      _read(root, 'tests/sandbox-workbench-acceptance-v1.json'),
+      contains('"gameBuild": 2509'),
     );
   });
 

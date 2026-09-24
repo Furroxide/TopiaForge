@@ -119,13 +119,19 @@ layout when owned-process termination cannot be confirmed.
 
 ## Creator workbench manual matrix
 
-`P0-CREATOR-01` and its separate challenge-bound workbench collector were retired
+`P0-CREATOR-01` and its separate release-evidence collection pipeline were retired
 with the `0.x` governance change. The workbench is a Sandbox feature, and the
 checklist below remains additional manual QA for
 `mods/TopiaForge.Sandbox/CreatorTools`. It does not create a separate creator gate.
 The Sandbox F5/pause and session-cleanup cases in the gamemode release inventory
 remain mandatory under `P0-GAME-01`; a mod-load smoke does not replace that full
 SDK and redesign acceptance matrix.
+
+The shipped controller opens a `CreatorProjectScope.Sandbox` session. Its production
+global-mutation safety service is currently unavailable: global success paths below
+require a separately implemented and reviewed native bridge. Exercise refusal and
+unchanged persistence now; record unsupported success paths as unavailable, never
+as passed. Dormant creator recorder code is not a release evidence source.
 
 On an authorized build-2478 host, the workbench checks are:
 
@@ -134,28 +140,47 @@ On an authorized build-2478 host, the workbench checks are:
 2. Spawn curated items, environment props, and every available RobotKit robot type. Exercise search, filters,
    selection, transform, duplicate, temporary remove, undo, and explicit End Session cleanup.
 3. Move a pre-existing robot and preview autonomous personality and brain changes. End the session
-   and verify location, personality, and brain mode restore exactly.
+   and verify location, personality, and brain mode restore exactly when no external writer intervened.
+   In a separate conflict case, preserve external changes and require an observable restoration
+   warning. Source cleanup now propagates the lease's Conflict/error result, attempts subsequent
+   cleanup and reports incomplete restoration; offline rollback regressions exercise that behavior.
+   Independently verify the actual native state and visible warning on the admitted candidate.
+   Passing fake-service assertions does not complete this native reporting check.
 4. Register test-mod character and validated vehicle factories, spawn them, then unload their source.
    Verify instances and entries disappear safely. If build 2478 exposes no validated native vehicle
    adapter, verify that source is visibly empty or degraded.
 5. Hide the workbench with F5 and its close affordance. Player controls must return while the session,
-   spawns, edits, graph state, and isolation lease remain; the warning HUD must remain visible. Reopen
+   spawns, edits, graph state, and any acquired isolation lease remain; the warning HUD must remain visible. Current Sandbox acquires no global persistence lease. Reopen
    and verify it is the same session.
-6. Before global mutation, capture save and checkpoint hashes. Acknowledge isolation once, mutate the
-   scene, then End Session and confirm both hashes are unchanged. Also revoke or make isolation
-   unavailable and confirm mutation fails closed and any active session restores immediately.
+6. Capture approved QA save/checkpoint hashes and attempt the currently unavailable global
+   mutation path: require refusal and unchanged hashes. If a validated native bridge is later
+   approved, also exercise its positive path: acknowledge isolation, mutate, End Session and
+   require unchanged hashes; revoke isolation and require refusal plus immediate restoration.
 7. Run a bounded branching event project, then Stop it. Graph-owned content, edits, conversation, and
    audio must roll back while an unrelated manual session spawn remains.
-8. While a global session is active, replace the scene, start a Worlds transition/session, admit a
-   remote participant, and unload a source/mod in separate runs. Each route must restore owned and
-   borrowed state and release controls.
+8. During a supported Sandbox session, exercise available scene/Worlds transition and source/mod
+   unload routes separately; require owned/borrowed cleanup and released controls. Unsupported
+   global or remote admission must refuse safely. Repeat every global/remote success path only
+   after that capability is implemented and approved; refusal does not prove that success path.
 9. Repeat open, spawn, edit, hide, reopen, graph run/stop, and End Session ten times. No object, lease,
    input, UI, interaction, conversation, audio, callback, or persistence-state count may grow between
    cycles.
 
-The Unity-free lifecycle suite protects the same ownership and rollback policies offline, so a
-change that breaks them fails there first; this matrix is what catches the native-only behaviour it
-cannot see.
+The Unity-free lifecycle and rollback suites exercise ownership, conflict reporting, throwing
+cleanup, stale callbacks and repeated-cycle baselines offline. The supplementary
+[nine-scenario specification](../tests/sandbox-workbench-acceptance-v1.json) and
+[offline verifier](../apps/topiaforge_cli/lib/src/sandbox_acceptance/sandbox_verifier.dart)
+retain explicit native, Editor, device and human requirements. Their observations are
+unauthenticated offline facts and cannot qualify a release. This manual matrix still requires the
+actual game state, input and visual behavior that fake services cannot observe.
+
+The supplementary [Sandbox native runner and verifier](https://github.com/Furroxide/TopiaForge/blob/main/docs/internal/launch/sandbox-automation-stages-3-6.md)
+now have a separate closed native-annex schema, original-process isolation binding,
+Windows input/capture broker and exact-byte media verification. Local Editor results
+are recorded in [launch evidence](https://github.com/Furroxide/TopiaForge/blob/main/docs/internal/launch/Evidence.md#sandbox-automation-stages-3-6-checkpoint).
+Game execution still requires admitted QA identity, actual persistence/device records
+and completion of the remaining native actuation gaps. Development annexes always
+report `qualifiesRelease: false` and do not replace this candidate acceptance matrix.
 
 The local Windows run extracts its candidate developer payload, uses only its
 packaged CLI to create a fresh minimal mod outside the extraction, and passes that

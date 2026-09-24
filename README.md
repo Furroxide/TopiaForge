@@ -135,7 +135,7 @@ TopiaForge is in early **0.x** development and has not had a stable release.
 
 A 0.x line makes no cross-minor compatibility promise and is not the recommended build for
 unattended or long-lived installations. Open gates are tracked in
-[docs/LaunchBlockers.md](docs/LaunchBlockers.md); the compatibility policy is
+[docs/LaunchBlockers.md](docs/LaunchBlockers.md). Maintainers use the [launch preparation hub](docs/internal/launch/README.md) for current actions, decisions, reviewer requests and setup plans; the compatibility policy is
 [docs/CompatibilityPolicy.md](docs/CompatibilityPolicy.md).
 
 ## Trust model

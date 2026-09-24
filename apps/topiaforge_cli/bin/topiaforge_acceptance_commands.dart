@@ -7,6 +7,9 @@ extension _TopiaForgeAcceptanceCommands on _TopiaForgeCli {
       '[--skip-runtime-install] [--skip-launch]';
 
   Future<int> _acceptance(List<String> args) async {
+    if (args.firstOrNull == 'sandbox') {
+      return _sandboxAcceptance(args.skip(1).toList());
+    }
     if (args.firstOrNull == 'verify-isolation') {
       return _verifyAcceptanceIsolation(args.skip(1).toList());
     }

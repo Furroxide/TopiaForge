@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
@@ -27,7 +28,21 @@ final class RepositoryAcceptanceSession {
     LiveAcceptanceOptions options,
     AcceptanceIsolationContext context,
     String challenge,
-  ) async {
+  ) => launchTarget(
+    options,
+    context,
+    challenge,
+    targetId: 'dev.topiaforge.sdk-acceptance.menu',
+  );
+
+  /// Additive target seam; ordinary SDK acceptance retains its exact default.
+  static Future<OwnedAcceptanceSession> launchTarget(
+    LiveAcceptanceOptions options,
+    AcceptanceIsolationContext context,
+    String challenge, {
+    required String targetId,
+    Set<String>? enabledMods,
+  }) async {
     context.verify();
     final repository = LocalLauncherRepository(
       dataRoot: context.launcherRoot,
@@ -42,14 +57,23 @@ final class RepositoryAcceptanceSession {
       if (install == null) {
         throw StateError('The isolated game installation is unavailable.');
       }
-      final profile = snapshot.profiles
+      final selectedProfile = snapshot.profiles
           .where((item) => item.id == snapshot.selectedProfileId)
           .single;
+      final profile = enabledMods == null
+          ? selectedProfile
+          : selectedProfile.copyWith(
+              inheritManagerModState: false,
+              enabledMods: enabledMods,
+              selectedVersions: {
+                for (final id in enabledMods) id: '0.1.0-rc.1',
+              },
+            );
       final result = await repository.launch(
         install,
         profile,
         selectionOverride: LaunchSelection.target(
-          LaunchRequest(targetId: 'dev.topiaforge.sdk-acceptance.menu'),
+          LaunchRequest(targetId: targetId),
         ),
       );
       if (!result.processStarted ||
@@ -158,6 +182,23 @@ final class OwnedAcceptanceSession implements LiveAcceptanceSession {
     } finally {
       await _dispose();
     }
+  }
+
+  LaunchProcessIdentity get originalProcess => _process;
+  bool get processExitConfirmed => _exitConfirmed;
+  bool get isolationConfirmed => _ack != null;
+
+  /// Retains a truthful failed-cleanup annex after admission; the original
+  /// schema-3 evidence getter below still requires confirmed exit.
+  Map<String, Object?> get nativeIsolationEvidence {
+    if (_ack == null) throw StateError('Native isolation is not confirmed.');
+    return {
+      'kind': _context.kind,
+      'provisioningRecordSha256': _context.recordSha256,
+      'acknowledgementSha256': _ack!.sha256Digest,
+      'acknowledgement': jsonDecode(jsonEncode(_ack!.document)),
+      'processExitConfirmed': _exitConfirmed,
+    };
   }
 
   @override

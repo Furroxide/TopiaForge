@@ -1,0 +1,465 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/Furroxide/TopiaForge/main/schemas/topiaforge.sandbox-workbench-automation-v1.schema.json",
+  "title": "Private supplementary Sandbox native automation annex",
+  "$comment": "Schema validation establishes shape only. Application parsing rejects duplicate properties, invalid calendar dates, path aliases, case-insensitive path collisions, reordered/repeated scenario claims, and structural excess. Verification must bind actual source/spec/driver/device/package/process/acknowledgement/transcript/artifact bytes and recompute independent oracles; scenarioResults and cleanup flags are untrusted claims. No successful native annex exists before admitted acknowledgement. This format never qualifies a release. Maximum UTF-8 size 262144 bytes, depth16, nodes12000.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "scope",
+    "runId",
+    "sourceRevision",
+    "specSha256",
+    "driverManifestSha256",
+    "challenge",
+    "startedAtUtc",
+    "completedAtUtc",
+    "deviceProfileSha256",
+    "isolation",
+    "packages",
+    "broker",
+    "transcript",
+    "artifacts",
+    "scenarioResults",
+    "cleanup",
+    "failures",
+    "sourceWorkspaceSha256"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "kind": {
+      "const": "sandbox-workbench-automation-v1"
+    },
+    "scope": {
+      "const": "supplementary-native-development"
+    },
+    "runId": {
+      "$ref": "#/definitions/id"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "specSha256": {
+      "$ref": "#/definitions/digest"
+    },
+    "driverManifestSha256": {
+      "$ref": "#/definitions/digest"
+    },
+    "challenge": {
+      "$ref": "#/definitions/digest"
+    },
+    "startedAtUtc": {
+      "$ref": "#/definitions/utc"
+    },
+    "completedAtUtc": {
+      "$ref": "#/definitions/utc"
+    },
+    "deviceProfileSha256": {
+      "$ref": "#/definitions/digest"
+    },
+    "isolation": {
+      "$ref": "#/definitions/isolation"
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/definitions/package"
+      }
+    },
+    "broker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binarySha256",
+        "processId"
+      ],
+      "properties": {
+        "binarySha256": {
+          "$ref": "#/definitions/digest"
+        },
+        "processId": {
+          "$ref": "#/definitions/pid"
+        }
+      }
+    },
+    "transcript": {
+      "$ref": "#/definitions/file"
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/definitions/artifact"
+      }
+    },
+    "scenarioResults": {
+      "type": "array",
+      "maxItems": 9,
+      "items": {
+        "$ref": "#/definitions/scenario"
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputReleased",
+        "fixtureReleased",
+        "originalProcessExitConfirmed"
+      ],
+      "properties": {
+        "inputReleased": {
+          "type": "boolean"
+        },
+        "fixtureReleased": {
+          "type": "boolean"
+        },
+        "originalProcessExitConfirmed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "failures": {
+      "$ref": "#/definitions/reasons"
+    },
+    "sourceWorkspaceSha256": {
+      "$ref": "#/definitions/digest"
+    }
+  },
+  "definitions": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "id": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "utc": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$",
+      "$comment": "Each slash-separated segment must be nonempty, neither dot nor dot-dot, not end in dot, and not be a reserved Windows device stem. All paths are relative to the admitted private run root; parser and physical verifier enforce this."
+    },
+    "windowsPath": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z]:\\\\[^\\u0000-\\u001f\\u007f/:]+$",
+      "$comment": "Parser additionally rejects empty/dot/dot-dot/trailing-dot/trailing-space segments. Actual admission verifies physical paths, known folders and reparse exclusion."
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/relativePath"
+        },
+        "sha256": {
+          "$ref": "#/definitions/digest"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "length"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/relativePath"
+        },
+        "sha256": {
+          "$ref": "#/definitions/digest"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 134217728
+        }
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sourceSha256",
+        "criticalFiles"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "sourceSha256": {
+          "$ref": "#/definitions/digest"
+        },
+        "criticalFiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/definitions/file"
+          }
+        }
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/text"
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenarioId",
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "scenarioId": {
+          "enum": [
+            "routing",
+            "catalog-editing",
+            "borrowed-robot",
+            "source-unload",
+            "hide-reopen",
+            "persistence-refusal",
+            "graph-rollback",
+            "lifecycle-routes",
+            "ten-cycles"
+          ]
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "unavailable"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "failed",
+                  "unavailable"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason": {
+                "$ref": "#/definitions/text"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userSid",
+        "logonId",
+        "sessionId",
+        "userProfile",
+        "localAppDataLow"
+      ],
+      "properties": {
+        "userSid": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^S-[0-9]+(?:-[0-9]+)+$"
+        },
+        "logonId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "sessionId": {
+          "$ref": "#/definitions/pid"
+        },
+        "userProfile": {
+          "$ref": "#/definitions/windowsPath"
+        },
+        "localAppDataLow": {
+          "$ref": "#/definitions/windowsPath"
+        }
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pid",
+        "nativeStartToken",
+        "executablePath"
+      ],
+      "properties": {
+        "pid": {
+          "$ref": "#/definitions/pid"
+        },
+        "nativeStartToken": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^windows:[1-9][0-9]*$"
+        },
+        "executablePath": {
+          "$ref": "#/definitions/windowsPath"
+        }
+      }
+    },
+    "roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gameRoot",
+        "bepInExRoot",
+        "managerRoot",
+        "persistentDataRoot"
+      ],
+      "properties": {
+        "gameRoot": {
+          "$ref": "#/definitions/windowsPath"
+        },
+        "bepInExRoot": {
+          "$ref": "#/definitions/windowsPath"
+        },
+        "managerRoot": {
+          "$ref": "#/definitions/windowsPath"
+        },
+        "persistentDataRoot": {
+          "$ref": "#/definitions/windowsPath"
+        }
+      }
+    },
+    "acknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "challenge",
+        "requestSha256",
+        "status",
+        "process",
+        "observedOsIdentity",
+        "observedRoots",
+        "reasons"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "challenge": {
+          "$ref": "#/definitions/digest"
+        },
+        "requestSha256": {
+          "$ref": "#/definitions/digest"
+        },
+        "status": {
+          "const": "admitted"
+        },
+        "process": {
+          "$ref": "#/definitions/process"
+        },
+        "observedOsIdentity": {
+          "$ref": "#/definitions/identity"
+        },
+        "observedRoots": {
+          "$ref": "#/definitions/roots"
+        },
+        "reasons": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "provisioningRecordSha256",
+        "acknowledgementSha256",
+        "acknowledgement",
+        "processExitConfirmed"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "windows-user",
+            "virtual-machine"
+          ]
+        },
+        "provisioningRecordSha256": {
+          "$ref": "#/definitions/digest"
+        },
+        "acknowledgementSha256": {
+          "$ref": "#/definitions/digest"
+        },
+        "acknowledgement": {
+          "$ref": "#/definitions/acknowledgement"
+        },
+        "processExitConfirmed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

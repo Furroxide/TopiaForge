@@ -248,8 +248,10 @@ namespace TopiaForge.CreatorTools.Shared
                 activeProject.Edges,
                 nativeBindings: activeProject.NativeBindings.Concat(new[] { binding }));
             graphNativeBindingId = binding.Id;
-            ClearResolvedProjectBindings();
-            return OperationResult<string>.Success("Captured native binding recipe " + binding.DisplayName + ".");
+            var cleanup = ClearResolvedProjectBindings();
+            return cleanup.Succeeded
+                ? OperationResult<string>.Success("Captured native binding recipe " + binding.DisplayName + ".")
+                : OperationResult<string>.Failure(cleanup.ErrorCode, cleanup.ErrorMessage);
         }
 
         private static string Value(CreatorGraphNode? node, string key) =>

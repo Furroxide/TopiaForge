@@ -15,7 +15,7 @@ namespace TopiaForge.CreatorTools.Shared
             if (projects == null || string.IsNullOrEmpty(selectedProjectId) || confirmation?.IsOpen == true) return;
             var summary = projectSummaries.FirstOrDefault(item => item.Id == selectedProjectId);
             if (summary == null) return;
-            var shown = context.Ui.ShowModal(
+            ShowConfirmation(
                 new UiModalRequest(
                     "DELETE EVENT PROJECT?",
                     "Delete '" + summary.DisplayName + "' from the local creator project library? This cannot be undone.",
@@ -23,7 +23,6 @@ namespace TopiaForge.CreatorTools.Shared
                     destructive: true),
                 confirmed =>
                 {
-                    confirmation = null;
                     if (!confirmed || projectDeleteTask != null) return;
                     deletingProjectId = summary.Id;
                     if (activeProject?.Id == deletingProjectId)
@@ -41,7 +40,6 @@ namespace TopiaForge.CreatorTools.Shared
                     status = "Deleting project…";
                     RefreshUi();
                 });
-            shown.TryGetValue(out confirmation);
         }
 
         private void PollProjectDeletion()

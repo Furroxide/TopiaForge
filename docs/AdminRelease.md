@@ -1,5 +1,7 @@
 # Admin-orchestrated release
 
+For current preparation status, explicit user decisions and ready-to-use reviewer/setup documents, start with the [maintainer launch hub](internal/launch/README.md). This runbook describes execution after its prerequisites are satisfied.
+
 Production archives are built only on maintainer-controlled machines. GitHub
 Actions verifies the exact staged bytes, attests what it verified, creates the
 signed update metadata, and publishes after approval of the protected

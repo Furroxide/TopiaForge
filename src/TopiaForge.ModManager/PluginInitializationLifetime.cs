@@ -10,6 +10,31 @@ namespace TopiaForge.ModManager
         private bool teardownStarted;
         private bool ownsUi;
 
+        internal bool ProvisioningObservationRecorded { get; private set; }
+        private bool provisioningQuitRequested;
+
+        internal bool ProvisioningQuitPending => ProvisioningObservationRecorded && !provisioningQuitRequested;
+
+        internal bool TryRequestProvisioningQuit(Action requestQuit)
+        {
+            if (requestQuit == null) throw new ArgumentNullException(nameof(requestQuit));
+            if (!ProvisioningQuitPending) return false;
+            // Claim before dispatch: reentrancy and a throwing/cancelled request cannot become a retry loop.
+            provisioningQuitRequested = true;
+            requestQuit();
+            return true;
+        }
+
+        internal void ObserveProvisioning(Action observe)
+        {
+            if (observe == null) throw new ArgumentNullException(nameof(observe));
+            if (startAttempted) throw new InvalidOperationException("Plugin initialization can only be attempted once.");
+            startAttempted = true;
+            // Success and failure both remain unadmitted and own no UI/storage teardown.
+            observe();
+            ProvisioningObservationRecorded = true;
+        }
+
         internal void Start(Action admit, Action persist, Action initializeStorage)
         {
             if (admit == null) throw new ArgumentNullException(nameof(admit));

@@ -16,6 +16,8 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiText("SCENE ROSTER", UiTextStyle.Heading),
                 new UiText("Owned objects can be duplicated or removed. Native scene targets are temporary, reversible edits only.", UiTextStyle.Caption),
                 BuildRosterList(),
+                // Roster action row. Native discovery sits on its own row so the narrow left pane never clips
+                // the trailing action (the seven project actions were split for the same reason).
                 new UiRow(
                     new UiButton("duplicate-selected", "Duplicate", () => Execute(DuplicateSelected), UiButtonStyle.Secondary, selected != null && CanMutate),
                     new UiButton(
@@ -25,6 +27,8 @@ namespace TopiaForge.CreatorTools.Shared
                         UiButtonStyle.Danger,
                         selected?.Owned == true || selected?.NativeTarget != null
                             && (selected.NativeTarget.Capabilities & CreatorSceneTargetCapabilities.TemporaryVisibility) != 0),
+                    new UiButton("undo-last", "Undo", () => Execute(Undo), UiButtonStyle.Ghost, history.Count > 0)),
+                new UiRow(
                     new UiButton("refresh-native", "Discover native targets", () => ExecuteBool(RefreshNativeRoster), UiButtonStyle.Ghost)));
             var center = new UiColumn(BuildProjectContent());
             var right = new UiColumn(
@@ -199,14 +203,16 @@ namespace TopiaForge.CreatorTools.Shared
                 new UiRow(
                     new UiButton("load-project", "Load", () => Execute(LoadSelectedProject), enabled: selectedProject != null),
                     new UiButton("delete-project", "Delete", ConfirmDeleteSelectedProject, UiButtonStyle.Danger, selectedProject != null && projectDeleteTask == null),
-                    new UiButton("new-project", "New project", () => Execute(CreateProject), UiButtonStyle.Secondary),
+                    new UiButton("new-project", "New project", () => Execute(CreateProject), UiButtonStyle.Secondary)),
+                new UiRow(
                     new UiButton("save-project", "Save", () => Execute(SaveProject), UiButtonStyle.Secondary, activeProject != null),
                     new UiButton(
                         "confirm-native-bindings",
                         "Confirm native bindings",
                         ConfirmNativeBindings,
                         UiButtonStyle.Secondary,
-                        activeProject?.NativeBindings.Count > 0),
+                        activeProject?.NativeBindings.Count > 0)),
+                new UiRow(
                     new UiButton("run-project", "Run", () => Execute(RunProject), enabled: activeProject != null && CanMutate),
                     new UiButton("stop-project", "Stop", () => Execute(() => StopProject(true)), UiButtonStyle.Danger, runner != null))
             };
@@ -240,11 +246,9 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void Execute(Func<OperationResult<string>> action)
         {
-            var session = creatorSession;
             var result = action();
-            if (ReferenceEquals(creatorSession, session))
-                status = result.Succeeded ? result.Value ?? "Done." : result.ErrorMessage;
-            if (!result.Succeeded) context.Ui.ShowToast(result.ErrorMessage, UiTone.Danger);
+            status = result.Succeeded ? result.Value ?? "Done." : result.ErrorMessage;
+            if (!result.Succeeded) context.Ui.ShowToast(status, UiTone.Danger);
             RefreshUi();
         }
 
@@ -263,19 +267,13 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void ConfirmEndSession()
         {
-            if (confirmation?.IsOpen == true) return;
-            var result = context.Ui.ShowModal(
-                new UiModalRequest(
-                    "END SESSION & RESTORE?",
-                    "Owned content will be removed and every native transform, brain, and personality preview will be restored.",
-                    "END SESSION & RESTORE",
-                    destructive: true),
-                confirmed =>
-                {
-                    confirmation = null;
-                    if (confirmed) requestEnd();
-                });
-            result.TryGetValue(out confirmation);
+            ShowConfirmation(new UiModalRequest(
+                "END SESSION & RESTORE?",
+                "Owned content will be removed and temporary native edits restored. Conflicting outside changes are preserved and reported.",
+                "END SESSION & RESTORE", destructive: true), confirmed =>
+            {
+                if (confirmed) requestEnd();
+            });
         }
     }
 }

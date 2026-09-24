@@ -36,10 +36,13 @@ namespace TopiaForge.CreatorTools.Shared
             {
                 var live = FindRoster(entry.Id);
                 if (live == null) return OperationResult<string>.Success(entry.DisplayName + " was already removed.");
-                var cleanup = RemoveOwnedEntry(live);
-                return cleanup.Succeeded
-                    ? OperationResult<string>.Success("Undid spawn of " + entry.DisplayName + ".")
-                    : OperationResult<string>.Failure(cleanup.ErrorCode, cleanup.ErrorMessage);
+                var cleanup = RetireRosterEntry(live, despawn: true);
+                if (!cleanup.Succeeded)
+                {
+                    ReportCleanupFailure("Undo spawn cleanup completed with problems", cleanup);
+                    return OperationResult<string>.Failure(cleanup.ErrorCode, status);
+                }
+                return OperationResult<string>.Success("Undid spawn of " + entry.DisplayName + ".");
             });
         }
 

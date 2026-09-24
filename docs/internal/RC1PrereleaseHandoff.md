@@ -79,13 +79,29 @@ regressions cover eleven cleanup routes plus session retirement and startup
 rollback. Generated runtime acceptance fixtures use their explicit local SDK
 feed without inheriting unrelated host feeds; failures retain subprocess output
 and the existing deadlines. Local full Release build, manager and runtime
-harnesses pass. The PR's fresh hosted checks remain required before integration.
+harnesses pass. [PR #130](https://github.com/Furroxide/TopiaForge/pull/130)
+passed all 16 CI jobs, CodeQL and required checks on reviewed head `ec03955`,
+then was normally squash-merged with explicit user authorization at
+`0ea59e7941b1d56f515ac34f89819f31f16c7137`. Its tree is exactly the reviewed
+`befbabaeaed9bdc55d4b14185af4c49804afe65c`. On this exact integrated head, both CI runs passed all 16 jobs, both CodeQL
+runs passed and the packaging dry run passed all 11 jobs. PR #119 has been
+updated with the exact source, results and remaining prerequisites. It remains
+a draft with auto-merge off and no unresolved review threads.
 
-The original development checkout retains separate unfinished Sandbox automation
-and provisioning work. Its source tests and earlier pinned-Editor results are
-not candidate acceptance. Full native automation, a clean runtime provisioning
-retry, reviewed QA admission and the final candidate authoring/game matrix
-remain incomplete. The user has not answered the full-versus-reduced experimental
+The timeout diagnostic follow-up shares one five-second cleanup budget for
+process exit and stream collection. Controlled ordinary and descendant-held-pipe
+timeouts returned in 2.060 and 7.014 seconds, preserving the original failure.
+The final local Runtime suite passed in 22.26 seconds, and the same helper in
+the original development checkout passed in 24.58 seconds.
+
+The development checkout's Sandbox automation and provisioning work is
+reconciled with the release head on the isolated branch `fix/rc1-sandbox-automation`,
+where protocol v2 completes the native matrix in source and the pinned Editor
+lane passed on 2026-09-13; the [launch hub](launch/README.md) records the exact
+state. Its source tests and Editor results are not candidate acceptance. A
+successful runtime provisioning retry (staged, awaiting one operator session),
+reviewed QA admission, admitted native execution and the final candidate
+authoring/game matrix remain incomplete. The user has not answered the full-versus-reduced experimental
 scope question; no requirement or deferred decision has been changed.
 
 ## After the user merges
@@ -116,3 +132,18 @@ scope question; no requirement or deferred decision has been changed.
 The final-main candidate does not exist before the merge. Successful source
 promotion therefore cannot promise immediate publication: candidate construction,
 acceptance, qualification and protected approval still follow in that order.
+
+## Current local launch status
+
+This local handoff supersedes the historical pre-integration observations in
+the release branch's handoff. Integrate its final status alongside the eventual
+reviewed gate/scope changes before the main freeze. [The launch hub](launch/README.md)
+and [decision log](launch/Decisions.md) preserve the user's instructions.
+
+The corrected QA retry ended at 22:13:23Z on 2026-09-09 before broker startup:
+the active QA desktop did not become available within its nine-minute budget.
+Its failed receipt is retained and the one-time task was removed. It supplies
+no native verification of the shutdown correction or isolation admission.
+No new native attempt was dispatched during this release stabilization.
+
+The 2026-09-11 retry ran the game and reached Unity OnApplicationQuit, but again exceeded the 90-second deadline. Original-game exit was confirmed after forced cleanup; the task was removed. The diagnostic launch mode that retains the Unity log and read-only runtime snapshots is verified on a fixture player, and retry `20260911T183026Z` is staged and refusal-checked without dispatch. No attempt is queued; one bounded operator session, confirmed by the user, comes next. See the [current observer runbook](launch/runtime-provisioning-observer.md).

@@ -1,0 +1,296 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.sandbox-workbench-offline-observations-v1.schema.json",
+  "title": "TopiaForge supplementary Sandbox workbench offline observations V1",
+  "description": "Unauthenticated typed offline before/after facts, not driver PASS labels. Missing scenarios and wrong sample totals yield incomplete/failed verification; no input can qualify a release or establish native execution.",
+  "$comment": "Input is capped at 262144 bytes by the application parser. The byte parser also rejects duplicate JSON keys, structural depth over 16 or node count over 12000. The verifier requires unique scenario IDs, the exact external specification SHA-256, exact per-scenario oracle metric names/types, contiguous sequences, prescribed sample totals, expected postconditions and unchanged restoration baselines across cycles. Specification-dependent checks and result calculation remain mandatory; schema validation alone cannot pass a scenario. For each positive equals/count exercise oracle, the verifier requires a zero before value and the prescribed positive after value in every sample; stale nonzero counters cannot prove an exercised action.",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 7,
+  "maxProperties": 7,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "scope",
+    "specSha256",
+    "runId",
+    "sourceRevision",
+    "observations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "kind": {
+      "const": "sandbox-workbench-offline-observations-v1"
+    },
+    "scope": {
+      "const": "supplementary-offline-contracts"
+    },
+    "specSha256": {
+      "$ref": "#/definitions/fingerprint"
+    },
+    "runId": {
+      "$ref": "#/definitions/identifier"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 9,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/definitions/observation"
+      }
+    }
+  },
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "fingerprint": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9-]{0,79}$"
+    },
+    "measurements": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 32,
+      "propertyNames": {
+        "$ref": "#/definitions/identifier"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/count"
+          },
+          {
+            "$ref": "#/definitions/fingerprint"
+          },
+          {
+            "$ref": "#/definitions/label"
+          }
+        ]
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 3,
+      "maxProperties": 3,
+      "required": [
+        "sequence",
+        "before",
+        "after"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "before": {
+          "$ref": "#/definitions/measurements"
+        },
+        "after": {
+          "$ref": "#/definitions/measurements"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 2,
+      "maxProperties": 2,
+      "required": [
+        "scenarioId",
+        "samples"
+      ],
+      "properties": {
+        "scenarioId": {
+          "enum": [
+            "routing",
+            "catalog-editing",
+            "borrowed-robot",
+            "source-unload",
+            "hide-reopen",
+            "persistence-refusal",
+            "graph-rollback",
+            "lifecycle-routes",
+            "ten-cycles"
+          ]
+        },
+        "samples": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "additionalItems": false,
+          "items": [
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 1
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 2
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 4
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 5
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 6
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 7
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 8
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 9
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/sample"
+                },
+                {
+                  "properties": {
+                    "sequence": {
+                      "const": 10
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

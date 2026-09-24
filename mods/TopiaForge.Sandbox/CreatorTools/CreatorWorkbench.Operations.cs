@@ -41,22 +41,31 @@ namespace TopiaForge.CreatorTools.Shared
 
         public OperationResult<string> CleanUpEverything()
         {
-            var removed = roster.Count(entry => entry.Owned);
+            var removed = 0;
             var cleanup = OperationResult<bool>.Success(true);
             if (runner != null || projectEntities.Count > 0 || projectBindings.Count > 0)
             {
+                removed += projectEntities.Count;
                 var stopped = StopProject(removeProjectEntities: true);
-                if (!stopped.Succeeded) cleanup = OperationResult<bool>.Failure(stopped.ErrorCode, stopped.ErrorMessage);
+                if (!stopped.Succeeded) cleanup = MergeCleanup(cleanup, OperationResult<bool>.Failure(stopped.ErrorCode, stopped.ErrorMessage));
             }
             foreach (var entry in roster.Where(item => item.Owned).Reverse().ToArray())
-                cleanup = MergeCleanup(cleanup, RemoveOwnedEntry(entry));
+            {
+                if (!roster.Contains(entry)) continue;
+                cleanup = MergeCleanup(cleanup, RetireRosterEntry(entry, despawn: true));
+                removed++;
+            }
             selectedRosterId = string.Empty;
             ClearHistory();
-            status = cleanup.Succeeded ? removed.ToString(CultureInfo.InvariantCulture) + " owned objects removed."
-                : "Cleanup completed with problems: " + cleanup.ErrorMessage;
+            if (!cleanup.Succeeded)
+            {
+                ReportCleanupFailure("Owned content cleanup completed with problems", cleanup);
+                RefreshUi();
+                return OperationResult<string>.Failure(cleanup.ErrorCode, status);
+            }
+            status = removed.ToString(CultureInfo.InvariantCulture) + " owned objects removed.";
             RefreshUi();
-            return cleanup.Succeeded ? OperationResult<string>.Success(status)
-                : OperationResult<string>.Failure(cleanup.ErrorCode, status);
+            return OperationResult<string>.Success(status);
         }
 
         public OperationResult<string> ToggleRobotSimulation()
@@ -325,21 +334,29 @@ namespace TopiaForge.CreatorTools.Shared
                 RecordNativeHidden(entry);
                 return OperationResult<string>.Success(entry.DisplayName + " temporarily hidden; End Session & Restore restores it.");
             }
-            var session = creatorSession;
+            var generation = sessionGeneration;
             var projectId = ProjectIdForRoster(entry.Id);
             var hasTransform = TryGetTransform(entry, out var previous);
-            var cleanup = RemoveOwnedEntry(entry);
-            // Source disposal and removal events can synchronously end or replace this session.
-            if (!ReferenceEquals(creatorSession, session) || session?.IsAlive != true)
+            var cleanup = RetireRosterEntry(entry, despawn: true);
+            // Source disposal and removal events can synchronously end or replace this session;
+            // a stale removal result must neither record history nor overwrite the newer status.
+            if (!IsCurrentSession(generation))
                 return cleanup.Succeeded ? OperationResult<string>.Success(status)
                     : OperationResult<string>.Failure(cleanup.ErrorCode, cleanup.ErrorMessage);
-            if (cleanup.Succeeded && hasTransform) RecordDespawn(entry, previous, projectId);
-            status = cleanup.Succeeded ? entry.DisplayName + " removed."
-                : entry.DisplayName + " removal completed with cleanup problems: " + cleanup.ErrorMessage;
+            if (!cleanup.Succeeded)
+            {
+                ReportCleanupFailure(entry.DisplayName + " removal completed with cleanup problems", cleanup);
+                RefreshUi();
+                return OperationResult<string>.Failure(cleanup.ErrorCode, status);
+            }
+            if (hasTransform) RecordDespawn(entry, previous, projectId);
+            status = entry.DisplayName + " removed.";
             RefreshUi();
-            return cleanup.Succeeded ? OperationResult<string>.Success(status)
-                : OperationResult<string>.Failure(cleanup.ErrorCode, status);
+            return OperationResult<string>.Success(status);
         }
+
+        private static OperationResult<bool> Despawn(CreatorRosterEntry entry) =>
+            entry.Spawn?.Despawn() ?? entry.Robot?.Despawn() ?? OperationResult<bool>.Success(false);
 
         private OperationResult<TransformState> AimTransform()
         {

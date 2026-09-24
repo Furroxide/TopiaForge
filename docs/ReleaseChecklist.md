@@ -1,12 +1,13 @@
 # Initial release checklist
 
-Use this checklist from a clean, frozen release candidate. A checked box requires a command log, artifact, or reviewed
-QA record from the exact candidate SHA. Warnings, failures, and unavailable checks need an explicit disposition; they
-are never silently waived. Candidate-specific open items are in [`LaunchBlockers.md`](LaunchBlockers.md).
-Machine setup and the resumable command sequence are in
-[`AdminRelease.md`](AdminRelease.md).
-The dated [RC1 handoff](internal/RC1PrereleaseHandoff.md) separates source
-promotion from final candidate construction and publication.
+Use this checklist to prepare and qualify a clean, frozen release candidate. Checked policy/source rows below record
+established decisions or implementation evidence; they do not claim an accepted candidate. Complete candidate-specific
+rows only with command logs, exact artifacts, or reviewed QA records bound to the frozen final `main` SHA. Warnings,
+failures, and unavailable checks need an explicit disposition; they are never silently waived.
+
+Current decisions, dependencies, and nested follow-ups are indexed in the [launch-readiness hub](internal/launch/README.md).
+Candidate-specific gates are in [`LaunchBlockers.md`](LaunchBlockers.md); machine setup and the resumable command
+sequence are in [`AdminRelease.md`](AdminRelease.md). RC1 targets Windows x64 only.
 
 ## 1. Scope, policy, and ownership
 
@@ -40,7 +41,7 @@ promotion from final candidate construction and publication.
 - [x] Unity is exactly `6000.0.23f1`; no fallback editor is accepted.
 - [x] Launcher updates use signed GitHub prerelease metadata, explicit
       confirmation, whole-package replacement, health-gated rollback, and a
-      verified manual fallback; RC1 custom worlds remain Windows-only.
+      verified manual fallback; RC1 custom-world acceptance targets Windows x64 only.
 - [x] Remote AI, player-token, microphone, and STT features default off and declare descriptive capabilities.
 - [x] TopiaForge-owned release surfaces use AGPL-3.0-or-later with
       `Copyright (C) 2026 furroxide`; third-party terms remain unchanged and
@@ -50,23 +51,24 @@ promotion from final candidate construction and publication.
       `Signed-off-by` trailers; pre-`v0.1.0-rc.1` history is grandfathered.
 - [ ] Owner/legal approves Robotopia/brand/art/font/compatibility/injection rights and all third-party dispositions.
 - [ ] Privacy/backend/security owners approve remote data flows, retention, consent, cost, abuse, and incident policy.
-- [ ] Security/product owners approve first-party package trust, origin, revocation, and installed-user recovery.
+- [ ] Confirm the existing `P0-TRUST-01` 0.x disposition (`EVID-P0-TRUST-01-0001`) still covers first-party package trust, origin, revocation, and installed-user recovery. Obtain renewed security/product review if that approved scope changes.
 - [ ] The owners named in [`ReleaseOperations.md`](ReleaseOperations.md) confirm that security, support, release,
       incident, revocation, and rollback channels are monitored or delegated.
 
 ## 2. Candidate and toolchains
 
-- [ ] Review and commit the remediation without discarding unrelated user work; freeze one candidate SHA.
-- [ ] Reserve `v0.1.0-rc.1` for the frozen final `main` SHA; create its signed,
-      annotated tag only during `stage` after candidate qualification in section 9.
+- [ ] Review and integrate the remediation without discarding unrelated user work; freeze the exact final `main` SHA
+      from a clean checkout matching `origin/main`. Tag creation belongs to staging after qualification in section 9.
 - [ ] Confirm `global.json` resolves exactly .NET SDK `10.0.301` with roll-forward disabled and runtime `10.0.9`.
 - [ ] Confirm Dart `3.12.2`, Flutter `3.44.6`, and Node `24.18.0` in each
       applicable production environment, plus Unity `6000.0.23f1` on the
       Windows production builder.
 - [ ] Probe the public latest-build manifest and verify both pinned build-2478 archive paths and SHA-256 values.
 - [ ] Confirm all LFS objects, immutable BepInEx inputs, UnityDoorstop source, and managed references are present.
-- [ ] Git LFS is installed on every applicable production builder; `git lfs fsck`
-      succeeds and every tracked LFS path is materialized in its exact-SHA checkout.
+- [ ] Git LFS is installed on Windows; `git lfs fsck` succeeds and every tracked LFS path is materialized in the
+      exact-SHA administrator checkout. RC1 requires no Ubuntu distribution or WSL source clone.
+- [ ] The `wsl` executable is available: current administrator preflight still requires that command even for
+      Windows-only RC1. This does not authorize or require Linux/Proton acceptance.
 
 ## 3. Source, contracts, and tests
 
@@ -173,17 +175,12 @@ promotion from final candidate construction and publication.
 - [ ] The exact Windows archive matches its reviewed distribution mode. Signed mode requires all three
       executables signed and timestamped by the pinned certificate. Explicit unsigned mode requires all three
       unsigned; a missing certificate never selects that mode implicitly.
-- [ ] *(Future Linux release; no version promised.)* The Proton evidence bundle matches the exact Linux archive digest and covers real
-      discovery, path/process, repair, custom-world, runtime, and uninstall behavior with Proton `10.0-4`.
-      Metadata records whether this future evidence is same-host and non-independent;
-      build output without the actual game run is not accepted.
 - [ ] An independent clean-machine author with only Robotopia, the release archive, and its pinned .NET SDK creates
       and launches a working safe code mod in at most five commands, without a source checkout or Unity installation.
 
 ## 8. Platform release archives
 
-- [ ] On a clean checkout of the frozen SHA, build Windows x64 on the administrator workstation.
-      Linux x64 is outside RC1; future enablement requires implemented native isolation and acceptance.
+- [ ] On a clean checkout of the frozen final `main` SHA, build Windows x64 on the administrator workstation.
 - [ ] Build the canonical ecosystem twice byte-identically before distribution and prove every platform archive
       contains that exact ecosystem digest.
 - [ ] Directly inspect final extracted archives for missing/extra/duplicate/linked entries, case collisions, modes,
@@ -192,14 +189,19 @@ promotion from final candidate construction and publication.
       Authenticode signatures from the exact reviewed leaf-certificate
       SHA-256 pin and valid HTTPS RFC 3161 timestamps. Unsigned, partly signed,
       untimestamped, expired-at-signing, mismatched, or invalid output fails.
-- [ ] *(Future Linux release; no version promised.)* Linux executable modes, native launcher/CLI, and
-      discovery/path/process/repair/custom-world assumptions for Robotopia's Windows build under Proton pass on a
-      clean host that can reach a GPU Vulkan implementation.
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
       diagnostics, confirmed in-app update, forced rollback, manual fallback,
       and uninstall pass for each supported platform.
 - [ ] Native visual/accessibility QA covers all screens and state families at 800x600, 100–200% text scale, high
       contrast, reduced motion, keyboard-only/focus, screen reader, long paths, and no-overflow behavior.
+
+Future Linux/Proton work is outside RC1, with no promised release version. The earlier Ubuntu 24.04/WSL2 and
+Proton `10.0-4` plan did not establish native acceptance or support. A future platform needs separately reviewed
+policy and an implemented isolation/evidence path; current administrator admission refuses Linux, so restoring an
+archive name in policy is insufficient. Acceptance must bind the exact Linux archive digest and exercise native
+launcher/CLI, executable modes, discovery, paths/processes, repair, custom worlds, runtime and uninstall on an
+appropriate GPU/Vulkan host. Record independence and isolation explicitly; a build alone is insufficient.
+See [future Linux acceptance](AdminRelease.md#future-linux-acceptance).
 
 ## 9. Release metadata and protected publication
 
@@ -207,15 +209,15 @@ promotion from final candidate construction and publication.
       decision and evidence, then atomically records `accepted`. Stage, dispatch,
       and resume revalidate the full summary and exact bytes; they cannot skip
       qualification. Accepted candidates cannot be rebuilt or repacked.
+- [ ] After qualification records `accepted`, run the approved administrator `stage` step. It creates or verifies the
+      protected, signed annotated `v0.1.0-rc.1` tag at that exact accepted source SHA before staging the matching draft.
+      Do not create the release tag during candidate preparation.
 - [ ] In unsigned mode, omit both P7S and its decision digest. In signed mode,
       `handoffSignatureSha256` binds its exact bytes; the existing CMS trust
       verification still verifies certificate, timestamp and chains separately.
 - [ ] Stage both fixed candidate JSON records as human-owned immutable assets.
       Publication metadata is downstream of qualification. Generated metadata
       cannot become an input payload or replace a human-owned decision.
-- [ ] After qualification, `stage` creates or verifies the protected, signed,
-      annotated `v0.1.0-rc.1` tag on the frozen final `main` SHA and its matching
-      prerelease draft. Keep `prerelease: true`; do not mark this as a stable release.
 
 - [ ] Each platform emits a deterministic `release-platform-bundle-v1` manifest, and the administrator stages one
       `release-handoff-v1` manifest binding version, source SHA, platform asset digests/sizes, canonical ecosystem

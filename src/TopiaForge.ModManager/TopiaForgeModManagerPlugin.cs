@@ -61,6 +61,7 @@ namespace TopiaForge.ModManager
 
         private void Awake()
         {
+            if (ObserveProvisioningOnly()) return;
             startupStartedAtUtc = DateTime.UtcNow.ToString("O");
             startupStopwatch.Restart();
             paths = new ManagerPaths(BepInEx.Paths.BepInExRootPath);
@@ -212,6 +213,7 @@ namespace TopiaForge.ModManager
 
         private void Update()
         {
+            RequestProvisioningQuitOnUpdate();
             if (!ready)
             {
                 return;
@@ -231,6 +233,7 @@ namespace TopiaForge.ModManager
 
         private void OnDestroy()
         {
+            LogProvisioningDestroyPhase();
             if (!initializationLifetime.TryBeginTeardown()) return;
             ready = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;

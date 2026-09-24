@@ -9,6 +9,7 @@ export 'src/launch_process_control.dart'
     show
         LaunchProcessReceipt,
         readWindowsAcceptanceIdentity,
+        readWindowsSystemRoot,
         startLaunchProcessWithReceipt,
         isLaunchProcessAlive,
         stopLaunchProcess;

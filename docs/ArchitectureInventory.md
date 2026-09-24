@@ -18,6 +18,7 @@ not merely build projects. Update it whenever a public contract, generator, or r
 | `TopiaForge.GameCompat.Surface` | Serializable Robotopia-code surface and comparison rules | Unity-free contract shared by extractor/tests |
 | `TopiaForge.GameCompat.Extractor` | Metadata-only installed-Robotopia inspection | Self-contained developer/release executable; never loads Robotopia code for execution |
 | `TopiaForge.ModManager.Tests` | Cross-component C# harness | Exercises Core, SDK, GameCompat, runtime source conventions, and pure mod seams |
+| Sandbox acceptance fixtures | Production-UI Editor integration and bounded safe/native game observations | Non-distributable projects under `tests/TopiaForge.Sandbox*`; actual workbench/UI services, isolated QA only; excluded from the first-party release catalog |
 
 The canonical Robotopia-side loader payload contains thirteen managed assemblies: eleven
 `TopiaForge.*` implementations/contracts plus pinned `System.Reflection.Metadata`
@@ -46,7 +47,8 @@ from the thirteen-package release payload.
 | `launcher_data` | Local repositories and services for storage, downloads, archives, processes, runtime repair, diagnostics, and Unity/VPM tooling | Depends on `launcher_domain`; returns domain-ready typed data |
 | `launcher_ui` | Shared Flutter theme, motion, and presentation widgets | Flutter only; no application state or data access |
 | `topiaforge_launcher_flutter` | Desktop application and `LauncherBloc` event/state coordination | Depends on all launcher packages; widgets dispatch events and never perform data I/O |
-| `topiaforge` CLI | Mod/template/registry/VPM/world/UI/release commands and deterministic packaging | Reuses domain/data services; is not a second implementation of archive or process policy |
+| `topiaforge` CLI | Mod/template/registry/VPM/world/UI/release commands, supplementary Sandbox acceptance and deterministic packaging | Reuses domain/data services; Sandbox orchestration retains the production original-process receipt and independently verifies private source/runtime/media bytes |
+| `TopiaForge.Acceptance.Windows` | Finite declared OS input, foreground game captures, render loopback and read-only persistence observation | Private Windows x64 broker; native process/window/identity checks; no arbitrary execution endpoint, microphone or release authority |
 
 ## Package and serialization contracts
 
@@ -59,6 +61,7 @@ from the thirteen-package release payload.
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
 | World and TopiaForgeUi bundle manifests | Exact Unity `6000.0.23f1`, target, inputs, and SHA-256 provenance | Unity batch builders produce; CLI/package/runtime validate |
 | Release policy/BOM/catalog | Product/component versions, signing trust, expected artifacts, and local handoff evidence are checked against source metadata; stable Pages metadata remains manual-only | Admin orchestrator and CLI produce; protected GitHub finalizer verifies |
+| Sandbox automation annex V1 | Strict private development evidence with source/spec/package/runtime/process/isolation/device/artifact binding; always `qualifiesRelease: false` | Supplementary native CLI/broker and independent verifier; separate from closed candidate/live evidence schemas |
 | Launcher update metadata V1 | Ed25519-signed exact UTF-8 payload with immutable GitHub asset URLs, hashes, sizes, entry inventory, and complete install layouts | Protected GitHub finalizer signs after verifying admin-built bytes; launcher verifies before parsing and reconciles with GitHub |
 
 ## Templates and authoring surfaces
@@ -116,6 +119,11 @@ author identity is supplied.
 
 ## CI and privilege boundaries
 
+Supplementary Sandbox workflows run offline contracts and scrubbed handoff validation on secretless hosted runners.
+Pinned-Editor and game lanes remain local, admitted and serialized; the native matrix is still incomplete and has no
+admitted game execution evidence. See the [maintainer handoff](https://github.com/Furroxide/TopiaForge/blob/main/docs/internal/launch/sandbox-automation-stages-3-6.md).
+These additions do not change required-check policy or qualify a release.
+
 GitHub-hosted workflows cover general CI, unsigned release dry-runs, Unity source/VPM validation, registry validation,
 Pages, and protected release finalization. Pull-request validation is secretless. Repository code may build a Pages
 artifact with `contents: read`; the separate deploy job has Pages/OIDC write permissions but performs no checkout or
@@ -127,7 +135,8 @@ generates protected update metadata and a verifier attestation, then publishes a
 
 The codebase can enforce but cannot choose the project license, rights to Robotopia/TopiaForge assets and
 compatibility work, privacy/backend policy, registry governance, or package trust root. It also cannot synthesize
-future-platform signing credentials, GitHub rulesets/environments, WSL2, pinned Proton, legally authorized Robotopia
-access, screen-reader review, or Robotopia profiler/gameplay evidence. RC1's
-mandatory Windows signing and same-host Proton decisions are explicit,
-fail-closed policy—not silently skipped gates.
+signing credentials, GitHub rulesets/environments, legally authorized Robotopia access, screen-reader review, or
+Robotopia profiler/gameplay evidence. RC1 explicitly targets Windows x64 with unsigned distribution under the
+[release policy](../release/release-policy.json). Exact-byte qualification and isolated native acceptance remain
+required. Any future platform or signed distribution needs separately reviewed policy, tooling and acceptance;
+adding Linux to policy does not restore the retired Proton runner. See [AdminRelease](AdminRelease.md).

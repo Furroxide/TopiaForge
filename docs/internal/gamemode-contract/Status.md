@@ -1,6 +1,7 @@
 # Gamemode contract redesign status
 
-Updated: 2026-09-08. This is an evidence ledger, not a completion declaration.
+Updated: 2026-09-09. This is an evidence ledger, not a completion declaration.
+Current preparation actions and explicit user decisions are in the [launch hub](../launch/README.md). Dated entries below preserve earlier observations; the September 9 checkpoint supersedes their pending Unity/setup and hosted-publication statements.
 The [canonical brief](../GamemodeContractRedesign.md) is normative. The
 [architecture report](../../GamemodeArchitectureReport.md) preserves the original investigation.
 
@@ -34,7 +35,7 @@ The historical rows describe each slice at its own merge. Current state:
 | Candidate qualification and publication guards | Integrated through slice 7a | CLI, administrator and publication paths connected | Final reviewed-head CI and CodeQL passed at `80fa8f9`; 441 local CLI tests passed with four platform skips | Pending; synthetic acceptance is not game evidence |
 | Unsigned RC package construction | Integrated after explicit authorization on 8 September | Builder and Windows orchestration honor recorded policy | Final PR #114 hosted checks passed; local regression details below | Pending |
 | V5 retirement, migration and obsolete models | Integrated through slice 8a | Readers and CLI atomic writer connected; old models removed | Full final-head CI, including Windows data and publication, passed at `0c4a306` | Pending |
-| Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI and CodeQL passed; fifteen filesystem checks and fourteen supplementary actual EditMode cases on 6000.0.31f1 pass | Pinned 6000.0.23f1 cases and actual spawn pending |
+| Authored-world marker validation | Integrated through slice 8a | Editor validation and owned prefab instantiation connected | Full CI/CodeQL and fifteen filesystem checks passed; fourteen actual EditMode cases on pinned 6000.0.23f1 passed on September 9 | Actual authored spawn and frozen-candidate authoring/game acceptance pending |
 | Acceptance isolation | Integrated through slice 8b | Runtime, CLI and release admission connected with request-bound original receipts | Full final-head Windows/Linux CI, publication and CodeQL pass at `eda671d` | Pending isolated host and actual game evidence |
 
 No release tag, release dispatch or publication has occurred. The checkout is
@@ -2366,3 +2367,124 @@ Astro checks report zero errors/warnings/hints and the site build produces 27
 pages. A tracked test/script audit finds no further obsolete guide assertion.
 These local checks do not include the combined DocFX/Dart references and search
 publication; that remains required in fresh Linux CI for the repaired revision.
+
+## September 9 launch preparation checkpoint
+
+PR #124 integrated the final administrator-source corrections at
+`437733854795c11e684eac9d59d6bc52ada9516e`, tree
+`976326d02fd68b19a2e10bde923e15510df441a6`, identical to reviewed local `7a43966`.
+Both exact-source CI runs (34228318402 and 34228313322) passed 16/16 jobs. Each
+passed 585 Windows data tests and 521 CLI tests, with four platform skips per
+suite. Complete documentation publication passed 50 website tests, 27 pages,
+127 Markdown files, three Dart references and 2,286 built-link checks. Both
+CodeQL runs passed; the recorded PR119 alert inventory was empty. Dry run
+34228314143 passed 11/11 jobs, including all three synthetic archive validations.
+These completed results supersede the earlier pending hosted-publication note
+for that source, without erasing either failed run. They do not validate this
+later documentation refresh or approve additional public platforms.
+
+After explicit user authorization, the verified Unity 6000.0.23f1 installer
+completed with exit 0. The installed `6000.0.23f1_1c4764c07fb4` Editor passed all
+fourteen real WorldValidatorTests with existing-licence admission and confirmed
+exit 0, no failures/skips/inconclusive cases. All 81 prepared inputs matched the
+recorded Git source before the run; only disposable VFX settings changed during
+import. Source, XML/log hashes, exact boundaries and private archive location
+are recorded in the [sanitized evidence ledger](../launch/Evidence.md).
+
+The user requested the three reviewer requests, isolated-QA setup plan,
+audit-token setup instructions, signing recovery checklist, a full Sandbox
+automation implementation plan and an independent-tester handoff. These are now
+prepared in the [repository launch hub](../launch/README.md). Actual approval,
+provisioning, automation implementation and native execution remain pending.
+Credential closure is explicitly deferred; neutral build resources remain a
+plan; the native UX/accessibility choice remains unanswered. Unanswered
+questions wait indefinitely for an explicit reply.
+
+The machine readiness register is unchanged. No final-main promotion, candidate,
+new native GAME evidence, tag, staging or publication is supplied by these
+preparation steps. The final candidate still needs sixteen Unity authoring
+cycles, fifteen SDK cases, ten game resource cycles and all thirty-six gamemode
+cases. Normal source/gate review and fresh verification precede that sequence.
+
+The consolidated documentation refresh passed all 50 website tests, canonical
+content generation, 141 Markdown links, 533 repository JSON/YAML files, Astro
+diagnostics and the 27-page build, C# reference generation, domain/data Dartdoc,
+README counts, residue and whitespace checks. Its full Windows command stopped
+in the already documented UI Dartdoc 9.0.4 CRLF RangeError; search and final
+built-link verification were not reached. Fresh complete Linux documentation
+CI is still required for the integrated refresh revision. No SDK patch or
+check exemption was applied; this requirement does not expand game support.
+See the [evidence ledger](../launch/Evidence.md#september-9-documentation-validation)
+for the local source/validation boundary.
+
+
+## September 9 native UX handoff and Sandbox automation authorization
+
+This subsequent checkpoint supersedes the unanswered-UX and pending-implementation
+status in the earlier September 9 preparation entry; that earlier observation is
+retained as history. The user requested continuation of the native UX/accessibility
+operator handoff. The [brief](../launch/native-ux-accessibility-handoff.md) is now
+prepared for all eight launcher flows and supplementary in-game coverage, with
+actual viewport/text scaling, keyboard/focus, screen-reader, contrast/motion and
+private evidence requirements. Operators, fixtures, provisioning and execution
+remain pending; P1-UX-01 is still advisory and blocked.
+
+The user then explicitly replied **“Implement the first two stages.”** This
+authorizes the Sandbox nine-scenario specification/verifier and offline
+lifecycle/rollback regressions, including applicable tests. Source implementation
+and verification are in progress; no completed result is asserted here. The
+[automation plan](../launch/sandbox-automation-implementation-plan.md) and launch
+[decisions](../launch/Decisions.md), [actions](../launch/NextActions.md) and
+[evidence](../launch/Evidence.md) record this bounded scope. New Editor/native
+execution, device access and provisioning remain unauthorized by this reply;
+stages 3–6 remain proposed. The earlier fourteen Editor tests and prior CI results
+retain their original source/evidence boundaries.
+
+ArchitectureInventory now reflects the explicit unsigned Windows-only RC1 policy
+and conditional future platforms. The gate register and release policy are
+unchanged. Credential closure remains user-deferred and neutral build setup stays
+a plan; no candidate, approval, tag, staging or publication is supplied. Current
+private packet views in both repository locations follow the tracked launch hub,
+with prior views preserved as dated snapshots.
+
+## September 9 Sandbox stages 1–2 implementation and verification
+
+This checkpoint supersedes the in-progress Sandbox statement above. The authorized
+nine-scenario specification, strict offline verifier/developer tool and lifecycle/
+rollback regressions are implemented. The [implementation handoff](../launch/sandbox-automation-stages-1-2.md)
+maps coverage and retains 25 explicit Editor, native, device, unsupported and human
+requirements. Offline results always have `qualifiesRelease: false`.
+
+The final Release solution build passed with zero warnings/errors, and all five
+required C# harnesses passed. The focused module run passed 19 suites, including
+21 rollback checks, nine graph lifecycle cases and two added runner cases. The
+Testing API baseline has 26 intentional additions and no removals. CLI analysis
+was clean; the full suite passed 613 tests with four existing platform skips,
+including 92 new cases. Seeded failures, actual pre-fix failures and the final
+safe-consumer token audit failure/repair remain in private receipts. The strict
+audit itself was not weakened. Exact results and scope belong in [Evidence](../launch/Evidence.md#sandbox-automation-stages-1-2-verification).
+
+Current runbooks, source behavior notes and private packet indexes now reflect
+these results. The native UX handoff is prepared. Stages 3–6, new Editor/native
+execution and provisioning still need explicit direction. Credential closure
+remains deferred; neutral build setup remains a plan. The machine readiness and
+release policy are unchanged; no candidate, approval, commit, push, merge, tag,
+staging or publication is supplied. Fresh complete Linux documentation CI remains
+required because the earlier full Windows run stopped at the recorded UI Dartdoc
+CRLF failure; this is not an expansion of game platform support.
+
+
+## September 9 Sandbox stages 3–6 and QA provisioning checkpoint
+
+The later user replies supersede the preceding stages 1–2 authorization limit.
+The [current launch evidence](../launch/Evidence.md#sandbox-automation-stages-3-6-checkpoint)
+and [native implementation handoff](../launch/sandbox-automation-stages-3-6.md)
+record the Editor fixture, native observer/broker/verifier, local and hosted lanes,
+passing source checks, retained Editor run and its later source refinements.
+A standard QA account and two hash-verified game binary copies are provisioned
+on D:. Source, user as operator, main display and default render audio are
+explicitly confirmed; microphone recording is off. First sign-in, measured
+isolation/device admission and native game execution remain pending. Native
+scrolling and graph-interaction automation remain explicit implementation gaps.
+These development results leave reviewer gates, exact final-main candidate
+acceptance and the NO-SHIP decision unchanged.
