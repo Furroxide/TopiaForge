@@ -140,10 +140,18 @@ namespace TopiaForge.ModManager.Tests
                 ExpectedIdentity = new Dictionary<string, object?>(ActualIdentity);
                 ActualProcess = new Dictionary<string, object?> { ["pid"] = 123, ["nativeStartToken"] = "windows:1234", ["executablePath"] = Path.Combine(Game, "Robotopia.exe") };
                 ExpectedProcess = new Dictionary<string, object?>(ActualProcess);
-                Request = new Dictionary<string, object?> { ["schemaVersion"] = 1, ["kind"] = "sandbox-provisioning-request-v1",
-                    ["requestId"] = Id, ["challenge"] = new string('b', 64), ["issuedAtUtc"] = Now.UtcDateTime.ToString("O"),
-                    ["expiresAtUtc"] = Now.UtcDateTime.AddSeconds(120).ToString("O"), ["expectedIdentity"] = ExpectedIdentity,
-                    ["expectedProcess"] = ExpectedProcess, ["gameRoot"] = Game };
+                Request = new Dictionary<string, object?>
+                {
+                    ["schemaVersion"] = 1,
+                    ["kind"] = "sandbox-provisioning-request-v1",
+                    ["requestId"] = Id,
+                    ["challenge"] = new string('b', 64),
+                    ["issuedAtUtc"] = Now.UtcDateTime.ToString("O"),
+                    ["expiresAtUtc"] = Now.UtcDateTime.AddSeconds(120).ToString("O"),
+                    ["expectedIdentity"] = ExpectedIdentity,
+                    ["expectedProcess"] = ExpectedProcess,
+                    ["gameRoot"] = Game
+                };
                 Write();
             }
             internal void Write() => File.WriteAllText(RequestPath, JsonSerializer.Serialize(Request));

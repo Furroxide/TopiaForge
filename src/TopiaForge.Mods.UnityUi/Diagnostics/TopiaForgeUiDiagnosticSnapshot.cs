@@ -7,8 +7,10 @@ namespace TopiaForge.Mods.UnityUi
     {
         internal TopiaForgeUiDiagnosticSnapshot(string owner, IReadOnlyList<TopiaForgeUiDiagnosticWidget> widgets, int hosts,
             int ownerCanvases, int canvases, int subscribers, int cursors, int dismiss, int width, int height)
-        { OwnerId = owner; Widgets = widgets; HostCount = hosts; OwnerCanvasCount = ownerCanvases; TotalCanvasCount = canvases;
-          ThemeSubscriberCount = subscribers; CursorLeaseCount = cursors; DismissScopeCount = dismiss; Width = width; Height = height; }
+        {
+            OwnerId = owner; Widgets = widgets; HostCount = hosts; OwnerCanvasCount = ownerCanvases; TotalCanvasCount = canvases;
+            ThemeSubscriberCount = subscribers; CursorLeaseCount = cursors; DismissScopeCount = dismiss; Width = width; Height = height;
+        }
         /// <summary>Observed owner.</summary>
         public string OwnerId { get; }
         /// <summary>Measured widgets, including hidden and clipped widgets.</summary>
@@ -37,12 +39,14 @@ namespace TopiaForge.Mods.UnityUi
             float x, float y, float width, float height, bool visible, bool enabled, bool focused, bool clipped,
             bool contrast, bool reduced, float scale, float motion,
             bool selected = false, string? value = null, string? foreground = null, string? background = null)
-        { SurfaceId = surface; NodeId = id; Kind = kind; Text = TopiaForgeUiDiagnosticFormat.Bound(text); Style = style;
-          X = x; Y = y; Width = width; Height = height;
-          Visible = visible; Enabled = enabled; Focused = focused; Clipped = clipped; HighContrast = contrast;
-          ReducedMotion = reduced; UiScale = scale; MotionIntensity = motion;
-          Selected = selected; Value = TopiaForgeUiDiagnosticFormat.Bound(value);
-          Foreground = foreground ?? string.Empty; Background = background ?? string.Empty; }
+        {
+            SurfaceId = surface; NodeId = id; Kind = kind; Text = TopiaForgeUiDiagnosticFormat.Bound(text); Style = style;
+            X = x; Y = y; Width = width; Height = height;
+            Visible = visible; Enabled = enabled; Focused = focused; Clipped = clipped; HighContrast = contrast;
+            ReducedMotion = reduced; UiScale = scale; MotionIntensity = motion;
+            Selected = selected; Value = TopiaForgeUiDiagnosticFormat.Bound(value);
+            Foreground = foreground ?? string.Empty; Background = background ?? string.Empty;
+        }
         /// <summary>Safe SDK surface id; modals use $modal.</summary>
         public string SurfaceId { get; }
         /// <summary>Safe SDK node id; virtual rows use list-id/item-id.</summary>

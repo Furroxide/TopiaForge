@@ -193,7 +193,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var target = new FakeRobotEditTarget(id, TransformState.Identity);
             var entry = new CreatorRosterEntry("owned-test:" + id, id, CreatorContentKind.Prop, true,
-                new TestCleanup(() => { target.IsAlive = false; cleanup(); })) { RobotTarget = target };
+                new TestCleanup(() => { target.IsAlive = false; cleanup(); }))
+            { RobotTarget = target };
             Roster(fixture).Add(entry);
             return entry;
         }
