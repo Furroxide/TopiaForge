@@ -86,8 +86,8 @@ active-scene-only startup behavior and one-callback-per-load behavior afterward.
 ## Robotopia and platform compatibility
 
 Robotopia uses numeric build identifiers. TopiaForge maps build `N` to SemVer `0.0.N` for range
-evaluation while retaining the human-readable build label. The supported build is build 2409
-(`0.0.2409`). When the installed Robotopia build is unknown, a constrained mod fails closed.
+evaluation while retaining the human-readable build label. The supported build is build 2478
+(`0.0.2478`). When the installed Robotopia build is unknown, a constrained mod fails closed.
 
 Compatibility is declared **per mod**, by whether the mod actually resolves symbols out of the game's
 own implementation assembly:
@@ -95,9 +95,10 @@ own implementation assembly:
 - A mod with a `bindings/<id>.gamebindings.json` manifest pins the exact audited build, because it may
   claim only what its bindings were verified against. Exact pins fail closed rather than silently
   selecting another version.
-- A mod that rides the SDK alone declares a bounded range (`>=0.0.2409 <0.0.2600`), so an ordinary game
-  update does not brick it. Published builds step by roughly +100 (2309 -> 2409), so that bound admits
-  the current build and the next one, and nothing beyond a review.
+- A mod that rides the SDK alone declares a bounded range (`>=0.0.2478 <0.0.2600`), so an ordinary game
+  update does not brick it. Published builds do not step by a fixed amount (recent updates moved by as
+  few as nine builds), so the ceiling is reviewed at every bump rather than derived, and it admits
+  nothing beyond that review.
 
 Two limits are worth stating plainly. There is no loader-level game-build gate: `supportedGameVersionRange`
 is the only check, and a ranged mod that loads on an unverified build still runs inside a loader that
