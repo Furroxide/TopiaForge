@@ -514,3 +514,19 @@ The updated copier then made `game-provisioning-20260924T172451Z` from `source-g
 - Wrote `runtime-retry-preparation-20260924T172541Z.json` (SHA-256 `699c013e70d76e6b1bb0d52c9d9d64676d0baa3766c25e21c490f1d7d0c85aea`).
 
 Run as the normal user, the staged driver refused with "requires the intended standard interactive QA account". It exited 1, wrote no state, created no native run and left no process behind. No firewall rule was created and no task was registered. No game ran, no isolation was admitted and no gate changed. Dispatch needs one operator session that the user confirms.
+
+## Game-QA policy change (2026-09-24)
+
+The user's answer to the scope question is implemented by the game-QA policy change, which the user reviewed and merged personally. In the register, `P0-GAME-01` is advisory under `EVID-P0-GAME-01-0001` and stays blocked with its exit criteria unmet; `P1-UX-01` and `P1-E2E-01` are accepted-risk under `EVID-P1-UX-01-0001` and `EVID-P1-E2E-01-0001`. The handoff, qualification and administrator tooling accept a truthful `not-run` live-acceptance record only while GAME is advisory. The sixteen pinned-Unity authoring cycles still run in every build.
+
+The three evidence identifiers refer to the owner's retained decision record, `review:rc1-owner-dispositions-20260924`: `.dart_tool/rc1-review/decisions-20260924/owner-dispositions-20260924.json`, SHA-256 `e769f70072a61bc755fb5f65f591b72af1f104ad5957ce19b9a6b0b5cae0d99c` when written. It transcribes the user's verbatim replies and stays outside Git. A `not-run` candidate cites that reference and the record's current digest. If the user replaces the transcription with their own record, the candidate cites the replacement instead.
+
+Before the change was opened for review, these checks passed on its final source:
+
+- Solution build with 0 warnings.
+- CLI format and analysis clean, and 1,146 CLI tests with 4 platform skips. These include 71 new tests for the advisory register, the not-run handoff, acceptance, qualification and metadata.
+- The release-admin, isolation and path PowerShell suites, and 68 signing-policy checks.
+- PSScriptAnalyzer over `tools` with 0 findings.
+- The residue audit and its 37 tests, 52 website tests and the Markdown link check.
+
+No administrator preflight or build ran on a release host, and no live game acceptance ran.

@@ -192,8 +192,8 @@ The supplementary [Sandbox native runner and verifier](https://github.com/Furrox
 now have a separate closed native-annex schema, original-process isolation binding,
 Windows input/capture broker and exact-byte media verification. Local Editor results
 are recorded in [launch evidence](https://github.com/Furroxide/TopiaForge/blob/main/docs/internal/launch/Evidence.md#sandbox-automation-stages-3-6-checkpoint).
-Game execution still requires admitted QA identity, actual persistence/device records
-and completion of the remaining native actuation gaps. Development annexes always
+Game execution still requires admitted QA identity and actual persistence/device records;
+native matrix protocol v2 closes the actuation gaps in source. Development annexes always
 report `qualifiesRelease: false` and do not replace this candidate acceptance matrix.
 Like the live run itself, this supplementary native matrix is optional for RC1.
 

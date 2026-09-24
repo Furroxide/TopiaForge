@@ -1,6 +1,6 @@
 # Non-game review gates and record boundary
 
-Updated 2026-09-24. The [tracked readiness register](../../../release/release-readiness.json) still blocks all four gates below with empty `evidenceIds`. The three prepared review requests do not supply approvals; credential-incident closure was explicitly deferred. Only GAME may remain deferred at private candidate construction.
+Updated 2026-09-24. The [tracked readiness register](../../../release/release-readiness.json) still blocks all four gates below with empty `evidenceIds`. The three prepared review requests do not supply approvals; credential-incident closure was explicitly deferred. GAME is advisory under the owner's 2026-09-24 disposition, so these four are the only blocking gates.
 
 | Gate | Required roles, in contract order | Actual decision needed |
 | --- | --- | --- |
@@ -23,8 +23,8 @@ Recommended private record fields are project/release, gate, exact reviewed sour
 
 ## Machine contract
 
-The register uses schema version 1, twelve ordered gates and `candidateBinding.mode=git-blob-at-target-sha`. The [schema](../../../schemas/topiaforge.release-readiness-v1.schema.json) closes properties; [gate contracts](../../../apps/topiaforge_cli/lib/src/release_readiness_gate_contracts.dart) pin identities, priorities, enforcement and reviewer-role order. All four gates above are P0/blocking; accepted risk is unavailable. Preserve all seven advisory rows and their actual status.
+The register uses schema version 1, twelve ordered gates and `candidateBinding.mode=git-blob-at-target-sha`. The [schema](../../../schemas/topiaforge.release-readiness-v1.schema.json) closes properties; [gate contracts](../../../apps/topiaforge_cli/lib/src/release_readiness_gate_contracts.dart) pin identities, priorities, enforcement and reviewer-role order. All four gates above are P0/blocking; accepted risk is unavailable. Preserve all eight advisory rows and their actual status, including the blocked, advisory GAME row.
 
-Blocked rows retain their required reason and no evidence IDs. Approved rows require sorted unique IDs with the gate's `EVID-<gate-id>-` prefix and four-digit suffix, and omit blocked reasons/accepted-risk fields. No actual approval ID is assigned by this document. The overall register remains blocked while GAME is blocked.
+Blocked rows retain their required reason and no evidence IDs. Approved rows require sorted unique IDs with the gate's `EVID-<gate-id>-` prefix and four-digit suffix, and omit blocked reasons/accepted-risk fields. No actual approval ID is assigned by this document. The overall register is ready only when all four blocking gates are approved; advisory rows, including GAME, report their status without blocking.
 
 There is no separately enforced non-game attestation-file schema. The candidate-acceptance `reviewerEvidence` array (`evidenceId`, `role`, `reference`, `sha256`) applies to GAME only. The private QA provisioning record instead has a nonempty reviewer-reference string. Do not mix those contracts or invent non-game approvals inside GAME evidence. Actual identity and authority verification belongs to the authorized reviewers and protected approver.
