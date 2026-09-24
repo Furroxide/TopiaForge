@@ -10,7 +10,10 @@ extension _PackageInboxSelection on LocalLauncherRepository {
     final valid = candidates.where((candidate) => candidate.isValid).toList();
     if (valid.isEmpty) return const _InboxSelectionAssessment();
     try {
-      final installed = await _loadInstalledMods(install);
+      final installed = await _loadInstalledMods(
+        install,
+        reconcileRestartRequirements: false,
+      );
       final sources = await _loadPackageSources();
       final registry = await _loadRegistryCandidates(installed, sources);
       return _selectCompatibleInboxBatch(valid, installed, registry, install);

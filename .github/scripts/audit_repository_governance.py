@@ -265,6 +265,59 @@ def collect_snapshot(repository: str, client: GitHubClient | None = None) -> dic
     }
 
 
+def normalise_codeql_languages(security: Any) -> Any:
+    """Collapses GitHub's CodeQL language aliases before comparison.
+
+    Default setup reports `javascript-typescript` together with its `javascript`
+    and `typescript` aliases, so an exact list comparison against the analysed
+    scope can never match. Dropping the aliases keeps the desired state
+    expressing what is analysed rather than how the API happens to spell it; a
+    genuinely extra language still fails, because only these two collapse.
+    """
+    if not isinstance(security, dict):
+        return security
+    setup = security.get("codeql_default_setup")
+    if not isinstance(setup, dict):
+        return security
+    languages = setup.get("languages")
+    if not isinstance(languages, list):
+        return security
+    if "javascript-typescript" not in languages:
+        return security
+    normalised = [
+        language
+        for language in languages
+        if language not in {"javascript", "typescript"}
+    ]
+    if normalised == languages:
+        return security
+    return {
+        **security,
+        "codeql_default_setup": {**setup, "languages": normalised},
+    }
+
+
+def fold_login(value: Any) -> Any:
+    """Case-folds a GitHub login or `owner/repo` for comparison.
+
+    GitHub stores logins case-insensitively but echoes back the canonical
+    casing, so `${{ github.repository }}` yields `Furroxide/TopiaForge` while
+    the desired state is written lowercase. Comparing the raw strings made the
+    audit permanently unsatisfiable for a difference that identifies the same
+    account. Actor IDs, which are the real identity, are compared unfolded.
+    """
+    if isinstance(value, str):
+        return value.casefold()
+    if isinstance(value, list):
+        return [fold_login(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: fold_login(item) if key in {"login", "full_name"} else item
+            for key, item in value.items()
+        }
+    return value
+
+
 def add_mismatch(
     failures: list[str], label: str, actual: Any, expected: Any
 ) -> None:
@@ -561,7 +614,8 @@ def check_release_mutation_authority(
             "type": collaborator.get("type"),
         }
         if (
-            identity["login"] == PINNED_RELEASE_STAGING_PRINCIPAL["login"]
+            fold_login(identity["login"])
+            == fold_login(PINNED_RELEASE_STAGING_PRINCIPAL["login"])
             or identity["actor_id"]
             == PINNED_RELEASE_STAGING_PRINCIPAL["actor_id"]
         ):
@@ -593,7 +647,9 @@ def check_release_mutation_authority(
             or permissions["maintain"]
             or permissions["admin"]
         )
-        if write_capable and identity != PINNED_RELEASE_STAGING_PRINCIPAL:
+        if write_capable and fold_login(identity) != fold_login(
+            PINNED_RELEASE_STAGING_PRINCIPAL
+        ):
             failures.append(
                 f"{label}: write-capable collaborator is not the pinned "
                 "release-staging principal"
@@ -609,12 +665,14 @@ def check_release_mutation_authority(
     add_mismatch(
         failures,
         "release-staging principal.identity",
-        {
-            "login": principal.get("login"),
-            "actor_id": principal.get("id"),
-            "type": principal.get("type"),
-        },
-        PINNED_RELEASE_STAGING_PRINCIPAL,
+        fold_login(
+            {
+                "login": principal.get("login"),
+                "actor_id": principal.get("id"),
+                "type": principal.get("type"),
+            }
+        ),
+        fold_login(PINNED_RELEASE_STAGING_PRINCIPAL),
     )
     add_mismatch(
         failures,
@@ -642,14 +700,14 @@ def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[
     add_mismatch(
         failures,
         "repository.full_name",
-        repository.get("full_name"),
-        policy["repository_full_name"],
+        fold_login(repository.get("full_name")),
+        fold_login(policy["repository_full_name"]),
     )
     add_mismatch(
         failures,
         "repository_administrators",
-        sorted(snapshot.get("repository_administrators", [])),
-        sorted(policy.get("repository_administrators", [])),
+        sorted(fold_login(snapshot.get("repository_administrators", []))),
+        sorted(fold_login(policy.get("repository_administrators", []))),
     )
     compare_mapping(
         failures,
@@ -678,7 +736,7 @@ def evaluate_snapshot(snapshot: dict[str, Any], policy: dict[str, Any]) -> list[
     compare_mapping(
         failures,
         "security",
-        snapshot.get("security"),
+        normalise_codeql_languages(snapshot.get("security")),
         policy.get("security", {}),
     )
     compare_mapping(

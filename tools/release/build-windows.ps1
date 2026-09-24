@@ -37,11 +37,33 @@ param(
     [string]$UnityPath,
 
     [Parameter(Mandatory = $true)]
-    [string]$GameDirectory
+    [string]$GameDirectory,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("run", "not-run", IgnoreCase = $false)]
+    [string]$LiveGameAcceptance,
+
+    [string]$AcceptanceIsolationRecord
 )
+
+. (Join-Path $PSScriptRoot "acceptance-isolation.ps1")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+# Live game acceptance is optional only under the owner's P0-GAME-01
+# disposition, which release-admin.ps1 admits and freezes. A run needs the
+# explicit isolation record; a build that does not run refuses one, so no
+# record can suggest isolation for an acceptance run that never happened.
+$runsLiveGameAcceptance = $LiveGameAcceptance -ceq "run"
+if ($runsLiveGameAcceptance) {
+    if ([string]::IsNullOrWhiteSpace($AcceptanceIsolationRecord)) {
+        throw "An explicit -AcceptanceIsolationRecord is required when -LiveGameAcceptance is run."
+    }
+    $AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
+}
+elseif (-not [string]::IsNullOrEmpty($AcceptanceIsolationRecord)) {
+    throw "-LiveGameAcceptance not-run performs no live game acceptance and refuses -AcceptanceIsolationRecord."
+}
 
 function Invoke-Checked {
     param(
@@ -261,10 +283,17 @@ function Remove-OwnedProjectDirectory {
     }
 }
 
+if ($runsLiveGameAcceptance) {
+    $isolationRecordHash = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
+}
 $repository = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $canonical = (Resolve-Path -LiteralPath $CanonicalArchive).Path
 $output = [System.IO.Path]::GetFullPath($OutputDirectory)
 $privateEvidenceRoot = [System.IO.Path]::GetFullPath($PrivateEvidenceDirectory)
+if ($runsLiveGameAcceptance) {
+    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
+        -OutputDirectories @($output, $privateEvidenceRoot)
+}
 if ($output -eq $repository -or
     $repository.StartsWith($output.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar,
         [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -286,7 +315,6 @@ if ($privateEvidenceRoot.Equals(
     )) {
     throw "Private Windows evidence must not overlap the public asset directory."
 }
-New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $head = (& git -C $repository rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -ne $SourceSha) {
@@ -310,34 +338,64 @@ if ($policy.versioning.productVersion -ne $Version) {
     throw "The requested version does not match release-policy.json."
 }
 $windowsCertificatePin = ""
-if ($policy.signingIdentities.PSObject.Properties.Name -contains
-    "windowsCertificateSha256") {
-    $windowsCertificatePin =
-        [string]$policy.signingIdentities.windowsCertificateSha256
+if ($null -ne $policy.signingIdentities.PSObject.Properties["windowsCertificateSha256"]) {
+    $pinValue = $policy.signingIdentities.windowsCertificateSha256
+    if ($pinValue -isnot [string] -or [string]::IsNullOrEmpty($pinValue)) {
+        throw "Windows signing certificate pin must be a nonempty string when present."
+    }
+    $windowsCertificatePin = $pinValue
 }
 $hasWindowsCertificatePin =
-    $windowsCertificatePin -cmatch "^(?!0{64}$)[0-9a-f]{64}$"
+    $windowsCertificatePin -cmatch "\A(?!0{64}\z)[0-9a-f]{64}\z"
 if ($policy.publication.PSObject.Properties.Name -contains
     "codeSigningException") {
     throw "Production Windows builds forbid every code-signing exception."
 }
-if (-not $hasWindowsCertificatePin) {
+$windowsDistribution = "signed"
+if ($null -ne $policy.signingIdentities.PSObject.Properties["windowsDistribution"]) {
+    $modeValue = $policy.signingIdentities.windowsDistribution
+    if ($modeValue -isnot [string] -or [string]::IsNullOrEmpty($modeValue)) {
+        throw "Windows distribution mode must be a nonempty string when present."
+    }
+    $windowsDistribution = $modeValue
+}
+if ($windowsDistribution -cne "signed" -and $windowsDistribution -cne "unsigned") {
+    throw "Unknown Windows distribution mode '$windowsDistribution'; expected 'signed' or 'unsigned'."
+}
+if ($windowsDistribution -ceq "unsigned") {
+    if (-not [string]::IsNullOrEmpty($windowsCertificatePin)) {
+        throw "An unsigned Windows distribution must not also pin a signing certificate."
+    }
+    # Match the Dart SemVer reader, including metadata and numeric identifier rules.
+    $prereleaseIdentifier = '(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+    $unsignedVersionPattern = '\A0\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-' +
+        $prereleaseIdentifier + '(?:\.' + $prereleaseIdentifier + ')*' +
+        '(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
+    if ($policy.versioning.productVersion -isnot [string] -or
+        $policy.versioning.productVersion -cnotmatch $unsignedVersionPattern) {
+        throw "An unsigned Windows distribution is only allowed for a 0.x prerelease."
+    }
+}
+if ($windowsDistribution -ceq "signed" -and -not $hasWindowsCertificatePin) {
     throw "release-policy.json must pin the reviewed Windows signing certificate."
 }
-foreach ($name in @(
-        "WINDOWS_CERTIFICATE_PFX",
-        "WINDOWS_CERTIFICATE_PASSWORD",
-        "WINDOWS_TIMESTAMP_URL"
-    )) {
-    if ([string]::IsNullOrWhiteSpace(
-            [Environment]::GetEnvironmentVariable($name)
+if ($windowsDistribution -ceq "signed") {
+    foreach ($name in @(
+            "WINDOWS_CERTIFICATE_PFX",
+            "WINDOWS_CERTIFICATE_PASSWORD",
+            "WINDOWS_TIMESTAMP_URL"
         )) {
-        throw "$name is mandatory for a production Windows build."
+        if ([string]::IsNullOrWhiteSpace(
+                [Environment]::GetEnvironmentVariable($name)
+            )) {
+            throw "$name is mandatory for a production Windows build."
+        }
     }
 }
 if ((Get-Sha256 $canonical) -ne $CanonicalArchiveSha256) {
     throw "The canonical ecosystem transport archive digest does not match."
 }
+New-Item -ItemType Directory -Force -Path $output | Out-Null
 
 $flutterCommand = Get-Command $FlutterPath -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1
@@ -492,7 +550,9 @@ $buildPackageArguments = @(
     "--prebuilt-launcher", $launcherDirectory, "--prebuilt-cli", $compiledCli,
     "--prebuilt-dist", $canonicalDirectory
 )
-$buildPackageArguments += "--require-windows-signing"
+if ($windowsDistribution -ceq "signed") {
+    $buildPackageArguments += "--require-windows-signing"
+}
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments $buildPackageArguments
 $archive = Join-Path $output "TopiaForge-windows-x64.zip"
@@ -503,10 +563,17 @@ $testPackageArguments = @(
     "--expected-canonical-ecosystem-sha256", $CanonicalEcosystemSha256,
     "--canonical-assets", $canonicalDirectory
 )
-$testPackageArguments += @(
-    "--require-windows-signature",
-    "--expected-windows-signer-sha256", $windowsCertificatePin
-)
+if ($windowsDistribution -ceq "unsigned") {
+    # Prove the artifacts really are unsigned rather than accidentally signed by
+    # stray credentials in the environment.
+    $testPackageArguments += "--require-windows-unsigned"
+}
+else {
+    $testPackageArguments += @(
+        "--require-windows-signature",
+        "--expected-windows-signer-sha256", $windowsCertificatePin
+    )
+}
 Invoke-Checked -FilePath $dart -WorkingDirectory $cliProject `
     -Arguments $testPackageArguments
 Invoke-PackagedLauncherHealthCheck -ArchivePath $archive `
@@ -577,106 +644,152 @@ if ($unityResult.result -ne "pass" -or
     throw "Exact-Unity lifecycle evidence is invalid."
 }
 
-# Exercise the exact packaged CLI in the full Robotopia journey.
-$extracted = Join-Path $work "extracted"
-New-Item -ItemType Directory -Force -Path $extracted | Out-Null
-$sevenZip = Get-Command 7z -CommandType Application -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-if ($null -eq $sevenZip) {
-    $sevenZipPath = Join-Path $env:ProgramFiles "7-Zip/7z.exe"
-    if (-not (Test-Path -LiteralPath $sevenZipPath -PathType Leaf)) {
-        throw "7-Zip is required for the Windows acceptance journey."
+# Live game acceptance runs only when the frozen mode is `run`. A `not-run`
+# build still performed the Unity reproducibility build, the official-install
+# check and the 16-cycle Unity lifecycle smoke above; it launches no game.
+if ($runsLiveGameAcceptance) {
+    # Exercise the exact packaged CLI in the full Robotopia journey.
+    $extracted = Join-Path $work "extracted"
+    New-Item -ItemType Directory -Force -Path $extracted | Out-Null
+    $sevenZip = Get-Command 7z -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -eq $sevenZip) {
+        $sevenZipPath = Join-Path $env:ProgramFiles "7-Zip/7z.exe"
+        if (-not (Test-Path -LiteralPath $sevenZipPath -PathType Leaf)) {
+            throw "7-Zip is required for the Windows acceptance journey."
+        }
     }
-}
-else {
-    $sevenZipPath = $sevenZip.Source
-}
-Invoke-Checked -FilePath $sevenZipPath -Arguments @("x", "-y", $archive, "-o$extracted")
-$packagedCli = Join-Path $extracted "topiaforge.exe"
-$journeyProjects = Join-Path $work "journey-projects"
-New-Item -ItemType Directory -Force -Path $journeyProjects | Out-Null
-$journeyId = "dev.topiaforge.release-$($SourceSha.Substring(0, 12))"
-$journeyName = "TopiaForge release $Version"
-Invoke-Checked -FilePath $packagedCli -WorkingDirectory $extracted -Arguments @(
-    "new", "mod", $journeyId, "--template", "minimal", "--name", $journeyName,
-    "--author", "TopiaForge Release", "--license", "MIT", "--dir", $journeyProjects
-)
-$journeyProject = Join-Path $journeyProjects $journeyId
-$marker = "$journeyName loaded. Run '$journeyId`:greet' to try its command."
-$gameEvidence = Join-Path $acceptanceDirectory "robotopia"
-Invoke-Checked -FilePath $packagedCli -WorkingDirectory $repository -Arguments @(
-    "acceptance", "run",
-    "--game-dir", $GameDirectory, "--output", $gameEvidence,
-    "--timeout-seconds", "1800", "--dev-cli", $packagedCli,
-    "--dev-project", $journeyProject, "--required-loaded-package", $journeyId,
-    "--required-log-marker", $marker, "--all"
-)
-$gameEvidenceFile = Join-Path $gameEvidence "acceptance-result.json"
-if (-not (Test-Path -LiteralPath $gameEvidenceFile -PathType Leaf)) {
-    throw "Robotopia acceptance did not produce its bounded result."
-}
-$gameAcceptance = Get-Content -LiteralPath $gameEvidenceFile -Raw |
-    ConvertFrom-Json
-if ($gameAcceptance.schemaVersion -ne 2 -or
-    [string]$gameAcceptance.acceptanceChallenge -cnotmatch
-        "^[0-9a-f]{64}$" -or
-    [string]$gameAcceptance.acceptancePackageReceipt.sourceSha256 -cnotmatch
-        "^[0-9a-f]{64}$" -or
-    @($gameAcceptance.acceptancePackageReceipt.criticalFiles).Count -lt 1 -or
-    [string]$gameAcceptance.requiredLoadedPackageReceipt.sourceSha256 `
-        -cnotmatch "^[0-9a-f]{64}$" -or
-    @($gameAcceptance.requiredLoadedPackageReceipt.criticalFiles).Count -lt 1) {
-    throw "Robotopia acceptance did not bind its challenge and exact package receipts."
-}
-$lastRunPath = Join-Path $GameDirectory `
-    "BepInEx/TopiaForge/logs/last-run.json"
-if (-not (Test-Path -LiteralPath $lastRunPath -PathType Leaf)) {
-    throw "Robotopia acceptance last-run evidence is missing."
-}
-$lastRun = Get-Content -LiteralPath $lastRunPath -Raw | ConvertFrom-Json
-$acceptanceRunPackage = @(
-    $lastRun.packages |
-        Where-Object { [string]$_.id -ceq "dev.topiaforge.sdk-acceptance" }
-)
-$journeyRunPackage = @(
-    $lastRun.packages |
-        Where-Object { [string]$_.id -ceq $journeyId }
-)
-if ($lastRun.schemaVersion -ne 1 -or
-    [string]$lastRun.sessionId -cne
-        [string]$gameAcceptance.lastRunSessionId -or
-    $acceptanceRunPackage.Count -ne 1 -or
-    $journeyRunPackage.Count -ne 1 -or
-    [string]$acceptanceRunPackage[0].sourceSha256 -cne
-        [string]$gameAcceptance.acceptancePackageReceipt.sourceSha256 -or
-    (($acceptanceRunPackage[0].criticalFiles | ConvertTo-Json -Compress) -cne
-        ($gameAcceptance.acceptancePackageReceipt.criticalFiles |
-            ConvertTo-Json -Compress)) -or
-    [string]$journeyRunPackage[0].sourceSha256 -cne
-        [string]$gameAcceptance.requiredLoadedPackageReceipt.sourceSha256 -or
-    (($journeyRunPackage[0].criticalFiles | ConvertTo-Json -Compress) -cne
-        ($gameAcceptance.requiredLoadedPackageReceipt.criticalFiles |
-            ConvertTo-Json -Compress))) {
-    throw "Robotopia last-run package receipts do not match the exact accepted packages."
-}
-if ((Get-RobotopiaInstalledBuildId $GameDirectory) -ne $installedGameBuildId) {
-    throw "Robotopia installed-build.json changed during acceptance."
-}
-$officialInstallAfterText = & $gameInstallVerifier `
-    -GameDirectory $GameDirectory -MetadataPath $gameMetadataPath | Out-String
-if (-not $?) {
-    throw "Official Robotopia installation verification failed after acceptance."
-}
-$officialInstallAfter = $officialInstallAfterText.Trim() | ConvertFrom-Json
-if (($officialInstallBefore | ConvertTo-Json -Compress) -cne
-    ($officialInstallAfter | ConvertTo-Json -Compress)) {
-    throw "Official Robotopia base-game identity changed during acceptance."
+    else {
+        $sevenZipPath = $sevenZip.Source
+    }
+    Invoke-Checked -FilePath $sevenZipPath -Arguments @("x", "-y", $archive, "-o$extracted")
+    $packagedCli = Join-Path $extracted "topiaforge.exe"
+    $journeyProjects = Join-Path $work "journey-projects"
+    New-Item -ItemType Directory -Force -Path $journeyProjects | Out-Null
+    $journeyId = "dev.topiaforge.release-$($SourceSha.Substring(0, 12))"
+    $journeyName = "TopiaForge release $Version"
+    Invoke-Checked -FilePath $packagedCli -WorkingDirectory $extracted -Arguments @(
+        "new", "mod", $journeyId, "--template", "minimal", "--name", $journeyName,
+        "--author", "TopiaForge Release", "--license", "MIT", "--dir", $journeyProjects
+    )
+    $journeyProject = Join-Path $journeyProjects $journeyId
+    $marker = "$journeyName loaded. Run '$journeyId`:greet' to try its command."
+    $gameEvidence = Join-Path $acceptanceDirectory "robotopia"
+    Invoke-Checked -FilePath $packagedCli -WorkingDirectory $repository -Arguments @(
+        "acceptance", "run",
+        "--game-dir", $GameDirectory, "--output", $gameEvidence,
+        "--isolation-record", $AcceptanceIsolationRecord,
+        "--timeout-seconds", "1800", "--dev-cli", $packagedCli,
+        "--dev-project", $journeyProject, "--required-loaded-package", $journeyId,
+        "--required-log-marker", $marker, "--all"
+    )
+    $gameEvidenceFile = Join-Path $gameEvidence "acceptance-result.json"
+    if (-not (Test-Path -LiteralPath $gameEvidenceFile -PathType Leaf)) {
+        throw "Robotopia acceptance did not produce its bounded result."
+    }
+    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord `
+        -ExpectedSha256 $isolationRecordHash
+    $isolation = Get-VerifiedReleaseAcceptanceIsolation -EvidencePath $gameEvidenceFile `
+        -IsolationRecordPath $AcceptanceIsolationRecord -CliPath $packagedCli `
+        -WorkingDirectory $repository
+    $gameAcceptance = Get-Content -LiteralPath $gameEvidenceFile -Raw |
+        ConvertFrom-Json
+    if ($gameAcceptance.schemaVersion -ne 3 -or
+        [string]$gameAcceptance.acceptanceChallenge -cnotmatch
+            "^[0-9a-f]{64}$" -or
+        [string]$gameAcceptance.acceptancePackageReceipt.sourceSha256 -cnotmatch
+            "^[0-9a-f]{64}$" -or
+        @($gameAcceptance.acceptancePackageReceipt.criticalFiles).Count -lt 1 -or
+        [string]$gameAcceptance.requiredLoadedPackageReceipt.sourceSha256 `
+            -cnotmatch "^[0-9a-f]{64}$" -or
+        @($gameAcceptance.requiredLoadedPackageReceipt.criticalFiles).Count -lt 1) {
+        throw "Robotopia acceptance did not bind its challenge and exact package receipts."
+    }
+    $lastRunPath = Join-Path ([string]$isolation.managerRoot) "logs/last-run.json"
+    if (-not (Test-Path -LiteralPath $lastRunPath -PathType Leaf)) {
+        throw "Robotopia acceptance last-run evidence is missing."
+    }
+    $lastRun = Get-Content -LiteralPath $lastRunPath -Raw | ConvertFrom-Json
+    $acceptanceRunPackage = @(
+        $lastRun.packages |
+            Where-Object { [string]$_.id -ceq "dev.topiaforge.sdk-acceptance" }
+    )
+    $journeyRunPackage = @(
+        $lastRun.packages |
+            Where-Object { [string]$_.id -ceq $journeyId }
+    )
+    if ($lastRun.schemaVersion -ne 1 -or
+        [string]$lastRun.sessionId -cne
+            [string]$gameAcceptance.lastRunSessionId -or
+        $acceptanceRunPackage.Count -ne 1 -or
+        $journeyRunPackage.Count -ne 1 -or
+        [string]$acceptanceRunPackage[0].sourceSha256 -cne
+            [string]$gameAcceptance.acceptancePackageReceipt.sourceSha256 -or
+        (($acceptanceRunPackage[0].criticalFiles | ConvertTo-Json -Compress) -cne
+            ($gameAcceptance.acceptancePackageReceipt.criticalFiles |
+                ConvertTo-Json -Compress)) -or
+        [string]$journeyRunPackage[0].sourceSha256 -cne
+            [string]$gameAcceptance.requiredLoadedPackageReceipt.sourceSha256 -or
+        (($journeyRunPackage[0].criticalFiles | ConvertTo-Json -Compress) -cne
+            ($gameAcceptance.requiredLoadedPackageReceipt.criticalFiles |
+                ConvertTo-Json -Compress))) {
+        throw "Robotopia last-run package receipts do not match the exact accepted packages."
+    }
+    if ((Get-RobotopiaInstalledBuildId $GameDirectory) -ne $installedGameBuildId) {
+        throw "Robotopia installed-build.json changed during acceptance."
+    }
+    $officialInstallAfterText = & $gameInstallVerifier `
+        -GameDirectory $GameDirectory -MetadataPath $gameMetadataPath | Out-String
+    if (-not $?) {
+        throw "Official Robotopia installation verification failed after acceptance."
+    }
+    $officialInstallAfter = $officialInstallAfterText.Trim() | ConvertFrom-Json
+    if (($officialInstallBefore | ConvertTo-Json -Compress) -cne
+        ($officialInstallAfter | ConvertTo-Json -Compress)) {
+        throw "Official Robotopia base-game identity changed during acceptance."
+    }
 }
 $finalTrackedChanges = (& git -C $repository status --porcelain --untracked-files=no |
         Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($finalTrackedChanges)) {
     throw "The Windows release build changed tracked source files."
 }
+
+# The validation record has to state what this build actually did. Leaving the
+# Authenticode claim unconditional meant an unsigned build produced a handoff
+# asserting a signature it never carried -- worse than an absent field, because
+# it is an affirmative false provenance claim.
+$signingStateValue = if ($windowsDistribution -ceq "unsigned") {
+    "unsigned"
+}
+else {
+    "authenticode-timestamped"
+}
+$validationChecks = [System.Collections.Generic.List[string]]::new()
+$validationChecks.AddRange([string[]]@(
+        "archive-smoke",
+        "embedded-cli",
+        "packaged-launcher-health",
+        "canonical-ecosystem"
+    ))
+if ($windowsDistribution -cne "unsigned") {
+    $validationChecks.Add("authenticode")
+}
+$validationChecks.AddRange([string[]]@(
+        "unity-reproducibility",
+        "unity-lifecycle",
+        "official-game-bytes"
+    ))
+# Likewise a build that did not run live game acceptance must neither list the
+# check nor carry its evidence; it records the mode it ran in instead.
+$evidenceSha256 = [ordered]@{
+    unity = Get-Sha256 $unityEvidence
+}
+if ($runsLiveGameAcceptance) {
+    $validationChecks.Add("robotopia-acceptance")
+    $evidenceSha256.robotopia = Get-Sha256 $gameEvidenceFile
+}
+$liveGameAcceptanceResult = if ($runsLiveGameAcceptance) { "passed" } else { "not-run" }
 
 $validation = [ordered]@{
     schema = "release-local-validation-v1"
@@ -686,7 +799,7 @@ $validation = [ordered]@{
     archiveSha256 = Get-Sha256 $archive
     canonicalEcosystemSha256 = $CanonicalEcosystemSha256
     canonicalArchiveSha256 = $CanonicalArchiveSha256
-    signingState = "authenticode-timestamped"
+    signingState = $signingStateValue
     platformToolchains = [ordered]@{
         node = $measuredNode
         msvc = $measuredMsvc
@@ -697,21 +810,9 @@ $validation = [ordered]@{
     gameFilesManifestSha256 = [string]$officialInstallBefore.filesManifestSha256
     gameFilesVerified = [Int64]$officialInstallBefore.filesVerified
     gameExecutableSha256 = [string]$officialInstallBefore.gameExecutableSha256
-    checks = @(
-        "archive-smoke",
-        "embedded-cli",
-        "packaged-launcher-health",
-        "canonical-ecosystem",
-        "authenticode",
-        "unity-reproducibility",
-        "unity-lifecycle",
-        "official-game-bytes",
-        "robotopia-acceptance"
-    )
-    evidenceSha256 = [ordered]@{
-        unity = Get-Sha256 $unityEvidence
-        robotopia = Get-Sha256 $gameEvidenceFile
-    }
+    liveGameAcceptance = $liveGameAcceptanceResult
+    checks = @($validationChecks.ToArray())
+    evidenceSha256 = $evidenceSha256
     passed = $true
 }
 $validation | ConvertTo-Json -Depth 6 -Compress |

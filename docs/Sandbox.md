@@ -6,12 +6,12 @@ description: Use Robotopia's managed, disposable Creator workbench through safe 
 # Sandbox creator gamemode
 
 Sandbox is TopiaForge's managed, disposable Robotopia creator gamemode. Press **F5** to open the same fullscreen
-workbench used by the optional global Creator Tools package. Sandbox receives F5 routing priority and does not require
+workbench. Sandbox receives F5 routing priority and does not require
 the ordinary-world persistence-isolation gate.
 
 ## Dependencies
 
-The manifest declares schema V5 dependencies on Worlds, RobotKit, and Creator Content. The consumer project references
+The manifest declares schema V6 dependencies on Worlds, RobotKit, and Creator Content. The consumer project references
 only their Unity-free contracts and links the shared workbench presentation/controller source. Providers are resolved
 through the owner-scoped extension service.
 
@@ -38,6 +38,6 @@ Remote dialogue remains optional and has a deterministic fallback. Any unavailab
 provider binding disables only the affected feature and reports the reason in the mod's attributed
 diagnostics.
 
-Sandbox is a live acceptance case, not a substitute for the smaller generated templates. See [Creator Tools](CreatorTools.md)
+Sandbox is a live acceptance case, not a substitute for the smaller generated templates. See [Creator Content](CoreServices.md)
 for the shared safety and event-project model. New modders should begin with [Your first mod](YourFirstMod.md), then
 add [Specialist modules](Modules.md) as their feature needs grow.

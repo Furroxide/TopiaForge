@@ -241,10 +241,12 @@ void main() {
     );
 
     test('excludes runtime-incompatible mods and their dependents', () {
+      // Deliberately below the shipped loader/SDK line so the mod is genuinely
+      // runtime-incompatible; the exact bound moves with the product version.
       final incompatible = _manifest(
         'incompatible.mod',
-        loaderVersionRange: VersionRange.parse('<0.2.0'),
-        sdkVersionRange: VersionRange.parse('<0.1.3'),
+        loaderVersionRange: VersionRange.parse('<0.0.9'),
+        sdkVersionRange: VersionRange.parse('<0.0.9'),
       );
       final dependent = _manifest(
         'dependent.mod',
@@ -349,7 +351,7 @@ ModManifest _manifest(
   List<String> capabilities = const [],
 }) {
   return ModManifest(
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: id,
     name: id,
     version: version,

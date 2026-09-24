@@ -14,9 +14,8 @@ namespace TopiaForge.Worlds
     /// Session-scoped bridge into the game's vanilla pause menu (<c>PlayerController.pauseUI</c>). While a
     /// world session is active it rewires the vanilla exit/quit buttons so leaving the world first ends the
     /// session cleanly (consulting an optional gamemode interceptor). Gamemode actions are hosted in a TopiaForgeUi
-    /// companion window rather than cloning the game's private UI hierarchy. Everything is defensive reflection in the
-    /// <see cref="GameLevelBridge"/> style: a missing symbol or unrecognized UI logs once and degrades to
-    /// doing nothing — the provider's scene-load session teardown remains the correctness backstop.
+    /// companion window rather than cloning the game's private UI hierarchy. Everything is defensive reflection at the native boundary: a missing symbol or unrecognized UI logs once and degrades to
+    /// doing nothing — the manager's committed lifecycle remains the correctness backstop.
     /// </summary>
     internal sealed partial class PauseMenuBridge : IWorldPauseMenuService,
         IOwnerBoundExtensionFactory, IDisposable
@@ -25,7 +24,9 @@ namespace TopiaForge.Worlds
         private const BindingFlags AnyStatic = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
         private const BindingFlags AnyInstance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-        private readonly WorldsService service;
+        private readonly IWorldSessionService service;
+        private readonly PauseExitOperation exitOperation = new PauseExitOperation();
+        private WorldSessionSnapshot current;
         private readonly IModLogger logger;
         private readonly bool enabled;
         private readonly Type? playerControllerType;
@@ -34,20 +35,22 @@ namespace TopiaForge.Worlds
         private readonly PauseActionOverlay actionOverlay;
 
         private Func<WorldPauseExitContext, WorldPauseExitDecision>? exitInterceptor;
+        private string exitInterceptorOwner = string.Empty;
         private Component? pauseRoot;
         private bool pauseWasActive;
         private float pollTimer;
         private bool resolveFailureLogged;
         private bool disposed;
 
-        public PauseMenuBridge(WorldsService service, IModLogger logger, UiHost ui, bool enabled)
+        public PauseMenuBridge(IWorldSessionService service, IModLogger logger, UiHost ui, bool enabled)
         {
             this.service = service;
+            current = service.Current;
             this.logger = logger;
             this.enabled = enabled;
             actionOverlay = new PauseActionOverlay(ui, logger, ClosePauseMenu);
             playerControllerType = Type.GetType("PlayerController, GameCode", throwOnError: false);
-            service.SessionEnded += OnSessionEnded;
+            service.StateChanged += OnSessionChanged;
         }
 
         public bool IsAvailable { get; private set; }
@@ -79,7 +82,19 @@ namespace TopiaForge.Worlds
         }
 
         public OperationResult<IDisposable> InterceptExit(
-            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor)
+            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor) =>
+            InterceptExit(interceptor, string.Empty);
+
+        /// <summary>Claims the single exit-interceptor slot for one owner.</summary>
+        /// <remarks>
+        /// Only one interceptor may be active at a time. The slot decides what the vanilla exit button does, so
+        /// accepting a second writer silently would leave the first gamemode believing it still held a veto over
+        /// an exit it no longer sees. Every other registration surface reports that as a conflict; so does this
+        /// one. The slot is released when its lease is disposed and when the session ends.
+        /// </remarks>
+        internal OperationResult<IDisposable> InterceptExit(
+            Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor,
+            string ownerModId)
         {
             if (interceptor == null)
             {
@@ -93,7 +108,17 @@ namespace TopiaForge.Worlds
                     "Pause service is disposed.");
             }
 
+            if (exitInterceptor != null)
+            {
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.Conflict,
+                    "The pause exit interceptor is already held by "
+                        + (exitInterceptorOwner.Length > 0 ? "'" + exitInterceptorOwner + "'" : "another mod")
+                        + "; only one interceptor can decide what the vanilla exit button does.");
+            }
+
             exitInterceptor = interceptor;
+            exitInterceptorOwner = ownerModId ?? string.Empty;
             return OperationResult<IDisposable>.Success(new ExitInterceptorLease(this, interceptor));
         }
 
@@ -118,7 +143,7 @@ namespace TopiaForge.Worlds
                 return;
             }
 
-            if (service.CurrentSession == null)
+            if (current.Phase != WorldSessionPhase.Running)
             {
                 pauseWasActive = false;
                 return;
@@ -177,7 +202,7 @@ namespace TopiaForge.Worlds
             }
 
             disposed = true;
-            service.SessionEnded -= OnSessionEnded;
+            service.StateChanged -= OnSessionChanged;
             RestoreAll();
             foreach (var registration in actions.ToArray())
             {
@@ -187,11 +212,15 @@ namespace TopiaForge.Worlds
             actionOverlay.Dispose();
         }
 
-        private void OnSessionEnded(WorldSessionEnd end)
+        private void OnSessionChanged(WorldSessionSnapshot snapshot)
         {
-            // The session's pause customizations must not outlive it (the menu scene has its own UI).
+            current = snapshot;
+            if (snapshot.Phase != WorldSessionPhase.Stopping && snapshot.Phase != WorldSessionPhase.Idle) return;
+            // Package-root registrations must also retire with the session that displayed them.
+            foreach (var registration in actions.ToArray()) registration.Dispose();
             RestoreAll();
             exitInterceptor = null;
+            exitInterceptorOwner = string.Empty;
             pauseRoot = null;
             pauseWasActive = false;
             IsAvailable = false;
@@ -234,43 +263,20 @@ namespace TopiaForge.Worlds
             }
         }
 
-        private void OnVanillaExitClicked(Button.ButtonClickedEvent original)
+        private async void OnVanillaExitClicked(Button.ButtonClickedEvent original)
         {
-            var session = service.CurrentSession;
-            if (session == null)
+            var snapshot = current;
+            if (snapshot.Phase == WorldSessionPhase.Idle)
             {
-                // No live session to protect — behave exactly like the vanilla button.
                 original.Invoke();
                 return;
             }
-
-            var decision = WorldPauseExitDecision.EndSessionAndExit;
-            var interceptor = exitInterceptor;
-            if (interceptor != null)
+            var result = await exitOperation.RunAsync(snapshot, exitInterceptor,
+                error => logger.Warn("Worlds pause interceptor failed: " + error.Message));
+            if (!result.Succeeded && !disposed)
             {
-                try
-                {
-                    decision = interceptor(new WorldPauseExitContext(session));
-                }
-                catch (Exception ex)
-                {
-                    // A throwing gamemode hook must never eat the vanilla button.
-                    logger.Warn("Worlds pause exit interceptor failed; ending the session and exiting: " + ex.Message);
-                    decision = WorldPauseExitDecision.EndSessionAndExit;
-                }
-            }
-
-            switch (decision)
-            {
-                case WorldPauseExitDecision.Block:
-                    return;
-                case WorldPauseExitDecision.ExitWithoutEnding:
-                    original.Invoke();
-                    return;
-                default:
-                    service.EndSession(WorldSessionEndReason.MenuReached);
-                    original.Invoke();
-                    return;
+                logger.Warn("Worlds pause exit failed: " + result.ErrorMessage);
+                TopiaForgeToasts.Show(result.ErrorMessage, TopiaForgeTone.Danger, 5f);
             }
         }
 
@@ -315,6 +321,7 @@ namespace TopiaForge.Worlds
             if (ReferenceEquals(exitInterceptor, interceptor))
             {
                 exitInterceptor = null;
+                exitInterceptorOwner = string.Empty;
             }
         }
 

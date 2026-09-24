@@ -63,7 +63,7 @@ void main() {
 
   test('runtime compatibility includes host and content constraints', () {
     const manifest = ModManifest(
-      schemaVersion: 5,
+      schemaVersion: 6,
       id: 'platform.mod',
       name: 'Platform Mod',
       version: '1.0.0',

@@ -13,15 +13,22 @@ namespace TopiaForge.ModManager
         private readonly UnityGameTime time = new UnityGameTime();
         private readonly UnityScheduler scheduler = new UnityScheduler();
         private readonly UnityPlayerBackend player = new UnityPlayerBackend();
-        private readonly UnitySceneBackend scenes = new UnitySceneBackend();
+        private readonly UnitySceneBackend scenes;
+        private readonly UnityWorldRuntimeBackend worlds;
+        private readonly IHostDispatcher dispatcher;
+        private readonly string runtimeOwnershipId;
         private readonly SceneCoordinator sceneCoordinator;
         private readonly UnityPhysicsBackend physics;
         private readonly GameObject loopObject;
         private bool disposed;
 
-        public CoreGameplayServices(SceneCoordinator sceneCoordinator)
+        public CoreGameplayServices(NativeTransitionHost nativeHost, string runtimeOwnershipId)
         {
-            this.sceneCoordinator = sceneCoordinator ?? throw new ArgumentNullException(nameof(sceneCoordinator));
+            sceneCoordinator = nativeHost.Coordinator;
+            scenes = nativeHost.Scenes;
+            dispatcher = nativeHost.Dispatcher;
+            worlds = new UnityWorldRuntimeBackend(entities);
+            this.runtimeOwnershipId = runtimeOwnershipId;
             UnityMainThreadGuard.CaptureCurrentThread();
             physics = new UnityPhysicsBackend(entities);
             loopObject = new GameObject("TopiaForge.CoreGameplayLoop");
@@ -38,7 +45,8 @@ namespace TopiaForge.ModManager
             string packagePath,
             string dataPath,
             IModLifetime lifetime,
-            IModLogger logger)
+            IModLogger logger,
+            NativeTransitionAccessSlot? transitionAccess = null)
         {
             UnityMainThreadGuard.AssertCurrent();
             if (disposed)
@@ -46,14 +54,17 @@ namespace TopiaForge.ModManager
                 throw new ObjectDisposedException(nameof(CoreGameplayServices));
             }
 
-            var sceneTransitions = new OwnerSceneTransitionService(ownerModId, sceneCoordinator);
+            var sceneTransitions = new OwnerSceneTransitionService(ownerModId, sceneCoordinator,
+                lifetime.StoppingToken, transitionAccess,
+                runtimeOwnershipId + ":" + (transitionAccess?.OwnershipId ?? ownerModId));
+            var ownerScheduler = new OwnerScheduler(lifetime, scheduler, logger);
             return new GameplayContextServices(
                 new OwnerInputService(ownerModId, lifetime, input),
                 new OwnerPlayerService(lifetime, player),
                 new OwnerEntityService(lifetime, entities),
                 physics,
                 time,
-                new OwnerScheduler(lifetime, scheduler, logger),
+                ownerScheduler,
                 new OwnerSceneService(lifetime, scenes, logger, sceneTransitions),
                 new OwnerInteractionService(lifetime, entities, player, logger),
                 new OwnerItemService(lifetime, entities, logger),
@@ -61,7 +72,8 @@ namespace TopiaForge.ModManager
                 new OwnerAudioService(lifetime),
                 new OwnerUiService(ownerModId, dataPath, lifetime, logger),
                 new OwnerUnityInteropService(ownerModId, lifetime, entities),
-                sceneTransitions);
+                sceneTransitions,
+                new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher));
         }
 
         public GameTimeSample BeginFrame(float deltaTime)
@@ -129,7 +141,7 @@ namespace TopiaForge.ModManager
             disposed = true;
             input.Dispose();
             scheduler.Dispose();
-            scenes.Dispose();
+            sceneCoordinator.RevokeOwnership(runtimeOwnershipId);
             entities.Dispose();
             player.Dispose();
             FixedUpdate = null;

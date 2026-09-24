@@ -33,8 +33,11 @@ gh_api() {
     "$@"
 }
 
-policy_repository=$(jq -er '.repository_full_name' "$policy_path")
-[[ $policy_repository == "$repository" ]] || {
+policy_repository=$(jq -er '
+  .repository_full_name |
+  select(type == "string" and test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) |
+  ascii_downcase' "$policy_path")
+[[ $policy_repository == "${repository,,}" ]] || {
   echo "Governance policy repository does not match $repository." >&2
   exit 1
 }
@@ -42,6 +45,7 @@ reviewer_login=$(jq -er \
   '.repository_administrators |
    select(type == "array" and length == 1) |
    .[0] |
+   select(type == "string") | ascii_downcase |
    select(. == "furroxide")' "$policy_path") || {
   echo "Governance policy must name furroxide as its sole release reviewer." >&2
   exit 1
@@ -67,7 +71,8 @@ reviewer=$(gh_api "users/$reviewer_login")
 jq -e \
   --arg login "$reviewer_login" \
   --argjson id "$reviewer_id" \
-  '.login == $login and .id == $id and .type == "User"' \
+  '(.login | type == "string" and ascii_downcase == $login) and
+   .id == $id and .type == "User"' \
   <<<"$reviewer" >/dev/null || {
   echo "The pinned release reviewer identity no longer resolves to furroxide." >&2
   exit 1
@@ -86,7 +91,8 @@ jq -e \
      .[0].prevent_self_review == false and
      (.[0].reviewers | type == "array" and length == 1) and
      .[0].reviewers[0].type == "User" and
-     .[0].reviewers[0].reviewer.login == $login and
+     (.[0].reviewers[0].reviewer.login |
+       type == "string" and ascii_downcase == $login) and
      .[0].reviewers[0].reviewer.id == $id and
      .[0].reviewers[0].reviewer.type == "User")' \
   <<<"$environment" >/dev/null || {

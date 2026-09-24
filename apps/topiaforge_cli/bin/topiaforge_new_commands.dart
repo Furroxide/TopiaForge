@@ -18,7 +18,7 @@ extension _NewCommands on _TopiaForgeCli {
       );
       stdout.writeln(
         'Created Unity world project "$name" (${projects.length} project(s) tracked). '
-        'Open it in Unity and author UGC markers, then Go Live from the launcher cockpit.',
+        'Open it in Unity to author custom-world content, then build it with `topiaforge world build`.',
       );
       final pairedMod = _option(args, '--mod');
       if (pairedMod != null) {
@@ -30,33 +30,12 @@ extension _NewCommands on _TopiaForgeCli {
             .path;
         await _worldLink(['--project', projectPath, '--mod', pairedMod]);
       }
-      if (args.contains('--live-sync')) {
-        final projectPath = projects
-            .firstWhere(
-              (project) => p.basename(project.path) == name,
-              orElse: () => projects.last,
-            )
-            .path;
-        final watch = await _resolveWatchFolder(
-          _option(args, '--watch'),
-          fallbackRoot: projectPath,
-        );
-        final seed = await developerRepository.writeUgcCompanionSeed(
-          projectPath,
-          watchFolder: watch,
-          projectName: name,
-          sceneId: _option(args, '--scene') ?? '',
-        );
-        stdout.writeln(
-          'Live sync seeded ($seed, watch folder $watch). Launch it with `topiaforge ugc dev --project "$projectPath"`.',
-        );
-      }
       return 0;
     }
     if (args.firstOrNull != 'mod' || args.length < 2) {
       throw UsageError(
         'Usage: topiaforge new mod <id> [--template id] [--name Name] [--dir Path] [flags...]\n'
-        '       topiaforge new unity-world <name> [--dir Path] [--live-sync [--watch folder]]\n'
+        '       topiaforge new unity-world <name> [--dir Path] [--mod ModDir]\n'
         'Run `topiaforge list templates` for template ids and `topiaforge help` for the full flag list.',
       );
     }
@@ -92,24 +71,28 @@ extension _NewCommands on _TopiaForgeCli {
         );
       }
     }
-    if (options.includeUnityCompanion || options.liveSync != null) {
+    if (options.includeUnityCompanion) {
       stdout.writeln(
-        'Unity companion scaffolded in unity-companion/. Open it in Unity and use '
-        'TopiaForge → UGC Live Sync to author and live-sync UGC content into the running game.',
-      );
-    }
-    if (options.liveSync != null) {
-      stdout.writeln(
-        'Live sync preconfigured (${options.liveSync!.transport}). Deploy it to the game with '
-        '`topiaforge ugc setup` and start the full loop with `topiaforge ugc dev`.',
+        'Unity companion scaffolded in unity-companion/. Open it in Unity to author '
+        'custom-world AssetBundles, then build them with `topiaforge world build`.',
       );
     }
     return 0;
   }
 
   /// Parses every scaffold-time manifest flag of `new mod`. `hashes`
-  /// (pack-time) and `schemaVersion` (pinned to 5) are intentionally not flags.
+  /// (pack-time) and `schemaVersion` (pinned to V6) are intentionally not flags.
   ModScaffoldOptions _parseModScaffoldOptions(List<String> args) {
+    if (args.any(
+      (argument) =>
+          argument == '--gamemode' || argument.startsWith('--gamemode='),
+    )) {
+      throw UsageError(
+        'Metadata-only --gamemode scaffolding is retired. Use --template gamemode '
+        'and declare contributions.gamemodes with a factory implementation, '
+        'plus contributions.launchTargets in topiaforge.mod.json.',
+      );
+    }
     ModDependency parseDependency(String spec, {bool optional = false}) {
       final at = spec.indexOf('@');
       return ModDependency(
@@ -131,32 +114,9 @@ extension _NewCommands on _TopiaForgeCli {
       );
     }
 
-    GamemodeDefinition parseGamemode(String spec) {
-      final parts = spec.split(':');
-      if (parts.first.trim().isEmpty) {
-        throw StateError('--gamemode expects <id:Name[:description]>.');
-      }
-      return GamemodeDefinition(
-        id: parts[0].trim(),
-        name: parts.length > 1 && parts[1].trim().isNotEmpty
-            ? parts[1].trim()
-            : parts[0].trim(),
-        description: parts.length > 2 ? parts.sublist(2).join(':').trim() : '',
-      );
-    }
-
     VersionRange? parseRange(String? value) =>
         value == null ? null : VersionRange.parse(value);
 
-    final liveSync = args.contains('--live-sync')
-        ? UgcLiveSyncSettings(
-            transport: UgcLiveSyncSettings.normalizeTransport(
-              _option(args, '--transport'),
-            ),
-            watchFolder: _option(args, '--watch') ?? '',
-            sceneId: _option(args, '--scene') ?? '',
-          )
-        : null;
     final licenseText = _readLicenseText(args);
 
     return ModScaffoldOptions(
@@ -183,7 +143,6 @@ extension _NewCommands on _TopiaForgeCli {
         '--optional-dependency',
       ).map((spec) => parseDependency(spec, optional: true)).toList(),
       conflicts: _options(args, '--conflict').map(parseConflict).toList(),
-      gamemodes: _options(args, '--gamemode').map(parseGamemode).toList(),
       entryAssembly: _option(args, '--entry-assembly'),
       entryType: _option(args, '--entry-type'),
       gameVersionRange: parseRange(_option(args, '--game-version-range')),
@@ -193,7 +152,6 @@ extension _NewCommands on _TopiaForgeCli {
       homepage: _option(args, '--homepage'),
       source: _option(args, '--source'),
       includeUnityCompanion: args.contains('--unity-companion'),
-      liveSync: liveSync,
     );
   }
 

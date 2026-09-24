@@ -4,8 +4,6 @@ const releasePlatformQaLinuxSchema = 'release-platform-qa-linux-v1';
 const releasePlatformQaWindowsSchema = 'release-platform-qa-windows-v1';
 const releaseWindowsQaSummarySchema = 'release-windows-qa-summary-v1';
 const releaseProtonEvidenceSchema = 'release-proton-evidence-v1';
-const releaseWindowsCreatorEvidenceSchema =
-    'release-windows-creator-evidence-v2';
 
 Map<String, Object?> buildReleasePlatformQa({
   required String platform,
@@ -194,7 +192,6 @@ Map<String, Object?> _normalizeWindowsQa(
     'validationDescriptorSha256',
     'unity',
     'robotopia',
-    'creator',
   };
   const embeddedFields = {
     ...sourceFields,
@@ -247,6 +244,5 @@ Map<String, Object?> _normalizeWindowsQa(
     ),
     'unity': _qaUnity(json['unity']),
     'robotopia': _qaRobotopia(json['robotopia']),
-    'creator': _qaCreator(json['creator']),
   };
 }

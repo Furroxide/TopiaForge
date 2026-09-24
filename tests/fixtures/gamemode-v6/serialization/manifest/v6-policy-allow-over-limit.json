@@ -1,0 +1,148 @@
+{
+  "id": "v6-policy-allow-over-limit",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "v6 policy allow over limit.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.arena",
+          "name": "Arena",
+          "content": {
+            "kind": "bundle",
+            "bundle": "Content/arena.bundle",
+            "prefab": "Arena"
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.survival",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.play",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival",
+          "world": {
+            "policy": "list",
+            "default": "io.github.furroxide.topiaforge.fixture.arena",
+            "allow": [
+              "io.github.furroxide.topiaforge.fixture.arena",
+              "io.example.other.arena0",
+              "io.example.other.arena1",
+              "io.example.other.arena2",
+              "io.example.other.arena3",
+              "io.example.other.arena4",
+              "io.example.other.arena5",
+              "io.example.other.arena6",
+              "io.example.other.arena7",
+              "io.example.other.arena8",
+              "io.example.other.arena9",
+              "io.example.other.arena10",
+              "io.example.other.arena11",
+              "io.example.other.arena12",
+              "io.example.other.arena13",
+              "io.example.other.arena14",
+              "io.example.other.arena15",
+              "io.example.other.arena16",
+              "io.example.other.arena17",
+              "io.example.other.arena18",
+              "io.example.other.arena19",
+              "io.example.other.arena20",
+              "io.example.other.arena21",
+              "io.example.other.arena22",
+              "io.example.other.arena23",
+              "io.example.other.arena24",
+              "io.example.other.arena25",
+              "io.example.other.arena26",
+              "io.example.other.arena27",
+              "io.example.other.arena28",
+              "io.example.other.arena29",
+              "io.example.other.arena30",
+              "io.example.other.arena31",
+              "io.example.other.arena32",
+              "io.example.other.arena33",
+              "io.example.other.arena34",
+              "io.example.other.arena35",
+              "io.example.other.arena36",
+              "io.example.other.arena37",
+              "io.example.other.arena38",
+              "io.example.other.arena39",
+              "io.example.other.arena40",
+              "io.example.other.arena41",
+              "io.example.other.arena42",
+              "io.example.other.arena43",
+              "io.example.other.arena44",
+              "io.example.other.arena45",
+              "io.example.other.arena46",
+              "io.example.other.arena47",
+              "io.example.other.arena48",
+              "io.example.other.arena49",
+              "io.example.other.arena50",
+              "io.example.other.arena51",
+              "io.example.other.arena52",
+              "io.example.other.arena53",
+              "io.example.other.arena54",
+              "io.example.other.arena55",
+              "io.example.other.arena56",
+              "io.example.other.arena57",
+              "io.example.other.arena58",
+              "io.example.other.arena59",
+              "io.example.other.arena60",
+              "io.example.other.arena61",
+              "io.example.other.arena62",
+              "io.example.other.arena63"
+            ]
+          }
+        }
+      ]
+    },
+    "dependencies": {
+      "io.example.other": "*"
+    }
+  },
+  "schemaOutcome": "reject",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    }
+  }
+}

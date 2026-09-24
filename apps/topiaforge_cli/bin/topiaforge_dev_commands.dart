@@ -5,15 +5,30 @@ part of 'topiaforge.dart';
 extension _TopiaForgeDevCommands on _TopiaForgeCli {
   static const _devUsage =
       'Usage: topiaforge dev [--project path] [--configuration name] '
-      '[--game-dir path] [--no-launch] [--no-tail]';
+      '[--game-dir path] [--profile id] [--target id | --main-menu] '
+      '[--world id] [--transition name] [--wait-seconds n | --no-wait] '
+      '[--launch | --no-launch] [--tail | --no-tail]';
 
   Future<int> _dev(List<String> args) async {
     _validateDevArguments(args);
+    final launchOptions = _parseLaunchOptions(
+      args,
+      extraValues: const {'--project', '--configuration'},
+      extraSwitches: const {
+        '--help',
+        '--no-launch',
+        '--no-tail',
+        '--launch',
+        '--tail',
+      },
+    );
     if (args.contains('--help')) {
       stdout.writeln(_devUsage);
       stdout.writeln(
         'Interactive terminals launch Robotopia and tail attributed logs by '
-        'default. Redirected/CI runs stop after install.',
+        'default. Redirected/CI runs stop after install. Choose --target or '
+        '--main-menu to override the profile selection for this run. World and '
+        'transition overrides must be permitted by the selected target.',
       );
       return 0;
     }
@@ -193,6 +208,8 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
       );
 
       final launcher = LocalLauncherRepository(
+        acceptanceIsolation: acceptanceIsolation,
+        dataRoot: acceptanceIsolation?.launcherRoot,
         knownGamePath: gameDir,
         repositoryRoot: _findRepoRoot(),
         workingDirectory: projectRoot,
@@ -225,16 +242,13 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
             ),
             () async {
               final snapshot = await launcher.loadSnapshot();
-              if (snapshot.profiles.isEmpty) {
-                throw StateError('No launcher profile is available.');
-              }
-              final profile = snapshot.profiles.firstWhere(
-                (item) => item.id == snapshot.selectedProfileId,
-                orElse: () => snapshot.profiles.first,
+              final code = await _runLaunchWorkflow(
+                launcher,
+                install,
+                _launchProfile(snapshot, launchOptions),
+                launchOptions,
               );
-              final result = await launcher.launch(install, profile);
-              if (!result.started) throw StateError(result.message);
-              stdout.writeln('  ${result.message}');
+              if (code != 0) throw _DevLaunchExit(code);
             },
           );
         } else {
@@ -268,7 +282,9 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
       stderr.writeln(
         'Docs: https://docs.topiaforge.dev/diagnostics/${failure.stage.code}',
       );
-      return 1;
+      return failure.cause is _DevLaunchExit
+          ? (failure.cause as _DevLaunchExit).code
+          : 1;
     }
   }
 
@@ -369,8 +385,13 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
   }
 
   void _validateDevArguments(List<String> args) {
-    const valueOptions = {'--project', '--configuration', '--game-dir'};
+    const valueOptions = {
+      '--project',
+      '--configuration',
+      ...CliLaunchOptions.valueOptions,
+    };
     const switches = {
+      ...CliLaunchOptions.switches,
       '--help',
       '--no-launch',
       '--no-tail',
@@ -381,6 +402,11 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
     };
     for (var index = 0; index < args.length; index++) {
       final arg = args[index];
+      if (arg == '--gamemode') {
+        throw UsageError(
+          '--gamemode is retired. Use --target <id> or --main-menu.',
+        );
+      }
       if (switches.contains(arg)) continue;
       if (valueOptions.contains(arg)) {
         if (index + 1 >= args.length || args[index + 1].startsWith('--')) {
@@ -441,4 +467,15 @@ int _devLineOverlap(List<String> previous, List<String> current) {
     if (matches) return count;
   }
   return 0;
+}
+
+final class _DevLaunchExit implements Exception {
+  const _DevLaunchExit(this.code);
+  final int code;
+  @override
+  String toString() => code == 3
+      ? 'Session startup is unconfirmed.'
+      : code == 130
+      ? 'Stopped waiting for session startup.'
+      : 'Session startup failed.';
 }

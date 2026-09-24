@@ -15,7 +15,7 @@ It audits the toolchain (with versions and install links), the current project, 
 ends with a **Recommended actions:** section that maps every finding to a next step — run `topiaforge setup`
 for the safe auto-fixes, a pointer to this page when no Robotopia installation is detected, and `No action needed.`
 when everything is green. `topiaforge setup` runs the same audit and applies the safe fixes automatically
-(for example installing the Automerge sidecar dependencies); anything that needs a manual install is
+(for example creating the developer data folder); anything that needs a manual install is
 spelled out.
 
 ## Robotopia not detected — `ROBOTOPIA_GAME_DIR`
@@ -84,6 +84,45 @@ Robotopia runs its Windows build under Proton/Wine:
 - In the launcher, select the Robotopia folder inside your prefix and run Repair to install the Windows BepInEx;
   setting `wineCommand` in the launcher settings lets the launcher start Robotopia directly.
 
+## Starting a launch target
+
+Choose a declared launch target on the launcher's Home or Setup screen, then press Launch.
+A target selects its gamemode, world policy and transition policy. Only the effective profile's
+installed and enabled packages supply launchable targets; unavailable selections show their
+blocking reasons. To launch the first-party Zombies target from the CLI:
+
+```sh
+topiaforge launch --target io.github.furroxide.topiaforge.zombies.menu
+```
+
+Use `--profile <id>` to choose an existing profile. `--main-menu` returns to the ordinary menu for
+one run and overrides remembered autoload without changing the saved selection. Safe Mode always
+requests main-menu with no packages. A saved legacy selection that cannot map uniquely stays
+unavailable until you explicitly choose a target or main-menu. `--gamemode` is retired.
+
+`--world <id>` and `--transition scene-replacement|additive-arena` require an explicit `--target`
+and permission from that target's policy. Registry entries and stale runtime observations cannot
+make an unavailable target launchable.
+
+In game, **GAMEMODES** opens the launch target picker and **TOPIAFORGE** opens the mod manager.
+**F10** opens the manager overlay; its Gamemodes tab uses the same declarations and resolver.
+A competing launch reports Busy. A CLI `restart` cannot take ownership of a game process started
+by an earlier CLI invocation; close an unowned game yourself before launching its replacement.
+
+## No TopiaForge buttons on the main menu
+
+TopiaForge draws those buttons on its own canvas, so they do not depend on the game's UI. If they
+are missing, `manager.log` says so directly - look for the line that begins `Menu entry point`:
+
+```text
+Menu entry point mounted in scene 'TestCityStartMenu' on its own canvas at sorting order 30000.
+```
+
+A `NOT mounted` line names how many attempts were made and what UI surfaces the game had, and is
+followed by a warning. Press F10 to reach the manager while you investigate; the overlay is
+independent of the menu buttons. If mounting fails, TopiaForge opens the overlay for you rather than
+leaving you with no way in.
+
 ## Logs
 
 | Log | Location |
@@ -95,4 +134,16 @@ Robotopia runs its Windows build under Proton/Wine:
 
 ## CLI exit codes
 
-`0` success · `1` failure · `2` usage error — stable, for scripts and CI.
+For `launch`, `restart`, `world play`, and the `dev` launch stage:
+
+| Exit | Meaning |
+|---|---|
+| `0` | Matching runtime acknowledgement confirmed Running for a target or Idle for main-menu. With explicit `--no-wait`, only process creation succeeded. |
+| `1` | Preflight blocked the launch, process creation failed, or runtime startup failed. |
+| `2` | Invalid command usage. |
+| `3` | Runtime acknowledgement is missing or unavailable; session startup is unconfirmed. |
+| `130` | Ctrl+C stopped acknowledgement waiting without terminating the game. |
+
+The default acknowledgement timeout is 30 seconds; `--wait-seconds 1..300` changes it.
+`--no-wait` cannot be combined with `--wait-seconds`. Other successful commands, including
+`dev --no-launch`, return `0` for their completed work without claiming that gameplay started.

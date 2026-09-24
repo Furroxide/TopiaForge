@@ -17,8 +17,8 @@ settings, retained game-over actions, and clean restart/exit behavior.
 
 ## Player loop
 
-1. Worlds starts a Zombies session in the configured arena and waits until the active gameplay scene,
-   player, and RobotKit services are ready.
+1. The manager resolves the declared Zombies launch target and prepares its world, content, player and
+   spawn before calling `ZombiesGamemode.StartAsync` with the session-scoped context.
 2. A short preparation timer leads into a wave budget. Reachable spawn searches place infected robots
    outside the player's minimum safety radius while an alive cap keeps pressure bounded.
 3. The SDK zapper supports quick shots, charged piercing shots, headshots, knockback, ragdoll reactions,
@@ -52,7 +52,7 @@ remain authoritative.
 
 | Source | Responsibility | Pattern to reuse |
 | --- | --- | --- |
-| [`ZombiesMod.cs`](../mods/TopiaForge.Zombies/ZombiesMod.cs) | Config migration, service discovery, and gamemode registration through `GamemodeHost<T>` | Keep the entry point thin; let the SDK own session wiring rather than hand-writing it. |
+| [`ZombiesMod.cs`](../mods/TopiaForge.Zombies/ZombiesMod.cs) | Package config and stable command routing | Keep gameplay allocation in the declared factory and its session scope. |
 | [`ZombiesController.cs`](../mods/TopiaForge.Zombies/ZombiesController.cs) | Session dependencies, construction, command surface, and idempotent teardown | Keep the coordinator's public surface small and make every acquired resource visible at construction or disposal. |
 | [`ZombiesController.Loop.cs`](../mods/TopiaForge.Zombies/ZombiesController.Loop.cs) | Phase dispatch and scaled/unscaled clock selection | Keep the frame callback as orchestration; move feature rules into named methods and models. |
 | [`ZombiesController.Waves.cs`](../mods/TopiaForge.Zombies/ZombiesController.Waves.cs) and [`ZombiesController.Enemies.cs`](../mods/TopiaForge.Zombies/ZombiesController.Enemies.cs) | Wave budgets, bounded spawning, pursuit, attacks, and roster cleanup | Bound work per frame and drive every asynchronous SDK call with `PendingOperation<T>`. |
@@ -72,8 +72,8 @@ remain authoritative.
 Start a full gamemode in the same order that Zombies does:
 
 1. Declare versioned dependencies and optional capabilities in the manifest.
-2. Keep the `TopiaForgeMod` entry point focused on configuration, service discovery, registrations,
-   and creating one session coordinator.
+2. Keep `TopiaForgeMod` focused on package configuration and stable command routing. Declare an
+   `IGamemodeFactory`; its `StartAsync` creates one controller through the supplied session context.
 3. Give persisted configuration separate shape, defaults/migration, and validation responsibilities.
 4. Model the run as explicit phases. Use world-scaled time for simulation and unscaled time only for
    controls, transitions, and UI that must remain responsive while paused.
@@ -93,8 +93,8 @@ health, uplink, presentation, and test behavior live.
 
 Zombies also exercises failure paths that small samples rarely reach:
 
-- Worlds publishes immutable session replacements when the active gameplay scene changes, so
-  session consumers rebind instead of holding stale scene identity.
+- Session identity is immutable. Native scene changes follow the declared `sceneChangePolicy`;
+  state notifications never reconstruct controllers. Commands reject stale or non-running sessions.
 - RobotKit anchors canonical SDK identity to native robot roots. Queries, physics hits, and player
   targeting therefore agree even when a native robot has many child colliders.
 - Chronos uses owner-scoped leases. Nested shop, conversation, game-over, and Superhot effects compose,
@@ -105,8 +105,8 @@ Zombies also exercises failure paths that small samples rarely reach:
   and reacquires a hold the host takes away mid-session.
 - Every asynchronous SDK call — reachable-spawn search, scene return, conversation turn, voice capture —
   runs through `PendingOperation<T>`. Nothing waits on a task, cancellation drains so a late result is
-  still released on the main thread, and the return-to-menu path carries a deadline so a scene load that
-  never settles cannot strand the run behind a frozen world.
+  still released on the main thread. The menu operation is bound to the captured session; cancellation
+  does not release native ownership before the engine completes or safely retires the work.
 - The frame loop does no spawning, pursuit, or attacks when world delta is zero. Unscaled control time
   still drives menus, conversation timeouts, scene-return polling, and HUD state.
 - Native player health is captured before Zombies first mutates it and restored to the exact pre-run
@@ -134,7 +134,8 @@ Saves written before schema 3 deserialize to `0`, which is already the wanted me
 has nothing to reshape — worth copying as a pattern: prefer a new member whose zero value is the correct
 default over one that needs migration code.
 
-The manifest declares Worlds, RobotKit, and Chronos as required versioned dependencies. Network,
+The manifest target selects Open Sandbox. The legacy `targetWorldId` config value remains preserved
+but does not override the resolved world. The manifest declares Worlds, RobotKit, and Chronos as required versioned dependencies. Network,
 remote-AI, player-token, microphone, and speech-to-text capabilities are disclosed because players may
 explicitly enable those optional paths; installation alone never activates them.
 

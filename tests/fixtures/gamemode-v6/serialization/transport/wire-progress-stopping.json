@@ -1,0 +1,39 @@
+{
+  "id": "wire-progress-stopping",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec stopping",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "request-01",
+    "sequence": 3,
+    "phase": "stopping",
+    "nativeBusy": false,
+    "sessionId": "session-01"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "request-01",
+        "sequence": 3,
+        "phase": "stopping",
+        "nativeBusy": false,
+        "sessionId": "session-01"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "request-01",
+        "sequence": 3,
+        "phase": "stopping",
+        "nativeBusy": false,
+        "sessionId": "session-01"
+      }
+    }
+  }
+}

@@ -119,21 +119,34 @@ class SetupScreen extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
+                      // The resolver owns this order: it is derived from dependencies, and a mod
+                      // moved by hand would just be moved back. The drag handle that used to lead
+                      // each row promised a reorder that has never existed anywhere in the product.
+                      Text(
+                        'Set by dependencies between mods, not editable.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
                       if (state.resolution.orderedMods.isEmpty)
                         Text(
                           'No enabled mods in the current load order.',
                           style: Theme.of(context).textTheme.bodySmall,
                         )
                       else
-                        ...state.resolution.orderedMods.map(
-                          (mod) => ListTile(
-                            leading: const Icon(Icons.drag_indicator),
+                        ...state.resolution.orderedMods.indexed.map(
+                          (entry) => ListTile(
+                            leading: Text(
+                              '${entry.$1 + 1}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                             title: Text(
-                              mod.name,
+                              entry.$2.name,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            subtitle: Text('${mod.id} ${mod.version}'),
-                            trailing: mod.restartRequired
+                            subtitle: Text(
+                              '${entry.$2.id} ${entry.$2.version}',
+                            ),
+                            trailing: entry.$2.restartRequired
                                 ? _restartPill(context, state)
                                 : null,
                           ),
@@ -157,146 +170,7 @@ class _WorldLaunchSettings extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BorderedPane(child: _WorldLaunchControls(state: state));
-  }
-}
-
-class _WorldLaunchControls extends StatelessWidget {
-  const _WorldLaunchControls({required this.state});
-
-  final LauncherState state;
-
-  static String _loadModeLabel(String mode) {
-    switch (mode) {
-      case WorldSelection.sceneReplacement:
-        return 'Scene replacement';
-      case WorldSelection.additiveArena:
-      default:
-        return 'Additive arena';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selection =
-        state.selectedProfile?.worldSelection ?? const WorldSelection();
-    final worlds = state.worldCatalog.worlds;
-    final gamemodes = state.worldCatalog.gamemodes;
-    final worldId = worlds.any((world) => world.id == selection.worldId)
-        ? selection.worldId
-        : worlds.first.id;
-    final gamemodeId = gamemodes.any((mode) => mode.id == selection.gamemodeId)
-        ? selection.gamemodeId
-        : gamemodes.first.id;
-
-    // Only offer the load modes the selected world can actually honour. A checkpoint/first-party level loads
-    // via the game loader and the open sandbox is additive-only, so for those the control is locked to the one
-    // valid mode instead of presenting a choice the runtime would silently override. Clamping the value also
-    // prevents a stale/unknown persisted loadMode from asserting the dropdown.
-    final selectedWorld = worlds.firstWhere(
-      (world) => world.id == worldId,
-      orElse: () => worlds.first,
-    );
-    final supportedModes = selectedWorld.supportedLoadModes;
-    final loadModeOptions = [
-      for (final mode in WorldSelection.supportedLoadModes)
-        if (supportedModes.isEmpty || supportedModes.contains(mode)) mode,
-    ];
-    final effectiveLoadMode = loadModeOptions.contains(selection.loadMode)
-        ? selection.loadMode
-        : loadModeOptions.first;
-    final loadModeEnabled = loadModeOptions.length > 1;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('World', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                initialValue: worldId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'World'),
-                items: [
-                  for (final world in worlds)
-                    DropdownMenuItem(
-                      value: world.id,
-                      child: Text(world.name, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: (value) => value == null
-                    ? null
-                    : _add(context, WorldSelectionChanged(worldId: value)),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                initialValue: gamemodeId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Gamemode'),
-                items: [
-                  for (final mode in gamemodes)
-                    DropdownMenuItem(
-                      value: mode.id,
-                      child: Text(mode.name, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: (value) => value == null
-                    ? null
-                    : _add(context, WorldSelectionChanged(gamemodeId: value)),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                initialValue: effectiveLoadMode,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: 'Load mode',
-                  helperText: loadModeEnabled
-                      ? null
-                      : 'Determined by the selected world',
-                ),
-                items: [
-                  for (final mode in loadModeOptions)
-                    DropdownMenuItem(
-                      value: mode,
-                      child: Text(_WorldLaunchControls._loadModeLabel(mode)),
-                    ),
-                ],
-                onChanged: loadModeEnabled
-                    ? (value) => value == null
-                          ? null
-                          : _add(
-                              context,
-                              WorldSelectionChanged(loadMode: value),
-                            )
-                    : null,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Auto-load'),
-                value: selection.autoLoadOnStart,
-                onChanged: (enabled) => _add(
-                  context,
-                  WorldSelectionChanged(autoLoadOnStart: enabled),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+    return BorderedPane(child: _LaunchTargetControls(state: state));
   }
 }
 

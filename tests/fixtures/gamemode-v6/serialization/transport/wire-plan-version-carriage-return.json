@@ -1,0 +1,41 @@
+{
+  "id": "wire-plan-version-carriage-return",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Package version rejects trailing carriage-return",
+  "transport": "plan",
+  "payload": {
+    "targetId": "base.mod.menu",
+    "gamemodeId": "mode.mod.play",
+    "worldId": "base.mod.world",
+    "transition": "scene-replacement",
+    "request": {
+      "targetId": "BASE.MOD.MENU"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0\r"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "43fcf02e81a2d9d4"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

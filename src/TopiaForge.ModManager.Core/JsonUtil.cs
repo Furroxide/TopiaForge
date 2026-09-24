@@ -47,6 +47,13 @@ namespace TopiaForge.ModManager.Core
             return LoadPersistent(path, fallback, ReadBoundedJsonObject, IsJsonObjectContentFailure);
         }
 
+        /// <summary>Parses preserved JSON inside the same bounded, backup-aware read transaction.</summary>
+        public static T LoadPersistentJsonObject<T>(string path, T fallback, Func<string, T> parse)
+        {
+            if (parse == null) throw new ArgumentNullException(nameof(parse));
+            return LoadPersistent(path, fallback, file => parse(ReadBoundedJsonObject(file)), IsJsonObjectContentFailure);
+        }
+
         private static T LoadPersistent<T>(
             string path,
             T fallback,
@@ -283,7 +290,7 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static string ReadBoundedJsonObject(string path)
+        internal static string ReadBoundedJsonObject(string path)
         {
             using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {

@@ -1,0 +1,72 @@
+{
+  "id": "wire-profile-safe-main-menu",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Safe mode starts the main menu with an empty exact effective package set.",
+  "transport": "profile",
+  "payload": {
+    "schemaVersion": 4,
+    "profileId": "profile-01",
+    "profileRevision": 7,
+    "requestId": "request-01",
+    "command": "main-menu",
+    "safeMode": true,
+    "inheritManagerModState": false,
+    "enabledMods": [
+      "base.mod",
+      "mode.mod"
+    ],
+    "selectedVersions": {
+      "base.mod": "1.0.0",
+      "mode.mod": "2.3.4"
+    },
+    "packages": [],
+    "digest": "cbf29ce484222325"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 4,
+        "profileId": "profile-01",
+        "profileRevision": 7,
+        "requestId": "request-01",
+        "command": "main-menu",
+        "safeMode": true,
+        "inheritManagerModState": false,
+        "enabledMods": [
+          "base.mod",
+          "mode.mod"
+        ],
+        "selectedVersions": {
+          "base.mod": "1.0.0",
+          "mode.mod": "2.3.4"
+        },
+        "packages": [],
+        "digest": "cbf29ce484222325"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 4,
+        "profileId": "profile-01",
+        "profileRevision": 7,
+        "requestId": "request-01",
+        "command": "main-menu",
+        "safeMode": true,
+        "inheritManagerModState": false,
+        "enabledMods": [
+          "base.mod",
+          "mode.mod"
+        ],
+        "selectedVersions": {
+          "base.mod": "1.0.0",
+          "mode.mod": "2.3.4"
+        },
+        "packages": [],
+        "digest": "cbf29ce484222325"
+      }
+    }
+  }
+}

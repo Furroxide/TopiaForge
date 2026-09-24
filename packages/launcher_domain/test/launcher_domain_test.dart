@@ -9,7 +9,7 @@ void main() {
   group('ModManifest', () {
     test('parses extended clean manifest fields', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 5,
+        'schemaVersion': 6,
         'name': 'author.spawn_tools',
         'displayName': 'Spawn Tools',
         'version': '1.2.0',
@@ -58,7 +58,7 @@ void main() {
     test(r'preserves $schema through a fromJson/toJson round-trip', () {
       final manifest = ModManifest.fromJson({
         r'$schema': ModManifest.canonicalSchemaUrl,
-        'schemaVersion': 5,
+        'schemaVersion': 6,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -72,7 +72,7 @@ void main() {
       expect(json.keys.first, r'$schema');
 
       final withoutSchema = ModManifest.fromJson({
-        'schemaVersion': 5,
+        'schemaVersion': 6,
         'name': 'author.schema_mod',
         'displayName': 'Schema Mod',
         'version': '1.0.0',
@@ -85,7 +85,7 @@ void main() {
 
     test('rejects malformed manifests and unsafe entry paths', () {
       final manifest = ModManifest.fromJson({
-        'schemaVersion': 5,
+        'schemaVersion': 6,
         'name': '../bad',
         'displayName': '',
         'version': 'nope',
@@ -373,74 +373,6 @@ void main() {
     });
   });
 
-  group('LauncherProfile', () {
-    test('round trips durable profile state', () {
-      final profile = LauncherProfile(
-        id: 'speedrun',
-        name: 'Speedrun',
-        enabledMods: {'timer.mod'},
-        selectedVersions: {'timer.mod': '2.0.0'},
-        launchSettings: const LaunchSettings(
-          safeMode: true,
-          extraArguments: ['-screen-fullscreen', '0'],
-        ),
-      );
-
-      final restored = LauncherProfile.fromJson(profile.toJson());
-
-      expect(restored.id, profile.id);
-      expect(restored.enabledMods, contains('timer.mod'));
-      expect(restored.selectedVersions['timer.mod'], '2.0.0');
-      expect(restored.launchSettings.safeMode, isTrue);
-    });
-
-    test('round trips the world selection', () {
-      const selection = WorldSelection(
-        worldId: 'io.github.furroxide.topiaforge.worlds.level.city',
-        gamemodeId: 'io.github.furroxide.topiaforge.zombies.survival',
-        loadMode: WorldSelection.sceneReplacement,
-        autoLoadOnStart: true,
-      );
-      final profile = LauncherProfile(
-        id: 'p',
-        name: 'P',
-        worldSelection: selection,
-      );
-
-      final restored = LauncherProfile.fromJson(profile.toJson());
-
-      expect(restored.worldSelection.worldId, selection.worldId);
-      expect(restored.worldSelection.gamemodeId, selection.gamemodeId);
-      expect(restored.worldSelection.loadMode, selection.loadMode);
-      expect(restored.worldSelection.autoLoadOnStart, isTrue);
-    });
-
-    test('profile parsing ignores runtime-only world selection keys', () {
-      final profile = LauncherProfile.fromJson({
-        'worldSelection': {
-          'selectedWorldId': 'retired-world',
-          'selectedGamemodeId': 'retired-mode',
-        },
-      });
-
-      expect(profile.worldSelection.worldId, WorldCatalog.openSandboxWorldId);
-      expect(profile.worldSelection.gamemodeId, WorldCatalog.sandboxGamemodeId);
-    });
-
-    test('profile parsing rejects retired canonical world selection ids', () {
-      expect(
-        () => LauncherProfile.fromJson({
-          'worldSelection': {
-            'worldId':
-                'robo'
-                'topia.world.old',
-          },
-        }),
-        throwsFormatException,
-      );
-    });
-  });
-
   _developerModelTests();
 
   _unityVpmResolverTests();
@@ -458,7 +390,7 @@ ModManifest _manifest(
   String license = '',
 }) {
   return ModManifest(
-    schemaVersion: 5,
+    schemaVersion: 6,
     id: id,
     name: id,
     version: version,

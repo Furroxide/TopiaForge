@@ -11,6 +11,7 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run(string root)
         {
+            OwnerFacadeStoppingTests.Run(root);
             TestSemanticVersion();
             TestOperationResult();
             TestSceneLifecycleEvent();
@@ -28,7 +29,7 @@ namespace TopiaForge.ModManager.Tests
                 "SemVer identifiers should remain discoverable");
             Assert(SemanticVersion.Parse("1.0.0-alpha.2") < SemanticVersion.Parse("1.0.0-alpha.10"),
                 "numeric prerelease identifiers should use numeric precedence");
-            Assert(SemanticVersion.Parse("1.0.0") > SemanticVersion.Parse("1.0.0-rc.1"),
+            Assert(SemanticVersion.Parse("1.0.0") > SemanticVersion.Parse("0.1.0-rc.1"),
                 "stable versions should sort after prereleases");
             Assert(SemanticVersion.Parse("1.0.0+one").CompareTo(SemanticVersion.Parse("1.0.0+two")) == 0,
                 "build metadata should not affect precedence");
@@ -76,6 +77,27 @@ namespace TopiaForge.ModManager.Tests
                 isInitial: true);
             Assert(initialBackground.IsInitial && !initialBackground.IsActive,
                 "initial replay metadata should support already-loaded background scenes");
+
+            // Robotopia 2409 handed Unity's Scene.handle back negative. The manager passes that
+            // through verbatim, so rejecting the sign threw inside SceneManager.sceneLoaded and
+            // no mod received a scene event at all. The id is an opaque correlation key.
+            var negativeHandle = new SceneLifecycleEvent(
+                -1877,
+                "Gameplay",
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Single,
+                isActive: true);
+            Assert(negativeHandle.SceneInstanceId == -1877,
+                "a negative host scene handle should be preserved, not rejected");
+
+            var extremeHandle = new SceneLifecycleEvent(
+                int.MinValue,
+                "Gameplay",
+                SceneLifecyclePhase.Loaded,
+                SceneLoadMode.Single,
+                isActive: true);
+            Assert(extremeHandle.SceneInstanceId == int.MinValue,
+                "no scene handle value should be treated as out of range");
 
             var detailedOnlyEvents = new DetailedOnlyModEvents();
             SceneLifecycleEvent? fallback = null;
@@ -139,7 +161,7 @@ namespace TopiaForge.ModManager.Tests
             var context = new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = 6,
                     Id = "example.lifecycle",
                     Name = "Lifecycle Example",
                     Version = "1.2.3-beta.1+test",
@@ -197,7 +219,7 @@ namespace TopiaForge.ModManager.Tests
             var failingContext = new ModContext(
                 new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = 6,
                     Id = "example.partial",
                     Name = "Partial Example",
                     Version = "1.0.0",

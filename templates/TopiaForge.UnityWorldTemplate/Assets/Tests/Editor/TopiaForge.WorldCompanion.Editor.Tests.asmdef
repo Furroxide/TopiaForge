@@ -1,0 +1,13 @@
+{
+  "name": "TopiaForge.WorldCompanion.Editor.Tests",
+  "references": [
+    "TopiaForge.WorldCompanion.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "autoReferenced": false
+}

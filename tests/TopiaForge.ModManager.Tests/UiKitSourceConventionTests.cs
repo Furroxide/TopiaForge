@@ -136,7 +136,7 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(topiaForgeUi, "TopiaForgeRuntime.Shutdown();", "TopiaForgeUi shutdown must stop its hidden runtime driver.");
             RequireSource(topiaForgeUi, "TopiaForgeLog.Reset();", "TopiaForgeUi shutdown must release owner logging delegates.");
             RequireSource(topiaForgeUi, "while (Hosts.Count > 0)", "TopiaForgeUi shutdown must reclaim forgotten hosts.");
-            RequireSource(host, "TopiaForgeUi.OnHostDisposed(this);", "Disposed hosts must leave the global host registry.");
+            RequireSource(host, "TopiaForgeUi.OnHostDisposed(this)", "Disposed hosts must leave the global host registry.");
             RequireSource(toast, "TopiaForgeToastHost.Instance.Layer(", "The toast canvas must be owned by its UiHost.");
             RequireSource(toast, "Queue.Clear();", "Toast shutdown must clear pending notifications.");
             RequireSource(toast, "Views.Clear();", "Toast shutdown must release pooled view references.");
@@ -171,10 +171,12 @@ namespace TopiaForge.ModManager.Tests
             var repositoryRoot = Program.FindRepoRoot();
             var expected = new HashSet<string>(new[]
             {
-                "mods/TopiaForge.UgcLiveSync/TopiaForge.UgcLiveSync.csproj",
                 "mods/TopiaForge.UiGallery/TopiaForge.UiGallery.csproj",
                 "mods/TopiaForge.Worlds/TopiaForge.Worlds.csproj",
-                "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj"
+                "src/TopiaForge.ModManager/TopiaForge.ModManager.csproj",
+                // Non-distributable harnesses observe the production renderer and real Editor host.
+                "tests/TopiaForge.SandboxAcceptanceNative/TopiaForge.SandboxAcceptanceNative.csproj",
+                "tests/TopiaForge.SandboxAutomation.Unity/TopiaForge.SandboxAutomation.Unity.csproj"
             }, StringComparer.Ordinal);
             var unityUiReference = new Regex(
                 @"<(?:Project|Package)Reference\b[^>]*\bInclude\s*=\s*""[^""]*TopiaForge\.Mods\.UnityUi(?:\.csproj)?""",
@@ -199,7 +201,7 @@ namespace TopiaForge.ModManager.Tests
             if (!actual.SetEquals(expected))
             {
                 throw new InvalidOperationException(
-                    "UnityUi references must remain restricted to loader-owned providers and the QA gallery. " +
+                    "UnityUi references must remain restricted to loader-owned providers and the explicitly listed QA harnesses. " +
                     "Expected: " + string.Join(", ", expected.OrderBy(value => value, StringComparer.Ordinal)) +
                     "; actual: " + string.Join(", ", actual.OrderBy(value => value, StringComparer.Ordinal)) + ".");
             }

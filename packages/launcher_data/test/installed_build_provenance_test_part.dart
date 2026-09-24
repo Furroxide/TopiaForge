@@ -72,12 +72,27 @@ void _registerInstalledBuildProvenanceTests({
       install,
     );
     expect(incompatible.hasBlockingIssues, isTrue);
+    final newer = incompatible.issues.map((issue) => issue.message).join(' ');
     expect(
-      incompatible.issues.map((issue) => issue.message).join(' '),
+      newer,
       contains(
         'supports Robotopia $currentBuildLabel; installed: $nextBuildLabel',
       ),
     );
+    // A player ahead of the mod waits for a mod update; updating the game
+    // cannot help.
+    expect(newer, contains('which is newer'));
+    expect(newer, isNot(contains('Update Robotopia')));
+
+    metadata.writeAsStringSync('{"id":${currentBuildId - 1}}');
+    final older = await repository().previewPackage(package.path, install);
+    expect(older.hasBlockingIssues, isTrue);
+    expect(
+      older.issues.map((issue) => issue.message).join(' '),
+      allOf(contains('Update Robotopia'), isNot(contains('which is newer'))),
+    );
+
+    metadata.writeAsStringSync('{"id":$nextBuildId}');
     await expectLater(
       repository().installPackage(package.path, install),
       throwsA(

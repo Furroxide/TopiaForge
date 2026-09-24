@@ -143,15 +143,15 @@ namespace TopiaForge.Mods.Testing
         /// <summary>Drives the vanilla exit-to-menu path through the registered interceptor.</summary>
         /// <param name="session">The session that is exiting.</param>
         /// <returns>
-        /// The interceptor's decision, or <see cref="WorldPauseExitDecision.EndSessionAndExit"/> when no interceptor
+        /// The interceptor's decision, or <see cref="WorldPauseExitDecision.ReturnToMainMenu"/> when no interceptor
         /// is registered or the interceptor throws — matching the provider's fail-safe contract.
         /// </returns>
-        public WorldPauseExitDecision InvokeExit(WorldSession session)
+        public WorldPauseExitDecision InvokeExit(IWorldSession session)
         {
             var interceptor = exitInterceptor;
             if (interceptor == null)
             {
-                return WorldPauseExitDecision.EndSessionAndExit;
+                return WorldPauseExitDecision.ReturnToMainMenu;
             }
 
             try
@@ -160,7 +160,7 @@ namespace TopiaForge.Mods.Testing
             }
             catch
             {
-                return WorldPauseExitDecision.EndSessionAndExit;
+                return WorldPauseExitDecision.ReturnToMainMenu;
             }
         }
 

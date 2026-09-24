@@ -47,7 +47,7 @@ tag_is_prerelease=false
   echo "Assets directory must be a real directory: $assets_dir" >&2
   exit 1
 }
-for command in gh git jq sha256sum; do
+for command in gh git jq sha256sum dart; do
   command -v "$command" >/dev/null || {
     echo "$command is required." >&2
     exit 1
@@ -95,16 +95,53 @@ declare -A workflow_generated_assets
 while IFS= read -r generated_name; do
   generated_name=${generated_name%$'\r'}
   workflow_generated_assets[$generated_name]=1
-done < <(jq -r '.[]' <<<"$workflow_generated_json")
+done < <(jq -r '.[]' <<<"$workflow_generated_json" | tr -d '\r')
 
+# The handoff asset set follows artifactPolicy rather than a hard-coded platform
+# list, which stops this script demanding a Linux archive the Windows-only RC1
+# build never produces. Restoring Linux takes more than an artifactPolicy edit:
+# release_policy.dart pins platformArchives to {TopiaForge-windows-x64.zip} and
+# release_handoff_contract.dart pins targetPlatforms to {windows-x64}. Both must
+# be lifted with the policy. See P0-LINUX-01 in docs/LaunchBlockers.md.
 required_handoff_assets=(
   release-handoff-v1.json
-  release-handoff-v1.json.p7s
-  release-platform-bundle-v1-linux-x64.json
-  release-platform-bundle-v1-windows-x64.json
-  TopiaForge-linux-x64.zip
-  TopiaForge-windows-x64.zip
+  release-candidate-readiness-v1.json
+  release-candidate-acceptance-v1.json
 )
+# An unsigned distribution has no certificate and therefore no detached CMS
+# handoff signature. Demanding the P7S unconditionally is what made the hosted
+# path reject an unsigned candidate outright. See P0-WIN-01 in
+# docs/LaunchBlockers.md.
+windows_distribution=$(jq -er '
+  .signingIdentities.windowsDistribution // "signed"
+' "$release_policy" | tr -d '\r')
+case "$windows_distribution" in
+  signed) required_handoff_assets+=(release-handoff-v1.json.p7s) ;;
+  unsigned) ;;
+  *)
+    printf 'Unknown Windows distribution mode: %s\n' "$windows_distribution" >&2
+    exit 1
+    ;;
+esac
+# Every `jq | read` loop below strips \r. jq on Windows writes through CRT
+# text-mode translation, so each line it emits ends \r\n; `read -r` keeps that
+# byte, and the value is then used as a filename or as base64, both of which
+# fail on it. The failure names the value and looks correct, because \r is
+# invisible in a terminal -- this one reported the archive below as a missing
+# file while it sat in the assets directory. A no-op on Linux, where CI runs.
+# Process substitution already discards jq's exit status, so the added pipe
+# costs nothing that was being checked.
+while IFS= read -r policy_archive; do
+  bundle_target=${policy_archive#TopiaForge-}
+  bundle_target=${bundle_target%.zip}
+  required_handoff_assets+=(
+    "$policy_archive"
+    "release-platform-bundle-v1-$bundle_target.json"
+  )
+done < <(jq -er '
+  .artifactPolicy.platformArchives |
+  select(type == "array" and length > 0) | sort | .[]
+' "$release_policy" | tr -d '\r')
 for required in "${required_handoff_assets[@]}"; do
   [[ -f $assets_dir/$required && -s $assets_dir/$required ]] || {
     echo "Required local handoff asset is missing: $required" >&2
@@ -136,6 +173,24 @@ if [[ $mode == publish ]]; then
   )
 fi
 
+asset_policy=$(bash "$script_dir/release-asset-policy.sh" "$repository_root" "${tag#v}")
+declare -A allowed_assets
+while IFS= read -r name; do allowed_assets[$name]=1; done < <(
+  jq -r '.all[]' <<<"$asset_policy" | tr -d '\r'
+)
+while IFS= read -r name; do
+  [[ -f $assets_dir/$name && ! -L $assets_dir/$name && -s $assets_dir/$name ]] || {
+    echo "Required admin-staged candidate asset is missing or unsafe: $name" >&2; exit 1;
+  }
+done < <(jq -r '.human[]' <<<"$asset_policy" | tr -d '\r')
+assets_dir=$(CDPATH='' cd -- "$assets_dir" && pwd)
+validate_qualification() {
+  (cd "$repository_root/apps/topiaforge_cli" &&
+    dart run bin/topiaforge.dart release validate-readiness \
+      --version "${tag#v}" --target-sha "$target_sha" --assets "$assets_dir")
+}
+validate_qualification
+
 mapfile -d '' local_paths < <(
   find "$assets_dir" -mindepth 1 -maxdepth 1 -type f -print0 | sort -z
 )
@@ -160,6 +215,10 @@ for path in "${local_paths[@]}"; do
     exit 1
   }
   local_path[$name]=$path
+  [[ -n ${allowed_assets[$name]+x} ]] || {
+    echo "Local release asset is outside the exact reviewed allowlist: $name" >&2
+    exit 1
+  }
   local_sha[$name]=$(sha256sum "$path" | awk '{print $1}')
   local_size[$name]=$(wc -c <"$path" | tr -d ' ')
 done
@@ -200,7 +259,7 @@ verify_release_fields() {
      .body == $body and
      .prerelease == $prerelease and
      (.draft | type == "boolean") and
-     .author.login == "furroxide" and
+     (.author.login | type == "string" and ascii_downcase == "furroxide") and
      .author.id == 221987073 and
      .author.type == "User"' \
     "$file" >/dev/null || {
@@ -216,7 +275,7 @@ verify_asset_uploaders() {
     --argjson generated "$workflow_generated_json" \
     '
       def staging_uploader:
-        .uploader.login == "furroxide" and
+        (.uploader.login | type == "string" and ascii_downcase == "furroxide") and
         .uploader.id == 221987073 and
         .uploader.type == "User" and
         (
@@ -224,7 +283,7 @@ verify_asset_uploaders() {
           .performed_via_github_app == null
         );
       def workflow_uploader:
-        .uploader.login == "github-actions[bot]" and
+        (.uploader.login | type == "string" and ascii_downcase == "github-actions[bot]") and
         .uploader.id == 41898282 and
         .uploader.type == "Bot" and
         (
@@ -318,7 +377,7 @@ reconcile_assets() {
       exit 1
     }
     present[$name]=1
-  done < <(jq -r '.[] | @base64' "$assets_file")
+  done < <(jq -r '.[] | @base64' "$assets_file" | tr -d '\r')
   rm -f "$assets_file"
 
   if [[ $mode == publish ]]; then
@@ -362,7 +421,7 @@ reconcile_assets() {
       echo "Final release verification failed for $name." >&2
       exit 1
     }
-  done < <(jq -r '.[] | @base64' "$assets_file")
+  done < <(jq -r '.[] | @base64' "$assets_file" | tr -d '\r')
   rm -f "$assets_file"
 }
 
@@ -430,6 +489,7 @@ if [[ $draft == true ]]; then
   }
   "$script_dir/verify-release-tag.sh" "$tag" "$target_sha" origin >/dev/null
   reconcile_assets "$release_id" false
+  validate_qualification
   jq -n '{draft:false}' |
     gh_api --method PATCH "repos/$repository/releases/$release_id" --input - \
       >"$release_file"

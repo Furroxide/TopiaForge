@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-request-129",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec request 129",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "sequence": 3,
+    "phase": "loading-world",
+    "nativeBusy": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

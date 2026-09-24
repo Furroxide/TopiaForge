@@ -12,66 +12,41 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
-            OpenSandboxFallbackRejectsShellScenes();
-            OpenSandboxFallbackGuardPrecedesArenaCreation();
+            LegacyLaunchAndFallbackPathsAreRemoved();
+            GeneratedProviderUsesPreparedSceneAndSpawn();
             ManualUnsubscribeReleasesTheTrackedLifetimeNode();
             EarlyUnsubscribeBeforeLeaseAttachReleasesTheLateLease();
             StopDuringLeaseAttachLeavesNoSubscriberOrTrackedNode();
-            OwnerFacadeUsesSelfReleasingSubscriptions();
+            SessionForwarderKeepsTheConsumingContext();
             Console.WriteLine("All Worlds safety tests passed.");
         }
 
-        private static void OpenSandboxFallbackRejectsShellScenes()
+        private static void LegacyLaunchAndFallbackPathsAreRemoved()
         {
-            var knownGameplayScenes = new[] { "UgcPlay", "TestCity", "02 City Streets" };
-            foreach (var scene in new string?[]
-                     {
-                         null,
-                         string.Empty,
-                         GameScenes.MainMenuSceneName,
-                         "MainMenu_Remastered",
-                         "BootScene",
-                         "LevelLoader",
-                         "SplashIntro"
-                     })
-            {
-                Assert(!OpenSandboxFallbackPolicy.CanBuildInScene(scene, knownGameplayScenes),
-                    "Open Sandbox fallback must reject shell scene '" + (scene ?? "<null>") + "'");
-            }
-
-            foreach (var scene in knownGameplayScenes)
-            {
-                Assert(OpenSandboxFallbackPolicy.CanBuildInScene(scene, knownGameplayScenes),
-                    "Open Sandbox fallback should remain available in gameplay scene '" + scene + "'");
-            }
-
-            Assert(!OpenSandboxFallbackPolicy.CanBuildInScene("ArbitraryUnknownScene", knownGameplayScenes),
-                "a non-shell name is not gameplay proof unless it appears in the registered/build-settings catalog");
+            var directory = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.Worlds");
+            Assert(Directory.GetFiles(directory, "WorldsService*.cs").Length == 0
+                   && !File.Exists(Path.Combine(directory, "GameLevelBridge.cs"))
+                   && !File.Exists(Path.Combine(directory, "SandboxPlayerGuard.cs")),
+                "Legacy implicit sessions, scene dispatch, and fallback player spawning must remain retired.");
+            var module = File.ReadAllText(Path.Combine(directory, "WorldsMod.cs"));
+            Assert(!module.Contains("RegisterMenuEntry(", StringComparison.Ordinal)
+                   && !module.Contains("DiscoverBuiltIns(", StringComparison.Ordinal)
+                   && !module.Contains("StartSession(", StringComparison.Ordinal),
+                "Module loading cannot manufacture launchable declarations or start a session.");
         }
 
-        private static void OpenSandboxFallbackGuardPrecedesArenaCreation()
+        private static void GeneratedProviderUsesPreparedSceneAndSpawn()
         {
-            var source = ReadWorldsServiceSource();
-            const string methodMarker = "private WorldLoadResult LoadOpenSandbox(";
-            const string nextMethodMarker = "private void ArmSandboxArena()";
-            var methodStart = source.IndexOf(methodMarker, StringComparison.Ordinal);
-            Assert(methodStart >= 0,
-                "the Open Sandbox fallback source invariant must locate LoadOpenSandbox");
-            var methodEnd = source.IndexOf(nextMethodMarker, methodStart, StringComparison.Ordinal);
-            Assert(methodEnd > methodStart,
-                "the Open Sandbox fallback source invariant must locate the end of LoadOpenSandbox");
-
-            var method = source.Substring(methodStart, methodEnd - methodStart);
-            var guard = method.IndexOf(
-                "OpenSandboxFallbackPolicy.CanBuildInScene(activeScene, KnownGameplaySceneNames())",
-                StringComparison.Ordinal);
-            Assert(guard >= 0,
-                "LoadOpenSandbox must consult the current-scene fallback safety policy");
-            var failure = method.IndexOf("return WorldLoadResult.Fail(", guard, StringComparison.Ordinal);
-            var arena = method.IndexOf("BuildArena();", StringComparison.Ordinal);
-            var session = method.IndexOf("return StartSession(", arena, StringComparison.Ordinal);
-            Assert(failure > guard && arena > failure && session > arena,
-                "LoadOpenSandbox must reject a non-gameplay active scene before building an arena or session");
+            var path = Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.Worlds", "OpenSandboxProvider.cs");
+            var source = File.ReadAllText(path);
+            Assert(!source.Contains("GetActiveScene()", StringComparison.Ordinal)
+                   && !source.Contains("SceneManager.LoadScene", StringComparison.Ordinal)
+                   && !source.Contains("Vector3.zero", StringComparison.Ordinal),
+                "The generated provider cannot dispatch an independent scene load or substitute arbitrary scene/origin fallbacks.");
+            Assert(source.Contains("preparation.NativeDefaultSpawn", StringComparison.Ordinal)
+                   && source.Contains("preparation.FinishAsync(", StringComparison.Ordinal)
+                   && source.Contains("UnityWorldScene.ContainsRoot(", StringComparison.Ordinal),
+                "Generated content must use the prepared native spawn and retain scene ownership through readiness.");
         }
 
         private static void ManualUnsubscribeReleasesTheTrackedLifetimeNode()
@@ -140,27 +115,15 @@ namespace TopiaForge.ModManager.Tests
                 "stop during tracking must leave neither a subscriber nor a retained lifetime node");
         }
 
-        private static void OwnerFacadeUsesSelfReleasingSubscriptions()
+        private static void SessionForwarderKeepsTheConsumingContext()
         {
-            var source = ReadWorldsServiceSource();
-            Assert(source.Contains("List<OwnerEventSubscription<WorldSession>>", StringComparison.Ordinal)
-                   && source.Contains("List<OwnerEventSubscription<WorldSessionEnd>>", StringComparison.Ordinal),
-                "both owner-facade session events must use the self-releasing subscription primitive");
-            Assert(source.Contains(
-                    "subscription.AttachLifetimeLease(lifetime.Track(subscription));",
-                    StringComparison.Ordinal),
-                "owner-facade subscriptions must attach the returned lifetime lease");
-        }
-
-        private static string ReadWorldsServiceSource()
-        {
-            var directory = Path.Combine(
-                Program.FindRepoRoot(),
-                "mods",
-                "TopiaForge.Worlds");
-            var files = Directory.GetFiles(directory, "WorldsService*.cs");
-            Array.Sort(files, StringComparer.Ordinal);
-            return string.Join(Environment.NewLine, Array.ConvertAll(files, File.ReadAllText));
+            var source = File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "mods", "TopiaForge.Worlds", "WorldSessionServiceForwarder.cs"));
+            Assert(source.Contains("IOwnerContextBoundExtensionFactory", StringComparison.Ordinal)
+                   && source.Contains("return runtime.Sessions;", StringComparison.Ordinal),
+                "The Worlds observer must forward the consuming context's scoped manager service.");
+            Assert(!source.Contains("new Gamemode", StringComparison.Ordinal)
+                   && !source.Contains("WorldSessionEnd", StringComparison.Ordinal),
+                "The observer cannot recreate controller startup or legacy end notifications.");
         }
 
         private static void Assert(bool condition, string message)

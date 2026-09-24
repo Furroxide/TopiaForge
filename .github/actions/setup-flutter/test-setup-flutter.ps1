@@ -63,8 +63,12 @@ foreach ($archive in $manifest.archives) {
 
 $action = Get-Content -LiteralPath (Join-Path $PSScriptRoot "action.yml") -Raw
 if ($action -notmatch
-    'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830') {
-    throw "The Flutter setup action must pin actions/cache to its approved full SHA."
+    'actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830') {
+    throw "The Flutter setup action must pin restore-only actions/cache to its approved full SHA."
+}
+
+if ($action -match 'uses:\s+actions/cache(?:/save)?@') {
+    throw "Shared Flutter setup must never register a post-job cache writer."
 }
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "../../..")).Path
@@ -84,6 +88,112 @@ foreach ($workflowName in @("ci.yml", "deploy-pages.yml", "flutter-launcher-buil
     if ($workflow -notmatch 'uses:\s+\./\.github/actions/setup-flutter(?:\s|$)') {
         throw "$workflowName must use the repository's verified Flutter setup action."
     }
+}
+
+# Shared setup keeps the existing default while release builds opt into their verified
+# neutral workspace. Both paths retain the installer's dedicated-leaf ownership guard.
+if ($action -notmatch '(?m)^  install_directory:\s*$' -or
+    $action -notmatch '(?m)^    required: false\s*$') {
+    throw "Pinned Flutter setup must expose an optional neutral install_directory input."
+}
+$installExpression = "TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY: " +
+    '${{ inputs.install_directory || format(''{0}/topiaforge-flutter-sdk'', runner.temp) }}'
+if (-not $action.Contains($installExpression)) {
+    throw "Flutter setup must honor the verified install override and preserve the runner-temp default."
+}
+$launcherWorkflow = Get-Content -LiteralPath (
+    Join-Path $workflowDirectory "flutter-launcher-builds.yml"
+) -Raw
+$launcherSteps = @([regex]::Split($launcherWorkflow, '(?m)(?=      - name:)'))
+$preparation = @($launcherSteps | Where-Object { $_ -match 'id: neutral' })
+if ($preparation.Count -ne 1 -or
+    -not $preparation[0].Contains('source "$GITHUB_WORKSPACE/tools/prepare-neutral-build-root.sh" "$GITHUB_WORKSPACE"') -or
+    -not $preparation[0].Contains('"$TOPIAFORGE_NEUTRAL_PUB_CACHE" >> "$GITHUB_ENV"')) {
+    throw "Launcher builds must prepare a hydrated neutral source and export its private PUB_CACHE."
+}
+if ($launcherWorkflow.IndexOf('id: neutral') -gt
+    $launcherWorkflow.IndexOf('uses: ./.github/actions/setup-flutter')) {
+    throw "Neutral launcher paths must be established before Flutter setup generates package state."
+}
+if (-not $launcherWorkflow.Contains(
+        'install_directory: ${{ steps.neutral.outputs.root }}/topiaforge-flutter-sdk')) {
+    throw "Release launchers must install the verified Flutter SDK beneath the neutral root."
+}
+foreach ($stepName in @('Build launcher', 'Verify unsigned macOS launcher policy', 'Pack launcher artifact')) {
+    $matching = @($launcherSteps | Where-Object { $_ -match ('(?m)^      - name: ' + [regex]::Escape($stepName) + '\s*$') })
+    if ($matching.Count -ne 1 -or
+        -not $matching[0].Contains('working-directory: ${{ steps.neutral.outputs.source }}')) {
+        throw "$stepName must consume the same neutral physical launcher source."
+    }
+}
+if ($launcherWorkflow -match '(?m)^\s*(?:export\s+)?HOME=') {
+    throw "Neutral launcher builds must not repurpose the runner HOME."
+}
+if ($action -notmatch
+    ('(?m)^\s+TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY:\s+' +
+        '\$\{\{\s*runner\.temp\s*\}\}/topiaforge-flutter-archives\s*$')) {
+    throw "The Flutter setup action must cache archives in its dedicated runner-temp directory."
+}
+
+# The installer recursively deletes its install directory, so prove it refuses a directory it
+# does not own, and refuses it before creating anything.
+$installer = Join-Path $PSScriptRoot "install-flutter.ps1"
+$rejectedDirectory = Join-Path ([System.IO.Path]::GetTempPath()) (
+    "topiaforge-flutter-guard-" + [Guid]::NewGuid().ToString("N")
+)
+$guardVariableNames = @(
+    "RUNNER_OS",
+    "RUNNER_ARCH",
+    "TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY",
+    "TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY"
+)
+$previousEnvironment = @{}
+foreach ($name in $guardVariableNames) {
+    $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
+}
+
+# A non-zero child exit must surface as $LASTEXITCODE here, not as a terminating error.
+$restoreNativePreference = Test-Path Variable:PSNativeCommandUseErrorActionPreference
+$previousNativePreference = if ($restoreNativePreference) {
+    $PSNativeCommandUseErrorActionPreference
+} else {
+    $null
+}
+
+try {
+    if ($restoreNativePreference) {
+        $PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    $env:RUNNER_OS = "Linux"
+    $env:RUNNER_ARCH = "X64"
+    $env:TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY = Join-Path $rejectedDirectory "archives"
+    $env:TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY = $rejectedDirectory
+    $guardOutput = (& pwsh -NoLogo -NoProfile -NonInteractive -File $installer 2>&1) |
+        Out-String
+    $guardExitCode = $LASTEXITCODE
+    if ($guardExitCode -eq 0) {
+        throw "The Flutter installer must refuse an install directory it does not own."
+    }
+    if ($guardOutput -notmatch "must name a dedicated") {
+        throw "The Flutter installer refused the install directory for the wrong reason: " +
+            $guardOutput
+    }
+}
+finally {
+    # The child is expected to fail, so keep its exit status out of this script's own.
+    $global:LASTEXITCODE = 0
+    if ($restoreNativePreference) {
+        $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+    }
+
+    foreach ($name in $guardVariableNames) {
+        [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name])
+    }
+}
+
+if (Test-Path -LiteralPath $rejectedDirectory) {
+    throw "The Flutter installer must reject an unowned install directory before creating it."
 }
 
 Write-Host "Pinned Flutter setup contract tests passed."

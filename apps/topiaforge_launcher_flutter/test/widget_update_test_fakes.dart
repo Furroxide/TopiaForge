@@ -57,14 +57,14 @@ class _FakeLauncherUpdateRepository implements LauncherUpdateRepository {
 }
 
 LauncherUpdateCandidate _updateCandidate() {
-  const version = '1.0.0-rc.2';
+  const version = '0.1.0-rc.2';
   const hash =
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   return LauncherUpdateCandidate(
     version: version,
     tag: 'v$version',
     channel: LauncherUpdateChannel.beta,
-    minimumUpdaterVersion: '1.0.0-rc.1',
+    minimumUpdaterVersion: '0.1.0-rc.1',
     releaseUrl:
         'https://github.com/furroxide/TopiaForge/releases/tag/v$version',
     signingKeyId: 'ed25519:0123456789abcdef',

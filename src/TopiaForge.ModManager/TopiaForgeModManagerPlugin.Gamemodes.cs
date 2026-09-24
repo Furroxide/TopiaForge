@@ -1,181 +1,152 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
-using BepInEx;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
-using TopiaForge.Mods.UnityUi;
-using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace TopiaForge.ModManager
 {
     public sealed partial class TopiaForgeModManagerPlugin
     {
-        public IWorldGamemodeService? GetWorldService()
+        private const float WorldLaunchMaxWaitSeconds = 12f;
+        private bool pendingStartupLaunch;
+        private bool startupCommandIssued;
+        private LaunchSelection? pendingRememberedSelection;
+        private float pendingWorldLaunchWait;
+        private LaunchDiscoveryGate launchDiscovery = null!;
+        public IReadOnlyList<ModLaunchTargetDeclaration> GetLaunchTargets() => runtime == null
+            ? Array.Empty<ModLaunchTargetDeclaration>() : runtime.LaunchTargets;
+        public IReadOnlyList<LaunchTargetPreview> GetLaunchPreviews()
         {
-            return runtime?.GetService<IWorldGamemodeService>();
+            var snapshot = runtime.CaptureSessionRuntime();
+            return LaunchTargetPreviewBuilder.Build(snapshot.Profile, snapshot.Observation, snapshot.Bindings);
         }
-
-        public WorldLaunchSettings ReadWorldLaunchSettings()
+        public IWorldSessionService? GetSessionService() => runtime == null ? null : runtime.Sessions;
+        public LaunchSelection ReadLaunchSelection() => state.LaunchSelection ?? LaunchSelection.UnresolvedLegacy("{}");
+        public LaunchSelectionResolution ResolveRememberedSelection()
+        {
+            var snapshot = runtime.CaptureSessionRuntime();
+            return LaunchSelectionResolver.Resolve(ReadLaunchSelection(), snapshot.Profile, snapshot.Observation, snapshot.Bindings);
+        }
+        public void SaveLaunchSelection(LaunchSelection selection, bool autoLoadOnStart)
+        {
+            if (!CanSaveState) throw new InvalidOperationException(StatePersistenceError);
+            state.LaunchSelection = selection ?? throw new ArgumentNullException(nameof(selection));
+            state.AutoLoadOnStart = autoLoadOnStart;
+            SaveState();
+        }
+        private void ArmWorldLaunch()
+        {
+            pendingRememberedSelection = WorldLaunchArming.Resolve(startupSelection, state.LaunchSelection, state.AutoLoadOnStart);
+            pendingStartupLaunch = hasLauncherCommand || startupSelection.SafeMode || pendingRememberedSelection != null;
+            pendingWorldLaunchWait = WorldLaunchMaxWaitSeconds;
+            launchDiscovery = new LaunchDiscoveryGate(runtime.NativeDispatcher, DiscoverForLaunchAsync);
+        }
+        private void UpdatePendingWorldLaunch(float deltaTime)
+        {
+            var scene = SceneManager.GetActiveScene().name;
+            var atMenu = GameScenes.IsMainMenuScene(scene);
+            if (atMenu) _ = launchDiscovery.Start();
+            if (!pendingStartupLaunch) return;
+            var menuCommand = rejectedLauncherCommand || startupSelection.SafeMode
+                || launchProfile?.Command == "main-menu" || pendingRememberedSelection?.Kind == "main-menu";
+            pendingWorldLaunchWait -= deltaTime;
+            if (!menuCommand && !atMenu && pendingWorldLaunchWait > 0f) return;
+            pendingStartupLaunch = false;
+            _ = DispatchStartupAsync(!menuCommand && !atMenu && GameScenes.IsNonGameplayScene(scene), !menuCommand);
+        }
+        private async Task DiscoverForLaunchAsync()
+        {
+            try { await runtime.DiscoverWorldsAsync(); PublishRuntimeObservations(); }
+            catch (Exception error) { managerLogger.Error(error, "World discovery failed."); }
+        }
+        private async Task DispatchStartupAsync(bool menuUnavailable, bool requireDiscovery)
         {
             try
             {
-                return JsonUtil.LoadPersistentFile(
-                    paths.GetConfigPath("topiaforge.worlds"),
-                    new WorldLaunchSettings());
+                await launchDiscovery.AfterAsync(async stillCurrent =>
+                {
+                    if (!ready) return;
+                    startupCommandIssued = true;
+                    if (rejectedLauncherCommand)
+                    {
+                        var rejectedId = launchProfile?.RequestId ?? rejectedCorrelation?.RequestId;
+                        var rejectedCommand = launchProfile?.Command ?? rejectedCorrelation?.Command;
+                        if (rejectedId != null && rejectedCommand != null)
+                            await runtime.Sessions.RejectCommandAsync(rejectedId, rejectedCommand,
+                                ModErrorCode.InvalidArgument, "The launcher request was rejected: " + rejectionReason);
+                        if (ready && stillCurrent()) await runtime.Sessions.ReturnToMainMenuAsync();
+                        return;
+                    }
+                    if (launchProfile != null)
+                    {
+                        var result = menuUnavailable
+                            ? await runtime.Sessions.RejectCommandAsync(launchProfile.RequestId, launchProfile.Command, ModErrorCode.TimedOut,
+                                "The game menu was not ready before the launch deadline.")
+                            : await runtime.Sessions.ExecuteCommandAsync(launchProfile);
+                        if (!result.Succeeded) managerLogger.Warn("Launcher session did not start: " + result.ErrorMessage);
+                        var recoveryChanged = (startupSelection.SafeMode && !launchProfile.SafeMode)
+                            || startupSelection.QuarantinedPackageId.Length != 0;
+                        if (!result.Succeeded && recoveryChanged && ready && stillCurrent())
+                            await runtime.Sessions.ReturnToMainMenuAsync();
+                        return;
+                    }
+                    if (startupSelection.SafeMode || pendingRememberedSelection?.Kind == "main-menu")
+                    { await runtime.Sessions.ReturnToMainMenuAsync(); return; }
+                    if (menuUnavailable) { managerLogger.Warn("Remembered selection was not started: the menu was not ready."); return; }
+                    var snapshot = runtime.CaptureSessionRuntime();
+                    var resolved = LaunchSelectionResolver.Resolve(pendingRememberedSelection!, snapshot.Profile, snapshot.Observation, snapshot.Bindings);
+                    if (!resolved.Available || resolved.Request == null)
+                    { managerLogger.Warn("Remembered selection needs repair: " + resolved.RepairMessage); return; }
+                    var launched = await runtime.LaunchTargetAsync(resolved.Request);
+                    if (!launched.Succeeded) managerLogger.Warn("Remembered target did not start: " + launched.ErrorMessage);
+                }, requireDiscovery && !menuUnavailable);
             }
-            catch (Exception ex)
+            catch (Exception error) { managerLogger.Error(error, "Startup launch command failed."); }
+        }
+        private void CancelPendingStartup()
+        {
+            pendingStartupLaunch = false;
+            if (!startupCommandIssued && launchProfile != null)
             {
-                managerLogger.Warn("World launch settings could not be read; using defaults: " + ex.Message);
-                return new WorldLaunchSettings();
+                startupCommandIssued = true;
+                _ = runtime.Sessions.RejectCommandAsync(launchProfile.RequestId, launchProfile.Command, ModErrorCode.Cancelled,
+                    "A manager command superseded the pending launcher command.");
             }
         }
-
-        public void SaveWorldLaunchSettings(WorldLaunchSettings settings)
+        public async Task<(bool Ok, string Message)> LaunchTarget(string targetId,
+            string? worldOverride = null, string? transitionOverride = null)
         {
-            if (settings == null)
-            {
-                throw new ArgumentNullException(nameof(settings));
-            }
-
-            var path = paths.GetConfigPath("topiaforge.worlds");
-            string existingJson;
             try
             {
-                existingJson = JsonUtil.LoadPersistentJsonObject(path, "{}");
-            }
-            catch (Exception ex)
-            {
-                managerLogger.Warn("World config could not be read within the bounded JSON policy; replacing it: "
-                    + ex.Message);
-                existingJson = "{}";
-            }
-
-            string merged;
-            try
-            {
-                merged = settings.MergeIntoJson(existingJson);
-            }
-            catch (Exception ex)
-            {
-                // A malformed provider config was already unreadable. Recover the launch fields rather than
-                // making PLAY unusable; the warning makes the loss of unrecoverable raw content explicit.
-                managerLogger.Warn("World config could not be merged; replacing malformed JSON: " + ex.Message);
-                merged = settings.MergeIntoJson("{}");
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? paths.Config);
-            var tempPath = path + ".manager.tmp";
-            File.WriteAllText(tempPath, merged);
-            if (File.Exists(path))
-            {
-                try
+                return await launchDiscovery.ExplicitAsync(async () =>
                 {
-                    File.Replace(tempPath, path, null);
-                }
-                catch (PlatformNotSupportedException)
-                {
-                    File.Delete(path);
-                    File.Move(tempPath, path);
-                }
+                    CancelPendingStartup();
+                    if (!ready) return (false, "The runtime is not ready to launch a target.");
+                    var result = await runtime.LaunchTargetAsync(new LaunchRequest(targetId, worldOverride, transitionOverride));
+                    return (result.Succeeded, result.Succeeded ? "Launch target reached Running." : result.ErrorMessage);
+                });
             }
-            else
+            catch (Exception error)
             {
-                File.Move(tempPath, path);
+                managerLogger.Error(error, "Target launch failed.");
+                return (false, "Target launch failed: " + error.Message);
             }
         }
-
-        public async Task<(bool Ok, string Message)> LaunchGamemode(string entryId)
+        public async Task<(bool Ok, string Message)> ReturnToMainMenu()
         {
-            var service = GetWorldService();
-            if (service == null)
-            {
-                return (false, "World/gamemode service unavailable. Enable the TopiaForge Worlds mod.");
-            }
-
             try
             {
-                var result = await service.LaunchMenuEntryAsync(entryId);
-                var message = result.Succeeded
-                    ? "Launched gamemode entry '" + entryId + "'."
-                    : result.ErrorMessage;
-                managerLogger.Info("Gamemode launch '" + entryId + "': " + message);
-                return (result.Succeeded, message);
-            }
-            catch (Exception ex)
-            {
-                managerLogger.Error(ex, "Failed to launch gamemode '" + entryId + "'.");
-                return (false, "Failed to launch: " + ex.Message);
-            }
-        }
-
-        public async Task<(bool Ok, string Message)> LaunchGamemodeSelection(
-            string entryId,
-            string worldId,
-            string gamemodeId,
-            string loadMode)
-        {
-            var service = GetWorldService();
-            if (service == null)
-            {
-                return (false, "World/gamemode service unavailable. Enable the TopiaForge Worlds mod.");
-            }
-
-            try
-            {
-                var world = service.Worlds.FirstOrDefault(item =>
-                    string.Equals(item.Id, worldId, StringComparison.OrdinalIgnoreCase));
-                if (world == null)
+                return await launchDiscovery.ExplicitAsync(async () =>
                 {
-                    return (false, "Unknown world: " + worldId);
-                }
-
-                var gamemode = service.Gamemodes.FirstOrDefault(item =>
-                    string.Equals(item.Id, gamemodeId, StringComparison.OrdinalIgnoreCase));
-                if (gamemode == null)
-                {
-                    return (false, "Unknown gamemode: " + gamemodeId);
-                }
-
-                var resolvedLoadMode = WorldLaunchSettings.ReconcileLoadMode(
-                    world.SupportsSceneReplacement,
-                    world.SupportsAdditiveArena,
-                    loadMode);
-                var existing = ReadWorldLaunchSettings();
-                var settings = new WorldLaunchSettings
-                {
-                    SelectedWorldId = worldId,
-                    SelectedGamemodeId = gamemodeId,
-                    LoadMode = resolvedLoadMode,
-                    AutoLoadOnStart = existing.AutoLoadOnStart,
-                    AllowAdditiveFallback = existing.AllowAdditiveFallback,
-                    EndSessionOnMenuScene = existing.EndSessionOnMenuScene,
-                    InterceptPauseMenu = existing.InterceptPauseMenu
-                };
-                SaveWorldLaunchSettings(settings);
-
-                var result = await service.LoadAsync(new WorldLoadRequest(
-                    worldId,
-                    gamemodeId,
-                    preferSceneReplacement: settings.PreferSceneReplacement,
-                    allowAdditiveFallback: settings.AllowAdditiveFallback));
-                var message = result.Succeeded
-                    ? "Launched '" + gamemode.Name + "' in '" + world.Name + "'."
-                    : result.ErrorMessage;
-                managerLogger.Info("Gamemode launch '" + entryId + "' world '" + world.Name + "' [" + world.Id
-                    + "] gamemode '" + gamemode.Name + "' [" + gamemode.Id + "] loadMode '" + settings.LoadMode
-                    + "': " + message);
-                return (result.Succeeded, message);
+                    CancelPendingStartup();
+                    if (!ready) return (false, "The runtime is not ready to return to the main menu.");
+                    var result = await runtime.Sessions.ReturnToMainMenuAsync();
+                    return (result.Succeeded, result.Succeeded ? "Returned to the main menu." : result.ErrorMessage);
+                });
             }
-            catch (Exception ex)
-            {
-                managerLogger.Error(ex, "Failed to launch gamemode '" + entryId + "' for world '" + worldId + "'.");
-                return (false, "Failed to launch: " + ex.Message);
-            }
+            catch (Exception error) { return (false, "Return to menu failed: " + error.Message); }
         }
     }
 }

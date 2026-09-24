@@ -249,6 +249,7 @@ void _registerReleasePackagingTests() {
         ArchiveFile.string('third_party/BepInEx/LICENSES/$license', 'license'),
       );
     }
+    addDoorstopSourceFixture(archive);
     _addDartNotices(archive);
     _addSdkPayload(archive);
     zip.writeAsBytesSync(_markZipEntriesAsUnix(ZipEncoder().encode(archive)));
@@ -311,6 +312,7 @@ void _registerReleasePackagingTests() {
         ),
       );
     }
+    addDoorstopSourceFixture(archive, prefix: '$payload/');
     _addDartNotices(archive, prefix: payload);
     _addSdkPayload(archive, prefix: payload);
     final zip = File(p.join(temp.path, 'macos-nested-arch.zip'))

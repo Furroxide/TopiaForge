@@ -12,6 +12,10 @@ cat >"$temp_root/bin/gh" <<'FAKE_GH'
 set -euo pipefail
 [[ ${1:-} == api ]] || exit 64
 endpoint=${*: -1}
+request_prefix="repos/${FAKE_REQUEST_REPOSITORY:-furroxide/TopiaForge}/"
+if [[ $endpoint == "$request_prefix"* ]]; then
+  endpoint="repos/furroxide/TopiaForge/${endpoint#"$request_prefix"}"
+fi
 case "$endpoint" in
   repos/furroxide/TopiaForge/immutable-releases)
     jq -nc \
@@ -137,6 +141,22 @@ must_fail() {
 }
 
 "$verifier" furroxide/TopiaForge >/dev/null
+
+# GitHub returns the canonical mixed-case login; identity is still its exact ID.
+export FAKE_REVIEWER_LOGIN=Furroxide
+export FAKE_ENV_REVIEWER_LOGIN=FURROXIDE
+export FAKE_REQUEST_REPOSITORY=Furroxide/TopiaForge
+"$verifier" "$FAKE_REQUEST_REPOSITORY" >/dev/null
+export FAKE_REVIEWER_ID=999
+must_fail "$verifier" "$FAKE_REQUEST_REPOSITORY"
+unset FAKE_REVIEWER_ID
+export FAKE_ENV_REVIEWER_ID=999
+must_fail "$verifier" "$FAKE_REQUEST_REPOSITORY"
+unset FAKE_ENV_REVIEWER_ID
+export FAKE_REVIEWER_LOGIN=Furroxide-other
+must_fail "$verifier" "$FAKE_REQUEST_REPOSITORY"
+unset FAKE_REVIEWER_LOGIN FAKE_ENV_REVIEWER_LOGIN FAKE_REQUEST_REPOSITORY
+must_fail "$verifier" attacker/TopiaForge
 
 export FAKE_IMMUTABLE_ENABLED=false
 must_fail "$verifier" furroxide/TopiaForge

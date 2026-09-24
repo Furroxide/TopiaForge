@@ -11,9 +11,11 @@ extension _WorldCommands on _TopiaForgeCli {
       'play' => _worldPlay(args.skip(1).toList()),
       _ => throw UsageError(
         'Usage: topiaforge world link|build|play ...\n'
-        '  topiaforge world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]\n'
+        '  topiaforge world link --project <unityProj> --mod <modDir> [--world id] [--bundle name] [--prefab assetPath]\n'
         '  topiaforge world build [--project <unityProj|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--dry-run]\n'
-        '  topiaforge world play [--project <unityProj|name>] [--mod <modDir>] [--bundle name] [--unity Unity.exe] [--configuration cfg]',
+        '  topiaforge world play --target <launchTargetId> [--project <unityProj|name>] [--mod <modDir>] '
+        '[--bundle name] [--unity Unity.exe] [--configuration cfg] [--game-dir path] [--profile id] '
+        '[--world id] [--transition scene-replacement|additive-arena] [--no-wait | --wait-seconds 1..300]',
       ),
     };
   }
@@ -23,7 +25,7 @@ extension _WorldCommands on _TopiaForgeCli {
     final modArg = _option(args, '--mod');
     if (projectArg == null || modArg == null) {
       throw UsageError(
-        'Usage: topiaforge world link --project <unityProj> --mod <modDir> [--bundle name] [--prefab assetPath]',
+        'Usage: topiaforge world link --project <unityProj> --mod <modDir> [--world id] [--bundle name] [--prefab assetPath]',
       );
     }
     final project = p.normalize(p.absolute(projectArg));
@@ -57,18 +59,47 @@ extension _WorldCommands on _TopiaForgeCli {
         '${blockingManifestIssues.map((issue) => issue.message).join(' ')}',
       );
     }
-    final modId = manifest.id;
+    final requestedWorld = _option(args, '--world');
+    final worlds =
+        (manifest.contributions?.worlds ?? const <ModWorldDeclaration>[])
+            .where(
+              (world) =>
+                  world.content?.kind == ModWorldContent.bundleKind &&
+                  (requestedWorld == null || world.id == requestedWorld),
+            )
+            .toList();
+    if (worlds.length != 1) {
+      throw StateError(
+        'Choose one declared bundle world with --world <id>. '
+        'This mod has ${worlds.length} matching declarations; edit contributions.worlds if none exists.',
+      );
+    }
+    final world = worlds.single;
+    final bundle = p.posix.basenameWithoutExtension(world.content!.bundle);
+    if (world.content!.bundle != 'AssetBundles/$bundle.bundle') {
+      throw StateError(
+        'World authoring builds into AssetBundles/<name>.bundle. '
+        'Update ${world.id} content.bundle to that location before linking.',
+      );
+    }
+    final requestedBundle = _option(args, '--bundle');
+    final requestedPrefab = _option(args, '--prefab');
+    if ((requestedBundle != null && requestedBundle != bundle) ||
+        (requestedPrefab != null &&
+            requestedPrefab.toLowerCase() !=
+                world.content!.prefab.toLowerCase())) {
+      throw StateError(
+        'Bundle and prefab overrides must match ${world.id} content declaration. '
+        'Update contributions.worlds before linking different content.',
+      );
+    }
 
     final config = await developerRepository.writeWorldAuthoringConfig(
       project,
       WorldAuthoringConfig(
-        worldId: modId,
-        bundleName:
-            _option(args, '--bundle') ??
-            WorldAuthoringConfig.deriveBundleName(modId),
-        worldPrefab:
-            _option(args, '--prefab') ??
-            WorldAuthoringConfig.defaultWorldPrefab,
+        worldId: world.id,
+        bundleName: bundle,
+        worldPrefab: requestedPrefab ?? world.content!.prefab,
         modPath: p.relative(mod, from: project),
       ),
     );
@@ -147,20 +178,50 @@ extension _WorldCommands on _TopiaForgeCli {
   }
 
   Future<int> _worldPlay(List<String> args) async {
-    if (!await _ensureBuildTooling()) {
-      return 1;
+    final options = _parseLaunchOptions(
+      args,
+      extraValues: const {
+        '--project',
+        '--mod',
+        '--bundle',
+        '--unity',
+        '--configuration',
+      },
+    );
+    final request = options.selectionOverride?.request;
+    if (request == null) {
+      throw UsageError(
+        'world play requires --target <declared launch target>. '
+        'The saved profile cannot identify which authored world to test.',
+      );
     }
     final project = await _resolveUnityDevProject(_option(args, '--project'));
     if (project == null) {
-      stderr.writeln(
-        'No Unity world project found. Pass --project <path|name> or run from one.',
+      throw StateError(
+        'No Unity world project found. Pass --project <path|name>.',
       );
-      return 1;
     }
-
+    final config = await developerRepository.readWorldAuthoringConfig(project);
+    final modRaw = _option(args, '--mod') ?? config?.modPath ?? '';
+    if (modRaw.isEmpty) {
+      throw StateError('No paired mod. Run world link or pass --mod.');
+    }
+    final mod = p.normalize(
+      p.isAbsolute(modRaw) ? modRaw : p.join(project, modRaw),
+    );
+    final manifest = await developerRepository.readModManifest(mod);
+    if (!(manifest.contributions?.launchTargets ??
+            const <ModLaunchTargetDeclaration>[])
+        .any((target) => target.id == request.targetId)) {
+      throw StateError(
+        '${request.targetId} is not a launch target declared by the paired mod. '
+        'Choose a contributions.launchTargets id from its manifest.',
+      );
+    }
+    if (!await _ensureBuildTooling()) return 1;
     final build = await developerRepository.buildWorldBundle(
       unityProjectPath: project,
-      modPath: _option(args, '--mod') ?? '',
+      modPath: mod,
       bundleName: _option(args, '--bundle') ?? '',
       unityExePath: _option(args, '--unity') ?? '',
     );
@@ -172,18 +233,9 @@ extension _WorldCommands on _TopiaForgeCli {
       return 1;
     }
     stdout.writeln('Built ${build.bundlePath}.');
-
-    // The bundle lands inside the mod; pack that mod and install the package.
-    final config = await developerRepository.readWorldAuthoringConfig(project);
-    final modRaw = _option(args, '--mod') ?? (config?.modPath ?? '');
-    final mod = p.normalize(
-      p.isAbsolute(modRaw) ? modRaw : p.join(project, modRaw),
-    );
     final configuration = _option(args, '--configuration') ?? 'Release';
-    final hasProjectFile = File(
-      p.join(mod, 'topiaforge.project.json'),
-    ).existsSync();
-    final packagePath = hasProjectFile
+    final packagePath =
+        File(p.join(mod, 'topiaforge.project.json')).existsSync()
         ? await developerRepository.packProject(
             mod,
             configuration: configuration,
@@ -193,14 +245,73 @@ extension _WorldCommands on _TopiaForgeCli {
             configuration: configuration,
           );
     stdout.writeln('Packed $packagePath.');
-
-    final launcher = LocalLauncherRepository();
-    final install = await launcher.detectKnownInstall();
-    if (install == null) {
-      throw StateError(_noInstallRemedy);
+    final launcher = LocalLauncherRepository(
+      knownGamePath: options.gameDirectory,
+    );
+    try {
+      final install = await launcher.detectKnownInstall();
+      if (install == null) throw StateError(_noInstallRemedy);
+      await launcher.installPackage(packagePath, install);
+      stdout.writeln('Installed $packagePath.');
+      final snapshot = await launcher.loadSnapshot();
+      return await _runLaunchWorkflow(
+        launcher,
+        install,
+        _launchProfile(snapshot, options),
+        options,
+      );
+    } finally {
+      await launcher.dispose();
     }
-    await launcher.installPackage(packagePath, install);
-    stdout.writeln('Installed $packagePath.');
-    return _launch(const <String>[], restart: false);
+  }
+
+  Future<String?> _resolveUnityDevProject(String? selector) async {
+    bool isUnityProject(String path) =>
+        Directory(p.join(path, 'ProjectSettings')).existsSync() &&
+        Directory(p.join(path, 'Assets')).existsSync();
+
+    if (selector != null) {
+      // An explicit path has to clear the same check `world link` applies; every
+      // other route into this resolver already does. A directory that fails it is
+      // still offered to the registry lookup, because `--project` also takes a name
+      // and a same-named directory in the working tree must not shadow one.
+      final directory = Directory(selector).existsSync()
+          ? p.normalize(p.absolute(selector))
+          : null;
+      if (directory != null && isUnityProject(directory)) {
+        return directory;
+      }
+      final projects = await developerRepository.listProjects();
+      for (final project in projects) {
+        if (project.name.toLowerCase() == selector.toLowerCase() &&
+            project.isUnity) {
+          return project.path;
+        }
+      }
+      if (directory != null) {
+        // Say why a real directory was rejected rather than letting the caller's
+        // "no project found" message suggest the path was missing.
+        throw StateError(
+          '$directory is not a Unity project (expected Assets/ and ProjectSettings/).',
+        );
+      }
+      return null;
+    }
+
+    if (isUnityProject(Directory.current.path)) {
+      return Directory.current.path;
+    }
+
+    final projects = await developerRepository.listProjects();
+    final worlds =
+        projects
+            .where(
+              (project) =>
+                  project.kind == ProjectKind.unityWorld &&
+                  Directory(project.path).existsSync(),
+            )
+            .toList()
+          ..sort((a, b) => b.lastOpenedUtc.compareTo(a.lastOpenedUtc));
+    return worlds.isEmpty ? null : worlds.first.path;
   }
 }

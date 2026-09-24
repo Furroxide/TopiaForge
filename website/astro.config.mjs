@@ -48,6 +48,10 @@ export default defineConfig({
           label: 'Start here',
           items: [
             { label: 'Overview', slug: 'index' },
+            {
+              label: 'TopiaForge and the Robotopia Creator',
+              slug: 'getting-started/creator-scope',
+            },
             { label: 'Your first mod', slug: 'getting-started/first-mod' },
             { label: 'SDK overview', slug: 'reference/sdk-overview' },
           ],
@@ -58,7 +62,6 @@ export default defineConfig({
             { label: 'Core services', slug: 'guides/core-services' },
             { label: 'In-game UI', slug: 'guides/ui' },
             { label: 'Specialist modules', slug: 'guides/modules' },
-            { label: 'Creator Tools', slug: 'guides/creator-tools' },
             { label: 'Sandbox creator mode', slug: 'guides/sandbox' },
             { label: 'Multiplayer preview', slug: 'guides/multiplayer' },
             { label: 'RobotKit', slug: 'guides/robotkit' },
@@ -72,7 +75,7 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            { label: 'Manifest V5', slug: 'reference/manifest-v5' },
+            { label: 'Manifest V6', slug: 'reference/manifest-v6' },
             { label: 'Diagnostics', slug: 'reference/diagnostics' },
             { label: 'Capabilities and trust', slug: 'reference/capabilities' },
             { label: 'V1 capability coverage', slug: 'reference/capability-matrix' },

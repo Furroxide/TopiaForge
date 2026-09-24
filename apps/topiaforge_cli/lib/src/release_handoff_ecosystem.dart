@@ -2,8 +2,9 @@ part of 'release_handoff.dart';
 
 Future<String> _embeddedEcosystemDigest(
   File file,
-  TopiaForgeReleaseCatalogEntry release,
-) async {
+  TopiaForgeReleaseCatalogEntry release, {
+  Directory? canonicalAssets,
+}) async {
   final resolved = file.resolveSymbolicLinksSync();
   final before = file.statSync();
   final expectedPaths = {
@@ -64,6 +65,19 @@ Future<String> _embeddedEcosystemDigest(
         throw StateError('Could not read the complete nested entry $path.');
       }
       found[path] = sha256.convert(bytes).toString();
+      if (canonicalAssets != null && path.endsWith('.topiaforgemod')) {
+        final name = path.substring('dist/'.length);
+        final external = await _inspectFile(
+          File(p.join(canonicalAssets.path, name)),
+          expectedName: name,
+          maxBytes: CliFileLimits.package,
+        );
+        if (external.sha256 != found[path] || external.size != entry.size) {
+          throw StateError(
+            'External package $name differs from the tested embedded ecosystem.',
+          );
+        }
+      }
     }
     if (found.length != expectedPaths.length ||
         !found.keys.toSet().containsAll(expectedPaths)) {

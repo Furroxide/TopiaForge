@@ -22,6 +22,8 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Raised after any global theme or accessibility setting changes.</summary>
         public static event Action? Changed;
 
+        internal static int DiagnosticSubscriberCount => Changed?.GetInvocationList().Length ?? 0;
+
         /// <summary>Accessibility: re-tones colors for legibility (ports Zombies' HudColor mode).</summary>
         public static bool HighContrast
         {

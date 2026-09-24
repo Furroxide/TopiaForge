@@ -1,10 +1,15 @@
 part of '../models.dart';
 
-/// Deliberately non-publishable defaults used when a scaffold caller has not
-/// supplied the new mod author's identity and license decision.
+/// Defaults used when a scaffold caller has not supplied the new mod author's
+/// identity and license decision. The author name stays deliberately
+/// non-publishable; the license defaults to the project's own terms.
 abstract final class TopiaForgeScaffoldDefaults {
   static const authorName = 'REPLACE_WITH_YOUR_NAME';
-  static const license = 'NOASSERTION';
+  static const license = 'AGPL-3.0-or-later';
+
+  /// SPDX sentinel meaning the author has not chosen terms yet. Distinct from
+  /// [license]: a scaffold that still carries this value is not publishable.
+  static const unresolvedLicense = 'NOASSERTION';
 }
 
 void _validateScaffoldPlaceholders(
@@ -20,7 +25,7 @@ void _validateScaffoldPlaceholders(
       ),
     );
   }
-  if (manifest.license.trim() == TopiaForgeScaffoldDefaults.license) {
+  if (manifest.license.trim() == TopiaForgeScaffoldDefaults.unresolvedLicense) {
     issues.add(
       LauncherIssue(
         severity: IssueSeverity.warning,

@@ -6,6 +6,9 @@ import 'package:json_schema/json_schema.dart';
 import 'package:path/path.dart' as p;
 
 import 'release_metadata_inventory.dart';
+import 'release_metadata_source.dart';
+import 'release_metadata_trust.dart';
+import 'release_metadata_checksums.dart';
 import 'bounded_file_reader.dart';
 import 'release_game_archive_metadata.dart';
 import 'release_handoff_models.dart';
@@ -45,6 +48,14 @@ class TopiaForgeReleaseMetadataBuilder {
         'Expected an exact lowercase 40-character commit hash.',
       );
     }
+    await verifyMetadataPublicationSource(
+      repositoryRoot,
+      targetSha,
+      version,
+      assetsDirectory,
+      outputDirectory,
+      allowUnresolved: allowUnresolvedPolicy,
+    );
     final policy = TopiaForgeReleasePolicy.load(repositoryRoot);
     final release = TopiaForgeReleaseCatalog.load(
       repositoryRoot,
@@ -64,6 +75,7 @@ class TopiaForgeReleaseMetadataBuilder {
       version: version,
       targetSha: targetSha,
       allowUnresolved: allowUnresolvedPolicy,
+      assetsDirectory: assetsDirectory,
     );
 
     final assets = Directory(assetsDirectory);
@@ -77,6 +89,14 @@ class TopiaForgeReleaseMetadataBuilder {
       final name = p.basename(entity.path);
       if (name == trustEvidenceFileName) continue;
       if (policy.generatedMetadata.contains(name)) continue;
+      if (releaseCandidateMetadataFileNames.contains(name)) continue;
+      if (name == releaseHandoffFileName ||
+          name == '$releaseHandoffFileName.p7s' ||
+          policy.targetPlatforms.any(
+            (platform) => name == releasePlatformBundleFileName(platform),
+          )) {
+        continue;
+      }
       if (entity is! File ||
           FileSystemEntity.typeSync(entity.path, followLinks: false) !=
               FileSystemEntityType.file) {
@@ -128,7 +148,7 @@ class TopiaForgeReleaseMetadataBuilder {
         );
       }
     }
-    final codeSigning = _readCodeSigningEvidence(
+    final codeSigning = readReleaseCodeSigningEvidence(
       File(p.join(assets.path, trustEvidenceFileName)),
       policy,
     );
@@ -155,7 +175,7 @@ class TopiaForgeReleaseMetadataBuilder {
     final bom = <String, Object?>{
       r'$schema':
           'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-bom.schema.json',
-      'schemaVersion': 3,
+      'schemaVersion': 4,
       'version': release.version,
       'tag': release.tag,
       'targetSha': targetSha,
@@ -210,6 +230,13 @@ class TopiaForgeReleaseMetadataBuilder {
         (name: name, file: File(p.join(assets.path, name))),
       for (final entry in signedUpdateFiles.entries)
         (name: entry.key, file: entry.value),
+      for (final entry in presentReleaseHandoffFiles(
+        assets,
+        policy.targetPlatforms,
+      ).entries)
+        (name: entry.key, file: entry.value),
+      for (final entry in presentCandidateMetadataFiles(assets).entries)
+        (name: entry.key, file: entry.value),
       (name: p.basename(bomFile.path), file: bomFile),
       (name: p.basename(sbomFile.path), file: sbomFile),
     ]..sort((left, right) => left.name.compareTo(right.name));
@@ -243,6 +270,14 @@ class TopiaForgeReleaseMetadataBuilder {
     required String metadataDirectory,
     bool allowUnresolvedPolicy = false,
   }) async {
+    await verifyMetadataPublicationSource(
+      repositoryRoot,
+      targetSha,
+      version,
+      assetsDirectory,
+      metadataDirectory,
+      allowUnresolved: allowUnresolvedPolicy,
+    );
     final policy = TopiaForgeReleasePolicy.load(repositoryRoot);
     final release = TopiaForgeReleaseCatalog.load(
       repositoryRoot,
@@ -262,6 +297,7 @@ class TopiaForgeReleaseMetadataBuilder {
       version: version,
       targetSha: targetSha,
       allowUnresolved: allowUnresolvedPolicy,
+      assetsDirectory: assetsDirectory,
     );
     final metadata = Directory(metadataDirectory);
     final bomFile = File(p.join(metadata.path, 'release-bom.json'));
@@ -329,7 +365,7 @@ class TopiaForgeReleaseMetadataBuilder {
         'Release BOM artifact inventory differs from exact bytes.',
       );
     }
-    final expectedCodeSigning = _readCodeSigningEvidence(
+    final expectedCodeSigning = readReleaseCodeSigningEvidence(
       File(p.join(assets.path, trustEvidenceFileName)),
       policy,
     );
@@ -359,9 +395,10 @@ class TopiaForgeReleaseMetadataBuilder {
         'topiaforge-update-v1.json.sig',
       ])
         name: File(p.join(assetsDirectory, name)),
+      ...presentCandidateMetadataFiles(assets),
       'release-bom.json': bomFile,
       'release-sbom.spdx.json': sbomFile,
-      ..._presentHandoffFiles(assets, policy.targetPlatforms),
+      ...presentReleaseHandoffFiles(assets, policy.targetPlatforms),
     };
     final lines = sumsFile.readAsLinesSync();
     if (lines.length != expected.length) {
@@ -385,33 +422,6 @@ class TopiaForgeReleaseMetadataBuilder {
       }
     }
   }
-}
-
-Map<String, File> _presentHandoffFiles(
-  Directory assets,
-  List<String> targetPlatforms,
-) {
-  final names = <String>[
-    releaseHandoffFileName,
-    for (final platform in targetPlatforms)
-      releasePlatformBundleFileName(platform),
-  ];
-  final present = <String, File>{};
-  for (final name in names) {
-    final file = File(p.join(assets.path, name));
-    final type = FileSystemEntity.typeSync(file.path, followLinks: false);
-    if (type == FileSystemEntityType.notFound) continue;
-    if (type != FileSystemEntityType.file || file.lengthSync() == 0) {
-      throw StateError('Release handoff checksum input is invalid: $name.');
-    }
-    present[name] = file;
-  }
-  if (present.isNotEmpty && present.length != names.length) {
-    throw StateError(
-      'SHA256SUMS requires the complete policy-derived release handoff set.',
-    );
-  }
-  return present;
 }
 
 Map<String, String> _sortedMap(Map<String, String> source) => {
@@ -450,51 +460,3 @@ bool _sameSet(Set<String> left, Set<String> right) =>
 
 Future<String> _sha256File(File file) async =>
     (await sha256.bind(file.openRead()).single).toString();
-
-Map<String, Object?> _readCodeSigningEvidence(
-  File file,
-  TopiaForgeReleasePolicy policy,
-) {
-  final json = _readJsonObject(file);
-  final platforms = policy.targetPlatforms.toSet();
-  if (!_sameSet(json.keys.toSet(), platforms)) {
-    throw StateError(
-      '${TopiaForgeReleaseMetadataBuilder.trustEvidenceFileName} must '
-      'contain the exact policy target platform set.',
-    );
-  }
-  final normalized = <String, Object?>{};
-  for (final platform in platforms.toList()..sort()) {
-    final value = json[platform];
-    if (value is! Map) {
-      throw StateError('Code-signing evidence for $platform is invalid.');
-    }
-    final entry = Map<String, Object?>.from(value);
-    final status = entry['status'];
-    final exceptionApplied = entry['exceptionApplied'];
-    if (entry.length != 2 || status is! String || exceptionApplied is! bool) {
-      throw StateError('Code-signing evidence for $platform is invalid.');
-    }
-    switch (platform) {
-      case 'windows-x64':
-        if (status == 'trusted' && !exceptionApplied) break;
-        throw StateError(
-          'Windows code-signing evidence is not permitted by release policy.',
-        );
-      case 'macos-universal':
-        if (status == 'trusted' && !exceptionApplied) break;
-        throw StateError(
-          'macOS code-signing evidence is not permitted by release policy.',
-        );
-      case 'linux-x64':
-        if (status != 'not-applicable' || exceptionApplied) {
-          throw StateError('Linux code-signing evidence is invalid.');
-        }
-    }
-    normalized[platform] = {
-      'status': status,
-      'exceptionApplied': exceptionApplied,
-    };
-  }
-  return {'exceptionVersion': null, 'platforms': normalized};
-}

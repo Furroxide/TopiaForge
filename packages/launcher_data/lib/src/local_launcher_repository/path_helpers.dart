@@ -27,6 +27,7 @@ extension _PathHelpers on LocalLauncherRepository {
       File(p.join(_managerRoot(install).path, 'state.json'));
 
   void _ensureDataRoot() {
+    _acceptanceIsolation?.verify();
     _dataRoot.createSync(recursive: true);
     Directory(p.join(_dataRoot.path, 'logs')).createSync(recursive: true);
     Directory(

@@ -5,7 +5,8 @@ description: Understand .topiaforgemod layout, validation, receipts, and install
 
 # Mod package format
 
-A `.topiaforgemod` is a bounded zip archive with one schema-V5 `topiaforge.mod.json` at its root.
+A `.topiaforgemod` is a bounded zip archive with one `topiaforge.mod.json` at its root.
+New packages use the canonical schema V6 contract.
 Its canonical filename is `<normalized-id>-<semver>.topiaforgemod`; the manifest identity and version
 must match the containing install directory.
 
@@ -35,7 +36,7 @@ analyzer and package validator reject copied framework assemblies.
 Before installation or load, TopiaForge checks:
 
 - bounded, portable archive paths with no traversal, roots, device names, links, or case collisions;
-- schema V5, known capabilities, required compatibility ranges, and bounded dependency graphs;
+- supported manifest schema, known capabilities, required compatibility ranges, and bounded dependency graphs;
 - canonical package id, SemVer, directory layout, and supported platform/content constraints;
 - managed PE validity and declared assembly identity;
 - a public parameterless `entryType` deriving from `TopiaForgeMod`;

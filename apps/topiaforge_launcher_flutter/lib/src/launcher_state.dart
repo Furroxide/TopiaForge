@@ -14,7 +14,8 @@ class LauncherState {
     required this.registryMods,
     required this.packageSources,
     required this.sourceStatuses,
-    required this.worldCatalog,
+    this.previewsByProfile = const {},
+    this.launchActivity,
     required this.recentLog,
     required this.launcherLog,
     required this.resolution,
@@ -31,14 +32,9 @@ class LauncherState {
     this.diagnosticBundle,
     this.developerWorkspace,
     this.developerDoctor,
-    this.ugcPublisherRunning = false,
     this.developerMode = false,
     this.developerEnvironment,
     this.developerSetup,
-    this.ugcStatus,
-    this.ugcScenes = const [],
-    this.ugcSidecarLog = const [],
-    this.ugcCapturedDocumentUrl = '',
     this.developerProjects = const [],
     this.unityEditors = const [],
     this.managedProject,
@@ -57,7 +53,6 @@ class LauncherState {
     registryMods: const [],
     packageSources: const [],
     sourceStatuses: const [],
-    worldCatalog: WorldCatalog.fallback(),
     recentLog: '',
     launcherLog: '',
     resolution: const DependencyResolutionResult(
@@ -80,10 +75,12 @@ class LauncherState {
   final List<RegistryMod> registryMods;
   final List<PackageSource> packageSources;
   final List<PackageSourceStatus> sourceStatuses;
-  final WorldCatalog worldCatalog;
+  final Map<String, LaunchPreview> previewsByProfile;
+  final LaunchActivity? launchActivity;
   final String recentLog;
   final String launcherLog;
   final DependencyResolutionResult resolution;
+
   final LauncherUpdateSettings launcherUpdates;
   final LauncherUpdateStatus launcherUpdateStatus;
   final String? selectedModId;
@@ -96,9 +93,6 @@ class LauncherState {
   final DeveloperWorkspace? developerWorkspace;
   final DeveloperDoctorReport? developerDoctor;
 
-  /// True while the UGC Automerge publisher (Node sidecar) is running in watch mode from the launcher.
-  final bool ugcPublisherRunning;
-
   /// Opt-in developer mode (off by default). Controls whether the Developer tab is shown.
   final bool developerMode;
 
@@ -107,18 +101,6 @@ class LauncherState {
 
   /// Last setup/auto-fix result (action log), shown after running Setup in the Dev tab.
   final DeveloperSetupResult? developerSetup;
-
-  /// Last UGC live-sync status read from the game's handshake file (default watch folder, connected doc, scenes).
-  final UgcLiveSyncStatusSnapshot? ugcStatus;
-
-  /// Scenes parsed from the newest exported project in the watch folder (drives the cockpit's scene dropdown).
-  final List<UgcSceneRef> ugcScenes;
-
-  /// Recent lines from the running Automerge publisher (Node sidecar), shown in the cockpit's console view.
-  final List<String> ugcSidecarLog;
-
-  /// The live Automerge document url auto-captured from the publisher's output (pre-populated into the game).
-  final String ugcCapturedDocumentUrl;
 
   /// The VCC-style tracked developer projects (mod + Unity), shown in the Dev tab's Projects list.
   final List<RegisteredProject> developerProjects;
@@ -138,18 +120,13 @@ class LauncherState {
   /// The subscribed VPM repositories (package listings).
   final List<PackageSource> unityRepos;
 
-  /// Convenience accessor for the current project's UGC live-sync settings (defaults when none).
-  UgcLiveSyncSettings get ugcLiveSync =>
-      developerWorkspace?.project?.unityCompanion.liveSync ??
-      const UgcLiveSyncSettings();
-
   LauncherProfile? get selectedProfile {
     for (final profile in profiles) {
       if (profile.id == selectedProfileId) {
         return profile;
       }
     }
-    return profiles.isEmpty ? null : profiles.first;
+    return null;
   }
 
   InstalledMod? get selectedMod {
@@ -164,19 +141,33 @@ class LauncherState {
     return installedMods.first;
   }
 
-  bool get canLaunch {
-    return gameInstall != null &&
-        gameInstall!.canLaunch &&
-        !gameInstall!.needsRepair &&
-        selectedProfile != null;
+  LaunchPreview? previewFor(LauncherProfile profile) {
+    final preview = previewsByProfile[profile.id];
+    return preview?.profileId == profile.id &&
+            preview?.profileRevision == profile.revision
+        ? preview
+        : null;
   }
 
-  bool get canStartLaunchFlow {
-    return gameInstall != null &&
-        gameInstall!.canLaunch &&
-        selectedProfile != null;
-  }
+  LaunchPreview? get launchPreview =>
+      selectedProfile == null ? null : previewFor(selectedProfile!);
 
+  List<LauncherIssue> get blockingLaunchIssues => [
+    ...?launchPreview?.issues.where((issue) => issue.isBlocking),
+    for (final block
+        in launchPreview?.resolution?.blocks ?? const <LaunchBlock>[])
+      LauncherIssue(severity: IssueSeverity.error, message: block.message),
+  ];
+
+  bool canStartProfileLaunch(LauncherProfile profile) =>
+      gameInstall != null &&
+      gameInstall!.canLaunch &&
+      previewFor(profile)?.canLaunch == true;
+
+  bool get canLaunch => canStartLaunchFlow && !gameInstall!.needsRepair;
+
+  bool get canStartLaunchFlow =>
+      selectedProfile != null && canStartProfileLaunch(selectedProfile!);
   int get availableModUpdateCount {
     return registryMods.where((mod) => mod.updateAvailable).length;
   }
@@ -210,7 +201,9 @@ class LauncherState {
     List<RegistryMod>? registryMods,
     List<PackageSource>? packageSources,
     List<PackageSourceStatus>? sourceStatuses,
-    WorldCatalog? worldCatalog,
+    Map<String, LaunchPreview>? previewsByProfile,
+    LaunchActivity? launchActivity,
+    bool clearLaunchActivity = false,
     String? recentLog,
     String? launcherLog,
     DependencyResolutionResult? resolution,
@@ -229,15 +222,9 @@ class LauncherState {
     DiagnosticBundle? diagnosticBundle,
     DeveloperWorkspace? developerWorkspace,
     DeveloperDoctorReport? developerDoctor,
-    bool? ugcPublisherRunning,
     bool? developerMode,
     EnvironmentReport? developerEnvironment,
     DeveloperSetupResult? developerSetup,
-    UgcLiveSyncStatusSnapshot? ugcStatus,
-    bool clearUgcStatus = false,
-    List<UgcSceneRef>? ugcScenes,
-    List<String>? ugcSidecarLog,
-    String? ugcCapturedDocumentUrl,
     List<RegisteredProject>? developerProjects,
     List<UnityEditor>? unityEditors,
     RegisteredProject? managedProject,
@@ -262,7 +249,10 @@ class LauncherState {
       registryMods: registryMods ?? this.registryMods,
       packageSources: packageSources ?? this.packageSources,
       sourceStatuses: sourceStatuses ?? this.sourceStatuses,
-      worldCatalog: worldCatalog ?? this.worldCatalog,
+      previewsByProfile: previewsByProfile ?? this.previewsByProfile,
+      launchActivity: clearLaunchActivity
+          ? null
+          : launchActivity ?? this.launchActivity,
       recentLog: recentLog ?? this.recentLog,
       launcherLog: launcherLog ?? this.launcherLog,
       resolution: resolution ?? this.resolution,
@@ -283,15 +273,9 @@ class LauncherState {
       diagnosticBundle: diagnosticBundle ?? this.diagnosticBundle,
       developerWorkspace: developerWorkspace ?? this.developerWorkspace,
       developerDoctor: developerDoctor ?? this.developerDoctor,
-      ugcPublisherRunning: ugcPublisherRunning ?? this.ugcPublisherRunning,
       developerMode: developerMode ?? this.developerMode,
       developerEnvironment: developerEnvironment ?? this.developerEnvironment,
       developerSetup: developerSetup ?? this.developerSetup,
-      ugcStatus: clearUgcStatus ? null : ugcStatus ?? this.ugcStatus,
-      ugcScenes: ugcScenes ?? this.ugcScenes,
-      ugcSidecarLog: ugcSidecarLog ?? this.ugcSidecarLog,
-      ugcCapturedDocumentUrl:
-          ugcCapturedDocumentUrl ?? this.ugcCapturedDocumentUrl,
       developerProjects: developerProjects ?? this.developerProjects,
       unityEditors: unityEditors ?? this.unityEditors,
       managedProject: clearManagedProject

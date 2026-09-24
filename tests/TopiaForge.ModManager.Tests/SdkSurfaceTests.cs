@@ -82,45 +82,21 @@ namespace TopiaForge.ModManager.Tests
                 "IsNonGameplayScene is null/empty safe");
         }
 
-        // The session-end lifecycle contract (the fix for gamemodes staying active over the menu).
         private static void TestWorldSessionEndContracts()
         {
-            var sessionEnded = typeof(IWorldGamemodeService).GetEvent("SessionEnded");
-            Assert(sessionEnded != null && sessionEnded.EventHandlerType == typeof(Action<WorldSessionEnd>),
-                "IWorldGamemodeService exposes SessionEnded as Action<WorldSessionEnd>");
-            var endSession = typeof(IWorldGamemodeService).GetMethod("EndSession");
-            Assert(endSession != null && endSession.GetParameters().Length == 1
-                && endSession.GetParameters()[0].ParameterType == typeof(WorldSessionEndReason),
-                "IWorldGamemodeService exposes EndSession(WorldSessionEndReason)");
-
-            // Pin the reason set: mods switch on these, so a silent rename/reorder is a breaking change.
-            Assert((int)WorldSessionEndReason.MenuReached == 0 && (int)WorldSessionEndReason.EndedByGamemode == 1
-                && (int)WorldSessionEndReason.Superseded == 2 && (int)WorldSessionEndReason.ProviderUnloading == 3
-                && (int)WorldSessionEndReason.SceneReplaced == 4 && (int)WorldSessionEndReason.LoadFailed == 5,
-                "WorldSessionEndReason order must append SceneReplaced and LoadFailed after the original reasons");
-
-            var inFlight = typeof(IWorldTransitionState).GetProperty("IsTransitionInFlight");
-            Assert(inFlight != null && inFlight.PropertyType == typeof(bool) && inFlight.CanRead && !inFlight.CanWrite,
-                "IWorldTransitionState exposes read-only bool IsTransitionInFlight");
-            Assert(typeof(IWorldGamemodeService).GetProperty("IsTransitionInFlight") == null,
-                "scene-load state stays on its focused optional capability interface");
-
-            var session = new WorldSession("world", "gamemode", "gameScene", "Scene", DateTime.UtcNow);
-            var end = new WorldSessionEnd(session, WorldSessionEndReason.MenuReached);
-            Assert(ReferenceEquals(end.Session, session) && end.Reason == WorldSessionEndReason.MenuReached,
-                "WorldSessionEnd carries the ended session and the reason");
-
-            var threw = false;
-            try
-            {
-                _ = new WorldSessionEnd(null!, WorldSessionEndReason.MenuReached);
-            }
-            catch (ArgumentNullException)
-            {
-                threw = true;
-            }
-
-            Assert(threw, "WorldSessionEnd null-guards the session");
+            var assembly = typeof(IWorldSessionService).Assembly;
+            Assert(assembly.GetType("TopiaForge.Mods.GamemodeHost") == null
+                && assembly.GetType("TopiaForge.Mods.IWorldGamemodeService") == null,
+                "the old startup and imperative registration APIs are retired");
+            Assert(typeof(IWorldSessionService).GetEvent("StateChanged")!.EventHandlerType == typeof(Action<WorldSessionSnapshot>),
+                "observers receive one committed immutable state");
+            Assert(typeof(IWorldSession).GetProperty("Context") == null && typeof(IWorldSession).GetProperty("Lifetime") == null,
+                "an observed session cannot expose another package's resource scope");
+            Assert(typeof(IGamemodeSession).GetInterfaces().Contains(typeof(IWorldSession)), "gamemode session shares the bound identity contract");
+            foreach (var property in typeof(WorldSessionSnapshot).GetProperties())
+                Assert(!property.CanWrite, "committed session state is immutable");
+            Assert(typeof(IGamemodeFactory).GetMethod("StartAsync") != null && typeof(IGamemodeFactory).GetProperty("GamemodeId") == null,
+                "manifest identity is authoritative and factory startup is asynchronous");
         }
         private static void AssertThrows<TException>(Action action, string message)
             where TException : Exception

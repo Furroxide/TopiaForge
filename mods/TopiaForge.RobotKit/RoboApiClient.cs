@@ -19,7 +19,7 @@ namespace TopiaForge.RobotKit
     // consumer's deterministic fallback always stands.
     //
     // UNAPPROVED THIRD-PARTY DEPENDENCY. This endpoint belongs to Tomato Cake, not to TopiaForge. As of the
-    // 1.0.0-rc.1 candidate no authorization for these mod-layer calls has been obtained from them, and their
+    // 0.1.0-rc.1 candidate no authorization for these mod-layer calls has been obtained from them, and their
     // retention, training-use, geographic-processing, account-linkage, rate-limit, abuse-handling, and cost policies
     // are unknown to this repository. Do not document or imply otherwise. See docs/PrivacyAndCapabilities.md and the
     // P0-PRIV-01 gate in docs/LaunchBlockers.md.
@@ -42,15 +42,20 @@ namespace TopiaForge.RobotKit
 
         // One process-wide client (creating one per call exhausts sockets). Timeout is managed per-call via a linked
         // CancellationTokenSource, so the handler-level timeout is left generous.
-        private static readonly HttpClient Http = new HttpClient(new HttpClientHandler
-        {
-            AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-        })
+        private static readonly HttpClient Http = new HttpClient(CreateHttpHandler())
         {
             Timeout = TimeSpan.FromSeconds(30),
         };
 
+        internal static HttpClientHandler CreateHttpHandler() => new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+        };
+
+        // The default client is process-owned; an explicitly supplied transport
+        // remains caller-owned and is never disposed by this service.
+        private readonly HttpClient transport;
         private readonly string tokenFilePath;
         private readonly string endpoint;
         private readonly string sttEndpoint;
@@ -62,7 +67,13 @@ namespace TopiaForge.RobotKit
         private bool tokenLoaded;
 
         public RoboApiClient(string tokenDirectory, string sessionId, IModLogger logger)
+            : this(tokenDirectory, sessionId, logger, Http)
         {
+        }
+
+        internal RoboApiClient(string tokenDirectory, string sessionId, IModLogger logger, HttpClient transport)
+        {
+            this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
             this.tokenFilePath = ResolveTokenPath(tokenDirectory);
             this.sessionId = sessionId;
             this.logger = logger;
@@ -158,7 +169,7 @@ namespace TopiaForge.RobotKit
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(0.25f, timeoutSeconds)));
 
-                using var response = await Http
+                using var response = await transport
                     .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token)
                     .ConfigureAwait(false);
 
@@ -224,7 +235,7 @@ namespace TopiaForge.RobotKit
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(0.5f, timeoutSeconds)));
 
-                using var response = await Http
+                using var response = await transport
                     .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token)
                     .ConfigureAwait(false);
 
@@ -313,7 +324,10 @@ namespace TopiaForge.RobotKit
             return uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
         }
 
-        private static async Task<string> ReadBoundedContentAsync(HttpContent content, int maximumBytes, CancellationToken token)
+        // internal rather than private so the response-cap regressions can drive it directly: the caps are a
+        // privacy/DoS boundary (P0-PRIV-01), and reaching them through a live HTTPS response would need a
+        // trusted local certificate fixture on every supported host.
+        internal static async Task<string> ReadBoundedContentAsync(HttpContent content, int maximumBytes, CancellationToken token)
         {
             if (content.Headers.ContentLength.HasValue && content.Headers.ContentLength.Value > maximumBytes)
             {

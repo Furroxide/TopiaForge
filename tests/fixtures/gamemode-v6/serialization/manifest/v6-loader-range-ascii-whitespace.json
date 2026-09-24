@@ -1,0 +1,63 @@
+{
+  "id": "v6-loader-range-ascii-whitespace",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "Present supportedLoaderVersionRange must not become an unrestricted default.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+    "schemaVersion": 6,
+    "name": "fixtures.v6-valid",
+    "displayName": "V6 Fixture",
+    "version": "1.2.3",
+    "author": {
+      "name": "TopiaForge Tests"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixtures.V6Mod",
+    "dependencies": {
+      "fixtures.required": ">=1.0.0 <2.0.0"
+    },
+    "optionalDependencies": {
+      "fixtures.optional": "*"
+    },
+    "loadBefore": [
+      "fixtures.later"
+    ],
+    "supportedGameVersionRange": ">=0.0.2409 <0.0.2600",
+    "supportedLoaderVersionRange": " \t\r\n",
+    "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
+    "capabilities": [
+      "input"
+    ],
+    "platforms": [
+      "windows"
+    ],
+    "architectures": [
+      "x64"
+    ],
+    "contentTargets": [
+      "gameplay"
+    ],
+    "builtWith": {
+      "toolVersion": "1.0.0"
+    },
+    "x-test-metadata": {
+      "enabled": true
+    }
+  },
+  "schemaOutcome": "accept",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "supportedLoaderVersionRange"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "supportedLoaderVersionRange"
+      ]
+    }
+  }
+}

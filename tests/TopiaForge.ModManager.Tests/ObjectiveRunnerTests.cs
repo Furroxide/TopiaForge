@@ -9,10 +9,14 @@ namespace TopiaForge.ModManager.Tests
     // that owns runners + the named-target registry (RobotObjectiveService), driven against a fake robot agent and a
     // fake clock. No UnityEngine — these compile straight into the net8.0 test assembly via the csproj Compile
     // includes, exactly like the conversation tests.
-    internal static class ObjectiveRunnerTests
+    internal static partial class ObjectiveRunnerTests
     {
         public static void Run()
         {
+            TestStoppedOwnerCannotSetObjectives();
+            TestStoppedOwnerCannotClearObjectives();
+            TestStoppedOwnerCannotPublishTargets();
+            TestStoppedOwnerDoesNotReceiveDelivery();
             TestIdleStopsOnce();
             TestGoToPointArrives();
             TestGoToNamedTargetReissuesWhenItMoves();

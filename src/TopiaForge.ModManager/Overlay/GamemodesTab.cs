@@ -1,186 +1,140 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TopiaForge.ModManager.Core;
-using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>Gamemode cards with PLAY actions; launching closes the overlay on success.</summary>
+    /// <summary>Policy-permitted target choices, durable repair, and live resolver admission.</summary>
     internal sealed class GamemodesTab : IManagerTab
     {
+        private readonly Dictionary<string, LaunchRequest?> drafts = new Dictionary<string, LaunchRequest?>(StringComparer.OrdinalIgnoreCase);
         public string Title => "GAMEMODES";
-
         public void Build(TopiaForgeContainer content, ManagerTabContext context)
         {
-            content.Label("SELECT GAMEMODE", TopiaForgeTextStyle.Display).FixedHeight(34f);
-            content.Label("Launches close this overlay so the world stays in view.", TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(22f);
-
-            var service = context.Plugin.GetWorldService();
-            if (service == null)
-            {
-                content.Label("World/gamemode service unavailable. Enable TopiaForge Worlds and restart.", TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Warning);
-                return;
-            }
-
-            var entries = service.MenuEntries;
-            if (entries.Count == 0)
-            {
-                content.Label("No gamemodes are registered yet.", TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Muted);
-                return;
-            }
-
-            var worlds = service.Worlds;
-            if (worlds.Count == 0)
-            {
-                content.Label("No worlds are registered yet.", TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Muted);
-                return;
-            }
-
-            var settings = context.Plugin.ReadWorldLaunchSettings();
-            var selectedWorldIndex = IndexOfWorld(worlds, settings.SelectedWorldId);
-            if (selectedWorldIndex < 0)
-            {
-                selectedWorldIndex = 0;
-            }
-
-            var selectedWorld = worlds[selectedWorldIndex];
-            var selectedLoadMode = WorldLaunchSettings.ReconcileLoadMode(
-                selectedWorld.SupportsSceneReplacement,
-                selectedWorld.SupportsAdditiveArena,
-                settings.LoadMode);
-            var loadModeOptions = LoadModesFor(selectedWorld);
-            var selectedLoadModeIndex = Math.Max(0, loadModeOptions.IndexOf(selectedLoadMode));
-
-            content.Label("LAUNCH TARGET", TopiaForgeTextStyle.Heading).FixedHeight(24f);
-            var controls = content.Panel(TopiaForgePanelStyle.Plain);
-            controls.FixedHeight(92f);
-            var controlsRow = controls.Row(TopiaForgeGap.Md, TopiaForgeGap.Md, expandChildWidth: true);
-            controlsRow.Stretch();
-
-            var worldColumn = controlsRow.Column(TopiaForgeGap.Xs);
-            worldColumn.Flex(2f, 0f);
-            worldColumn.Label("WORLD", TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(18f);
-
-            TopiaForgeDropdown? loadModeDropdown = null;
-            var worldDropdown = worldColumn.Dropdown(WorldLabels(worlds), selectedWorldIndex, next =>
-            {
-                selectedWorldIndex = next;
-                selectedWorld = worlds[selectedWorldIndex];
-                selectedLoadMode = WorldLaunchSettings.ReconcileLoadMode(
-                    selectedWorld.SupportsSceneReplacement,
-                    selectedWorld.SupportsAdditiveArena,
-                    selectedLoadMode);
-                loadModeOptions = LoadModesFor(selectedWorld);
-                selectedLoadModeIndex = Math.Max(0, loadModeOptions.IndexOf(selectedLoadMode));
-                loadModeDropdown?.SetOptions(LoadModeLabels(loadModeOptions), selectedLoadModeIndex);
-                loadModeDropdown?.SetEnabled(loadModeOptions.Count > 1);
-            });
-            worldDropdown.FixedHeight(TopiaForgeTokens.ControlHeight);
-
-            var modeColumn = controlsRow.Column(TopiaForgeGap.Xs);
-            modeColumn.Flex(1f, 0f);
-            modeColumn.Label("LOAD MODE", TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(18f);
-            loadModeDropdown = modeColumn.Dropdown(LoadModeLabels(loadModeOptions), selectedLoadModeIndex, next =>
-            {
-                selectedLoadModeIndex = next;
-                selectedLoadMode = loadModeOptions[selectedLoadModeIndex];
-            });
-            loadModeDropdown.SetEnabled(loadModeOptions.Count > 1);
-            loadModeDropdown.FixedHeight(TopiaForgeTokens.ControlHeight);
-
+            content.Label("LAUNCH TARGETS", TopiaForgeTextStyle.Display).FixedHeight(34f);
+            content.Label("Choose a target and a permitted world. Launch completes when gameplay is ready.",
+                TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(30f);
+            var session = context.Plugin.GetSessionService()?.Current;
+            if (session != null) content.Label("Session: " + session.Phase, TopiaForgeTextStyle.Caption).FixedHeight(24f);
+            var saved = context.Plugin.ReadLaunchSelection();
+            var remembered = context.Plugin.ResolveRememberedSelection();
             var scroll = content.Scroll(TopiaForgeGap.Sm);
-            foreach (var entry in entries)
+            if (!context.Plugin.CanSaveState) scroll.Content.Label(context.Plugin.StatePersistenceError,
+                TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Warning);
+            if (!remembered.Available)
             {
-                var entryId = entry.Id;
-                var gamemodeId = entry.GamemodeId;
-                var card = scroll.Content.Panel(TopiaForgePanelStyle.Plain);
-                card.FixedHeight(64f);
-                var row = card.Row(TopiaForgeGap.Md, TopiaForgeGap.Md, expandChildWidth: false);
-                row.Stretch();
-                var text = row.Column(TopiaForgeGap.Xs);
-                text.Flex(1f, 0f);
-                text.Label(entry.Title.ToUpperInvariant(), TopiaForgeTextStyle.Heading);
-                text.Label(entry.Description, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
-                var play = row.Button("PLAY", async () =>
-                {
-                    var selectedWorldId = worlds[selectedWorldIndex].Id;
-                    var (ok, message) = await context.Plugin.LaunchGamemodeSelection(
-                        entryId,
-                        selectedWorldId,
-                        gamemodeId,
-                        selectedLoadMode);
-                    context.SetStatus(message);
-                    if (ok)
-                    {
-                        context.Close();
-                    }
-                    else
-                    {
-                        TopiaForgeToasts.Show(message, TopiaForgeTone.Danger, 5f);
-                        context.Refresh();
-                    }
-                });
-                play.Fixed(110f, TopiaForgeTokens.ControlHeight);
+                scroll.Content.Label("Saved selection unavailable. " + remembered.RepairMessage + " Choose and save a target below, or save Main Menu.",
+                    TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Warning);
+                foreach (var reason in remembered.Blocks) scroll.Content.Label(Reason(reason), TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
             }
+            else scroll.Content.Label(remembered.IsMainMenu ? "Saved: Main Menu" : "Saved: " + remembered.Request!.TargetId,
+                TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
+            if (saved.Kind == "unresolved-legacy" && remembered.Available)
+                scroll.Content.Label("The legacy choice has one valid target. Save it explicitly to finish migration; its original values are retained until then.",
+                    TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
+            var automatic = scroll.Content.Toggle("Use saved selection when starting Robotopia directly", context.Plugin.State.AutoLoadOnStart,
+                value => { context.Plugin.SaveLaunchSelection(saved, value); context.SetStatus("Direct-start preference saved."); });
+            automatic.SetEnabled(context.Plugin.CanSaveState);
+            var entries = context.Plugin.GetLaunchPreviews();
+            if (entries.Count == 0) scroll.Content.Label("No targets are declared by enabled packages. Enable the required packages in Mods and restart.",
+                TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Warning);
+            foreach (var entry in entries) BuildTarget(scroll.Content, context, entry, saved, remembered);
+            var menu = scroll.Content.Row(TopiaForgeGap.Md, TopiaForgeGap.Md, expandChildWidth: true);
+            var saveMenu = menu.Button("SAVE MAIN MENU", () =>
+            {
+                context.Plugin.SaveLaunchSelection(LaunchSelection.MainMenu(), context.Plugin.State.AutoLoadOnStart);
+                drafts.Clear(); context.SetStatus("Main Menu saved."); context.Refresh();
+            }).FixedHeight(TopiaForgeTokens.ControlHeight);
+            saveMenu.SetEnabled(context.Plugin.CanSaveState);
+            menu.Button("MAIN MENU", async () =>
+            {
+                var (ok, message) = await context.Plugin.ReturnToMainMenu();
+                context.SetStatus(message);
+                if (ok) context.Close(); else TopiaForgeToasts.Show(message, TopiaForgeTone.Danger, 5f);
+            }).FixedHeight(TopiaForgeTokens.ControlHeight);
         }
-
-        private static int IndexOfWorld(IReadOnlyList<WorldDefinition> worlds, string worldId)
+        private void BuildTarget(TopiaForgeContainer content, ManagerTabContext context, LaunchTargetPreview target,
+            LaunchSelection saved, LaunchSelectionResolution remembered)
         {
-            for (var index = 0; index < worlds.Count; index++)
+            var card = content.Panel(TopiaForgePanelStyle.Plain);
+            card.Label(target.Title, TopiaForgeTextStyle.Heading).FixedHeight(28f);
+            card.Label(target.Description ?? target.Id, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).FixedHeight(40f);
+            if (!drafts.TryGetValue(target.Id, out var chosen))
             {
-                if (string.Equals(worlds[index].Id, worldId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return index;
-                }
+                var prior = saved.Request ?? remembered.Request;
+                chosen = prior != null && Same(prior.TargetId, target.Id) ? prior
+                    : target.Declared.Resolved ? new LaunchRequest(target.Id) : null;
             }
-
-            return -1;
+            var selected = target.Choices.ToList().FindIndex(choice => Matches(choice.Request, chosen));
+            var options = new[] { selected < 0 && chosen != null ? "Saved choice unavailable — select a permitted option" : "Select a world and transition" }
+                .Concat(target.Choices.Select(choice => (choice.IsDeclaredDefault ? "Declared default: " : "") + choice.WorldId + " · " + choice.Transition)).ToArray();
+            var dropdown = card.Dropdown(options, selected + 1, index =>
+            {
+                drafts[target.Id] = index > 0 && index <= target.Choices.Count ? target.Choices[index - 1].Request : null;
+                context.Refresh();
+            });
+            dropdown.SetEnabled(target.Choices.Count != 0);
+            if (selected < 0)
+                foreach (var block in target.Declared.Blocks) card.Label(Reason(block), TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning);
+            var selectedRequest = selected < 0 ? null : target.Choices[selected].Request;
+            var actions = card.Row(TopiaForgeGap.Md, TopiaForgeGap.Md, expandChildWidth: true);
+            var save = actions.Button("SAVE SELECTION", () =>
+            {
+                if (selectedRequest == null) return;
+                context.Plugin.SaveLaunchSelection(LaunchSelection.Target(selectedRequest), context.Plugin.State.AutoLoadOnStart);
+                drafts.Clear(); context.SetStatus("Launch selection saved."); context.Refresh();
+            });
+            save.SetEnabled(selectedRequest != null && context.Plugin.CanSaveState);
+            var play = actions.Button("PLAY", async () =>
+            {
+                if (selectedRequest == null) return;
+                var (ok, message) = await context.Plugin.LaunchTarget(selectedRequest.TargetId, selectedRequest.WorldOverride, selectedRequest.TransitionOverride);
+                context.SetStatus(message);
+                if (ok) context.Close(); else { TopiaForgeToasts.Show(message, TopiaForgeTone.Danger, 5f); context.Refresh(); }
+            });
+            play.SetEnabled(selectedRequest != null);
         }
-
-        private static List<string> WorldLabels(IReadOnlyList<WorldDefinition> worlds)
+        private static bool Same(string? left, string? right) => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        private static bool Matches(LaunchRequest left, LaunchRequest? right) => right != null && Same(left.TargetId, right.TargetId)
+            && Same(left.WorldOverride, right.WorldOverride) && left.TransitionOverride == right.TransitionOverride;
+        private static string Reason(LaunchBlock block)
         {
-            var labels = new List<string>(worlds.Count);
-            for (var index = 0; index < worlds.Count; index++)
+            string repair;
+            switch (block.Code)
             {
-                labels.Add(worlds[index].Name);
+                case LaunchBlockCode.TargetPackageDisabled:
+                case LaunchBlockCode.GamemodePackageDisabled:
+                case LaunchBlockCode.WorldPackageDisabled:
+                    repair = "Enable the required package and restart"; break;
+                case LaunchBlockCode.TargetNotDeclared:
+                case LaunchBlockCode.GamemodeNotDeclared:
+                case LaunchBlockCode.WorldNotDeclared:
+                    repair = "Install the required package or choose another target"; break;
+                case LaunchBlockCode.GamemodeUnbound:
+                case LaunchBlockCode.WorldUnbound:
+                case LaunchBlockCode.WorldUnavailable:
+                case LaunchBlockCode.NoAvailableTarget:
+                    repair = "Required content is unavailable; check package errors in Mods"; break;
+                case LaunchBlockCode.WorldConsentMissing:
+                case LaunchBlockCode.WorldNotAdmittedByPolicy:
+                case LaunchBlockCode.WorldNotStaticallyDeclared:
+                    repair = "Choose a world permitted by this target"; break;
+                case LaunchBlockCode.TransitionNotOffered:
+                case LaunchBlockCode.TransitionUnsatisfiable:
+                case LaunchBlockCode.SpawnRequirementUnsatisfied:
+                    repair = "Choose a compatible world and transition"; break;
+                case LaunchBlockCode.TargetPlatformUnsupported:
+                case LaunchBlockCode.GamemodePlatformUnsupported:
+                case LaunchBlockCode.WorldPlatformUnsupported:
+                    repair = "This package does not support the current installation"; break;
+                case LaunchBlockCode.PlanPackageSetMismatch:
+                case LaunchBlockCode.PlanResolutionMismatch:
+                    repair = "The package selection changed; restart and choose again"; break;
+                default: repair = "Repair package dependencies or select a compatible package version"; break;
             }
-
-            return labels;
-        }
-
-        private static List<string> LoadModesFor(WorldDefinition world)
-        {
-            var modes = new List<string>(2);
-            if (world.SupportsAdditiveArena)
-            {
-                modes.Add(WorldLaunchSettings.AdditiveArena);
-            }
-
-            if (world.SupportsSceneReplacement)
-            {
-                modes.Add(WorldLaunchSettings.SceneReplacement);
-            }
-
-            if (modes.Count == 0)
-            {
-                modes.Add(WorldLaunchSettings.AdditiveArena);
-            }
-
-            return modes;
-        }
-
-        private static List<string> LoadModeLabels(IReadOnlyList<string> modes)
-        {
-            var labels = new List<string>(modes.Count);
-            for (var index = 0; index < modes.Count; index++)
-            {
-                labels.Add(modes[index] == WorldLaunchSettings.SceneReplacement
-                    ? "Scene replacement"
-                    : "Additive arena");
-            }
-
-            return labels;
+            return repair + ": " + block.Subject + (block.SubjectVersion.Length == 0 ? "" : " " + block.SubjectVersion) + ".";
         }
     }
 }

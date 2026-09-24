@@ -27,7 +27,7 @@ class DeveloperDoctorReport {
 enum ToolStatus { ok, outdated, warning, missing }
 
 /// What a tool is needed for. Consuming mods needs none of these.
-enum ToolPurpose { develop, ugcAutomerge, ugcUnity, optional }
+enum ToolPurpose { develop, customWorldUnity, optional }
 
 /// A single environment check with actionable remediation when not OK.
 class ToolCheck {
@@ -61,10 +61,8 @@ class EnvironmentReport {
 
   bool get developerReady => ofPurpose(ToolPurpose.develop).every((c) => c.ok);
 
-  bool get ugcAutomergeReady =>
-      ofPurpose(ToolPurpose.ugcAutomerge).every((c) => c.ok);
-
-  bool get ugcUnityReady => ofPurpose(ToolPurpose.ugcUnity).every((c) => c.ok);
+  bool get customWorldUnityReady =>
+      ofPurpose(ToolPurpose.customWorldUnity).every((c) => c.ok);
 
   List<ToolCheck> get blockers =>
       ofPurpose(ToolPurpose.develop).where((c) => !c.ok).toList();

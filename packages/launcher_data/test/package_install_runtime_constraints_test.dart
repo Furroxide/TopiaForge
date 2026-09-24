@@ -108,7 +108,7 @@ class _Fixture {
         ArchiveFile.string(
           'topiaforge.mod.json',
           jsonEncode({
-            'schemaVersion': 5,
+            'schemaVersion': 6,
             'name': id,
             'displayName': id,
             'version': '1.0.0',

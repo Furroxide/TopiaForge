@@ -1,5 +1,6 @@
 using System;
-using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
@@ -10,39 +11,59 @@ namespace {{ASSEMBLY_NAME}}.Tests
     public sealed class {{TYPE_NAME}}ModTests
     {
         [Test]
-        public void LifecycleRegistersRunsAndCleansUpGamemode()
+        public void LoadingPackageDoesNotStartGameplay()
         {
-            var context = new FakeModContext();
-            var worlds = new FakeWorldGamemodeService(context.Lifetime);
-            var world = worlds.RegisterWorld(new WorldDefinition(
-                WellKnownWorldIds.OpenSandboxWorld,
-                "Open Sandbox",
-                "Deterministic test world.",
-                sceneName: "UgcPlay"));
-            Assert.That(world.Succeeded, Is.True);
-            Assert.That(context.Extensions.Register<IWorldGamemodeService>(worlds).Succeeded, Is.True);
+            using var context = new FakeModContext();
             using var runner = ModLifecycleRunner.Create<{{TYPE_NAME}}Mod>(context);
-
             runner.Load();
-
-            Assert.That(worlds.Gamemodes.Select(item => item.Id), Does.Contain({{TYPE_NAME}}Mod.GamemodeId));
-            Assert.That(worlds.MenuEntries.Single().WorldId, Is.EqualTo(WellKnownWorldIds.OpenSandboxWorld));
-
-            var loaded = worlds.LoadAsync(new WorldLoadRequest(
-                WellKnownWorldIds.OpenSandboxWorld,
-                {{TYPE_NAME}}Mod.GamemodeId)).GetAwaiter().GetResult();
-            Assert.That(loaded.Succeeded, Is.True);
-            context.AdvanceFrame(TimeSpan.FromMilliseconds(16));
-            Assert.That(context.Logger.Entries.Any(entry => entry.Message.Contains("session started")), Is.True);
-
-            Assert.That(worlds.EndSession(WorldSessionEndReason.EndedByGamemode).Value, Is.True);
+            Assert.That(context.Events.ActiveSubscriptionCount, Is.Zero);
             runner.Unload();
-
-            Assert.That(worlds.Worlds, Is.Empty);
-            Assert.That(worlds.Gamemodes, Is.Empty);
-            Assert.That(worlds.MenuEntries, Is.Empty);
-            Assert.That(worlds.ActiveRegistrationCount, Is.Zero);
             context.AssertNoLeaks();
         }
+
+        [Test]
+        public async Task FactoryOwnsRoundResourcesAndRestartUsesItsSession()
+        {
+            using var context = new FakeModContext();
+            var pause = new FakeWorldPauseMenuService(context.Lifetime);
+            Assert.That(context.Extensions.Register<IWorldPauseMenuService>(pause).Succeeded, Is.True);
+            var session = ReadySession(context);
+            var result = await new {{TYPE_NAME}}Gamemode().StartAsync(session, CancellationToken.None);
+            Assert.That(result.TryGetValue(out var controller), Is.True);
+            Assert.That(context.Events.ActiveSubscriptionCount, Is.EqualTo(1));
+            Assert.That(pause.ActiveActionCount, Is.EqualTo(1));
+            Assert.That(pause.Invoke(session.GamemodeId + ".restart"), Is.True);
+            Assert.That(session.RestartRequests, Is.EqualTo(1));
+            controller!.Dispose();
+            controller.Dispose();
+            Assert.That(pause.ActiveActionCount, Is.Zero);
+            Assert.That(context.Events.ActiveSubscriptionCount, Is.Zero);
+            Assert.That(pause.Invoke(session.GamemodeId + ".restart"), Is.False);
+            context.Dispose();
+            context.AssertNoLeaks();
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CancellationBeforeStartAllocatesNoGameplayResources(bool cancelSession)
+        {
+            using var context = new FakeModContext();
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            var baselineResources = context.Lifetime.TrackedResourceCount;
+            var session = ReadySession(context, cancelSession ? cancellation.Token : CancellationToken.None);
+            Assert.ThrowsAsync<OperationCanceledException>(async () =>
+                await new {{TYPE_NAME}}Gamemode().StartAsync(session,
+                    cancelSession ? CancellationToken.None : cancellation.Token));
+            Assert.That(context.Lifetime.TrackedResourceCount, Is.EqualTo(baselineResources));
+            Assert.That(context.Events.ActiveSubscriptionCount, Is.Zero);
+            context.Dispose();
+            context.AssertNoLeaks();
+        }
+
+        private static FakeGamemodeSession ReadySession(FakeModContext context, CancellationToken token = default) =>
+            new FakeGamemodeSession(context,
+                new WorldReadiness(new WorldSceneIdentity(1, "TestWorld"), TransformState.Identity),
+                gamemodeId: "{{MOD_ID}}.mode", cancellationToken: token);
     }
 }

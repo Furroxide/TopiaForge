@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.Zombies;
@@ -7,142 +8,93 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class ZombiesControllerTests
     {
-        // Registration and repeated-session tests define the cleanup standard expected from a production mod.
-        private static void RegistrationConflictsFailClosed()
+        private static void CancelledFactoryStartupCleansAllocatedResources()
         {
-            var gamemodeContext = new FakeModContext();
-            var gamemodeWorlds = new FakeWorldGamemodeService(gamemodeContext.Lifetime);
-            var gamemodeRobots = new FakeRobotKit(gamemodeContext.Lifetime);
-            Assert(gamemodeWorlds.RegisterWorld(new WorldDefinition(
-                    WellKnownWorldIds.OpenSandboxWorld,
-                    "Open Sandbox",
-                    "Conflict test world")).Succeeded
-                && gamemodeWorlds.RegisterGamemode(new GamemodeDefinition(
-                    ZombiesMod.GamemodeId,
-                    "Conflicting Zombies",
-                    "Owned by another provider")).Succeeded
-                && gamemodeContext.Extensions.Register<IWorldGamemodeService>(gamemodeWorlds).Succeeded
-                && gamemodeContext.Extensions.Register<IRobotAgentService>(gamemodeRobots.Agents).Succeeded,
-                "the gamemode-conflict harness should expose both required dependencies");
-            using (var runner = ModLifecycleRunner.Create<ZombiesMod>(gamemodeContext))
-            {
-                runner.Load();
-                Assert(gamemodeWorlds.Gamemodes.Count == 1
-                    && gamemodeWorlds.MenuEntries.Count == 0
-                    && CountDiagnostics(gamemodeContext, "ZOMBIES_REGISTRATION_FAILED") == 1,
-                    "a gamemode-id conflict must not publish a Zombies menu entry or continue startup");
-                var launched = gamemodeWorlds.LoadAsync(new WorldLoadRequest(
-                    WellKnownWorldIds.OpenSandboxWorld,
-                    ZombiesMod.GamemodeId)).GetAwaiter().GetResult();
-                Assert(launched.Succeeded && gamemodeContext.Ui.Surfaces.Count == 0,
-                    "a session owned by the conflicting gamemode must not start the Zombies controller");
-                runner.Unload();
-            }
-            gamemodeContext.AssertNoLeaks();
-
-            var menuContext = new FakeModContext();
-            var menuWorlds = new FakeWorldGamemodeService(menuContext.Lifetime);
-            var menuRobots = new FakeRobotKit(menuContext.Lifetime);
-            Assert(menuWorlds.RegisterMenuEntry(new GamemodeMenuEntry(
-                    ZombiesMod.MenuEntryId,
-                    "Conflicting entry",
-                    "Owned by another provider",
-                    "other.mode",
-                    "other.world")).Succeeded
-                && menuContext.Extensions.Register<IWorldGamemodeService>(menuWorlds).Succeeded
-                && menuContext.Extensions.Register<IRobotAgentService>(menuRobots.Agents).Succeeded,
-                "the menu-conflict harness should expose both required dependencies");
-            using (var runner = ModLifecycleRunner.Create<ZombiesMod>(menuContext))
-            {
-                runner.Load();
-                Assert(menuWorlds.Gamemodes.Count == 0
-                    && menuWorlds.MenuEntries.Count == 1
-                    && CountDiagnostics(menuContext, "ZOMBIES_REGISTRATION_FAILED") == 1,
-                    "a menu-id conflict must immediately roll back the partial Zombies gamemode registration");
-                runner.Unload();
-            }
-            menuContext.AssertNoLeaks();
+            using var context = new FakeModContext();
+            using var cancellation = new CancellationTokenSource();
+            var sessions = new FakeWorldSessionService();
+            var robots = new FakeRobotKit(context.Lifetime);
+            var pause = new FakeWorldPauseMenuService(context.Lifetime);
+            context.Extensions.Register<IWorldSessionService>(sessions);
+            context.Extensions.Register<IRobotAgentService>(robots.Agents);
+            context.Extensions.Register<IWorldPauseMenuService>(new CancellingPause(pause, cancellation));
+            var session = NewSession(context, "cancelled-start");
+            sessions.Publish(WorldSessionPhase.StartingMode, session, session.World);
+            var baseline = context.Lifetime.TrackedResourceCount;
+            var result = new ZombiesGamemode().StartAsync(session, cancellation.Token).GetAwaiter().GetResult();
+            Assert(result.ErrorCode == ModErrorCode.Cancelled && cancellation.IsCancellationRequested
+                && pause.ActiveActionCount == 0 && context.Ui.Surfaces.Count == 0
+                && context.Input.ActiveActionCount == 0 && context.Events.ActiveSubscriptionCount == 0
+                && !context.Extensions.TryGet<ZombiesSessionCommands>(out _)
+                && context.Lifetime.TrackedResourceCount == baseline,
+                "cancellation after controller and pause allocation cleans everything without publishing a command target");
         }
 
         private static void SuccessfulModLifecycleReusesOneContextWithoutSessionLeaks()
         {
-            const string arenaScene = "ZombiesArena";
-            var context = new FakeModContext(new ModIdentity(
-                "io.github.furroxide.topiaforge.zombies",
-                "Zombies",
-                SemanticVersion.Parse("1.0.0")));
-            var config = FastConfig();
-            context.Config.Seed(2, config);
-            context.Scenes.Load(arenaScene);
-            context.LocalPlayer.Snapshot = new PlayerSnapshot(
-                Vec3.Zero,
-                new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
-            context.LocalPlayer.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
-
-            var worlds = new FakeWorldGamemodeService(context.Lifetime);
+            var context = new FakeModContext(new ModIdentity("io.github.furroxide.topiaforge.zombies", "Zombies", SemanticVersion.Parse("1.0.0")));
+            context.Config.Seed(2, FastConfig());
+            context.Scenes.Load("ZombiesArena");
+            context.LocalPlayer.Snapshot = new PlayerSnapshot(Vec3.Zero, new Ray(Vec3.Zero, new Vec3(0f, 0f, 1f)));
+            var sessions = new FakeWorldSessionService();
             var robots = new FakeRobotKit(context.Lifetime);
-            robots.Agents.AutoCompleteAgentMovement = false;
-            var pauseMenu = new FakeWorldPauseMenuService(context.Lifetime);
-            Assert(worlds.RegisterWorld(new WorldDefinition(
-                    WellKnownWorldIds.OpenSandboxWorld,
-                    "Open Sandbox",
-                    "Successful Zombies lifecycle world",
-                    arenaScene)).Succeeded
-                && context.Extensions.Register<IWorldGamemodeService>(worlds).Succeeded
-                && context.Extensions.Register<IRobotAgentService>(robots.Agents).Succeeded
-                && context.Extensions.Register<IWorldPauseMenuService>(pauseMenu).Succeeded,
-                "the successful lifecycle harness should publish every Zombies dependency");
-
+            robots.Agents.PlayerEntity = new FakeEntity("zombies-player", "Player", Vec3.Zero);
+            var pause = new FakeWorldPauseMenuService(context.Lifetime);
+            context.Extensions.Register<IWorldSessionService>(sessions);
+            context.Extensions.Register<IRobotAgentService>(robots.Agents);
+            context.Extensions.Register<IWorldPauseMenuService>(pause);
             using var runner = ModLifecycleRunner.Create<ZombiesMod>(context);
             runner.Load();
-            Assert(worlds.Gamemodes.Count == 1
-                && worlds.MenuEntries.Count == 1
-                && context.Commands.ActiveCommandCount == 3,
-                "successful mod load publishes one gamemode, one menu entry, and all commands");
-            var loadedBaseline = context.Lifetime.TrackedResourceCount;
-
+            Assert(context.Commands.ActiveCommandCount == 3 && context.Ui.Surfaces.Count == 0,
+                "package load retains command names without creating gameplay");
+            var baseline = context.Lifetime.TrackedResourceCount;
             for (var cycle = 0; cycle < 10; cycle++)
             {
-                var player = new FakeEntity(
-                    "zombies-player-" + cycle,
-                    "Player",
-                    new Vec3(cycle, 0f, 0f));
-                robots.Agents.PlayerEntity = player;
-                context.LocalPlayer.Snapshot = new PlayerSnapshot(
-                    player.Position,
-                    new Ray(player.Position, new Vec3(0f, 0f, 1f)));
-                context.LocalPlayer.Health = new PlayerHealthSnapshot(config.PlayerIntegrity, config.PlayerIntegrity);
-
-                var launched = worlds.LaunchMenuEntryAsync(ZombiesMod.MenuEntryId).GetAwaiter().GetResult();
-                Assert(launched.Succeeded
-                    && pauseMenu.ActiveActionCount == 1
-                    && context.Ui.Surfaces.Count == 1
-                    && context.Input.ActiveActionCount == 1
-                    && context.Events.ActiveSubscriptionCount == 1
-                    && context.Lifetime.TrackedResourceCount > loadedBaseline,
-                    "each successful session binds its controller, HUD, input, update, and pause action once");
-                Assert(pauseMenu.Invoke("zombies-restart"),
-                    "the session-scoped destructive pause action remains callable after every rebind");
-
-                Assert(worlds.EndSession(WorldSessionEndReason.EndedByGamemode).Succeeded
-                    && pauseMenu.ActiveActionCount == 0
-                    && context.Ui.Surfaces.Count == 0
-                    && context.Input.ActiveActionCount == 0
-                    && context.Events.ActiveSubscriptionCount == 0
-                    && robots.Agents.ActiveAgents.Count == 0
-                    && context.Lifetime.TrackedResourceCount == loadedBaseline,
-                    "ending each session returns the still-loaded mod to its exact lifetime/resource baseline");
+                Assert(context.Commands.TryExecute("zombies-status", Array.Empty<string>(), out var inactive)
+                    && inactive!.ErrorCode == ModErrorCode.InvalidState, "inactive command names remain discoverable");
+                var session = NewSession(context, "cycle-" + cycle);
+                sessions.Publish(WorldSessionPhase.StartingMode, session, session.World);
+                var result = new ZombiesGamemode().StartAsync(session, default).GetAwaiter().GetResult();
+                Assert(result.Succeeded && pause.ActiveActionCount == 1 && context.Ui.Surfaces.Count == 1,
+                    "factory creates the controller and one scoped pause action");
+                Assert(context.Commands.TryExecute("zombies-status", Array.Empty<string>(), out var starting)
+                    && starting!.ErrorCode == ModErrorCode.InvalidState, "commands reject before committed Running");
+                sessions.Publish(WorldSessionPhase.Running, session, session.World);
+                Assert(context.Commands.TryExecute("zombies-status", Array.Empty<string>(), out var running) && running!.Succeeded,
+                    "matching running session accepts retained package commands");
+                Assert(pause.Invoke("zombies-restart") && session.RestartRequests == 0,
+                    "restart run retains its wave-reset behavior instead of requesting a world reload");
+                var successor = NewSession(context, "different-" + cycle);
+                sessions.Publish(WorldSessionPhase.Running, successor, successor.World);
+                Assert(context.Commands.TryExecute("zombies-restart", Array.Empty<string>(), out var stale)
+                    && stale!.ErrorCode == ModErrorCode.InvalidState, "stale targets cannot control another committed session");
+                result.Value!.Dispose();
+                sessions.Publish(WorldSessionPhase.Idle);
+                Assert(pause.ActiveActionCount == 0 && context.Ui.Surfaces.Count == 0
+                    && context.Input.ActiveActionCount == 0 && context.Events.ActiveSubscriptionCount == 0
+                    && robots.Agents.ActiveAgents.Count == 0 && context.Lifetime.TrackedResourceCount == baseline,
+                    "controller cleanup returns the loaded package to its exact resource baseline");
             }
-
             runner.Unload();
-            Assert(worlds.Gamemodes.Count == 0
-                && worlds.MenuEntries.Count == 0
-                && pauseMenu.ActiveActionCount == 0
-                && context.Commands.ActiveCommandCount == 0,
-                "successful mod unload retracts registrations, actions, and commands after repeated sessions");
             context.AssertNoLeaks();
         }
 
+        private static FakeGamemodeSession NewSession(FakeModContext context, string id) => new FakeGamemodeSession(context,
+            new WorldReadiness(new WorldSceneIdentity(1, "ZombiesArena"), TransformState.Identity), id,
+            "io.github.furroxide.topiaforge.zombies.menu", ZombiesMod.GamemodeId);
+
+        private sealed class CancellingPause : IWorldPauseMenuService
+        {
+            private readonly FakeWorldPauseMenuService inner;
+            private readonly CancellationTokenSource cancellation;
+            internal CancellingPause(FakeWorldPauseMenuService inner, CancellationTokenSource cancellation)
+            { this.inner = inner; this.cancellation = cancellation; }
+            public bool IsAvailable => inner.IsAvailable;
+            public OperationResult<IDisposable> RegisterAction(WorldPauseAction action)
+            { var result = inner.RegisterAction(action); cancellation.Cancel(); return result; }
+            public OperationResult<IDisposable> InterceptExit(Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor) =>
+                inner.InterceptExit(interceptor);
+        }
         private static void SceneReadinessRequiresTheSessionScene()
         {
             var config = FastConfig();

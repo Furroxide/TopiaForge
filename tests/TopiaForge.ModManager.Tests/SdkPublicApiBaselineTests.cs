@@ -46,7 +46,7 @@ namespace TopiaForge.ModManager.Tests
             new BaselineSpec(
                 "topiaforge.mods.worlds",
                 "TopiaForge.Mods.Worlds",
-                () => typeof(IWorldGamemodeService).Assembly),
+                () => typeof(IWorldSessionService).Assembly),
             new BaselineSpec(
                 "topiaforge.mods.chronos",
                 "TopiaForge.Mods.Chronos",
@@ -63,10 +63,6 @@ namespace TopiaForge.ModManager.Tests
                 "topiaforge.mods.prompts",
                 "TopiaForge.Mods.Prompts",
                 () => typeof(IPromptOverrideRegistry).Assembly),
-            new BaselineSpec(
-                "topiaforge.mods.ugc",
-                "TopiaForge.Mods.Ugc",
-                () => typeof(IUgcLiveSyncService).Assembly),
             new BaselineSpec(
                 "topiaforge.mods.testing",
                 "TopiaForge.Mods.Testing",

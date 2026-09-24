@@ -14,6 +14,19 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--provisioning-observation") { ProvisioningRuntimeObservationTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--harness-workspaces") { HarnessWorkspaceTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--robo-api-client")
+            {
+                var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");
+                try { RoboApiClientTests.Run(owned.FullName); return 0; }
+                finally { owned.Delete(true); }
+            }
+            if (args.Length == 1 && args[0] == "--world-marker-hierarchy") { WorldMarkerHierarchyTests.Run(FindRepoRoot()); return 0; }
+            if (args.Length == 1 && args[0] == "--acceptance-isolation") { AcceptanceIsolationTests.Run(); AcceptanceIsolationStagingTests.Run(); AcceptancePluginLifecycleTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--runtime-launch-command") { var owned = Directory.CreateTempSubdirectory("TopiaForgeLaunchCommand-"); try { RuntimeLaunchCommandTests.Run(owned.FullName); RuntimeLaunchPublicationTests.Run(Path.Combine(owned.FullName, "publication")); return 0; } finally { owned.Delete(true); } }
+            if (args.Length == 1 && args[0] == "--profile-v4-policy") { ProfileLaunchV4PolicyTests.Run(); RuntimeStartupSelectionTests.Run(); ManagerLaunchSelectionTests.Run(); LegacyManagerSelectionTests.Run(); WorldLaunchArmingTests.Run(); LaunchTargetPreviewTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--launch-staging") { LaunchStorageKeyTests.Run(FindRepoRoot()); LaunchStagingTests.Run(); return 0; }
             if (args.Length >= 1 && args.Length <= 2 &&
                 string.Equals(args[0], "--print-sdk-api-baseline", StringComparison.Ordinal))
             {
@@ -43,15 +56,72 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 2 && string.Equals(args[0], "--content-admission-case", StringComparison.Ordinal))
+            {
+                var contentRoot = Directory.CreateTempSubdirectory("TopiaForgeContentTests-").FullName;
+                try { ContentAdmissionTests.Run(contentRoot, args[1]); return 0; }
+                finally { TryDelete(contentRoot); }
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--worlds-activation", StringComparison.Ordinal))
+            { WorldsActivationTests.RunAsync().GetAwaiter().GetResult(); return 0; }
+            if (args.Length == 1 && string.Equals(args[0], "--acceptance-factory", StringComparison.Ordinal))
+            { AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult(); return 0; }
+
+            if (args.Length == 1 && string.Equals(args[0], "--manifest-activation-serialization", StringComparison.Ordinal))
+            { ManifestActivationSerializationTests.Run(); return 0; }
+            if (args.Length == 1 && string.Equals(args[0], "--duplicate-selection", StringComparison.Ordinal))
+            { DuplicateSelectionTests.Run(); return 0; }
+            if (args.Length == 1 && string.Equals(args[0], "--world-readiness-contract", StringComparison.Ordinal))
+            {
+                var readinessRoot = Directory.CreateTempSubdirectory("TopiaForgeReadinessTests-").FullName;
+                try { WorldReadinessContractTests.Run(readinessRoot); return 0; }
+                finally { TryDelete(readinessRoot); }
+            }
+
+            if ((args.Length == 1 || args.Length == 2) && string.Equals(args[0], "--legacy-launch-discovery", StringComparison.Ordinal))
+            { LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot(), args.Length == 2 ? args[1] : null).GetAwaiter().GetResult(); return 0; }
+
+            if (args.Length == 1 && string.Equals(args[0], "--session-lifecycle", StringComparison.Ordinal))
+            {
+                var sessionRoot = Directory.CreateTempSubdirectory("TopiaForgeSessionTests-").FullName;
+                try
+                {
+                    HostDispatcherTests.Run();
+                    SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
+                    GamemodeSessionOrchestratorTests.Run(Path.Combine(sessionRoot, "orchestrator"));
+                    SessionActivationTests.Run(sessionRoot);
+                    ContentAdmissionTests.Run(Path.Combine(sessionRoot, "content-admission"));
+                    WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
+                    AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
+                    LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();
+                    RuntimeSessionSelectionTests.Run();
+                    NativeWorldReflectionTests.Run();
+                    LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
+                    BuiltinWorldProviderTests.Run();
+                    WorldRuntimeReadinessTests.Run();
+                    WorldReadinessContractTests.Run(Path.Combine(sessionRoot, "readiness-contract"));
+                    DuplicateSelectionTests.Run();
+                    AssetNativeDrainTests.Run();
+                    OwnerNativeSceneLoadTests.Run();
+                    NativeWorkLifecycleTests.Run(Path.Combine(sessionRoot, "native-work"));
+                    return 0;
+                }
+                finally { TryDelete(sessionRoot); }
+            }
+
             if (args.Length == 1 && string.Equals(args[0], "--sdk-lifecycle", StringComparison.Ordinal))
             {
-                var lifecycleRoot = Path.Combine(
-                    Path.GetTempPath(),
-                    "TopiaForgeSdkLifecycleTests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(lifecycleRoot);
+                var lifecycleRoot = Directory.CreateTempSubdirectory("TopiaForgeSdkLifecycleTests-").FullName;
                 try
                 {
                     SdkLifecycleTests.Run(lifecycleRoot);
+                    ScopedModContextTests.Run(Path.Combine(lifecycleRoot, "scoped-context"));
+                    ScopedAssetOwnershipTests.Run(lifecycleRoot);
+                    AssetSpawnTransactionTests.Run();
+                    UiHotkeyOwnershipTests.Run();
+                    ContextBoundExtensionTests.Run();
+                    ScopedExtensionFacadeTests.Run();
                     return 0;
                 }
                 finally
@@ -75,12 +145,25 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--creator-workbench", StringComparison.Ordinal))
             {
                 CreatorWorkbenchLifecycleTests.Run();
+                CreatorWorkbenchCleanupFailureTests.Run();
+                SandboxWorkbenchRollbackTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--ui-diagnostics", StringComparison.Ordinal))
+            {
+                UiKitCoreTests.Run();
+                UiDiagnosticsContractTests.Run();
+                UiKitSourceConventionTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
                 return 0;
             }
 
             if (args.Length == 1 && string.Equals(args[0], "--creator-event-graph", StringComparison.Ordinal))
             {
                 CreatorEventGraphRunnerTests.Run();
+                SandboxGraphLifecycleTests.Run();
                 return 0;
             }
 
@@ -93,20 +176,36 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--scene-coordinator", StringComparison.Ordinal))
             {
                 SceneCoordinatorTests.Run();
+                NativeTransitionExecutorTests.Run();
+                MultiplayerSceneAuthorityTests.Run();
                 SceneTransitionTrackerTests.Run();
                 return 0;
             }
 
-            if (args.Length == 1 && string.Equals(args[0], "--manifest-v5", StringComparison.Ordinal))
+            if (args.Length == 1 && string.Equals(args[0], "--menu-entry-point", StringComparison.Ordinal))
             {
-                var manifestRoot = Path.Combine(
-                    Path.GetTempPath(),
-                    "TopiaForgeManifestV5Tests-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(manifestRoot);
+                MenuSurfaceCensusTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--gamemode-contract", StringComparison.Ordinal))
+            {
+                GamemodeContractConformanceTests.Run();
+                return 0;
+            }
+
+            if (args.Length == 1 && string.Equals(args[0], "--manifest-retirement", StringComparison.Ordinal))
+            {
+                ManifestRetirementTests.Run();
+                return 0;
+            }
+            if (args.Length == 1 && string.Equals(args[0], "--manifest-v6", StringComparison.Ordinal))
+            {
+                var manifestRoot = Directory.CreateTempSubdirectory("TopiaForgeManifestV6Tests-").FullName;
                 try
                 {
                     TestStrictManifestExtensions();
-                    ManifestV5Tests.Run(manifestRoot);
+                    ManifestV6Tests.Run(manifestRoot);
                     MultiplayerContractLockBoundaryTests.Run(manifestRoot);
                     return 0;
                 }
@@ -145,7 +244,11 @@ namespace TopiaForge.ModManager.Tests
                 CreatorContentTests.Run();
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
+                SandboxGraphLifecycleTests.Run();
                 CreatorWorkbenchLifecycleTests.Run();
+                CreatorWorkbenchCleanupFailureTests.Run();
+                SandboxWorkbenchRollbackTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
                 WorldsSafetyTests.Run();
                 return 0;
             }
@@ -174,11 +277,22 @@ namespace TopiaForge.ModManager.Tests
                 }
             }
 
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeModManagerTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            var root = Directory.CreateTempSubdirectory("TopiaForgeModManagerTests-").FullName;
 
             try
             {
+                if (args.Contains("--world-providers"))
+                {
+                    WorldDiscoveryIdentityTests.Run();
+                    WorldResourceScopeTests.Run();
+                    WorldPlayerPlacementTests.Run();
+                    GeneratedArenaGeometryTests.Run();
+                    WorldProviderLoaderTests.Run();
+                    Console.WriteLine("World provider tests passed.");
+                    return 0;
+                }
+
+                HarnessWorkspaceTests.Run();
                 TestInstallSuccess(root);
                 TestLegacyPackageExtensionRejected(root);
                 TestUpdatePreservesDisabledState(root);
@@ -186,7 +300,6 @@ namespace TopiaForge.ModManager.Tests
                 TestAppliedRestartRequirementsClear();
                 RuntimePersistenceSecurityTests.Run(root);
                 StartupJournalTests.Run(root);
-                StartupRecoveryPolicyTests.Run();
                 PackageInstallReceiptTests.Run(root);
                 ManagedModAssemblyValidatorTests.Run(root);
                 RuntimePayloadDependencyTests.Run();
@@ -238,26 +351,46 @@ namespace TopiaForge.ModManager.Tests
                 VersionUtilTests.Run();
                 GameCompatibilityTests.Run(root);
                 ManifestPathValidationTests.Run();
-                ManifestV5Tests.Run(root);
+                ManifestRetirementTests.Run();
+                ManifestV6Tests.Run(root);
                 MultiplayerContractLockBoundaryTests.Run(root);
                 MultiplayerAdmissionTests.Run();
                 FirstPartyManifestTests.Run();
                 FirstPartyConfigTests.Run();
                 ModAssemblyResolutionCatalogTests.Run(root);
-                ProfileLaunchConfigurationTests.Run();
                 TestUgcExportSchemaContract();
                 TestPendingRuntimeManifestContracts();
                 WorldLaunchSettingsTests.Run();
                 ZombiesConfigTests.Run();
                 ZombiesControllerTests.Run();
                 UgcNoOpLaunchRequestTests.Run();
-                UgcLiveSyncTests.Run();
+                NativeDamageSourceTests.Run();
                 SdkSurfaceTests.Run();
                 RuntimeInfoTests.Run();
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();
                 GameplayFacadeTests.Run();
+                HostDispatcherTests.Run();
+                SessionLifecycleTests.Run(Path.Combine(root, "state"));
+                GamemodeSessionOrchestratorTests.Run(Path.Combine(root, "session"));
+                SessionActivationTests.Run(Path.Combine(root, "activation"));
+                ContentAdmissionTests.Run(Path.Combine(root, "content-admission"));
+                RuntimeSessionSelectionTests.Run();
+                BuiltinWorldProviderTests.Run();
+                WorldRuntimeReadinessTests.Run();
+                WorldReadinessContractTests.Run(Path.Combine(root, "readiness-contract"));
+                DuplicateSelectionTests.Run();
+                NativeWorldReflectionTests.Run();
+                AssetNativeDrainTests.Run();
+                OwnerNativeSceneLoadTests.Run();
+                NativeWorkLifecycleTests.Run(Path.Combine(root, "native-work"));
                 SdkLifecycleTests.Run(root);
+                ScopedModContextTests.Run(Path.Combine(root, "scoped-context"));
+                ScopedAssetOwnershipTests.Run(root);
+                AssetSpawnTransactionTests.Run();
+                UiHotkeyOwnershipTests.Run();
+                ContextBoundExtensionTests.Run();
+                ScopedExtensionFacadeTests.Run();
                 TestingKitTests.Run();
                 SdkPublicApiBaselineTests.Run();
                 PromptRegistryTests.Run();
@@ -270,10 +403,40 @@ namespace TopiaForge.ModManager.Tests
                 RobotTargetFactsTests.Run();
                 SandboxProgramDirectorTests.Run();
                 SandboxConfigTests.Run();
-                WorldAutoLoadRouterTests.Run();
+                WorldDiscoveryIdentityTests.Run();
+                WorldResourceScopeTests.Run();
+                WorldPlayerPlacementTests.Run();
+                GeneratedArenaGeometryTests.Run();
+                WorldProviderLoaderTests.Run();
+                LegacyLaunchDiscoveryTests.RunAsync(FindRepoRoot()).GetAwaiter().GetResult();
+                GamemodeConsumerRegressionTests.Run();
+                WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
+                AcceptanceGamemodeFactoryTests.RunAsync().GetAwaiter().GetResult();
+                LocalImportOperationTests.RunAsync().GetAwaiter().GetResult();
+                WorldLaunchArmingTests.Run();
+                RoboWorldImportPlanTests.Run();
                 WorldsSafetyTests.Run();
                 PendingOperationTests.Run();
                 SceneCoordinatorTests.Run();
+                NativeTransitionExecutorTests.Run();
+                MultiplayerSceneAuthorityTests.Run();
+                MenuSurfaceCensusTests.Run();
+                GamemodeContractConformanceTests.Run();
+                ManifestActivationSerializationTests.Run();
+                LaunchStorageKeyTests.Run(FindRepoRoot());
+                LaunchStagingTests.Run();
+                ProvisioningRuntimeObservationTests.Run();
+                AcceptanceIsolationTests.Run();
+                AcceptanceIsolationStagingTests.Run();
+                AcceptancePluginLifecycleTests.Run();
+                WorldMarkerHierarchyTests.Run(FindRepoRoot());
+                ProfileLaunchV4PolicyTests.Run();
+                RuntimeStartupSelectionTests.Run();
+                ManagerLaunchSelectionTests.Run();
+                LegacyManagerSelectionTests.Run();
+                LaunchTargetPreviewTests.Run();
+                RuntimeLaunchCommandTests.Run(Path.Combine(root, "runtime-launch-command"));
+                RuntimeLaunchPublicationTests.Run(Path.Combine(root, "runtime-launch-publication"));
                 ModServiceRegistryTests.Run();
                 SceneTransitionTrackerTests.Run();
                 MainThreadDispatchQueueTests.Run();
@@ -283,11 +446,17 @@ namespace TopiaForge.ModManager.Tests
                 CreatorContentTests.Run();
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
+                SandboxGraphLifecycleTests.Run();
                 CreatorWorkbenchLifecycleTests.Run();
+                CreatorWorkbenchCleanupFailureTests.Run();
+                SandboxWorkbenchRollbackTests.Run();
                 ShopTests.Run();
                 GameCompatTests.Run();
+                GameCompatActivationTests.Run();
                 GameVersionLabelReaderTests.Run();
                 UiKitCoreTests.Run();
+                UiDiagnosticsContractTests.Run();
+                CreatorWorkbenchUndoControlTests.Run();
                 TopiaForgeStateFileTests.Run(root);
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();

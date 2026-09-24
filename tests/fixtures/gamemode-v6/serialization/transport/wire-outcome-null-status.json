@@ -1,0 +1,32 @@
+{
+  "id": "wire-outcome-null-status",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec null status",
+  "transport": "outcome",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "launch",
+    "command": "launch-target",
+    "requestId": "request-01",
+    "sequence": 5,
+    "phase": "running",
+    "status": null,
+    "sessionId": "session-01",
+    "blocks": []
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

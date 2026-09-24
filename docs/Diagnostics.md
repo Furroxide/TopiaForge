@@ -219,7 +219,7 @@ bundled-framework finding. Validation reads metadata only and never loads mod co
 ### TFPKG170
 
 **Downloaded package metadata differs from the manifest approved during planning.** Refresh the
-package source and retry. Source maintainers must publish immutable bytes whose canonical V5
+package source and retry. Source maintainers must publish immutable bytes whose canonical V6
 manifest exactly matches the indexed manifest; TopiaForge does not stage mismatched packages.
 
 ### TFINBOX100–TFINBOX130

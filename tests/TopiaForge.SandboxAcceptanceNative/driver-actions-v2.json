@@ -1,0 +1,868 @@
+{
+  "schemaVersion": 2,
+  "kind": "sandbox-native-driver-actions-v2",
+  "targetId": "io.github.furroxide.topiaforge.sandbox.creator.menu",
+  "surfaceId": "sandbox-creator-window",
+  "geometryOrigin": "bottom-left",
+  "maximumStepMilliseconds": 10000,
+  "maximumScenarioMilliseconds": 180000,
+  "operations": [
+    "prepare",
+    "begin",
+    "capture",
+    "advance",
+    "unregister-source",
+    "request-session-stop",
+    "external-write",
+    "destroy-borrowed",
+    "register-competing-host",
+    "unregister-competing-host",
+    "control-cue",
+    "stop-control-cue",
+    "spawn-control-robot",
+    "despawn-control-robot",
+    "accessibility-high-contrast",
+    "accessibility-scale-150",
+    "accessibility-reduced-motion",
+    "accessibility-reset",
+    "cleanup"
+  ],
+  "actions": {
+    "open": [
+      {
+        "kind": "key",
+        "key": "F5"
+      }
+    ],
+    "reopen": [
+      {
+        "kind": "key",
+        "key": "F5"
+      }
+    ],
+    "hide-f5": [
+      {
+        "kind": "key",
+        "key": "F5"
+      }
+    ],
+    "hide-close": [
+      {
+        "kind": "click",
+        "surfaceId": "sandbox-creator-window",
+        "nodeId": "$close"
+      }
+    ],
+    "duplicate-toggle": [
+      {
+        "kind": "key",
+        "key": "F5"
+      },
+      {
+        "kind": "key",
+        "key": "F5"
+      }
+    ],
+    "focus-next": [
+      {
+        "kind": "key",
+        "key": "Tab"
+      }
+    ],
+    "move-player": [
+      {
+        "kind": "key",
+        "key": "W"
+      }
+    ],
+    "move-while-visible": [
+      {
+        "kind": "key-hold",
+        "key": "W",
+        "milliseconds": 300
+      }
+    ],
+    "camera-hidden": [
+      {
+        "kind": "mouse-move",
+        "dx": 120,
+        "dy": 0
+      }
+    ],
+    "text-focus": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-search",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "catalog-search"
+      },
+      {
+        "kind": "key",
+        "key": "W"
+      }
+    ],
+    "spawn-prop": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-search",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "catalog-search",
+        "text": "Acceptance prop"
+      },
+      {
+        "kind": "select-list-item",
+        "nodeId": "catalog-list",
+        "itemId": "content:dev.topiaforge.sandbox-acceptance:prop"
+      },
+      {
+        "kind": "click",
+        "nodeId": "spawn-selected"
+      }
+    ],
+    "spawn-character": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-search",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "catalog-search",
+        "text": "Acceptance character"
+      },
+      {
+        "kind": "select-list-item",
+        "nodeId": "catalog-list",
+        "itemId": "content:dev.topiaforge.sandbox-acceptance:character"
+      },
+      {
+        "kind": "click",
+        "nodeId": "spawn-selected"
+      }
+    ],
+    "spawn-catalog": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-search",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "catalog-search",
+        "textFromFact": "actionCatalogDisplayName"
+      },
+      {
+        "kind": "select-list-item",
+        "nodeId": "catalog-list",
+        "itemIdFromFact": "actionCatalogRowId"
+      },
+      {
+        "kind": "click",
+        "nodeId": "spawn-selected"
+      }
+    ],
+    "search-nonmatching": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-search",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "catalog-search",
+        "text": "zz-no-such-acceptance-entry"
+      }
+    ],
+    "filter-robots": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-search",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "catalog-search",
+        "text": ""
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-kind",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "catalog-kind"
+      },
+      {
+        "kind": "key",
+        "key": "Down"
+      },
+      {
+        "kind": "key",
+        "key": "Return"
+      }
+    ],
+    "filter-all": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "catalog-kind",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "catalog-kind"
+      },
+      {
+        "kind": "key",
+        "key": "Up"
+      },
+      {
+        "kind": "key",
+        "key": "Return"
+      }
+    ],
+    "duplicate": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "duplicate-selected",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "duplicate-selected"
+      }
+    ],
+    "undo": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "undo-last",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "undo-last"
+      }
+    ],
+    "remove": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "remove-selected",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "remove-selected"
+      },
+      {
+        "kind": "click",
+        "surfaceId": "$modal",
+        "nodeId": "confirm"
+      }
+    ],
+    "edit-transform": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "nudge-up",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "click",
+        "nodeId": "nudge-up"
+      }
+    ],
+    "edit-rotation": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "rotation-y",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "rotation-y",
+        "text": "0.7071068"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "rotation-w",
+        "text": "0.7071068"
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "apply-transform",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "click",
+        "nodeId": "apply-transform"
+      }
+    ],
+    "edit-scale": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "scale-x",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "scale-x",
+        "text": "1.25"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "scale-y",
+        "text": "1.25"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "scale-z",
+        "text": "1.25"
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "apply-transform",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "click",
+        "nodeId": "apply-transform"
+      }
+    ],
+    "select-borrowed": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "refresh-native",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "click",
+        "nodeId": "refresh-native"
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "roster-list",
+        "itemIdFromFact": "borrowedRosterId",
+        "containerId": "$scroll-0"
+      },
+      {
+        "kind": "select-list-item",
+        "nodeId": "roster-list",
+        "itemIdFromFact": "borrowedRosterId"
+      }
+    ],
+    "edit-personality": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "persona-name",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "persona-name",
+        "text": "Sandbox acceptance preview"
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "persona-instructions",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "replace-text",
+        "nodeId": "persona-instructions",
+        "text": "Synthetic offline fixture persona. Remain dormant."
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "apply-personality",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "click",
+        "nodeId": "apply-personality"
+      }
+    ],
+    "edit-brain": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "brain-dormant",
+        "containerId": "$scroll-2"
+      },
+      {
+        "kind": "click",
+        "nodeId": "brain-dormant"
+      }
+    ],
+    "run-graph": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "project-list",
+        "itemIdFromFact": "projectId",
+        "containerId": "$scroll-1"
+      },
+      {
+        "kind": "select-list-item",
+        "nodeId": "project-list",
+        "itemIdFromFact": "projectId"
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "load-project",
+        "containerId": "$scroll-1"
+      },
+      {
+        "kind": "click",
+        "nodeId": "load-project"
+      },
+      {
+        "kind": "barrier",
+        "minimumFrames": 2
+      },
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "run-project",
+        "containerId": "$scroll-1"
+      },
+      {
+        "kind": "click",
+        "nodeId": "run-project"
+      }
+    ],
+    "stop-graph": [
+      {
+        "kind": "scroll-into-view",
+        "nodeId": "stop-project",
+        "containerId": "$scroll-1"
+      },
+      {
+        "kind": "click",
+        "nodeId": "stop-project"
+      }
+    ],
+    "stop-before-start": [
+      {
+        "kind": "capture"
+      }
+    ],
+    "aim-graph-prop": [
+      {
+        "kind": "aim",
+        "fact": "aimToGraphProp",
+        "maxIterations": 40,
+        "gain": 5
+      }
+    ],
+    "interact": [
+      {
+        "kind": "key",
+        "key": "MouseLeft"
+      }
+    ],
+    "end-session": [
+      {
+        "kind": "click",
+        "nodeId": "end-session"
+      },
+      {
+        "kind": "click",
+        "surfaceId": "$modal",
+        "nodeId": "confirm"
+      }
+    ],
+    "unregister-source": [
+      {
+        "kind": "request",
+        "operation": "unregister-source"
+      }
+    ],
+    "stop-world-session": [
+      {
+        "kind": "request",
+        "operation": "request-session-stop"
+      }
+    ],
+    "toggle-during-transition": [
+      {
+        "kind": "key",
+        "key": "F5"
+      }
+    ],
+    "toggle-in-menu": [
+      {
+        "kind": "key",
+        "key": "F5"
+      }
+    ],
+    "observe-refusal": [
+      {
+        "kind": "capture"
+      }
+    ],
+    "external-write": [
+      {
+        "kind": "request",
+        "operation": "external-write"
+      }
+    ],
+    "destroy-borrowed": [
+      {
+        "kind": "request",
+        "operation": "destroy-borrowed"
+      }
+    ],
+    "register-competing-host": [
+      {
+        "kind": "request",
+        "operation": "register-competing-host"
+      }
+    ],
+    "unregister-competing-host": [
+      {
+        "kind": "request",
+        "operation": "unregister-competing-host"
+      }
+    ],
+    "control-cue": [
+      {
+        "kind": "request",
+        "operation": "control-cue"
+      }
+    ],
+    "stop-control-cue": [
+      {
+        "kind": "request",
+        "operation": "stop-control-cue"
+      }
+    ],
+    "spawn-control-robot": [
+      {
+        "kind": "request",
+        "operation": "spawn-control-robot"
+      }
+    ],
+    "despawn-control-robot": [
+      {
+        "kind": "request",
+        "operation": "despawn-control-robot"
+      }
+    ],
+    "accessibility-high-contrast": [
+      {
+        "kind": "request",
+        "operation": "accessibility-high-contrast"
+      }
+    ],
+    "accessibility-scale-150": [
+      {
+        "kind": "request",
+        "operation": "accessibility-scale-150"
+      }
+    ],
+    "accessibility-reduced-motion": [
+      {
+        "kind": "request",
+        "operation": "accessibility-reduced-motion"
+      }
+    ],
+    "accessibility-reset": [
+      {
+        "kind": "request",
+        "operation": "accessibility-reset"
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "routing",
+      "cycles": 2,
+      "cycleSteps": [
+        {
+          "cycle": 1,
+          "steps": [
+            "open",
+            "accessibility-high-contrast",
+            "accessibility-scale-150",
+            "accessibility-reduced-motion",
+            "accessibility-reset",
+            "focus-next",
+            "hide-f5",
+            "reopen",
+            "duplicate-toggle",
+            "end-session"
+          ]
+        },
+        {
+          "cycle": 2,
+          "steps": [
+            "register-competing-host",
+            "open",
+            "hide-f5",
+            "reopen",
+            "end-session",
+            "unregister-competing-host"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "catalog-editing",
+      "cycles": 1,
+      "steps": [
+        "open",
+        "search-nonmatching",
+        "filter-robots",
+        "filter-all",
+        "$catalog",
+        "end-session"
+      ],
+      "inventoryExpansion": {
+        "facts": [
+          "catalog",
+          "robotCatalog"
+        ],
+        "maximumEntries": 256,
+        "perEntry": [
+          "spawn-catalog",
+          {
+            "ifTransformCapability": 1,
+            "action": "edit-transform"
+          },
+          {
+            "ifTransformCapability": 2,
+            "action": "edit-rotation"
+          },
+          {
+            "ifTransformCapability": 4,
+            "action": "edit-scale"
+          },
+          "duplicate",
+          "undo",
+          "remove"
+        ],
+        "rowFact": "actionCatalogRowId",
+        "labelFact": "actionCatalogDisplayName"
+      }
+    },
+    {
+      "id": "borrowed-robot",
+      "cycles": 3,
+      "cycleSteps": [
+        {
+          "cycle": 1,
+          "steps": [
+            "open",
+            "select-borrowed",
+            "edit-transform",
+            "edit-personality",
+            "edit-brain",
+            "end-session"
+          ]
+        },
+        {
+          "cycle": 2,
+          "steps": [
+            "open",
+            "select-borrowed",
+            "edit-transform",
+            "edit-personality",
+            "external-write",
+            "end-session"
+          ]
+        },
+        {
+          "cycle": 3,
+          "steps": [
+            "open",
+            "select-borrowed",
+            "edit-transform",
+            "destroy-borrowed",
+            "end-session"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source-unload",
+      "cycles": 2,
+      "cycleSteps": [
+        {
+          "cycle": 1,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "duplicate",
+            "spawn-character",
+            "spawn-control-robot",
+            "unregister-source",
+            "end-session",
+            "despawn-control-robot"
+          ]
+        },
+        {
+          "cycle": 2,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "run-graph",
+            "unregister-source",
+            "end-session"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hide-reopen",
+      "cycles": 1,
+      "steps": [
+        "open",
+        "spawn-prop",
+        "select-borrowed",
+        "edit-transform",
+        "run-graph",
+        "move-while-visible",
+        "hide-close",
+        "move-player",
+        "camera-hidden",
+        "reopen",
+        "text-focus",
+        "hide-f5",
+        "reopen",
+        "stop-graph",
+        "end-session"
+      ]
+    },
+    {
+      "id": "persistence-refusal",
+      "cycles": 1,
+      "steps": [
+        "observe-refusal"
+      ]
+    },
+    {
+      "id": "graph-rollback",
+      "cycles": 2,
+      "cycleSteps": [
+        {
+          "cycle": 1,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "control-cue",
+            "run-graph",
+            "hide-f5",
+            "aim-graph-prop",
+            "interact",
+            "reopen",
+            "stop-graph",
+            "stop-control-cue",
+            "end-session"
+          ]
+        },
+        {
+          "cycle": 2,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "stop-before-start",
+            "run-graph",
+            "stop-graph",
+            "run-graph",
+            "stop-graph",
+            "end-session"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lifecycle-routes",
+      "cycles": 3,
+      "cycleSteps": [
+        {
+          "cycle": 1,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "stop-world-session"
+          ]
+        },
+        {
+          "cycle": 2,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "stop-world-session",
+            "toggle-during-transition",
+            "move-player"
+          ]
+        },
+        {
+          "cycle": 3,
+          "steps": [
+            "open",
+            "spawn-prop",
+            "stop-world-session",
+            "toggle-in-menu"
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "cycle": 1,
+          "operation": "request-session-stop",
+          "method": "IWorldSession.StopAsync"
+        },
+        {
+          "cycle": 2,
+          "operation": "request-session-stop",
+          "method": "IWorldSession.RestartAsync"
+        },
+        {
+          "cycle": 3,
+          "operation": "request-session-stop",
+          "method": "IWorldSession.ReturnToMainMenuAsync"
+        }
+      ],
+      "freshSessionPerCycle": true
+    },
+    {
+      "id": "ten-cycles",
+      "cycles": 10,
+      "steps": [
+        "open",
+        "spawn-prop",
+        "select-borrowed",
+        "edit-transform",
+        "edit-personality",
+        "edit-brain",
+        "hide-f5",
+        "move-player",
+        "camera-hidden",
+        "reopen",
+        "run-graph",
+        "stop-graph",
+        "end-session"
+      ]
+    }
+  ],
+  "unavailable": [
+    "native-vehicle",
+    "native-global-mutation-bridge",
+    "global-mutation-denial-and-revocation: no shipping global mutation bridge",
+    "genuine-remote-participant",
+    "remote-backend-conversation-completion",
+    "package-specific-live-unload: manager disable requires restart; registration disposal is not package unload"
+  ],
+  "externalEvidenceRequired": [
+    "OS input and click geometry against actual widgets",
+    "native screenshot observations against reviewed BMP baselines with masks and tolerances",
+    "loopback audio with microphone disabled",
+    "admitted synthetic persistence allowlist before/during/after",
+    "physical device/layout checks under versioned UX rules",
+    "human baseline acceptance of screenshots, physical audibility and subjective usability"
+  ],
+  "maximumCatalogScenarioMilliseconds": 7200000
+}

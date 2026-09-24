@@ -1,0 +1,22 @@
+{
+  "id": "wire-observation-scalar-root",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive observation codec scalar root",
+  "transport": "observation",
+  "payload": true,
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

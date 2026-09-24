@@ -214,66 +214,6 @@ extension _PackageHelpers on LocalLauncherRepository {
 const _maxPackageBytes = 512 * 1024 * 1024;
 const _maxManifestBytes = 1024 * 1024;
 
-class _BoundedArchiveOutput extends OutputStream {
-  _BoundedArchiveOutput(
-    this._output, {
-    required this.maxBytes,
-    required this.entryName,
-  }) : super(byteOrder: _output.byteOrder);
-
-  final OutputStream _output;
-  final int maxBytes;
-  final String entryName;
-
-  @override
-  int get length => _output.length;
-
-  void _requireCapacity(int count) {
-    if (count < 0 || length > maxBytes - count) {
-      throw StateError(
-        'Package entry exceeds its $maxBytes-byte expanded limit: $entryName.',
-      );
-    }
-  }
-
-  @override
-  void clear() => _output.clear();
-
-  @override
-  Future<void> close() => _output.close();
-
-  @override
-  void closeSync() => _output.closeSync();
-
-  @override
-  void flush() => _output.flush();
-
-  @override
-  bool get isOpen => _output.isOpen;
-
-  @override
-  Uint8List subset(int start, [int? end]) => _output.subset(start, end);
-
-  @override
-  void writeByte(int value) {
-    _requireCapacity(1);
-    _output.writeByte(value);
-  }
-
-  @override
-  void writeBytes(List<int> bytes, {int? length}) {
-    final count = length ?? bytes.length;
-    _requireCapacity(count);
-    _output.writeBytes(bytes, length: count);
-  }
-
-  @override
-  void writeStream(InputStream stream) {
-    _requireCapacity(stream.length);
-    _output.writeStream(stream);
-  }
-}
-
 class _PackageReadResult {
   const _PackageReadResult({
     required this.archive,

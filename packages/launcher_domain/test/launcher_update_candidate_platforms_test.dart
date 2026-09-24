@@ -49,13 +49,13 @@ LauncherUpdateCandidate _candidate(
         'schemas/topiaforge.launcher-update-v1.schema.json',
     'formatVersion': 1,
     'product': 'TopiaForge',
-    'version': '1.0.0-rc.1',
-    'tag': 'v1.0.0-rc.1',
+    'version': '0.1.0-rc.1',
+    'tag': 'v0.1.0-rc.1',
     'channel': 'beta',
-    'minimumUpdaterVersion': '1.0.0-rc.1',
+    'minimumUpdaterVersion': '0.1.0-rc.1',
     'releaseUrl':
         'https://github.com/furroxide/TopiaForge/releases/tag/'
-        'v1.0.0-rc.1',
+        'v0.1.0-rc.1',
     'platforms': platforms,
   },
 );
@@ -71,7 +71,7 @@ Map<String, Object?> _artifact(String platform) {
     'assetName': name,
     'url':
         'https://github.com/furroxide/TopiaForge/releases/download/'
-        'v1.0.0-rc.1/$name',
+        'v0.1.0-rc.1/$name',
     'sha256':
         'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     'size': 1024,

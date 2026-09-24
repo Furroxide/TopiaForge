@@ -278,6 +278,47 @@ class RepositoryGovernanceAuditTests(unittest.TestCase):
             self.policy["security"]["codeql_default_setup"]["languages"],
         )
 
+    def test_codeql_alias_languages_are_not_reported_as_drift(self) -> None:
+        # GitHub reports javascript-typescript together with its javascript and
+        # typescript aliases. That is the same analysis, so it must not read as
+        # drift -- but a genuinely extra language still has to.
+        self.snapshot["security"]["codeql_default_setup"]["languages"] = [
+            "actions",
+            "c-cpp",
+            "csharp",
+            "javascript",
+            "javascript-typescript",
+            "typescript",
+        ]
+        self.assertEqual([], AUDIT.evaluate_snapshot(self.snapshot, self.policy))
+
+        self.snapshot["security"]["codeql_default_setup"]["languages"].append("ruby")
+        failures = AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+        self.assertTrue(
+            any("codeql_default_setup.languages" in failure for failure in failures),
+            failures,
+        )
+
+    def test_canonical_login_casing_is_not_reported_as_drift(self) -> None:
+        # GitHub echoes the canonical casing of a login, so github.repository
+        # yields Furroxide/TopiaForge while the desired state is lowercase.
+        # Same account, so it must not read as drift.
+        self.snapshot["repository"]["full_name"] = "Furroxide/TopiaForge"
+        self.snapshot["repository_administrators"] = ["Furroxide"]
+        for collaborator in self.snapshot["repository_collaborators"]:
+            if collaborator.get("id") == 221987073:
+                collaborator["login"] = "Furroxide"
+        self.assertEqual([], AUDIT.evaluate_snapshot(self.snapshot, self.policy))
+
+        # A different account still fails, because the fold is only about case.
+        self.snapshot["repository_administrators"] = ["someone-else"]
+        self.assertTrue(
+            any(
+                "repository_administrators" in failure
+                for failure in AUDIT.evaluate_snapshot(self.snapshot, self.policy)
+            )
+        )
+
     def test_obsolete_active_ruleset_is_reported(self) -> None:
         self.snapshot["rulesets"].append(
             {"name": "protected-release-flow", "enforcement": "active", "rules": []}
