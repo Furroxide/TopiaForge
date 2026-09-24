@@ -494,4 +494,23 @@ The user authorized fresh verified copies from the 2478 install (**“Yes, copy 
 2. Copied exactly the manifest's files into `D:\TopiaForgeQA\source-game-2478` and `D:\TopiaForgeQA\game-2478`: 415 files and 5,567,020,099 bytes each, every byte verified against the manifest digest in both trees.
 3. Created both trees with protected ACLs. The QA account has read/execute on the source copy and modify on the game copy.
 
-Before the real copy, the new copier refused a wrong QA root and a metadata file whose manifest digest did not match the install. It wrote nothing in either case. An independent rehash of both trees afterwards found every file equal to its manifest entry, with no missing, extra or linked entries. Private receipt: `.dart_tool/rc1-review/qa-provisioning-20260909/game-copy-2478.json` (SHA-256 `ce72e95cd81118ce37dede363f4786386aa3e4115bbac257ed7ed5689b608804`). The 2409 copies, all earlier receipts and the staged 2409 retry are unchanged. No game ran, and the retry has not been re-staged for 2478.
+Before the real copy, the new copier refused a wrong QA root and a metadata file whose manifest digest did not match the install. It wrote nothing in either case. An independent rehash of both trees afterwards found every file equal to its manifest entry, with no missing, extra or linked entries. Private receipt: `.dart_tool/rc1-review/qa-provisioning-20260909/game-copy-2478.json` (SHA-256 `ce72e95cd81118ce37dede363f4786386aa3e4115bbac257ed7ed5689b608804`). The 2409 copies, all earlier receipts and the staged 2409 retry are unchanged. No game ran. The retry was re-staged afterwards; see the next entry.
+
+## Build-2478 provisioning retry re-staged (2026-09-24)
+
+The user authorized re-staging the provisioning retry without dispatching it. The v4 preparation refused the changed worktree: 12 of its 44 checkpoint sources had changed, including seven broker files. So a new source checkpoint was built at release head `37f9088`, with a clean worktree.
+
+- **C# checks.** The solution build had 0 warnings and 0 errors. The manager, runtime, analyzer, generator and multiplayer harnesses passed, along with 53 focused provisioning-observer checks.
+- **Broker.** The self-contained bundle v4 (192 files) was published and passed 183 broker, 17 waveform and 100 provisioning checks.
+- **Fixture.** A fresh fixture player built with the pinned Editor ran through that broker. It exited unforced with code 0 in 664 ms and retained a 2,135-byte player log.
+
+The checkpoint receipt `runtime-observer-2478-v6/final-source-receipt-v6.json` (SHA-256 `3447f11bf591f83eb36baa4d482d331fe654b762a56e1e6d9dcda70de35b1cf4`) records 54 source hashes, the 13 loader hashes and the broker bundle. The worktree content is snapshotted at the local ref `refs/snapshots/rc1-automation-worktree-v6`.
+
+The updated copier then made `game-provisioning-20260924T172451Z` from `source-game-2478` (415 files) against the reviewed `game-copy-2478.json` digest. The v6 preparation step did the following:
+
+- Staged the 22 vendored BepInEx files and 13 loader assemblies into the copy, for 450 files.
+- Bundled the 197 retry files into `D:\TopiaForgeQA\tools\runtime-retry-20260924T172541Z`.
+- Left its state root empty.
+- Wrote `runtime-retry-preparation-20260924T172541Z.json` (SHA-256 `699c013e70d76e6b1bb0d52c9d9d64676d0baa3766c25e21c490f1d7d0c85aea`).
+
+Run as the normal user, the staged driver refused with "requires the intended standard interactive QA account". It exited 1, wrote no state, created no native run and left no process behind. No firewall rule was created and no task was registered. No game ran, no isolation was admitted and no gate changed. Dispatch needs one operator session that the user confirms.

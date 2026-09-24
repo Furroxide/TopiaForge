@@ -63,7 +63,7 @@ Under my decision, live game acceptance, native UX/accessibility, independent pl
 Optional execution needs:
 
 - The verified 2478 copies `source-game-2478` and `game-2478`, which already exist. Saves, tokens, personal configuration and microphone recording stay excluded.
-- A re-staged, refusal-checked retry, which needs a new source checkpoint (see the observer runbook).
+- The re-staged, refusal-checked retry `20260924T172541Z`. Its v6 source checkpoint is at `37f9088`, so any later loader or broker change needs a new checkpoint (see the observer runbook).
 - One operator session that I confirm.
 - A successful unforced exit and an attributable provisioning review.
 
