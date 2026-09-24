@@ -1,6 +1,6 @@
 # Non-game review gates and record boundary
 
-Updated 2026-09-09. The [tracked readiness register](../../../release/release-readiness.json) still blocks all four gates below with empty `evidenceIds`. The three prepared review requests do not supply approvals; credential-incident closure was explicitly deferred. Only GAME may remain deferred at private candidate construction.
+Updated 2026-09-24. The [tracked readiness register](../../../release/release-readiness.json) still blocks all four gates below with empty `evidenceIds`. The three prepared review requests do not supply approvals; credential-incident closure was explicitly deferred. Only GAME may remain deferred at private candidate construction.
 
 | Gate | Required roles, in contract order | Actual decision needed |
 | --- | --- | --- |
@@ -9,7 +9,7 @@ Updated 2026-09-09. The [tracked readiness register](../../../release/release-re
 | `P0-PRIV-01` | `backend-owner`, `privacy-legal`, `product-owner`, `robotopia-owner`, `security-owner` | Endpoint/token authorization; authoritative retention/deletion/training/geography/account/cost policy; consent/disclosures/off controls and acceptance-matrix review |
 | `P0-CRED-01` | `credential-owner`, `security-owner` | Complete private affected inventory, revocation/replacement and old-credential invalidity, least privilege and log retention/deletion disposition, authenticated sanitized-sentinel evidence |
 
-Use the [IP request](ip-naming-review-request.md), [OSS request](oss-redistribution-review-request.md) and [privacy request](privacy-backend-review-request.md). The existing three-image 0.x disposition covers that asset sub-item only. Source audits establish inventory or behavior; they do not establish legal authority, backend permission or actual credential revocation. The Windows-only/unsigned choice does not close earlier exposure. [LaunchBlockers](../../LaunchBlockers.md) retains detailed history; [Evidence](Evidence.md) describes the available engineering record.
+Use the [IP request](ip-naming-review-request.md), [OSS request](oss-redistribution-review-request.md) and [privacy request](privacy-backend-review-request.md). The three Robotopia web images were replaced with CC0 artwork on 2026-09-09, so the earlier three-image `0.x` disposition no longer applies. Source audits establish inventory or behavior; they do not establish legal authority, backend permission or actual credential revocation. The Windows-only/unsigned choice does not close earlier exposure. [LaunchBlockers](../../LaunchBlockers.md) retains detailed history; [Evidence](Evidence.md) describes the available engineering record.
 
 ## Review sequence and record boundary
 

@@ -1,12 +1,12 @@
 # Maintainer draft: RC1 IP, naming and retained-asset review
 
-**Tracked maintainer draft — review and decision pending.** Prepared 2026-09-09 for `P0-IP-01` (blocking).
+**Tracked maintainer draft — review and decision pending.** Prepared 2026-09-09 for `P0-IP-01` (blocking); source pin refreshed 2026-09-24.
 
 Please review the rights basis and public naming for TopiaForge's proposed Windows x64 `0.1.0-rc.1` release, and return an attributable decision within your authorized role. This request records no approval. The gate remains blocked pending actual review evidence.
 
 ## Review scope and role coverage
 
-The baseline supplied for review is release source **`437733854795c11e684eac9d59d6bc52ada9516e`**, tree **`976326d02fd68b19a2e10bde923e15510df441a6`**. The [reviewed-source and automated-verification summary](Evidence.md#reviewed-source-and-automated-verification) identifies that reviewed source. This is the reviewed release-branch source, not a frozen final `main` candidate. Identify any later source changes that require renewed review; final candidate archive contents and notices must be rechecked after construction.
+The baseline supplied for review is release source **`79740dc1d747e75510ca477e7be0d5c0b109a085`**, tree **`10b55514193727d205fe84cb62e8e03d9aa4fb90`**. This is the release branch after the 2026-09-24 stabilization, which retargeted RC1 to Robotopia build 2478 ([evidence](Evidence.md#build-2478-retarget-2026-09-24)). It supersedes the earlier baseline `4377338`. This is the reviewed release-branch source, not a frozen final `main` candidate. Identify any later source changes that require renewed review; final candidate archive contents and notices must be rechecked after construction.
 
 Required role coverage, in the gate's exact order:
 

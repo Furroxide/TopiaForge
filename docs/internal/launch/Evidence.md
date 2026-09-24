@@ -1,6 +1,6 @@
 # Launch preparation evidence
 
-Updated 2026-09-10. These are source and local-preparation observations. **No final-main candidate, qualified game/authoring evidence or new gate approval is established.** Private originals are retained locally; [the action list](NextActions.md) supplies current next steps.
+Updated 2026-09-24. These are source and local-preparation observations. **No final-main candidate, qualified game/authoring evidence or new gate approval is established.** Private originals are retained locally; [the action list](NextActions.md) supplies current next steps.
 
 ## Reviewed source and automated verification
 
@@ -412,3 +412,86 @@ Three contract decisions were reconciled between the observer and the verifier d
 
 Six PowerShell analyzer findings inherited from the earlier local scripts were repaired without suppressions: the QA copy script is ASCII-only (the reserved-name superscripts are regex escapes) and its protected-root function and the provisioning ACL function support `ShouldProcess`; the provisioning script builds the generated bootstrap secret directly into a read-only `SecureString` with no plaintext conversion cmdlet; the sandbox CI test helpers no longer use a state-changing verb. `Invoke-ScriptAnalyzer` over `tools` now reports 0 findings with the CI settings. During this work two commands resolved a relative path against the process directory and altered the untracked copy script in the main checkout; it was restored and verified byte-identical to the 2026-09-11 snapshot blob (`990e31e9…`), and the main checkout is otherwise untouched.
 
+
+## Build 2478 retarget (2026-09-24)
+
+The public manifest (`https://builds.tomatocake.dev/latest-build.json`) moved from build 2409 to 2469 on 2026-09-10 and to 2478 on 2026-09-16. Every `--require-latest` gate then failed, including PR #131's 2026-09-13 run. On 2026-08-22 the maintainer kept `gameBuild.requireLatestAtRelease` and named `topiaforge compat bump` as the remedy. The user updated the official install to 2478 during this session. Read-only measurements of that install:
+
+- `installed-build.json` id 2478.
+- `filelist.json` SHA-256 `447937c4a46d80ae7bafc8c03dcf4adc752d94b572e5aa0d8e7018ac9e23affd`, covering 415 files.
+- `Robotopia.exe` SHA-256 `8384b6e282e904ccdac517301281bca7c1c3c103beb5ee4e3bb255938ba04e5f`.
+
+The archive hashes come from the public manifest and are pinned in `.github/robotopia-game-build.json`. The game's Unity runtime is still `6000.0.31f1`, so the `6000.0.23f1` authoring pin is unaffected. The official update removed BepInEx, doorstop and `winhttp.dll` from that install, so a native run must reinstall the loader first.
+
+**Retarget ([#137](https://github.com/Furroxide/TopiaForge/pull/137), squash `4bc4fdd`).** `compat bump` still named the manifest fixtures that were renamed from v5 to v6. It also missed seven pin-bound sites, so it could report success while tests failed. It now covers those sites and the supported-build documents. It also lists every other tracked file outside `docs/internal/` that still names the old build. The bump covers the pin, policy, 8 exact and 6 bounded manifest ranges, fixtures, guards and documents. `tools/release/verify-robotopia-install.ps1` accepted the official install (415 files).
+
+The P2-COMPAT-01 audit on the live 2478 `Managed` directory:
+
+- `gamecompat verify`: 218 bindings, of which 207 are verifiable and 11 cannot be checked offline. It found 0 indeterminate results, 0 errors and 0 warnings.
+- `gamecompat audit --strict`: 0 manifest problems, undeclared bindings or stale bindings.
+- Full surface diff against the 2409 baseline: 34 changed members across 6 of 60 captured types. The baseline was then refreshed.
+
+Two changes reach TopiaForge, and both are adapted in source:
+
+- **Health signature.** `Health.ChangeHealth` and `Health.Damage` now take the causing `GameObject` instead of a diagnostic string. Name-only bindings had hidden this from `verify`. A shared `NativeDamageSource` helper selects either shape, and the Health bindings now constrain the full signatures.
+- **Metadata and Immutable.** The game now preloads its own `System.Reflection.Metadata` and `System.Collections.Immutable` 8.0. The payload test now shows, at the metadata level, that the game's copies contain every type and member the compiled loader references, with the same signatures. A negative control proves the check is not vacuous.
+
+Local checks on that head:
+
+- Solution build: 0 warnings.
+- The seven C# harnesses passed, including managed-ref 17/17 and the package validator.
+- `launcher_domain` 1,079 tests; `launcher_data` 585 tests with 4 platform skips; CLI 523 tests with 4 platform skips.
+- `launcher_ui` 3 tests and the Flutter launcher 75 tests.
+- The Windows debug build.
+
+After the merge, the release head passed [push CI](https://github.com/Furroxide/TopiaForge/actions/runs/36025175593) (16/16 jobs), [CodeQL](https://github.com/Furroxide/TopiaForge/actions/runs/36025174834) and the [packaging dry run](https://github.com/Furroxide/TopiaForge/actions/runs/36025177612) (11/11 jobs). PR #119's [synthetic-merge CI](https://github.com/Furroxide/TopiaForge/actions/runs/36025182013) passed 16/16.
+
+**Newer-build guidance ([#139](https://github.com/Furroxide/TopiaForge/pull/139), squash `ecf7c79`).** When a mod refuses because the installed game is newer than its supported range, the launcher now says so. It advises waiting for a mod update and gives the update advice only for older builds. The Diagnostics headline no longer claims every mod feature is compatible when only the binding check passed. Local checks: `launcher_domain` 1,081 tests, `launcher_data` 585 tests and the Flutter launcher 78 tests. After the merge, [push CI](https://github.com/Furroxide/TopiaForge/actions/runs/36027239341) passed 16/16 jobs and [CodeQL](https://github.com/Furroxide/TopiaForge/actions/runs/36027239671) passed. The next merge superseded and cancelled its packaging dry run.
+
+**Native world loading ([#138](https://github.com/Furroxide/TopiaForge/pull/138)).** These two loader fixes existed only as uncommitted work in the maintainer's checkout; the FlyBrain native runs on 2409 exposed them.
+
+- **Spawn placement.** It now goes through `FirstPersonController.TeleportTo(Vector3, Quaternion?)` after camera readiness, instead of writing the player's `Transform`.
+- **Empty UGC scene.** The no-op UGC launch now writes an original empty scene rather than pointing at a missing export.
+
+The manager declares the new bindings. `gamecompat verify` on 2478 reports 223 bindings, 212 of them verifiable, with 0 errors. The pinned Editor `UgcNoOpProjectSmoke` ran against the 2478 `Managed` directory. The game's own parser accepted and loaded the empty scene and still rejected a project with no scenes. CodeQL's two path-injection findings on the first push were fixed in code, not dismissed: the import folder must now be the exact named child of temporary storage. The final head passed all 29 PR checks with no open alerts. After the merge (squash `7d5c191`), [push CI](https://github.com/Furroxide/TopiaForge/actions/runs/36028959346) passed 16/16 jobs and [CodeQL](https://github.com/Furroxide/TopiaForge/actions/runs/36028958616) passed.
+
+**Sandbox automation ([#131](https://github.com/Furroxide/TopiaForge/pull/131)).** Two causes made its 2026-09-13 run fail:
+
+- The managed-ref validator lacked `UnityEngine.ImageConversionModule`, which the pinned-Editor lane references. It now requires 21 assemblies.
+- The build drift described above.
+
+The Sandbox specification, expected-catalog parser, schema and fixtures now derive the build from the pinned runtime constant. The reviewed expected-inventory file no longer carries a build in its name, and an inventory for another build is refused.
+
+Two review findings on the independent verifier were fixed:
+
+- It now mirrors the broker's closed atom schema and requires the full 48-action inventory.
+- It recomputes screen baselines from the admitted bitmaps instead of trusting the broker's verdict.
+
+The two PowerShell threads were masked `-Password` arguments. All four threads were answered and resolved. Local checks on the updated head:
+
+- Solution build: 0 warnings.
+- The seven C# harnesses passed.
+- The native observer passed 546 contract checks.
+- The broker self-test passed 183 broker, 17 waveform and 100 provisioning checks.
+- CLI 1,075 tests with 4 platform skips.
+- 44 Sandbox CI admission tests.
+
+The pinned-Editor lane was not rerun, because the update changes nothing that lane compiles or evaluates. The first hosted run then failed `dotnet format` on three files. The 2026-09-13 run had never reached that step, because the managed-reference bootstrap failed first. The files were fixed with the formatter's own whitespace-only output. The final head passed all 31 PR checks, including CodeQL and the Sandbox Automation offline jobs, and was squash-merged as `79740dc` (tree `10b5551`). PR #119 records the release-head runs for the final integrated head.
+
+**Not established.** No game was launched in this session. Nothing natively confirms the following on 2478:
+
+- The game accepts a null damage source.
+- `TeleportTo` places the player.
+- The observations recorded against 2409 in source comments still hold.
+
+No Sandbox native row, provisioning retry or candidate acceptance ran. The 2409 QA game copies and every failed-attempt receipt are retained unchanged. They no longer match the pinned build, so any optional QA needs fresh 2478 copies.
+
+## Build-2478 QA game copies (2026-09-24)
+
+The user authorized fresh verified copies from the 2478 install (**“Yes, copy 2478”**). `tools/copy-sandbox-qa-game.ps1` was changed for this; it reached the release branch with the launch-documentation change that records this entry. At 2026-09-24T16:49Z it did the following. The copy ran from an earlier revision of that change; the merged revision differs only in how it locates the verifier and validates the verifier's output.
+
+1. Verified the official install with `tools/release/verify-robotopia-install.ps1`: the files-manifest digest, 415 files, each size and digest, and the pinned `Robotopia.exe`.
+2. Copied exactly the manifest's files into `D:\TopiaForgeQA\source-game-2478` and `D:\TopiaForgeQA\game-2478`: 415 files and 5,567,020,099 bytes each, every byte verified against the manifest digest in both trees.
+3. Created both trees with protected ACLs. The QA account has read/execute on the source copy and modify on the game copy.
+
+Before the real copy, the new copier refused a wrong QA root and a metadata file whose manifest digest did not match the install. It wrote nothing in either case. An independent rehash of both trees afterwards found every file equal to its manifest entry, with no missing, extra or linked entries. Private receipt: `.dart_tool/rc1-review/qa-provisioning-20260909/game-copy-2478.json` (SHA-256 `ce72e95cd81118ce37dede363f4786386aa3e4115bbac257ed7ed5689b608804`). The 2409 copies, all earlier receipts and the staged 2409 retry are unchanged. No game ran, and the retry has not been re-staged for 2478.
