@@ -30,7 +30,7 @@ for existing V3/V4/V5 source projects; no retired reader can activate a package.
   "author": { "name": "You" },
   "entryAssembly": "ExampleFirstMod.dll",
   "entryType": "Example.FirstMod.FirstMod",
-  "supportedGameVersionRange": "0.0.2409",
+  "supportedGameVersionRange": "0.0.2478",
   "supportedLoaderVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "supportedSdkVersionRange": ">=0.1.0-rc.1 <0.2.0",
   "license": "AGPL-3.0-or-later"
@@ -39,7 +39,7 @@ for existing V3/V4/V5 source projects; no retired reader can activate a package.
 
 Required fields are `schemaVersion`, `name`, `displayName`, `version`, `author`, `entryAssembly`,
 `entryType`, and the three `supported*VersionRange` fields. `name` is a stable 2–64 character package
-id. Versions use SemVer 2; Robotopia build 2409 is represented as `0.0.2409`.
+id. Versions use SemVer 2; Robotopia build 2478 is represented as `0.0.2478`.
 
 ## Package contract
 
@@ -92,7 +92,7 @@ Required dependency ranges block resolution when unsatisfied. Optional dependenc
 participate when a compatible provider is installed. Supported ranges include exact,
 wildcard and comparator sets. The V3 migrator translates legacy caret/tilde ranges
 into explicit comparators; they are not accepted by the V6 readers. Versions retain full SemVer precedence;
-Robotopia build 2409 maps to `0.0.2409`. Host constraints restrict package loading;
+Robotopia build 2478 maps to `0.0.2478`. Host constraints restrict package loading;
 an empty constraint list is portable, not evidence of testing on every host.
 
 Capabilities disclose access and do not grant or sandbox authority. Recognized values

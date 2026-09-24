@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.GameBridge;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
@@ -514,22 +515,41 @@ namespace TopiaForge.RobotKit
             try
             {
                 var damageType = Enum.ToObject(DamageTypeType, (int)type);
-                var method = health.GetType().GetMethods(InstanceFlags).FirstOrDefault(candidate =>
-                    candidate.Name == "Damage" &&
-                    candidate.GetParameters() is { Length: 3 } parameters &&
-                    parameters[0].ParameterType == typeof(float) &&
-                    parameters[1].ParameterType == DamageTypeType);
+                var method = NativeDamageSource.Select(
+                    health.GetType(), "Damage", InstanceFlags, typeof(GameObject), typeof(float), DamageTypeType);
                 if (method == null)
                 {
                     return false;
                 }
 
-                method.Invoke(health, new[] { Mathf.Max(0f, amount), damageType, source });
+                method.Invoke(health, new[] { Mathf.Max(0f, amount), damageType, NativeDamageSource.Argument(method, source) });
                 return true;
             }
             catch (Exception ex)
             {
                 logger?.Debug("RobotKit Health.Damage failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        // Change health through the native Health.ChangeHealth(delta, source); a negative delta is damage.
+        public static bool ChangeHealth(Component health, float delta, string source, IModLogger? logger)
+        {
+            try
+            {
+                var method = NativeDamageSource.Select(
+                    health.GetType(), "ChangeHealth", InstanceFlags, typeof(GameObject), typeof(float));
+                if (method == null)
+                {
+                    return false;
+                }
+
+                method.Invoke(health, new[] { delta, NativeDamageSource.Argument(method, source) });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug("RobotKit Health.ChangeHealth failed: " + ex.Message);
                 return false;
             }
         }

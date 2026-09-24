@@ -51,10 +51,27 @@ extension _TopiaForgeCompatCommands on _TopiaForgeCli {
     }
 
     final dryRun = args.contains('--dry-run');
+    final repositoryRoot = _releaseRepositoryRoot();
+    final tracked = await Process.run('git', [
+      '-C',
+      repositoryRoot,
+      'ls-files',
+      '-z',
+    ]);
+    final candidateFiles = tracked.exitCode == 0 && tracked.stdout is String
+        ? (tracked.stdout as String)
+              .split('\x00')
+              .where((path) => path.isNotEmpty)
+        : const <String>[];
+    if (tracked.exitCode != 0) {
+      stderr.writeln(
+        'Could not list tracked files; unlisted mentions are not reported.',
+      );
+    }
     final GameBuildBumpResult result;
     try {
       result = bumpRobotopiaGameBuild(
-        repositoryRoot: _releaseRepositoryRoot(),
+        repositoryRoot: repositoryRoot,
         toBuildId: requireInt('--build'),
         windowsArchiveSha256: requireValue('--windows-sha256'),
         macArchiveSha256: requireValue('--mac-sha256'),
@@ -62,6 +79,7 @@ extension _TopiaForgeCompatCommands on _TopiaForgeCli {
         filesManifestFileCount: requireInt('--file-count'),
         gameExecutableSha256: requireValue('--game-exe-sha256'),
         dryRun: dryRun,
+        candidateFiles: candidateFiles,
       );
     } on ArgumentError catch (error) {
       throw UsageError('${error.name}: ${error.message}');
@@ -78,6 +96,16 @@ extension _TopiaForgeCompatCommands on _TopiaForgeCli {
     );
     for (final edit in result.edits) {
       stdout.writeln('  ${edit.path} (${edit.replacements})');
+    }
+    if (result.unlistedMentions.isNotEmpty) {
+      stdout.writeln(
+        'Also naming build ${result.fromBuildId}, not rewritten — review by '
+        'hand (history, observations and sample values may stay; a pin-bound '
+        'site belongs in gameBuildBumpTargets):',
+      );
+      for (final path in result.unlistedMentions) {
+        stdout.writeln('  $path');
+      }
     }
     if (!result.isComplete) {
       stderr.writeln(
