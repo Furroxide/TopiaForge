@@ -52,11 +52,49 @@ try {
         try { Assert-IsolationFailure { Use-StateConfiguration $state } 'Cannot change AcceptanceIsolationRecord' }
         finally { $script:AcceptanceIsolationRecord=$original; $script:explicitParameters.Remove('AcceptanceIsolationRecord') }
     }
-    Test-IsolationCase 'Windows build requires explicit isolation record' {
+    Test-IsolationCase 'Windows build requires an explicit mode and a record only for a live run' {
         $tokens=$null; $errors=$null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'release/build-windows.ps1'),[ref]$tokens,[ref]$errors)
+        $mode = @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -ceq 'LiveGameAcceptance' })
+        Assert-IsolationCondition ($mode.Count -eq 1 -and $mode[0].Extent.Text -match 'Mandatory\s*=\s*\$true' -and
+            $mode[0].Extent.Text -match 'ValidateSet\("run", "not-run", IgnoreCase = \$false\)') 'Windows build does not require an exact -LiveGameAcceptance mode.'
         $parameter = @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -ceq 'AcceptanceIsolationRecord' })
-        Assert-IsolationCondition ($parameter.Count -eq 1 -and $parameter[0].Extent.Text -match 'Mandatory\s*=\s*\$true') 'Windows build does not require -AcceptanceIsolationRecord.'
+        Assert-IsolationCondition ($parameter.Count -eq 1 -and $parameter[0].Extent.Text -notmatch 'Mandatory') 'The isolation record must be required by mode, not by the parameter block.'
+        # Admission happens before any path is resolved: run the real script in a child.
+        $build = Join-Path $PSScriptRoot 'release/build-windows.ps1'
+        $absent = Join-Path $testRoot 'absent-repository'
+        $common = @('-NoProfile', '-NonInteractive', '-File', $build, '-RepositoryRoot', $absent, '-SourceSha', ('1' * 40),
+            '-Version', '0.1.0-rc.1', '-CanonicalArchive', $absent, '-CanonicalEcosystemSha256', ('2' * 64),
+            '-CanonicalArchiveSha256', ('3' * 64), '-OutputDirectory', $absent, '-PrivateEvidenceDirectory', $absent,
+            '-DartPath', 'dart', '-FlutterPath', 'flutter', '-UnityPath', 'unity', '-GameDirectory', $absent)
+        foreach ($case in @(
+                @{ Arguments = @('-LiveGameAcceptance', 'run'); Pattern = 'explicit -AcceptanceIsolationRecord' },
+                @{ Arguments = @('-LiveGameAcceptance', 'not-run', '-AcceptanceIsolationRecord', $AcceptanceIsolationRecord); Pattern = 'refuses -AcceptanceIsolationRecord' },
+                @{ Arguments = @('-LiveGameAcceptance', 'Run', '-AcceptanceIsolationRecord', $AcceptanceIsolationRecord); Pattern = 'does not belong to the set' },
+                @{ Arguments = @('-LiveGameAcceptance', 'not-run'); Pattern = 'absent-repository' }
+            )) {
+            $output = & $powerShellExecutable @common @($case.Arguments) 2>&1 | Out-String
+            Assert-IsolationCondition ($LASTEXITCODE -ne 0 -and $output -match $case.Pattern) "Unexpected Windows build admission for $($case.Arguments -join ' '): $output"
+        }
+    }
+    Test-IsolationCase 'Windows build launches live acceptance only inside its run branch' {
+        $tokens=$null; $errors=$null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'release/build-windows.ps1'),[ref]$tokens,[ref]$errors)
+        Assert-IsolationCondition ($errors.Count -eq 0) 'build-windows.ps1 has parse errors.'
+        $launches = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.Extent.Text -match '"acceptance",\s*"run"' }, $true))
+        Assert-IsolationCondition ($launches.Count -eq 1) "Expected one live acceptance launch, found $($launches.Count)."
+        $binding = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$runsLiveGameAcceptance' }, $true))
+        Assert-IsolationCondition ($binding.Count -eq 1 -and $binding[0].Right.Extent.Text -ceq '$LiveGameAcceptance -ceq "run"') 'The run branch is not bound to the case-sensitive run mode.'
+        $enclosing = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.IfStatementAst] -and $node.Clauses.Count -eq 1 -and
+                    $null -eq $node.ElseClause -and $node.Clauses[0].Item1.Extent.Text -ceq '$runsLiveGameAcceptance' }, $true) | Where-Object {
+                $body = $_.Clauses[0].Item2.Extent
+                $launches[0].Extent.StartOffset -ge $body.StartOffset -and $launches[0].Extent.EndOffset -le $body.EndOffset })
+        Assert-IsolationCondition ($enclosing.Count -eq 1) 'The live acceptance launch escapes the run branch.'
+        $parent = $launches[0].Parent
+        while ($null -ne $parent -and $parent -ne $enclosing[0]) {
+            Assert-IsolationCondition ($parent -isnot [System.Management.Automation.Language.IfStatementAst]) 'The live acceptance launch is nested under another condition.'
+            $parent = $parent.Parent
+        }
     }
     Test-IsolationCase 'Windows acceptance propagates record and reads admitted manager root' {
         $sourceText=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release/build-windows.ps1') -Raw
@@ -171,6 +209,81 @@ try {
                 [System.IO.File]::WriteAllText($AcceptanceIsolationRecord, '{"fixture":"private record bytes"}')
                 [System.IO.File]::WriteAllText($evidencePath, '{"fixture":"private verifier input"}')
             }
+        }
+    }
+    $gameGate = { param([string]$Enforcement) [pscustomobject]@{ id = 'P0-GAME-01'; enforcement = $Enforcement; status = 'blocked' } }
+    $advisory = [pscustomobject]@{ gates = @((& $gameGate 'advisory')) }
+    Test-IsolationCase 'run mode keeps the explicit isolation-record checks either way' {
+        foreach ($prerequisites in @($null, $advisory, [pscustomobject]@{ gates = @((& $gameGate 'blocking')) })) {
+            Assert-LiveGameAcceptanceMode -Mode run -IsolationRecord $AcceptanceIsolationRecord -Prerequisites $prerequisites
+            Assert-IsolationFailure { Assert-LiveGameAcceptanceMode -Mode run -IsolationRecord '' -Prerequisites $prerequisites } 'explicit'
+        }
+        Assert-IsolationFailure { Assert-LiveGameAcceptanceMode -Mode run -IsolationRecord (Join-Path $testRoot 'missing.json') } 'bounded regular'
+        $insideOutputs = Join-Path $assetsDirectory 'isolation.json'
+        New-Item -ItemType Directory -Force -Path $assetsDirectory | Out-Null
+        [System.IO.File]::WriteAllText($insideOutputs, '{"fixture":"record inside outputs"}')
+        try { Assert-IsolationFailure { Assert-LiveGameAcceptanceMode -Mode run -IsolationRecord $insideOutputs } 'output|overwrite' }
+        finally { Remove-Item -LiteralPath $insideOutputs -Force }
+    }
+    Test-IsolationCase 'not-run mode refuses an isolation record' {
+        foreach ($prerequisites in @($null, $advisory)) {
+            Assert-IsolationFailure { Assert-LiveGameAcceptanceMode -Mode not-run -IsolationRecord $AcceptanceIsolationRecord -Prerequisites $prerequisites } 'not-run.*AcceptanceIsolationRecord'
+        }
+    }
+    Test-IsolationCase 'not-run mode requires an advisory P0-GAME-01 at the exact SHA' {
+        Assert-LiveGameAcceptanceMode -Mode not-run -IsolationRecord ''
+        Assert-LiveGameAcceptanceMode -Mode not-run -IsolationRecord '' -Prerequisites $advisory
+        foreach ($prerequisites in @(
+                [pscustomobject]@{ gates = @((& $gameGate 'blocking')) },
+                [pscustomobject]@{ gates = @((& $gameGate 'advisory'), (& $gameGate 'advisory')) },
+                [pscustomobject]@{ gates = @([pscustomobject]@{ id = 'P0-IP-01'; enforcement = 'blocking' }) },
+                [pscustomobject]@{ gates = @([pscustomobject]@{ id = 'P0-GAME-01' }) },
+                [pscustomobject]@{ status = 'eligible-for-private-build' }
+            )) {
+            Assert-IsolationFailure { Assert-LiveGameAcceptanceMode -Mode not-run -IsolationRecord '' -Prerequisites $prerequisites } 'advisory'
+        }
+    }
+    Test-IsolationCase 'live game acceptance mode is exact and case-sensitive' {
+        foreach ($mode in @('Run', 'NOT-RUN', 'skip', '')) {
+            Assert-IsolationFailure { Assert-LiveGameAcceptanceMode -Mode $mode -IsolationRecord '' } 'argument|validat'
+        }
+    }
+    Test-IsolationCase 'state freezes the live game acceptance mode against resume' {
+        $savedRecord = $AcceptanceIsolationRecord
+        try {
+            $script:LiveGameAcceptance = 'not-run'
+            $script:AcceptanceIsolationRecord = ''
+            Write-State -Phase preflight -SourceSha $source
+            $frozen = Read-State
+            Assert-IsolationCondition ($frozen.liveGameAcceptance -ceq 'not-run' -and $frozen.acceptanceIsolationRecord -ceq '' -and
+                $frozen.acceptanceIsolationRecordSha256 -ceq '') 'State did not freeze not-run without a record.'
+            $before = Get-Sha256 $statePath
+            foreach ($change in @(@('LiveGameAcceptance', 'run'), @('AcceptanceIsolationRecord', $savedRecord))) {
+                Set-Variable -Scope Script -Name $change[0] -Value $change[1]
+                $script:explicitParameters[$change[0]] = $true
+                try { Assert-IsolationFailure { Use-StateConfiguration $frozen } "Cannot change $($change[0])" }
+                finally {
+                    $script:explicitParameters.Remove($change[0])
+                    $script:LiveGameAcceptance = 'not-run'
+                    $script:AcceptanceIsolationRecord = ''
+                }
+            }
+            Assert-IsolationCondition ((Get-Sha256 $statePath) -ceq $before) 'Refused resume rewrote state.'
+            $script:LiveGameAcceptance = 'run'
+            Use-StateConfiguration $frozen
+            Assert-IsolationCondition ($LiveGameAcceptance -ceq 'not-run') 'Resume did not adopt the frozen not-run mode.'
+            $script:AcceptanceIsolationRecord = $savedRecord
+            $script:LiveGameAcceptance = 'run'
+            Write-State -Phase preflight -SourceSha $source
+            $running = Read-State
+            $script:LiveGameAcceptance = 'not-run'
+            $script:explicitParameters['LiveGameAcceptance'] = $true
+            Assert-IsolationFailure { Use-StateConfiguration $running } 'Cannot change LiveGameAcceptance'
+        }
+        finally {
+            $script:explicitParameters.Remove('LiveGameAcceptance')
+            $script:LiveGameAcceptance = 'run'
+            $script:AcceptanceIsolationRecord = $savedRecord
         }
     }
     Write-Host "Release isolation tests: $passed passed, $($failures.Count) failed."
