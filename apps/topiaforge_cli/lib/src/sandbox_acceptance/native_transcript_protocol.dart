@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import '../release_strict_json.dart';
 import 'native_annex.dart';
 import 'native_driver_manifest.dart';
+import 'native_driver_vocabulary.dart';
 import 'sandbox_json.dart';
 import 'sandbox_specification.dart';
 

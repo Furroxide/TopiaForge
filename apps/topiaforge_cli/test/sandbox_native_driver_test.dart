@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:test/test.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_driver_vocabulary.dart';
 import 'sandbox_native_transcript_fixture.dart';
 
 /// Driver manifest v2 acceptance, precise v1 rejection, and the closed
-/// vocabularies/atom bounds of spec section 2 (outcome 1).
+/// vocabularies/atom schemas/action inventory of spec section 2 (outcome 1),
+/// refused by the transcript verifier before any oracle runs.
 void main() {
   List<int> mutatedDriver(void Function(Map<String, Object?>) mutate) {
     final json =
@@ -105,5 +107,58 @@ void main() {
     test('vocabulary refuses ${mutation.key}', () {
       expectRefused(mutatedDriver(mutation.value));
     });
+  }
+
+  test('an undeclared action is refused before evaluation', () {
+    expectRefused(
+      mutatedDriver(
+        (j) => (j['actions']! as Map)['open-shell'] = [
+          {'kind': 'capture'},
+        ],
+      ),
+      message: 'undeclared action',
+    );
+  });
+
+  test('a missing action is refused even when no scenario uses it', () {
+    // persistence-refusal never interacts; the inventory must still be whole.
+    expectRefused(
+      mutatedDriver((j) => (j['actions']! as Map).remove('interact')),
+      message: 'lacks interact',
+    );
+  });
+
+  test('a recipe beyond twelve atoms is refused', () {
+    expectRefused(
+      mutatedDriver(
+        (j) => (j['actions']! as Map)['observe-refusal'] = List.filled(13, {
+          'kind': 'capture',
+        }),
+      ),
+      message: 'needs 1 to 12',
+    );
+  });
+
+  // The first recipe atom of each kind, faulted in place in the real manifest.
+  for (final kind in nativeDriverAtomSchemas.keys) {
+    Map<String, Object?> firstAtom(Map<String, Object?> json) =>
+        (json['actions']! as Map).values
+            .expand((atoms) => atoms as List)
+            .cast<Map<String, Object?>>()
+            .firstWhere((atom) => atom['kind'] == kind);
+    String field(Map<String, Object?> atom) => atom.keys.lastWhere(
+      (k) => k != 'kind' && k != 'surfaceId',
+      orElse: () => 'kind',
+    );
+    for (final fault in <String, void Function(Map<String, Object?>)>{
+      'an undeclared field': (atom) => atom['extra'] = true,
+      'a missing field': (atom) => atom.remove(field(atom)),
+      'a wrongly typed field': (atom) =>
+          atom[field(atom)] = atom[field(atom)] is String ? 7 : '7',
+    }.entries) {
+      test('$kind atom with ${fault.key} is refused', () {
+        expectRefused(mutatedDriver((j) => fault.value(firstAtom(j))));
+      });
+    }
   }
 }
