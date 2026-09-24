@@ -49,10 +49,10 @@ namespace TopiaForge.Mods.GameBridge
                 // Reuse one stable folder per caller instead of leaking a GUID-named directory on every start/stop.
                 // Clear it immediately before arming the request so a stale export left by an interrupted run can
                 // never be imported. Caller-specific names keep Worlds, live sync, and stopped-request state apart.
-                var tempRoot = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                var tempRoot = Path.GetFullPath(Path.GetTempPath());
                 var emptyImportFolder = Path.GetFullPath(Path.Combine(tempRoot, emptyFolderName));
-                if (!emptyImportFolder.StartsWith(tempRoot, StringComparison.OrdinalIgnoreCase))
-                    throw new ArgumentException("The import folder must remain inside temporary storage.", nameof(emptyFolderName));
+                if (!IsNamedChild(tempRoot, emptyImportFolder, emptyFolderName))
+                    throw new ArgumentException("The import folder must be the named child of temporary storage.", nameof(emptyFolderName));
                 PrepareEmptyFolder(emptyImportFolder);
                 lastRunType.GetField("Mode")?.SetValue(values, "SelectedFile");
                 lastRunType.GetField("ImportFolderPath")?.SetValue(values, emptyImportFolder);
@@ -76,6 +76,19 @@ namespace TopiaForge.Mods.GameBridge
 
                 return false;
             }
+        }
+
+        // Exact placement rather than a prefix test: the resolved folder's parent must be the temporary root itself
+        // and its name the single validated segment, so no separator, dot segment or casing trick can move it.
+        private static bool IsNamedChild(string root, string candidate, string name)
+        {
+            var parent = Path.GetDirectoryName(candidate);
+            return parent != null
+                && string.Equals(
+                    parent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetFileName(candidate), name, StringComparison.Ordinal);
         }
 
         private static void PrepareEmptyFolder(string path)
