@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Compile Include="../../mods/Shared/UgcNoOpLaunchRequest.cs" Link="NativeWorld/UgcNoOpLaunchRequest.cs" />
+    <Compile Include="../../mods/Shared/NativeDamageSource.cs" Link="NativeWorld/NativeDamageSource.cs" />
   </ItemGroup>
 
   <!-- System.Reflection.Metadata is used by the non-executing package validator in
