@@ -487,6 +487,22 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotConversationService : 
   property System.Boolean IsAvailable { get [virtual,final,newslot]; set; }
   property System.Int32 ActiveConversationCount { get; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeRobotEditTarget : System.Object, TopiaForge.Mods.IRobotEditTarget
+  constructor .ctor(System.String id, TopiaForge.Mods.TransformState transform, TopiaForge.Mods.IRobotAgent? agent = null)
+  method [virtual,final,newslot] System.Boolean TryGetTransform(out TopiaForge.Mods.TransformState transform)
+  property System.Boolean IsAlive { get [virtual,final,newslot]; set; }
+  property System.Boolean IsNativeSceneObject { get [virtual,final,newslot]; set; }
+  property System.Boolean ThrowOnDispose { get; set; }
+  property System.Boolean ThrowOnRestore { get; set; }
+  property System.String DisplayName { get [virtual,final,newslot]; set; }
+  property System.String Id { get [virtual,final,newslot]; }
+  property System.String SceneName { get [virtual,final,newslot]; set; }
+  property TopiaForge.Mods.IRobotAgent? Agent { get; }
+  property TopiaForge.Mods.ModErrorCode PreviewErrorCode { get; set; }
+  property TopiaForge.Mods.RobotBrainMode BrainMode { get; set; }
+  property TopiaForge.Mods.RobotPersonalityDraft? Personality { get; set; }
+  property TopiaForge.Mods.TransformState Transform { get; set; }
+
 type public sealed class TopiaForge.Mods.Testing.FakeRobotKit : System.Object
   constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
   property TopiaForge.Mods.Testing.FakePlayerDialogueInputService DialogueInput { get; }
@@ -509,6 +525,16 @@ type public sealed class TopiaForge.Mods.Testing.FakeRobotObjectiveService : Sys
   property System.Collections.Generic.IReadOnlyList<System.String> TargetNames { get [virtual,final,newslot]; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.RobotTargetInfo> Targets { get [virtual,final,newslot]; }
   property System.Int32 ActiveHandleCount { get; }
+
+type public sealed class TopiaForge.Mods.Testing.FakeRobotSceneEditorService : System.Object, TopiaForge.Mods.IRobotSceneEditorService
+  constructor .ctor(TopiaForge.Mods.Testing.FakeModLifetime lifetime)
+  method System.Void AddTarget(TopiaForge.Mods.Testing.FakeRobotEditTarget target)
+  method [virtual,final,newslot] System.Boolean TryResolve(TopiaForge.Mods.IRobotAgent agent, out TopiaForge.Mods.IRobotEditTarget? target)
+  method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IRobotEditLease> BeginTemporaryEdit(TopiaForge.Mods.IRobotEditTarget target)
+  property System.Boolean IsAvailable { get [virtual,final,newslot]; set; }
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IRobotEditTarget> Targets { get [virtual,final,newslot]; }
+  property System.Int32 ActiveLeaseCount { get; }
+  property System.Int32 ActiveTemporaryPersonalityCount { get; }
 
 type public sealed class TopiaForge.Mods.Testing.FakeRuntimeInfo : System.Object, TopiaForge.Mods.IRuntimeInfo
   constructor .ctor()

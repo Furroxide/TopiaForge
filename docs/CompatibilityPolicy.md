@@ -110,10 +110,13 @@ Windows/Proton layout it also checks beside the launcher-owned `Robotopia` direc
 installation shape. An existing malformed higher-priority marker never falls through to a lower-priority
 one; users are directed to finish or repair the game installation instead.
 
-Platform and architecture claims are made per release artifact and require their native CI jobs.
-Custom-world live acceptance is Windows/Proton-only for 0.x. Bundle content must declare an
-appropriate content target; a build for one target is not assumed portable to another.
-Under Proton/Wine, TopiaForge treats Robotopia as the Windows player target. Empty constraint lists are portable;
+Platform and architecture claims are made per release artifact and require their native CI jobs
+and exact-candidate acceptance. RC1's public scope, including custom worlds, is Windows x64 only.
+Future platforms require separately approved policy and an implemented, isolated native acceptance
+path. Bundle content must declare an appropriate content target; a build for one target is not
+assumed portable to another.
+The existing Proton/Wine target normalization treats Robotopia as the Windows player target;
+that implementation behavior does not establish Linux release support. Empty constraint lists are portable;
 otherwise the loader normalizes the host platform/architecture and requires at least one declared
 content target to match `code` or the active Unity player target. Valid installed versions coexist;
 exact profile pins fail closed without deleting alternatives, while ordinary selection chooses the

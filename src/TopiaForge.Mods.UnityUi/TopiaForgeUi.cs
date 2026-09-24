@@ -100,6 +100,8 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeLog.Reset();
         }
 
+        internal static int DiagnosticHostCount(string ownerId) => Hosts.FindAll(host => host.OwnerId == ownerId).Count;
+
         internal static void OnHostDisposed(UiHost host)
         {
             Hosts.Remove(host);

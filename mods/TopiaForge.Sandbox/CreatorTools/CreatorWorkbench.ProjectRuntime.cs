@@ -43,8 +43,9 @@ namespace TopiaForge.CreatorTools.Shared
                     for (var index = graphAudio.Count - 1; index >= 0; index--)
                     {
                         if (graphAudio[index].IsPlaying) continue;
-                        graphAudio[index].Dispose();
+                        var completedPlayback = graphAudio[index];
                         graphAudio.RemoveAt(index);
+                        completedPlayback.Dispose();
                     }
                     if (graphAudio.Count >= 256)
                     {
@@ -99,7 +100,25 @@ namespace TopiaForge.CreatorTools.Shared
             {
                 return OperationResult<bool>.Success(false);
             }
-            return RemoveOwnedEntry(entry);
+            var owningRunner = runner;
+            projectEntities.Remove(id);
+            roster.Remove(entry);
+            // Source disposal can synchronously remove this same target again. Retire its identity first,
+            // then attempt every owned cleanup even when one provider throws.
+            var problems = new List<Exception>();
+            void Attempt(Action cleanup)
+            {
+                try { cleanup(); }
+                catch (Exception exception) { problems.Add(exception); }
+            }
+            Attempt(() => DisposeProjectInteractions(id));
+            var despawned = OperationResult<bool>.Success(false);
+            Attempt(() => despawned = Despawn(entry));
+            var restored = MergeCleanup(despawned, entry.RestoreAndDispose());
+            if (problems.Count > 0) throw new AggregateException("Project target cleanup failed.", problems);
+            if (!restored.Succeeded) return restored;
+            if (ReferenceEquals(runner, owningRunner)) owningRunner?.Fire(CreatorGraphNodeKind.EntityRemoved, id);
+            return OperationResult<bool>.Success(true);
         }
 
         private OperationResult<bool> ExecuteTransformNode(CreatorGraphNode node)
@@ -313,12 +332,17 @@ namespace TopiaForge.CreatorTools.Shared
 
         private void DisposeGraphAudio()
         {
-            for (var index = graphAudio.Count - 1; index >= 0; index--)
-            {
-                graphAudio[index].Stop();
-                graphAudio[index].Dispose();
-            }
+            var playbacks = graphAudio.ToArray();
             graphAudio.Clear();
+            var problems = new List<Exception>();
+            for (var index = playbacks.Length - 1; index >= 0; index--)
+            {
+                try { playbacks[index].Stop(); }
+                catch (Exception exception) { problems.Add(exception); }
+                try { playbacks[index].Dispose(); }
+                catch (Exception exception) { problems.Add(exception); }
+            }
+            if (problems.Count > 0) throw new AggregateException("Project audio cleanup failed.", problems);
         }
     }
 }

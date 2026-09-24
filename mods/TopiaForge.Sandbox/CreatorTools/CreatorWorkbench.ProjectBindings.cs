@@ -12,7 +12,8 @@ namespace TopiaForge.CreatorTools.Shared
             if (activeProject == null || activeProject.NativeBindings.Count == 0) return;
             if (confirmation?.IsOpen == true) return;
             var listed = string.Join("\n", activeProject.NativeBindings.Select(binding => "• " + binding.DisplayName));
-            var shown = context.Ui.ShowModal(
+            var requestedProject = activeProject;
+            ShowConfirmation(
                 new UiModalRequest(
                     "RESOLVE NATIVE SCENE TARGETS?",
                     "These bindings are scene-specific and temporary. Confirm each resolved target before the event can run:\n" + listed,
@@ -20,14 +21,12 @@ namespace TopiaForge.CreatorTools.Shared
                     destructive: false),
                 confirmed =>
                 {
-                    confirmation = null;
-                    if (!confirmed) return;
+                    if (!confirmed || !ReferenceEquals(activeProject, requestedProject)) return;
                     var result = ResolveNativeBindings();
                     status = result.Succeeded ? result.Value ?? "Bindings confirmed." : result.ErrorMessage;
                     if (!result.Succeeded) context.Ui.ShowToast(status, UiTone.Danger);
                     RefreshUi();
                 });
-            shown.TryGetValue(out confirmation);
         }
 
         private OperationResult<string> ResolveNativeBindings()
@@ -36,12 +35,15 @@ namespace TopiaForge.CreatorTools.Shared
             {
                 return OperationResult<string>.Failure(ModErrorCode.InvalidState, "No active project session.");
             }
-            ClearResolvedProjectBindings();
+            var cleared = ClearResolvedProjectBindings();
+            if (!cleared.Succeeded) return OperationResult<string>.Failure(cleared.ErrorCode, cleared.ErrorMessage);
             var staged = new List<KeyValuePair<string, CreatorRosterEntry>>();
             OperationResult<string> Fail(ModErrorCode code, string message)
             {
-                foreach (var item in staged) item.Value.Dispose();
-                return OperationResult<string>.Failure(code, message);
+                var cleanup = OperationResult<bool>.Success(true);
+                foreach (var item in staged) cleanup = MergeCleanup(cleanup, item.Value.RestoreAndDispose());
+                if (!cleanup.Succeeded) ReportCleanupFailure("Staged binding cleanup completed with problems", cleanup);
+                return OperationResult<string>.Failure(code, message + (cleanup.Succeeded ? string.Empty : " " + cleanup.ErrorMessage));
             }
             if (activeProject.Scope != options.ProjectScope)
             {
@@ -139,17 +141,18 @@ namespace TopiaForge.CreatorTools.Shared
             return OperationResult<string>.Success(activeProject.NativeBindings.Count + " native bindings confirmed for this session.");
         }
 
-        private void ClearResolvedProjectBindings()
+        private OperationResult<bool> ClearResolvedProjectBindings()
         {
             confirmedNativeProjectId = string.Empty;
+            var result = OperationResult<bool>.Success(true);
             foreach (var rosterId in projectBindings.Values.ToArray())
             {
                 var old = FindRoster(rosterId);
-                if (old == null) continue;
-                old.Dispose();
-                roster.Remove(old);
+                if (old != null) result = MergeCleanup(result, RetireRosterEntry(old, despawn: false, fireRemoved: false));
             }
             projectBindings.Clear();
+            if (!result.Succeeded) ReportCleanupFailure("Native binding cleanup completed with problems", result);
+            return result;
         }
 
         private static OperationResult<bool> MissingProjectEntity(CreatorGraphNode node) =>

@@ -22,18 +22,19 @@ dotnet run --project tests\TopiaForge.ModRuntime.Tests\TopiaForge.ModRuntime.Tes
 dotnet run --project tests\TopiaForge.Mods.Analyzers.Tests\TopiaForge.Mods.Analyzers.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.Mods.Multiplayer.Generators.Tests\TopiaForge.Mods.Multiplayer.Generators.Tests.csproj -c Release
 dotnet run --project tests\TopiaForge.Mods.Multiplayer.Tests\TopiaForge.Mods.Multiplayer.Tests.csproj -c Release
-dart test packages\launcher_domain
-dart test packages\launcher_data
-dart test apps\topiaforge_cli
+dotnet run --project tests\TopiaForge.ManagedRefs.Tests\TopiaForge.ManagedRefs.Tests.csproj -c Release
+dotnet run --project tests\TopiaForge.ModPackageValidator.Tests\TopiaForge.ModPackageValidator.Tests.csproj -c Release
 dart analyze packages\launcher_domain
 dart analyze packages\launcher_data
 dart analyze apps\topiaforge_cli
-flutter test packages\launcher_ui
 flutter analyze packages\launcher_ui
 flutter analyze apps\topiaforge_launcher_flutter
-flutter test apps\topiaforge_launcher_flutter
+foreach ($package in 'packages\launcher_domain', 'packages\launcher_data', 'apps\topiaforge_cli') { Push-Location $package; dart test; Pop-Location }
+foreach ($package in 'packages\launcher_ui', 'apps\topiaforge_launcher_flutter') { Push-Location $package; flutter test; Pop-Location }
 flutter build windows --debug
 ```
+
+`dart test` and `flutter test` must run inside the package directory (the root has no `pubspec.yaml`). If `dart.bat` or `flutter.bat` fails instantly with an empty `PATH`, the interactive `PATH` exceeds the `cmd.exe` limit: run the checks with a short process-local `PATH` instead of blaming the code.
 
 Line-count audit:
 
@@ -79,3 +80,10 @@ $rows = @(); foreach ($file in rg --files -g "*.dart") { $count = (Get-Content -
 - Keep Unity/BepInEx-specific work in `src/TopiaForge.ModManager`.
 - Keep `src/TopiaForge.ModManager.Core` free of Unity references.
 - SDK conveniences compiled into the `TopiaForge.Mods.Abstractions` assembly must remain additive and clean-room. Source files in that directory compiled into `TopiaForge.Mods.Worlds` follow the approved gamemode contract redesign; its retired startup API is removed while assembly identity remains `0.1.0.0`.
+
+## Launch preparation and pending user decisions
+
+- Start launch/blocker/checklist work at `docs/internal/launch/README.md`; keep its actions, decisions, evidence summary and related runbooks consistent.
+- Retain raw logs, actual private review/provisioning records and credentials outside Git. Prepared reviewer requests and setup plans are not approvals or completed execution.
+- Wait indefinitely for an explicit reply to any question asked of the user. Never select a default or treat elapsed time as an answer or authorization. Continue independent already-authorized work while dependent work waits.
+- Preserve the explicit choices in `docs/internal/launch/Decisions.md`; do not reopen deferred work or infer an answer from another item's reply.

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:topiaforge/src/sandbox_acceptance/native_arguments.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_runner.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_file_verifier.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:topiaforge/src/cli_launch_options.dart';
@@ -33,6 +36,7 @@ import 'package:topiaforge/src/release_update_metadata.dart';
 part 'topiaforge_check_commands.dart';
 part 'topiaforge_compat_commands.dart';
 part 'topiaforge_acceptance_commands.dart';
+part 'topiaforge_sandbox_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';

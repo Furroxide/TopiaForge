@@ -136,7 +136,7 @@ namespace TopiaForge.ModManager
                     var panel = layer.Panel(TopiaForgePanelStyle.HudPanel)
                         .Dock(TopiaForgeCorner.TopLeft)
                         .Size(request.Width, request.Height);
-                    var column = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
+                    var column = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md).Stretch();
                     column.Label(request.Title, TopiaForgeTextStyle.Heading);
                     var scroll = column.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None);
                     var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
@@ -207,11 +207,13 @@ namespace TopiaForge.ModManager
                 modal.Content.Label(request.Body, TopiaForgeTextStyle.Body);
                 var row = modal.Content.Row(TopiaForgeGap.Sm);
                 row.Spacer();
-                row.Button(request.CancelLabel, state.Cancel, TopiaForgeButtonStyle.Ghost);
-                row.Button(
+                var cancel = row.Button(request.CancelLabel, state.Cancel, TopiaForgeButtonStyle.Ghost);
+                TopiaForgeUiDiagnostics.TagWidget(cancel, "$modal", "cancel", "button", request.CancelLabel);
+                var confirm = row.Button(
                     request.ConfirmLabel,
                     state.Confirm,
                     request.Destructive ? TopiaForgeButtonStyle.Danger : TopiaForgeButtonStyle.Filled);
+                TopiaForgeUiDiagnostics.TagWidget(confirm, "$modal", "confirm", "button", request.ConfirmLabel);
                 modal.Closed += state.HandleNativeClosed;
                 state.AttachLifetimeLease(lifetime.Track(state));
                 modal.Show();
