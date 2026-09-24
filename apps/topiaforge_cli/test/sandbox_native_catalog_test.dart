@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_annex_verifier.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_contrast.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_expected_catalog.dart';
-import 'package:topiaforge/src/sandbox_acceptance/native_screen_oracle.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_screen_baseline.dart';
 import 'sandbox_native_steps.dart';
 import 'sandbox_native_transcript_fixture.dart';
 
@@ -100,8 +100,10 @@ void main() {
   });
 
   group('device-profile screen baselines', () {
-    test('entries build the set of scenario|cycle|step keys', () {
-      final keys = nativeScreenBaselineSteps({
+    const display = {'width': 1920, 'height': 1080};
+    test('entries are admitted per scenario, cycle and step', () {
+      final baselines = NativeScreenBaselines.parse({
+        'display': display,
         'screenBaselines': {
           'root': r'D:\baselines',
           'entries': [
@@ -117,16 +119,24 @@ void main() {
           ],
         },
       });
-      expect(keys, {'routing|1|open'});
+      expect(
+        baselines.entryFor('routing', 1, 'open')!.path,
+        'routing/open.bmp',
+      );
+      expect(baselines.entryFor('routing', 2, 'open'), isNull);
     });
 
-    test('an absent screenBaselines block yields an empty set', () {
-      expect(nativeScreenBaselineSteps(const {}), isEmpty);
+    test('an absent screenBaselines block admits no entry', () {
+      expect(
+        NativeScreenBaselines.parse(const {}).entryFor('routing', 1, 'open'),
+        isNull,
+      );
     });
 
     test('a malformed entry is refused', () {
       expect(
-        () => nativeScreenBaselineSteps({
+        () => NativeScreenBaselines.parse({
+          'display': display,
           'screenBaselines': {
             'root': r'D:\baselines',
             'entries': [

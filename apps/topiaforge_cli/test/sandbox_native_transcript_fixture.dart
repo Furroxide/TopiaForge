@@ -5,11 +5,11 @@ import 'package:topiaforge/src/sandbox_acceptance/native_annex.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_annex_verifier.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_audio_oracle.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_expected_catalog.dart';
-import 'package:topiaforge/src/sandbox_acceptance/native_screen_oracle.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_transcript_actions.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_transcript_oracles.dart';
 import 'sandbox_native_fixture.dart';
 import 'sandbox_native_scene.dart';
+import 'sandbox_native_screen_fixture.dart';
 import 'sandbox_native_steps.dart';
 
 /// Builds a complete, valid protocol-v2 transcript for one scenario by walking
@@ -33,8 +33,9 @@ final class NativeScenarioTranscript {
   final List<Map<String, Object?>> events = [];
   final List<Map<String, Object?>> artifacts = [];
   final Map<String, NativeAudioMeasurement> audioMeasurements = {};
-  final Map<String, NativeScreenMeasurement> screenMeasurements = {};
-  final Set<String> screenBaselineSteps = {};
+
+  /// Retained captures, reviewed baselines and the admitted profile entries.
+  final NativeScreenFixture screens = NativeScreenFixture();
   final Map<String, void Function(SandboxScene)> _overrides = {};
   final Map<String, void Function(Map<String, Object?>)> _eventEdits = {};
   final scene = SandboxScene();
@@ -211,24 +212,13 @@ final class NativeScenarioTranscript {
 
   void _screenshot(int index, NativeOracleStep step) {
     final path = 'screens/$scenarioId-$_cycle-${++_artifact}.bmp';
-    final sha256Hex = List.filled(64, '3').join();
-    artifacts.add({'path': path, 'sha256': sha256Hex, 'length': 128});
-    screenMeasurements[path] = const NativeScreenMeasurement(1920, 1080, 100);
-    screenBaselineSteps.add('$scenarioId|$_cycle|${step.action}');
-    _event('capture', index, step.action, {
+    final data = screens.capture(scenarioId, _cycle, step.action, path);
+    artifacts.add({
       'path': path,
-      'width': 1920,
-      'height': 1080,
-      'distinctSampleColors': 100,
-      'sha256': sha256Hex,
-      'length': 128,
-      'baseline': {
-        'path': 'baselines/$path',
-        'sha256': sha256Hex,
-        'mismatchFraction': 0.0,
-        'withinTolerance': true,
-      },
+      'sha256': data['sha256'],
+      'length': data['length'],
     });
+    _event('capture', index, step.action, data);
   }
 
   void _audio(int index, NativeOracleStep step, {required bool cue}) {
@@ -390,10 +380,10 @@ final class NativeScenarioTranscript {
       transcriptBytes: bytes,
       driverManifestBytes: driverEvalBytes,
       audioMeasurements: audioMeasurements,
-      screenMeasurements: screenMeasurements,
+      screenMeasurements: screens.measurements,
       audioEndpointId: 'synthetic-render-endpoint',
       expectedCatalog: catalogForEvaluate ?? expected,
-      screenBaselineSteps: screenBaselineSteps,
+      screenBaselines: screens.inputs(),
     );
   }
 

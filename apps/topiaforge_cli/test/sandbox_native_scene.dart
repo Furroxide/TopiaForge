@@ -7,7 +7,8 @@ import 'dart:convert';
 /// satisfies exactly one recipe postcondition relative to the previous
 /// snapshot; tests then mutate a single value to flip a scenario.
 final class SandboxScene {
-  final int uiWidth = 1920, uiHeight = 1080;
+  // The smallest admitted display keeps synthetic BMP recomputation fast.
+  final int uiWidth = 640, uiHeight = 480;
   String worldSessionId = 'world-session-1';
   String sessionPhase = 'Running';
   String activeHostId = '';

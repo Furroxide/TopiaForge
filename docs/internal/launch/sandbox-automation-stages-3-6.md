@@ -100,7 +100,7 @@ The comparison below uses the checked-in [driver recipes v2](../../../tests/Topi
 | 8 Lifecycle routes | Stop, restart with a new controller identity and restored input, return to menu with F5 in Idle. | Global and genuine remote-session branches remain `unavailable`. |
 | 9 Ten full cycles | Ten cycles with per-cycle personality destruction, audio release, stable controller identity and retired interactions. | None at the harness level. |
 
-Across all rows the broker now scrolls clipped widgets into view, compares captures against reviewed BMP baselines with masks and tolerance when the device profile provides them, and records every measured atom event; the verifier fails a step on any bound or measured-outcome violation. Remaining execution gaps: an admitted end-to-end run, reviewed baseline images, the reviewed expected inventory, and the human checks (baseline acceptance, physical audio quality, subjective usability). The Editor lane rerun on the final fixture source is recorded in [Evidence](Evidence.md).
+Across all rows the broker now scrolls clipped widgets into view, compares captures against reviewed BMP baselines with masks and tolerance when the device profile provides them, and records every measured atom event; the verifier recomputes each baseline comparison from the retained capture and reviewed baseline bytes and fails a step on any bound or measured-outcome violation. Remaining execution gaps: an admitted end-to-end run, reviewed baseline images, the reviewed expected inventory, and the human checks (baseline acceptance, physical audio quality, subjective usability). The Editor lane rerun on the final fixture source is recorded in [Evidence](Evidence.md).
 
 ## Failure, interruption and recovery
 

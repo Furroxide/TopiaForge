@@ -1,3 +1,5 @@
+import 'native_screen_baseline.dart';
+import 'native_screen_bitmap.dart';
 import 'native_screen_oracle.dart';
 import 'native_audio_oracle.dart';
 import 'dart:convert';
@@ -68,7 +70,7 @@ Future<Map<String, Object?>> runSandboxNative(SandboxNativePaths paths) async {
   );
   final deviceBytes = readNativeFile(paths.deviceProfilePath);
   final deviceProfile = sandboxDocument(deviceBytes, 'native device profile');
-  final screenBaselineSteps = nativeScreenBaselineSteps(deviceProfile);
+  final screenBaselines = NativeScreenBaselines.parse(deviceProfile);
   final expectedCatalog = SandboxExpectedCatalog.parse(
     readNativeFile(
       nativeChild(p.dirname(paths.driverManifestPath), expectedCatalogFileName),
@@ -362,7 +364,17 @@ Future<Map<String, Object?>> runSandboxNative(SandboxNativePaths paths) async {
           sandboxObject(deviceProfile['audio'], 'audio')['endpointId']!
               as String,
       expectedCatalog: expectedCatalog,
-      screenBaselineSteps: screenBaselineSteps,
+      screenBaselines: NativeScreenBaselineInputs(
+        screenBaselines,
+        readCapture: (path) => readNativeFile(
+          nativeChild(runRoot, path),
+          maximum: nativeBitmapMaximumBytes,
+        ),
+        readBaseline: (path) => readNativeFile(
+          nativeChild(screenBaselines.root, path),
+          maximum: nativeBitmapMaximumBytes,
+        ),
+      ),
     );
     raw['scenarioResults'] = [
       for (final result in observed)

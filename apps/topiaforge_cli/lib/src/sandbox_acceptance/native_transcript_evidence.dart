@@ -1,5 +1,6 @@
 import 'native_annex.dart';
 import 'native_audio_oracle.dart';
+import 'native_screen_baseline.dart';
 import 'native_screen_oracle.dart';
 import 'native_transcript_facts.dart';
 import 'native_transcript_protocol.dart';
@@ -18,7 +19,7 @@ void checkNativeScreens(
   List<Map<String, Object?>> stepEvents,
   NativeTranscriptObservation accepted,
   Map<String, NativeScreenMeasurement> screenMeasurements,
-  Set<String> screenBaselineSteps,
+  NativeScreenBaselineInputs? screenBaselines,
 ) {
   final screens = stepEvents.where((e) => e['kind'] == 'capture').toList();
   if (screens.isEmpty ||
@@ -39,19 +40,18 @@ void checkNativeScreens(
       throw StateError('Screenshot and actual client geometry differ.');
     }
   }
-  if (!screenBaselineSteps.contains('$id|$cycle|$step')) {
+  final entry = screenBaselines?.baselines.entryFor(id, cycle, step);
+  if (entry == null) {
     throw NativeFactUnavailable(
       'Reviewed screen baseline for $id cycle $cycle step $step is unavailable.',
     );
   }
   for (final screen in screens) {
-    final baseline = objectMap(screen['data'])['baseline'];
-    if (baseline is! Map<String, Object?> ||
-        baseline['withinTolerance'] != true) {
-      throw StateError(
-        'Native screenshot is missing its reviewed baseline or exceeds tolerance.',
-      );
-    }
+    verifyNativeScreenBaseline(
+      screenBaselines!,
+      entry,
+      objectMap(screen['data']),
+    );
   }
 }
 

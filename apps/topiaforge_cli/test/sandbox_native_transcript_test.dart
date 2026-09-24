@@ -138,9 +138,10 @@ void main() {
     });
   });
 
-  // Screen baseline gate (spec section 2 / outcome 5).
+  // Screen baseline gate (spec section 2 / outcome 5); the recomputation
+  // faults live in sandbox_native_baseline_test.dart.
   group('screen baseline gate', () {
-    test('a screenshot beyond tolerance fails the step', () {
+    test('a beyond-tolerance record over matching pixels fails the step', () {
       final f = NativeScenarioTranscript('routing')
         ..editEvent('capture', 0, (d) {
           (d['baseline']! as Map)['withinTolerance'] = false;
@@ -156,9 +157,9 @@ void main() {
       'no device-profile baseline entry makes the visual check unavailable',
       () {
         final f = NativeScenarioTranscript('routing');
-        // Build first so the baseline set is populated, then clear it.
+        // Build first so the admitted entries exist, then withdraw them.
         f.evaluate();
-        f.screenBaselineSteps.clear();
+        f.screens.entries.clear();
         expect(f.result().status, SandboxNativeStatus.unavailable);
         expect(f.result().reason, contains('screen baseline'));
       },
