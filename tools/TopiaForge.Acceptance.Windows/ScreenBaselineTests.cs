@@ -63,8 +63,7 @@ internal static class ScreenBaselineTests
     }
     private static void RunFiles(Action<bool, string> assert, Action<Action, string> refuse, byte[] capture, byte[] encoded, int width, int height)
     {
-        var directory = Path.Combine(Path.GetTempPath(), "topiaforge-broker-selftest-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
+        var directory = Directory.CreateTempSubdirectory("topiaforge-broker-selftest-").FullName;
         try
         {
             File.WriteAllBytes(Path.Combine(directory, "open.bmp"), encoded);
