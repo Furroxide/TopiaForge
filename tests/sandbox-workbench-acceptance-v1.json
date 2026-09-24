@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "kind": "sandbox-workbench-acceptance-v1",
-  "gameBuild": 2409,
+  "gameBuild": 2478,
   "scope": "supplementary-offline-contracts",
   "scenarios": [
     {
@@ -252,7 +252,7 @@
           "id": "source-native-vehicle",
           "lane": "game",
           "availability": "not-implemented",
-          "oracle": "Exercise a validated native vehicle factory only after such an adapter is implemented and admitted for build 2409.",
+          "oracle": "Exercise a validated native vehicle factory only after such an adapter is implemented and admitted for the pinned build.",
           "negativeTest": "A fake vehicle or empty category cannot pass vehicle creation/unload; record unavailable capability.",
           "cleanup": "Release every admitted vehicle object and registration, or verify refusal left no mutation."
         }

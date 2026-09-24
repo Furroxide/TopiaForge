@@ -1,7 +1,10 @@
+import 'sandbox_game_build.dart';
 import 'sandbox_json.dart';
 
 /// The reviewed expected-inventory baseline lives beside the driver manifest.
-const expectedCatalogFileName = 'expected-catalog-2409-v1.json';
+/// Its `gameBuild` must equal the pinned build: an inventory reviewed for
+/// another build is refused, so a retarget cannot carry a stale review.
+const expectedCatalogFileName = 'expected-catalog-v1.json';
 
 /// Reviewed expected per-type catalog inventory (spec section 5).
 ///
@@ -33,7 +36,7 @@ final class SandboxExpectedCatalog {
         json['schemaVersion'] != 1 ||
         json['kind'] != 'sandbox-native-expected-catalog-v1' ||
         json['gameBuild'] is! int ||
-        json['gameBuild'] != 2409 ||
+        json['gameBuild'] != sandboxGameBuild ||
         json['reviewed'] is! bool) {
       throw StateError('Unsupported expected catalog identity.');
     }
