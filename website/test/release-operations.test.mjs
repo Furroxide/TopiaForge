@@ -74,6 +74,42 @@ test('RC1 public notes retain prerelease trust disclosures without mutable prepa
   assert.doesNotMatch(notes, /not qualified for publication|no (?:final )?(?:candidate|archive) is qualified|candidate status:/iu);
 });
 
+test('RC1 public notes disclose optional QA without claiming it ran', () => {
+  const notes = read('release/notes/v0.1.0-rc.1.md').replace(/\s+/gu, ' ');
+  assert.match(notes, /does not require live in-game acceptance, native accessibility review or independent player\/author testing/u);
+  assert.match(notes, /`release-candidate-acceptance-v1\.json` records in its `result` field whether live in-game acceptance ran/u);
+  assert.match(notes, /sixteen pinned-Unity authoring cycles/u);
+  assert.doesNotMatch(notes, /live (?:in-game )?acceptance (?:passed|was completed)/iu);
+});
+
+test('register records the 2026-09-24 QA dispositions without approving GAME', () => {
+  const gate = (id) => readiness.gates.find((entry) => entry.id === id);
+  assert.deepEqual(
+    readiness.gates.filter((entry) => entry.enforcement === 'blocking').map((entry) => entry.id),
+    ['P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01'],
+  );
+  const game = gate('P0-GAME-01');
+  assert.equal(game.enforcement, 'advisory');
+  assert.equal(game.status, 'blocked');
+  assert.equal(game.reasonCode, 'acceptance-evidence-missing');
+  assert.deepEqual(game.evidenceIds, []);
+  for (const [id, scope] of [
+    ['P1-UX-01', 'rc1-native-ux-accessibility'],
+    ['P1-E2E-01', 'rc1-independent-player-author-e2e'],
+  ]) {
+    const entry = gate(id);
+    assert.equal(entry.status, 'accepted-risk');
+    assert.deepEqual(entry.acceptedRisk, { scope, decisionEvidenceId: `EVID-${id}-0001` });
+    assert.deepEqual(entry.evidenceIds, [`EVID-${id}-0001`]);
+    assert.equal(entry.reasonCode, undefined);
+  }
+  const blockers = read('docs/LaunchBlockers.md').replace(/\s+/gu, ' ');
+  assert.match(blockers, /Four gates are \*\*blocking\*\* and eight are \*\*advisory\*\*/u);
+  assert.match(blockers, /\(advisory — owner disposition 2026-09-24, EVID-P0-GAME-01-0001\)/u);
+  assert.match(blockers, /All four blocking gates — `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, `P0-CRED-01` — remain open/u);
+  assert.match(source, /Live game acceptance is optional for RC1/u);
+});
+
 test('release checklist names the complete eleven-package public SDK release surface', () => {
   const guide = read('docs/ReleaseChecklist.md').replace(/\s+/gu, ' ');
   assert.match(guide, /All 11 public SDK projects/u);
