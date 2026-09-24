@@ -161,3 +161,14 @@ Source checkpoint: the private receipt `runtime-observer-shutdown-diagnostics-v4
 Prepared retry `20260911T183026Z`: the unused fresh game copy `game-provisioning-20260911T180717Z` (409 verified files) received the 22 vendored BepInEx files and the 13 loader assemblies (444 files). The bundle holds the 192 broker files, the wrapper, the desktop helper and the v5 driver (197 files); the state root is empty. The v5 driver additionally requires the v2 result with a retained player log and diagnostics record. Under the normal user, the driver refused with "requires the intended standard interactive QA account" before writing any state. The firewall rule `TopiaForge-QA-Provisioning-20260911T180717Z` does not exist yet; the elevated step creates and verifies it, registers the one-time limited task and removes it after first completion. Nothing has run; this is preparation only. Private references: `runtime-retry-preparation-20260911T183026Z.json` and `retry-driver-v5-wrong-account-20260911T183026Z.json`.
 
 Operator session (pending the user's confirmed availability): one UAC approval for `run-elevated-retry-v5.ps1 -Preparation <receipt>` in an elevated PowerShell 7, sign in as `TopiaForgeQA` when the task is armed, wait for the on-screen notice, then switch back. The task expires after 16 minutes and the driver waits at most 540 seconds for the active desktop. Afterwards, analyse the retained `player.log`, `runtime-diagnostics.json` and loader phase timestamps before deciding anything. A failure again preserves everything and queues no further attempt.
+
+## Build 2478 (2026-09-24)
+
+RC1 now pins Robotopia build 2478. Retry `20260911T183026Z` and its copy `game-provisioning-20260911T180717Z` hold build 2409, so they are retained as history and must not be dispatched for RC1. Verified copies `source-game-2478` and `game-2478` exist (see the [QA setup plan](isolated-qa-setup-plan.md)). The retry has not been re-staged. An optional re-stage needs four things:
+
+1. A fresh `game-provisioning-<timestamp>` copy from `source-game-2478`, made by the copier with the `game-copy-2478.json` digest.
+2. A new source checkpoint covering the integrated loader and broker. The v4 checkpoint's worktree has changed, so its preparation script refuses it.
+3. A preparation step bound to the 415-file 2478 inventory.
+4. The outbound block for the new copy. `set-sandbox-qa-network-isolation.ps1` now accepts build copies and their receipts.
+
+Dispatch still needs the user's confirmed operator session.

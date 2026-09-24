@@ -1,12 +1,12 @@
 # Maintainer draft: RC1 remote AI, token and audio review
 
-**Tracked maintainer draft — review and decision pending.** Prepared 2026-09-09 for `P0-PRIV-01` (blocking), for the project owner to forward manually.
+**Tracked maintainer draft — review and decision pending.** Prepared 2026-09-09 for `P0-PRIV-01` (blocking), for the project owner to forward manually; source pin refreshed 2026-09-24.
 
 Please review TopiaForge's optional RoboAPI integration for the proposed Windows x64 `0.1.0-rc.1` release and return an attributable decision within your authorized role. This request records no backend authorization, approved privacy notice, consent decision or release approval. The gate remains blocked pending actual review evidence.
 
 ## Review scope and role coverage
 
-The reviewed release source is **`75acc780cd5e30e46d27b04c6020fdecaba00dba`**, tree **`976326d02fd68b19a2e10bde923e15510df441a6`**; the commit-to-tree relationship was verified locally when preparing this request. The [reviewed-source and automated-verification summary](Evidence.md#reviewed-source-and-automated-verification) identifies that reviewed baseline. It is not a frozen final `main` candidate. Identify subsequent changes that require renewed review.
+The reviewed release source is **`d2eb1ee2ed67aeb15c71c0b356a7d5ca94264ae5`**, tree **`10b55514193727d205fe84cb62e8e03d9aa4fb90`**. This is the release branch after the 2026-09-24 stabilization ([evidence](Evidence.md#build-2478-retarget-2026-09-24)), and the commit-to-tree relationship was verified locally when the pin was refreshed. It supersedes the earlier baseline `4377338`. It is not a frozen final `main` candidate. Identify subsequent changes that require renewed review.
 
 Required role coverage, in the gate's exact order:
 
