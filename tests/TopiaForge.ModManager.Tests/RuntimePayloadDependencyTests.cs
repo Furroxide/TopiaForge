@@ -52,10 +52,11 @@ namespace TopiaForge.ModManager.Tests
             // ScriptingAssemblies.json, before any plugin loads. Under Unity's Mono the first-loaded copy of an
             // assembly name usually wins, so the loader may bind to the game's copies instead of the bundled 10.0
             // ones, or bind the bundled Metadata against the game's Immutable. Whichever copy binds, every type and
-            // member the compiled references need must exist in it.
+            // member the compiled references need must exist in it. The non-short-circuit & still checks every
+            // present copy, and the success line below claims the game copies only when all three checks ran.
             var gameCopies = AssertGameCopySatisfies(corePath, managedDirectory, "System.Reflection.Metadata", true)
-                | AssertGameCopySatisfies(corePath, managedDirectory, "System.Collections.Immutable", false)
-                | AssertGameCopySatisfies(metadataPath, managedDirectory, "System.Collections.Immutable", true);
+                & AssertGameCopySatisfies(corePath, managedDirectory, "System.Collections.Immutable", false)
+                & AssertGameCopySatisfies(metadataPath, managedDirectory, "System.Collections.Immutable", true);
             var profile = new[]
             {
                 new ProfileExpectation(
