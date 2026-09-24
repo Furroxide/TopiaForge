@@ -1,156 +1,32 @@
 import 'native_annex.dart';
+import 'native_driver_vocabulary.dart';
 import 'sandbox_json.dart';
 
-/// Closed protocol-v2 wire and driver vocabularies plus the manifest and
-/// measured-event structural validators (spec section 2). The verifier accepts
-/// only these keys, nodes, request operations and atoms; anything else is
-/// refused before an oracle runs.
-const nativeDriverRequestOperations = {
-  'unregister-source',
-  'request-session-stop',
-  'external-write',
-  'destroy-borrowed',
-  'register-competing-host',
-  'unregister-competing-host',
-  'control-cue',
-  'stop-control-cue',
-  'spawn-control-robot',
-  'despawn-control-robot',
-  'accessibility-high-contrast',
-  'accessibility-scale-150',
-  'accessibility-reduced-motion',
-  'accessibility-reset',
-};
-const nativeOperations = {
-  'prepare',
-  'begin',
-  'capture',
-  'advance',
-  'cleanup',
-  ...nativeDriverRequestOperations,
-};
-const nativeDriverKeys = {
-  'F5',
-  'Escape',
-  'Tab',
-  'W',
-  'Down',
-  'Up',
-  'Return',
-  'Space',
-  'MouseLeft',
-};
-const nativeDriverNodes = {
-  // v1 node set.
-  'hide-workbench',
-  'catalog-search',
-  'catalog-list',
-  'spawn-selected',
-  'duplicate-selected',
-  'nudge-up',
-  'refresh-native',
-  'roster-list',
-  'persona-name',
-  'persona-instructions',
-  'apply-personality',
-  'brain-dormant',
-  'project-list',
-  'load-project',
-  'run-project',
-  'stop-project',
-  'end-session',
-  'confirm',
-  'rotation-y',
-  'rotation-w',
-  'apply-transform',
-  'scale-x',
-  'scale-y',
-  'scale-z',
-  'remove-selected',
-  // v2 additions.
-  'undo-last',
-  'catalog-kind',
-  r'$close',
-  r'$scroll-0',
-  r'$scroll-1',
-  r'$scroll-2',
-};
-const nativeDriverSurfaces = {'sandbox-creator-window', r'$modal'};
-const nativeScrollContainers = {r'$scroll-0', r'$scroll-1', r'$scroll-2'};
-const nativeDriverAtomKinds = {
-  'click',
-  'replace-text',
-  'select-list-item',
-  'key',
-  'capture',
-  'barrier',
-  'request',
-  'scroll-into-view',
-  'mouse-move',
-  'key-hold',
-  'aim',
-};
-
-/// Validates the driver manifest `actions` map against the closed protocol-v2
-/// vocabularies and atom bounds. Unknown keys, nodes, request operations or
-/// out-of-bounds atoms are refused before any oracle runs.
+/// Protocol-v2 driver manifest and transcript structural validators (spec
+/// section 2). The `actions` map must declare exactly the closed action
+/// inventory with bounded recipes whose atoms satisfy the broker's closed
+/// per-kind schema; anything else is refused before an oracle runs.
 void validateNativeDriverActions(Object? input) {
   final actions = sandboxObject(input, 'native driver actions');
-  if (actions.isEmpty || actions.length > 128) {
-    throw StateError('Native driver action recipe count is invalid.');
+  if (!actions.keys.every(nativeDriverActions.contains)) {
+    throw StateError('Native driver manifest declares an undeclared action.');
   }
-  for (final atoms in actions.values) {
-    if (atoms is! List || atoms.isEmpty || atoms.length > 32) {
-      throw StateError('Native driver action atom list is invalid.');
+  for (final name in nativeDriverActions) {
+    if (!actions.containsKey(name)) {
+      throw StateError('Native driver action inventory lacks $name.');
     }
-    for (final entry in atoms) {
-      _validateAtom(sandboxObject(entry, 'native driver atom'));
+    final atoms = actions[name];
+    if (atoms is! List ||
+        atoms.isEmpty ||
+        atoms.length > nativeDriverMaximumAtoms) {
+      throw StateError(
+        'Native driver action $name needs 1 to $nativeDriverMaximumAtoms '
+        'atoms.',
+      );
     }
-  }
-}
-
-void _validateAtom(Map<String, Object?> atom) {
-  final kind = atom['kind'];
-  if (!nativeDriverAtomKinds.contains(kind)) {
-    throw StateError('Unknown native driver atom kind.');
-  }
-  final surface = atom['surfaceId'];
-  if (surface != null && !nativeDriverSurfaces.contains(surface)) {
-    throw StateError('Unknown native driver surface.');
-  }
-  final node = atom['nodeId'];
-  if (node != null && !nativeDriverNodes.contains(node)) {
-    throw StateError('Unknown native driver node.');
-  }
-  switch (kind) {
-    case 'key':
-    case 'key-hold':
-      if (!nativeDriverKeys.contains(atom['key'])) {
-        throw StateError('Unknown native driver key.');
-      }
-      if (kind == 'key-hold') {
-        nativeInteger(atom['milliseconds'], 50, 1000);
-      }
-    case 'request':
-      if (!nativeDriverRequestOperations.contains(atom['operation'])) {
-        throw StateError('Unknown native driver request operation.');
-      }
-    case 'mouse-move':
-      nativeInteger(atom['dx'], -400, 400);
-      nativeInteger(atom['dy'], -400, 400);
-    case 'scroll-into-view':
-      if (!nativeDriverNodes.contains(atom['nodeId']) ||
-          !nativeScrollContainers.contains(atom['containerId'])) {
-        throw StateError('Invalid native scroll-into-view target/container.');
-      }
-    case 'aim':
-      if (atom['fact'] != 'aimToGraphProp') {
-        throw StateError('Unknown native aim fact.');
-      }
-      nativeInteger(atom['maxIterations'], 1, 40);
-      nativeInteger(atom['gain'], 1, 20);
-    case 'barrier':
-      nativeInteger(atom['minimumFrames'], 1, 600);
+    for (final atom in atoms) {
+      validateNativeDriverAtom(sandboxObject(atom, 'native driver atom'));
+    }
   }
 }
 
