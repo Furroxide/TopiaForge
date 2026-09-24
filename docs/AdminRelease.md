@@ -148,7 +148,7 @@ The checkout must be a clean `main` exactly equal to `origin/main`. Configure:
   Unity `6000.0.23f1`, MSVC `14.51.36231`, Windows SDK
   `10.0.26100.0`, Python 3.11 or newer, Git LFS, 7-Zip, tar, `jq`, `bash`
   (Git for Windows), WSL, and GitHub CLI;
-- an activated local Unity license and the Robotopia build-2409 installation.
+- an activated local Unity license and the Robotopia build-2478 installation.
 
 On Windows systems where `python` resolves to the nonfunctional Microsoft
 Store alias, set `TOPIAFORGE_PYTHON` (or pass `-PythonPath`) to an absolute,

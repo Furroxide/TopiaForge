@@ -60,7 +60,7 @@ namespace TopiaForge.RobotKit
         // Apply damage to a resolved Health component via Health.ChangeHealth(neg amount, source).
         public static bool ChangeHealth(Component health, float amount, string source, IModLogger? logger)
         {
-            return GameReflection.Invoke(health, "ChangeHealth", logger, -amount, source);
+            return GameReflection.ChangeHealth(health, -amount, source, logger);
         }
 
         // Enable/disable the player's first-person controller (PlayerController.FPSController).

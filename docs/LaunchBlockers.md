@@ -283,8 +283,8 @@ check is silently skipped.
 | Exact-Unity TopiaForgeUi build | PASS | Unity `6000.0.23f1`; two builds matched SHA-256 `3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb`. |
 | Exact-Unity representative world build | PASS | Two current-tree builds matched SHA-256 `afa3e9195e8e03199b414f8a5c9002e9f89831041a63c7e1c9b8eef173d9057d`; manifests, editor provenance, and companion/VPM inputs matched. |
 | Exact-Unity lifecycle smoke | NEEDS RERUN | A current-tree Unity `6000.0.23f1` run executed the managed validator and all 16 lifecycle cycles successfully with zero retained-resource delta. The administrator-controlled Windows release flow must regenerate and scrub that evidence from the frozen candidate. |
-| Robotopia compatibility | PASS | Build `2409`; **206 bindings across 8 mods, 185 verifiable offline**, 21 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings. Re-verified 2026-08-28 against the live install's `Managed` directory: `gamecompat verify` exits 0. The 8 declaring mods are exactly the ones pinned to `0.0.2409` — Chronos, CreatorContent, NoFeedbackUrl, PerfFixes, Performance, Prompts, RobotKit, Worlds; safe GravityGun, Multiplayer, OppositeDay, Sandbox, UiGallery, and Zombies declare the bounded range and have no native binding declarations. |
-| Public build freshness | PASS | The public latest manifest identifies build `2409`, matching the pin; CI/release fail if it changes. |
+| Robotopia compatibility | PASS | Build `2478`; **218 bindings across the manager and 8 mods, 207 verifiable offline**, 11 explicitly uncheckable offline, zero errors, warnings, or indeterminate findings. Re-audited 2026-09-24 against the live 2478 install's `Managed` directory after the 2409 → 2478 retarget: `gamecompat verify` exits 0 and `audit --strict` reports no undeclared or stale entries. The full surface moved 34 members across 6 captured types; the only change TopiaForge reaches is the `Health` damage source, which became a `GameObject` instead of a string. The manager and RobotKit now pass no source object on such builds, and their manifests constrain that parameter so another re-signing fails `verify`. The 8 declaring mods are exactly the ones pinned to `0.0.2478` — Chronos, CreatorContent, NoFeedbackUrl, PerfFixes, Performance, Prompts, RobotKit, Worlds; safe GravityGun, Multiplayer, OppositeDay, Sandbox, UiGallery, and Zombies declare the bounded range and have no native binding declarations. Metadata compatibility does not establish native behaviour on 2478. |
+| Public build freshness | PASS | On 2026-09-24 the public latest manifest identifies build `2478`, matching the pin; CI/release fail if it changes. Builds 2469 (2026-09-10) and 2478 (2026-09-16) were published during RC1 preparation, so the pin moved from 2409 to 2478 with the audit above. |
 | BepInEx/UnityDoorstop provenance | PASS | Pinned BepInEx `5.4.23.5` archives and extracted trees, UnityDoorstop commit/source, hashes, modes, and notices validate. |
 | macOS release package | OUT OF RC1 | Generic packaging remains in source, but macOS is not in RC1 policy, catalog, update metadata, handoff, or public assets. It requires a separately reviewed future release. |
 | Release-policy/BOM/SBOM/checksum machinery | PASS | Strict policy and metadata regressions cover AGPL-3.0-or-later, actual platform trust, signed update metadata/sidecar, checksums, BOM, SBOM, and immutable asset inventory. |
@@ -860,9 +860,10 @@ automated tests cannot close Unity object lifetime.
   only. Opening submissions requires namespace ownership, moderation, malware review, transfer/dispute, yank,
   revocation, appeal, and installed-user response governance plus tests.
 - [x] **P2-WORLDS-01 — RC1 custom-world support is Windows x64 only.** Future Linux/Proton support requires reviewed native isolation and separate platform approval; no release version is promised. Do not advertise native macOS Robotopia support.
-- [x] **P2-COMPAT-01 — Build `2409` is the supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
-  Compatibility is declared per mod: mods with native `GameCode` bindings pin `0.0.2409`; SDK-only mods declare the
-  bounded range `>=0.0.2409 <0.0.2600`. See [the compatibility policy](CompatibilityPolicy.md).
+- [x] **P2-COMPAT-01 — Build `2478` is the supported Robotopia build.** Numeric build `N` maps to SemVer `0.0.N`.
+  Compatibility is declared per mod: mods with native `GameCode` bindings pin `0.0.2478`; SDK-only mods declare the
+  bounded range `>=0.0.2478 <0.0.2600`. See [the compatibility policy](CompatibilityPolicy.md). Retargeted from
+  2409 on 2026-09-24 through `topiaforge compat bump`; the audit is recorded in the Robotopia compatibility row.
   Any change in the public latest manifest stops release for a new compatibility audit; unknown constrained versions
   block mods but never block an empty safe-mode launch.
 

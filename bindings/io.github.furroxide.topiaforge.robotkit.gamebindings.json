@@ -188,7 +188,7 @@
       "matchMode": "PredicateOverload",
       "criticality": "Critical",
       "feature": "Robot damage pipeline (native hurt/death/ragdoll)",
-      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:179",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:518",
       "parameters": [
         {
           "type": "System.Single",
@@ -199,8 +199,8 @@
           "constrained": true
         },
         {
-          "type": "System.String",
-          "constrained": false
+          "type": "UnityEngine.GameObject",
+          "constrained": true
         }
       ],
       "returnType": "System.Void"
@@ -995,18 +995,18 @@
       "assembly": "GameCode",
       "declaringType": "Health",
       "member": "ChangeHealth",
-      "matchMode": "DynamicInstance",
+      "matchMode": "PredicateOverload",
       "criticality": "Optional",
       "feature": "Player damage application",
-      "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:60",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:540",
       "parameters": [
         {
           "type": "System.Single",
-          "constrained": false
+          "constrained": true
         },
         {
-          "type": "System.String",
-          "constrained": false
+          "type": "UnityEngine.GameObject",
+          "constrained": true
         }
       ],
       "returnType": "System.Void"

@@ -76,7 +76,7 @@ namespace TopiaForge.ModRuntime.Tests
         {
             var paths = new ManagerPaths(Path.Combine(root, "runtime"));
             var state = new ManagerState();
-            var validation = new ManifestValidationContext("0.0.2409", "0.1.0-rc.1", "0.1.0-rc.1",
+            var validation = new ManifestValidationContext("0.0.2478", "0.1.0-rc.1", "0.1.0-rc.1",
                 platform: "windows", architecture: "x64", contentTargets: new[] { "code", "standalonewindows64" }, enforceRuntimeCompatibility: true);
             var fixtureManifest = GeneratedWorldsManifest();
             InstallGeneratedArchive(Path.Combine(root, "dependency.topiaforgemod"), paths, state, validation,
@@ -114,7 +114,7 @@ namespace TopiaForge.ModRuntime.Tests
                 "the installed manifest is exactly the Dart scaffolder output");
             Assert(packages.All(package => File.Exists(Path.Combine(package.PackagePath, PackageInstallReceipt.FileName))), "installer receipts exist for both packages");
             var profile = new EffectiveProfile("generated", 1, packages.Select(package => new ResolvedPackage(package.Manifest!.Id, package.Manifest.Version, package.Manifest)).ToArray(),
-                new InstallFacts("windows", "x64", "standalonewindows64", "0.0.2409"));
+                new InstallFacts("windows", "x64", "standalonewindows64", "0.0.2478"));
             var host = new GeneratedGameplayHost();
             var logger = new CapturedRuntimeLogger();
             var runtime = new TopiaForge.ModManager.ModRuntime(paths, logger, validation, new CapturedLoadObserver(), host);

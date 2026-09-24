@@ -61,8 +61,13 @@ void main() {
     );
     _write(
       root,
-      'tools/release/test-proton.sh',
-      '[[ "\$game_build_id" == "2409" ]] || die "locked to Robotopia build 2409"\n',
+      'tools/release/test-verify-robotopia-install.ps1',
+      '        buildId = [Int64]2409 # locked to Robotopia build 2409\n',
+    );
+    _write(
+      root,
+      'docs/ReleaseChecklist.md',
+      '- [x] Robotopia support is build `2409` (`0.0.2409`).\n',
     );
   });
 
@@ -70,17 +75,21 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
-  GameBuildBumpResult bump({int to = 2509, bool dryRun = false}) =>
-      bumpRobotopiaGameBuild(
-        repositoryRoot: root.path,
-        toBuildId: to,
-        windowsArchiveSha256: _windowsSha,
-        macArchiveSha256: _macSha,
-        filesManifestSha256: _filesSha,
-        filesManifestFileCount: 411,
-        gameExecutableSha256: _exeSha,
-        dryRun: dryRun,
-      );
+  GameBuildBumpResult bump({
+    int to = 2509,
+    bool dryRun = false,
+    Iterable<String> candidateFiles = const <String>[],
+  }) => bumpRobotopiaGameBuild(
+    repositoryRoot: root.path,
+    toBuildId: to,
+    windowsArchiveSha256: _windowsSha,
+    macArchiveSha256: _macSha,
+    filesManifestSha256: _filesSha,
+    filesManifestFileCount: 411,
+    gameExecutableSha256: _exeSha,
+    dryRun: dryRun,
+    candidateFiles: candidateFiles,
+  );
 
   test('rewrites every derivable reference and reports no residue', () {
     final result = bump();
@@ -119,10 +128,22 @@ void main() {
       ),
       contains('currentBuildId = 2509'),
     );
-    // The build-locked acceptance guard, in both its comparison and its message.
-    final proton = _read(root, 'tools/release/test-proton.sh');
-    expect(proton, contains('== "2509"'));
-    expect(proton, contains('build 2509'));
+    // The build-locked install guard, in both its literal and its message.
+    final guard = _read(
+      root,
+      'tools/release/test-verify-robotopia-install.ps1',
+    );
+    expect(guard, contains('[Int64]2509'));
+    expect(guard, contains('build 2509'));
+  });
+
+  test('rewrites the supported build that documents state as a fact', () {
+    bump();
+
+    expect(
+      _read(root, 'docs/ReleaseChecklist.md'),
+      contains('build `2509` (`0.0.2509`)'),
+    );
   });
 
   test('leaves the SDK-only ceiling alone as a judgement call', () {
@@ -156,6 +177,34 @@ void main() {
 
     expect(result.isComplete, isFalse);
     expect(result.residual, contains('release/release-policy.json'));
+  });
+
+  test('lists other files that name the old build without failing', () {
+    _write(root, 'docs/CreatorScope.md', 'Two subsystems left in 2409.\n');
+    _write(root, 'src/Observed.cs', '// On build 2409 the getter throws.\n');
+    _write(root, 'docs/internal/Evidence.md', 'Measured on 2409.\n');
+    _write(root, 'src/Unrelated.cs', '// Version 124090 is not a build.\n');
+    File(p.join(root.path, 'Binary.bin'))
+      ..createSync()
+      ..writeAsBytesSync([0, ...utf8.encode('2409')]);
+    final candidates = [
+      'src/Observed.cs',
+      'docs/CreatorScope.md',
+      'docs/internal/Evidence.md',
+      'src/Unrelated.cs',
+      'Binary.bin',
+      'docs/ReleaseChecklist.md',
+      'missing/File.md',
+    ];
+
+    final dryRun = bump(dryRun: true, candidateFiles: candidates);
+    final result = bump(candidateFiles: candidates);
+
+    const expected = ['docs/CreatorScope.md', 'src/Observed.cs'];
+    expect(dryRun.unlistedMentions, expected);
+    expect(result.unlistedMentions, expected);
+    expect(result.isComplete, isTrue, reason: 'residual: ${result.residual}');
+    expect(_read(root, 'src/Observed.cs'), contains('build 2409'));
   });
 
   test('rejects a malformed hash, a non-positive count, and a no-op bump', () {
