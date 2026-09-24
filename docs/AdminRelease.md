@@ -334,7 +334,7 @@ The deterministic procedure is:
    plus the WSL2/WSLg environment, without launching the game:
 
 ```bash
-tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2409 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
+tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2478 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
 ```
 
 If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
@@ -405,7 +405,7 @@ The generated descriptor is deterministic JSON and binds at least:
   "archiveSha256": "64-lowercase-hex",
   "archiveSize": 123456,
   "canonicalEcosystemSha256": "64-lowercase-hex",
-  "gameBuildId": 2409,
+  "gameBuildId": 2478,
   "protonVersion": "10.0-4",
   "protonRuntimeSha256": "64-lowercase-hex",
   "wineDllOverrides": "winhttp=n,b",
