@@ -524,7 +524,7 @@ The three evidence identifiers refer to the owner's retained decision record, `r
 Before the change was opened for review, these checks passed on its final source:
 
 - Solution build with 0 warnings.
-- CLI format and analysis clean, and 1,146 CLI tests with 4 platform skips. These include 71 new tests for the advisory register, the not-run handoff, acceptance, qualification and metadata.
+- CLI format and analysis clean, and 1,148 CLI tests with 4 platform skips. These include 73 new tests for the advisory register, the not-run handoff, acceptance (including the pinned disposition), qualification and metadata.
 - The release-admin, isolation and path PowerShell suites, and 68 signing-policy checks.
 - PSScriptAnalyzer over `tools` with 0 findings.
 - The residue audit and its 37 tests, 52 website tests and the Markdown link check.
