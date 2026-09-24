@@ -355,14 +355,20 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
     } else if (gameVersion != null &&
         gameVersion.isNotEmpty &&
         !manifest.gameVersionRange.allows(gameVersion)) {
+      final installed =
+          RobotopiaGameVersion.tryBuildLabel(gameVersion) ?? gameVersion;
       issues.add(
         LauncherIssue(
           severity: IssueSeverity.error,
           subjectId: manifest.id,
-          message:
-              '${manifest.name} supports Robotopia $supportedGameBuilds; '
-              'installed: ${RobotopiaGameVersion.tryBuildLabel(gameVersion) ?? gameVersion}. '
-              'Update Robotopia or choose a compatible mod version.',
+          message: manifest.gameVersionRange.isAboveMaximum(gameVersion)
+              ? '${manifest.name} supports Robotopia $supportedGameBuilds; '
+                    'installed: $installed, which is newer. Wait for a '
+                    '${manifest.name} update that supports it, or choose a '
+                    'compatible mod version.'
+              : '${manifest.name} supports Robotopia $supportedGameBuilds; '
+                    'installed: $installed. Update Robotopia or choose a '
+                    'compatible mod version.',
         ),
       );
     }
