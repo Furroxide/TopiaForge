@@ -44,13 +44,24 @@ final class CandidateFixture {
         p.join(root.path, 'release/release-readiness.json'),
       );
       final readiness = readObject(readinessFile);
-      for (final gate in readiness['gates'] as List) {
+      final trackedGates = (readiness['gates'] as List).cast<Map>();
+      for (final gate in trackedGates) {
         if (gate['enforcement'] == 'blocking' && gate['id'] != 'P0-GAME-01') {
           gate['status'] = 'approved';
           gate.remove('reasonCode');
           gate['evidenceIds'] = ['EVID-${gate['id']}-0001'];
         }
       }
+      // The tracked status is computed from the blocking gates, and an
+      // advisory P0-GAME-01 no longer holds it.
+      readiness['status'] =
+          trackedGates.any(
+            (gate) =>
+                gate['enforcement'] == 'blocking' &&
+                gate['status'] == 'blocked',
+          )
+          ? 'blocked'
+          : 'ready';
       writeObject(readinessFile, readiness);
       final catalogFile = File(p.join(root.path, 'release/catalog.json'));
       final catalog = readObject(catalogFile);
