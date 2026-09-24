@@ -4,6 +4,9 @@
 param(
     [Parameter(Mandatory)][string]$GameCopyReceipt,
     [Parameter(Mandatory)][string]$ReceiptPath,
+    [Parameter(Mandatory)][string]$PrivateEvidenceRoot,
+    # Digest of the reviewed copy receipt, as for the fresh-provisioning copier.
+    [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{64}$')][string]$TrustedReceiptSha256,
     [string]$GameRoot = 'D:\TopiaForgeQA\game'
 )
 $ErrorActionPreference = 'Stop'
@@ -36,12 +39,17 @@ function RequirePhysical([string]$Path) {
         $parent = [IO.Path]::GetDirectoryName($parent)
     }
 }
-foreach ($path in @($gameExecutable,$GameCopyReceipt,$ReceiptPath)) { RequirePhysical $path }
+foreach ($path in @($gameExecutable,$GameCopyReceipt,$ReceiptPath,$PrivateEvidenceRoot)) { RequirePhysical $path }
+if ([IO.Path]::GetDirectoryName($GameCopyReceipt) -cne $PrivateEvidenceRoot -or !(Test-SandboxQaCopyReceiptName ([IO.Path]::GetFileName($GameCopyReceipt)))) { throw 'Only a reviewed game-copy receipt in the private QA record directory is accepted.' }
 if (Test-Path -LiteralPath $ReceiptPath) { throw 'Refusing existing firewall receipt.' }
 try {
     if ((Get-Item -LiteralPath $GameCopyReceipt).Length -gt 1MB) { throw 'Unbounded source copy receipt.' }
-    $copy = Get-Content -LiteralPath $GameCopyReceipt -Raw | ConvertFrom-Json
+    # Hash and parse the same bytes, so the reviewed digest covers exactly what is used.
+    $copyBytes = [IO.File]::ReadAllBytes($GameCopyReceipt)
+    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($copyBytes)).ToLowerInvariant() -cne $TrustedReceiptSha256) { throw 'Reviewed source-copy receipt changed.' }
+    $copy = [Text.UTF8Encoding]::new($false, $true).GetString($copyBytes) | ConvertFrom-Json
     $approved = Resolve-SandboxQaCopyReceipt -Receipt $copy
+    $result.approvedInventorySha256 = $TrustedReceiptSha256
     # A build copy is scoped to its own receipt; provisioning copies are bound by the executable digest below.
     if ($GameRoot -cmatch '^D:\\TopiaForgeQA\\game(-[1-9][0-9]{0,5})?$' -and $approved.GameRoot -cne $GameRoot) { throw 'QA game copy does not belong to this source-copy receipt.' }
     $sourceExecutable = $approved.SourceGameRoot + '\Robotopia.exe'
