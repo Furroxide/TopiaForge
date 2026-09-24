@@ -74,7 +74,10 @@ try {
                 @{ Arguments = @('-LiveGameAcceptance', 'not-run'); Pattern = 'absent-repository' }
             )) {
             $output = & $powerShellExecutable @common @($case.Arguments) 2>&1 | Out-String
-            Assert-IsolationCondition ($LASTEXITCODE -ne 0 -and $output -match $case.Pattern) "Unexpected Windows build admission for $($case.Arguments -join ' '): $output"
+            # Error views wrap long messages to the console width behind a '|' gutter
+            # (narrow on hosted Linux); match the unwrapped text.
+            $flat = ($output -replace '(?m)^\s*\|', ' ') -replace '\s+', ' '
+            Assert-IsolationCondition ($LASTEXITCODE -ne 0 -and $flat -match $case.Pattern) "Unexpected Windows build admission for $($case.Arguments -join ' '): $output"
         }
     }
     Test-IsolationCase 'Windows build launches live acceptance only inside its run branch' {
