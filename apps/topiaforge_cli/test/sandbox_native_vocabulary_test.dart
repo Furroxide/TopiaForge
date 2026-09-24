@@ -1,10 +1,15 @@
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:topiaforge/src/sandbox_acceptance/native_driver_vocabulary.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_screen_baseline.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_screen_bitmap.dart';
+import 'package:topiaforge/src/sandbox_acceptance/native_transcript_actions.dart';
+import 'package:topiaforge/src/sandbox_acceptance/sandbox_specification.dart';
 
-/// The verifier's driver vocabulary is an independent mirror of the broker's
-/// C# source. These checks parse that source, so a vocabulary, per-kind field
-/// set or bound changed on one side only fails here until both sides agree.
+/// The verifier's driver vocabulary and screen-baseline rules are independent
+/// mirrors of the broker's C# source. These checks parse that source, so a
+/// vocabulary, field set, bound or comparison rule changed on one side only
+/// fails here until both sides agree.
 void main() {
   final vocabulary = _BrokerSource('DriverVocabulary.cs');
   final manifest = _BrokerSource('DriverManifest.cs');
@@ -119,7 +124,83 @@ void main() {
       contains('DriverVocabulary.Actions.All(actions.ContainsKey)'),
     );
   });
+  _screenBaselineParity();
 }
+
+/// `ScreenBaselineSet` comparison, profile bounds and scenario identities.
+void _screenBaselineParity() => group('screen baselines', () {
+  final baselines = _BrokerSource('ScreenBaselines.cs');
+  final profile = _BrokerSource('DeviceProfile.cs');
+  final manifest = _BrokerSource('DriverManifest.cs');
+
+  test('the mismatch rule, threshold and verdict equal ScreenBaselines', () {
+    expect(
+      int.parse(
+        baselines.match(r'internal const int ChannelThreshold = (\d+);'),
+      ),
+      nativeScreenChannelThreshold,
+    );
+    // The largest B/G/R difference strictly above the threshold, counted
+    // over unmasked pixels only; alpha never enters the comparison.
+    for (final rule in [
+      'Math.Max(Math.Abs(capture[offset] - baseline[offset]), '
+          'Math.Max(Math.Abs(capture[offset + 1] - baseline[offset + 1]), '
+          'Math.Abs(capture[offset + 2] - baseline[offset + 2])))',
+      'if (difference > ChannelThreshold) mismatched++;',
+      'if (masked[pixel]) continue;',
+      'if (unmasked == 0) throw',
+      'return (double)mismatched / unmasked;',
+      'fraction <= entry.Tolerance',
+    ]) {
+      expect(baselines.text, contains(rule));
+    }
+  });
+
+  test('profile and bitmap bounds equal the broker', () {
+    int bound(_BrokerSource source, String pattern) =>
+        int.parse(source.match(pattern));
+    expect(
+      bound(baselines, r'rows\.GetArrayLength\(\) > (\d+)'),
+      nativeScreenBaselineEntryLimit,
+    );
+    expect(
+      bound(baselines, r'masks\.GetArrayLength\(\) > (\d+)'),
+      nativeScreenBaselineMaskLimit,
+    );
+    expect(
+      bound(baselines, r'checked\((\d+) \+ width \* height \* 4\)'),
+      nativeBitmapHeaderBytes,
+    );
+    expect(
+      baselines.text,
+      contains('step != "prepare" && !DriverVocabulary.Actions.Contains(step)'),
+    );
+    expect(
+      [
+        bound(profile, r'Integer\(display, "width", (\d+), \d+\)'),
+        bound(profile, r'Integer\(display, "width", \d+, (\d+)\)'),
+        bound(profile, r'Integer\(display, "height", (\d+), \d+\)'),
+        bound(profile, r'Integer\(display, "height", \d+, (\d+)\)'),
+      ],
+      [
+        nativeScreenMinimumWidth,
+        nativeScreenMaximumWidth,
+        nativeScreenMinimumHeight,
+        nativeScreenMaximumHeight,
+      ],
+    );
+  });
+
+  test('scenario identities and cycle counts equal DriverManifest', () {
+    expect(manifest.strings('ScenarioIds'), sandboxScenarioIds);
+    expect({
+      for (final m in RegExp(
+        r'\["([\w-]+)"\] = (\d+)',
+      ).allMatches(manifest.region('CycleCounts = new', ';')))
+        m[1]!: int.parse(m[2]!),
+    }, nativeCycleCounts);
+  });
+});
 
 /// One broker source file under `tools/TopiaForge.Acceptance.Windows`.
 final class _BrokerSource {

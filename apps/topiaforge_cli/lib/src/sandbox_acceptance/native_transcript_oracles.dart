@@ -1,3 +1,4 @@
+import 'native_screen_baseline.dart';
 import 'native_screen_oracle.dart';
 import 'native_audio_oracle.dart';
 import 'native_annex.dart';
@@ -30,7 +31,7 @@ List<SandboxNativeOracleResult> evaluateSandboxNativeTranscript({
   Map<String, NativeScreenMeasurement> screenMeasurements = const {},
   String audioEndpointId = '',
   SandboxExpectedCatalog? expectedCatalog,
-  Set<String> screenBaselineSteps = const {},
+  NativeScreenBaselineInputs? screenBaselines,
 }) {
   final data = readNativeTranscript(
     annex,
@@ -79,7 +80,7 @@ List<SandboxNativeOracleResult> evaluateSandboxNativeTranscript({
             screenMeasurements,
             audioEndpointId,
             expectedCatalog,
-            screenBaselineSteps,
+            screenBaselines,
           );
           if (id == 'ten-cycles') {
             _tenCycleInvariants(firstBaseline, previous, outcome);
@@ -182,7 +183,7 @@ _CycleOutcome _cycle(
   Map<String, NativeScreenMeasurement> screenMeasurements,
   String audioEndpointId,
   SandboxExpectedCatalog? expectedCatalog,
-  Set<String> screenBaselineSteps,
+  NativeScreenBaselineInputs? screenBaselines,
 ) {
   final begins = observations.where((o) => o.operation == 'begin').toList();
   if (begins.length != 1) {
@@ -295,7 +296,7 @@ _CycleOutcome _cycle(
         stepEvents,
         accepted,
         screenMeasurements,
-        screenBaselineSteps,
+        screenBaselines,
       );
     }
     if (['run-graph', 'stop-graph'].contains(action.action)) {

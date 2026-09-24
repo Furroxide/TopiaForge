@@ -1,3 +1,5 @@
+import 'native_screen_baseline.dart';
+import 'native_screen_bitmap.dart';
 import 'native_screen_oracle.dart';
 import 'native_audio_oracle.dart';
 import 'package:launcher_domain/launcher_domain.dart';
@@ -198,6 +200,7 @@ Future<SandboxNativeVerification> verifySandboxNativeFiles(
     read(paths.deviceProfilePath),
     'device',
   );
+  final screenBaselines = NativeScreenBaselines.parse(deviceProfile);
   final expectedCatalog = SandboxExpectedCatalog.parse(
     read(
       nativeChild(p.dirname(paths.driverManifestPath), expectedCatalogFileName),
@@ -212,7 +215,16 @@ Future<SandboxNativeVerification> verifySandboxNativeFiles(
     audioEndpointId:
         sandboxObject(deviceProfile['audio'], 'audio')['endpointId']! as String,
     expectedCatalog: expectedCatalog,
-    screenBaselineSteps: nativeScreenBaselineSteps(deviceProfile),
+    // Both reads join the change-detecting snapshot re-checked below.
+    screenBaselines: NativeScreenBaselineInputs(
+      screenBaselines,
+      readCapture: (path) =>
+          read(nativeChild(root, path), maximum: nativeBitmapMaximumBytes),
+      readBaseline: (path) => read(
+        nativeChild(screenBaselines.root, path),
+        maximum: nativeBitmapMaximumBytes,
+      ),
+    ),
   );
   final result = SandboxNativeAnnexVerifier().verify(
     annex,
