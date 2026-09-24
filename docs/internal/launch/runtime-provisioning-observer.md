@@ -164,11 +164,27 @@ Operator session (pending the user's confirmed availability): one UAC approval f
 
 ## Build 2478 (2026-09-24)
 
-RC1 now pins Robotopia build 2478. Retry `20260911T183026Z` and its copy `game-provisioning-20260911T180717Z` hold build 2409, so they are retained as history and must not be dispatched for RC1. Verified copies `source-game-2478` and `game-2478` exist (see the [QA setup plan](isolated-qa-setup-plan.md)). The retry has not been re-staged. An optional re-stage needs four things:
+RC1 now pins Robotopia build 2478. Retry `20260911T183026Z` and its copy `game-provisioning-20260911T180717Z` hold build 2409, so they are retained as history and must not be dispatched for RC1. Verified copies `source-game-2478` and `game-2478` exist (see the [QA setup plan](isolated-qa-setup-plan.md)). Retry `20260924T172541Z` has been re-staged for build 2478 and refusal-checked, but not dispatched:
 
-1. A fresh `game-provisioning-<timestamp>` copy from `source-game-2478`, made by the copier with the `game-copy-2478.json` digest.
-2. A new source checkpoint covering the integrated loader and broker. The v4 checkpoint's worktree has changed, so its preparation script refuses it.
-3. A preparation step bound to the 415-file 2478 inventory.
-4. The outbound block for the new copy. `set-sandbox-qa-network-isolation.ps1` now accepts build copies. Like the copier, it requires the private record directory and the reviewed receipt digest, so the retired v5 elevated step can no longer call it unchanged.
+1. **Source checkpoint v6** at release head `37f9088`, with a clean worktree.
+   - The seven C# checks passed, including a 0-warning build and 53 focused observer checks.
+   - The published broker bundle v4 (192 files) passed 183 broker, 17 waveform and 100 provisioning checks.
+   - A fresh fixture run through that broker exited unforced in 664 ms and retained its 2,135-byte player log.
+   - The unchanged v4 diagnostic launch mode, deadline, success condition, identity, inventory, firewall and ownership contracts carry over.
+2. **Fresh copy** `game-provisioning-20260924T172451Z`, made from `source-game-2478` with the reviewed `game-copy-2478.json` digest (415 files verified). It then received the 22 vendored BepInEx files and the 13 rebuilt loader assemblies, for 450 files in total.
+3. **Bundle** `D:\TopiaForgeQA\tools\runtime-retry-20260924T172541Z`: 192 broker files, the runner, desktop helper, v5 driver, launch template and manifest (197 files). The state root is empty.
+4. **Refusal check.** Under the normal user, the driver refused with "requires the intended standard interactive QA account". It wrote no state and created no native run.
 
-Dispatch still needs the user's confirmed operator session.
+The firewall rule `TopiaForge-QA-Provisioning-20260924T172451Z` does not exist yet. The elevated step `run-elevated-retry-v6.ps1` does three things: it creates and verifies that rule, passing the reviewed copy-receipt digest to `set-sandbox-qa-network-isolation.ps1`; it registers the one-time limited task; and it removes the task after the first completion.
+
+Private references:
+- `runtime-observer-2478-v6/final-source-receipt-v6.json` (SHA-256 `3447f11bf591f83eb36baa4d482d331fe654b762a56e1e6d9dcda70de35b1cf4`)
+- `runtime-retry-preparation-20260924T172541Z.json` (SHA-256 `699c013e70d76e6b1bb0d52c9d9d64676d0baa3766c25e21c490f1d7d0c85aea`)
+- `retry-driver-v6-wrong-account-20260924T172541Z.json`
+
+Operator session (optional QA, pending the user's confirmed availability):
+1. Give one UAC approval for `run-elevated-retry-v6.ps1 -Preparation <receipt>` in an elevated PowerShell 7.
+2. Sign in as `TopiaForgeQA` when the task is armed.
+3. Wait for the on-screen notice, then switch back.
+
+Afterwards, analyse the retained `player.log`, `runtime-diagnostics.json` and loader phase timestamps before deciding anything. A failure preserves everything and queues no further attempt. Any later source change requires a new checkpoint.
