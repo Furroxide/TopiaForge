@@ -23,9 +23,13 @@ final class CandidateFixture {
   final String sha;
   final ReleaseCandidateContract contract;
 
+  /// [liveGameAcceptanceRun] false builds a candidate whose live acceptance was
+  /// not run: a not-run game receipt, no game evidence, the tracked GAME row
+  /// unchanged in the decision and a not-run acceptance record.
   static Future<CandidateFixture> create({
     void Function(Directory root)? mutateContracts,
     bool validArchive = true,
+    bool liveGameAcceptanceRun = true,
   }) async {
     var repository = Directory.current.absolute;
     while (!File(p.join(repository.path, 'TopiaForge.slnx')).existsSync()) {
@@ -44,13 +48,24 @@ final class CandidateFixture {
         p.join(root.path, 'release/release-readiness.json'),
       );
       final readiness = readObject(readinessFile);
-      for (final gate in readiness['gates'] as List) {
+      final trackedGates = (readiness['gates'] as List).cast<Map>();
+      for (final gate in trackedGates) {
         if (gate['enforcement'] == 'blocking' && gate['id'] != 'P0-GAME-01') {
           gate['status'] = 'approved';
           gate.remove('reasonCode');
           gate['evidenceIds'] = ['EVID-${gate['id']}-0001'];
         }
       }
+      // The tracked status is computed from the blocking gates, and an
+      // advisory P0-GAME-01 no longer holds it.
+      readiness['status'] =
+          trackedGates.any(
+            (gate) =>
+                gate['enforcement'] == 'blocking' &&
+                gate['status'] == 'blocked',
+          )
+          ? 'blocked'
+          : 'ready';
       writeObject(readinessFile, readiness);
       final catalogFile = File(p.join(root.path, 'release/catalog.json'));
       final catalog = readObject(catalogFile);
@@ -79,7 +94,11 @@ final class CandidateFixture {
       final contract = await ReleaseCandidateContract.load(root.path, sha);
       final assets = Directory(p.join(root.path, 'assets'))..createSync();
       final fixture = CandidateFixture._(root, assets, sha, contract);
-      await fixture._build(readiness, validArchive: validArchive);
+      await fixture._build(
+        readiness,
+        validArchive: validArchive,
+        run: liveGameAcceptanceRun,
+      );
       return fixture;
     } catch (_) {
       root.deleteSync(recursive: true);
@@ -116,6 +135,7 @@ final class CandidateFixture {
   Future<void> _build(
     Map<String, Object?> baseReadiness, {
     required bool validArchive,
+    required bool run,
   }) async {
     final release = TopiaForgeReleaseCatalog.load(root.path).release(version);
     final policy = TopiaForgeReleasePolicy.load(root.path);
@@ -156,6 +176,7 @@ final class CandidateFixture {
       targetSha: sha,
       ecosystemSha: ecosystem,
       windowsDistribution: unsigned ? 'unsigned' : 'signed',
+      liveGameAcceptanceRun: run,
     );
     const handoffApi = TopiaForgeReleaseHandoff();
     await handoffApi.buildPlatformBundle(
@@ -170,6 +191,7 @@ final class CandidateFixture {
         'windows-x64',
         ecosystemSha: ecosystem,
         windowsDistribution: unsigned ? 'unsigned' : 'signed',
+        liveGameAcceptanceRun: run,
       ),
       qaPath: releaseQaPath(assets, 'windows-x64'),
       outputPath: asset(releasePlatformBundleFileName('windows-x64')).path,
@@ -193,10 +215,14 @@ final class CandidateFixture {
       );
     }
     final gates = baseReadiness['gates'] as List;
-    final game = gates.singleWhere((gate) => gate['id'] == 'P0-GAME-01') as Map;
-    game['status'] = 'approved';
-    game.remove('reasonCode');
-    game['evidenceIds'] = ['EVID-P0-GAME-01-0001'];
+    // Only a performed run approves GAME; a not-run candidate keeps its row.
+    if (run) {
+      final game =
+          gates.singleWhere((gate) => gate['id'] == 'P0-GAME-01') as Map;
+      game['status'] = 'approved';
+      game.remove('reasonCode');
+      game['evidenceIds'] = ['EVID-P0-GAME-01-0001'];
+    }
     final names = release.artifacts.toList()..sort();
     final decision = <String, Object?>{
       'schema': 'release-candidate-readiness-v1',
@@ -228,19 +254,30 @@ final class CandidateFixture {
       'gates': gates,
     };
     writeDecision(decision);
+    final payloads = (decision['payloads']! as List)
+        .cast<Map<String, Object?>>();
+    final gameMetadata = contract.object('.github/robotopia-game-build.json');
+    final redesign = contract.object('tests/gamemode-release-acceptance.json');
     writeAcceptance(
-      candidateAcceptanceFixture(
-        decision: decision,
-        repository: 'Furroxide/TopiaForge',
-        contractSha256: contract.contractSha256,
-        handoffSha256: decision['handoffSha256']! as String,
-        payloads: (decision['payloads']! as List).cast<Map<String, Object?>>(),
-        gameMetadata: contract.object('.github/robotopia-game-build.json'),
-        redesignInventory: contract.object(
-          'tests/gamemode-release-acceptance.json',
-        ),
-        handoff: handoff,
-      ),
+      run
+          ? candidateAcceptanceFixture(
+              decision: decision,
+              repository: 'Furroxide/TopiaForge',
+              contractSha256: contract.contractSha256,
+              handoffSha256: decision['handoffSha256']! as String,
+              payloads: payloads,
+              gameMetadata: gameMetadata,
+              redesignInventory: redesign,
+              handoff: handoff,
+            )
+          : candidateNotRunAcceptanceFixture(
+              contractSha256: contract.contractSha256,
+              handoffSha256: decision['handoffSha256']! as String,
+              payloads: payloads,
+              gameMetadata: gameMetadata,
+              redesignInventory: redesign,
+              handoff: handoff,
+            ),
     );
   }
 }

@@ -455,10 +455,12 @@ source, but create the 8b delivery branch only after 8a merges. Both require fre
 CI against `dev`; neither local preparation nor integration substitutes for game evidence.
 RC1 is unsigned Windows x64 `0.1.0-rc.1`; update metadata remains Ed25519 signed.
 Separate private-build prerequisites from final release permission: the four
-non-game blocking gates must already have reviewed approval before building, and
-all five must be approved before publication. Final game approval binds the frozen
-source SHA and exact tested payload/handoff/evidence bytes through a detached
-strict contract. Never prefill approval to break the build/acceptance ordering
+blocking gates (IP, OSS, PRIV, CRED) must already have reviewed approval before
+building, and must still be approved at publication. `P0-GAME-01` is advisory by
+the owner's 2026-09-24 disposition. When live acceptance runs, the game approval
+binds the frozen source SHA and exact tested payload/handoff/evidence bytes
+through a detached strict contract; when it does not, the candidate records a
+`not-run` acceptance and GAME stays blocked. Never prefill approval to break the build/acceptance ordering
 cycle, promote rehearsal output, or repack qualified bytes. The
 [release-preparation prompt](gamemode-contract/prompts/07a-release-preparation.md)
 defines the bounded repair, qualification state machine and regression matrix.
@@ -550,7 +552,9 @@ Unavailable native-timing or visual checks stay explicitly pending.
 Private preparation and permission to publish are separate assessments. The
 tracked register retains all twelve gates. `release validate-prerequisites
 --version <version> --target-sha <sha>` loads the exact Git blobs, requiring the
-four non-game blocking approvals and deferring only `P0-GAME-01`. Its successful
+four blocking approvals (IP, OSS, PRIV, CRED). It defers `P0-GAME-01` only while
+that gate is blocking; since the owner's 2026-09-24 disposition made it advisory,
+nothing is deferred. Its successful
 status is `eligible-for-private-build`; it never returns a publishable decision.
 Git replacement refs and working-tree drift cannot change the resolved contracts.
 
@@ -561,8 +565,9 @@ review produce two bounded, redacted JSON records in the candidate asset folder:
   `Furroxide/TopiaForge`, release version, exact lowercase source SHA, ready status,
   all twelve gate rows, exact sorted payload name/positive integer size/SHA-256
   records, and base readiness/schema/policy/catalog/contract/handoff/acceptance
-  digests. Only GAME may supersede its tracked row; the complete effective gate
-  register is validated again. Signed mode also requires
+  digests. Only GAME may supersede its tracked row, as an approval backed by a
+  performed run; a `not-run` candidate keeps it unchanged. The complete effective
+  gate register is validated again. Signed mode also requires
   `handoffSignatureSha256`; unsigned mode omits that field and the P7S file.
 - `release-candidate-acceptance-v1.json`: the same source, contract, handoff and
   payload identities; pinned game build; passed result; ten game cycles and
@@ -571,6 +576,20 @@ review produce two bounded, redacted JSON records in the candidate asset folder:
   approved GAME evidence IDs, required roles, opaque `review:<id>` references and
   evidence digests. No paths, host names, authentication data or raw logs belong
   in the public record. Every reference must identify an actual reviewed record.
+
+A candidate whose live acceptance was not run, which the owner's 2026-09-24
+disposition allows while `P0-GAME-01` is advisory, records the closed `not-run`
+branch of the same schema instead. It keeps the source, contract, handoff,
+payload and pinned-game identities, `result: "not-run"`, `authoringCycles: 16`
+and the handoff's Unity authoring digest, plus a `disposition` naming an
+`EVID-P0-GAME-01-NNNN` record, role `project-owner`, an opaque `review:<id>`
+reference and its digest. It has no game cycles, cases, isolation, game evidence
+or reviewer evidence. The Windows handoff must carry the matching `not-run` game
+receipt, which binds the verified official game identity and the tagged case
+inventory digest and has no evidence, and the decision must keep the tracked
+advisory GAME row byte for byte. A disposition is never a GAME approval, so the
+effective register, qualified summary and BOM still report GAME as blocked.
+Restoring the gate to blocking makes this branch unqualifiable.
 
 Their complete schemas are
 `schemas/topiaforge.release-candidate-readiness-v1.schema.json` and
@@ -616,6 +635,7 @@ before publication. The strict asset allowlist and uploader/no-replacement rules
 apply to both records. Ed25519 update signing remains mandatory in either Windows
 distribution mode.
 
-This specification does not close the live acceptance or human approval gates.
+This specification does not close the live acceptance or human approval gates,
+and a `not-run` record does not claim either.
 The ledger distinguishes implemented machinery, connected callers, automated
 verification, and actual isolated game observations at each revision.

@@ -9,7 +9,7 @@ const _nonGame = ['P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01'];
 
 void main() {
   test(
-    'four approvals permit private preparation with gameplay deferred',
+    'four approvals permit private preparation with game QA advisory',
     () async {
       final fixture = _Fixture.create(_nonGame);
       try {
@@ -19,13 +19,16 @@ void main() {
         expect(summary['status'], 'eligible-for-private-build');
         expect(summary['targetSha'], fixture.sha);
         expect(summary['gates'], hasLength(12));
-        expect(summary['deferredGateIds'], ['P0-GAME-01']);
-        expect(
-          (summary['gates'] as List)
-              .where((gate) => (gate as Map)['id'] == 'P0-GAME-01')
-              .single['status'],
-          'blocked',
+        // GAME is advisory by owner disposition, so nothing is deferred: the
+        // deferral only ever applies to a blocking GAME gate.
+        expect(summary['deferredGateIds'], isEmpty);
+        final game = (summary['gates'] as List).cast<Map>().singleWhere(
+          (gate) => gate['id'] == 'P0-GAME-01',
         );
+        expect(game['status'], 'blocked');
+        expect(game['enforcement'], 'advisory');
+        expect(result.stderr, contains('P0-GAME-01 is blocked (advisory)'));
+        expect(result.stderr, isNot(contains('error:')));
       } finally {
         fixture.dispose();
       }

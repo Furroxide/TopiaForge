@@ -2,6 +2,11 @@ import 'release_readiness.dart';
 
 /// Private preparation can defer game review until candidate bytes exist.
 /// It never grants publication permission.
+///
+/// The deferral covers P0-GAME-01 only while that gate is blocking. Under the
+/// owner's 2026-09-24 disposition it is advisory, so it never blocks and
+/// `deferredGateIds` is empty; the code stays so that restoring the gate to
+/// blocking restores the deferral without another change here.
 final class ReleasePrerequisites {
   ReleasePrerequisites(this.decision);
 

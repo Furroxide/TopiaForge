@@ -12,6 +12,8 @@ extension _TopiaForgeReadinessCommands on _TopiaForgeCli {
     );
     for (final gate in assessment.decision.gates) {
       if (gate.isSatisfied) continue;
+      // Mirrors ReleasePrerequisites: a blocking GAME gate is deferred, not
+      // fatal, here. While GAME is advisory it is only ever a warning.
       final blocks = gate.blocksRelease && gate.id != 'P0-GAME-01';
       stderr.writeln(
         '${blocks ? 'error' : 'warning'}: Release prerequisite ${gate.id} '

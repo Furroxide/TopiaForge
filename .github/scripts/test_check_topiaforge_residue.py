@@ -66,6 +66,7 @@ class GeneratedPayloadAuditTests(unittest.TestCase):
             "apps/topiaforge_cli/lib/src/release_candidate_acceptance.dart",
             "apps/topiaforge_cli/test/release_candidate_acceptance_fixture.dart",
             "apps/topiaforge_cli/test/release_candidate_acceptance_test.dart",
+            "apps/topiaforge_cli/test/release_candidate_not_run_acceptance_test.dart",
         ):
             with self.subTest(path=path):
                 self.assertEqual([], self.scan_text(path, "qa['" + game + "']"))

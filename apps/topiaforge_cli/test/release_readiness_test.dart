@@ -48,9 +48,10 @@ void main() {
       'P1-E2E-01',
       'P1-SUPPORT-01',
     ]);
-    // Two advisory gates carry a recorded owner approval (2026-08-28); the other
-    // ten are unmet and carry no evidence. Naming the approved pair here means a
-    // third approval appearing without a register entry fails this test.
+    // Two advisory gates carry a recorded owner approval (2026-08-28) and the
+    // two P1 QA gates an owner accepted-risk disposition (2026-09-24); the
+    // other eight are unmet and carry no evidence. Naming each set here means a
+    // decision appearing without a register entry fails this test.
     final approved = {
       for (final gate in decision.gates)
         if (gate.status == 'approved') gate.id: gate.evidenceIds,
@@ -59,9 +60,19 @@ void main() {
       'P0-TRUST-01': ['EVID-P0-TRUST-01-0001'],
       'P1-SUPPORT-01': ['EVID-P1-SUPPORT-01-0001'],
     });
+    final acceptedRisk = {
+      for (final gate in decision.gates)
+        if (gate.status == 'accepted-risk')
+          gate.id: [gate.acceptedRiskScope, ...gate.evidenceIds],
+    };
+    expect(acceptedRisk, {
+      'P1-UX-01': ['rc1-native-ux-accessibility', 'EVID-P1-UX-01-0001'],
+      'P1-E2E-01': ['rc1-independent-player-author-e2e', 'EVID-P1-E2E-01-0001'],
+    });
     expect(
       decision.gates
-          .where((gate) => gate.status != 'approved')
+          .where((gate) => !approved.containsKey(gate.id))
+          .where((gate) => !acceptedRisk.containsKey(gate.id))
           .every(
             (gate) => gate.status == 'blocked' && gate.evidenceIds.isEmpty,
           ),
@@ -69,14 +80,20 @@ void main() {
     );
     // Every blocking gate is unmet, so the computed status is decided entirely
     // by which of them the contract declares blocking. Pin that set: silently
-    // downgrading one is exactly the change this file exists to catch.
+    // downgrading one is exactly the change this file exists to catch. GAME
+    // left it by owner disposition and stays blocked, never approved.
     expect(
       decision.gates
           .where((gate) => gate.enforcement == 'blocking')
           .map((gate) => gate.id),
-      ['P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01', 'P0-GAME-01'],
+      ['P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01'],
     );
-    expect(decision.gates.where((gate) => gate.blocksRelease), hasLength(5));
+    expect(decision.gates.where((gate) => gate.blocksRelease), hasLength(4));
+    final game = decision.gates.singleWhere((gate) => gate.id == 'P0-GAME-01');
+    expect(game.enforcement, 'advisory');
+    expect(game.status, 'blocked');
+    expect(game.reasonCode, 'acceptance-evidence-missing');
+    expect(game.evidenceIds, isEmpty);
 
     final publicSummary = decision.toPublicSummary();
     expect(publicSummary.keys, {
@@ -199,6 +216,7 @@ void main() {
       final id = gate['id']! as String;
       gate['status'] = 'approved';
       gate.remove('reasonCode');
+      gate.remove('acceptedRisk');
       gate['evidenceIds'] = ['EVID-$id-0001'];
     }
     ready['status'] = 'ready';
@@ -249,18 +267,12 @@ void main() {
   });
 
   test('advisory gates are reported but do not hold the candidate', () {
-    // The 0.x posture: approving only the five blocking gates reaches `ready`
+    // The 0.x posture: approving only the four blocking gates reaches `ready`
     // while the advisory gates that remain unmet are still recorded as blocked.
-    // Two of the seven advisory gates are already approved in the decision, so
-    // five stay blocked.
+    // Of the eight advisory gates two are approved and two accepted as risk, so
+    // four stay blocked, P0-GAME-01 among them.
     final ready = _readinessJson(readinessBytes);
-    const blocking = {
-      'P0-IP-01',
-      'P0-OSS-01',
-      'P0-PRIV-01',
-      'P0-CRED-01',
-      'P0-GAME-01',
-    };
+    const blocking = {'P0-IP-01', 'P0-OSS-01', 'P0-PRIV-01', 'P0-CRED-01'};
     for (final rawGate in ready['gates']! as List) {
       final gate = rawGate as Map;
       final id = gate['id']! as String;
@@ -274,8 +286,10 @@ void main() {
     final decision = _parseJson(ready, schemaBytes);
     expect(decision.isReady, isTrue);
     expect(
-      decision.gates.where((gate) => gate.status == 'blocked'),
-      hasLength(5),
+      decision.gates
+          .where((gate) => gate.status == 'blocked')
+          .map((gate) => gate.id),
+      ['P0-WIN-01', 'P0-GAME-01', 'P0-HOST-01', 'P0-CAND-01'],
     );
 
     // One blocking gate left unapproved still stops the release.

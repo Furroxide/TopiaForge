@@ -1,5 +1,10 @@
 part of 'release_readiness.dart';
 
+/// The owner's disposition that makes live game acceptance optional for this
+/// release. A candidate recording `not-run` must cite exactly this record, so a
+/// new or different disposition is a reviewed change here, beside the gate.
+const gameAcceptanceDispositionEvidenceId = 'EVID-P0-GAME-01-0001';
+
 final class _GateContract {
   const _GateContract({
     required this.id,
@@ -19,20 +24,27 @@ final class _GateContract {
 }
 
 // The `0.x` release register keeps every gate visible but only lets a
-// `blocking` gate hold a candidate. TopiaForge has never shipped, and eight of
+// `blocking` gate hold a candidate. TopiaForge has never shipped, and most of
 // the original twelve gates wait on organizational evidence — counsel sign-off,
 // a paid code-signing certificate, GitHub org administration, external QA
 // participants — that an alpha line cannot obtain. Blocking is therefore
-// reserved for the four gates that are release-fatal at any version plus the
-// one that proves the product runs at all:
+// reserved for the four gates that are release-fatal at any version:
 //
 //   P0-IP-01     rights to integrate with Robotopia
 //   P0-OSS-01    third-party redistribution
 //   P0-PRIV-01   the unapproved RoboAPI backend dependency
 //   P0-CRED-01   rotation of exposed credentials
-//   P0-GAME-01   the product loads and runs on the pinned game build
 //
-// The remaining seven are advisory: recorded, reported, and approvable, but not
+// P0-GAME-01, the live proof that the product runs on the pinned game build,
+// was the fifth. It is advisory by the owner's 2026-09-24 disposition,
+// EVID-P0-GAME-01-0001, which made all game QA optional for RC1. That is a
+// disposition, not an approval: the gate stays `blocked` with its exit
+// criteria unmet, and a candidate that skips the run must say so in its
+// acceptance record. Restoring it to blocking means moving its `enforcement`
+// back here and in `release/release-readiness.json` together; the private-build
+// deferral in release_prerequisites.dart then applies to it again.
+//
+// The remaining eight are advisory: recorded, reported, and approvable, but not
 // by themselves a stop. Restoring the `1.0` posture is a matter of moving each
 // `enforcement` back to `blocking` here and in `release/release-readiness.json`;
 // the enforcement value is pinned per gate so the decision file cannot relax
@@ -98,10 +110,11 @@ const _gateContracts = [
   // P0-LINUX-01 is intentionally absent: Linux is descoped from 0.1.0-rc.1 and
   // returns in rc.2. Restore this entry, the schema's gate count and id enum,
   // and the policy platform archives together when it does.
+  // Advisory by owner disposition, not approval; see the note above.
   _GateContract(
     id: 'P0-GAME-01',
     priority: 'P0',
-    enforcement: 'blocking',
+    enforcement: 'advisory',
     blockedReasonCode: 'acceptance-evidence-missing',
     reviewerRoles: ['robotopia-owner', 'runtime-mod-qa'],
   ),
