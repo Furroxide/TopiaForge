@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
             }
             if (failures.Count > 0) throw new AggregateException(failures);
             Console.WriteLine("Native world reflection tests passed (4 cases).");
+            NativePlayerTeleportTests.Run();
         }
         private static void CheckpointUsesItsDeclaredAssetType()
         {

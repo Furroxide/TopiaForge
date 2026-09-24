@@ -11,6 +11,21 @@ namespace TopiaForge.ModManager
         internal static MethodInfo? CheckpointLoader(Type loader, Type checkpoint) =>
             ExactMethod(loader, "LoadSceneImpl", Static, typeof(bool), checkpoint);
 
+        internal static MethodInfo? PlayerTeleport(Type controller, Type position, Type rotation)
+        {
+            if (!rotation.IsValueType || Nullable.GetUnderlyingType(rotation) != null) return null;
+            var method = ExactMethod(controller, "TeleportTo", Instance, position, typeof(Nullable<>).MakeGenericType(rotation));
+            return method?.ReturnType == typeof(void) ? method : null;
+        }
+
+        internal static void InvokePlayerTeleport(object controller, MethodInfo teleport, object position, object rotation,
+            Func<bool> readControllerEnabled, Action<bool> writeControllerEnabled)
+        {
+            var wasEnabled = readControllerEnabled();
+            try { teleport.Invoke(controller, new[] { position, rotation }); }
+            finally { writeControllerEnabled(wasEnabled); }
+        }
+
         internal static NativeAwaiterMethods? Awaiter(Type awaitable)
         {
             var getAwaiter = ExactMethod(awaitable, "GetAwaiter", Instance);
