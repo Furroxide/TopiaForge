@@ -17,9 +17,24 @@ $sourceGameRoot = 'C:\QA\TopiaForge\source-game'
 ./tools/release-admin.ps1 build -StateRoot $releaseStateRoot -AcceptanceIsolationRecord $isolationRecord -GameDirectory $sourceGameRoot
 ```
 
-`build` contains a mandatory interactive window: the live `TF-ACCEPT`
-acceptance run needs roughly 30 minutes at the keyboard with a gamepad and
-microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
+That is the default `-LiveGameAcceptance run`. For RC1 the owner's 2026-09-24
+disposition of `P0-GAME-01` also allows a candidate that does not run live game
+acceptance. Choose that at preflight, without an isolation record:
+
+```powershell
+./tools/release-admin.ps1 preflight -StateRoot $releaseStateRoot -GameDirectory $sourceGameRoot -LiveGameAcceptance not-run
+./tools/release-admin.ps1 build -StateRoot $releaseStateRoot
+```
+
+Preflight freezes the mode in the release state; see
+[Live game acceptance mode](#live-game-acceptance-mode).
+
+In `run` mode, `build` contains a mandatory interactive window: the live
+`TF-ACCEPT` acceptance run needs roughly 30 minutes at the keyboard with a
+gamepad and microphone. See [`LiveGameAcceptance.md`](LiveGameAcceptance.md).
+A `not-run` build has no interactive game window. It still rebuilds the
+TopiaForgeUi bundle reproducibly, verifies the official game installation and
+runs the sixteen-cycle Unity lifecycle smoke, which stay mandatory.
 
 A successful build stops at `built`. Prepare and review the detached candidate
 decision and acceptance records described below, then continue explicitly:
@@ -55,9 +70,10 @@ policy can enable a Linux candidate.
 Preflight invokes `release validate-prerequisites --version <version>
 --target-sha <final-main-sha>`. It reads `release/release-readiness.json` and its
 schema from that exact commit. All twelve gates remain represented. The four
-blocking non-game gates (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01`)
-must already be approved. Only `P0-GAME-01` may await the candidate's live
-acceptance. Success means `eligible-for-private-build`; it is not a ship
+blocking gates (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01`)
+must already be approved. `P0-GAME-01` is advisory by the owner's 2026-09-24
+disposition and stays blocked, so the summary's `deferredGateIds` is empty.
+Success means `eligible-for-private-build`; it is not a ship
 approval. Advisory gates retain their recorded enforcement and reporting rules.
 
 The source catalog's `ready` status approves only the reviewed platform, package
@@ -70,8 +86,9 @@ the final `main` merge SHA, not the release-branch head. Local `main` must remai
 clean and exactly equal to `origin/main`. Moving that source invalidates the
 candidate even when a later commit has the same tree.
 
-`build` still requires the actual SDK, authored-world and live-game checks
-before sealing its validated handoff. Run live acceptance in an isolated Windows
+`build` still requires the actual SDK and authored-world checks before sealing
+its validated handoff, and in `run` mode the live-game checks too. Run live
+acceptance in an isolated Windows
 user/session or virtual machine that isolates Unity's persistent data and does
 not access the normal user's data. A separate BepInEx profile alone is
 insufficient. Pass the already approved private provisioning record through
@@ -104,9 +121,13 @@ assets directory (`<StateRoot>/<version>/assets`):
 
 - `release-candidate-readiness-v1.json`: the detached final decision, bound to
   the frozen source and tracked contracts. Only the game gate may supersede its
-  tracked base decision; the other gates retain their reviewed values.
+  tracked base decision, and only with an approval backed by a performed run; a
+  `not-run` candidate keeps the tracked GAME row unchanged. The other gates
+  retain their reviewed values.
 - `release-candidate-acceptance-v1.json`: the actual acceptance evidence for that
-  same candidate, with the required cases and reviewer references. Keep raw
+  same candidate, with the required cases and reviewer references, or for a
+  `not-run` candidate the truthful record described in
+  [Live game acceptance mode](#live-game-acceptance-mode). Keep raw
   logs, personal paths, credentials and other private evidence outside public
   assets. Do not fabricate passing cases or approval references.
 
@@ -131,6 +152,64 @@ Machine validation checks evidence structure and binding. It does not prove a
 reviewer's identity or permission to approve. Actual reviewer authorization,
 evidence inspection and the protected `release` environment approval remain
 human responsibilities.
+
+## Live game acceptance mode
+
+`-LiveGameAcceptance` selects whether this candidate runs the live game
+acceptance. The values are exactly `run` (the default) and `not-run`.
+
+- `run` behaves as described above: it requires the explicit
+  `-AcceptanceIsolationRecord`, the build performs the complete isolated
+  acceptance, and the detached decision must approve `P0-GAME-01` with its
+  reviewers' evidence.
+- `not-run` is admitted only while the exact-SHA prerequisites show `P0-GAME-01`
+  as advisory, which the owner's 2026-09-24 disposition (`EVID-P0-GAME-01-0001`)
+  made it for RC1. It refuses an isolation record, and preflight prints that
+  live game acceptance will NOT run for this candidate.
+
+Preflight freezes the mode as `liveGameAcceptance` in the release state. A later
+`build`, `qualify`, `stage`, `dispatch` or `resume` adopts the frozen value and
+refuses a different explicit one; changing the mode means starting a new release
+state. The Windows builder always receives the mode and receives the isolation
+record only in `run`. In both modes it rebuilds the TopiaForgeUi bundle
+reproducibly, verifies the official game installation before building, and runs
+the sixteen-cycle Unity lifecycle smoke. Only `run` extracts the archive, creates
+the journey mod and launches `acceptance run`.
+
+`validation-windows.json` records `liveGameAcceptance` as `passed` or `not-run`.
+A `not-run` summary omits the live-acceptance entry from `checks` and carries
+only the `unity` evidence digest, and `evidence/windows/robotopia` must not
+exist. Its platform bundle then has no game-evidence validation and carries this
+game receipt in its Windows QA summary:
+
+| Field | Value and source |
+| --- | --- |
+| `result` | The literal `not-run`. |
+| `gameArchiveSha256`, `gameExecutableSha256`, `gameFilesManifestSha256`, `gameFilesVerified` | Copied from `validation-windows.json`, where the builder records the pre-build `tools/release/verify-robotopia-install.ps1` result for `-GameDirectory`. The administrator compares them with `.github/robotopia-game-build.json` at the target SHA, and the handoff contract checks them again. |
+| `caseInventorySha256` | SHA-256 of `tests/live-game-acceptance.json` at the target SHA, the matrix a run would have used. |
+
+The reviewed `release-candidate-acceptance-v1.json` for that candidate has
+exactly these fields:
+
+| Field | Value and source |
+| --- | --- |
+| `schema` | `release-candidate-acceptance-v1`. |
+| `repository`, `releaseVersion`, `targetSha`, `contractSha256`, `handoffSha256`, `payloads` | The same values as the detached decision; qualification compares them. |
+| `gameBuildId` | `buildId` from `.github/robotopia-game-build.json` at the target SHA, which is also the Windows QA summary's `gameBuildId`. |
+| `result` | The literal `not-run`. |
+| `authoringCycles` | `16`, the `requiredAuthoringCycles` of `tests/gamemode-release-acceptance.json`. |
+| `authoringEvidenceSha256` | The Windows handoff's Unity receipt digest: the SHA-256 of the retained `evidence/windows/unity/lifecycle.json`, recorded in `validation-windows.json` as `evidenceSha256.unity`. |
+| `disposition.evidenceId` | The owner's disposition, `EVID-P0-GAME-01-0001` for RC1. The gate contracts and the acceptance schema pin it, so a different disposition needs a reviewed change. |
+| `disposition.role` | `project-owner`. |
+| `disposition.reference` | An opaque `review:<id>` reference to the owner's retained decision record. |
+| `disposition.sha256` | The SHA-256 of that retained record, which stays outside Git. |
+
+It has no `gameCycles`, `gameEvidenceSha256`, `isolation`, `cases` or
+`reviewerEvidence`. The detached decision keeps the tracked `P0-GAME-01` row
+byte for byte, still blocked. Qualification rejects an approved GAME row with a
+`not-run` record, a `passed` record over a `not-run` handoff and a `not-run`
+record over a performed one, so the qualified summary and the BOM show GAME as
+blocked.
 
 ## Admin Windows machine
 
@@ -239,8 +318,9 @@ records `windowsDistribution: unsigned`. The construction repairs are implemente
 and their synthetic regressions pass. Final source CI, including Windows/Linux
 tests and documentation publication, passes; revision-specific evidence is in
 [`gamemode-contract/Status.md`](internal/gamemode-contract/Status.md).
-No candidate is qualified. Building the exact frozen payloads, isolated live
-acceptance and remaining gate approvals are still required.
+No candidate is qualified. Building the exact frozen payloads and the remaining
+blocking gate approvals are still required; isolated live acceptance is optional
+under the 2026-09-24 disposition.
 
 The validator, handoff and qualification contracts require verified unsigned
 executable evidence in this mode. Both the detached CMS asset and its decision

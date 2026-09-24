@@ -13,6 +13,8 @@ param(
     [string]$UnityPath = "C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe",
     [string]$GameDirectory = "$env:LOCALAPPDATA\Tomato Cake\launcher\Robotopia",
     [string]$AcceptanceIsolationRecord,
+    [ValidateSet("run", "not-run", IgnoreCase = $false)]
+    [string]$LiveGameAcceptance = "run",
     [string]$PythonPath = $env:TOPIAFORGE_PYTHON,
     [string]$StateRoot,
     [switch]$Rehearsal
@@ -110,6 +112,60 @@ function Get-WindowsDistributionMode {
         throw "Unknown Windows distribution mode '$mode'; expected 'signed' or 'unsigned'."
     }
     return $mode
+}
+
+# Admits the live game acceptance mode, which the release state then freezes.
+#
+# `run` performs the isolated live acceptance and keeps the isolation-record
+# checks exactly as they were before the mode existed. `not-run` is the owner's
+# 2026-09-24 disposition of P0-GAME-01: no live run, so no isolation record,
+# and only while the exact-SHA prerequisites show P0-GAME-01 as advisory.
+# Restoring that gate to blocking therefore refuses `not-run` without an edit
+# here. The helper writes nothing and runs no external tool.
+function Assert-LiveGameAcceptanceMode {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("run", "not-run", IgnoreCase = $false)]
+        [string]$Mode,
+        [AllowEmptyString()][string]$IsolationRecord = "",
+        [AllowNull()][object]$Prerequisites = $null
+    )
+    if ($Mode -ceq "run") {
+        $null = Get-ReleaseIsolationRecordHash -Path $IsolationRecord
+        Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $IsolationRecord `
+            -OutputDirectories @($assetsDirectory, $evidenceDirectory)
+        return
+    }
+    if (-not [string]::IsNullOrEmpty($IsolationRecord)) {
+        throw ("-LiveGameAcceptance not-run performs no live game acceptance; " +
+            "omit -AcceptanceIsolationRecord instead of freezing an unused record.")
+    }
+    if ($null -eq $Prerequisites) {
+        return
+    }
+    $gates = if ($Prerequisites.PSObject.Properties.Name -contains "gates") {
+        @($Prerequisites.gates)
+    }
+    else { @() }
+    $gameGates = @($gates | Where-Object {
+            $null -ne $_ -and $_.PSObject.Properties.Name -contains "id" -and
+            [string]$_.id -ceq "P0-GAME-01"
+        })
+    if ($gameGates.Count -ne 1 -or
+        $gameGates[0].PSObject.Properties.Name -notcontains "enforcement" -or
+        [string]$gameGates[0].enforcement -cne "advisory") {
+        throw ("-LiveGameAcceptance not-run requires P0-GAME-01 to be advisory in " +
+            "the exact-SHA readiness register; run the live acceptance instead.")
+    }
+}
+
+# The `liveGameAcceptance` value a Windows validation summary records for the
+# frozen mode: a completed run is "passed" and a skipped one "not-run".
+function Get-ExpectedLiveGameAcceptanceResult {
+    if ($LiveGameAcceptance -ceq "run") {
+        return "passed"
+    }
+    return "not-run"
 }
 
 function Invoke-Checked {
@@ -771,7 +827,8 @@ function Use-StateConfiguration {
         @("CompatDataRoot", "compatDataRoot"),
         @("UnityPath", "unityPath"),
         @("GameDirectory", "gameDirectory"),
-        @("AcceptanceIsolationRecord", "acceptanceIsolationRecord")
+        @("AcceptanceIsolationRecord", "acceptanceIsolationRecord"),
+        @("LiveGameAcceptance", "liveGameAcceptance")
     )
     foreach ($binding in $immutableBindings) {
         $parameterName = $binding[0]
@@ -870,6 +927,7 @@ function Write-State {
         gameDirectory = $GameDirectory
         acceptanceIsolationRecord = $AcceptanceIsolationRecord
         acceptanceIsolationRecordSha256 = $isolationHash
+        liveGameAcceptance = $LiveGameAcceptance
     }
     foreach ($entry in $Additional.GetEnumerator()) {
         $body[$entry.Key] = $entry.Value
@@ -1149,9 +1207,8 @@ function Invoke-Preflight {
         Use-StateConfiguration $existingState
     }
     if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
-    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
-    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
-        -OutputDirectories @($assetsDirectory, $evidenceDirectory)
+    Assert-LiveGameAcceptanceMode -Mode $LiveGameAcceptance `
+        -IsolationRecord $AcceptanceIsolationRecord
     Require-Command git | Out-Null
     Require-Command git-lfs | Out-Null
 
@@ -1215,7 +1272,15 @@ function Invoke-Preflight {
         throw "Production release forbids every code-signing exception."
     }
     $sdk = Get-DartAndFlutter
-    Get-ReleaseAssessment -SourceSha $head -Kind prerequisites | Out-Null
+    $prerequisites = Get-ReleaseAssessment -SourceSha $head -Kind prerequisites
+    Assert-LiveGameAcceptanceMode -Mode $LiveGameAcceptance `
+        -IsolationRecord $AcceptanceIsolationRecord -Prerequisites $prerequisites
+    if ($LiveGameAcceptance -ceq "not-run") {
+        Write-Host ("Live game acceptance will NOT run for this candidate: " +
+            "P0-GAME-01 is advisory under the owner's recorded disposition, " +
+            "so the candidate must record a not-run acceptance. The Unity " +
+            "authoring cycles still run.")
+    }
     $windowsCertificatePin = ""
     if ($policyAtHead.signingIdentities.PSObject.Properties.Name -contains
         "windowsCertificateSha256") {
@@ -1686,9 +1751,21 @@ function Assert-WindowsRuntimeEvidence {
         [Parameter(Mandatory = $true)][string]$SourceSha,
         [Parameter(Mandatory = $true)][psobject]$Validation
     )
+    # The evidence set follows the frozen mode, as _requiredEvidenceFor does on
+    # the Dart side: a live run that did not happen has no game evidence.
+    $runsLiveGameAcceptance = $LiveGameAcceptance -ceq "run"
+    $expectedEvidence = if ($runsLiveGameAcceptance) {
+        @("robotopia", "unity")
+    }
+    else { @("unity") }
     Assert-ExactJsonProperties -Value $Validation.evidenceSha256 `
-        -Expected @("robotopia", "unity") `
+        -Expected $expectedEvidence `
         -Label "Windows validation evidenceSha256"
+    if ($Validation.PSObject.Properties.Name -notcontains "liveGameAcceptance" -or
+        [string]$Validation.liveGameAcceptance -cne
+            (Get-ExpectedLiveGameAcceptanceResult)) {
+        throw "Windows validation does not record the frozen live game acceptance mode."
+    }
     $gameMetadataBytes = Get-GitBlobBytes -SourceSha $SourceSha `
         -GitPath ([string]$policy.gameBuild.metadataFile)
     try {
@@ -1739,8 +1816,17 @@ function Assert-WindowsRuntimeEvidence {
         throw "Retained Unity lifecycle evidence does not match the exact release."
     }
 
-    $robotopiaPath = Join-Path $evidenceDirectory `
-        "windows/robotopia/acceptance-result.json"
+    $robotopiaDirectory = Join-Path $evidenceDirectory "windows/robotopia"
+    if (-not $runsLiveGameAcceptance) {
+        # Evidence from some other run must not sit beside a candidate that
+        # records none; a later reader could mistake it for this candidate's.
+        if (Test-Path -LiteralPath $robotopiaDirectory) {
+            throw ("Live game acceptance was not run, yet game evidence remains " +
+                "in evidence/windows/robotopia. Remove it or build in run mode.")
+        }
+        return
+    }
+    $robotopiaPath = Join-Path $robotopiaDirectory "acceptance-result.json"
     $null = Assert-BoundedRegularFile -Path $robotopiaPath `
         -MaximumBytes 16777216 -Label "Retained Robotopia acceptance evidence"
     $sdk = Get-DartAndFlutter
@@ -1924,29 +2010,71 @@ function New-WindowsQaSummary {
     Assert-WindowsRuntimeEvidence -SourceSha $SourceSha `
         -Validation $Validation
     $unityPath = Join-Path $evidenceDirectory "windows/unity/lifecycle.json"
-    $robotopiaPath = Join-Path $evidenceDirectory `
-        "windows/robotopia/acceptance-result.json"
     $unity = Get-Content -LiteralPath $unityPath -Raw | ConvertFrom-Json
-    $robotopia = Get-Content -LiteralPath $robotopiaPath -Raw |
-        ConvertFrom-Json -DateKind String
     $caseInventoryBytes = Get-GitBlobBytes -SourceSha $SourceSha `
         -GitPath "tests/live-game-acceptance.json"
     $caseInventorySha = Get-BytesSha256 $caseInventoryBytes
-    try {
-        $caseInventory = [System.Text.UTF8Encoding]::new(
-            $false,
-            $true
-        ).GetString($caseInventoryBytes) | ConvertFrom-Json
+    if ($LiveGameAcceptance -ceq "run") {
+        $robotopiaPath = Join-Path $evidenceDirectory `
+            "windows/robotopia/acceptance-result.json"
+        $robotopia = Get-Content -LiteralPath $robotopiaPath -Raw |
+            ConvertFrom-Json -DateKind String
+        try {
+            $caseInventory = [System.Text.UTF8Encoding]::new(
+                $false,
+                $true
+            ).GetString($caseInventoryBytes) | ConvertFrom-Json
+        }
+        catch {
+            throw "The source-SHA Windows QA case inventory is not valid UTF-8 JSON."
+        }
+        $liveCases = @(
+            $caseInventory.cases |
+                ForEach-Object { [string]$_.id } |
+                Sort-Object
+        )
+        $liveCasesSha = Get-Utf8Sha256 (($liveCases -join "`n") + "`n")
+        $gameReceipt = [ordered]@{
+            result = "pass"
+            suite = "full"
+            gameArchiveSha256 = [string]$Validation.gameArchiveSha256
+            gameExecutableSha256 = [string]$Validation.gameExecutableSha256
+            gameFilesManifestSha256 =
+                [string]$Validation.gameFilesManifestSha256
+            gameFilesVerified = [Int64]$Validation.gameFilesVerified
+            caseInventorySha256 = $caseInventorySha
+            requiredCases = $liveCases
+            requiredCasesSha256 = $liveCasesSha
+            passedCases = $liveCases
+            passedCasesSha256 = $liveCasesSha
+            missingCases = @()
+            failures = @()
+            releaseJourney = [ordered]@{
+                enabled = [bool]$robotopia.releaseJourneyEnabled
+                authoringCommandCount =
+                    [Int64]$robotopia.releaseJourneyAuthoringCommandCount
+                loadedPackageStatus =
+                    [string]$robotopia.requiredLoadedPackageStatus
+                logMarkerObserved =
+                    [bool]$robotopia.requiredLogMarkerObserved
+            }
+            evidenceSha256 = Get-Sha256 $robotopiaPath
+        }
     }
-    catch {
-        throw "The source-SHA Windows QA case inventory is not valid UTF-8 JSON."
+    else {
+        # The truthful receipt of a run that did not happen: the verified game
+        # identity and the tagged case inventory it would have used, no cases,
+        # no journey and no evidence digest.
+        $gameReceipt = [ordered]@{
+            result = "not-run"
+            gameArchiveSha256 = [string]$Validation.gameArchiveSha256
+            gameExecutableSha256 = [string]$Validation.gameExecutableSha256
+            gameFilesManifestSha256 =
+                [string]$Validation.gameFilesManifestSha256
+            gameFilesVerified = [Int64]$Validation.gameFilesVerified
+            caseInventorySha256 = $caseInventorySha
+        }
     }
-    $liveCases = @(
-        $caseInventory.cases |
-            ForEach-Object { [string]$_.id } |
-            Sort-Object
-    )
-    $liveCasesSha = Get-Utf8Sha256 (($liveCases -join "`n") + "`n")
     $summary = [ordered]@{
         schema = "release-windows-qa-summary-v1"
         version = $Version
@@ -1975,32 +2103,7 @@ function New-WindowsQaSummary {
             validatorSmoke = [bool]$unity.validatorSmoke
             evidenceSha256 = Get-Sha256 $unityPath
         }
-        robotopia = [ordered]@{
-            result = "pass"
-            suite = "full"
-            gameArchiveSha256 = [string]$Validation.gameArchiveSha256
-            gameExecutableSha256 = [string]$Validation.gameExecutableSha256
-            gameFilesManifestSha256 =
-                [string]$Validation.gameFilesManifestSha256
-            gameFilesVerified = [Int64]$Validation.gameFilesVerified
-            caseInventorySha256 = $caseInventorySha
-            requiredCases = $liveCases
-            requiredCasesSha256 = $liveCasesSha
-            passedCases = $liveCases
-            passedCasesSha256 = $liveCasesSha
-            missingCases = @()
-            failures = @()
-            releaseJourney = [ordered]@{
-                enabled = [bool]$robotopia.releaseJourneyEnabled
-                authoringCommandCount =
-                    [Int64]$robotopia.releaseJourneyAuthoringCommandCount
-                loadedPackageStatus =
-                    [string]$robotopia.requiredLoadedPackageStatus
-                logMarkerObserved =
-                    [bool]$robotopia.requiredLogMarkerObserved
-            }
-            evidenceSha256 = Get-Sha256 $robotopiaPath
-        }
+        robotopia = $gameReceipt
     }
     $parent = Split-Path -Parent $OutputPath
     New-Item -ItemType Directory -Force -Path $parent | Out-Null
@@ -2079,9 +2182,13 @@ function Build-Handoff {
     $expectedWindowsChecks.AddRange([string[]]@(
             "unity-reproducibility",
             "unity-lifecycle",
-            "official-game-bytes",
-            "robotopia-acceptance"
+            "official-game-bytes"
         ))
+    # A build frozen as `not-run` performed no live game acceptance, so its
+    # record must not list that check; `run` still requires it.
+    if ($LiveGameAcceptance -ceq "run") {
+        $expectedWindowsChecks.Add("robotopia-acceptance")
+    }
     $platforms = @(
         @{
             Name = "windows-x64"
@@ -2131,13 +2238,16 @@ function Build-Handoff {
             "version"
         )
         if ($platform.Name -eq "windows-x64") {
+            # Assert-WindowsRuntimeEvidence below binds liveGameAcceptance to
+            # the frozen mode and the evidence set to what that mode produced.
             $expectedValidationProperties += @(
                 "evidenceSha256",
                 "gameArchiveSha256",
                 "gameBuildId",
                 "gameExecutableSha256",
                 "gameFilesManifestSha256",
-                "gameFilesVerified"
+                "gameFilesVerified",
+                "liveGameAcceptance"
             )
         }
         Assert-ExactJsonProperties -Value $validation `
@@ -2255,10 +2365,16 @@ function Build-Handoff {
             if ($windowsDistribution -cne "unsigned") {
                 $arguments += @("--evidence", "authenticode=$validationSha")
             }
+            # The game evidence key follows the frozen mode in the same way.
             $arguments += @(
-                "--evidence", "unity=$($validation.evidenceSha256.unity)",
-                "--evidence", "robotopia=$($validation.evidenceSha256.robotopia)"
+                "--evidence", "unity=$($validation.evidenceSha256.unity)"
             )
+            if ($LiveGameAcceptance -ceq "run") {
+                $arguments += @(
+                    "--evidence",
+                    "robotopia=$($validation.evidenceSha256.robotopia)"
+                )
+            }
         }
         elseif ($platform.Name -eq "linux-x64") {
             $protonPath = Join-Path $evidenceDirectory "proton/proton-evidence.json"
@@ -2374,9 +2490,8 @@ function Invoke-Build {
         throw "An accepted candidate cannot be rebuilt or repacked; resume its qualified bytes."
     }
     if ($targetsLinux) { throw "Proton acceptance isolation is not supported; Linux RC2 remains blocked." }
-    $null = Get-ReleaseIsolationRecordHash -Path $AcceptanceIsolationRecord
-    Assert-ReleaseIsolationRecordOutsideOutputs -RecordPath $AcceptanceIsolationRecord `
-        -OutputDirectories @($assetsDirectory, $evidenceDirectory)
+    Assert-LiveGameAcceptanceMode -Mode $LiveGameAcceptance `
+        -IsolationRecord $AcceptanceIsolationRecord
     $sourceSha = [string]$state.sourceSha
     Assert-SourceStillExact $sourceSha
     Assert-OriginStillExact $sourceSha
@@ -2438,9 +2553,7 @@ function Invoke-Build {
             $windowsWorktree = New-ReleaseWorktree `
                 -Name "windows" -SourceSha $sourceSha
             $releaseWorktrees.Add($windowsWorktree)
-            Invoke-Checked (
-                Join-Path $windowsWorktree "tools/release/build-windows.ps1"
-            ) @(
+            $windowsBuildArguments = @(
                 "-RepositoryRoot", $windowsWorktree,
                 "-SourceSha", $sourceSha,
                 "-Version", $Version,
@@ -2451,10 +2564,20 @@ function Invoke-Build {
                 "-PrivateEvidenceDirectory", $evidenceDirectory,
                 "-UnityPath", $UnityPath,
                 "-GameDirectory", $GameDirectory,
-                "-AcceptanceIsolationRecord", $AcceptanceIsolationRecord,
+                "-LiveGameAcceptance", $LiveGameAcceptance,
                 "-DartPath", $sdk.Dart,
                 "-FlutterPath", $sdk.Flutter
             )
+            # The frozen mode always travels; the isolation record only with a
+            # live run, which build-windows.ps1 also enforces on its side.
+            if ($LiveGameAcceptance -ceq "run") {
+                $windowsBuildArguments += @(
+                    "-AcceptanceIsolationRecord", $AcceptanceIsolationRecord
+                )
+            }
+            Invoke-Checked (
+                Join-Path $windowsWorktree "tools/release/build-windows.ps1"
+            ) $windowsBuildArguments
 
             if ($targetsLinux) {
                 Invoke-WslBuild -SourceSha $sourceSha `

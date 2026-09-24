@@ -1,8 +1,15 @@
 import 'release_handoff.dart';
+import 'release_readiness.dart' show gameAcceptanceDispositionEvidenceId;
 
 /// Checks scrubbed acceptance content after exact-source schema and handoff
 /// verification. Hashes and reviewer references bind evidence; they do not
 /// establish a human reviewer's identity or authorization.
+///
+/// A record is either `passed`, evidence of an actual isolated live run, or
+/// `not-run`, the truthful statement that this candidate skipped that run under
+/// the owner's P0-GAME-01 disposition. Both bind the same candidate identity,
+/// payloads, pinned game and Unity authoring receipt. Only a `passed` record
+/// carries game cycles, cases, isolation and GAME reviewer evidence.
 void validateCandidateAcceptance({
   required Map<String, Object?> acceptance,
   required Map<String, Object?> decision,
@@ -11,6 +18,38 @@ void validateCandidateAcceptance({
   required Map<String, Object?> redesignInventory,
   required ReleaseHandoffVerification handoff,
 }) {
+  switch (acceptance['result']) {
+    case 'passed':
+      _validatePassed(
+        acceptance,
+        decision,
+        gameMetadata,
+        liveInventory,
+        redesignInventory,
+        handoff,
+      );
+    case 'not-run':
+      _validateNotRun(
+        acceptance,
+        decision,
+        gameMetadata,
+        liveInventory,
+        redesignInventory,
+        handoff,
+      );
+    default:
+      _fail('Acceptance result must be passed or not-run.');
+  }
+}
+
+void _validatePassed(
+  Map<String, Object?> acceptance,
+  Map<String, Object?> decision,
+  Map<String, Object?> gameMetadata,
+  Map<String, Object?> liveInventory,
+  Map<String, Object?> redesignInventory,
+  ReleaseHandoffVerification handoff,
+) {
   _keys(acceptance, const {
     'schema',
     'repository',
@@ -29,26 +68,133 @@ void validateCandidateAcceptance({
     'cases',
     'reviewerEvidence',
   }, 'acceptance');
+  _candidate(acceptance, handoff, const [
+    'gameEvidenceSha256',
+    'authoringEvidenceSha256',
+  ]);
+  _pinnedInventories(gameMetadata, liveInventory, redesignInventory);
+  _pinned(acceptance, {
+    'gameBuildId': gameMetadata['buildId'],
+    'gameCycles': liveInventory['requiredLifecycleCycles'],
+    'authoringCycles': redesignInventory['requiredAuthoringCycles'],
+  });
+  _isolation(acceptance['isolation']);
+  _cases(acceptance['cases'], _inventoryCases(redesignInventory));
+  _reviewers(acceptance['reviewerEvidence'], decision);
+  final qa = _windowsQa(acceptance, handoff);
+  final game = _object(qa['robotopia'], 'game receipt');
+  final liveCases = _inventoryCases(liveInventory);
+  if (game['result'] != 'pass' ||
+      game['suite'] != 'full' ||
+      !_sameStrings(game['requiredCases'], liveCases) ||
+      !_sameStrings(game['passedCases'], liveCases) ||
+      !_emptyList(game['missingCases']) ||
+      !_emptyList(game['failures']) ||
+      acceptance['gameEvidenceSha256'] != game['evidenceSha256']) {
+    _fail('Acceptance game receipt is stale, incomplete or failed.');
+  }
+  _authoring(acceptance, qa);
+}
+
+/// The live run was not performed for this candidate.
+///
+/// The disposition is not an approval, so the decision must keep the tracked
+/// advisory GAME row exactly: still blocked, with no evidence. The verified
+/// Windows handoff must carry the not-run game receipt for the pinned game,
+/// and the pinned Unity authoring cycles remain mandatory.
+void _validateNotRun(
+  Map<String, Object?> acceptance,
+  Map<String, Object?> decision,
+  Map<String, Object?> gameMetadata,
+  Map<String, Object?> liveInventory,
+  Map<String, Object?> redesignInventory,
+  ReleaseHandoffVerification handoff,
+) {
+  _keys(acceptance, const {
+    'schema',
+    'repository',
+    'releaseVersion',
+    'targetSha',
+    'contractSha256',
+    'handoffSha256',
+    'payloads',
+    'gameBuildId',
+    'result',
+    'authoringCycles',
+    'authoringEvidenceSha256',
+    'disposition',
+  }, 'acceptance');
+  _candidate(acceptance, handoff, const ['authoringEvidenceSha256']);
+  _pinnedInventories(gameMetadata, liveInventory, redesignInventory);
+  _pinned(acceptance, {
+    'gameBuildId': gameMetadata['buildId'],
+    'authoringCycles': redesignInventory['requiredAuthoringCycles'],
+  });
+  _disposition(acceptance['disposition']);
+  final gate = _gameGate(decision);
+  if (gate['status'] != 'blocked' ||
+      gate['enforcement'] != 'advisory' ||
+      gate['reasonCode'] != 'acceptance-evidence-missing' ||
+      !_emptyList(gate['evidenceIds']) ||
+      gate.containsKey('acceptedRisk')) {
+    _fail(
+      'A not-run acceptance requires the advisory P0-GAME-01 row to remain '
+      'blocked without evidence.',
+    );
+  }
+  final qa = _windowsQa(acceptance, handoff);
+  final game = _object(qa['robotopia'], 'game receipt');
+  _keys(game, const {
+    'result',
+    'gameArchiveSha256',
+    'gameExecutableSha256',
+    'gameFilesManifestSha256',
+    'gameFilesVerified',
+    'caseInventorySha256',
+  }, 'game receipt');
+  final archives = _object(gameMetadata['archives'], 'game archives');
+  final manifest = _object(
+    gameMetadata['windowsFilesManifest'],
+    'game files manifest',
+  );
+  _digest(game['caseInventorySha256'], 'case inventory digest');
+  if (game['result'] != 'not-run' ||
+      game['gameArchiveSha256'] !=
+          _object(archives['windows'], 'Windows game archive')['sha256'] ||
+      game['gameExecutableSha256'] != manifest['gameExecutableSha256'] ||
+      game['gameFilesManifestSha256'] != manifest['sha256'] ||
+      game['gameFilesVerified'] != manifest['fileCount']) {
+    _fail('A not-run acceptance requires the not-run Windows game receipt.');
+  }
+  _authoring(acceptance, qa);
+}
+
+void _candidate(
+  Map<String, Object?> acceptance,
+  ReleaseHandoffVerification handoff,
+  List<String> evidenceDigests,
+) {
   if (acceptance['schema'] != 'release-candidate-acceptance-v1' ||
-      acceptance['result'] != 'passed' ||
       acceptance['releaseVersion'] != handoff.handoff.version ||
       acceptance['targetSha'] != handoff.handoff.targetSha) {
-    _fail('Acceptance does not identify the passed handoff candidate.');
+    _fail('Acceptance does not identify the verified handoff candidate.');
   }
   _text(
     acceptance['repository'],
     RegExp(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'),
     'repository',
   );
-  for (final field in const [
-    'contractSha256',
-    'handoffSha256',
-    'gameEvidenceSha256',
-    'authoringEvidenceSha256',
-  ]) {
+  for (final field in ['contractSha256', 'handoffSha256', ...evidenceDigests]) {
     _digest(acceptance[field], field);
   }
   _payloads(acceptance['payloads']);
+}
+
+void _pinnedInventories(
+  Map<String, Object?> gameMetadata,
+  Map<String, Object?> liveInventory,
+  Map<String, Object?> redesignInventory,
+) {
   if (gameMetadata['buildId'] is! int ||
       liveInventory['schemaVersion'] != 1 ||
       redesignInventory['schemaVersion'] != 1 ||
@@ -61,41 +207,66 @@ void validateCandidateAcceptance({
       'Acceptance inventories do not bind the pinned game and cycle counts.',
     );
   }
-  for (final entry in {
-    'gameBuildId': gameMetadata['buildId'],
-    'gameCycles': liveInventory['requiredLifecycleCycles'],
-    'authoringCycles': redesignInventory['requiredAuthoringCycles'],
-  }.entries) {
+}
+
+void _pinned(Map<String, Object?> acceptance, Map<String, Object?> pins) {
+  for (final entry in pins.entries) {
     if (acceptance[entry.key] is! int || acceptance[entry.key] != entry.value) {
       _fail('Acceptance ${entry.key} differs from its pinned contract.');
     }
   }
-  _isolation(acceptance['isolation']);
-  _cases(acceptance['cases'], _inventoryCases(redesignInventory));
-  _reviewers(acceptance['reviewerEvidence'], decision);
+}
+
+Map<String, Object?> _windowsQa(
+  Map<String, Object?> acceptance,
+  ReleaseHandoffVerification handoff,
+) {
   final windows = handoff.platformBundles['windows-x64'];
   if (windows == null ||
       windows.qa['gameBuildId'] != acceptance['gameBuildId']) {
     _fail('Acceptance requires the verified Windows game handoff.');
   }
-  final game = _object(windows.qa['robotopia'], 'game receipt');
-  final authoring = _object(windows.qa['unity'], 'authoring receipt');
-  final liveCases = _inventoryCases(liveInventory);
-  if (game['result'] != 'pass' ||
-      game['suite'] != 'full' ||
-      !_sameStrings(game['requiredCases'], liveCases) ||
-      !_sameStrings(game['passedCases'], liveCases) ||
-      !_emptyList(game['missingCases']) ||
-      !_emptyList(game['failures']) ||
-      acceptance['gameEvidenceSha256'] != game['evidenceSha256']) {
-    _fail('Acceptance game receipt is stale, incomplete or failed.');
-  }
+  return windows.qa;
+}
+
+void _authoring(Map<String, Object?> acceptance, Map<String, Object?> qa) {
+  final authoring = _object(qa['unity'], 'authoring receipt');
   if (authoring['result'] != 'pass' ||
       authoring['cycles'] != 16 ||
       authoring['validatorSmoke'] != true ||
       acceptance['authoringEvidenceSha256'] != authoring['evidenceSha256']) {
     _fail('Acceptance authoring receipt is stale, incomplete or failed.');
   }
+}
+
+void _disposition(Object? value) {
+  final disposition = _object(value, 'disposition');
+  _keys(disposition, const {
+    'evidenceId',
+    'role',
+    'reference',
+    'sha256',
+  }, 'disposition');
+  _text(
+    disposition['evidenceId'],
+    RegExp(r'^EVID-P0-GAME-01-[0-9]{4}$'),
+    'disposition evidence ID',
+  );
+  if (disposition['evidenceId'] != gameAcceptanceDispositionEvidenceId) {
+    _fail(
+      'A not-run acceptance must cite the recorded P0-GAME-01 disposition '
+      '$gameAcceptanceDispositionEvidenceId.',
+    );
+  }
+  if (disposition['role'] != 'project-owner') {
+    _fail('Only the project owner can record the P0-GAME-01 disposition.');
+  }
+  _text(
+    disposition['reference'],
+    RegExp(r'^review:[a-z0-9][a-z0-9._-]{0,95}$'),
+    'disposition reference',
+  );
+  _digest(disposition['sha256'], 'disposition digest');
 }
 
 void _isolation(Object? value) {
@@ -154,15 +325,22 @@ void _cases(Object? value, List<String> expected) {
   }
 }
 
-void _reviewers(Object? value, Map<String, Object?> decision) {
+Map<String, Object?> _gameGate(Map<String, Object?> decision) {
   final gameGates = _list(decision['gates'], 'decision gates', 12)
       .map((value) => _object(value, 'decision gate'))
       .where((gate) => gate['id'] == 'P0-GAME-01')
       .toList();
-  if (gameGates.length != 1 || gameGates.single['status'] != 'approved') {
+  if (gameGates.length != 1) {
+    _fail('Acceptance requires exactly one P0-GAME-01 decision.');
+  }
+  return gameGates.single;
+}
+
+void _reviewers(Object? value, Map<String, Object?> decision) {
+  final gate = _gameGate(decision);
+  if (gate['status'] != 'approved') {
     _fail('Acceptance requires one approved P0-GAME-01 decision.');
   }
-  final gate = gameGates.single;
   const roles = ['robotopia-owner', 'runtime-mod-qa'];
   if (!_sameStrings(gate['reviewerRoles'], roles)) {
     _fail('Acceptance game reviewer roles differ from the required contract.');

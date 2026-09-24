@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.release-candidate-acceptance-v1.schema.json",
   "title": "TopiaForge exact candidate acceptance evidence",
-  "description": "Scrubbed evidence references for actual isolated live acceptance. Schema validity is not proof of reviewer identity or authorization.",
+  "description": "Scrubbed evidence references for actual isolated live acceptance, or a truthful record that live acceptance was not run under the owner's P0-GAME-01 disposition. A not-run record carries no game cycles, cases, isolation, game evidence or reviewer evidence. Schema validity is not proof of reviewer identity or authorization.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,14 +15,72 @@
     "payloads",
     "gameBuildId",
     "result",
-    "gameCycles",
     "authoringCycles",
-    "gameEvidenceSha256",
-    "authoringEvidenceSha256",
-    "isolation",
-    "cases",
-    "reviewerEvidence"
+    "authoringEvidenceSha256"
   ],
+  "if": {
+    "properties": {
+      "result": {
+        "const": "not-run"
+      }
+    },
+    "required": [
+      "result"
+    ]
+  },
+  "then": {
+    "required": [
+      "disposition"
+    ],
+    "not": {
+      "anyOf": [
+        {
+          "required": [
+            "gameCycles"
+          ]
+        },
+        {
+          "required": [
+            "gameEvidenceSha256"
+          ]
+        },
+        {
+          "required": [
+            "isolation"
+          ]
+        },
+        {
+          "required": [
+            "cases"
+          ]
+        },
+        {
+          "required": [
+            "reviewerEvidence"
+          ]
+        }
+      ]
+    }
+  },
+  "else": {
+    "required": [
+      "gameCycles",
+      "gameEvidenceSha256",
+      "isolation",
+      "cases",
+      "reviewerEvidence"
+    ],
+    "properties": {
+      "result": {
+        "const": "passed"
+      }
+    },
+    "not": {
+      "required": [
+        "disposition"
+      ]
+    }
+  },
   "properties": {
     "schema": {
       "const": "release-candidate-acceptance-v1"
@@ -83,7 +141,10 @@
       "minimum": 1
     },
     "result": {
-      "const": "passed"
+      "enum": [
+        "passed",
+        "not-run"
+      ]
     },
     "gameCycles": {
       "type": "integer",
@@ -191,6 +252,33 @@
             "type": "string",
             "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
           }
+        }
+      }
+    },
+    "disposition": {
+      "description": "The project owner's recorded decision that live acceptance was not required for this candidate. It is not a P0-GAME-01 approval.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "role",
+        "reference",
+        "sha256"
+      ],
+      "properties": {
+        "evidenceId": {
+          "const": "EVID-P0-GAME-01-0001"
+        },
+        "role": {
+          "const": "project-owner"
+        },
+        "reference": {
+          "type": "string",
+          "pattern": "^review:[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
         }
       }
     }

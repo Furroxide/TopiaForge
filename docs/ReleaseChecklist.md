@@ -14,22 +14,29 @@ sequence are in [`AdminRelease.md`](AdminRelease.md). RC1 targets Windows x64 on
 - [x] Product version is `0.1.0-rc.1`; components/mods version independently; initial release has no rollback target.
 - [ ] Freeze the tracked twelve-gate register at the candidate SHA. Run
       `release validate-prerequisites --version <version> --target-sha <sha>`:
-      `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01` require real
-      approvals before private preparation. Only `P0-GAME-01` may remain deferred.
-      `eligible-for-private-build` never authorizes publication.
+      `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01`, and `P0-CRED-01` are the four
+      blocking gates and require real approvals before private preparation.
+      `P0-GAME-01` is advisory by the owner's 2026-09-24 disposition
+      (`EVID-P0-GAME-01-0001`) and stays blocked; nothing is deferred while it
+      is advisory. `eligible-for-private-build` never authorizes publication.
 - [ ] Review the exact catalog inventory separately from permission to publish.
       Catalog `ready` means its package/platform list was reviewed; the detached
-      candidate decision remains the final release gate. Preserve all seven
-      advisory rows and their actual dispositions.
+      candidate decision remains the final release gate. Preserve all eight
+      advisory rows and their actual dispositions, including the RC1 accepted
+      risks for `P1-UX-01` (`EVID-P1-UX-01-0001`) and `P1-E2E-01`
+      (`EVID-P1-E2E-01-0001`).
 - [ ] After exercising the exact payloads, obtain reviewed
       `release-candidate-readiness-v1.json` and
-      `release-candidate-acceptance-v1.json`. Only the GAME row may supersede the
-      tracked register. Reviewer references and evidence hashes do not prove
+      `release-candidate-acceptance-v1.json`. Only the GAME row may differ from
+      the tracked register, and only as an approval backed by a performed live
+      run; a candidate that records `result: "not-run"` keeps the tracked GAME
+      row unchanged. Reviewer references and evidence hashes do not prove
       reviewer identity: the protected approver must verify actual records and
       authorization. Never infer approval from a test pass.
 - [x] Unsigned Windows RC1 is authorized and recorded in policy. The construction repairs have passing
       synthetic regressions; see [Status](internal/gamemode-contract/Status.md) for revision-specific evidence.
-      The exact candidate build and isolated acceptance remain required.
+      The exact candidate build remains required; isolated live acceptance is optional under the 2026-09-24
+      disposition.
 - [x] RC discovery is GitHub Releases only; stable Pages/manual and official registry feeds exclude prereleases.
 - [x] The stale `release/0.1.1` line is retired and is neither reused nor deleted during RC preparation.
 - [x] Robotopia support is build `2478` (`0.0.2478`). Public-latest drift stops CI and release, which makes an
@@ -164,19 +171,25 @@ sequence are in [`AdminRelease.md`](AdminRelease.md). RC1 targets Windows x64 on
       to baseline.
 - [ ] UiGallery covers loading, empty, information, warning, error, success, disabled, focus, long/scroll content,
       destructive modal, toast, scale, contrast, and reduced-motion states.
-- [ ] `P0-GAME-01` approves the tested frozen candidate. The generic startup,
+- [ ] Run sixteen Unity `6000.0.23f1` authoring cycles on the frozen candidate. They are mandatory whether or not
+      live game acceptance runs.
+- [ ] Freeze the live game acceptance mode at preflight with `-LiveGameAcceptance`. In `run` (the default),
+      `P0-GAME-01` approves the tested frozen candidate. The generic startup,
       first-party GameCode loading, and gamecompat checks are necessary but do not
       replace this redesign's full acceptance: all fifteen SDK cases, ten game
-      lifecycle cycles, sixteen Unity authoring cycles, and every case in
+      lifecycle cycles, and every case in
       `tests/gamemode-release-acceptance.json`. Record isolation and actual native
-      and visual observations; unavailable checks remain pending.
-- [ ] Local Windows acceptance passes from the frozen SHA with all canonical markers, main-thread assertions, ten
-      resource cycles, exact package hashes, and a scrubbed validation summary.
+      and visual observations; unavailable checks remain pending. In `not-run`, allowed by the owner's 2026-09-24
+      disposition while `P0-GAME-01` is advisory, no game is launched, the candidate records `result: "not-run"`,
+      and `P0-GAME-01` stays blocked. Never record a pass that did not run.
+- [ ] In `run` mode, local Windows acceptance passes from the frozen SHA with all canonical markers, main-thread
+      assertions, ten resource cycles, exact package hashes, and a scrubbed validation summary.
 - [ ] The exact Windows archive matches its reviewed distribution mode. Signed mode requires all three
       executables signed and timestamped by the pinned certificate. Explicit unsigned mode requires all three
       unsigned; a missing certificate never selects that mode implicitly.
-- [ ] An independent clean-machine author with only Robotopia, the release archive, and its pinned .NET SDK creates
-      and launches a working safe code mod in at most five commands, without a source checkout or Unity installation.
+- [ ] Optional for RC1 (`P1-E2E-01` accepted risk, `EVID-P1-E2E-01-0001`): an independent clean-machine author with
+      only Robotopia, the release archive, and its pinned .NET SDK creates and launches a working safe code mod in at
+      most five commands, without a source checkout or Unity installation.
 
 ## 8. Platform release archives
 
@@ -192,8 +205,9 @@ sequence are in [`AdminRelease.md`](AdminRelease.md). RC1 targets Windows x64 on
 - [ ] Clean-machine install, repair, profiles, dependency preview, normal/safe-mode launch, failure recovery,
       diagnostics, confirmed in-app update, forced rollback, manual fallback,
       and uninstall pass for each supported platform.
-- [ ] Native visual/accessibility QA covers all screens and state families at 800x600, 100–200% text scale, high
-      contrast, reduced motion, keyboard-only/focus, screen reader, long paths, and no-overflow behavior.
+- [ ] Optional for RC1 (`P1-UX-01` accepted risk, `EVID-P1-UX-01-0001`): native visual/accessibility QA covers all
+      screens and state families at 800x600, 100–200% text scale, high contrast, reduced motion, keyboard-only/focus,
+      screen reader, long paths, and no-overflow behavior.
 
 Future Linux/Proton work is outside RC1, with no promised release version. The earlier Ubuntu 24.04/WSL2 and
 Proton `10.0-4` plan did not establish native acceptance or support. A future platform needs separately reviewed

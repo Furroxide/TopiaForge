@@ -180,16 +180,20 @@ them only after that rehearsal, then rerun the governance audit.
 
 1. Merge the fully green release PR into `main` with a merge commit and freeze that final merge SHA.
 2. On the administrator-controlled Windows workstation, run `release-admin.ps1 preflight`. It requires clean `main`
-   equal to `origin/main`, the four approved non-game blocking gates at that SHA, repository-administrator GitHub
+   equal to `origin/main`, the four approved blocking gates at that SHA, repository-administrator GitHub
    authentication, matching live governance, and the applicable pinned toolchains. Use the explicit source-game,
-   external state and approved isolated-QA record paths described in [`AdminRelease.md`](AdminRelease.md).
-   Only the game gate may await the candidate; catalog `ready` approves inventory only.
-3. Build the canonical ecosystem twice byte-identically, then build and validate the Windows x64 archive. Perform
-   the exact SDK, Unity authoring and Robotopia acceptance in the admitted isolated Windows user/session or VM.
+   external state and, for a live run, approved isolated-QA record paths described in
+   [`AdminRelease.md`](AdminRelease.md). Preflight also freezes `-LiveGameAcceptance`: `run` by default, or
+   `not-run` while `P0-GAME-01` is advisory under the owner's 2026-09-24 disposition. Catalog `ready` approves
+   inventory only.
+3. Build the canonical ecosystem twice byte-identically, then build and validate the Windows x64 archive. Run the
+   sixteen Unity authoring cycles; in `run` mode also perform the exact SDK and Robotopia acceptance in the admitted
+   isolated Windows user/session or VM. A `not-run` build launches no game and records that it did not.
    Private evidence stays outside public assets. A successful `build` stops at `built`; it does not authorize staging.
 4. Prepare and review `release-candidate-readiness-v1.json` and `release-candidate-acceptance-v1.json` for those exact
    source, contract, payload and evidence bytes. Run `qualify` to validate them and atomically record `accepted`.
-   Only the game row may supersede the tracked register; accepted payloads cannot be rebuilt or repacked.
+   Only the game row may supersede the tracked register, and only with an approval backed by a performed run; a
+   `not-run` candidate keeps it unchanged. Accepted payloads cannot be rebuilt or repacked.
 5. Run `stage` only for that accepted candidate. It creates or verifies the signed annotated `v<semver>` tag and the
    matching draft, then uploads the exact human-owned allowlist. For current RC1 this is **18 assets**: the catalog's
    **14 payloads** (one Windows archive and thirteen mods), one `release-platform-bundle-v1-windows-x64.json`,

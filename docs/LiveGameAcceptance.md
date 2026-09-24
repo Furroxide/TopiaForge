@@ -7,8 +7,16 @@ The safe SDK has an instrumented, non-distributable acceptance mod under
 
 ## Administrator-controlled launch gates
 
-The administrator-controlled Windows workstation must run the complete Windows
-matrix against the frozen candidate. RC1 is Windows x64 only; Linux/Proton
+Live game acceptance is optional for `0.1.0-rc.1`. On 2026-09-24 the project
+owner made all game QA optional for RC1, so `P0-GAME-01` is advisory: a
+candidate may skip the run, and then records exactly that (`result: "not-run"`)
+instead of any game evidence. The skipped run is never reported as passed, and
+the sixteen Unity authoring cycles below stay mandatory either way.
+
+When live acceptance is run, nothing on this page changes: the
+administrator-controlled Windows workstation must run the complete Windows
+matrix against the frozen candidate with the same harness, isolation and
+evidence rules. RC1 is Windows x64 only; Linux/Proton
 acceptance is unavailable until native isolation is implemented and reviewed.
 Real keyboard, mouse, gamepad, audio, microphone,
 and rendered output are required. Unit tests and source-only CI cannot mark a live
@@ -24,22 +32,28 @@ The redesign adds the complete case matrix in
 [`tests/gamemode-release-acceptance.json`](../tests/gamemode-release-acceptance.json).
 Its 36 cases include generated Open Sandbox geometry, environment and kill plane,
 both discovery sources, authored markers, Zombies, Sandbox F5/pause, Free Play
-without Sandbox, restart/menu, and startup/teardown/native-drain failures. All
-fifteen SDK cases and ten game lifecycle cycles remain required. Sixteen Unity
-6000.0.23f1 authoring cycles are a separate requirement; they do not replace game
-cycles. Runtime Unity 6000.0.31f1 is a different version identity.
+without Sandbox, restart/menu, and startup/teardown/native-drain failures. When
+the live run is performed, all fifteen SDK cases and ten game lifecycle cycles
+remain required. Sixteen Unity 6000.0.23f1 authoring cycles are a separate
+requirement that applies whether or not the live run happens; they do not replace
+game cycles. Runtime Unity 6000.0.31f1 is a different version identity.
 
 After testing, the reviewed `release-candidate-acceptance-v1.json` binds those
 observations to the exact source, payload inventory, handoff and game/authoring
 receipts. Its companion decision may approve only the tracked GAME row; other
-gate decisions cannot change. `release-admin.ps1 qualify` validates the records
-and freezes `accepted` state before any staging. Evidence references require
-actual reviewer authorization; synthetic fixture hashes never count as evidence.
+gate decisions cannot change. A candidate that did not run live acceptance
+instead records `result: "not-run"` with the owner's disposition reference and
+the Unity authoring receipt, carries no game cases, isolation or reviewer
+evidence, and keeps the tracked GAME row unchanged. `release-admin.ps1 qualify`
+validates the records and freezes `accepted` state before any staging. Evidence
+references require actual reviewer authorization; synthetic fixture hashes never
+count as evidence.
 
 Acceptance evidence is valid only for the exact frozen candidate package hashes recorded by the
 harness in `acceptance-result.json` and `last-run.json`. Until the automated Windows result and
 the evidence for every platform in `artifactPolicy` match the candidate, `P0-GAME-01` stays
-blocked. RC1 custom-world live acceptance remains scoped to authorized Windows hosts.
+blocked; while the gate is advisory by disposition, a blocked GAME row no longer holds an RC1
+candidate. RC1 custom-world live acceptance remains scoped to authorized Windows hosts.
 The old Proton runner and its schema2 evidence path are retired; changing the platform policy
 cannot restore them. The internal `AdminRelease.md` runbook records the future Linux prerequisites.
 Any future same-host evidence must disclose that it is non-independent. Mods execute as
@@ -70,7 +84,7 @@ installation. These records contain private paths and OS identities; keep them o
 the QA host. Public qualification carries reviewed evidence hashes and results,
 never the full acknowledgement, SID, user paths or raw logs.
 
-Run the complete launch-blocking matrix on an authorized Robotopia build-2478 host (all cases are
+Run the complete matrix on an authorized Robotopia build-2478 host (all cases are
 required by default):
 
 ```powershell
@@ -123,9 +137,9 @@ layout when owned-process termination cannot be confirmed.
 with the `0.x` governance change. The workbench is a Sandbox feature, and the
 checklist below remains additional manual QA for
 `mods/TopiaForge.Sandbox/CreatorTools`. It does not create a separate creator gate.
-The Sandbox F5/pause and session-cleanup cases in the gamemode release inventory
-remain mandatory under `P0-GAME-01`; a mod-load smoke does not replace that full
-SDK and redesign acceptance matrix.
+Whenever live acceptance runs, the Sandbox F5/pause and session-cleanup cases in the
+gamemode release inventory remain mandatory under `P0-GAME-01`; a mod-load smoke does
+not replace that full SDK and redesign acceptance matrix.
 
 The shipped controller opens a `CreatorProjectScope.Sandbox` session. Its production
 global-mutation safety service is currently unavailable: global success paths below
@@ -178,9 +192,10 @@ The supplementary [Sandbox native runner and verifier](https://github.com/Furrox
 now have a separate closed native-annex schema, original-process isolation binding,
 Windows input/capture broker and exact-byte media verification. Local Editor results
 are recorded in [launch evidence](https://github.com/Furroxide/TopiaForge/blob/main/docs/internal/launch/Evidence.md#sandbox-automation-stages-3-6-checkpoint).
-Game execution still requires admitted QA identity, actual persistence/device records
-and completion of the remaining native actuation gaps. Development annexes always
+Game execution still requires admitted QA identity and actual persistence/device records;
+native matrix protocol v2 closes the actuation gaps in source. Development annexes always
 report `qualifiesRelease: false` and do not replace this candidate acceptance matrix.
+Like the live run itself, this supplementary native matrix is optional for RC1.
 
 The local Windows run extracts its candidate developer payload, uses only its
 packaged CLI to create a fresh minimal mod outside the extraction, and passes that

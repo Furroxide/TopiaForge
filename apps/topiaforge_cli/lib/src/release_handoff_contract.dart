@@ -201,6 +201,7 @@ void _validatePlatformBundle(
   final requiredEvidence = _requiredEvidenceFor(
     bundle.platform,
     context.policy,
+    liveGameAcceptanceRun: _runsLiveGameAcceptance(bundle),
   );
   if (!_sameSet(bundle.validations.keys.toSet(), requiredEvidence)) {
     throw StateError(
@@ -266,8 +267,22 @@ void _validateHandoff(
         '${reference.platform} handoff signing state is invalid.',
       );
     }
-    final evidence = _requiredEvidenceFor(reference.platform, context.policy);
-    if (!_sameSet(reference.validations.keys.toSet(), evidence)) {
+    // A reference carries only its QA digest, so either evidence set is
+    // admissible here. `verify` then requires each reference to equal its
+    // platform bundle, whose set was derived from that bundle's own receipt.
+    final evidence = reference.validations.keys.toSet();
+    if (!_sameSet(
+          evidence,
+          _requiredEvidenceFor(reference.platform, context.policy),
+        ) &&
+        !_sameSet(
+          evidence,
+          _requiredEvidenceFor(
+            reference.platform,
+            context.policy,
+            liveGameAcceptanceRun: false,
+          ),
+        )) {
       throw StateError(
         '${reference.platform} handoff validation set is invalid.',
       );
@@ -395,21 +410,37 @@ String _windowsQaSigningState(TopiaForgeReleasePolicy policy) =>
 ///
 /// An unsigned Windows build produces no Authenticode evidence, so requiring
 /// the key would have made the bundle unsatisfiable; leaving it required *and*
-/// satisfied would have meant fabricating it.
+/// satisfied would have meant fabricating it. A Windows build that did not run
+/// live game acceptance, as the owner's P0-GAME-01 disposition allows, has no
+/// `robotopia` evidence for the same reason.
 ///
 /// This is the single source of truth for the set. Anything that needs to know
 /// which evidence keys exist for a platform must ask here rather than keep its
 /// own list, or the two drift and only the unsigned path notices.
 Set<String> _requiredEvidenceFor(
   String platform,
-  TopiaForgeReleasePolicy policy,
-) {
+  TopiaForgeReleasePolicy policy, {
+  bool liveGameAcceptanceRun = true,
+}) {
   final evidence = _requiredEvidence[platform];
   if (evidence == null) {
     throw StateError('Unsupported release handoff platform: $platform.');
   }
-  if (platform == 'windows-x64' && policy.distributesWindowsUnsigned) {
-    return evidence.where((key) => key != 'authenticode').toSet();
-  }
-  return evidence;
+  if (platform != 'windows-x64') return evidence;
+  return evidence.difference({
+    if (policy.distributesWindowsUnsigned) 'authenticode',
+    if (!liveGameAcceptanceRun) 'robotopia',
+  });
+}
+
+/// Whether a platform bundle records a live game acceptance run.
+///
+/// Its own QA summary decides: the Windows game receipt is either the full pass
+/// receipt or the truthful `not-run` receipt, and the evidence set follows it,
+/// so neither receipt can travel with the other's validations. No other
+/// platform has an optional run.
+bool _runsLiveGameAcceptance(ReleasePlatformBundle bundle) {
+  if (bundle.platform != 'windows-x64') return true;
+  final game = bundle.qa['robotopia'];
+  return game is! Map || game['result'] != 'not-run';
 }

@@ -58,7 +58,8 @@ foreach ($requiredParameter in @(
         "ProtonExecutable",
         "SteamRoot",
         "CompatDataRoot",
-        "PythonPath"
+        "PythonPath",
+        "LiveGameAcceptance"
     )) {
     Assert-True ($parameterNames -contains $requiredParameter) (
         "release-admin.ps1 is missing -$requiredParameter."
@@ -897,6 +898,7 @@ exit 0
                 [Int64]$gameBuildMetadata.windowsFilesManifest.fileCount
             gameExecutableSha256 =
                 [string]$gameBuildMetadata.windowsFilesManifest.gameExecutableSha256
+            liveGameAcceptance = "passed"
             checks = @(
                 "archive-smoke",
                 "embedded-cli",
@@ -945,6 +947,94 @@ exit 0
             -Validation $windowsValidationObject -OutputPath $recomputedQa
         Assert-ByteIdenticalMetadata -ExpectedPath $recomputedQa `
             -ActualPath $frozenQa -Label "Exact-rerun Windows QA summary"
+
+        # A build frozen as not-run keeps the Unity evidence, records
+        # "not-run", carries no game evidence and must leave none behind.
+        $notRunEvidence = Join-Path $testRoot "not-run-evidence"
+        New-Item -ItemType Directory -Force -Path (
+            Join-Path $notRunEvidence "windows/unity"
+        ) | Out-Null
+        Copy-Item -LiteralPath $unityEvidencePath -Destination (
+            Join-Path $notRunEvidence "windows/unity/lifecycle.json"
+        )
+        $notRunValidation = $windowsValidation | ConvertTo-Json -Depth 8 |
+            ConvertFrom-Json
+        $notRunValidation.liveGameAcceptance = "not-run"
+        $notRunValidation.checks = @(
+            @($notRunValidation.checks) |
+                Where-Object { $_ -cne "robotopia-acceptance" }
+        )
+        $notRunValidation.evidenceSha256 = [pscustomobject]@{
+            unity = Get-Sha256 $unityEvidencePath
+        }
+        $originalModeEvidenceDirectory = $script:evidenceDirectory
+        $script:evidenceDirectory = $notRunEvidence
+        $script:LiveGameAcceptance = "not-run"
+        try {
+            Assert-WindowsRuntimeEvidence -SourceSha $sourceSha `
+                -Validation $notRunValidation
+            Assert-ThrowsMatch -Action {
+                Assert-WindowsRuntimeEvidence -SourceSha $sourceSha `
+                    -Validation $windowsValidationObject
+            } -Pattern "evidenceSha256 does not contain the exact" `
+                -Message "A not-run build accepted live game evidence."
+            $claimedPass = $notRunValidation | ConvertTo-Json -Depth 8 |
+                ConvertFrom-Json
+            $claimedPass.liveGameAcceptance = "passed"
+            Assert-ThrowsMatch -Action {
+                Assert-WindowsRuntimeEvidence -SourceSha $sourceSha `
+                    -Validation $claimedPass
+            } -Pattern "frozen live game acceptance mode" `
+                -Message "A not-run build accepted a passed acceptance claim."
+
+            $notRunValidationPath = Join-Path $notRunEvidence `
+                "validation-windows.json"
+            $notRunValidation | ConvertTo-Json -Depth 8 |
+                Set-Content -LiteralPath $notRunValidationPath -Encoding utf8NoBOM
+            $notRunQa = Join-Path $notRunEvidence "windows/windows-qa-summary.json"
+            $notRunQaAgain = Join-Path $testRoot "windows-qa-not-run-recomputed.json"
+            foreach ($qaOutput in @($notRunQa, $notRunQaAgain)) {
+                New-WindowsQaSummary -SourceSha $sourceSha `
+                    -CanonicalSha $canonicalSha -WindowsArchive $windowsArchive `
+                    -ValidationPath $notRunValidationPath `
+                    -Validation $notRunValidation -OutputPath $qaOutput
+            }
+            Assert-ByteIdenticalMetadata -ExpectedPath $notRunQaAgain `
+                -ActualPath $notRunQa -Label "Exact-rerun not-run Windows QA summary"
+            $notRunReceipt = (Get-Content -LiteralPath $notRunQa -Raw |
+                    ConvertFrom-Json).robotopia
+            $inventorySha = Get-BytesSha256 (Get-GitBlobBytes -SourceSha $sourceSha `
+                    -GitPath "tests/live-game-acceptance.json")
+            Assert-True (
+                (@($notRunReceipt.PSObject.Properties.Name) -join ",") -ceq (
+                    "result,gameArchiveSha256,gameExecutableSha256," +
+                    "gameFilesManifestSha256,gameFilesVerified,caseInventorySha256"
+                ) -and
+                [string]$notRunReceipt.result -ceq "not-run" -and
+                [string]$notRunReceipt.gameArchiveSha256 -ceq
+                    [string]$notRunValidation.gameArchiveSha256 -and
+                [string]$notRunReceipt.gameExecutableSha256 -ceq
+                    [string]$notRunValidation.gameExecutableSha256 -and
+                [string]$notRunReceipt.gameFilesManifestSha256 -ceq
+                    [string]$notRunValidation.gameFilesManifestSha256 -and
+                [Int64]$notRunReceipt.gameFilesVerified -eq
+                    [Int64]$notRunValidation.gameFilesVerified -and
+                [string]$notRunReceipt.caseInventorySha256 -ceq $inventorySha
+            ) "The not-run QA summary is not the exact truthful game receipt."
+
+            New-Item -ItemType Directory -Force -Path (
+                Join-Path $notRunEvidence "windows/robotopia"
+            ) | Out-Null
+            Assert-ThrowsMatch -Action {
+                Assert-WindowsRuntimeEvidence -SourceSha $sourceSha `
+                    -Validation $notRunValidation
+            } -Pattern "game evidence remains" `
+                -Message "A not-run build accepted leftover live game evidence."
+        }
+        finally {
+            $script:LiveGameAcceptance = "run"
+            $script:evidenceDirectory = $originalModeEvidenceDirectory
+        }
 
         Set-Item Function:Get-VerifiedReleaseAcceptanceIsolation -Value $originalIsolationVerifier
         Set-Item Function:Get-DartAndFlutter -Value $originalIsolationSdk

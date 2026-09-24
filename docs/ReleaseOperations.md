@@ -22,12 +22,16 @@ evidence path exist. The retired runner cannot be restored by a policy change; s
 that it is non-independent. The Windows workstation drives
 `release-admin.ps1`. Its two canonical ecosystem builds must be byte-identical before packaging.
 
-Private preparation requires the four non-game blocking approvals in the frozen twelve-gate register and the
-policy-approved final `main` merge SHA. Only the game gate may await the exact candidate. Run the mandatory matrix
-in an isolated Windows user/session or VM that isolates Unity's persistent data and never accesses the normal
-user's data. A separate BepInEx profile alone is insufficient. Acceptance requires all 36 redesign cases,
-all 15 SDK cases, 10 game lifecycle cycles, and 16 Unity authoring cycles from the tracked inventories in
-[`LiveGameAcceptance.md`](LiveGameAcceptance.md). Historical smoke logs or a build pass cannot replace those cases.
+Private preparation requires the four blocking approvals (`P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01` and
+`P0-CRED-01`) in the frozen twelve-gate register and the policy-approved final `main` merge SHA. Live game
+acceptance is optional for RC1: the owner's 2026-09-24 disposition made `P0-GAME-01` advisory, and a candidate
+that skips the run records that it was not run. When the matrix is run, run it in an isolated Windows
+user/session or VM that isolates Unity's persistent data and never accesses the normal user's data. A separate
+BepInEx profile alone is insufficient. A performed acceptance requires all 36 redesign cases, all 15 SDK cases and
+10 game lifecycle cycles from the tracked inventories in [`LiveGameAcceptance.md`](LiveGameAcceptance.md); the
+16 Unity authoring cycles are mandatory for every candidate. Historical smoke logs or a build pass cannot replace
+those cases. Native UX/accessibility review and independent player/author journeys are accepted risks for RC1
+(`EVID-P1-UX-01-0001`, `EVID-P1-E2E-01-0001`), not completed checks.
 
 The durable sequence is `preflight → platforms-built → built → accepted → staged → dispatch-requested → published`.
 A successful `build` seals the tested payloads and `release-handoff-v1` at `built`. Prepare and review
@@ -38,8 +42,8 @@ can never qualify or publish. See [`AdminRelease.md`](AdminRelease.md) for comma
 
 Unsigned Windows RC1 is authorized and recorded in the release policy. The construction repairs are implemented
 and synthetic regressions pass; see the revision-specific
-[verification record](internal/gamemode-contract/Status.md). The exact candidate build and isolated acceptance remain
-pending; no candidate is qualified. In unsigned mode, all three Windows executables must be verified unsigned, and the
+[verification record](internal/gamemode-contract/Status.md). The exact candidate build remains pending and isolated
+live acceptance is optional; no candidate is qualified. In unsigned mode, all three Windows executables must be verified unsigned, and the
 handoff CMS asset and its decision digest must be absent. In signed mode, the launcher, CLI and GameCompat extractor
 require Authenticode signatures and RFC 3161 timestamps from the exact pinned certificate; the detached handoff CMS
 must also pass its certificate and timestamp checks. A missing credential never selects unsigned mode.

@@ -62,6 +62,8 @@ final class ReleaseCandidateQualification {
       targetSha: targetSha,
       expectedReleaseVersion: expectedReleaseVersion,
     );
+    // While P0-GAME-01 is advisory this covers exactly the four release-fatal
+    // gates. A blocking GAME gate could only be approved by the candidate.
     for (final gate in base.gates) {
       if (gate.id != 'P0-GAME-01' && gate.blocksRelease) {
         throw StateError('Required tracked approval is missing: ${gate.id}.');
@@ -327,7 +329,15 @@ ReleaseReadinessDecision _effectiveGates(
     final original = baseGates[index] as Map;
     final actual = gates[index] as Map;
     if (original['id'] == 'P0-GAME-01') {
-      if (actual['id'] != original['id'] || actual['status'] != 'approved') {
+      final approved =
+          actual['id'] == original['id'] && actual['status'] == 'approved';
+      // A candidate whose live acceptance was not run keeps the tracked row
+      // byte for byte. That is admissible only while the tracked row is
+      // advisory: if GAME is restored to blocking, it must be approved.
+      final dispositioned =
+          original['enforcement'] == 'advisory' &&
+          canonicalReleaseJson(original) == canonicalReleaseJson(actual);
+      if (!approved && !dispositioned) {
         throw StateError('Candidate game approval is required.');
       }
     } else if (canonicalReleaseJson(original) != canonicalReleaseJson(actual)) {

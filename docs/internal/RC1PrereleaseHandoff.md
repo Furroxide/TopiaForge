@@ -32,15 +32,14 @@ to redistribute assets or evidence of a successful test.
   review on the final release head, alongside all other required checks and CodeQL.
 - Obtain actual attributable approvals for `P0-IP-01`, `P0-OSS-01`,
   `P0-PRIV-01`, and `P0-CRED-01`, and integrate their valid safe references.
-  Their tracked records are blocked with no evidence IDs. Only `P0-GAME-01`
-  may await the final candidate. Credential closure was previously deferred;
+  Their tracked records are blocked with no evidence IDs. `P0-GAME-01` is
+  advisory under the owner's disposition. Credential closure was previously deferred;
   release intent does not supply closure evidence.
-- Review and decide the game-QA policy PR. Under the user's 2026-09-24
-  decision it makes `P0-GAME-01` advisory with an owner disposition, gives
-  `P1-UX-01` and `P1-E2E-01` accepted-risk dispositions, and adds a frozen
-  `-LiveGameAcceptance run|not-run` build mode with a truthful not-run
-  acceptance record. The sixteen Unity authoring cycles stay mandatory. It
-  takes effect only when the user merges it.
+- The game-QA policy is in effect. Under the user's 2026-09-24 decision,
+  `P0-GAME-01` is advisory with an owner disposition and stays blocked.
+  `P1-UX-01` and `P1-E2E-01` carry accepted-risk dispositions. A frozen
+  `-LiveGameAcceptance run|not-run` build mode writes a truthful not-run
+  acceptance record, and the sixteen Unity authoring cycles stay mandatory.
 - Preserve all advisory rows and record actual dated owner dispositions where
   evidence remains incomplete. Keep private review records, raw logs and
   credentials outside Git and public release assets.
@@ -116,8 +115,8 @@ The [launch evidence](launch/Evidence.md#build-2478-retarget-2026-09-24) records
 the audit and results. It also records what did not run: no game was launched,
 and no native Sandbox row, provisioning retry or candidate acceptance ran.
 Source tests and Editor results are not candidate acceptance. The user answered
-the full-versus-reduced scope question; the resulting policy change is the
-separate PR above.
+the full-versus-reduced scope question; the resulting policy change is in
+effect.
 
 ## After the user merges
 
@@ -129,8 +128,7 @@ separate PR above.
    must report `eligible-for-private-build`; it does not grant SHIP approval.
 3. Build and test the exact candidate bytes. Complete the sixteen Unity
    authoring cycles. The SDK cases, gamemode cases and isolated native game
-   acceptance are required unless the game-QA policy PR has merged. After that
-   merge they are optional, and a `not-run` build records that truthfully.
+   acceptance are optional; a `not-run` build records that truthfully.
    Preserve failures and incomplete observations; do not substitute hosted
    dry-run artifacts or development fixtures for the candidate.
 4. Obtain reviewed detached candidate readiness and acceptance records and run

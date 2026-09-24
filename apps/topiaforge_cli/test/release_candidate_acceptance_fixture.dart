@@ -63,4 +63,37 @@ Map<String, Object?> candidateAcceptanceFixture({
   };
 }
 
+/// Synthetic not-run record. Its disposition reference and digest are fixture
+/// values, never a real owner decision.
+Map<String, Object?> candidateNotRunAcceptanceFixture({
+  required Map<String, Object?> gameMetadata,
+  required Map<String, Object?> redesignInventory,
+  required ReleaseHandoffVerification handoff,
+  required String contractSha256,
+  required String handoffSha256,
+  required List<Map<String, Object?>> payloads,
+  String repository = 'Furroxide/TopiaForge',
+}) {
+  final qa = handoff.platformBundles['windows-x64']!.qa;
+  return {
+    'schema': 'release-candidate-acceptance-v1',
+    'repository': repository,
+    'releaseVersion': handoff.handoff.version,
+    'targetSha': handoff.handoff.targetSha,
+    'contractSha256': contractSha256,
+    'handoffSha256': handoffSha256,
+    'payloads': payloads,
+    'gameBuildId': gameMetadata['buildId'],
+    'result': 'not-run',
+    'authoringCycles': redesignInventory['requiredAuthoringCycles'],
+    'authoringEvidenceSha256': (qa['unity'] as Map)['evidenceSha256'],
+    'disposition': <String, Object?>{
+      'evidenceId': 'EVID-P0-GAME-01-0001',
+      'role': 'project-owner',
+      'reference': 'review:fixture-game-disposition',
+      'sha256': _digest('fixture:EVID-P0-GAME-01-0001:project-owner'),
+    },
+  };
+}
+
 String _digest(String value) => sha256.convert(utf8.encode(value)).toString();

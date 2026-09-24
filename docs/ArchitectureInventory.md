@@ -61,6 +61,7 @@ from the thirteen-package release payload.
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
 | World and TopiaForgeUi bundle manifests | Exact Unity `6000.0.23f1`, target, inputs, and SHA-256 provenance | Unity batch builders produce; CLI/package/runtime validate |
 | Release policy/BOM/catalog | Product/component versions, signing trust, expected artifacts, and local handoff evidence are checked against source metadata; stable Pages metadata remains manual-only | Admin orchestrator and CLI produce; protected GitHub finalizer verifies |
+| Detached candidate qualification V1 | `release-candidate-readiness-v1` and `release-candidate-acceptance-v1` bind the exact source, contracts, payloads and handoff. The acceptance record is either `passed` (isolated live run, cases, isolation and GAME reviewer evidence) or `not-run` (owner disposition and the 16 Unity authoring cycles, no game evidence); only `passed` may pair with an approved `P0-GAME-01` row | Administrator prepares and `release-admin.ps1 qualify` records; `release validate-readiness` qualifies locally and in the protected finalizer |
 | Sandbox automation annex V1 | Strict private development evidence with source/spec/package/runtime/process/isolation/device/artifact binding; always `qualifiesRelease: false` | Supplementary native CLI/broker and independent verifier; separate from closed candidate/live evidence schemas |
 | Launcher update metadata V1 | Ed25519-signed exact UTF-8 payload with immutable GitHub asset URLs, hashes, sizes, entry inventory, and complete install layouts | Protected GitHub finalizer signs after verifying admin-built bytes; launcher verifies before parsing and reconciles with GitHub |
 
@@ -102,8 +103,8 @@ author identity is supplied.
 - RC1 declares one Windows x64 archive plus thirteen mod packages: fourteen catalog payloads. The canonical
   ecosystem embeds the two VPM packages and the same thirteen mods. Two independent ecosystem builds must be
   byte-identical, and nested payload hashes must match the reviewed ecosystem inventory.
-- Production Windows bytes and isolated Unity/Robotopia acceptance are produced on administrator-controlled
-  machines. RC1 has no Linux or macOS archive. Retained WSL2/Proton and generic macOS tooling require a separately
+- Production Windows bytes, the pinned-Unity authoring evidence and, when the candidate runs it, isolated
+  Robotopia acceptance are produced on administrator-controlled machines. RC1 has no Linux or macOS archive. Retained WSL2/Proton and generic macOS tooling require a separately
   reviewed policy change before use in a future candidate, and publication requires platform acceptance.
   Same-host evidence must be identified accurately where applicable.
 - RC1 stages eighteen human-owned assets: the fourteen catalog payloads, one Windows
@@ -137,6 +138,8 @@ The codebase can enforce but cannot choose the project license, rights to Roboto
 compatibility work, privacy/backend policy, registry governance, or package trust root. It also cannot synthesize
 signing credentials, GitHub rulesets/environments, legally authorized Robotopia access, screen-reader review, or
 Robotopia profiler/gameplay evidence. RC1 explicitly targets Windows x64 with unsigned distribution under the
-[release policy](../release/release-policy.json). Exact-byte qualification and isolated native acceptance remain
-required. Any future platform or signed distribution needs separately reviewed policy, tooling and acceptance;
+[release policy](../release/release-policy.json). Exact-byte qualification and the pinned-Unity authoring cycles
+remain required. Isolated live game acceptance is optional for RC1 under the owner's 2026-09-24 disposition of
+`P0-GAME-01`; a candidate that skips it records that it did not run, and the gate stays blocked. Any future
+platform or signed distribution needs separately reviewed policy, tooling and acceptance;
 adding Linux to policy does not restore the retired Proton runner. See [AdminRelease](AdminRelease.md).

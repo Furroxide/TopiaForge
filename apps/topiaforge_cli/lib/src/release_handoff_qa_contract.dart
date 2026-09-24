@@ -189,7 +189,11 @@ void _validateWindowsQa(
   // build carries no `authenticode` validation, so filter through the same
   // source of truth the bundle was validated against rather than restating the
   // set here.
-  final required = _requiredEvidenceFor(bundle.platform, context.policy);
+  final required = _requiredEvidenceFor(
+    bundle.platform,
+    context.policy,
+    liveGameAcceptanceRun: _runsLiveGameAcceptance(bundle),
+  );
   const validationBound = ['package', 'toolchains', 'authenticode'];
   for (final name in validationBound.where(required.contains)) {
     if (bundle.validations[name]!.evidenceSha256 != validationSha) {
@@ -221,6 +225,10 @@ void _validateRobotopiaQa(
   _RobotopiaGameIdentity gameIdentity,
 ) {
   final qa = (value as Map).cast<String, Object?>();
+  if (qa['result'] == 'not-run') {
+    _validateNotRunRobotopiaQa(bundle, qa, inventory, gameIdentity);
+    return;
+  }
   for (final field in const [
     'evidenceSha256',
     'gameArchiveSha256',
@@ -248,6 +256,43 @@ void _validateRobotopiaQa(
     'Windows Robotopia QA',
   );
   _requireReleaseJourney(qa['releaseJourney'], 'Windows Robotopia QA');
+}
+
+/// A truthful record that live game acceptance did not run for this candidate.
+///
+/// The owner's P0-GAME-01 disposition makes the run optional, not the binding:
+/// the receipt still names the verified official game bytes and the tagged case
+/// inventory a run would have used. It carries no evidence digest, and the
+/// bundle carries no `robotopia` validation, because nothing ran to vouch for.
+void _validateNotRunRobotopiaQa(
+  ReleasePlatformBundle bundle,
+  Map<String, Object?> qa,
+  _ReleaseQaCaseInventory inventory,
+  _RobotopiaGameIdentity gameIdentity,
+) {
+  for (final field in const [
+    'caseInventorySha256',
+    'gameArchiveSha256',
+    'gameExecutableSha256',
+    'gameFilesManifestSha256',
+  ]) {
+    _requireQaDigest(qa, field, 'Windows Robotopia not-run QA');
+  }
+  if (qa['gameArchiveSha256'] != gameIdentity.archiveSha256 ||
+      qa['gameExecutableSha256'] != gameIdentity.gameExecutableSha256 ||
+      qa['gameFilesManifestSha256'] != gameIdentity.filesManifestSha256 ||
+      qa['gameFilesVerified'] != gameIdentity.filesVerified ||
+      qa['caseInventorySha256'] != inventory.sha256) {
+    throw StateError(
+      'Windows Robotopia not-run QA does not bind the pinned game and the '
+      'tagged case inventory.',
+    );
+  }
+  if (bundle.validations.containsKey('robotopia')) {
+    throw StateError(
+      'Windows Robotopia not-run QA cannot carry live acceptance evidence.',
+    );
+  }
 }
 
 _RobotopiaGameIdentity _loadRobotopiaGameIdentity(
