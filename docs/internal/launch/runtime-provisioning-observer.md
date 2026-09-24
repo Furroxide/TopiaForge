@@ -169,6 +169,6 @@ RC1 now pins Robotopia build 2478. Retry `20260911T183026Z` and its copy `game-p
 1. A fresh `game-provisioning-<timestamp>` copy from `source-game-2478`, made by the copier with the `game-copy-2478.json` digest.
 2. A new source checkpoint covering the integrated loader and broker. The v4 checkpoint's worktree has changed, so its preparation script refuses it.
 3. A preparation step bound to the 415-file 2478 inventory.
-4. The outbound block for the new copy. `set-sandbox-qa-network-isolation.ps1` now accepts build copies and their receipts.
+4. The outbound block for the new copy. `set-sandbox-qa-network-isolation.ps1` now accepts build copies. Like the copier, it requires the private record directory and the reviewed receipt digest, so the retired v5 elevated step can no longer call it unchanged.
 
 Dispatch still needs the user's confirmed operator session.

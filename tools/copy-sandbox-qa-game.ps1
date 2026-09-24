@@ -2,7 +2,6 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$SourceGame,
-    [Parameter(Mandatory)][string]$MetadataPath,
     [Parameter(Mandatory)][string]$QaRoot,
     [Parameter(Mandatory)][string]$ReceiptPath
 )
@@ -16,6 +15,9 @@ Set-StrictMode -Version Latest
 # pins, is the exact inventory, so BepInEx, Doorstop configuration, winhttp.dll,
 # launcher credentials, logs, saves and user profiles are never copied. Earlier
 # copies, including the original source-game and game trees, stay untouched.
+# The build is always this checkout's pin; no caller-supplied metadata can select another.
+$repositoryRoot = Split-Path $PSScriptRoot
+$metadataPath = Join-Path $repositoryRoot '.github/robotopia-game-build.json'
 $source = [IO.Path]::GetFullPath($SourceGame).TrimEnd('\')
 $qa = [IO.Path]::GetFullPath($QaRoot).TrimEnd('\')
 if ($qa -cne $script:SandboxQaRoot) { throw 'Use the explicitly provisioned QA root.' }
@@ -31,7 +33,9 @@ if (Test-Path -LiteralPath $ReceiptPath) { throw 'Refusing to overwrite a copy r
 
 # The release verifier checks the manifest digest and count against the pin,
 # every listed file's size and digest, and the independently pinned executable.
-$official = & (Join-Path (Split-Path $PSScriptRoot) 'tools/release/verify-robotopia-install.ps1') -GameDirectory $source -MetadataPath $MetadataPath | ConvertFrom-Json
+$metadataSha256 = (Get-FileHash -LiteralPath $metadataPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$official = & (Join-Path $repositoryRoot 'tools/release/verify-robotopia-install.ps1') -GameDirectory $source -MetadataPath $metadataPath | ConvertFrom-Json
+if ((Get-FileHash -LiteralPath $metadataPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $metadataSha256) { throw 'Pinned build metadata changed during verification.' }
 if ($official.filesVerified -isnot [long] -or $official.filesManifestSha256 -cnotmatch '^[a-f0-9]{64}$' -or $official.gameExecutableSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Official install verification did not complete.' }
 $names = Get-SandboxQaBuildCopyNames ([long]$official.buildId)
 $destinations = @((Join-Path $qa $names.SourceGame), (Join-Path $qa $names.Game))
@@ -57,7 +61,7 @@ if ($creatorSid.Value -ceq $qaUser.SID.Value) { throw 'Copy as the existing crea
 
 $receipt = [ordered]@{
     schemaVersion = 2; kind = 'sandbox-qa-game-copy-v2'; startedAtUtc = [DateTime]::UtcNow.ToString('o')
-    buildId = [long]$official.buildId; archiveSha256 = $official.archiveSha256
+    buildId = [long]$official.buildId; archiveSha256 = $official.archiveSha256; metadataSha256 = $metadataSha256
     filesManifestSha256 = $official.filesManifestSha256; gameExecutableSha256 = $official.gameExecutableSha256
     source = $source; qaRoot = $qa; sourceGameRoot = $destinations[0]; gameRoot = $destinations[1]
     completed = $false; fileCount = $rows.Count; sourceBytes = $totalBytes; copiedFiles = 0; copiedBytes = 0L

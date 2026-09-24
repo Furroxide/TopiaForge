@@ -488,7 +488,7 @@ No Sandbox native row, provisioning retry or candidate acceptance ran. The 2409 
 
 ## Build-2478 QA game copies (2026-09-24)
 
-The user authorized fresh verified copies from the 2478 install (**“Yes, copy 2478”**). `tools/copy-sandbox-qa-game.ps1` was changed for this; it reached the release branch with the launch-documentation change that records this entry. At 2026-09-24T16:49Z it did the following. The copy ran from an earlier revision of that change; the merged revision differs only in how it locates the verifier and validates the verifier's output.
+The user authorized fresh verified copies from the 2478 install (**“Yes, copy 2478”**). `tools/copy-sandbox-qa-game.ps1` was changed for this; it reached the release branch with the launch-documentation change that records this entry. At 2026-09-24T16:49Z it did the following. The copy ran from an earlier revision of that change, which took the metadata path as a parameter. It was given this checkout's own `.github/robotopia-game-build.json`. The merged revision always uses the checkout's pin and records its digest. It also locates the verifier differently and validates the verifier's output.
 
 1. Verified the official install with `tools/release/verify-robotopia-install.ps1`: the files-manifest digest, 415 files, each size and digest, and the pinned `Robotopia.exe`.
 2. Copied exactly the manifest's files into `D:\TopiaForgeQA\source-game-2478` and `D:\TopiaForgeQA\game-2478`: 415 files and 5,567,020,099 bytes each, every byte verified against the manifest digest in both trees.
