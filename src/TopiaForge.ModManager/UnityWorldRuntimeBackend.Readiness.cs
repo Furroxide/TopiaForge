@@ -90,19 +90,35 @@ namespace TopiaForge.ModManager
                             return Failure<TransformState>(ModErrorCode.External, "The native player did not retain the applied spawn position and rotation.");
                         return OperationResult<TransformState>.Success(actual);
                     }
+                    var movementType = Type.GetType("FirstPersonController, GameCode", false)
+                        ?? throw new InvalidOperationException("The supported native player movement controller is unavailable.");
+                    var teleport = NativeWorldReflection.PlayerTeleport(movementType, typeof(Vector3), typeof(Quaternion))
+                        ?? throw new InvalidOperationException("The supported native player teleport contract is unavailable.");
+                    var movement = player.GetComponent(movementType);
                     var controller = player.GetComponent<CharacterController>();
-                    var wasEnabled = controller != null && controller.enabled;
-                    try
-                    {
-                        if (controller != null) controller.enabled = false;
-                        player.SetPositionAndRotation(new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
-                            new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W));
-                    }
-                    finally { if (controller != null) controller.enabled = wasEnabled; }
+                    if (movement == null || controller == null || !PlayerCameraReady()) return null;
+                    // Native teleport resets retained movement and facing state as well as position.
+                    // A transform-only write is overwritten by the next native movement/camera update.
+                    NativeWorldReflection.InvokePlayerTeleport(movement, teleport,
+                        new Vector3(spawn.Position.X, spawn.Position.Y, spawn.Position.Z),
+                        new Quaternion(spawn.Rotation.X, spawn.Rotation.Y, spawn.Rotation.Z, spawn.Rotation.W),
+                        () => controller.enabled, enabled => controller.enabled = enabled);
                     placedPlayer = player; requestedSpawn = spawn;
                     return null; // Read back on a later frame after native player code has run.
                 }
                 catch (Exception error) { return Failure<TransformState>(ModErrorCode.External, Unwrap(error).Message); }
+            }
+            private static bool PlayerCameraReady()
+            {
+                var type = Type.GetType("PlayerCamera, GameCode", false)
+                    ?? throw new InvalidOperationException("The supported native player camera is unavailable.");
+                var find = type.GetMethod("Find", PublicStatic, null, Type.EmptyTypes, null)
+                    ?? throw new InvalidOperationException("The supported native player camera lookup is unavailable.");
+                var camera = type.GetProperty("Camera", BindingFlags.Public | BindingFlags.Instance)
+                    ?? throw new InvalidOperationException("The supported native player camera contract is unavailable.");
+                var owner = find.Invoke(null, null);
+                return owner is Component component && component != null && component.gameObject.activeInHierarchy
+                    && camera.GetValue(owner) is Camera value && value != null && value.isActiveAndEnabled;
             }
             private static Transform? ResolvePlayer()
             {

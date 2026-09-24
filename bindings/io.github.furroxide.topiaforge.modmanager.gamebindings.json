@@ -496,6 +496,84 @@
         }
       ],
       "returnType": "System.Void"
+    },
+    {
+      "id": "manager.type.FirstPersonController",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authoritative world preparation",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Readiness.cs:93"
+    },
+    {
+      "id": "manager.readiness.teleport",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "FirstPersonController",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authoritative world preparation",
+      "sourceRef": "src/TopiaForge.ModManager/NativeWorldReflection.cs",
+      "member": "TeleportTo",
+      "returnType": "System.Void",
+      "exactParameters": true,
+      "parameters": [
+        {
+          "type": "UnityEngine.Vector3",
+          "constrained": true
+        },
+        {
+          "type": "System.Nullable<UnityEngine.Quaternion>",
+          "constrained": true
+        }
+      ],
+      "isPublic": true,
+      "isStatic": false,
+      "genericArity": 0
+    },
+    {
+      "id": "manager.type.PlayerCamera",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PlayerCamera",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authoritative world preparation",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Readiness.cs:113"
+    },
+    {
+      "id": "manager.readiness.camera.find",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "PlayerCamera",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authoritative world preparation",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Readiness.cs:115",
+      "member": "Find",
+      "returnType": "PlayerCamera",
+      "exactParameters": true,
+      "isPublic": true,
+      "isStatic": true,
+      "genericArity": 0
+    },
+    {
+      "id": "manager.readiness.camera.camera",
+      "kind": "Property",
+      "assembly": "GameCode",
+      "declaringType": "PlayerCamera",
+      "matchMode": "StaticFullName",
+      "criticality": "Critical",
+      "feature": "Authoritative world preparation",
+      "sourceRef": "src/TopiaForge.ModManager/UnityWorldRuntimeBackend.Readiness.cs:117",
+      "member": "Camera",
+      "returnType": "UnityEngine.Camera",
+      "isPublic": true,
+      "isStatic": false,
+      "requireReadable": true,
+      "indexParameterCount": 0
     }
   ]
 }

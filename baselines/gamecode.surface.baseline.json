@@ -1,5 +1,5 @@
 {
-  "capturedUtc": "2026-09-24T15:32:41.0194662Z",
+  "capturedUtc": "2026-09-24T15:49:42.5095452Z",
   "extractorVersion": "1.1.0-rc.1",
   "gameCodeMvid": "6775eebf-1faf-4230-bd4d-2291f871625f",
   "gameVersion": "0.0.2478",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "94069b36525490b4800d083ddce07b2af8a3df106e723f967cc59dad4933bc6b",
+  "surfaceContentHash": "ab46f35237b80c532dac8794d3982ba10716b642796ffce62b37bfcb8bf23cdb",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -6590,6 +6590,70 @@
       "simpleName": "PersonalityAsset",
       "status": "Resolved",
       "typeKey": "GameCode|PersonalityAsset"
+    },
+    "GameCode|PlayerCamera": {
+      "assembly": "GameCode",
+      "baseChainSimpleNames": [
+        "SingletonBehaviour`1",
+        "MonoBehaviour",
+        "Behaviour",
+        "Component",
+        "Object",
+        "Object"
+      ],
+      "constructors": [
+        {
+          "isPublic": true,
+          "parameters": []
+        }
+      ],
+      "enumMembers": {},
+      "fields": [],
+      "fullName": "PlayerCamera",
+      "isAbstract": false,
+      "isEnum": false,
+      "isInterface": false,
+      "methods": [
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": true,
+          "name": "Find",
+          "parameters": [],
+          "returnType": "PlayerCamera"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "OnSingletonAwake",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "PreloadResources",
+          "parameters": [],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
+        }
+      ],
+      "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "Camera",
+          "setterIsPublic": false,
+          "type": "UnityEngine.Camera"
+        }
+      ],
+      "simpleName": "PlayerCamera",
+      "status": "Resolved",
+      "typeKey": "GameCode|PlayerCamera"
     },
     "GameCode|PlayerController": {
       "assembly": "GameCode",
