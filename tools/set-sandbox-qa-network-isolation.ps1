@@ -7,19 +7,24 @@ param(
     [string]$GameRoot = 'D:\TopiaForgeQA\game'
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'sandbox/qa-game-copy.ps1')
 function ResolveQaProgram([string]$Root) {
     if ($Root -ceq 'D:\TopiaForgeQA\game') {
         return [pscustomobject]@{Executable='D:\TopiaForgeQA\game\Robotopia.exe';RuleName='TopiaForge-QA-Isolation-20260909'}
     }
+    $build = [regex]::Match($Root,'^D:\\TopiaForgeQA\\game-([1-9][0-9]{0,5})$',[Text.RegularExpressions.RegexOptions]::CultureInvariant)
+    if ($build.Success) {
+        return [pscustomobject]@{Executable=($Root+'\Robotopia.exe');RuleName=('TopiaForge-QA-Isolation-'+$build.Groups[1].Value)}
+    }
     $match = [regex]::Match($Root,'^D:\\TopiaForgeQA\\game-provisioning-([0-9]{8}T[0-9]{6}Z)$',[Text.RegularExpressions.RegexOptions]::CultureInvariant)
-    if (!$match.Success) { throw 'Use the original QA game or a fresh, timestamped provisioning-game child.' }
+    if (!$match.Success) { throw 'Use a QA game copy or a fresh, timestamped provisioning-game child.' }
     $stamp = $match.Groups[1].Value
     [void][DateTime]::ParseExact($stamp,'yyyyMMddTHHmmssZ',[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AssumeUniversal)
     return [pscustomobject]@{Executable=($Root+'\Robotopia.exe');RuleName=('TopiaForge-QA-Provisioning-'+$stamp)}
 }
 $scope = ResolveQaProgram $GameRoot
 $gameExecutable = $scope.Executable
-$sourceExecutable = 'D:\TopiaForgeQA\source-game\Robotopia.exe'
+$sourceExecutable = $null
 $ruleName = $scope.RuleName
 $result = [ordered]@{schemaVersion=1;kind='sandbox-qa-outbound-isolation-v1';startedAtUtc=[DateTime]::UtcNow.ToString('o');ruleName=$ruleName;program=$gameExecutable;ruleCreated=$false;verified=$false;gameExecuted=$false;isolationAdmitted=$false;qualifiesRelease=$false;errorType=$null}
 function RequirePhysical([string]$Path) {
@@ -31,12 +36,16 @@ function RequirePhysical([string]$Path) {
         $parent = [IO.Path]::GetDirectoryName($parent)
     }
 }
-foreach ($path in @($gameExecutable,$sourceExecutable,$GameCopyReceipt,$ReceiptPath)) { RequirePhysical $path }
+foreach ($path in @($gameExecutable,$GameCopyReceipt,$ReceiptPath)) { RequirePhysical $path }
 if (Test-Path -LiteralPath $ReceiptPath) { throw 'Refusing existing firewall receipt.' }
 try {
     if ((Get-Item -LiteralPath $GameCopyReceipt).Length -gt 1MB) { throw 'Unbounded source copy receipt.' }
     $copy = Get-Content -LiteralPath $GameCopyReceipt -Raw | ConvertFrom-Json
-    if ($copy.kind -ne 'sandbox-qa-game-copy-v1' -or !$copy.completed -or $copy.qaRoot -cne 'D:\TopiaForgeQA') { throw 'Verified approved source-copy receipt required.' }
+    $approved = Resolve-SandboxQaCopyReceipt -Receipt $copy
+    # A build copy is scoped to its own receipt; provisioning copies are bound by the executable digest below.
+    if ($GameRoot -cmatch '^D:\\TopiaForgeQA\\game(-[1-9][0-9]{0,5})?$' -and $approved.GameRoot -cne $GameRoot) { throw 'QA game copy does not belong to this source-copy receipt.' }
+    $sourceExecutable = $approved.SourceGameRoot + '\Robotopia.exe'
+    RequirePhysical $sourceExecutable
     $expected = @($copy.inventory | Where-Object path -CEQ 'Robotopia.exe')
     if ($expected.Count -ne 1 -or $expected[0].sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Expected game executable identity missing.' }
     foreach ($path in @($gameExecutable,$sourceExecutable)) {
