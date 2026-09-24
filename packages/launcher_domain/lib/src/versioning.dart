@@ -298,6 +298,18 @@ class VersionRange {
     return true;
   }
 
+  /// Whether [version] lies above this range's upper bound, as a game update
+  /// ahead of a mod's supported builds does.
+  bool isAboveMaximum(String version) {
+    final parsed = SemanticVersion.tryParse(version);
+    final maximum = max;
+    if (parsed == null || maximum == null) {
+      return false;
+    }
+    final comparison = parsed.compareTo(maximum);
+    return comparison > 0 || (comparison == 0 && !includeMax);
+  }
+
   static VersionRange parse(String? input) {
     final text = input?.trim() ?? '';
     if (text.isEmpty || text == '*') {
