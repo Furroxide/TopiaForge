@@ -36,11 +36,11 @@
        Restore the exact packages here and copy those two assemblies beside the loader. -->
   <ItemGroup>
     <PackageReference Include="System.Collections.Immutable"
-                      Version="10.0.9"
+                      Version="10.0.12"
                       GeneratePathProperty="true"
                       PrivateAssets="all" />
     <PackageReference Include="System.Reflection.Metadata"
-                      Version="10.0.9"
+                      Version="10.0.12"
                       GeneratePathProperty="true"
                       PrivateAssets="all" />
   </ItemGroup>
