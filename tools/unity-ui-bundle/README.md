@@ -37,7 +37,10 @@ anything else.
 
 The build script bakes the static SDF TMP font assets itself (idempotent — an existing
 committed `Assets/FontAssets/*.asset` is reused after its derivative object/family
-names are normalized; delete it only to re-bake the atlas):
+names are normalized; delete it only to re-bake the atlas). Because of that reuse, a
+replaced source TTF never reaches its SDF on its own: delete the matching `.asset` and
+build, then restore the committed `.asset.meta` (Unity discards the orphaned one and
+assigns a new GUID) and build again so the asset keeps its GUID. The assets are:
 
 - `TopiaForge Body SDF` — 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1
   Supplement + Latin Extended-A + typographic punctuation.
@@ -45,8 +48,13 @@ names are normalized; delete it only to re-bake the atlas):
 - Bold renders via TMP faux-bold (the variable TTF imports only its default instance),
   which the kit selects automatically when no dedicated bold asset ships.
 
-Every font-asset material stays on the `TextMeshPro/Distance Field` shader — building
-the bundle pulls the shader in as a dependency, which is the in-game safety net.
+Every font-asset material stays on TMP's `TextMeshPro/Mobile/Distance Field` shader
+(`Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader`) — building the bundle pulls the
+shader in as a dependency, which is the in-game safety net. That vendored shader omits
+the `#pragma enable_d3d11_debug_symbols` line TMP ships with: on Windows the directive
+compiles it unoptimized, with debug data that changes on every compile and records
+absolute editor paths, so the bundle stops being reproducible. Keep it out if the TMP
+essentials are ever re-imported.
 Commit the baked `.asset` files (+ `.meta`) together with the rebuilt bundle.
 
 ## Building the bundle

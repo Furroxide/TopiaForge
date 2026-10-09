@@ -85,7 +85,11 @@ inventory covers every non-source file a user receives rather than only the ones
   `*.manifest.json` recording the editor version, the contained asset paths, and a SHA-256, and release
   validation rebuilds them twice and compares bytes. A compiled AssetBundle is opaque to inspection, so
   that reproducible rebuild is what establishes the contents, not a reading of the file. The UI bundle
-  bakes in glyph data derived from the OFL fonts noted below; those notices apply to it.
+  bakes in glyph data derived from the OFL fonts noted below; those notices apply to it. It was
+  regenerated on 2026-10-09 with editor `6000.0.23f1` on a Windows host, after its Quicksand body SDF
+  (`tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body SDF.asset`) was re-baked from the upstream
+  Quicksand bytes (SHA-256 `39c9b64223561f56aaff6062a6f04063c4fc86809ad6768722c06614d977e1cc`); the
+  regenerated bundle's SHA-256 is `147c1f39baafb2488961dae4ab3d5553129104b8199a2c1475ea8550678b05b1`.
 - `templates/TopiaForge.UnityWorldTemplate/Assets/HDRPDefaultResources/*.asset` are Unity YAML
   configuration assets authored by this project. They hold settings values and reference HDRP script
   GUIDs; the HDRP package itself is resolved by the consumer's Unity and is not redistributed here.
@@ -127,6 +131,15 @@ TopiaForge bundles the Quicksand font for body typography in the launcher UI and
   byte-identical to upstream, so both bundled copies were replaced with the Google Fonts release
   above to give the font a verifiable first-hand provenance.
 
+  The Unity brand bundle's static SDF derivative,
+  `tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body SDF.asset`, had been baked from that earlier
+  copy, and because the bundle build reuses an existing SDF rather than re-baking it, the replacement
+  did not reach the SDF or `src/TopiaForge.Mods.UnityUi/Assets/topiaforge-ui.bundle`. Both were
+  regenerated on 2026-10-09 from the upstream bytes above with editor `6000.0.23f1` and unchanged bake
+  settings, so every shipped Quicksand-derived byte now traces to the upstream release. The atlas
+  pixels, face metrics, and glyph metrics came out identical to the earlier bake; of the glyph data,
+  only the glyph indices, which follow each file's glyph order, differ.
+
 TopiaForge bundles the Audiowide font for display typography in the launcher UI and Unity brand bundle.
 
 - Project: Audiowide
@@ -146,7 +159,11 @@ comprises shaders, materials, style sheets, line-breaking data, and the Liberati
 - License: distributed under the Unity Companion License as part of the Unity Editor package.
 - Local changes: the EmojiOne sprite sheet and its sprite asset were removed because their bundled
   attribution granted no redistribution right; the TMP default sprite asset is cleared and emoji
-  support disabled accordingly.
+  support disabled accordingly. Since 2026-10-09,
+  `tools/unity-ui-bundle/Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader`, the shader the UI bundle
+  compiles in, omits its `#pragma enable_d3d11_debug_symbols` line: on a Windows build host that
+  directive compiled the shader unoptimized, with debug data that differed on every compile and
+  recorded absolute paths into the editor installation.
 
 - Project: Liberation Sans
 - Bundled at: `tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans.ttf`
