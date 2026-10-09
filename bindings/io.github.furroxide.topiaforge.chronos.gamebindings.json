@@ -32,8 +32,9 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Critical",
       "feature": "Chronos: find player instance",
-      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:168",
+      "sourceRef": "mods/TopiaForge.Chronos/PlayerTimeExemption.cs:170",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "PlayerController"
     },
     {

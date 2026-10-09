@@ -47,6 +47,7 @@ param(
 )
 
 . (Join-Path $PSScriptRoot "acceptance-isolation.ps1")
+. (Join-Path $PSScriptRoot "tomato-cake-launcher-state.ps1")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -179,45 +180,6 @@ function Get-Sha256FromUtf8 {
     return [Convert]::ToHexString(
         [System.Security.Cryptography.SHA256]::HashData($bytes)
     ).ToLowerInvariant()
-}
-
-function Get-RobotopiaInstalledBuildId {
-    param([Parameter(Mandatory = $true)][string]$GameRoot)
-    $resolvedGameRoot = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd("\", "/")
-    $candidates = [System.Collections.Generic.List[string]]::new()
-    $candidates.Add((Join-Path $resolvedGameRoot "installed-build.json"))
-    if ((Split-Path -Leaf $resolvedGameRoot).Equals(
-            "Robotopia",
-            [System.StringComparison]::OrdinalIgnoreCase
-        )) {
-        $candidates.Add((Join-Path (Split-Path -Parent $resolvedGameRoot) `
-                    "installed-build.json"))
-    }
-    foreach ($candidate in $candidates) {
-        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-            continue
-        }
-        $length = (Get-Item -LiteralPath $candidate).Length
-        if ($length -le 0 -or $length -gt 4096) {
-            throw "Robotopia installed-build.json is invalid."
-        }
-        try {
-            $metadata = Get-Content -LiteralPath $candidate -Raw |
-                ConvertFrom-Json
-            if ($metadata.PSObject.Properties.Name -notcontains "id") {
-                throw "missing id"
-            }
-            $idText = [string]$metadata.id
-            if ($idText -notmatch "^[1-9][0-9]*$") {
-                throw "invalid id"
-            }
-            return [int]$idText
-        }
-        catch {
-            throw "Robotopia installed-build.json is invalid."
-        }
-    }
-    throw "Robotopia installed-build.json is missing."
 }
 
 function Clear-OwnedDirectory {
