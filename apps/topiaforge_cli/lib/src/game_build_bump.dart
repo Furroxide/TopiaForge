@@ -127,6 +127,7 @@ GameBuildBumpResult bumpRobotopiaGameBuild({
     'build `$from`': 'build `$to`',
     'Build `$from`': 'Build `$to`',
     'build $from': 'build $to',
+    'Build $from': 'Build $to',
     '"id":"$from"': '"id":"$to"',
     "'id': '$from'": "'id': '$to'",
     '"gameBuild": "$from"': '"gameBuild": "$to"',

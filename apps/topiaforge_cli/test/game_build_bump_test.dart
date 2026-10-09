@@ -71,6 +71,11 @@ void main() {
     );
     _write(
       root,
+      'docs/ArchitectureInventory.md',
+      'Build 2409 also preloads its own Metadata copy.\n',
+    );
+    _write(
+      root,
       'tests/sandbox-workbench-acceptance-v1.json',
       '{\n  "gameBuild": 2409,\n  "scope": "supplementary-offline-contracts"\n}\n',
     );
@@ -153,6 +158,11 @@ void main() {
     expect(
       _read(root, 'docs/ReleaseChecklist.md'),
       contains('build `2509` (`0.0.2509`)'),
+    );
+    // A sentence may open with the build, capitalised and unquoted.
+    expect(
+      _read(root, 'docs/ArchitectureInventory.md'),
+      contains('Build 2509 also preloads'),
     );
     // The Sandbox contract pins the build as a bare JSON integer.
     expect(
