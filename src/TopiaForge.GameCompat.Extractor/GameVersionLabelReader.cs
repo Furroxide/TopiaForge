@@ -62,10 +62,19 @@ namespace TopiaForge.GameCompat.Extractor
                 foreach (var metadataRoot in layout.MetadataRoots)
                 {
                     var installedBuild = ReadInstalledBuild(Path.Combine(metadataRoot, "installed-build.json"));
-                    if (installedBuild.Label.Length > 0)
+                    if (installedBuild == null)
                     {
-                        return installedBuild;
+                        continue;
                     }
+
+                    if (installedBuild.Value.Label.Length > 0)
+                    {
+                        return installedBuild.Value;
+                    }
+
+                    // An existing but rejected marker ends the search: a lower-priority marker may
+                    // describe another copy of the game. Only the bundle's own Info.plist remains.
+                    break;
                 }
 
                 return layout.InfoPlist == null
@@ -205,14 +214,18 @@ namespace TopiaForge.GameCompat.Extractor
             return null;
         }
 
-        private static GameVersionInfo ReadInstalledBuild(string path)
+        /// <summary>
+        /// Reads one launcher marker. Returns null when no marker exists at <paramref name="path"/>, and
+        /// <see cref="GameVersionInfo.Empty"/> when a marker exists but is rejected.
+        /// </summary>
+        private static GameVersionInfo? ReadInstalledBuild(string path)
         {
             try
             {
                 var bytes = ReadBounded(path);
                 if (bytes == null)
                 {
-                    return GameVersionInfo.Empty;
+                    return null;
                 }
 
                 using var document = JsonDocument.Parse(

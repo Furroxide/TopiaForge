@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
                 FallsBackToMacBundleVersion(root);
                 ReadsLauncherBuildFromWindowsInstall(root);
                 ReadsRelocatedLauncherBuild(root);
+                StopsAtRejectedMarker(root);
                 FindsRelocatedManagedDirectoryLast(root);
                 ReadsPublicManagedReferenceCacheBuild(root);
                 IgnoresAmbiguousChangelog(root);
@@ -115,6 +116,27 @@ namespace TopiaForge.ModManager.Tests
             fixture.WriteConfig("{\"game_dir\":" + value + ",\"game_dir\":" + value + "}");
             Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
                 "a malformed launcher-config.json should lend no marker");
+        }
+
+        private static void StopsAtRejectedMarker(string root)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(root, "rejected-marker");
+            var managed = Path.Combine(fixture.RelocatedGameRoot, "Robotopia_Data", "Managed");
+            Directory.CreateDirectory(managed);
+            fixture.WriteStateMarker(2545);
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == "build 2545",
+                "the launcher marker should apply while no higher-priority marker exists");
+
+            var besideGame = Path.Combine(fixture.RelocatedParent, "installed-build.json");
+            File.WriteAllText(besideGame, "{not-json");
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
+                "a malformed marker beside the game should not fall through to the launcher marker");
+
+            File.WriteAllText(besideGame, "{\"id\":2546}");
+            File.WriteAllText(Path.Combine(fixture.RelocatedGameRoot, "installed-build.json"), "{\"id\":0}");
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
+                "a rejected marker in the game root should not fall through to the marker beside it");
         }
 
         private static void FindsRelocatedManagedDirectoryLast(string root)
