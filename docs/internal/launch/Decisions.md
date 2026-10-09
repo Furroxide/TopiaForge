@@ -87,3 +87,13 @@ approve no gate.
 Every merge still needs the user's explicit authorization. Prepared requests
 are not approvals, and the user sends them; reviewers are never contacted from
 this work.
+
+Later in the same session the user instructed **“delete the
+media/pr-128-before-after branch”**. That pushed branch held the before-and-after
+comparison images embedded in PR #128's description, including the replaced
+Robotopia art. After inspection (two commits, ten PNG files, no protecting rule
+and no pull request using it), it was deleted from GitHub on 2026-10-09. The
+embedded image links in PR #128 now return 404. The deleted commits stay
+retrievable by commit ID until GitHub removes unreferenced objects, and the
+pre-#128 Git LFS history is unchanged; whether those copies must be removed
+remains a `P0-IP-01` question for counsel.
