@@ -7,8 +7,8 @@ using TopiaForge.Mods;
 namespace TopiaForge.Worlds
 {
     /// <summary>
-    /// Clean-room reflection bridge onto build 2409's local export importer, so a <c>.roboworld</c> a player
-    /// already has on disk can be loaded into the running game.
+    /// Clean-room reflection bridge onto the game's local export importer, so a <c>.roboworld</c> a player
+    /// already has on disk can be loaded into the running game. The audited build is the manifest's exact pin.
     /// </summary>
     /// <remarks>
     /// <para>
