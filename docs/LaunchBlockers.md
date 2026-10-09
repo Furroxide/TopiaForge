@@ -508,9 +508,10 @@ automated tests cannot close Unity object lifetime.
 
   Earlier copies remain reachable in this public repository (observed 2026-10-09): commits before
   [#128](https://github.com/Furroxide/TopiaForge/pull/128) still reference the replaced images through
-  Git LFS, and PR #128's description embeds before-and-after comparison images from the pushed
-  `media/pr-128-before-after` branch. Whether those copies must be removed is an open question for counsel
-  under this gate.
+  Git LFS. PR #128's description embedded before-and-after comparison images from a pushed
+  `media/pr-128-before-after` branch. The owner had that branch deleted on 2026-10-09, so those embeds no
+  longer resolve, but its commits stay retrievable by commit ID until GitHub removes unreferenced objects.
+  Whether the remaining copies must be removed is an open question for counsel under this gate.
 
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
   TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
