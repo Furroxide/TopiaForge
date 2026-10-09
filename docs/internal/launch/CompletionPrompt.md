@@ -1,6 +1,6 @@
 # RC1 completion continuation prompt
 
-Prepared 2026-09-24 from the current launch documents, local QA receipts and live reads of the RC1 pull requests. This is a continuation prompt, not an approval, completed review or release decision. Reverify observations before acting. Copy the text below into the continuing task.
+Prepared 2026-09-24 from the current launch documents, local QA receipts and live reads of the RC1 pull requests. This is a continuation prompt, not an approval, completed review or release decision. Its build references were refreshed on 2026-10-09 for the build-2545 retarget; the dated observations below were not. Reverify observations before acting. Copy the text below into the continuing task.
 
 ---
 
@@ -58,12 +58,12 @@ Name-only bindings can hide signature changes, as the 2478 Health change showed.
 
 4. Optional QA, only if I choose to run it.
 
-Under my decision, live game acceptance, native UX/accessibility, independent player/author journeys and the Sandbox native matrix are optional. The provisioning history is retained as evidence: three failed attempts, including forced termination after OnApplicationQuit on 2026-09-11, the verified diagnostic launch mode, and the staged but undispatched retry `20260911T183026Z`. Both existing QA game copies are build 2409 and no longer match the pin.
+Under my decision, live game acceptance, native UX/accessibility, independent player/author journeys and the Sandbox native matrix are optional. The provisioning history is retained as evidence: three failed attempts, including forced termination after OnApplicationQuit on 2026-09-11, the verified diagnostic launch mode, and the staged but undispatched retry `20260911T183026Z`. The existing build-2409 and build-2478 QA game copies no longer match the pin.
 
 Optional execution needs:
 
-- The verified 2478 copies `source-game-2478` and `game-2478`, which already exist. Saves, tokens, personal configuration and microphone recording stay excluded.
-- The re-staged, refusal-checked retry `20260924T172541Z`. Its v6 source checkpoint is at `37f9088`, so any later loader or broker change needs a new checkpoint (see the observer runbook).
+- Fresh verified build-2545 copies. The 2478 copies `source-game-2478` and `game-2478` are stale. Saves, tokens, personal configuration and microphone recording stay excluded.
+- A re-staged retry. `20260924T172541Z` was staged for 2478 from the v6 source checkpoint at `37f9088`, so 2545 needs a new checkpoint and a re-stage (see the observer runbook).
 - One operator session that I confirm.
 - A successful unforced exit and an attributable provisioning review.
 
@@ -83,7 +83,7 @@ Several items need the administrator:
 
 6. Complete the actual release sequence when prerequisites permit.
 
-RC1 scope is Windows x64, Robotopia build 2478, experimental prerelease, thirteen first-party mod packages and two embedded VPM packages. Unsigned Windows executables do not waive Ed25519 update signatures, checksums, signed annotated tags or exact-byte verification. Reverify these counts against the final catalog and policy.
+RC1 scope is Windows x64, Robotopia build 2545, experimental prerelease, thirteen first-party mod packages and two embedded VPM packages. Unsigned Windows executables do not waive Ed25519 update signatures, checksums, signed annotated tags or exact-byte verification. Reverify these counts against the final catalog and policy.
 
 Refresh PR #119 with the final source, validation and remaining decisions; leave auto-merge off. After I merge:
 

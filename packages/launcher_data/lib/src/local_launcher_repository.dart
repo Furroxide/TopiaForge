@@ -28,6 +28,7 @@ import 'launch_process_control.dart';
 import 'acceptance_isolation_context.dart';
 import 'acceptance_isolation_identity.dart';
 import 'acceptance_isolation_bootstrap.dart';
+import 'tomato_cake_launcher_state.dart';
 
 part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_install_discovery_helpers.dart';
@@ -71,6 +72,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     String? workingDirectory,
     String? knownGamePath,
     GameInstallDiscoveryService? gameInstallDiscoveryService,
+    TomatoCakeLauncherState? tomatoCakeLauncherState,
     DependencyPlanner dependencyPlanner = const DependencyPlanner(),
     PackageMetadataValidator? packageMetadataValidator,
     PackageInstallCommitHook? packageInstallCommitHook,
@@ -91,6 +93,8 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
        _gameInstallDiscovery =
            gameInstallDiscoveryService ??
            _defaultGameInstallDiscovery(knownGamePath),
+       _tomatoCakeLauncher =
+           tomatoCakeLauncherState ?? TomatoCakeLauncherState(),
        _dependencyPlanner = dependencyPlanner,
        _packageMetadataValidator = packageMetadataValidator,
        _packageInstallCommitHook = packageInstallCommitHook,
@@ -132,6 +136,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   final Directory _repositoryRoot;
   final String? _knownGamePath;
   final GameInstallDiscoveryService _gameInstallDiscovery;
+  final TomatoCakeLauncherState _tomatoCakeLauncher;
   final DependencyPlanner _dependencyPlanner;
   final PackageMetadataValidator? _packageMetadataValidator;
   final Map<String, Future<List<String>>> _installedMetadataCache = {};
