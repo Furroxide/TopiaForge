@@ -530,3 +530,52 @@ Before the change was opened for review, these checks passed on its final source
 - The residue audit and its 37 tests, 52 website tests and the Markdown link check.
 
 No administrator preflight or build ran on a release host, and no live game acceptance ran.
+
+## Build 2545 retarget (2026-10-09)
+
+The public manifest (`https://builds.tomatocake.dev/latest-build.json`) moved past build 2478 after the 2026-09-24 retarget. On 2026-10-09 it reported build 2545; the manifest was last modified on 2026-10-07. `gameBuild.requireLatestAtRelease` stays set, so the next run of every `--require-latest` gate would fail: CI, Pages, the packaging dry run, `release.yml` and `tools/release-admin.ps1`. The user confirmed that the official launcher showed 2545 installed and up to date. Read-only measurements of that install on 2026-10-09:
+
+- The official launcher now keeps the game outside its default directory: its `launcher-config.json` names a `game_dir` on another drive. `installed-build.json` (id 2545) stays in the default launcher directory. A stale `filelist.json` beside it differs from the current manifest in 103 entries and was not used.
+- The current `filelist.json` sits beside the relocated `Robotopia` directory: SHA-256 `2172c2554e040c5bae2c85262c8f94bf610598349c299e7fc86db06f54c151d1`, covering 416 files. Every installed file matches its listed size, and no unlisted file exists.
+- `Robotopia.exe` SHA-256 `c2a34751224673d9311ff363d249f3bddc6f049cd4eb4b8f09bee2172112fed2`.
+- The Unity runtime is still `6000.0.31f1`, so the `6000.0.23f1` authoring pin is unaffected. `Managed` holds 228 assemblies. No BepInEx, doorstop or `winhttp.dll` is present, so a native run must install the loader first.
+
+The archive hashes come from the public manifest. How the launcher, the manager and the release tooling find `installed-build.json` for a relocated install is a separate task; nothing here changes it.
+
+**Retarget.** `compat bump` had fallen behind two later changes:
+
+- [#131](https://github.com/Furroxide/TopiaForge/pull/131) added `tests/TopiaForge.SandboxAcceptanceNative/expected-catalog-v1.json` after the 2478 retarget. The Sandbox parser refuses an inventory for another build, so the file must follow the pin. The dry run listed it only as an unlisted mention.
+- [#137](https://github.com/Furroxide/TopiaForge/pull/137) added a sentence to `docs/ArchitectureInventory.md` that opens with a capitalised, unquoted `Build 2478`, which no substitution matched. The tool's self-check stopped the first real run on it. Build 2545 still lists both preloaded assemblies in `ScriptingAssemblies.json`, so the sentence stays true.
+
+Both are fixed, and a new test fails when a target is missing or no longer names the pinned build. The bump then updated 53 files and 82 references: the pin, policy, 8 exact and 6 bounded first-party ranges, fixtures, guards and documents. The SDK-only ceiling stays `<0.0.2600` after review with the user. The remaining mentions of 2478 were reviewed by hand and are history or sample values. `tools/release/verify-robotopia-install.ps1` accepted the install against the new pin: 416 files, each checked by size and digest.
+
+The P2-COMPAT-01 audit on the live 2545 `Managed` directory:
+
+- `gamecompat verify` with the 2478 manifests: 223 bindings and 2 errors, both critical Worlds bindings for the owned native import transaction.
+- After the adaptations below: 225 bindings, of which 214 are verifiable and 11 cannot be checked offline, with 0 indeterminate results, errors or warnings.
+- `gamecompat audit --strict`: 0 manifest problems, undeclared bindings or stale bindings.
+- Full surface diff against the 2478 baseline: 80 member changes (27 removed, 53 added) across 10 of 61 captured types. They cover robot thinking audio and subtitle placement (`AgentHead`), look input through an Input System action with `mouseSensitivity` and `invertCamera` removed (`FirstPersonController`), new audio clips (`GlobalAssetsMap`), a removed analysis model (`PersonalityAsset`), an interaction wheel and reply flow (`PlayerController`), a chat-bubble toggle replacing the subtitle toggle (`SettingsScreen`), a reworked startup import (`UgcImportHostSceneController`, `UgcImportPlayBootstrap`, `UgcPlayLaunchRequest`) and a catalog base URL (`UgcRuntimeAssetConfig`). Only the import host reaches TopiaForge.
+- The baseline was refreshed: surface hash `2357d580ce97960853843180ef7f19eb84513348e59f4657cd9e3d72c7641b3c`, 61 types, 15 simple-name lookups, provenance build 2545. The extractor reads the build label from `installed-build.json` beside the game, which the relocated install lacks. So the refresh ran through a scratch layout: a junction to the real `Managed` directory, with a copy of the launcher's own marker beside it. Its surface hash equals a direct extract of the install.
+- The payload test passed against 2545: the game's own `System.Reflection.Metadata` and `System.Collections.Immutable` 8.0 still satisfy every loader reference.
+
+Adapted in source:
+
+- **Local world import.** Build 2545 removed `UgcImportHostSceneController.ImportFile(String)` and the `LastImportedScene` property that was its only result. Worlds now imports through `ImportProject(UgcExportProject, String, String)`, which 2478 already exposed with the same signature. It passes the project the game's own loader parsed during validation, so the validated bytes are the imported bytes. The returned scene replaces the before/after comparison as the evidence of a fresh import. A null scene id requests the project's default scene, matching the null default that `UgcExportProject.ResolveScene` declares for a parameter of the same name. The source label is the file name.
+- **Signature constraints.** Every binding for a member a mod calls, or patches with a hook that reads its arguments or result, now pins its full signature, and the runtime lookups select the same signature. That covers ten zero-argument lookups, every position RobotKit passes to `Walk`, `Pathfind`, `CreateSampler`, `StartEmote` and `EnableTestMode`, and the PerfFixes camera and Performance Sentry hooks. A scan of member-name lookups on captured types found three RobotKit calls that no manifest declared (`AgentHead.PushDisableTalkTo`, `AgentHead.PopDisableTalkTo` and `LLMAgent.Reset`); they are now declared. Snapshots do not record parameter names, so the Harmony hooks that bind target arguments by name (`camera`, `collision`, `options`) were compared with 2545 metadata by hand, and all match.
+
+Local checks on the head:
+
+- Solution build: 0 warnings and 0 errors.
+- The seven C# harnesses passed, including managed-ref 17/17 and the package validator.
+- `launcher_domain` 1,081 tests; `launcher_data` 585 tests with 4 platform skips; CLI 1,150 tests with 4 platform skips. Dart analysis is clean.
+- `launcher_ui` 3 tests and the Flutter launcher 78 tests. Flutter analysis is clean.
+- The Windows debug build.
+- `dotnet format` on every changed C# file, `dart format` on changed Dart files, the 500-line Dart cap, the residue audit and the Markdown link check.
+
+**Not established.** No game was launched. Nothing natively confirms the following on 2545:
+
+- `ImportProject` imports the project's default scene for a null scene id, with fresh owned content in the session scene.
+- Look input stays full speed under Chronos time scaling, as it did before 2545.
+- The two items carried over from 2478: the game accepts a null damage source, and `TeleportTo` places the player.
+
+The 2478 QA game copies and the staged retry `20260924T172541Z` no longer match the pinned build. Any optional QA needs fresh 2545 copies and a new source checkpoint.
