@@ -66,3 +66,24 @@ not attest any reviewer role.
 The native world-loading fixes that FlyBrain's native runs exposed (native
 teleport spawn placement, an original empty UGC scene) are ordinary source
 fixes and are integrated separately; the rest of that work stays out of RC1.
+
+## Blocking-gate review refresh (2026-10-09)
+
+The user asked to help close `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01` and
+`P0-CRED-01`: repin the three review requests once the build-2545 retarget and
+relocated-install PRs merge, then integrate actual attributable records when
+the user supplies them. A source audit of the three requests found statements
+the source no longer supports, stale passages in documents they cite, and
+engineering gaps reviewers would see. The user selected the options below in
+that session. They are task-scope decisions; they attest no reviewer role and
+approve no gate.
+
+| Topic | Selected option | Effect |
+| --- | --- | --- |
+| Credential-incident closure (deferred 2026-09-09) | **“Resume it”** | `P0-CRED-01` work resumes with a prepared [closure request](credential-closure-review-request.md) for `credential-owner` and `security-owner`. The gate stays blocked until actual closure evidence exists. Secret values, the update-signing seed and old incident logs stay unread |
+| Stale documents the requests cite | **“Fix first, separate PR”** | A documentation PR corrects `TRADEMARKS.md`, `docs/PrivacyAndCapabilities.md`, `docs/LaunchBlockers.md` and `THIRD_PARTY_NOTICES.md` before the repin, so the pinned tree is consistent |
+| Engineering gaps reviewers would see | **“Fix before the repin”** | Separate PRs rebake the Quicksand SDF and UI bundle from the upstream font bytes, record vendored third-party components in the SBOM, extend the asset-licence audit to icon files, and install licence notices beside the game-side loader. The repin waits for them and for the build-2545 and relocated-install PRs |
+
+Every merge still needs the user's explicit authorization. Prepared requests
+are not approvals, and the user sends them; reviewers are never contacted from
+this work.

@@ -40,9 +40,9 @@ the statement itself.
 ## Bundled brand assets
 
 The statement above covers names and affiliation. It does **not** cover the artwork this project
-bundles. Three Robotopia web images ship with the launcher under attribution while a written grant
-remains outstanding; they are recorded, with their rights basis and dated disposition, in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+bundles. The launcher no longer ships the three Robotopia web images it once bundled: on 2026-09-09
+they were replaced with CC0 artwork under the same filenames.
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records the provenance of the bundled artwork.
 
 ## Status
 
