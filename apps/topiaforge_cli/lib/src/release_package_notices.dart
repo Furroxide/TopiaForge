@@ -6,6 +6,7 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
+import 'release_dart_runtime_packages.dart';
 import 'release_package_io.dart';
 
 /// Copies the license texts that correspond to the exact Dart packages linked
@@ -210,7 +211,7 @@ class ReleasePackageNoticeWriter {
     );
 
     final versions = <String, String>{};
-    for (final name in _dartCliRuntimePackages) {
+    for (final name in dartCliRuntimePackages) {
       final entry = packages[name];
       if (entry == null || entry['rootUri'] is! String) {
         throw StateError('The runtime Dart package $name is unresolved.');
@@ -341,39 +342,10 @@ class ReleasePackageNoticeWriter {
   }
 }
 
-const _dartCliRuntimePackages = [
-  'archive',
-  'async',
-  'boolean_selector',
-  'collection',
-  'crypto',
-  'ffi',
-  'http',
-  'http_parser',
-  'json_schema',
-  'logging',
-  'matcher',
-  'meta',
-  'path',
-  'posix',
-  'quiver',
-  'rfc_6901',
-  'source_span',
-  'stack_trace',
-  'stream_channel',
-  'string_scanner',
-  'term_glyph',
-  'test_api',
-  'typed_data',
-  'unorm_dart',
-  'uri',
-  'web',
-];
-
 final List<String> dartCliLicenseNames = List.unmodifiable([
   'Dart-SDK-LICENSE.txt',
   'VERSIONS.json',
-  for (final package in _dartCliRuntimePackages) '$package-LICENSE.txt',
+  for (final package in dartCliRuntimePackages) '$package-LICENSE.txt',
 ]);
 
 const runtimeLoaderNoticeNames = <String>[

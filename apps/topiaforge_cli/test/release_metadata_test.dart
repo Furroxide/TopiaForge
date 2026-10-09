@@ -229,6 +229,20 @@ void main() {
       );
       expect((bom['legalInventory'] as List), isNotEmpty);
       expect(sbom['spdxVersion'], 'SPDX-2.3');
+      final doorstop = (sbom['packages'] as List).cast<Map>().singleWhere(
+        (entry) => entry['name'] == 'UnityDoorstop',
+      );
+      expect(doorstop['licenseDeclared'], 'LGPL-2.1-only');
+      expect(
+        sbom['relationships'] as List,
+        anyElement(
+          equals({
+            'spdxElementId': 'SPDXRef-Package-bepInEx',
+            'relationshipType': 'CONTAINS',
+            'relatedSpdxElement': doorstop['SPDXID'],
+          }),
+        ),
+      );
       await builder.verify(
         repositoryRoot: root,
         version: release.version,
@@ -357,6 +371,53 @@ void main() {
       );
     },
   );
+
+  test('SBOM third-party terms and containment are verified', () async {
+    final builder = const TopiaForgeReleaseMetadataBuilder();
+    await builder.build(
+      repositoryRoot: root,
+      version: release.version,
+      targetSha: targetSha,
+      assetsDirectory: temp.path,
+      outputDirectory: temp.path,
+      allowUnresolvedPolicy: true,
+    );
+    final sbomFile = File(p.join(temp.path, 'release-sbom.spdx.json'));
+    final generated = sbomFile.readAsStringSync();
+    Map<String, Object?> named(Map<String, Object?> sbom, String name) =>
+        (sbom['packages'] as List).cast<Map<String, Object?>>().singleWhere(
+          (entry) => entry['name'] == name,
+        );
+    for (final tamper in <void Function(Map<String, Object?>)>[
+      (sbom) => named(sbom, 'UnityDoorstop')['licenseDeclared'] = 'MIT',
+      (sbom) => (sbom['relationships'] as List).removeWhere(
+        (entry) => (entry as Map)['spdxElementId'] == 'SPDXRef-Package-bepInEx',
+      ),
+      (sbom) => (sbom['packages'] as List).remove(named(sbom, 'Flutter')),
+    ]) {
+      final sbom = jsonDecode(generated) as Map<String, Object?>;
+      tamper(sbom);
+      _writeJson(sbomFile, sbom);
+      _refreshChecksum(temp, 'release-sbom.spdx.json');
+      await expectLater(
+        builder.verify(
+          repositoryRoot: root,
+          version: release.version,
+          targetSha: targetSha,
+          assetsDirectory: temp.path,
+          metadataDirectory: temp.path,
+          allowUnresolvedPolicy: true,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            startsWith('SPDX SBOM '),
+          ),
+        ),
+      );
+    }
+  });
 
   test('safe contract assembly identity survives patch releases', () async {
     final next = TopiaForgeReleaseCatalogEntry(
