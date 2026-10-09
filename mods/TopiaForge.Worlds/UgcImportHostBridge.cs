@@ -15,8 +15,9 @@ namespace TopiaForge.Worlds
     /// The game's importer has two reachable halves. <c>UgcImportHostConfig</c> is a ScriptableObject holding
     /// the serialized <c>ImportFolderOverride</c> / <c>SelectedExportFilePath</c> / <c>SelectedSceneId</c>
     /// selection, and <c>UgcImportHostSceneController</c> is the live scene component that scans that folder
-    /// and builds the scene from a chosen file. <c>ConfigureRuntimeImportFolder</c> and <c>ImportFile</c> are
-    /// both public and both take nothing but a path.
+    /// and builds the scene from a chosen file. <c>ConfigureRuntimeImportFolder</c> takes nothing but a path,
+    /// and <c>ImportProject</c> takes the project the game's own <c>UgcExportLoader</c> parsed from that file.
+    /// Build 2545 removed the path-only <c>ImportFile</c>.
     /// </para>
     /// <para>
     /// That matters because it is the whole feature: the local path needs no Discord sign-in, no publish, and
@@ -92,10 +93,12 @@ namespace TopiaForge.Worlds
         /// </summary>
         /// <remarks>
         /// This runs before any import so a malformed file is refused while the current world is still
-        /// intact, and so the reason the player sees is the game's own wording rather than ours.
+        /// intact, and so the reason the player sees is the game's own wording rather than ours. The parsed
+        /// <paramref name="project"/> is exactly what the import transaction hands to <c>ImportProject</c>.
         /// </remarks>
-        public bool TryValidateExport(string filePath, out string projectName, out string error)
+        public bool TryLoadExport(string filePath, out object? project, out string projectName, out string error)
         {
+            project = null;
             projectName = string.Empty;
             error = string.Empty;
 
@@ -110,13 +113,14 @@ namespace TopiaForge.Worlds
             {
                 var arguments = new object?[] { filePath, null, null };
                 var loaded = tryLoad.Invoke(null, arguments) is bool result && result;
-                if (!loaded)
+                if (!loaded || arguments[1] == null)
                 {
                     error = arguments[2] as string ?? "The export could not be read.";
                     return false;
                 }
 
-                projectName = ReadProjectName(arguments[1]);
+                project = arguments[1];
+                projectName = ReadProjectName(project);
                 return true;
             }
             catch (Exception ex)
