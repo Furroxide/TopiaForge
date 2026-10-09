@@ -244,7 +244,7 @@ class _ProfileDetail extends StatelessWidget {
                   selected.selectedVersions.length.toString(),
                 ),
                 const SizedBox(height: 10),
-                _WorldLaunchControls(state: state),
+                _LaunchTargetControls(state: state),
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
                   onPressed: state.profiles.length <= 1

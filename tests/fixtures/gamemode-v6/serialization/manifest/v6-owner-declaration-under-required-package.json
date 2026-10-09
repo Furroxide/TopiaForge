@@ -1,0 +1,81 @@
+{
+  "id": "v6-owner-declaration-under-required-package",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "Declaration ownership cannot squat beneath a known longer package owner.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.arena",
+          "name": "Arena",
+          "content": {
+            "kind": "bundle",
+            "bundle": "Content/arena.bundle",
+            "prefab": "Arena"
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.addon.mode",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.play",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.addon.mode",
+          "world": {
+            "policy": "fixed",
+            "default": "io.github.furroxide.topiaforge.fixture.arena"
+          }
+        }
+      ]
+    },
+    "dependencies": {
+      "io.github.furroxide.topiaforge.fixture.addon": "*"
+    }
+  },
+  "schemaOutcome": "accept",
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions.gamemodes[0].id"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions.gamemodes[0].id"
+      ]
+    }
+  }
+}

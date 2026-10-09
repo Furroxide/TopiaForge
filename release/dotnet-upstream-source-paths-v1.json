@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "runtimeVersion": "10.0.9",
+  "repository": "https://github.com/dotnet/dotnet",
+  "commit": "901ca941248413c79832d2fdbd709da0c4386353",
+  "purpose": "Public source assertion literals copied from the pinned Microsoft singlefilehost; all other home paths remain rejected.",
+  "members": [
+    {
+      "package": "microsoft.netcore.app.host.osx-arm64.10.0.9.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.host.osx-arm64/10.0.9/microsoft.netcore.app.host.osx-arm64.10.0.9.nupkg",
+      "packageSha256": "4970e98bff30f3174301ad11756084289662caa122e3aa0eebe5aac0717cf3ee",
+      "member": "runtimes/osx-arm64/native/singlefilehost",
+      "memberLength": 10619744,
+      "memberSha256": "163a48f77e9c20c0cf2474d8b1ce2b57055ffd5b8954b39d1cae9118e29e9f74",
+      "encoding": "ASCII",
+      "boundary": "NUL before and after each complete literal",
+      "findings": [
+        {
+          "offset": 7152883,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash.c"
+        },
+        {
+          "offset": 7153287,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash-specialization.h"
+        },
+        {
+          "offset": 7153429,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash-string-ptr.c"
+        },
+        {
+          "offset": 7153573,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash-ght-compatible.c"
+        },
+        {
+          "offset": 7161261,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/dlls/mscoree/exports.cpp"
+        },
+        {
+          "offset": 7164561,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/debug/ee/rcthread.cpp"
+        },
+        {
+          "offset": 7245867,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/threads.cpp"
+        },
+        {
+          "offset": 7267351,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/gcenv.ee.common.cpp"
+        },
+        {
+          "offset": 7267751,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/jithelpers.cpp"
+        },
+        {
+          "offset": 7285279,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/writebarriermanager.cpp"
+        },
+        {
+          "offset": 7292200,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/codegencommon.cpp"
+        },
+        {
+          "offset": 7348195,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/instr.cpp"
+        },
+        {
+          "offset": 7350733,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/lclvars.cpp"
+        },
+        {
+          "offset": 7350866,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/morph.cpp"
+        },
+        {
+          "offset": 7352219,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/codegenarmarch.cpp"
+        },
+        {
+          "offset": 7352372,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/codegenarm64.cpp"
+        },
+        {
+          "offset": 7352526,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/emitarm64.cpp"
+        },
+        {
+          "offset": 7354541,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/lsraarm64.cpp"
+        },
+        {
+          "offset": 7354638,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/unwindarm64.cpp"
+        }
+      ]
+    },
+    {
+      "package": "microsoft.netcore.app.host.osx-x64.10.0.9.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.host.osx-x64/10.0.9/microsoft.netcore.app.host.osx-x64.10.0.9.nupkg",
+      "packageSha256": "025d89b12117a8141bce9ab0048e279efd310c491453cfd9ef91005fb14d3754",
+      "member": "runtimes/osx-x64/native/singlefilehost",
+      "memberLength": 11394768,
+      "memberSha256": "f46e15e984db89f4c84cd7fcd32846e9e4fa0c5661a13432bea85b33dae58990",
+      "encoding": "ASCII",
+      "boundary": "NUL before and after each complete literal",
+      "findings": [
+        {
+          "offset": 7947565,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash.c"
+        },
+        {
+          "offset": 7947969,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash-specialization.h"
+        },
+        {
+          "offset": 7948213,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash-string-ptr.c"
+        },
+        {
+          "offset": 7948357,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/native/containers/dn-simdhash-ght-compatible.c"
+        },
+        {
+          "offset": 7956051,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/dlls/mscoree/exports.cpp"
+        },
+        {
+          "offset": 7959254,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/debug/ee/rcthread.cpp"
+        },
+        {
+          "offset": 8040508,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/threads.cpp"
+        },
+        {
+          "offset": 8061993,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/gcenv.ee.common.cpp"
+        },
+        {
+          "offset": 8062393,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/jithelpers.cpp"
+        },
+        {
+          "offset": 8080709,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/writebarriermanager.cpp"
+        },
+        {
+          "offset": 8082444,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/vm/amd64/cgenamd64.cpp"
+        },
+        {
+          "offset": 8087863,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/codegencommon.cpp"
+        },
+        {
+          "offset": 8131119,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/morph.cpp"
+        },
+        {
+          "offset": 8132522,
+          "literal": "/Users/runner/work/1/s/src/runtime/src/coreclr/jit/codegenxarch.cpp"
+        }
+      ]
+    }
+  ]
+}

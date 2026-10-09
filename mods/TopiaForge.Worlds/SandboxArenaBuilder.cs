@@ -11,40 +11,37 @@ namespace TopiaForge.Worlds
     /// tinted colour zones. Everything is static scenery (colliders, no rigidbodies) parented under the
     /// caller's root so the existing arena teardown (destroy the root) cleans all of it up.
     /// </summary>
-    internal static class SandboxArenaBuilder
+    internal sealed class SandboxArenaBuilder
     {
         public const float GroundSize = 200f;
         private const float WallHeight = 10f;
 
-        // CreatePrimitive's default material uses the built-in Standard shader, which this HDRP build does
-        // not ship — primitives render magenta with it. Each tint therefore gets a real HDRP/Lit material
-        // (the GravityGunModel pattern), cached per colour: the set of arena colours is small and constant,
-        // and mod assemblies never unload under Mono, so a bounded static cache is the leak-free option.
-        private static readonly Dictionary<Color, Material> TintMaterials = new Dictionary<Color, Material>();
+        // Materials are native allocations and belong to this arena's lifetime, even though their colours repeat.
+        private readonly Dictionary<Color, Material> tintMaterials = new Dictionary<Color, Material>();
+        private readonly WorldResourceScope resources;
+        private readonly bool requireHdrp;
+        private SandboxArenaBuilder(WorldResourceScope resources, bool requireHdrp) { this.resources = resources; this.requireHdrp = requireHdrp; }
 
-        /// <summary>Builds the arena centred at <paramref name="center"/> (the sandbox player spawn).</summary>
-        public static void Build(GameObject root, Vector3 center, IModLogger logger)
+        public static void Build(GameObject root, Vector3 center, IModLogger logger,
+            WorldResourceScope resources, bool allowPartialDecoration = false)
         {
-            BuildGroundAndWalls(root, center);
-
+            var builder = new SandboxArenaBuilder(resources, requireHdrp: !allowPartialDecoration);
+            builder.BuildGroundAndWalls(root, center);
             try
             {
-                BuildSpawnPlatform(root, center);
-                BuildRamps(root, center);
-                BuildStairs(root, center);
-                BuildPillars(root, center);
-                BuildBlocks(root, center);
-                BuildColorZones(root, center);
+                builder.BuildSpawnPlatform(root, center);
+                builder.BuildRamps(root, center);
+                builder.BuildStairs(root, center);
+                builder.BuildPillars(root, center);
+                builder.BuildBlocks(root, center);
+                builder.BuildColorZones(root, center);
             }
-            catch (Exception ex)
+            catch (Exception error) when (allowPartialDecoration)
             {
-                // The ground/walls above are the playable minimum; decorative content failing (e.g. a shader
-                // rename breaking tints) must not take the whole arena down with it.
-                logger.Warn("Worlds sandbox arena decoration failed part-way (arena stays playable): " + ex.Message);
+                logger.Warn("Worlds sandbox arena decoration failed part-way: " + error.Message);
             }
         }
-
-        private static void BuildGroundAndWalls(GameObject root, Vector3 center)
+        private void BuildGroundAndWalls(GameObject root, Vector3 center)
         {
             var ground = Spawn(root, "Sandbox Ground", center + new Vector3(0f, -0.5f, 0f),
                 new Vector3(GroundSize, 1f, GroundSize));
@@ -68,14 +65,14 @@ namespace TopiaForge.Worlds
             }
         }
 
-        private static void BuildSpawnPlatform(GameObject root, Vector3 center)
+        private void BuildSpawnPlatform(GameObject root, Vector3 center)
         {
-            var platform = Spawn(root, "Sandbox Spawn Platform", center + new Vector3(0f, 0.2f, 0f),
-                new Vector3(12f, 0.4f, 12f));
+            var platform = Spawn(root, "Sandbox Spawn Platform", new Vector3(center.x, GeneratedArenaGeometry.SpawnPlatformCenterY(center.y), center.z),
+                new Vector3(12f, GeneratedArenaGeometry.SpawnPlatformHeight, 12f));
             Tint(platform, new Color(0.78f, 0.70f, 0.55f));
         }
 
-        private static void BuildRamps(GameObject root, Vector3 center)
+        private void BuildRamps(GameObject root, Vector3 center)
         {
             var rampA = Spawn(root, "Sandbox Ramp A", center + new Vector3(18f, 1.6f, 10f),
                 new Vector3(6f, 0.5f, 16f), Quaternion.Euler(-12f, 0f, 0f));
@@ -86,7 +83,7 @@ namespace TopiaForge.Worlds
             Tint(rampB, new Color(0.62f, 0.60f, 0.55f));
         }
 
-        private static void BuildStairs(GameObject root, Vector3 center)
+        private void BuildStairs(GameObject root, Vector3 center)
         {
             // A five-step block staircase up to a small lookout slab: cheap parkour + a physgun vantage point.
             for (var step = 0; step < 5; step++)
@@ -103,7 +100,7 @@ namespace TopiaForge.Worlds
             Tint(lookout, new Color(0.78f, 0.70f, 0.55f));
         }
 
-        private static void BuildPillars(GameObject root, Vector3 center)
+        private void BuildPillars(GameObject root, Vector3 center)
         {
             var positions = new[]
             {
@@ -120,7 +117,7 @@ namespace TopiaForge.Worlds
             }
         }
 
-        private static void BuildBlocks(GameObject root, Vector3 center)
+        private void BuildBlocks(GameObject root, Vector3 center)
         {
             // Oversized static blocks: cover to hide behind and surfaces to throw spawned props against.
             var block = Spawn(root, "Sandbox Block A", center + new Vector3(12f, 3f, -25f), new Vector3(6f, 6f, 6f));
@@ -130,7 +127,7 @@ namespace TopiaForge.Worlds
             Tint(slab, new Color(0.72f, 0.48f, 0.30f));
         }
 
-        private static void BuildColorZones(GameObject root, Vector3 center)
+        private void BuildColorZones(GameObject root, Vector3 center)
         {
             // Flat tinted pads toward the corners — gm_construct's colour rooms, minus the rooms. Handy as
             // spawn-sorting areas and as visual landmarks for orientation on an otherwise uniform ground.
@@ -148,14 +145,15 @@ namespace TopiaForge.Worlds
             }
         }
 
-        private static GameObject Spawn(GameObject root, string name, Vector3 position, Vector3 scale)
+        private GameObject Spawn(GameObject root, string name, Vector3 position, Vector3 scale)
         {
             return Spawn(root, name, position, scale, Quaternion.identity);
         }
 
-        private static GameObject Spawn(GameObject root, string name, Vector3 position, Vector3 scale, Quaternion rotation)
+        private GameObject Spawn(GameObject root, string name, Vector3 position, Vector3 scale, Quaternion rotation)
         {
-            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            resources.ThrowIfStopping();
+            var cube = UnityWorldResources.Own(resources, GameObject.CreatePrimitive(PrimitiveType.Cube));
             cube.name = name;
             cube.transform.SetParent(root.transform, false);
             cube.transform.localScale = scale;
@@ -163,7 +161,7 @@ namespace TopiaForge.Worlds
             return cube;
         }
 
-        private static void Tint(GameObject target, Color color)
+        private void Tint(GameObject target, Color color)
         {
             var renderer = target.GetComponent<Renderer>();
             if (renderer == null)
@@ -171,18 +169,19 @@ namespace TopiaForge.Worlds
                 return;
             }
 
-            if (!TintMaterials.TryGetValue(color, out var material) || material == null)
+            if (!tintMaterials.TryGetValue(color, out var material) || material == null)
             {
-                var shader = Shader.Find("HDRP/Lit")
-                    ?? Shader.Find("Standard")
-                    ?? Shader.Find("Universal Render Pipeline/Lit");
+                var shader = Shader.Find("HDRP/Lit");
+                if (shader == null && !requireHdrp) shader = Shader.Find("Standard") ?? Shader.Find("Universal Render Pipeline/Lit");
                 if (shader == null)
                 {
-                    return; // keep whatever the primitive shipped with rather than assigning a null shader
+                    throw new InvalidOperationException("No supported shader is available for the generated world.");
                 }
 
-                material = new Material(shader) { name = "Sandbox Arena Tint", color = color };
-                TintMaterials[color] = material;
+                material = UnityWorldResources.Own(resources, new Material(shader));
+                material.name = "Sandbox Arena Tint";
+                material.color = color;
+                tintMaterials[color] = material;
             }
 
             renderer.sharedMaterial = material;

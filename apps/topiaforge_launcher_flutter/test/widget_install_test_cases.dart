@@ -101,7 +101,7 @@ void registerInstallConfirmationWidgetTests() {
     tester,
   ) async {
     const manifest = ModManifest(
-      schemaVersion: 5,
+      schemaVersion: 6,
       id: 'permission.mod',
       name: 'Permission Mod',
       version: '1.0.0',

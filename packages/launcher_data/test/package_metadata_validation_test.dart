@@ -130,7 +130,7 @@ class _Fixture {
 
   File package(String id, String version) {
     final manifest = <String, Object?>{
-      'schemaVersion': 5,
+      'schemaVersion': 6,
       'name': id,
       'displayName': 'Sample Mod',
       'version': version,

@@ -138,12 +138,11 @@ namespace TopiaForge.Zombies
 
         private void ClearEnemies()
         {
+            var failures = new System.Collections.Generic.List<Exception>();
             for (var index = enemies.Count - 1; index >= 0; index--)
-            {
-                enemies[index].Dispose();
-            }
-
+                TryCleanup(failures, enemies[index].Dispose);
             enemies.Clear();
+            if (failures.Count != 0) throw new AggregateException("Zombies enemy cleanup failed.", failures);
         }
 
         private int CountActiveNonAllies()

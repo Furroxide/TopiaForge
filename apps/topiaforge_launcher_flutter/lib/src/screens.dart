@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -14,13 +16,11 @@ part 'screens/browse_profiles_screen.dart';
 part 'screens/developer_screen.dart';
 part 'screens/developer_environment_pane.dart';
 part 'screens/developer_packages_pane.dart';
-part 'screens/developer_ugc_actions_pane.dart';
-part 'screens/developer_ugc_form_sync.dart';
-part 'screens/developer_ugc_pane.dart';
 part 'screens/diagnostics_settings_screen.dart';
 part 'screens/home_discovery.dart';
 part 'screens/home_first_run.dart';
 part 'screens/home_launch_pane.dart';
+part 'screens/launch_target_controls.dart';
 part 'screens/home_profiles.dart';
 part 'screens/home_screen.dart';
 part 'screens/mods_screen.dart';

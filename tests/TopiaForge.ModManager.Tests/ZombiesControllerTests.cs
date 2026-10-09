@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
-            RegistrationConflictsFailClosed();
+            CancelledFactoryStartupCleansAllocatedResources();
             SuccessfulModLifecycleReusesOneContextWithoutSessionLeaks();
             SceneReadinessRequiresTheSessionScene();
             CompleteWaveExceedsTheConcurrentAliveCap();
@@ -159,7 +159,7 @@ namespace TopiaForge.ModManager.Tests
                 string activeScene = "ZombiesArena",
                 string sessionScene = "ZombiesArena",
                 bool withChronos = false,
-                Func<CancellationToken, Task<OperationResult<SceneSnapshot>>>? returnToMenu = null)
+                Func<CancellationToken, Task<OperationResult<bool>>>? returnToMenu = null)
             {
                 Config = config;
                 Context = new FakeModContext();
@@ -186,22 +186,18 @@ namespace TopiaForge.ModManager.Tests
                         "Chronos should register in the fake extension service");
                 }
 
-                var session = new WorldSession(
-                    "test.world",
-                    "topiaforge.zombies",
-                    "gameScene",
-                    sessionScene,
-                    DateTimeOffset.UnixEpoch);
-                Controller = new ZombiesController(
-                    Context,
-                    config,
-                    Robots.Agents,
-                    session,
-                    returnToMenu ?? (cancellationToken => Context.Scenes.LoadAsync(
-                        new SceneLoadRequest(GameScenes.MainMenuSceneName),
-                        cancellationToken)));
+                Session = new FakeGamemodeSession(Context,
+                    new WorldReadiness(new WorldSceneIdentity(1, sessionScene), TransformState.Identity));
+                Session.OnReturnToMainMenu = returnToMenu ?? (async cancellationToken =>
+                {
+                    var result = await Context.Scenes.LoadAsync(new SceneLoadRequest(GameScenes.MainMenuSceneName), cancellationToken);
+                    return result.Succeeded ? OperationResult<bool>.Success(true)
+                        : OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage);
+                });
+                Controller = new ZombiesController(Context, config, Robots.Agents, Session);
             }
 
+            public FakeGamemodeSession Session { get; }
             public ZombiesConfig Config { get; }
             public FakeModContext Context { get; }
             public FakeRobotKit Robots { get; }

@@ -56,8 +56,8 @@ namespace TopiaForge.ModManager.Tests
             var second = coordinator.RequestTransition(new SceneTransitionRequest(
                 "second.mod", "SceneB", SceneTransitionPriority.UserInitiated));
 
-            Assert(first.Approved && second.Approved, "user-initiated is always approved");
-            Assert(coordinator.ActiveClaims.Count == 2, "both claims stay active until their owners resolve them");
+            Assert(first.Approved && !second.Approved, "competing user-initiated requests must be Busy");
+            Assert(coordinator.ActiveClaims.Count == 1, "only one admission owner may exist");
         }
 
         private static void TestDisposeReleasesClaim()
@@ -77,16 +77,11 @@ namespace TopiaForge.ModManager.Tests
         private static void TestDisposeIsIdempotent()
         {
             var coordinator = new SceneCoordinator();
-            var first = coordinator.RequestTransition(new SceneTransitionRequest(
-                "a.mod", "SceneA", SceneTransitionPriority.UserInitiated));
-            var second = coordinator.RequestTransition(new SceneTransitionRequest(
-                "b.mod", "SceneB", SceneTransitionPriority.UserInitiated));
-
+            var first = coordinator.RequestTransition(new SceneTransitionRequest("a.mod", "SceneA", SceneTransitionPriority.UserInitiated));
             first.Claim!.Dispose();
-            first.Claim!.Dispose(); // double-dispose must not release someone else's claim
-
-            Assert(coordinator.ActiveClaims.Count == 1 && coordinator.ActiveClaims[0].OwnerModId == "b.mod",
-                "double-dispose releases only the disposed claim");
+            var second = coordinator.RequestTransition(new SceneTransitionRequest("b.mod", "SceneB", SceneTransitionPriority.UserInitiated));
+            first.Claim.Dispose();
+            Assert(second.Approved && coordinator.ActiveClaims.Count == 1, "stale disposal must not release a later owner");
             second.Claim!.Dispose();
         }
 
@@ -94,33 +89,20 @@ namespace TopiaForge.ModManager.Tests
         {
             var coordinator = new SceneCoordinator();
             coordinator.RequestTransition(new SceneTransitionRequest("gone.mod", "SceneA", SceneTransitionPriority.UserInitiated));
-            coordinator.RequestTransition(new SceneTransitionRequest("gone.mod", "SceneB", SceneTransitionPriority.UserInitiated));
-            var kept = coordinator.RequestTransition(new SceneTransitionRequest("kept.mod", "SceneC", SceneTransitionPriority.UserInitiated));
-
-            coordinator.ReleaseOwner("GONE.MOD"); // owner match is case-insensitive (mod ids are)
-
-            Assert(coordinator.ActiveClaims.Count == 1 && coordinator.ActiveClaims[0].OwnerModId == "kept.mod",
-                "ReleaseOwner removes every claim of that owner and nothing else");
-            kept.Claim!.Dispose();
+            coordinator.ReleaseOwner("other.mod");
+            Assert(coordinator.IsSceneBusy, "unrelated owner cleanup must not release admission");
+            coordinator.ReleaseOwner("GONE.MOD");
+            Assert(!coordinator.IsSceneBusy, "owner cleanup closes an idle reservation");
         }
 
         private static void TestThrowingLoggerCannotChangeDecisions()
         {
             var coordinator = new SceneCoordinator(_ => throw new InvalidOperationException("disk full"));
-            var first = coordinator.RequestTransition(new SceneTransitionRequest(
-                "first.mod", "SceneA", SceneTransitionPriority.UserInitiated));
-            Assert(first.Approved && coordinator.ActiveClaims.Count == 1,
-                "a throwing log sink must not prevent an approved claim");
-
-            var automatic = coordinator.RequestTransition(new SceneTransitionRequest(
-                "auto.mod", "SceneB", SceneTransitionPriority.Automatic));
-            Assert(!automatic.Approved && coordinator.ActiveClaims.Count == 1,
-                "a throwing log sink must not turn an automatic refusal into an exception");
-
-            var takeover = coordinator.RequestTransition(new SceneTransitionRequest(
-                "second.mod", "SceneB", SceneTransitionPriority.UserInitiated));
-            Assert(takeover.Approved && coordinator.ActiveClaims.Count == 2,
-                "a throwing log sink must not prevent a user-initiated takeover");
+            var first = coordinator.RequestTransition(new SceneTransitionRequest("first.mod", "SceneA", SceneTransitionPriority.UserInitiated));
+            Assert(first.Approved, "logging cannot prevent admission");
+            var takeover = coordinator.RequestTransition(new SceneTransitionRequest("second.mod", "SceneB", SceneTransitionPriority.UserInitiated));
+            Assert(!takeover.Approved && coordinator.ActiveClaims.Count == 1, "logging cannot allow competing admission");
+            first.Claim!.Dispose();
         }
 
         private static void TestAuthorityPolicyDeniesBeforeClaiming()

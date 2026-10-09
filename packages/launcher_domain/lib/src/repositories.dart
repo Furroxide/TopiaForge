@@ -75,11 +75,27 @@ abstract interface class LauncherRepository {
   /// Starts [install] with [profile] as a process-scoped snapshot. Profile mod
   /// enablement, version pins, safe mode, arguments, and environment must not
   /// be persisted into the manager's global state when launch fails or exits.
-  Future<LaunchResult> launch(GameInstall install, LauncherProfile profile);
+  Stream<LaunchActivity> get launchActivities;
 
-  /// Stops the matching game process, then follows the same process-scoped
-  /// profile contract as [launch].
-  Future<LaunchResult> restart(GameInstall install, LauncherProfile profile);
+  Future<LaunchPreview> previewLaunch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
+
+  Future<LaunchResult> launch(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
+
+  /// Preflights before stopping the owned process and resolves again before
+  /// creating its replacement. The optional command never changes saved intent.
+  Future<LaunchResult> restart(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  });
 
   Future<DiagnosticBundle> createDiagnosticBundle(
     GameInstall install,
@@ -101,46 +117,6 @@ abstract interface class LauncherRepository {
 
   /// Persists launcher self-update settings such as automatic checks and release channel.
   Future<void> saveLauncherUpdateSettings(LauncherUpdateSettings settings);
-
-  /// Writes the UGC live-sync runtime config (`config/topiaforge.ugc.livesync.json`) into the install so the
-  /// `TopiaForge.UgcLiveSync` mod picks it up on next launch. Returns the written file path.
-  Future<String> deployUgcLiveSyncConfig(
-    GameInstall install,
-    UgcLiveSyncSettings settings,
-  );
-
-  /// Stops the active UGC live-sync loop and clears transient connection state.
-  /// Durable preferences come from the deployed runtime config when readable;
-  /// [fallbackSettings] is used only when no valid config has been deployed.
-  Future<UgcLiveSyncCleanupReport> cleanupUgcLiveSync(
-    GameInstall install,
-    UgcLiveSyncSettings fallbackSettings,
-  );
-
-  /// Sidecar lifecycle events emitted by the repository-owned publisher.
-  Stream<UgcPublisherEvent> get ugcPublisherEvents;
-
-  bool get isUgcPublisherRunning;
-
-  Future<UgcPublisherStartResult> startUgcPublisher(
-    UgcLiveSyncSettings settings,
-  );
-
-  /// Stops a repository-owned sidecar. This does not revoke a detached
-  /// publisher lease owned by another launcher or CLI process.
-  Future<void> stopUgcPublisher({bool waitForExit = false});
-
-  /// Explicitly revokes the shared publisher lease, independent of installs.
-  Future<void> revokeUgcPublisherSession();
-
-  /// Reads the UGC live-sync status handshake the mod writes (`config/topiaforge.ugc.livesync.status.json`) so the
-  /// cockpit can auto-detect the game's default watch folder and show live state. Null only when absent; malformed
-  /// or unsafe files throw so callers can surface the failure.
-  Future<UgcLiveSyncStatusSnapshot?> readUgcLiveSyncStatus(GameInstall install);
-
-  /// Inspects the deterministic newest exported project snapshot and returns
-  /// its scenes, source provenance, and structured validation issues.
-  Future<UgcSceneInspectionResult> inspectWatchFolderScenes(String watchFolder);
 }
 
 abstract interface class LauncherUpdateRepository {
@@ -196,26 +172,6 @@ abstract interface class DeveloperRepository {
     ModManifest manifest,
   );
 
-  /// Ensures `Packages/io.github.furroxide.topiaforge.ugc-companion` exists in a Unity project, copying it from the repo template
-  /// when missing (or when [update] is true). Returns true when the package is present afterwards.
-  Future<bool> ensureUgcCompanionPackage(
-    String projectPath, {
-    bool update = false,
-  });
-
-  /// Writes `ProjectSettings/TopiaForgeUgcCompanion.json` — the seed the companion's editor bootstrap reads to
-  /// configure the UGC Live Sync window (watch folder, scene, live-sync on) on next project load. Returns the
-  /// written file path.
-  Future<String> writeUgcCompanionSeed(
-    String projectPath, {
-    required String watchFolder,
-    String projectName = '',
-    String sceneId = '',
-    String sceneName = '',
-    String environment = '',
-    bool liveSync = true,
-  });
-
   Future<DeveloperWorkspace> resolveDeveloperProject(
     String projectPath, {
     bool restore = true,
@@ -228,7 +184,7 @@ abstract interface class DeveloperRepository {
   /// Independent of any project, so it works for a fresh machine. Consuming mods requires none of these.
   Future<EnvironmentReport> checkEnvironment();
 
-  /// Performs safe auto-fixes (installs the UGC Automerge sidecar's npm deps, ensures data folders) and returns
+  /// Performs safe auto-fixes (ensures data folders) and returns
   /// the post-fix environment plus an action log. Never installs SDKs. Shared by the CLI `setup` command and the
   /// launcher's Developer tab so both behave identically.
   Future<DeveloperSetupResult> runSetup();
@@ -256,12 +212,6 @@ abstract interface class DeveloperRepository {
     String configuration = 'Release',
   });
 
-  /// Persists UGC live-sync settings into the project's `topiaforge.project.json` (under `unityCompanion`).
-  Future<DeveloperProject> updateUgcLiveSync(
-    String projectPath,
-    UgcLiveSyncSettings settings,
-  );
-
   /// Lists the tracked developer projects (VCC-style registry, persisted to `developer_projects.json`).
   Future<List<RegisteredProject>> listProjects();
 
@@ -269,11 +219,11 @@ abstract interface class DeveloperRepository {
   /// Throws if the directory is not a recognized project. Returns the updated project list.
   Future<List<RegisteredProject>> addExistingProject(String path);
 
-  /// Removes a project from the registry (untrack only — never deletes files). Returns the updated list.
+  /// Removes a project from the registry (untrack only; never deletes files). Returns the updated list.
   Future<List<RegisteredProject>> removeProject(String path);
 
-  /// Creates a new Unity authoring project from the bundled template (copies it, installs the UGC companion
-  /// package, registers it). The VCC-style "new project from template" flow. Returns the updated project list.
+  /// Creates a new Unity authoring project from the bundled template (copies it and registers it).
+  /// The VCC-style "new project from template" flow. Returns the updated project list.
   Future<List<RegisteredProject>> createUnityProject({
     required String parentDirectory,
     required String name,
@@ -345,7 +295,7 @@ abstract interface class DeveloperRepository {
   /// Builds the paired world prefab into an AssetBundle by running the Unity editor headlessly
   /// (`-batchmode -executeMethod` against the world-companion package's builder) and verifies the bundle
   /// landed in the paired mod's `AssetBundles/` folder. [modPath]/[bundleName]/[unityExePath] override the
-  /// config/auto-detected values. Never throws for build failures — inspect the result.
+  /// config/auto-detected values. Never throws for build failures; inspect the result.
   Future<WorldBundleBuildResult> buildWorldBundle({
     required String unityProjectPath,
     String modPath = '',

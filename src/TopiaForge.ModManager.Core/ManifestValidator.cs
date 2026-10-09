@@ -54,17 +54,17 @@ namespace TopiaForge.ModManager.Core
 
             var errors = new List<string>();
 
-            if (manifest.SchemaVersion == 4)
+            if (manifest.SchemaVersion == 4 || manifest.SchemaVersion == ModManifest.ManifestV5SchemaVersion)
             {
                 errors.Add(
-                    "schemaVersion 4 was retired before TopiaForge 1.0; migrate this manifest to " +
-                    "schemaVersion 5 with 'topiaforge migrate-manifest --project <path>'. " +
+                    "schemaVersion " + manifest.SchemaVersion + " was retired before TopiaForge 1.0; migrate this manifest to " +
+                    "schemaVersion 6 with 'topiaforge migrate-manifest --project <path>'. " +
                     "The multiplayer field is optional for standalone-only mods.");
                 return errors;
             }
-            else if (manifest.SchemaVersion != ModManifest.ManifestV5SchemaVersion)
+            else if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
-                errors.Add("schemaVersion must be 5.");
+                errors.Add("schemaVersion must be 6.");
                 return errors;
             }
 
@@ -184,7 +184,7 @@ namespace TopiaForge.ModManager.Core
             ValidateStringList(manifest.Tags, "tags", 64, 1, 64, validatePaths: false, errors);
             ValidateStringList(manifest.Screenshots, "screenshots", 32, 1, 1024, validatePaths: true, errors);
             ValidateHashes(manifest.Hashes, errors);
-            ValidateWorldGamemodes(manifest.WorldGamemodes, errors);
+            ManifestContributionValidator.Validate(manifest, errors);
             ValidateBuiltWith(manifest.BuiltWith, errors);
             ValidateMultiplayer(manifest, errors);
 
@@ -193,7 +193,7 @@ namespace TopiaForge.ModManager.Core
 
         private static void ValidateMultiplayer(ModManifest manifest, List<string> errors)
         {
-            if (manifest.SchemaVersion != ModManifest.CurrentSchemaVersion)
+            if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
             {
                 return;
             }
@@ -557,39 +557,6 @@ namespace TopiaForge.ModManager.Core
             }
         }
 
-        private static void ValidateWorldGamemodes(IEnumerable<ModGamemode>? values, List<string> errors)
-        {
-            var entries = (values ?? Array.Empty<ModGamemode>()).ToList();
-            ValidateCount(entries, "worldGamemodes", 64, errors);
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var gamemode in entries)
-            {
-                if (!IsValidId(gamemode.Id))
-                {
-                    errors.Add("worldGamemodes id '" + gamemode.Id + "' must use the safe mod id format.");
-                }
-                else if (!seen.Add(gamemode.Id))
-                {
-                    errors.Add("worldGamemodes contains duplicate id '" + gamemode.Id + "'.");
-                }
-
-                ValidateStringLength(
-                    gamemode.Name,
-                    "worldGamemodes name for '" + gamemode.Id + "'",
-                    1,
-                    128,
-                    required: true,
-                    errors);
-                ValidateStringLength(
-                    gamemode.Description,
-                    "worldGamemodes description for '" + gamemode.Id + "'",
-                    0,
-                    1024,
-                    required: false,
-                    errors);
-            }
-        }
-
         private static void ValidateStringList(
             IEnumerable<string>? values,
             string fieldName,
@@ -726,6 +693,19 @@ namespace TopiaForge.ModManager.Core
             {
                 errors.Add(fieldName + " cannot contain more than " + maximum + " entries.");
             }
+        }
+
+        internal static bool IsRetiredEcosystemId(string id)
+        {
+            foreach (var prefix in RetiredEcosystemIdPrefixes)
+            {
+                if (id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         internal static bool IsValidId(string? id)

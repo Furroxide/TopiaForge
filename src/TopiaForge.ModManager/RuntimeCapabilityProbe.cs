@@ -14,7 +14,6 @@ namespace TopiaForge.ModManager
         private const string WorldsProvider = "io.github.furroxide.topiaforge.worlds";
         private const string ChronosProvider = "io.github.furroxide.topiaforge.chronos";
         private const string PromptsProvider = "io.github.furroxide.topiaforge.prompts";
-        private const string UgcProvider = "io.github.furroxide.topiaforge.ugc.livesync";
 
         internal static void Refresh(RuntimeInfo runtimeInfo, ModServiceRegistry registry)
         {
@@ -70,14 +69,14 @@ namespace TopiaForge.ModManager
                 "RobotKit loaded, but did not register its objective service.",
                 "RobotKit objectives are unavailable.");
 
-            Report<IWorldGamemodeService>(
+            Report<IWorldSessionService>(
                 runtimeInfo,
                 registry,
                 WorldsProvider,
                 "worlds",
                 _ => true,
-                "Worlds loaded, but did not register its world and gamemode service.",
-                "World and gamemode registration is unavailable.");
+                "Worlds loaded, but did not publish its committed session observer.",
+                "World session observation is unavailable.");
             Report<IWorldPauseMenuService>(
                 runtimeInfo,
                 registry,
@@ -103,14 +102,6 @@ namespace TopiaForge.ModManager
                 _ => true,
                 "Prompts loaded, but did not register its prompt override service.",
                 "Prompt overrides are unavailable.");
-            Report<IUgcLiveSyncService>(
-                runtimeInfo,
-                registry,
-                UgcProvider,
-                "ugc",
-                service => service.Status != UgcLiveSyncStatus.Unavailable,
-                "UGC loaded, but did not register its live-sync adapter.",
-                "UGC live sync is unavailable because required game bindings are missing.");
         }
 
         private static void Report<T>(

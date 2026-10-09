@@ -132,14 +132,19 @@ namespace TopiaForge.ModManager.Tests
             SurfaceSnapshot baseline,
             BindingManifest manifest)
         {
-            AssertFormatRejected(
-                () => SurfaceSnapshot.Parse(
-                    baseline.ToCanonicalJson().Replace("\"schemaVersion\": 2", "\"schemaVersion\": 1")),
-                "surface snapshots must reject schemaVersion 1");
-            AssertFormatRejected(
-                () => BindingManifest.Parse(
-                    manifest.ToCanonicalJson().Replace("\"schemaVersion\": 2", "\"schemaVersion\": 1")),
-                "binding manifests must reject schemaVersion 1");
+            foreach (var retired in new[] { 1, 2 })
+            {
+                AssertFormatRejected(
+                    () => SurfaceSnapshot.Parse(baseline.ToCanonicalJson().Replace(
+                        "\"schemaVersion\": " + SurfaceSnapshot.CurrentSchemaVersion,
+                        "\"schemaVersion\": " + retired)),
+                    "surface snapshots must reject schemaVersion " + retired);
+                AssertFormatRejected(
+                    () => BindingManifest.Parse(manifest.ToCanonicalJson().Replace(
+                        "\"schemaVersion\": " + BindingManifest.CurrentSchemaVersion,
+                        "\"schemaVersion\": " + retired)),
+                    "binding manifests must reject schemaVersion " + retired);
+            }
         }
 
         private static void AssertFormatRejected(Action action, string message)
@@ -311,7 +316,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void AssertLinkedCompileSourcesAreAudited()
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeGameCompatLinked-" + Guid.NewGuid().ToString("N"));
+            var owned = Directory.CreateTempSubdirectory("TopiaForgeGameCompatLinked-");
+            var root = owned.FullName;
             var bindings = Path.Combine(root, "bindings");
             const string modId = "io.github.furroxide.topiaforge.linked";
             var mod = Path.Combine(root, "mods", "TopiaForge.Linked");
@@ -362,7 +368,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 try
                 {
-                    Directory.Delete(root, recursive: true);
+                    owned.Delete(recursive: true);
                 }
                 catch
                 {

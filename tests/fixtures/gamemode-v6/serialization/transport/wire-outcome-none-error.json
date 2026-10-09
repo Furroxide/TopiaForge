@@ -1,0 +1,36 @@
+{
+  "id": "wire-outcome-none-error",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec none error",
+  "transport": "outcome",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "launch",
+    "command": "launch-target",
+    "requestId": "request-01",
+    "sequence": 5,
+    "phase": "running",
+    "status": "failed",
+    "sessionId": "session-01",
+    "blocks": [],
+    "error": {
+      "code": "none",
+      "message": "Failure"
+    }
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

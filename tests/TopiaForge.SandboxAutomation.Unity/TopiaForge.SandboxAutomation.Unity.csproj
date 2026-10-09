@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>netstandard2.1</TargetFramework><IsPackable>false</IsPackable><AssemblyName>TopiaForge.SandboxAutomation.Unity</AssemblyName>  <TopiaForgeSafeProject>false</TopiaForgeSafeProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TopiaForge.Mods.Testing/TopiaForge.Mods.Testing.csproj" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj" />
+    <ProjectReference Include="../../src/TopiaForge.ModManager.Core/TopiaForge.ModManager.Core.csproj" />
+    <Compile Include="../../mods/TopiaForge.Sandbox/CreatorTools/*.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UnityUi*.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UnityMainThreadGuard.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager.Core/KeyedRetentionMap.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)/UnityEngine.UI.dll" Private="false" />
+    <Reference Include="UnityEngine.UIModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.ImageConversionModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="Unity.TextMeshPro" HintPath="$(RobotopiaManagedDir)/Unity.TextMeshPro.dll" Private="false" />
+  </ItemGroup>
+</Project>

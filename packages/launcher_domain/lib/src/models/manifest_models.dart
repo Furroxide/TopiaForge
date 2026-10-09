@@ -37,7 +37,7 @@ class ModManifest {
     this.architectures = const [],
     this.contentTargets = const [],
     this.builtWith,
-    this.worldGamemodes = const [],
+    this.contributions,
     this.apiAssemblies = const [],
     this.multiplayer,
     bool? multiplayerIsPresent,
@@ -51,7 +51,19 @@ class ModManifest {
   static const canonicalSchemaUrl =
       'https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json';
   static const manifestV5SchemaVersion = 5;
-  static const currentSchemaVersion = manifestV5SchemaVersion;
+
+  /// The schema that declares `contributions`: worlds, gamemodes and launch
+  /// targets as separate things, each with an implementation owner, rather than
+  /// V5's display-only `worldGamemodes` list.
+  static const manifestV6SchemaVersion = 6;
+  static const currentSchemaVersion = manifestV6SchemaVersion;
+
+  /// Whether a version has a reader at all. Every version gate routes through
+  /// here, so admitting a new schema cannot leave one of them behind still
+  /// testing for a single version. A gate that silently stops applying is worse
+  /// than one that rejects.
+  static bool isSupportedSchemaVersion(int schemaVersion) =>
+      schemaVersion == manifestV6SchemaVersion;
 
   static bool isValidId(String id) {
     if (!_modIdPattern.hasMatch(id)) {
@@ -96,7 +108,9 @@ class ModManifest {
   final List<String> architectures;
   final List<String> contentTargets;
   final ModBuildMetadata? builtWith;
-  final List<GamemodeDefinition> worldGamemodes;
+
+  /// The worlds, gamemodes and launch targets this package declares.
+  final ModContributions? contributions;
   final List<String> apiAssemblies;
 
   /// Optional multiplayer admission metadata. Its absence means the mod is
@@ -118,75 +132,13 @@ class ModManifest {
     ...optionalDependencies,
   ];
 
-  /// Decodes a V5 manifest after rejecting other schema versions before any
+  /// Decodes a V6 manifest after rejecting retired schema versions before any
   /// version-specific fields are interpreted.
   factory ModManifest.fromJson(Map<String, Object?> json) {
     switch (_dispatchManifestSchema(json)) {
-      case _ManifestSchemaContract.v5:
-        return ModManifest._fromV5Json(json);
+      case _ManifestSchemaContract.v6:
+        return _readV6Manifest(json);
     }
-  }
-
-  factory ModManifest._fromV5Json(Map<String, Object?> json) {
-    return ModManifest(
-      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 0,
-      schemaUrl: (json[r'$schema'] as String?) ?? '',
-      id: (json['name'] as String?) ?? '',
-      name: (json['displayName'] as String?) ?? '',
-      version: (json['version'] as String?) ?? '',
-      author: ModAuthor.fromJson(json['author']),
-      authorIsObject: json['author'] is Map,
-      description: (json['description'] as String?) ?? '',
-      entryAssembly: (json['entryAssembly'] as String?) ?? '',
-      entryType: (json['entryType'] as String?) ?? '',
-      dependencies: _dependencyMapList(json['dependencies']),
-      optionalDependencies: _dependencyMapList(
-        json['optionalDependencies'],
-        optional: true,
-      ),
-      conflicts: _conflictList(json['conflicts']),
-      loadAfter: _stringList(json['loadAfter']),
-      loadBefore: _stringList(json['loadBefore']),
-      gameVersionRange: VersionRange.parse(
-        json['supportedGameVersionRange'] as String?,
-      ),
-      loaderVersionRange: VersionRange.parse(
-        json['supportedLoaderVersionRange'] as String?,
-      ),
-      sdkVersionRange: VersionRange.parse(
-        json['supportedSdkVersionRange'] as String?,
-      ),
-      gameVersionRangeIsPresent: json.containsKey('supportedGameVersionRange'),
-      loaderVersionRangeIsPresent: json.containsKey(
-        'supportedLoaderVersionRange',
-      ),
-      sdkVersionRangeIsPresent: json.containsKey('supportedSdkVersionRange'),
-      category: (json['category'] as String?) ?? '',
-      tags: _stringList(json['tags']),
-      icon: (json['icon'] as String?) ?? '',
-      screenshots: _stringList(json['screenshots']),
-      homepage: (json['homepage'] as String?) ?? '',
-      source: (json['source'] as String?) ?? '',
-      license: (json['license'] as String?) ?? '',
-      licenseFiles: _stringList(json['licenseFiles']),
-      hashes: _stringMap(json['hashes']),
-      capabilities: _stringList(json['capabilities']),
-      platforms: _stringList(json['platforms']),
-      architectures: _stringList(json['architectures']),
-      contentTargets: _stringList(json['contentTargets']),
-      builtWith: json['builtWith'] == null
-          ? null
-          : ModBuildMetadata.fromJson(json['builtWith']),
-      worldGamemodes: _gamemodeList(json['worldGamemodes']),
-      apiAssemblies: _stringList(json['apiAssemblies']),
-      multiplayer: ModMultiplayerMetadata.tryFromJson(json['multiplayer']),
-      multiplayerIsPresent: json.containsKey('multiplayer'),
-      structuralIssues: _manifestStructuralIssues(json),
-      extraFields: Map<String, Object?>.unmodifiable(
-        Map<String, Object?>.of(json)
-          ..removeWhere((key, _) => _knownManifestJsonKeys.contains(key)),
-      ),
-    );
   }
 
   Map<String, Object?> toJson() => {
@@ -230,28 +182,28 @@ class ModManifest {
     if (architectures.isNotEmpty) 'architectures': architectures,
     if (contentTargets.isNotEmpty) 'contentTargets': contentTargets,
     if (builtWith != null) 'builtWith': builtWith!.toJson(),
-    if (worldGamemodes.isNotEmpty)
-      'worldGamemodes': worldGamemodes.map((item) => item.toJson()).toList(),
+    if (contributions != null && !contributions!.isEmpty)
+      'contributions': contributions!.toJson(),
     if (apiAssemblies.isNotEmpty) 'apiAssemblies': apiAssemblies,
     if (multiplayerIsPresent && multiplayer != null)
       'multiplayer': multiplayer!.toJson(),
   };
 
   List<LauncherIssue> validate() {
-    if (schemaVersion == 4) {
-      return const [
+    if (schemaVersion == 4 || schemaVersion == 5) {
+      return [
         LauncherIssue(
           severity: IssueSeverity.error,
           message:
-              'schemaVersion 4 was retired before TopiaForge 1.0; migrate to schemaVersion 5. The multiplayer field is optional for standalone-only mods.',
+              'schemaVersion $schemaVersion was retired before TopiaForge 1.0; run `topiaforge migrate-manifest` to migrate to schemaVersion 6.',
         ),
       ];
     }
-    if (schemaVersion != manifestV5SchemaVersion) {
+    if (!isSupportedSchemaVersion(schemaVersion)) {
       return const [
         LauncherIssue(
           severity: IssueSeverity.error,
-          message: 'schemaVersion must be 5.',
+          message: 'schemaVersion must be 6.',
         ),
       ];
     }
@@ -262,7 +214,7 @@ class ModManifest {
     _validateConflicts(issues);
     _validateOrderHints(issues);
     _validateApiAssemblies(issues);
-    _validateManifestWorldGamemodes(this, issues);
+    _validateManifestContributions(this, issues);
     _validateUnsupportedAliases(issues);
     _validateUnknownFields(issues);
     for (final message in _structuralIssues) {

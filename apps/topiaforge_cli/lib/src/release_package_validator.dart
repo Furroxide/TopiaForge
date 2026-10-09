@@ -6,6 +6,7 @@ import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
+import 'release_build_host_paths.dart';
 import 'release_ecosystem_identity.dart';
 import 'release_loader_payload.dart';
 import 'release_package_io.dart';
@@ -167,6 +168,10 @@ class ReleasePackageValidator {
 
   void _assertPayload(String payloadRoot) {
     const ReleaseSdkPayloadValidator().validate(payloadRoot);
+    // Runs before the structural checks: a package that names the build
+    // account is a privacy defect regardless of whether its layout is right,
+    // and the byte scan is what makes that visible.
+    const BuildHostPathScanner().assertClean(payloadRoot);
     _assertPath(p.join(payloadRoot, 'tools'), 'Package must include tools/.');
     _assertPath(
       p.join(payloadRoot, 'templates'),
@@ -202,6 +207,32 @@ class ReleasePackageValidator {
       _assertPath(
         p.join(payloadRoot, 'third_party', 'BepInEx', 'LICENSES', license),
         'Package must include the bundled BepInEx dependency licenses.',
+      );
+    }
+    // UnityDoorstop is LGPL-2.1 and ships as winhttp.dll in the loader runtime,
+    // so the notice alone is not enough: the corresponding source has to travel
+    // with the binary. Matched by shape rather than by exact filename so a
+    // Doorstop version bump does not silently turn this into a no-op.
+    final bepInExRoot = Directory(
+      p.join(payloadRoot, 'third_party', 'BepInEx'),
+    );
+    final correspondingSource = bepInExRoot.existsSync()
+        ? bepInExRoot
+              .listSync(followLinks: false)
+              .whereType<File>()
+              .map((entry) => p.basename(entry.path))
+              .where(
+                (name) =>
+                    name.startsWith('UnityDoorstop-') &&
+                    name.contains('-source-') &&
+                    name.endsWith('.zip'),
+              )
+              .toList()
+        : const <String>[];
+    if (correspondingSource.isEmpty) {
+      throw StateError(
+        'Package must include the UnityDoorstop corresponding source archive '
+        'beside its LGPL-2.1 notice.',
       );
     }
     _assertPath(

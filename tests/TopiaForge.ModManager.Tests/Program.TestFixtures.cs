@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Tests
         {
             return new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = 6,
                 Id = id,
                 Name = id,
                 Version = "1.0.0",
@@ -47,8 +47,7 @@ namespace TopiaForge.ModManager.Tests
         // Pins the shared UGC export JSON contract (the surface the Unity exporter writes and the game
         // importer deserializes into UgcExportProject). GameCode-free on purpose: the test harness targets
         // net8.0 and never references the game's Mono assemblies, so this validates the golden fixture against
-        // the documented shape. The authoritative round-trip is exercised by the manual E2E (docs/UgcLiveSync.md)
-        // and the Unity exporter self-check.
+        // the documented shape. The authoritative round-trip is exercised by the Unity exporter self-check.
         internal static string FindRepoRoot()
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -107,7 +106,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 WriteEntry(zip, "topiaforge.mod.json", JsonUtil.Serialize(new ModManifest
                 {
-                    SchemaVersion = 5,
+                    SchemaVersion = 6,
                     Id = id,
                     Name = name,
                     Author = new ModAuthor { Name = "TopiaForge" },
@@ -115,8 +114,8 @@ namespace TopiaForge.ModManager.Tests
                     EntryAssembly = fixtureAssembly,
                     EntryType = fixtureType,
                     SupportedGameVersionRange = supportedGameVersionRange,
-                    SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
-                    SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0",
+                    SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
+                    SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0",
                     Category = category,
                     Dependencies = dependencies == null
                         ? new Dictionary<string, string>()

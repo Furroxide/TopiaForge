@@ -35,7 +35,6 @@ Specialist modules have first-class, engine-free fakes too:
 - `FakeWorldGamemodeService` owns typed registrations and lets tests pause and complete a world load.
 - `FakeTimeControlService` derives freeze/slow state and advances scaled and control clocks only on request.
 - `FakePromptOverrideRegistry` reproduces deterministic priority and conflict selection.
-- `FakeUgcLiveSyncService` owns sessions and asset overrides and injects snapshot, patch, and error events.
 
 Pass `context.Lifetime` to each fake. This gives module handles the same reverse-order unload and failed-load
 cleanup semantics as a live mod. Register a fake in `context.Extensions` only when the mod under test resolves it

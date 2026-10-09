@@ -30,6 +30,7 @@ internal sealed class ManagedDirectoryValidator : IManagedDirectoryValidator
             ["UnityEngine.AudioModule.dll"] = "UnityEngine.AudioModule",
             ["UnityEngine.CoreModule.dll"] = "UnityEngine.CoreModule",
             ["UnityEngine.IMGUIModule.dll"] = "UnityEngine.IMGUIModule",
+            ["UnityEngine.ImageConversionModule.dll"] = "UnityEngine.ImageConversionModule",
             ["UnityEngine.InputLegacyModule.dll"] = "UnityEngine.InputLegacyModule",
             ["UnityEngine.PhysicsModule.dll"] = "UnityEngine.PhysicsModule",
             ["UnityEngine.TextCoreFontEngineModule.dll"] = "UnityEngine.TextCoreFontEngineModule",

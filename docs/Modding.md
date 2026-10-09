@@ -42,23 +42,23 @@ cancellation with the lifetime stopping token.
 
 ```sh
 topiaforge list templates
-topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 ```
 
 | Template | Demonstrates |
 | --- | --- |
 | `minimal` | Typed validated/migrating config, logging, and a namespaced command. |
 | `gameplay` | Named input, player aim, a safe physics query, logging, and a toast. |
-| `gamemode` | Worlds registration, session events, and automatic teardown. |
+| `gamemode` | Declared launch targets, `StartAsync` controllers, and session-owned teardown. |
 | `service` | A dependency-scoped typed provider plus consumer contract. |
 | `ui` | Configurable input and a TopiaForgeUi-backed window. |
 | `asset` | Package bundle/prefab loading, spawning, and result handling. |
-| `world` | Bundle-backed world/menu registration and save-aware teardown. |
+| `world` | Declared bundle worlds and launch targets with session-owned loading, readiness, and cleanup. |
 
 Every scaffold includes:
 
 - an exact V1 `PackageReference` and analyzer;
-- manifest schema V5 with current compatibility defaults;
+- manifest schema V6 with current compatibility defaults;
 - project-local `global.json` and NuGet lock state;
 - source-control rules for generated restore output; and
 - an NUnit project using `TopiaForge.Mods.Testing`.
@@ -70,10 +70,10 @@ lifetime, events, files, config, installation-local storage, input, time, schedu
 physics, interactions, items, assets, audio, UI, localization, commands, diagnostics, and
 extensions. See [Core services](CoreServices.md) for the complete service map and usage rules.
 
-Creator Content, RobotKit, Worlds, Chronos, Prompts, UGC, and the multiplayer preview are separate
+Creator Content, RobotKit, Worlds, Chronos, Prompts, and the multiplayer preview are separate
 Unity-free module contracts. Add a module with `topiaforge mod add <module>` so its compile-time
 package and runtime manifest dependency stay in sync. See [Specialist modules](Modules.md) and the
-[Creator Tools guide](CreatorTools.md).
+[Sandbox guide](Sandbox.md).
 
 ## Errors, queries, and cancellation
 
@@ -88,10 +88,10 @@ Mods should disable only the affected feature and show a useful message.
 
 ## Manifest, restore, and packaging
 
-`topiaforge.mod.json` schema V5 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
+`topiaforge.mod.json` schema V6 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
 ID-to-range maps. Compatibility ranges, platform/architecture/content constraints, capabilities,
 load-order hints, exported API assemblies, and namespaced `x-*` metadata are validated before code
-executes. Read [Manifest V5](ManifestV5.md) for every field and
+executes. Read [Manifest V6](ManifestV6.md) for every field and
 [Multiplayer API preview](Multiplayer.md) before opting in.
 
 ```sh
@@ -127,11 +127,11 @@ staged when required and take effect after a Robotopia restart.
 
 ## Next steps
 
-- [Manifest V5](ManifestV5.md)
+- [Manifest V6](ManifestV6.md)
 - [Multiplayer API preview](Multiplayer.md)
 - [Core services](CoreServices.md)
 - [Specialist modules](Modules.md)
-- [Creator Tools](CreatorTools.md)
+- [Sandbox](Sandbox.md)
 - [Test a mod](TestingMods.md)
 - [Development loop](CliDevLoop.md)
 - [Diagnostics](Diagnostics.md)

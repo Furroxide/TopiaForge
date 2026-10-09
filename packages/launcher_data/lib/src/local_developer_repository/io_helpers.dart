@@ -1,5 +1,10 @@
 part of '../local_developer_repository.dart';
 
+/// Resolves a developer executable, including an optional configured path.
+/// Production lookups retain their bounded where/which process.
+typedef DeveloperExecutableLookup =
+    Future<String> Function(String executable, {String? configuredPath});
+
 extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
   Directory? _findProjectRoot(String startPath) {
     var current = FileSystemEntity.isDirectorySync(startPath)
@@ -146,34 +151,12 @@ namespace $assembly
     final companion = Directory(p.join(root, 'unity-companion'));
     companion.createSync(recursive: true);
 
-    // Copy the authored UGC companion Unity package from the repo template when available (the CLI runs from
-    // the repo). In synthetic environments (e.g. unit tests) the template may be absent; the README + sample
-    // config are still written so the scaffold is self-describing either way.
-    if (_companionTemplateDir.existsSync()) {
-      _copyDirectory(
-        _companionTemplateDir,
-        Directory(
-          p.join(
-            companion.path,
-            'Packages',
-            'io.github.furroxide.topiaforge.ugc-companion',
-          ),
-        ),
-      );
-    }
-
     await File(p.join(companion.path, 'README.md')).writeAsString(
       '# $name Unity Companion\n\n'
-      'Open this folder as a Unity project, or copy `Packages/io.github.furroxide.topiaforge.ugc-companion` into an existing '
-      'Unity project. Use **TopiaForge → UGC Live Sync** to author UGC content and live-sync it into the '
-      'running game with no restart. See docs/UgcLiveSync.md for the full workflow.\n',
-    );
-
-    // A sample of the runtime config the game mod reads (config/topiaforge.ugc.livesync.json). Copy it there and
-    // set the watch folder to share content between the Unity companion and the game.
-    _writeDeveloperTextAtomic(
-      File(p.join(companion.path, 'topiaforge.ugc.livesync.sample.json')),
-      _prettyJson(const UgcLiveSyncSettings().toRuntimeConfig()),
+      'Place a Unity project here to author AssetBundles for this mod. Scaffold one '
+      'with `topiaforge new unity-world <Name> --dir .`, then build its bundles with '
+      '`topiaforge world build`. Scene and robot authoring lives in the official '
+      'Robotopia Creator at https://robotopia.gg/editor/.\n',
     );
   }
 
@@ -340,7 +323,16 @@ ${references.join('\n')}
     return '';
   }
 
-  Future<String> _which(String executable) async {
+  Future<String> _which(String executable, {String? configuredPath}) async {
+    final lookup = _executableLookup;
+    if (lookup != null) {
+      return lookup(executable, configuredPath: configuredPath);
+    }
+    if (configuredPath != null &&
+        configuredPath.isNotEmpty &&
+        File(configuredPath).existsSync()) {
+      return configuredPath;
+    }
     final command = Platform.isWindows ? 'where' : 'which';
     final result = await runBoundedProcess(
       command,
@@ -356,11 +348,10 @@ ${references.join('\n')}
   }
 
   Future<String> _findUnityHub() async {
-    final env = Platform.environment['UNITY_HUB_PATH'];
-    if (env != null && env.isNotEmpty && File(env).existsSync()) {
-      return env;
-    }
-    return _which(Platform.isWindows ? 'Unity Hub.exe' : 'unityhub');
+    return _which(
+      Platform.isWindows ? 'Unity Hub.exe' : 'unityhub',
+      configuredPath: Platform.environment['UNITY_HUB_PATH'],
+    );
   }
 
   Future<String> _findUnityEditor(DeveloperProject? project) async {
@@ -370,35 +361,6 @@ ${references.join('\n')}
           configuredVersion: project?.unityCompanion.unityVersion ?? '',
         )?.path ??
         '';
-  }
-
-  // Locates the UGC Automerge sidecar script. Prefers the resolved repo root (correct when the launcher runs
-  // from a packaged location), then walks up from the current directory for parity with the CLI.
-  String? _findSidecar() {
-    final fromRepo = p.join(
-      _repositoryRoot.path,
-      'tools',
-      'ugc-automerge-sidecar',
-      'index.mjs',
-    );
-    if (File(fromRepo).existsSync()) {
-      return fromRepo;
-    }
-
-    var dir = Directory.current.absolute;
-    while (true) {
-      final candidate = File(
-        p.join(dir.path, 'tools', 'ugc-automerge-sidecar', 'index.mjs'),
-      );
-      if (candidate.existsSync()) {
-        return candidate.path;
-      }
-      final parent = dir.parent;
-      if (parent.path == dir.path) {
-        return null;
-      }
-      dir = parent;
-    }
   }
 
   String _assemblyName(String id) => id

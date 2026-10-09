@@ -21,7 +21,7 @@ loader state. Follow its remediation if a required row is not ready.
 ## 2. Create a project
 
 ```sh
-topiaforge new mod example.first-mod --name "First Mod" --author "You" --license MIT --version 1.0.0
+topiaforge new mod example.first-mod --name "First Mod" --author "You" --license AGPL-3.0-or-later --version 1.0.0
 cd example.first-mod
 ```
 
@@ -61,16 +61,19 @@ to the mod lifetime automatically.
 topiaforge dev
 ```
 
-That one command restores exact SDK packages, builds, runs the NUnit project, packs, validates,
-installs, launches Robotopia, and tails attributed logs. It stops before install if any earlier
-stage fails.
+That command restores exact SDK packages, builds, runs the NUnit project, packs, validates,
+and installs. In an interactive terminal it also launches Robotopia and tails attributed logs.
+Redirected runs stop after install unless you request `--launch` or `--tail`. Any earlier failure
+stops the command before install.
 
-The launch-blocking local Windows and same-host WSL2/Proton acceptance gates repeat this journey with a
+For RC1, the launch-blocking Windows acceptance gate must repeat this journey with a
 clean candidate developer payload built from the frozen SHA: its CLI runs `new mod`, then
 `dev --launch`, and the release handoff requires that unique mod's attributed load marker in the
 same fresh `last-run.json`. The project lives outside that payload and requires no Unity
 installation. The separate final clean-machine release gate repeats the journey with the actual
-extracted platform archive and no source checkout.
+extracted Windows archive and no source checkout. These are required checks, not recorded acceptance
+results. RC1 targets Windows x64 only; a future Linux/Proton release requires separate platform
+approval and an implemented, isolated native acceptance path.
 
 In Robotopia, open the TopiaForge manager with F10. Select **First Mod** to see its log. Run the
 `example.first-mod:greet` command from the manager command console to exercise the scaffolded
@@ -84,10 +87,10 @@ Edit the default greeting in `ExampleFirstModConfig.cs`, add a test assertion, a
 ## Where next
 
 - Use [Core services](CoreServices.md) to add input, player, physics, entities, assets, audio, or UI.
-- Add creator content, robots, worlds, time control, prompt overrides, UGC, or multiplayer through
+- Add creator content, robots, worlds, time control, prompt overrides, or multiplayer through
   [Specialist modules](Modules.md).
-- Use [Creator Tools](CreatorTools.md) when your mod should contribute safe catalog content or work
+- Use [Creator Content](Modules.md#creator-content) when your mod should contribute safe catalog content or work
   with reversible creator sessions.
 - Read [Test a mod](TestingMods.md) before adding behavior with several resource handles.
-- Use [Manifest V5](ManifestV5.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.
+- Use [Manifest V6](ManifestV6.md) for dependencies, constraints, capabilities, optional multiplayer metadata, and exported contracts.
 - See [Diagnostics](Diagnostics.md) when a stable `TF` code appears.

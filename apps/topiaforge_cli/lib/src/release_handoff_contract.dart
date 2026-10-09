@@ -43,12 +43,11 @@ _ReleaseHandoffContext _loadHandoffContext(
   if (!release.artifacts.toSet().containsAll(expectedArchives)) {
     throw StateError('Release catalog omits a required platform archive.');
   }
-  // Linux is descoped from 1.0.0-rc.1 and returns in rc.2; see the note in
-  // release_policy.dart and P0-LINUX-01 in docs/LaunchBlockers.md.
-  if (version == '1.0.0-rc.1' &&
-      !_sameSet(targetPlatforms.toSet(), {'windows-x64'})) {
+  // Linux is descoped; see the note in release_policy.dart and P0-LINUX-01 in
+  // docs/LaunchBlockers.md. This is a property of the product, not of one version.
+  if (!_sameSet(targetPlatforms.toSet(), {'windows-x64'})) {
     throw StateError(
-      'Release 1.0.0-rc.1 handoff requires signed Windows x64 only.',
+      'Release $version handoff requires signed Windows x64 only.',
     );
   }
   final platformToolchains = _loadPlatformToolchains(repositoryRoot);
@@ -190,7 +189,7 @@ void _validatePlatformBundle(
     throw StateError('${bundle.platform} archive name is invalid.');
   }
   _requireSha256(bundle.archive.sha256, '${bundle.platform} archive sha256');
-  final expectedSigning = _signingState(bundle.platform);
+  final expectedSigning = _signingState(bundle.platform, context.policy);
   if (bundle.signing.scheme != expectedSigning.scheme ||
       bundle.signing.status != expectedSigning.status ||
       bundle.signing.notarization != expectedSigning.notarization ||
@@ -199,7 +198,11 @@ void _validatePlatformBundle(
       '${bundle.platform} signing state does not match release policy.',
     );
   }
-  final requiredEvidence = _requiredEvidenceFor(bundle.platform);
+  final requiredEvidence = _requiredEvidenceFor(
+    bundle.platform,
+    context.policy,
+    liveGameAcceptanceRun: _runsLiveGameAcceptance(bundle),
+  );
   if (!_sameSet(bundle.validations.keys.toSet(), requiredEvidence)) {
     throw StateError(
       '${bundle.platform} validations must be exactly: '
@@ -255,7 +258,7 @@ void _validateHandoff(
         '${reference.platform} handoff builder profile is invalid.',
       );
     }
-    final signing = _signingState(reference.platform);
+    final signing = _signingState(reference.platform, context.policy);
     if (reference.signing.scheme != signing.scheme ||
         reference.signing.status != signing.status ||
         reference.signing.notarization != signing.notarization ||
@@ -264,8 +267,22 @@ void _validateHandoff(
         '${reference.platform} handoff signing state is invalid.',
       );
     }
-    final evidence = _requiredEvidenceFor(reference.platform);
-    if (!_sameSet(reference.validations.keys.toSet(), evidence)) {
+    // A reference carries only its QA digest, so either evidence set is
+    // admissible here. `verify` then requires each reference to equal its
+    // platform bundle, whose set was derived from that bundle's own receipt.
+    final evidence = reference.validations.keys.toSet();
+    if (!_sameSet(
+          evidence,
+          _requiredEvidenceFor(reference.platform, context.policy),
+        ) &&
+        !_sameSet(
+          evidence,
+          _requiredEvidenceFor(
+            reference.platform,
+            context.policy,
+            liveGameAcceptanceRun: false,
+          ),
+        )) {
       throw StateError(
         '${reference.platform} handoff validation set is invalid.',
       );
@@ -321,7 +338,6 @@ const _platformToolchainSections = <String, String>{
 const _requiredEvidence = <String, Set<String>>{
   'windows-x64': {
     'authenticode',
-    'creator',
     'ecosystem-reproducibility',
     'package',
     'robotopia',
@@ -339,13 +355,31 @@ const _requiredEvidence = <String, Set<String>>{
   },
 };
 
-ReleaseHandoffSigning _signingState(String platform) => switch (platform) {
-  'windows-x64' => const ReleaseHandoffSigning(
-    scheme: 'authenticode',
-    status: 'verified',
-    notarization: 'not-applicable',
-    exceptionApplied: false,
-  ),
+/// The signing state a platform bundle must declare.
+///
+/// Windows depends on the recorded distribution mode: an unsigned build has to
+/// say so. Deriving this from the platform alone meant an unsigned release
+/// would still have asserted `authenticode` / `verified` in its handoff, which
+/// is worse than an absent field — it is an affirmative false provenance claim
+/// in the document GitHub verifies before publishing.
+ReleaseHandoffSigning _signingState(
+  String platform,
+  TopiaForgeReleasePolicy policy,
+) => switch (platform) {
+  'windows-x64' =>
+    policy.distributesWindowsUnsigned
+        ? const ReleaseHandoffSigning(
+            scheme: 'not-applicable',
+            status: 'unsigned',
+            notarization: 'not-applicable',
+            exceptionApplied: false,
+          )
+        : const ReleaseHandoffSigning(
+            scheme: 'authenticode',
+            status: 'verified',
+            notarization: 'not-applicable',
+            exceptionApplied: false,
+          ),
   'linux-x64' => const ReleaseHandoffSigning(
     scheme: 'not-applicable',
     status: 'not-applicable',
@@ -361,10 +395,52 @@ ReleaseHandoffSigning _signingState(String platform) => switch (platform) {
   _ => throw StateError('Unsupported release handoff platform: $platform.'),
 };
 
-Set<String> _requiredEvidenceFor(String platform) {
+/// The `signingState` a Windows QA summary must record.
+///
+/// `build-windows.ps1` derives the same string from the same policy field and
+/// `New-WindowsQaSummary` propagates it, so this is the reader for a value the
+/// producers already condition. It exists as a function rather than a constant
+/// because a constant is exactly what went wrong: the QA validator asserted
+/// `authenticode-timestamped` unconditionally, which an unsigned build can only
+/// fail.
+String _windowsQaSigningState(TopiaForgeReleasePolicy policy) =>
+    policy.distributesWindowsUnsigned ? 'unsigned' : 'authenticode-timestamped';
+
+/// The evidence keys a platform bundle must carry.
+///
+/// An unsigned Windows build produces no Authenticode evidence, so requiring
+/// the key would have made the bundle unsatisfiable; leaving it required *and*
+/// satisfied would have meant fabricating it. A Windows build that did not run
+/// live game acceptance, as the owner's P0-GAME-01 disposition allows, has no
+/// `robotopia` evidence for the same reason.
+///
+/// This is the single source of truth for the set. Anything that needs to know
+/// which evidence keys exist for a platform must ask here rather than keep its
+/// own list, or the two drift and only the unsigned path notices.
+Set<String> _requiredEvidenceFor(
+  String platform,
+  TopiaForgeReleasePolicy policy, {
+  bool liveGameAcceptanceRun = true,
+}) {
   final evidence = _requiredEvidence[platform];
   if (evidence == null) {
     throw StateError('Unsupported release handoff platform: $platform.');
   }
-  return evidence;
+  if (platform != 'windows-x64') return evidence;
+  return evidence.difference({
+    if (policy.distributesWindowsUnsigned) 'authenticode',
+    if (!liveGameAcceptanceRun) 'robotopia',
+  });
+}
+
+/// Whether a platform bundle records a live game acceptance run.
+///
+/// Its own QA summary decides: the Windows game receipt is either the full pass
+/// receipt or the truthful `not-run` receipt, and the evidence set follows it,
+/// so neither receipt can travel with the other's validations. No other
+/// platform has an optional run.
+bool _runsLiveGameAcceptance(ReleasePlatformBundle bundle) {
+  if (bundle.platform != 'windows-x64') return true;
+  final game = bundle.qa['robotopia'];
+  return game is! Map || game['result'] != 'not-run';
 }

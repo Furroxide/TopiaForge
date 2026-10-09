@@ -16,7 +16,9 @@ and CI stop after installation. The complete command surface is:
 
 ```text
 topiaforge dev [--project path] [--configuration name] [--game-dir path]
-               [--launch|--no-launch] [--tail|--no-tail]
+               [--launch|--no-launch] [--tail|--no-tail] [--profile id]
+               [--target id [--world id] [--transition mode] | --main-menu]
+               [--no-wait | --wait-seconds 1..300]
 ```
 
 Use `--project` outside the mod directory, `--configuration` for a bounded MSBuild configuration
@@ -39,6 +41,45 @@ remediation, and a diagnostics URL. It never installs bytes that failed packing 
 Validation is metadata-only: the release-carried validator does not load or execute mod code. It
 rejects malformed PE files, wrong assembly identities/target frameworks, invalid entry types or
 constructors, incompatible SDK references, unsafe exported APIs, and bundled loader-owned SDK files.
+
+## Choose and confirm the launch
+
+Home and Setup select a manifest-declared launch target from the effective installed
+profile. Registry metadata cannot make a target launchable. For a development run,
+pass the target explicitly; the choice applies only to that run:
+
+```sh
+topiaforge dev --launch --target example.my-mod.play
+topiaforge launch --profile default --target example.my-mod.play
+topiaforge launch --main-menu
+```
+
+Without an override, launch uses the selected profile's versioned choice. An
+unavailable legacy choice stays visible and requires explicit repair; it never
+silently becomes Free Play or another mode. `--main-menu` overrides remembered
+autoload. Safe Mode always requests main-menu with no packages loaded.
+
+`--world` and `--transition` require `--target` and its policy's permission.
+Transition values are `scene-replacement` and `additive-arena`. `world link --world`
+selects an actual bundle-world declaration when the package is ambiguous;
+`world play --target <id>` carries that target through build, installation and
+preflight. A package ID is not a world or target ID.
+
+For `launch`, `restart`, `world play`, and the launch stage of `dev`, the CLI waits
+up to 30 seconds for a matching runtime acknowledgement by default. Exit 0 confirms
+Running for a target or Idle for main-menu; exit 1 reports blocked or failed startup;
+exit 3 means runtime confirmation is unavailable. Use `--wait-seconds` to choose a
+1–300 second deadline. Explicit `--no-wait` returns process-start status and labels
+the session unconfirmed. Ctrl+C stops waiting with exit 130 without terminating the
+game. Process creation alone never certifies gameplay. `dev --no-launch` can return
+0 after development work without starting or confirming a session.
+
+A competing launch is Busy. `restart` preflights the replacement before stopping
+anything and requires a process generation owned by the current launcher instance;
+a new CLI invocation does not acquire another process's ownership from its name.
+Close an unowned game yourself before launching the replacement. On Linux, configure
+the full path to the Wine/Proton executable; detached startup without a verified
+creation receipt cannot enable owned restart.
 
 ## Generated project state
 

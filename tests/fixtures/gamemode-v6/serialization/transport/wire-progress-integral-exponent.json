@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-integral-exponent",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Strict progress integral-exponent",
+  "transport": "progress",
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "r",
+        "sequence": 2,
+        "phase": "idle"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "r",
+        "sequence": 2,
+        "phase": "idle"
+      }
+    }
+  },
+  "wireJson": "{\"schemaVersion\":1e0,\"requestId\":\"r\",\"sequence\":2e0,\"phase\":\"idle\"}"
+}

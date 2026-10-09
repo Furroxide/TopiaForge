@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-missing",
+  "displayName": "Invalid V6 Missing Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.InvalidMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*"
+}

@@ -13,8 +13,9 @@ test('creator guides are published and discoverable in the public sidebar', () =
     pages.map((page) => [page.sourcePath, page.outputPath]),
   );
 
-  assert.equal(routesBySource.get('docs/CreatorTools.md'), 'guides/creator-tools.md');
+  // The standalone Creator Tools guide went with its package; Sandbox owns the workbench.
+  assert.equal(routesBySource.get('docs/CreatorTools.md'), undefined);
   assert.equal(routesBySource.get('docs/Sandbox.md'), 'guides/sandbox.md');
-  assert.match(configSource, /slug: 'guides\/creator-tools'/u);
+  assert.doesNotMatch(configSource, /slug: 'guides\/creator-tools'/u);
   assert.match(configSource, /slug: 'guides\/sandbox'/u);
 });

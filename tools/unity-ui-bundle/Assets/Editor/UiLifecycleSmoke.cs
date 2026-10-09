@@ -26,6 +26,7 @@ namespace TopiaForge
         private static Snapshot baseline;
         private static int verificationAttempts;
         private static string evidencePath;
+        private static IDisposable toastObservation;
 
         public static void Run()
         {
@@ -89,9 +90,13 @@ namespace TopiaForge
                 Snapshot.Capture(uiAssembly).AssertRuntimeStateEquals(baseline, Cycles);
 
                 var toneType = RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeTone");
+                // Observe the toast host explicitly: the presented toast must surface as a "$toast" node with the
+                // measured fields of the diagnostics contract, and shutdown must leave that owner empty.
+                toastObservation = UiSmokeRuntimeSnapshot.EnableToastDiagnostics(uiAssembly);
                 RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeToasts")
                     .GetMethod("Show", BindingFlags.Public | BindingFlags.Static)
                     .Invoke(null, new object[] { "Lifecycle smoke toast", Enum.Parse(toneType, "Success"), 1f });
+                UiSmokeRuntimeSnapshot.AssertToastObserved(uiAssembly, "Lifecycle smoke toast", "Success");
                 RequiredType("TopiaForge.Mods.UnityUi.TopiaForgeUi")
                     .GetMethod("Shutdown", BindingFlags.Public | BindingFlags.Static)
                     .Invoke(null, null);
@@ -196,6 +201,14 @@ namespace TopiaForge
 
                 EditorApplication.update -= VerifyDestroyedCanvases;
                 current.AssertEquals(baseline, "post-destroy verification");
+                var retainedToasts = UiSmokeRuntimeSnapshot.ToastDiagnosticWidgetCount(uiAssembly);
+                if (retainedToasts != 0)
+                {
+                    throw new InvalidOperationException("Toast diagnostics retained " + retainedToasts + " node(s) after shutdown.");
+                }
+
+                toastObservation?.Dispose();
+                toastObservation = null;
                 WriteEvidence();
                 Debug.Log("[UiLifecycleSmoke] PASS: " + Cycles
                     + " create/show/modal/clear/dispose cycles returned every tracked baseline.");
@@ -324,6 +337,7 @@ namespace TopiaForge
                 + "  \"editorVersion\": \"" + Application.unityVersion + "\",\n"
                 + "  \"cycles\": " + Cycles + ",\n"
                 + "  \"validatorSmoke\": true,\n"
+                + "  \"toastDiagnostics\": true,\n"
                 + "  \"worldsAssemblyVersion\": \"" + worldsAssembly.GetName().Version + "\",\n"
                 + "  \"uiAssemblyVersion\": \"" + uiAssembly.GetName().Version + "\"\n"
                 + "}\n";
@@ -421,10 +435,7 @@ namespace TopiaForge
                 var theme = assembly.GetType("TopiaForge.Mods.UnityUi.TopiaForgeTheme", true);
                 var changed = theme.GetField("Changed", BindingFlags.Static | BindingFlags.NonPublic)
                     ?.GetValue(null) as Delegate;
-                var registrations = (ICollection)assembly
-                    .GetType("TopiaForge.Mods.UnityUi.TopiaForgeHotkeys", true)
-                    .GetField("Registrations", BindingFlags.Static | BindingFlags.NonPublic)
-                    .GetValue(null);
+                var hotkeys = UiSmokeRuntimeSnapshot.HotkeyCount(assembly);
                 var hosts = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeUi", "Hosts");
                 var toastViews = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeToasts", "Views");
                 var queuedToasts = StaticCollection(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeToasts", "Queue");
@@ -435,7 +446,7 @@ namespace TopiaForge
                     StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeTween", "ActiveCount"),
                     StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeCursor", "ActiveLeases"),
                     StaticInt(assembly, "TopiaForge.Mods.UnityUi.TopiaForgeDismissStack", "Count"),
-                    registrations.Count,
+                    hotkeys,
                     changed?.GetInvocationList().Length ?? 0,
                     hosts.Count,
                     toastViews.Count,

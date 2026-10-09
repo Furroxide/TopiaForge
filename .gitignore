@@ -64,9 +64,12 @@ topiaforge.dev.props
 .codex-tmp/
 .claude/skills
 .claude/settings.local.json
+.claude/worktrees/
 
 # CI pack-smoke scratch (release.yml scaffolds here)
 .pack-smoke/
 
 # FVM Version Cache
 .fvm/
+/tools/TopiaForge.Acceptance.Windows/[Bb]in/
+/tools/TopiaForge.Acceptance.Windows/[Oo]bj/

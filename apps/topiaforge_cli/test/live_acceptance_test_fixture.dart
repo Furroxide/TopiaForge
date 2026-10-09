@@ -5,14 +5,20 @@ import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:topiaforge/src/live_acceptance_models.dart';
+import 'package:topiaforge/src/live_acceptance_runner.dart';
+import 'package:topiaforge/src/live_acceptance_session.dart';
+import 'package:launcher_data/launcher_data.dart';
 
 final class AcceptanceFixture {
-  AcceptanceFixture()
-    : temp = Directory.systemTemp.createTempSync(
-        'topiaforge-acceptance-test-',
+  AcceptanceFixture({Directory? temporaryRoot})
+    : temp = Directory(
+        (temporaryRoot ?? Directory.systemTemp)
+            .createTempSync('topiaforge-acceptance-test-')
+            .resolveSymbolicLinksSync(),
       ) {
     repository = Directory(p.join(temp.path, 'repository'))..createSync();
     game = Directory(p.join(temp.path, 'game'))..createSync();
+    sourceGame = Directory(p.join(temp.path, 'source-game'))..createSync();
     output = Directory(p.join(temp.path, 'evidence'));
     package = File(p.join(temp.path, 'acceptance.topiaforgemod'))
       ..writeAsBytesSync(
@@ -33,6 +39,7 @@ final class AcceptanceFixture {
   final Directory temp;
   late final Directory repository;
   late final Directory game;
+  late final Directory sourceGame;
   late final Directory output;
   late final File package;
 
@@ -47,7 +54,7 @@ final class AcceptanceFixture {
     String requiredLogMarker = '',
   }) => LiveAcceptanceOptions(
     repositoryRoot: repository.path,
-    gameDirectory: game.path,
+    gameDirectory: sourceGame.path,
     packagePath: packagePath ?? package.path,
     outputDirectory: output.path,
     requiredCases: requiredCases,
@@ -59,7 +66,80 @@ final class AcceptanceFixture {
     requiredLogMarker: requiredLogMarker,
   );
 
+  AcceptanceIsolationContext admitIsolation(LiveAcceptanceOptions options) {
+    final qa = p.join(temp.path, 'qa-profile');
+    final low = p.join(qa, 'AppData', 'LocalLow');
+    final identity = WindowsAcceptanceIdentity(
+      userSid: 'S-1-5-21-42',
+      logonId: '0000000000000042',
+      sessionId: 2,
+      userProfile: qa,
+      localAppDataLow: low,
+    );
+    final record = File(p.join(temp.path, 'isolation.json'));
+    if (!record.existsSync()) {
+      record.writeAsStringSync(
+        jsonEncode({
+          'schemaVersion': 1,
+          'kind': 'windows-user',
+          'sourceGameRoot': sourceGame.path,
+          'gameRoot': game.path,
+          'launcherRoot': p.join(temp.path, 'launcher'),
+          'outputRoot': output.path,
+          'persistentDataRoot': p.join(low, 'Vendor', 'Game'),
+          'userSid': identity.userSid,
+          'userProfile': qa,
+          'localAppDataLow': low,
+          'normalUserSid': 'S-1-5-21-1',
+          'normalUserProfile': p.join(temp.path, 'normal-profile'),
+          'reviewerEvidence':
+              'Synthetic test fixture; no real identity or game.',
+        }),
+      );
+    }
+    return AcceptanceIsolationContext.admit(
+      recordPath: record.path,
+      sourceGameRoot: options.gameDirectory,
+      outputRoot: options.outputDirectory,
+      identityReader: () => identity,
+    );
+  }
+
+  LiveAcceptanceRunner runner({
+    required LiveAcceptanceCommandRunner commandRunner,
+    LiveAcceptanceProcessRunner? processRunner,
+    LiveAcceptanceDelay? delay,
+    LiveAcceptanceClock? clock,
+    LiveAcceptanceChallengeGenerator? challengeGenerator,
+    LiveAcceptanceSessionLauncher? sessionLauncher,
+    Duration pollInterval = const Duration(milliseconds: 500),
+  }) => LiveAcceptanceRunner(
+    commandRunner: commandRunner,
+    processRunner: processRunner,
+    delay: delay,
+    clock: clock,
+    challengeGenerator: challengeGenerator,
+    pollInterval: pollInterval,
+    isolationAdmission: admitIsolation,
+    sessionLauncher:
+        sessionLauncher ??
+        (options, context, challenge) async {
+          if (!options.releaseJourneyEnabled) {
+            final code = await commandRunner([
+              'launch',
+              '--game-dir',
+              game.path,
+              '--target',
+              'dev.topiaforge.sdk-acceptance.menu',
+            ]);
+            if (code != 0) throw StateError('Synthetic launch failed.');
+          }
+          return FixtureAcceptanceSession();
+        },
+  );
+
   void writePassingRun({
+    File? acceptancePackage,
     List<String> cases = const ['case.one', 'case.two'],
     String marker = '',
     String journeyPackageId = '',
@@ -100,7 +180,7 @@ final class AcceptanceFixture {
             'valid': true,
             'status': 'loaded',
             ..._receiptJson(
-              package,
+              acceptancePackage ?? package,
               tamperCriticalFile: tamperAcceptanceReceipt,
             ),
           },
@@ -161,7 +241,7 @@ final class AcceptanceFixture {
   }
 }
 
-List<int> acceptancePackageBytes(String id) {
+List<int> acceptancePackageBytes(String id, {String? assemblyContent}) {
   final archive = Archive()
     ..addFile(
       ArchiveFile.string(
@@ -174,7 +254,7 @@ List<int> acceptancePackageBytes(String id) {
         }),
       ),
     )
-    ..addFile(ArchiveFile.string('Mod.dll', 'managed-$id'));
+    ..addFile(ArchiveFile.string('Mod.dll', assemblyContent ?? 'managed-$id'));
   return ZipEncoder().encode(archive);
 }
 
@@ -201,4 +281,30 @@ Map<String, Object?> _receiptJson(
         },
     ],
   };
+}
+
+final class FixtureAcceptanceSession implements LiveAcceptanceSession {
+  bool confirmed = false;
+  bool closed = false;
+  @override
+  Future<void> confirm(Duration timeout) async {
+    confirmed = true;
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+  }
+
+  @override
+  Map<String, Object?> get isolationEvidence {
+    if (!confirmed || !closed) throw StateError('Unconfirmed fixture session.');
+    return {
+      'kind': 'windows-user',
+      'provisioningRecordSha256': '0' * 64,
+      'acknowledgementSha256': '1' * 64,
+      'acknowledgement': {'fixture': true},
+      'processExitConfirmed': true,
+    };
+  }
 }

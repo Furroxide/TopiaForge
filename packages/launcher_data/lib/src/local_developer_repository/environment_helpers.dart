@@ -22,85 +22,36 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    final unityHub = await _findUnityHub();
-    final unityEditor = await _findUnityEditor(workspace.project);
-    messages.add(
-      unityHub.isEmpty ? 'Unity Hub not detected.' : 'Unity Hub: $unityHub',
+    final hubProbe = await _probeOptionalTool('Unity Hub', _findUnityHub);
+    final editorProbe = await _probeOptionalTool(
+      'Unity Editor',
+      () => _findUnityEditor(workspace.project),
     );
-    messages.add(
-      unityEditor.isEmpty
-          ? 'Unity Editor not detected.'
-          : 'Unity Editor: $unityEditor',
-    );
-
-    if (workspace.project?.unityCompanion.enabled == true) {
-      _checkUgcCompanion(workspace, messages, issues);
+    for (final (name, probe) in [
+      ('Unity Hub', hubProbe),
+      ('Unity Editor', editorProbe),
+    ]) {
+      if (probe.warning.isNotEmpty) {
+        issues.add(
+          LauncherIssue(
+            severity: IssueSeverity.warning,
+            message: '${probe.warning} $_optionalToolRetry',
+          ),
+        );
+      } else {
+        final path = probe.value!;
+        messages.add(path.isEmpty ? '$name not detected.' : '$name: $path');
+      }
     }
 
     return DeveloperDoctorReport(
       projectRoot: workspace.projectRoot,
       messages: messages,
       hasProject: workspace.hasProject,
-      unityHubPath: unityHub,
-      unityEditorPath: unityEditor,
+      unityHubPath: hubProbe.value ?? '',
+      unityEditorPath: editorProbe.value ?? '',
       issues: issues,
     );
-  }
-
-  // Verifies the UGC live-sync dev loop is wired up: the companion Unity package is present, and the configured
-  // watch folder can actually be written to (the Unity exporter and the game both need that folder).
-  void _checkUgcCompanion(
-    DeveloperWorkspace workspace,
-    List<String> messages,
-    List<LauncherIssue> issues,
-  ) {
-    final packageJson = File(
-      p.join(
-        workspace.projectRoot,
-        'unity-companion',
-        'Packages',
-        'io.github.furroxide.topiaforge.ugc-companion',
-        'package.json',
-      ),
-    );
-    if (packageJson.existsSync()) {
-      messages.add('UGC companion package present.');
-    } else {
-      issues.add(
-        const LauncherIssue(
-          severity: IssueSeverity.warning,
-          message:
-              'UGC companion package missing. Re-scaffold with '
-              '`topiaforge new mod --unity-companion` or copy '
-              'unity-companion/Packages/io.github.furroxide.topiaforge.ugc-companion into the project.',
-        ),
-      );
-    }
-
-    final watchFolder =
-        workspace.project?.unityCompanion.liveSync.watchFolder ?? '';
-    if (watchFolder.isEmpty) {
-      messages.add(
-        'UGC watch folder is not set. Set it in the in-game UGC Live Sync panel '
-        'or the launcher developer view.',
-      );
-      return;
-    }
-
-    try {
-      final dir = Directory(watchFolder)..createSync(recursive: true);
-      final probe = File(p.join(dir.path, '.topiaforge-doctor-probe'));
-      probe.writeAsStringSync('ok');
-      probe.deleteSync();
-      messages.add('UGC watch folder is writable: $watchFolder');
-    } on Object catch (error) {
-      issues.add(
-        LauncherIssue(
-          severity: IssueSeverity.warning,
-          message: 'UGC watch folder is not writable: $watchFolder ($error)',
-        ),
-      );
-    }
   }
 
   Future<EnvironmentReport> _checkEnvironment() async {
@@ -136,54 +87,41 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    // Node.js — only needed for the optional UGC Automerge live-sync channel.
-    final node = await _which('node');
-    if (node.isEmpty) {
+    // Unity — only needed to build custom-world AssetBundles.
+    final hubProbe = await _probeOptionalTool('Unity Hub', _findUnityHub);
+    final unityHub = hubProbe.value ?? '';
+    if (hubProbe.warning.isNotEmpty) {
       checks.add(
         ToolCheck(
-          name: 'Node.js',
-          status: ToolStatus.missing,
-          purpose: ToolPurpose.ugcAutomerge,
-          detail: 'Not found (optional).',
-          remediation:
-              'Install ${UgcNodeVersionPolicy.requirement} only if '
-              'you publish via the UGC Automerge live-sync channel.',
-          url: 'https://nodejs.org/',
-        ),
-      );
-    } else {
-      final version = await _toolVersion('node', const ['--version']);
-      final outdated = !UgcNodeVersionPolicy.supports(version);
-      checks.add(
-        ToolCheck(
-          name: 'Node.js',
-          status: outdated ? ToolStatus.outdated : ToolStatus.ok,
-          purpose: ToolPurpose.ugcAutomerge,
-          detail: version.isEmpty ? node : version,
-          remediation: outdated
-              ? 'Upgrade to ${UgcNodeVersionPolicy.requirement} for the '
-                    'Automerge sidecar.'
-              : '',
-          url: 'https://nodejs.org/',
+          name: 'Unity Hub',
+          status: ToolStatus.warning,
+          purpose: ToolPurpose.optional,
+          detail: hubProbe.warning,
+          remediation: _optionalToolRetry,
         ),
       );
     }
-
-    // Unity — only needed to author UGC content in the companion or build custom-world bundles.
-    final unityHub = await _findUnityHub();
     // World/UI bundle builds must use the exact game-player editor.
-    final editors = await _scanUnityEditors();
+    final editorProbe = await _probeOptionalTool(
+      'Unity Editor',
+      _scanUnityEditors,
+    );
+    final editors = editorProbe.value ?? const <UnityEditor>[];
     final unityEditor = RobotopiaGameUnityCompatibility.selectEditor(editors);
     final ToolStatus unityStatus;
     final String unityDetail;
     final String unityRemediation;
-    if (editors.isEmpty) {
+    if (editorProbe.warning.isNotEmpty) {
+      unityStatus = ToolStatus.warning;
+      unityDetail = editorProbe.warning;
+      unityRemediation = _optionalToolRetry;
+    } else if (editors.isEmpty) {
       unityStatus = ToolStatus.missing;
       unityDetail = unityHub.isEmpty
           ? 'Unity not detected (optional).'
           : 'Hub found, editor not detected: $unityHub';
       unityRemediation =
-          'Install Unity via Unity Hub only if you author UGC content or custom worlds.';
+          'Install Unity via Unity Hub only if you author custom worlds.';
     } else if (unityEditor == null) {
       unityStatus = ToolStatus.warning;
       unityDetail =
@@ -200,7 +138,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       ToolCheck(
         name: 'Unity Editor',
         status: unityStatus,
-        purpose: ToolPurpose.ugcUnity,
+        purpose: ToolPurpose.customWorldUnity,
         detail: unityDetail,
         remediation: unityRemediation,
         url: 'https://unity.com/download',
@@ -208,35 +146,28 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     );
 
     // Git — optional but recommended for version control.
-    final git = await _which('git');
+    final gitProbe = await _probeOptionalTool('Git', () => _which('git'));
+    final git = gitProbe.value ?? '';
     checks.add(
       ToolCheck(
         name: 'Git',
         status: git.isEmpty ? ToolStatus.warning : ToolStatus.ok,
         purpose: ToolPurpose.optional,
-        detail: git.isEmpty ? 'Not found (recommended).' : git,
-        remediation: git.isEmpty ? 'Install Git for version control.' : '',
+        detail: gitProbe.warning.isNotEmpty
+            ? gitProbe.warning
+            : git.isEmpty
+            ? 'Not found (recommended).'
+            : git,
+        remediation: gitProbe.warning.isNotEmpty
+            ? _optionalToolRetry
+            : git.isEmpty
+            ? 'Install Git for version control.'
+            : '',
         url: 'https://git-scm.com/downloads',
       ),
     );
 
     return EnvironmentReport(checks: checks);
-  }
-
-  Future<String> _toolVersion(String executable, List<String> args) async {
-    try {
-      final result = await runBoundedProcess(
-        executable,
-        args,
-        timeout: const Duration(seconds: 10),
-      );
-      if (result.exitCode == 0) {
-        return result.stdout.trim().split('\n').first.trim();
-      }
-    } on Object {
-      // Probe is best-effort; absence is reported by the caller via _which.
-    }
-    return '';
   }
 
   int? _majorVersion(String version) {
@@ -249,29 +180,6 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     return 'The .NET SDK could not be validated (${error.runtimeType}).';
   }
 
-  Future<({String action, LauncherIssue? issue})> _installSidecarDeps(
-    String sidecarDir,
-  ) async {
-    try {
-      final sidecar = TrustedUgcSidecar.inspectDirectory(Directory(sidecarDir));
-      await sidecar.ensureDependencies();
-      return (
-        action: 'Verified lockfile-backed UGC sidecar dependencies.',
-        issue: null,
-      );
-    } on Object catch (error) {
-      return (
-        action: 'Could not run npm.',
-        issue: LauncherIssue(
-          severity: IssueSeverity.warning,
-          message:
-              'Could not complete npm ci (${error.runtimeType}). '
-              'Install ${UgcNodeVersionPolicy.requirement} and retry.',
-        ),
-      );
-    }
-  }
-
   Future<DeveloperSetupResult> _runSetup() async {
     final actions = <String>[];
     final issues = <LauncherIssue>[];
@@ -279,6 +187,7 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
     // Ensure the developer data root exists (where sample projects are scaffolded).
     try {
       _dataRoot.createSync(recursive: true);
+      actions.add('Ensured the developer data folder.');
     } on Object catch (error) {
       issues.add(
         LauncherIssue(
@@ -288,35 +197,56 @@ extension LocalDeveloperEnvironmentOperations on LocalDeveloperRepository {
       );
     }
 
-    var environment = await checkEnvironment();
-
-    // The only safe auto-fix that needs a tool: install the UGC Automerge sidecar's npm deps when Node is present.
-    if (environment.ugcAutomergeReady) {
-      final sidecar = _findSidecar();
-      if (sidecar == null) {
-        actions.add(
-          'UGC Automerge sidecar not found; skipped dependency install.',
-        );
-      } else {
-        final sidecarDir = File(sidecar).parent.path;
-        final result = await _installSidecarDeps(sidecarDir);
-        actions.add(result.action);
-        if (result.issue != null) {
-          issues.add(result.issue!);
-        }
-      }
-    } else {
-      actions.add(
-        'Node.js not available; skipped the UGC Automerge sidecar (optional).',
-      );
-    }
-
-    // Re-check so the returned environment reflects any fixes.
-    environment = await checkEnvironment();
+    // Creating the data folder cannot change any probe result, so one pass is enough.
+    final environment = await checkEnvironment();
     return DeveloperSetupResult(
       environment: environment,
       actions: actions,
       issues: issues,
+    );
+  }
+}
+
+const _optionalToolRetry =
+    'Check tool discovery permissions and PATH, then retry the diagnostic.';
+
+class _OptionalToolProbe<T> {
+  const _OptionalToolProbe({this.value, this.warning = ''});
+
+  final T? value;
+  final String warning;
+}
+
+// Failure containment belongs only to reports. Required editor selection and
+// world builds still use the original discovery methods and their error paths.
+Future<_OptionalToolProbe<T>> _probeOptionalTool<T>(
+  String name,
+  Future<T> Function() probe,
+) async {
+  try {
+    return _OptionalToolProbe(value: await probe());
+  } on Exception catch (error) {
+    final reason = switch (error) {
+      BoundedProcessException(failure: BoundedProcessFailure.timeout) =>
+        'the discovery process timed out',
+      BoundedProcessException(
+        failure: BoundedProcessFailure.outputReadFailed,
+      ) =>
+        'the discovery process output could not be read',
+      BoundedProcessException(
+        failure: BoundedProcessFailure.terminationFailed,
+      ) =>
+        'the discovery process exceeded a bound and could not be terminated',
+      BoundedProcessException() =>
+        'the discovery process exceeded an output bound',
+      ProcessException() => 'the discovery process could not be started',
+      FileSystemException() => 'installed-tool locations could not be read',
+      TimeoutException() => 'the discovery probe timed out',
+      _ => 'the discovery probe failed (${error.runtimeType})',
+    };
+    // Process output and exception messages can contain private host details.
+    return _OptionalToolProbe(
+      warning: '$name availability is unknown: $reason.',
     );
   }
 }

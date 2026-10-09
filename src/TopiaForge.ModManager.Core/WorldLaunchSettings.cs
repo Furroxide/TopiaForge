@@ -30,14 +30,6 @@ namespace TopiaForge.ModManager.Core
         [DataMember(Name = "allowAdditiveFallback")]
         public bool AllowAdditiveFallback { get; set; } = true;
 
-        // These provider-owned switches are carried through even though the manager overlay does not edit
-        // them. Saving only the launch subset would otherwise erase existing WorldsConfig preferences.
-        [DataMember(Name = "endSessionOnMenuScene")]
-        public bool EndSessionOnMenuScene { get; set; } = true;
-
-        [DataMember(Name = "interceptPauseMenu")]
-        public bool InterceptPauseMenu { get; set; } = true;
-
         public bool PreferSceneReplacement => LoadMode == SceneReplacement;
 
         public static string NormalizeLoadMode(string? value)
@@ -70,23 +62,6 @@ namespace TopiaForge.ModManager.Core
             return normalized;
         }
 
-        /// <summary>
-        /// Writes only manager-owned launch members into an existing Worlds config document. Provider-owned
-        /// and future/third-party members remain byte-for-byte JSON values instead of being dropped by a narrow
-        /// DTO round-trip.
-        /// </summary>
-        public string MergeIntoJson(string existingJson)
-        {
-            return JsonObjectMerge.Merge(existingJson, new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["selectedWorldId"] = JsonUtil.Serialize(SelectedWorldId ?? string.Empty),
-                ["selectedGamemodeId"] = JsonUtil.Serialize(SelectedGamemodeId ?? string.Empty),
-                ["loadMode"] = JsonUtil.Serialize(NormalizeLoadMode(LoadMode)),
-                ["autoLoadOnStart"] = JsonUtil.Serialize(AutoLoadOnStart),
-                ["allowAdditiveFallback"] = JsonUtil.Serialize(AllowAdditiveFallback),
-            });
-        }
-
         [OnDeserializing]
         private void OnDeserializing(StreamingContext context)
         {
@@ -100,8 +75,6 @@ namespace TopiaForge.ModManager.Core
             LoadMode = AdditiveArena;
             AutoLoadOnStart = false;
             AllowAdditiveFallback = true;
-            EndSessionOnMenuScene = true;
-            InterceptPauseMenu = true;
         }
     }
 }

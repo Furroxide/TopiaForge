@@ -1,6 +1,6 @@
 ---
 title: RobotKit
-description: Build Robotopia robot, objective, dialogue, voice, and story features through safe V1 contracts.
+description: Build Robotopia robot, objective, dialogue, voice, and story features through safe SDK contracts.
 ---
 
 # RobotKit

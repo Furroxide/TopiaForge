@@ -17,7 +17,8 @@ include secrets, game-account data, private paths, or proprietary game assemblie
 
 Include the affected component/version, impact, reproduction steps, proof-of-concept files, and any suggested
 mitigation. Reports involving archive traversal, signature/hash bypass, unsafe process launch, registry compromise,
-credential exposure, loader privilege boundaries, or remote UGC sessions are especially useful.
+credential exposure, loader privilege boundaries, or signed-update trust and downgrade policy are
+especially useful.
 
 TopiaForge is maintained by one person on a best-effort basis, with no guaranteed response time. The intent is to
 acknowledge a private report, agree on disclosure timing with the reporter, and publish an advisory once users have

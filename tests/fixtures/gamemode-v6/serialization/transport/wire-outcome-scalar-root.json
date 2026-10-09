@@ -1,0 +1,22 @@
+{
+  "id": "wire-outcome-scalar-root",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec scalar root",
+  "transport": "outcome",
+  "payload": true,
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

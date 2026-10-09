@@ -1,0 +1,33 @@
+{
+  "id": "wire-outcome-unknown-field",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec unknown field",
+  "transport": "outcome",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "launch",
+    "command": "launch-target",
+    "requestId": "request-01",
+    "sequence": 5,
+    "phase": "running",
+    "status": "succeeded",
+    "sessionId": "session-01",
+    "blocks": [],
+    "unknown": true
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

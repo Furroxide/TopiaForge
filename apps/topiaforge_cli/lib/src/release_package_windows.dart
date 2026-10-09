@@ -150,33 +150,87 @@ class WindowsPackageSigner {
     }
   }
 
+  /// Confirms [target] carries no Authenticode signature at all.
+  ///
+  /// The script reports the status rather than encoding a verdict in its exit
+  /// code, because those are different questions. "This file is signed" is a
+  /// policy violation the caller must not publish past; "I could not read this
+  /// file" is a transient condition on Windows, where a freshly extracted
+  /// executable is routinely held open by the antivirus scanner for a moment
+  /// after it is written. Collapsing both into one failure reported a signing
+  /// violation for a file that was never signed, on the path an unsigned
+  /// release now depends on.
   Future<void> _verifyUnsignedExecutable(String target) async {
     const targetEnvironmentName = 'TOPIAFORGE_AUTHENTICODE_TARGET';
     const script = r'''
-$signature = Get-AuthenticodeSignature `
-  -LiteralPath $env:TOPIAFORGE_AUTHENTICODE_TARGET
-if (
-  $signature.Status -ne
-    [System.Management.Automation.SignatureStatus]::NotSigned
-) { exit 2 }
-if (
-  $null -ne $signature.SignerCertificate -or
-  $null -ne $signature.TimeStamperCertificate
-) { exit 3 }
-[Console]::Out.Write("unsigned")
+$ErrorActionPreference = "Stop"
+try {
+  $signature = Get-AuthenticodeSignature `
+    -LiteralPath $env:TOPIAFORGE_AUTHENTICODE_TARGET
+} catch {
+  [Console]::Out.Write("unreadable:" + $_.Exception.GetType().Name)
+  exit 0
+}
+$signer = if ($null -ne $signature.SignerCertificate) { "signer" } else { "none" }
+$stamp = if ($null -ne $signature.TimeStamperCertificate) { "stamp" } else { "none" }
+[Console]::Out.Write("$($signature.Status)|$signer|$stamp")
 ''';
-    final result = await processRunner.runResult(
-      'powershell.exe',
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-      environment: {targetEnvironmentName: target},
-    );
-    if (result.exitCode != 0 || result.stdout.toString().trim() != 'unsigned') {
-      throw StateError(
-        'Windows executable is signed or has an invalid signature, but this '
-        'technical dry-run requires an entirely unsigned package: '
-        '${p.basename(target)}.',
+
+    // A transient read is worth one short retry; a signed binary is not going
+    // to become unsigned, so a real violation still fails on the first pass.
+    const attempts = 3;
+    var lastDetail = '';
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      final result = await processRunner.runResult(
+        'powershell.exe',
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
+        environment: {targetEnvironmentName: target},
       );
+      final output = result.stdout.toString().trim();
+      if (result.exitCode != 0) {
+        lastDetail =
+            'the Authenticode probe exited ${result.exitCode}: '
+            '${result.stderr.toString().trim()}';
+      } else if (output.startsWith('unreadable:')) {
+        lastDetail = 'the file could not be read (${output.substring(11)})';
+      } else {
+        final fields = output.split('|');
+        if (fields.length != 3) {
+          lastDetail = 'the Authenticode probe returned "$output"';
+        } else if (fields[0] == 'NotSigned' &&
+            fields[1] == 'none' &&
+            fields[2] == 'none') {
+          return;
+        } else if (fields[0] == 'UnknownError' &&
+            fields[1] == 'none' &&
+            fields[2] == 'none') {
+          // UnknownError carrying no certificate at all is Windows saying it
+          // could not read the file, not that it found something wrong with a
+          // signature. Either certificate makes the answer conclusive, so both
+          // have to be absent before this is treated as a read to retry.
+          lastDetail = 'the Authenticode status was UnknownError';
+        } else {
+          // A certificate is present, so this file really is signed - an
+          // untrusted or self-signed one also lands here, reported by Windows
+          // as UnknownError. Retrying cannot change it.
+          throw StateError(
+            'This dry-run requires an entirely unsigned package, but '
+            '${p.basename(target)} carries a signature: status '
+            '${fields[0]}, '
+            '${fields[1] == 'signer' ? 'with' : 'without'} a signer '
+            'certificate, '
+            '${fields[2] == 'stamp' ? 'with' : 'without'} a timestamp.',
+          );
+        }
+      }
     }
+
+    throw StateError(
+      'Could not determine whether ${p.basename(target)} is signed after '
+      '$attempts attempts: $lastDetail. This is not a signing violation - the '
+      'check never got an answer. Retry, and if it persists check whether an '
+      'antivirus scanner is holding the extracted package open.',
+    );
   }
 
   Future<void> _verifySignerIdentity(

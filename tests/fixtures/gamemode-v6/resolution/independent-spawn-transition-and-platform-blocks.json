@@ -1,0 +1,164 @@
+{
+  "id": "independent-spawn-transition-and-platform-blocks",
+  "channel": "resolution",
+  "kind": "launch-resolution",
+  "summary": "independent spawn transition and platform blocks.",
+  "profile": {
+    "packages": [
+      {
+        "id": "io.github.furroxide.topiaforge.worlds",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "io.github.furroxide.topiaforge.worlds",
+          "displayName": "worlds",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "worlds": [
+              {
+                "id": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                "name": "open_sandbox",
+                "content": {
+                  "kind": "game-scene",
+                  "sceneName": "UgcPlay"
+                },
+                "transitions": [
+                  "additive-arena"
+                ],
+                "spawn": {
+                  "kind": "provider-default"
+                },
+                "openToAnyCompatible": true
+              }
+            ]
+          },
+          "platforms": [
+            "linux"
+          ]
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      },
+      {
+        "id": "mode.mod",
+        "version": "0.1.0",
+        "manifest": {
+          "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
+          "schemaVersion": 6,
+          "name": "mode.mod",
+          "displayName": "Mode",
+          "version": "0.1.0",
+          "author": {
+            "name": "TopiaForge"
+          },
+          "entryAssembly": "Fixture.dll",
+          "entryType": "Fixture.Mod",
+          "supportedGameVersionRange": "*",
+          "supportedLoaderVersionRange": "*",
+          "supportedSdkVersionRange": "*",
+          "capabilities": [
+            "world-service"
+          ],
+          "contributions": {
+            "gamemodes": [
+              {
+                "id": "mode.mod.play",
+                "name": "freeplay",
+                "implementation": {
+                  "type": "Fixture.Gamemode"
+                },
+                "worldRequirements": {
+                  "spawn": "authored-marker",
+                  "transitions": [
+                    "scene-replacement"
+                  ]
+                }
+              }
+            ],
+            "launchTargets": [
+              {
+                "id": "mode.mod.menu",
+                "title": "menu",
+                "gamemode": "mode.mod.play",
+                "world": {
+                  "policy": "open",
+                  "default": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+                  "allowPlayerOverride": true
+                }
+              }
+            ]
+          },
+          "dependencies": {
+            "io.github.furroxide.topiaforge.worlds": "*"
+          }
+        },
+        "schemaOutcome": "accept",
+        "validation": {
+          "outcome": "accept"
+        }
+      }
+    ],
+    "install": {
+      "platform": "windows"
+    }
+  },
+  "request": {
+    "targetId": "mode.mod.menu"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "blocks": [
+        {
+          "code": "spawnRequirementUnsatisfied",
+          "subject": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "subjectVersion": ""
+        },
+        {
+          "code": "transitionUnsatisfiable",
+          "subject": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "subjectVersion": ""
+        },
+        {
+          "code": "worldPlatformUnsupported",
+          "subject": "io.github.furroxide.topiaforge.worlds",
+          "subjectVersion": "0.1.0"
+        }
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "blocks": [
+        {
+          "code": "spawnRequirementUnsatisfied",
+          "subject": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "subjectVersion": ""
+        },
+        {
+          "code": "transitionUnsatisfiable",
+          "subject": "io.github.furroxide.topiaforge.worlds.open_sandbox",
+          "subjectVersion": ""
+        },
+        {
+          "code": "worldPlatformUnsupported",
+          "subject": "io.github.furroxide.topiaforge.worlds",
+          "subjectVersion": "0.1.0"
+        }
+      ]
+    }
+  }
+}

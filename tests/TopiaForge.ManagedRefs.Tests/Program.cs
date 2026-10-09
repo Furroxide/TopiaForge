@@ -253,7 +253,7 @@ internal static class Program
 
     private static Task TestManagedDirectoryIdentityAsync()
     {
-        Assert(ManagedDirectoryValidator.RequiredAssemblies.Count == 20, "Production managed-ref inventory is incomplete.");
+        Assert(ManagedDirectoryValidator.RequiredAssemblies.Count == 21, "Production managed-ref inventory is incomplete.");
         using var workspace = new TemporaryWorkspace();
         var destination = Path.Combine(workspace.Root, "managed");
         Directory.CreateDirectory(destination);

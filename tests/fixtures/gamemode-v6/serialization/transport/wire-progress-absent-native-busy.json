@@ -1,0 +1,33 @@
+{
+  "id": "wire-progress-absent-native-busy",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec absent native busy",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "request-01",
+    "sequence": 3,
+    "phase": "loading-world"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "request-01",
+        "sequence": 3,
+        "phase": "loading-world"
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "requestId": "request-01",
+        "sequence": 3,
+        "phase": "loading-world"
+      }
+    }
+  }
+}

@@ -177,6 +177,29 @@ void main() {
     });
   });
 
+  group('VersionRange.isAboveMaximum', () {
+    test('tells a newer game apart from an older one', () {
+      final exact = VersionRange.parse('0.0.2478');
+      expect(exact.isAboveMaximum('0.0.2479'), isTrue);
+      expect(exact.isAboveMaximum('0.0.2478'), isFalse);
+      expect(exact.isAboveMaximum('0.0.2409'), isFalse);
+
+      final bounded = VersionRange.parse('>=0.0.2478 <0.0.2600');
+      expect(bounded.isAboveMaximum('0.0.2600'), isTrue);
+      expect(bounded.isAboveMaximum('0.0.2599'), isFalse);
+      expect(bounded.isAboveMaximum('0.0.2400'), isFalse);
+    });
+
+    test('never reports an unbounded or unreadable version as newer', () {
+      expect(VersionRange.parse('>=0.0.2478').isAboveMaximum('9.9.9'), isFalse);
+      expect(const VersionRange.any().isAboveMaximum('0.0.9999'), isFalse);
+      expect(
+        VersionRange.parse('0.0.2478').isAboveMaximum('build 2479'),
+        isFalse,
+      );
+    });
+  });
+
   group('VersionRange.parse', () {
     test('requires complete SemVer bounds while retaining wildcards', () {
       for (final value in ['1', '1.2', '>=1 <2.1']) {

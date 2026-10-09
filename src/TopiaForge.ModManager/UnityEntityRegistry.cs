@@ -124,13 +124,6 @@ namespace TopiaForge.ModManager
                     "The entity is no longer alive or has no physics body.");
             }
 
-            if (body.isKinematic)
-            {
-                return OperationResult<IEntityMotion>.Failure(
-                    ModErrorCode.InvalidState,
-                    "The entity has a kinematic physics body and cannot be moved by velocity control.");
-            }
-
             lock (sync)
             {
                 ThrowIfDisposed();

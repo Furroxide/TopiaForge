@@ -157,6 +157,16 @@ namespace TopiaForge.Mods.UnityUi
             dropdown.RefreshShownValue();
         }
 
+        /// <summary>Caption text of the current option, or empty when the dropdown has no options.</summary>
+        public string SelectedCaption
+        {
+            get
+            {
+                var index = dropdown.value;
+                return index >= 0 && index < dropdown.options.Count ? dropdown.options[index].text ?? string.Empty : string.Empty;
+            }
+        }
+
         /// <summary>Sets whether the dropdown accepts input.</summary>
         public void SetEnabled(bool enabled)
         {

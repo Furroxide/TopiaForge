@@ -100,6 +100,27 @@ Directory _writeFixtureRepo(Directory temp) {
       license,
     ], 'license');
   }
+  // UnityDoorstop is LGPL-2.1, so the package has to carry its corresponding
+  // source alongside the notice. The payload writer resolves the file list from
+  // provenance, so the fixture models both.
+  _writeFile(
+    repo,
+    ['third_party', 'BepInEx', 'provenance.json'],
+    jsonEncode({
+      'correspondingSource': [
+        {
+          'component': 'UnityDoorstop',
+          'file': bepInExCorrespondingSourceFileName,
+          'licenseFile': 'LICENSES/UnityDoorstop-LGPL-2.1.txt',
+        },
+      ],
+    }),
+  );
+  _writeFile(repo, [
+    'third_party',
+    'BepInEx',
+    bepInExCorrespondingSourceFileName,
+  ], 'doorstop source fixture');
   _writeFile(repo, [
     'src',
     'TopiaForge.GameCompat.Extractor',
@@ -216,6 +237,10 @@ void _writeFixtureSdkProjects(Directory repo) {
     }
   }
 }
+
+/// Name of the corresponding-source archive the fixtures redistribute.
+const bepInExCorrespondingSourceFileName =
+    'UnityDoorstop-4.5.0-source-fixture.zip';
 
 const _bepInExLicenseNames = [
   'BepInEx-MIT.txt',
@@ -400,6 +425,13 @@ class _RecordingProcessRunner extends ReleaseProcessRunner {
   Future<bool> commandExists(String executable) async =>
       availableCommands.contains(executable);
 
+  /// Mirrors the real resolver: a command that exists resolves to a launchable
+  /// path. The `.bat` suffix is what production returns on Windows, and the
+  /// builder is expected to invoke that rather than the bare name.
+  @override
+  Future<String?> resolveCommand(String executable) async =>
+      availableCommands.contains(executable) ? '$executable.bat' : null;
+
   @override
   Future<ProcessResult> runResult(
     String executable,
@@ -446,3 +478,14 @@ Future<DotnetSdkSelection> _resolveFixtureDotnetSdk(
 
 const _fixtureDotnetExecutable = '/verified/dotnet';
 const _fixtureDotnetVersion = '10.0.301';
+
+/// Adds the UnityDoorstop corresponding-source archive a valid package must
+/// carry beside its LGPL-2.1 notice.
+void addDoorstopSourceFixture(Archive archive, {String prefix = ''}) {
+  archive.addFile(
+    ArchiveFile.string(
+      '${prefix}third_party/BepInEx/$bepInExCorrespondingSourceFileName',
+      'doorstop source fixture',
+    ),
+  );
+}

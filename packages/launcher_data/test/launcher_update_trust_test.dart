@@ -54,12 +54,12 @@ void main() {
     final candidate = _candidate(
       version: '1.1.0-rc.1',
       channel: 'beta',
-      minimumUpdaterVersion: '1.0.0-rc.1',
+      minimumUpdaterVersion: '0.1.0-rc.1',
     );
 
     expect(
       candidate.isEligibleFor(
-        currentVersion: '1.0.0-rc.1',
+        currentVersion: '0.1.0-rc.1',
         requestedChannel: LauncherUpdateChannel.beta,
       ),
       isTrue,
@@ -73,7 +73,7 @@ void main() {
     );
     expect(
       candidate.isEligibleFor(
-        currentVersion: '1.0.0-rc.1',
+        currentVersion: '0.1.0-rc.1',
         requestedChannel: LauncherUpdateChannel.release,
       ),
       isFalse,
@@ -84,7 +84,7 @@ void main() {
         channel: 'release',
         minimumUpdaterVersion: '1.1.0',
       ).isEligibleFor(
-        currentVersion: '1.0.0-rc.1',
+        currentVersion: '0.1.0-rc.1',
         requestedChannel: LauncherUpdateChannel.beta,
       ),
       isFalse,
@@ -94,17 +94,17 @@ void main() {
   test('candidate rejects unknown channels and payload fields', () {
     expect(
       () => _candidate(
-        version: '1.0.0-rc.2',
+        version: '0.1.0-rc.2',
         channel: 'nightly',
-        minimumUpdaterVersion: '1.0.0-rc.1',
+        minimumUpdaterVersion: '0.1.0-rc.1',
       ),
       throwsFormatException,
     );
     expect(
       () => _candidate(
-        version: '1.0.0-rc.2',
+        version: '0.1.0-rc.2',
         channel: 'beta',
-        minimumUpdaterVersion: '1.0.0-rc.1',
+        minimumUpdaterVersion: '0.1.0-rc.1',
         extraFields: const {'unexpected': true},
       ),
       throwsFormatException,

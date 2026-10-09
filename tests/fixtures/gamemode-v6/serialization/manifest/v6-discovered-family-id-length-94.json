@@ -1,0 +1,146 @@
+{
+  "id": "v6-discovered-family-id-length-94",
+  "channel": "serialization",
+  "kind": "manifest-accepts",
+  "summary": "A discovered family id of length 94 must leave room for a dot and a nonempty instance slug within 96 characters.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "worlds": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+          "name": "Arena",
+          "content": {
+            "kind": "discovered",
+            "implementation": {
+              "type": "Fixture.Source"
+            }
+          },
+          "transitions": [
+            "additive-arena"
+          ],
+          "spawn": {
+            "kind": "provider-default"
+          }
+        }
+      ],
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ]
+    }
+  },
+  "schemaOutcome": "accept",
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "discovered",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": null,
+                "type": "Fixture.Source"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
+        ],
+        "gamemodes": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
+        ],
+        "launchTargets": []
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+            "name": "Arena",
+            "description": null,
+            "content": {
+              "kind": "discovered",
+              "bundle": null,
+              "prefab": null,
+              "implementation": {
+                "assembly": null,
+                "type": "Fixture.Source"
+              },
+              "sceneName": null
+            },
+            "transitions": [
+              "additive-arena"
+            ],
+            "spawn": {
+              "kind": "provider-default",
+              "markerName": null
+            },
+            "openTo": null,
+            "openToAnyCompatible": null
+          }
+        ],
+        "gamemodes": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
+        ],
+        "launchTargets": []
+      }
+    }
+  }
+}

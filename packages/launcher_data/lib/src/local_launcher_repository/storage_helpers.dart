@@ -1,6 +1,6 @@
 part of '../local_launcher_repository.dart';
 
-const _profileFormatVersion = 2;
+const _profileFormatVersion = 3;
 const _profileExportSuffix = '.topiaforgeprofile.json';
 const _packageSourceFormatVersion = 2;
 
@@ -12,44 +12,8 @@ void _requireProfileExportPath(String path) {
   }
 }
 
-LauncherProfile _requireValidLauncherProfile(LauncherProfile profile) {
-  ProfileLaunchConfiguration.fromProfile(profile);
-  return profile;
-}
-
 extension _StorageHelpers on LocalLauncherRepository {
-  Future<List<LauncherProfile>> _loadProfiles() async {
-    await _recoverAtomicBackupIfMissing(_profilesFile);
-    if (!_profilesFile.existsSync()) {
-      final defaults = [LauncherProfile.defaultProfile()];
-      await saveProfiles(defaults, defaults.first.id);
-      return defaults;
-    }
-
-    final decoded = await _readJsonFileBounded(
-      _profilesFile,
-      maxBytes: _maxProfilesBytes,
-      label: 'Launcher profiles',
-    );
-    if (decoded is! Map || decoded['schemaVersion'] != _profileFormatVersion) {
-      throw const FormatException(
-        'Launcher profiles must use TopiaForge schemaVersion 2.',
-      );
-    }
-    final profiles = decoded['profiles'] as List?;
-    final result = profiles == null
-        ? <LauncherProfile>[]
-        : profiles
-              .whereType<Map>()
-              .map(
-                (item) => LauncherProfile.fromJson(
-                  item.map((key, value) => MapEntry(key.toString(), value)),
-                ),
-              )
-              .map(_requireValidLauncherProfile)
-              .toList();
-    return result.isEmpty ? [LauncherProfile.defaultProfile()] : result;
-  }
+  Future<List<LauncherProfile>> _loadProfiles() => _loadVersionedProfiles();
 
   Future<List<PackageSource>> _loadPackageSources() async {
     await _recoverAtomicBackupIfMissing(_sourcesFile);
@@ -219,103 +183,6 @@ extension _StorageHelpers on LocalLauncherRepository {
       completion.complete();
     }
   }
-
-  Future<WorldCatalog> _loadWorldCatalog(
-    GameInstall install,
-    List<InstalledMod> installedMods,
-    List<RegistryMod> registryMods,
-  ) async {
-    final file = File(
-      p.join(_managerData(install).path, 'topiaforge.worlds', 'catalog.json'),
-    );
-    WorldCatalog catalog;
-    if (!file.existsSync()) {
-      catalog = WorldCatalog.fallback();
-    } else {
-      try {
-        final decoded = await _readJsonFileBounded(
-          file,
-          maxBytes: _maxWorldCatalogBytes,
-          label: 'World catalog',
-        );
-        catalog = WorldCatalog.fromJson(decoded as Map<String, Object?>);
-      } on Object catch (error) {
-        await _appendLauncherLogBestEffort('World catalog read failed: $error');
-        catalog = WorldCatalog.fallback();
-      }
-    }
-
-    return _mergeManifestGamemodes(catalog, installedMods, registryMods);
-  }
-
-  WorldCatalog _mergeManifestGamemodes(
-    WorldCatalog catalog,
-    List<InstalledMod> installedMods,
-    List<RegistryMod> registryMods,
-  ) {
-    final gamemodes = [...catalog.gamemodes];
-    final seen = {for (final gamemode in gamemodes) gamemode.id.toLowerCase()};
-    final installedIds = {
-      for (final mod in installedMods.where((mod) => mod.enabled))
-        mod.id.toLowerCase(),
-    };
-
-    for (final mod in installedMods.where((mod) => mod.enabled)) {
-      for (final gamemode in mod.manifest?.worldGamemodes ?? const []) {
-        if (ModManifest.isValidId(gamemode.id) &&
-            gamemode.name.trim().isNotEmpty &&
-            seen.add(gamemode.id.toLowerCase())) {
-          gamemodes.add(gamemode);
-        }
-      }
-    }
-
-    for (final mod in registryMods.where(
-      (mod) => installedIds.contains(mod.manifest.id.toLowerCase()),
-    )) {
-      for (final gamemode in mod.manifest.worldGamemodes) {
-        if (ModManifest.isValidId(gamemode.id) &&
-            gamemode.name.trim().isNotEmpty &&
-            seen.add(gamemode.id.toLowerCase())) {
-          gamemodes.add(gamemode);
-        }
-      }
-    }
-
-    return WorldCatalog(worlds: catalog.worlds, gamemodes: gamemodes);
-  }
-
-  Future<void> _writeWorldSelection(
-    GameInstall install,
-    WorldSelection selection,
-  ) async {
-    WorldSelection.fromJson(selection.toJson());
-    final file = File(
-      p.join(_managerConfig(install).path, 'topiaforge.worlds.json'),
-    );
-    var existing = <String, Object?>{};
-    if (await file.exists()) {
-      try {
-        final decoded = jsonDecode(
-          utf8.decode(
-            await _readLauncherFileBounded(file, _maxWorldConfigBytes),
-          ),
-        );
-        if (decoded is Map<String, Object?>) {
-          existing = decoded;
-        } else {
-          await _appendLauncherLogBestEffort(
-            'World config was not a JSON object; replacing it.',
-          );
-        }
-      } on FormatException catch (error) {
-        await _appendLauncherLogBestEffort(
-          'World config was malformed and will be replaced: $error',
-        );
-      }
-    }
-    await _writeJsonFileAtomic(file, selection.mergeRuntimeConfig(existing));
-  }
 }
 
 Future<void> _recoverAtomicBackupIfMissing(File file) async {
@@ -356,6 +223,7 @@ Future<Object?> _readJsonFileBounded(
   File file, {
   required int maxBytes,
   required String label,
+  bool preserveNumbers = false,
 }) async {
   final type = FileSystemEntity.typeSync(file.path, followLinks: false);
   if (type == FileSystemEntityType.link) {
@@ -365,13 +233,18 @@ Future<Object?> _readJsonFileBounded(
     throw StateError('$label does not exist: ${file.path}');
   }
   try {
-    return jsonDecode(
-      utf8.decode(await _readLauncherFileBounded(file, maxBytes)),
-    );
+    final text = utf8.decode(await _readLauncherFileBounded(file, maxBytes));
+    return preserveNumbers
+        ? decodeJsonPreservingValues(text, label: '$label at ${file.path}')
+        : jsonDecode(text);
   } on StateError {
     rethrow;
   } on Object catch (error) {
-    throw FormatException('$label is not valid JSON: $error');
+    throw FormatException(
+      preserveNumbers
+          ? '$label could not be preserved safely: $error'
+          : '$label is not valid JSON: $error',
+    );
   }
 }
 
@@ -410,7 +283,6 @@ List<String> _tailStatic(List<String> lines, int maxLines) {
 const _maxSettingsBytes = 1024 * 1024;
 const _maxProfilesBytes = 4 * 1024 * 1024;
 const _maxPackageSourcesBytes = 1024 * 1024;
-const _maxWorldCatalogBytes = 16 * 1024 * 1024;
 const _maxLauncherLogReadBytes = 4 * 1024 * 1024;
 const _maxLauncherLogBytes = 8 * 1024 * 1024;
 const _maxLauncherLogMessageCharacters = 4096;
@@ -419,7 +291,7 @@ String _sanitizeLauncherLogMessage(String message) {
   final singleLine = message.replaceAll(RegExp(r'[\u0000-\u001f\u007f]+'), ' ');
   return singleLine.length <= _maxLauncherLogMessageCharacters
       ? singleLine
-      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}…';
+      : '${singleLine.substring(0, _maxLauncherLogMessageCharacters)}\u2026';
 }
 
 Future<void> _writeJsonFileAtomic(

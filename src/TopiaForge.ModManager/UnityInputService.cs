@@ -58,7 +58,6 @@ namespace TopiaForge.ModManager
             }
             catch (ObjectDisposedException)
             {
-                action.Dispose();
                 return OperationResult<IInputAction>.Failure(
                     ModErrorCode.Cancelled,
                     "The mod stopped before its input action could be registered.");

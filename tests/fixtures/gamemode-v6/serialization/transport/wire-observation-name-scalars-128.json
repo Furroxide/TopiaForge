@@ -1,0 +1,111 @@
+{
+  "id": "wire-observation-name-scalars-128",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Discovery name Unicode scalar boundary 128",
+  "transport": "observation",
+  "payload": {
+    "schemaVersion": 1,
+    "profileId": "profile-01",
+    "profileRevision": 7,
+    "producer": {
+      "id": "base.mod",
+      "version": "1.0.0"
+    },
+    "packageSetDigest": "6a4a1aa84ed69e17",
+    "observationRevision": 3,
+    "discoveredWorlds": [
+      {
+        "id": "base.mod.family.level",
+        "familyId": "base.mod.family",
+        "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "description": ""
+      }
+    ],
+    "availability": [
+      {
+        "kind": "world",
+        "id": "base.mod.world",
+        "blocks": [
+          {
+            "code": "worldUnavailable",
+            "subject": "base.mod.world",
+            "subjectVersion": "1.0.0"
+          }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "profileId": "profile-01",
+        "profileRevision": 7,
+        "producer": {
+          "id": "base.mod",
+          "version": "1.0.0"
+        },
+        "packageSetDigest": "6a4a1aa84ed69e17",
+        "observationRevision": 3,
+        "discoveredWorlds": [
+          {
+            "id": "base.mod.family.level",
+            "familyId": "base.mod.family",
+            "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+            "description": ""
+          }
+        ],
+        "availability": [
+          {
+            "kind": "world",
+            "id": "base.mod.world",
+            "blocks": [
+              {
+                "code": "worldUnavailable",
+                "subject": "base.mod.world",
+                "subjectVersion": "1.0.0"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "profileId": "profile-01",
+        "profileRevision": 7,
+        "producer": {
+          "id": "base.mod",
+          "version": "1.0.0"
+        },
+        "packageSetDigest": "6a4a1aa84ed69e17",
+        "observationRevision": 3,
+        "discoveredWorlds": [
+          {
+            "id": "base.mod.family.level",
+            "familyId": "base.mod.family",
+            "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+            "description": ""
+          }
+        ],
+        "availability": [
+          {
+            "kind": "world",
+            "id": "base.mod.world",
+            "blocks": [
+              {
+                "code": "worldUnavailable",
+                "subject": "base.mod.world",
+                "subjectVersion": "1.0.0"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

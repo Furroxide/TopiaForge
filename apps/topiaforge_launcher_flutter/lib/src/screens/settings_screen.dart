@@ -355,7 +355,7 @@ class _DeveloperModeSettings extends StatelessWidget {
                 _add(context, DeveloperModeToggled(enabled)),
             title: const Text('Developer mode'),
             subtitle: const Text(
-              'Show the Developer tab (build mods, UGC live-sync). Off by default — '
+              'Show the Developer tab (build mods). Off by default — '
               'installing and playing mods needs no developer tools.',
             ),
           ),

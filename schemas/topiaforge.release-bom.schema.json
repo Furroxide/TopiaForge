@@ -12,7 +12,7 @@
   ],
   "properties": {
     "$schema": { "type": "string", "format": "uri" },
-    "schemaVersion": { "const": 3 },
+    "schemaVersion": { "const": 4 },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
     "targetSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
@@ -130,46 +130,98 @@
       "items": { "$ref": "#/definitions/pathInventory" }
     }
   },
+  "allOf": [{
+    "if": { "properties": { "distributable": { "const": true } }, "required": ["distributable"] },
+    "then": { "properties": {
+      "readiness": { "properties": { "status": { "const": "ready" } } },
+      "blockingReasons": { "maxItems": 0 }
+    } },
+    "else": { "properties": { "blockingReasons": { "minItems": 1 } } }
+  }],
   "definitions": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "readiness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["binding", "path", "schemaPath", "status", "blobSha256", "summary"],
+      "required": [
+        "binding",
+        "path",
+        "schemaPath",
+        "acceptancePath",
+        "status",
+        "blobSha256",
+        "summary"
+      ],
       "properties": {
-        "binding": { "const": "git-blob-at-target-sha" },
-        "path": { "const": "release/release-readiness.json" },
-        "schemaPath": { "const": "schemas/topiaforge.release-readiness-v1.schema.json" },
-        "status": { "enum": ["blocked", "ready", "unavailable"] },
+        "binding": {
+          "const": "detached-candidate-at-target-sha"
+        },
+        "path": {
+          "const": "release-candidate-readiness-v1.json"
+        },
+        "schemaPath": {
+          "const": "schemas/topiaforge.release-candidate-readiness-v1.schema.json"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "unavailable"
+          ]
+        },
         "blobSha256": {
           "oneOf": [
-            { "$ref": "#/definitions/sha256" },
-            { "type": "null" }
+            {
+              "$ref": "#/definitions/sha256"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "summary": {
           "oneOf": [
-            { "$ref": "#/definitions/readinessSummary" },
-            { "type": "null" }
+            {
+              "$ref": "#/definitions/readinessSummary"
+            },
+            {
+              "type": "null"
+            }
           ]
+        },
+        "acceptancePath": {
+          "const": "release-candidate-acceptance-v1.json"
         }
       },
       "allOf": [
         {
           "if": {
-            "properties": { "status": { "const": "unavailable" } },
-            "required": ["status"]
+            "properties": {
+              "status": {
+                "const": "unavailable"
+              }
+            },
+            "required": [
+              "status"
+            ]
           },
           "then": {
             "properties": {
-              "blobSha256": { "type": "null" },
-              "summary": { "type": "null" }
+              "blobSha256": {
+                "type": "null"
+              },
+              "summary": {
+                "type": "null"
+              }
             }
           },
           "else": {
             "properties": {
-              "blobSha256": { "$ref": "#/definitions/sha256" },
-              "summary": { "$ref": "#/definitions/readinessSummary" }
+              "blobSha256": {
+                "$ref": "#/definitions/sha256"
+              },
+              "summary": {
+                "$ref": "#/definitions/readinessSummary"
+              }
             }
           }
         }
@@ -180,33 +232,114 @@
       "additionalProperties": false,
       "required": [
         "schema",
+        "repository",
         "releaseVersion",
         "targetSha",
-        "readinessBlobSha256",
         "status",
+        "decisionSha256",
+        "acceptanceSha256",
+        "handoffSha256",
+        "baseReadinessSha256",
+        "baseSchemaSha256",
+        "policySha256",
+        "catalogSha256",
+        "contractSha256",
+        "payloads",
         "gates"
       ],
       "properties": {
-        "schema": { "const": "topiaforge-release-readiness-summary-v1" },
+        "schema": {
+          "const": "release-candidate-readiness-summary-v1"
+        },
         "releaseVersion": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
         },
-        "targetSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "readinessBlobSha256": { "$ref": "#/definitions/sha256" },
-        "status": { "enum": ["blocked", "ready"] },
+        "targetSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "status": {
+          "const": "ready"
+        },
         "gates": {
           "type": "array",
           "minItems": 12,
           "maxItems": 12,
-          "items": { "$ref": "#/definitions/readinessGate" }
+          "items": {
+            "$ref": "#/definitions/readinessGate"
+          }
+        },
+        "repository": {
+          "const": "Furroxide/TopiaForge"
+        },
+        "decisionSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "acceptanceSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "handoffSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "baseReadinessSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "baseSchemaSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "policySha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "catalogSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "contractSha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "payloads": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "size",
+              "sha256"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+                "maxLength": 255
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "sha256": {
+                "$ref": "#/definitions/sha256"
+              }
+            }
+          }
         }
       }
     },
     "readinessGate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "priority", "status", "reviewerRoles", "evidenceIds"],
+      "required": [
+        "id",
+        "priority",
+        "enforcement",
+        "status",
+        "reviewerRoles",
+        "evidenceIds"
+      ],
       "properties": {
         "id": {
           "enum": [
@@ -225,6 +358,7 @@
           ]
         },
         "priority": { "enum": ["P0", "P1"] },
+        "enforcement": { "enum": ["advisory", "blocking"] },
         "status": { "enum": ["accepted-risk", "approved", "blocked"] },
         "reasonCode": {
           "enum": [

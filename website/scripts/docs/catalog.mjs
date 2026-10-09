@@ -2,12 +2,12 @@ import { extname } from 'node:path';
 
 export const pages = [
   page('website/content/index.md', 'index.md', false),
+  page('docs/CreatorScope.md', 'getting-started/creator-scope.md'),
   page('docs/YourFirstMod.md', 'getting-started/first-mod.md'),
   page('docs/Modding.md', 'reference/sdk-overview.md'),
   page('docs/CoreServices.md', 'guides/core-services.md'),
   page('docs/UiKit.md', 'guides/ui.md'),
   page('docs/Modules.md', 'guides/modules.md'),
-  page('docs/CreatorTools.md', 'guides/creator-tools.md'),
   page('docs/Sandbox.md', 'guides/sandbox.md'),
   page('docs/Multiplayer.md', 'guides/multiplayer.md'),
   page('docs/MultiplayerHostingFeasibility.md', 'reference/multiplayer-hosting-feasibility.md'),
@@ -18,6 +18,7 @@ export const pages = [
   page('docs/CliDevLoop.md', 'guides/cli-dev.md'),
   page('docs/UnityInterop.md', 'guides/interop.md', false),
   page('docs/ManifestV5.md', 'reference/manifest-v5.md'),
+  page('docs/ManifestV6.md', 'reference/manifest-v6.md'),
   page('docs/Diagnostics.md', 'reference/diagnostics.md'),
   page('docs/PrivacyAndCapabilities.md', 'reference/capabilities.md'),
   page(
@@ -49,7 +50,6 @@ export const forbiddenPublicContractTerms = [
   [/(?<![A-Za-z])GetService(?![A-Za-z])/giu, 'retired global service lookup'],
   [/(?<![A-Za-z])vpmDependencies(?![A-Za-z])/giu, 'retired dependency field'],
   [/(?<![A-Za-z])permissions(?![A-Za-z])/giu, 'retired manifest terminology'],
-  [/(?<![0-9.])0\.(?:x|1(?:\.[0-9]+)?)(?![0-9])/giu, 'pre-V1 SDK or package version'],
   [/(?<![A-Za-z])UnityEngine(?![A-Za-z])/gu, 'native engine consumer type'],
   [/(?<![A-Za-z])GameCode(?![A-Za-z])/gu, 'game implementation assembly'],
   [/(?<![A-Za-z])Harmony(?![A-Za-z])/gu, 'patch-library consumer API'],

@@ -216,7 +216,7 @@ namespace TopiaForge.GameCompat.Extractor
         {
             foreach (var method in type.GetMethods(AllMembers))
             {
-                if (method.IsSpecialName || !IsGameRelevant(method.DeclaringType))
+                if (method.IsSpecialName || (method.DeclaringType != type && !IsGameRelevant(method.DeclaringType)))
                 {
                     continue;
                 }
@@ -225,6 +225,7 @@ namespace TopiaForge.GameCompat.Extractor
                 {
                     Name = method.Name,
                     ReturnType = NormalizeTypeName(method.ReturnType),
+                    GenericArity = method.GetGenericArguments().Length,
                     IsPublic = method.IsPublic,
                     IsStatic = method.IsStatic,
                 };
@@ -239,7 +240,7 @@ namespace TopiaForge.GameCompat.Extractor
 
             foreach (var field in type.GetFields(AllMembers))
             {
-                if (!IsGameRelevant(field.DeclaringType))
+                if (field.DeclaringType != type && !IsGameRelevant(field.DeclaringType))
                 {
                     continue;
                 }
@@ -255,7 +256,7 @@ namespace TopiaForge.GameCompat.Extractor
 
             foreach (var property in type.GetProperties(AllMembers))
             {
-                if (!IsGameRelevant(property.DeclaringType))
+                if (property.DeclaringType != type && !IsGameRelevant(property.DeclaringType))
                 {
                     continue;
                 }
@@ -266,6 +267,9 @@ namespace TopiaForge.GameCompat.Extractor
                     Type = NormalizeTypeName(property.PropertyType),
                     CanRead = property.CanRead,
                     CanWrite = property.CanWrite,
+                    GetterIsPublic = property.GetGetMethod(nonPublic: true)?.IsPublic == true,
+                    SetterIsPublic = property.GetSetMethod(nonPublic: true)?.IsPublic == true,
+                    IsStatic = (property.GetGetMethod(nonPublic: true) ?? property.GetSetMethod(nonPublic: true))?.IsStatic == true,
                 });
             }
 
@@ -448,8 +452,7 @@ namespace TopiaForge.GameCompat.Extractor
 
         private static string StripArity(string name)
         {
-            var tick = name.IndexOf('`');
-            return tick >= 0 ? name.Substring(0, tick) : name;
+            return System.Text.RegularExpressions.Regex.Replace(name, "`[0-9]+", string.Empty);
         }
 
         private static string SimpleName(string typeName)

@@ -1,4 +1,4 @@
-## 1.0.0-rc.1
+## 0.1.0-rc.1
 
 - Added the shared V1 desktop launcher presentation components and accessible
   status, focus, scaling, contrast, and reduced-motion behavior.

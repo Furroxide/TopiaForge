@@ -1,0 +1,42 @@
+{
+  "id": "v6-retired-world-gamemodes",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "The V5 list is retired, and the rejection has to say what to split it into -- an unknown-field error would leave the author guessing.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "worldGamemodes": [
+      {
+        "id": "io.github.furroxide.topiaforge.fixture.survival",
+        "name": "Survival"
+      }
+    ]
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldGamemodes"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "worldGamemodes"
+      ]
+    }
+  },
+  "schemaOutcome": "reject"
+}

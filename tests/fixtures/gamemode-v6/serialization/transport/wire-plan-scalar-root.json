@@ -1,0 +1,22 @@
+{
+  "id": "wire-plan-scalar-root",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive plan codec scalar root",
+  "transport": "plan",
+  "payload": true,
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

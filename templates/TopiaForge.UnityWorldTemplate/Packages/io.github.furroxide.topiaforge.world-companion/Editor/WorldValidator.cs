@@ -51,20 +51,25 @@ namespace TopiaForge.WorldCompanion.Editor
                 return result;
             }
 
-            CheckSpawnPoint(prefab, result);
+            var spawnPoint = CheckSpawnPoint(prefab, result);
+            if (spawnPoint == null) return result;
             CheckComponents(prefab, result);
-            CheckBounds(prefab, result);
+            CheckBounds(prefab, spawnPoint, result);
             return result;
         }
 
-        private static void CheckSpawnPoint(GameObject prefab, Result result)
+        private static Transform CheckSpawnPoint(GameObject prefab, Result result)
         {
-            if (FindDescendant(prefab.transform, SpawnPointName) == null)
-            {
-                result.Errors.Add(
-                    "No descendant named '" + SpawnPointName + "': add an empty child marking where the player "
-                    + "stands (>= 1m above walkable ground).");
-            }
+            var search = WorldMarkerHierarchy.Find(prefab.transform, SpawnPointName,
+                value => value.name, value => value.childCount, (value, index) => value.GetChild(index));
+            if (search.Status == WorldMarkerStatus.Unique) return search.Marker;
+            if (search.Status == WorldMarkerStatus.Ambiguous)
+                result.Errors.Add("Multiple objects named '" + SpawnPointName + "': keep exactly one authored spawn marker, including the root and inactive objects.");
+            else if (search.Status == WorldMarkerStatus.LimitExceeded)
+                result.Errors.Add("Spawn marker inspection exceeded the 16384-object hierarchy limit; simplify the prefab before exporting.");
+            else
+                result.Errors.Add("No object named '" + SpawnPointName + "': use this exact case for one root or descendant marking where the player stands (>= 1m above walkable ground).");
+            return null;
         }
 
         private static void CheckComponents(GameObject prefab, Result result)
@@ -112,7 +117,7 @@ namespace TopiaForge.WorldCompanion.Editor
             }
         }
 
-        private static void CheckBounds(GameObject prefab, Result result)
+        private static void CheckBounds(GameObject prefab, Transform spawnPoint, Result result)
         {
             var renderers = prefab.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0)
@@ -138,7 +143,6 @@ namespace TopiaForge.WorldCompanion.Editor
                     "World is very large (" + bounds.size + "); expect long load/placement times.");
             }
 
-            var spawnPoint = FindDescendant(prefab.transform, SpawnPointName);
             if (spawnPoint != null)
             {
                 var expanded = bounds;
@@ -151,17 +155,5 @@ namespace TopiaForge.WorldCompanion.Editor
             }
         }
 
-        private static Transform FindDescendant(Transform root, string name)
-        {
-            foreach (var transform in root.GetComponentsInChildren<Transform>(true))
-            {
-                if (transform != root && string.Equals(transform.name, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    return transform;
-                }
-            }
-
-            return null;
-        }
     }
 }

@@ -1,0 +1,57 @@
+{
+  "id": "v6-launch-target-without-world",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "A target that names no world policy cannot be resolved to anything, so it is not a target.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.survival",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ],
+      "launchTargets": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.play",
+          "title": "Play",
+          "gamemode": "io.github.furroxide.topiaforge.fixture.survival"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    }
+  },
+  "schemaOutcome": "reject"
+}

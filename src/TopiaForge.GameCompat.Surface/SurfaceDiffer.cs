@@ -369,7 +369,10 @@ namespace TopiaForge.GameCompat
                 return new Resolution(ChangeKind.MissingMember, "field '" + binding.Member + "' not found on " + binding.DeclaringType);
             }
 
-            if (binding.ReturnType.Length > 0 && !TypeNameMatches(field.Type, binding.ReturnType))
+            if (!AccessMatches(binding, field.IsPublic, field.IsStatic))
+                return new Resolution(ChangeKind.SignatureMismatch, "field '" + binding.Member + "' no longer has the required visibility/static access");
+
+            if (binding.ReturnType.Length > 0 && !TypeNameMatches(field.Type, binding.ReturnType, binding))
             {
                 return new Resolution(ChangeKind.SignatureMismatch,
                     "field '" + binding.Member + "' type is now '" + field.Type + "', expected '" + binding.ReturnType + "'");
@@ -386,7 +389,17 @@ namespace TopiaForge.GameCompat
                 return new Resolution(ChangeKind.MissingMember, "property '" + binding.Member + "' not found on " + binding.DeclaringType);
             }
 
-            if (binding.ReturnType.Length > 0 && !TypeNameMatches(property.Type, binding.ReturnType))
+            if ((binding.IndexParameterCount.HasValue && binding.IndexParameterCount.Value != property.IndexParameterCount)
+                || (binding.RequireReadable && !property.CanRead) || (binding.RequireWritable && !property.CanWrite)
+                || (binding.IsStatic.HasValue && binding.IsStatic.Value != property.IsStatic)
+                || (binding.IsPublic.HasValue &&
+                    ((binding.RequireReadable && property.GetterIsPublic != binding.IsPublic.Value)
+                     || (binding.RequireWritable && property.SetterIsPublic != binding.IsPublic.Value)
+                     || (!binding.RequireReadable && !binding.RequireWritable &&
+                         (property.CanRead ? property.GetterIsPublic : property.SetterIsPublic) != binding.IsPublic.Value))))
+                return new Resolution(ChangeKind.SignatureMismatch, "property '" + binding.Member + "' no longer has the required accessors/visibility/static access");
+
+            if (binding.ReturnType.Length > 0 && !TypeNameMatches(property.Type, binding.ReturnType, binding))
             {
                 return new Resolution(ChangeKind.SignatureMismatch,
                     "property '" + binding.Member + "' type is now '" + property.Type + "', expected '" + binding.ReturnType + "'");
@@ -404,9 +417,9 @@ namespace TopiaForge.GameCompat
             }
 
             // Match the SAME overload the runtime binder selects: correct arity, and every CONSTRAINED position's
-            // type matches. An empty parameter declaration remains name-only, so every overload is a candidate.
+            // type matches. An empty list is name-only only when ExactParameters was omitted.
             // Unconstrained positions are ignored (the runtime predicate ignores them too).
-            var matched = binding.Parameters.Count == 0
+            var matched = binding.Parameters.Count == 0 && !binding.ExactParameters
                 ? overloads
                 : overloads.Where(overload =>
             {
@@ -418,7 +431,7 @@ namespace TopiaForge.GameCompat
                 for (var i = 0; i < binding.Parameters.Count; i++)
                 {
                     var spec = binding.Parameters[i];
-                    if (spec.Constrained && !TypeNameMatches(overload.Parameters[i], spec.Type))
+                    if (spec.Constrained && !TypeNameMatches(overload.Parameters[i], spec.Type, binding))
                     {
                         return false;
                     }
@@ -435,8 +448,13 @@ namespace TopiaForge.GameCompat
                     "no '" + binding.Member + "' overload matches [" + expected + "]; available: " + available);
             }
 
+            matched = matched.Where(overload => AccessMatches(binding, overload.IsPublic, overload.IsStatic) &&
+                (!binding.GenericArity.HasValue || overload.GenericArity == binding.GenericArity.Value)).ToList();
+            if (matched.Count == 0)
+                return new Resolution(ChangeKind.SignatureMismatch, "method '" + binding.Member + "' has no matching overload with the required visibility/static access or generic arity");
+
             if (binding.ReturnType.Length > 0 &&
-                !matched.Any(overload => TypeNameMatches(overload.ReturnType, binding.ReturnType)))
+                !matched.Any(overload => TypeNameMatches(overload.ReturnType, binding.ReturnType, binding)))
             {
                 var available = string.Join(" | ", matched.Select(overload => overload.ReturnType));
                 return new Resolution(ChangeKind.SignatureMismatch,
@@ -446,6 +464,10 @@ namespace TopiaForge.GameCompat
 
             return Resolution.Ok;
         }
+
+        private static bool AccessMatches(GameBinding binding, bool isPublic, bool isStatic) =>
+            (!binding.IsPublic.HasValue || binding.IsPublic.Value == isPublic)
+            && (!binding.IsStatic.HasValue || binding.IsStatic.Value == isStatic);
 
         private static Resolution ResolveConstructor(GameBinding binding, TypeSurface type)
         {
@@ -458,7 +480,7 @@ namespace TopiaForge.GameCompat
             var wantParams = binding.Parameters.Count;
             var match = type.Constructors.Any(c =>
             {
-                if (c.Parameters.Count != wantParams)
+                if (!AccessMatches(binding, c.IsPublic, false) || c.Parameters.Count != wantParams)
                 {
                     return false;
                 }
@@ -466,7 +488,7 @@ namespace TopiaForge.GameCompat
                 for (var i = 0; i < wantParams; i++)
                 {
                     var spec = binding.Parameters[i];
-                    if (spec.Constrained && !TypeNameMatches(c.Parameters[i], spec.Type))
+                    if (spec.Constrained && !TypeNameMatches(c.Parameters[i], spec.Type, binding))
                     {
                         return false;
                     }
@@ -534,7 +556,7 @@ namespace TopiaForge.GameCompat
             // A field/property TYPE change (not disappearance) is advisory — type-name churn is noisy and often
             // semantically compatible. Disappearance keeps the binding's real criticality.
             if (kind == ChangeKind.SignatureMismatch &&
-                (binding.Kind == BindingKind.Field || binding.Kind == BindingKind.Property))
+                (binding.Kind == BindingKind.Field || binding.Kind == BindingKind.Property) && !binding.HasStrictAccess)
             {
                 return Severity.Info;
             }
@@ -558,7 +580,7 @@ namespace TopiaForge.GameCompat
         }
 
         // Match an actual (usually fully-qualified) type name against an expected name that may be simple or full.
-        private static bool TypeNameMatches(string actual, string expected)
+        private static bool TypeNameMatches(string actual, string expected, GameBinding binding)
         {
             if (string.IsNullOrEmpty(expected))
             {
@@ -569,6 +591,8 @@ namespace TopiaForge.GameCompat
             {
                 return true;
             }
+
+            if (binding.ExactParameters || binding.HasStrictAccess) return false;
 
             return string.Equals(
                 ComparableTypeShape(actual),

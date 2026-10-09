@@ -34,7 +34,7 @@ offline or bundled-only restore.
 | `GITHUB_ENV` | Receives `RobotopiaManagedDir=<absolute path>` after restore. |
 
 Public archives use 7-Zip; bundled archives use the .NET ZIP reader. Downloads reject redirects, credentials in
-URLs, queries, and fragments. The tool checks SHA-256 before and after extraction, validates all 20 required PE
+URLs, queries, and fragments. The tool checks SHA-256 before and after extraction, validates all 21 required PE
 assembly identities, and promotes a complete staging directory into the cache under an interprocess lock. Failed or
 interrupted extraction never becomes a visible cache entry.
 

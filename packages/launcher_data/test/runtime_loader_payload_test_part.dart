@@ -11,7 +11,6 @@ void _registerRuntimeLoaderPayloadTests({
     'TopiaForge.Mods.Multiplayer.dll',
     'TopiaForge.Mods.Prompts.dll',
     'TopiaForge.Mods.RobotKit.dll',
-    'TopiaForge.Mods.Ugc.dll',
     'TopiaForge.Mods.Worlds.dll',
   ];
   const validatorDependencyDlls = <String>[
@@ -35,8 +34,8 @@ void _registerRuntimeLoaderPayloadTests({
     final report = await repository().installOrRepairRuntime(install);
 
     expect(report.ok, isTrue);
-    expect(topiaForgeRuntimeLoaderAssemblies, hasLength(14));
-    expect(topiaForgeRuntimeLoaderDlls, hasLength(14));
+    expect(topiaForgeRuntimeLoaderAssemblies, hasLength(13));
+    expect(topiaForgeRuntimeLoaderDlls, hasLength(13));
     expect(topiaForgeRuntimeLoaderDlls, containsAll(moduleAndInteropDlls));
     final packages = {
       for (final assembly in topiaForgeRuntimeLoaderAssemblies.where(
@@ -72,42 +71,57 @@ void _registerRuntimeLoaderPayloadTests({
     }
   });
 
-  test(
-    'every missing module or interop contract makes the loader stale',
-    () async {
-      var install = await repository().selectGameDirectory(gameRoot().path);
-      var report = await repository().installOrRepairRuntime(install);
-      expect(report.ok, isTrue);
+  // Each missing assembly gets the normal test timeout and a fresh fixture.
+  // Keeping all seven repairs in one async body races teardown on slower hosts.
+  for (final dll in moduleAndInteropDlls) {
+    test(
+      'missing module or interop contract makes the loader stale ($dll)',
+      () async {
+        final fixtureRepository = repository();
+        final fixtureGamePath = gameRoot().path;
+        final fixtureDll = installedDll(dll);
+        var install = await fixtureRepository.selectGameDirectory(
+          fixtureGamePath,
+        );
+        var report = await fixtureRepository.installOrRepairRuntime(install);
+        expect(report.ok, isTrue);
 
-      for (final dll in moduleAndInteropDlls) {
-        installedDll(dll).deleteSync();
+        fixtureDll.deleteSync();
 
-        install = await repository().selectGameDirectory(gameRoot().path);
+        install = await fixtureRepository.selectGameDirectory(fixtureGamePath);
         expect(install.loaderStatus, ComponentState.partial, reason: dll);
         expect(install.needsRepair, isTrue, reason: dll);
 
-        report = await repository().installOrRepairRuntime(install);
+        report = await fixtureRepository.installOrRepairRuntime(install);
         expect(report.ok, isTrue, reason: dll);
-        expect(installedDll(dll).existsSync(), isTrue, reason: dll);
-      }
-    },
-  );
+        expect(fixtureDll.existsSync(), isTrue, reason: dll);
+      },
+    );
+  }
 
-  test('missing validator dependencies make the loader stale', () async {
-    var install = await repository().selectGameDirectory(gameRoot().path);
-    var report = await repository().installOrRepairRuntime(install);
-    expect(report.ok, isTrue);
+  for (final dll in validatorDependencyDlls) {
+    test(
+      'missing validator dependency makes the loader stale ($dll)',
+      () async {
+        final fixtureRepository = repository();
+        final fixtureGamePath = gameRoot().path;
+        final fixtureDll = installedDll(dll);
+        var install = await fixtureRepository.selectGameDirectory(
+          fixtureGamePath,
+        );
+        var report = await fixtureRepository.installOrRepairRuntime(install);
+        expect(report.ok, isTrue);
 
-    for (final dll in validatorDependencyDlls) {
-      installedDll(dll).deleteSync();
+        fixtureDll.deleteSync();
 
-      install = await repository().selectGameDirectory(gameRoot().path);
-      expect(install.loaderStatus, ComponentState.partial, reason: dll);
-      expect(install.needsRepair, isTrue, reason: dll);
+        install = await fixtureRepository.selectGameDirectory(fixtureGamePath);
+        expect(install.loaderStatus, ComponentState.partial, reason: dll);
+        expect(install.needsRepair, isTrue, reason: dll);
 
-      report = await repository().installOrRepairRuntime(install);
-      expect(report.ok, isTrue, reason: dll);
-      expect(installedDll(dll).existsSync(), isTrue, reason: dll);
-    }
-  });
+        report = await fixtureRepository.installOrRepairRuntime(install);
+        expect(report.ok, isTrue, reason: dll);
+        expect(fixtureDll.existsSync(), isTrue, reason: dll);
+      },
+    );
+  }
 }

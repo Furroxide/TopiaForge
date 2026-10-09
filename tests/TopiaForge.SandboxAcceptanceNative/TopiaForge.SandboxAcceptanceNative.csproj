@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>netstandard2.1</TargetFramework><AssemblyName>TopiaForge.SandboxAcceptanceNative</AssemblyName><RootNamespace>TopiaForge.SandboxAcceptance.Native</RootNamespace><Version>0.1.0-rc.1</Version><AssemblyVersion>0.1.0.0</AssemblyVersion><TopiaForgeSafeProject>false</TopiaForgeSafeProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TopiaForge.SandboxAcceptanceMod/TopiaForge.SandboxAcceptanceMod.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Interop.Unity/TopiaForge.Mods.Interop.Unity.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.ModManager.Core/TopiaForge.ModManager.Core.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.UnityUi/TopiaForge.Mods.UnityUi.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Abstractions/TopiaForge.Mods.Abstractions.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.CreatorContent/TopiaForge.Mods.CreatorContent.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.RobotKit/TopiaForge.Mods.RobotKit.csproj" Private="false" />
+    <ProjectReference Include="../../src/TopiaForge.Mods.Worlds/TopiaForge.Mods.Worlds.csproj" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.AudioModule" HintPath="$(RobotopiaManagedDir)/UnityEngine.AudioModule.dll" Private="false" />
+  </ItemGroup>
+</Project>

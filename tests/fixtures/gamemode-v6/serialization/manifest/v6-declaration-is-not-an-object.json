@@ -1,0 +1,44 @@
+{
+  "id": "v6-declaration-is-not-an-object",
+  "channel": "serialization",
+  "kind": "manifest-rejects",
+  "summary": "A declaration array holding a string is rejected as a shape error. The reader throws on the first fault; the launcher collects them all, so an unreadable declaration also reads as an empty one.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "gamemodes": [
+        "io.github.furroxide.topiaforge.fixture.survival"
+      ]
+    }
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "contributions"
+      ]
+    }
+  },
+  "schemaOutcome": "reject"
+}

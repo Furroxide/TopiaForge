@@ -703,7 +703,7 @@ namespace TopiaForge.RobotKit
                         return;
                     }
 
-                    var subscription = new DeliverySubscription(service, ownerModId, value);
+                    var subscription = new DeliverySubscription(service, ownerModId, lifetime, value);
                     lock (eventSync)
                     {
                         subscriptions.Add(subscription);
@@ -752,6 +752,9 @@ namespace TopiaForge.RobotKit
                 RobotTargetKind kind,
                 Func<RobotTargetSnapshot?> resolve)
             {
+                if (lifetime.IsStopping)
+                    return OperationResult<IRobotTargetRegistration>.Failure(
+                        ModErrorCode.InvalidState, "The mod lifetime is stopping.");
                 var result = service.RegisterTarget(ownerModId, name, kind, resolve);
                 if (!result.TryGetValue(out var registration))
                 {
@@ -765,7 +768,6 @@ namespace TopiaForge.RobotKit
                 }
                 catch (ObjectDisposedException)
                 {
-                    registration.Dispose();
                     return OperationResult<IRobotTargetRegistration>.Failure(
                         ModErrorCode.InvalidState,
                         "The mod lifetime is stopping.");
@@ -781,18 +783,13 @@ namespace TopiaForge.RobotKit
                 IRobotAgent agent,
                 RobotObjective objective)
             {
+                if (lifetime.IsStopping)
+                    return OperationResult<IRobotObjectiveHandle>.Failure(
+                        ModErrorCode.InvalidState, "The mod lifetime is stopping.");
                 var result = service.SetObjective(ownerModId, agent, objective);
                 if (!result.TryGetValue(out var handle))
                 {
                     return result;
-                }
-
-                if (lifetime.IsStopping)
-                {
-                    handle.Dispose();
-                    return OperationResult<IRobotObjectiveHandle>.Failure(
-                        ModErrorCode.InvalidState,
-                        "The mod lifetime is stopping.");
                 }
 
                 try
@@ -802,7 +799,6 @@ namespace TopiaForge.RobotKit
                 }
                 catch (ObjectDisposedException)
                 {
-                    handle.Dispose();
                     return OperationResult<IRobotObjectiveHandle>.Failure(
                         ModErrorCode.InvalidState,
                         "The mod lifetime is stopping.");
@@ -812,8 +808,9 @@ namespace TopiaForge.RobotKit
             public bool TryGetObjective(IRobotAgent agent, out IRobotObjectiveHandle? objective) =>
                 service.TryGetObjective(ownerModId, agent, out objective);
 
-            public OperationResult<bool> ClearObjective(IRobotAgent agent) =>
-                service.ClearObjective(ownerModId, agent);
+            public OperationResult<bool> ClearObjective(IRobotAgent agent) => lifetime.IsStopping
+                ? OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The mod lifetime is stopping.")
+                : service.ClearObjective(ownerModId, agent);
 
             private sealed class OwnerTargetRegistration : IRobotTargetRegistration
             {
@@ -865,15 +862,18 @@ namespace TopiaForge.RobotKit
                 private RobotObjectiveService? service;
                 private readonly string ownerModId;
                 private readonly Action<RobotProgramDelivery> handler;
+                private readonly IModLifetime lifetime;
 
                 public DeliverySubscription(
                     RobotObjectiveService service,
                     string ownerModId,
+                    IModLifetime lifetime,
                     Action<RobotProgramDelivery> handler)
                 {
                     this.service = service;
                     this.ownerModId = ownerModId;
                     this.handler = handler;
+                    this.lifetime = lifetime;
                     Wrapper = OnDelivery;
                 }
 
@@ -891,7 +891,8 @@ namespace TopiaForge.RobotKit
 
                 private void OnDelivery(OwnedDelivery delivery)
                 {
-                    if (string.Equals(delivery.OwnerModId, ownerModId, StringComparison.OrdinalIgnoreCase))
+                    if (service != null && !lifetime.IsStopping
+                        && string.Equals(delivery.OwnerModId, ownerModId, StringComparison.OrdinalIgnoreCase))
                     {
                         handler(delivery.Delivery);
                     }

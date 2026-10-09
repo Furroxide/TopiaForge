@@ -23,7 +23,9 @@ namespace TopiaForge.GameCompat
         public bool IsPublic { get; set; }
         public bool IsStatic { get; set; }
 
-        public string Signature => Name + "(" + string.Join(", ", Parameters) + ")";
+        public int GenericArity { get; set; }
+
+        public string Signature => Name + (GenericArity == 0 ? string.Empty : "`" + GenericArity) + "(" + string.Join(", ", Parameters) + ")";
 
         public JsonObject ToJson()
         {
@@ -37,6 +39,7 @@ namespace TopiaForge.GameCompat
                 .Set("name", Name)
                 .Set("parameters", parameters)
                 .Set("returnType", ReturnType)
+                .Set("genericArity", GenericArity)
                 .Set("isPublic", IsPublic)
                 .Set("isStatic", IsStatic);
         }
@@ -47,6 +50,7 @@ namespace TopiaForge.GameCompat
             {
                 Name = json.GetString("name"),
                 ReturnType = json.GetString("returnType"),
+                GenericArity = (int)json.GetLong("genericArity"),
                 IsPublic = json.GetBool("isPublic"),
                 IsStatic = json.GetBool("isStatic"),
             };
@@ -88,12 +92,20 @@ namespace TopiaForge.GameCompat
         public string Type { get; set; } = string.Empty;
         public bool CanRead { get; set; }
         public bool CanWrite { get; set; }
+        public int IndexParameterCount { get; set; }
+        public bool GetterIsPublic { get; set; }
+        public bool SetterIsPublic { get; set; }
+        public bool IsStatic { get; set; }
 
         public JsonObject ToJson() => new JsonObject()
             .Set("name", Name)
             .Set("type", Type)
             .Set("canRead", CanRead)
-            .Set("canWrite", CanWrite);
+            .Set("canWrite", CanWrite)
+            .Set("indexParameterCount", IndexParameterCount)
+                .Set("getterIsPublic", GetterIsPublic)
+            .Set("setterIsPublic", SetterIsPublic)
+            .Set("isStatic", IsStatic);
 
         public static PropertySurface FromJson(JsonObject json) => new PropertySurface
         {
@@ -101,6 +113,10 @@ namespace TopiaForge.GameCompat
             Type = json.GetString("type"),
             CanRead = json.GetBool("canRead"),
             CanWrite = json.GetBool("canWrite"),
+            IndexParameterCount = (int)json.GetLong("indexParameterCount"),
+            GetterIsPublic = json.GetBool("getterIsPublic"),
+            SetterIsPublic = json.GetBool("setterIsPublic"),
+            IsStatic = json.GetBool("isStatic"),
         };
     }
 
@@ -274,7 +290,7 @@ namespace TopiaForge.GameCompat
     //   gameCodeMvid       — advisory provenance only (changes every compile, so it is never gated on).
     public sealed class SurfaceSnapshot
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public int SchemaVersion { get; set; } = CurrentSchemaVersion;
         public string ExtractorVersion { get; set; } = string.Empty;

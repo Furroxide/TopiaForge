@@ -80,8 +80,7 @@ class _ProfileCard extends StatelessWidget {
         ? 'Current mod setup'
         : '${profile.enabledMods.length} '
               '${profile.enabledMods.length == 1 ? 'mod' : 'mods'}';
-    final caption =
-        '$modsLabel · ${_worldNameFor(state, profile.worldSelection)}';
+    final caption = '$modsLabel · ${_launchSelectionLabel(state, profile)}';
 
     return Padding(
       padding: const EdgeInsets.only(right: 12, bottom: 8),
@@ -140,7 +139,8 @@ class _ProfileCard extends StatelessWidget {
               Row(
                 children: [
                   FilledButton.icon(
-                    onPressed: state.canStartLaunchFlow && !state.isBusy
+                    onPressed:
+                        state.canStartProfileLaunch(profile) && !state.isBusy
                         ? () =>
                               _add(context, ProfileLaunchRequested(profile.id))
                         : null,

@@ -6,14 +6,14 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('versioned V5 schema is frozen and self-contained', () {
+  test('canonical alias is the frozen, self-contained V6 schema', () {
     final root = _repoRoot();
     Map<String, Object?> readSchema(String name) =>
         jsonDecode(File(_join(root.path, ['schemas', name])).readAsStringSync())
             as Map<String, Object?>;
 
     final latest = readSchema('topiaforge.mod.schema.json');
-    final versioned = readSchema('topiaforge.mod.v5.schema.json');
+    final versioned = readSchema('topiaforge.mod.v6.schema.json');
     expect(
       jsonEncode(versioned),
       isNot(contains('/schemas/topiaforge.mod.schema.json')),
@@ -34,12 +34,57 @@ void main() {
     expect(
       versioned,
       latest,
-      reason:
-          'while V5 is latest, its frozen schema and editor alias must remain semantically identical',
+      reason: 'V6 and the editor alias must remain semantically identical',
     );
   });
 
-  test('checked-in manifests satisfy schema V5', () {
+  test('retired V4 and V5 schemas reject every manifest', () {
+    for (final version in [4, 5]) {
+      final schema = _manifestSchema(version: version);
+      for (final value in [
+        <String, Object?>{},
+        _validManifest(),
+        {..._validManifest(), 'schemaVersion': version},
+        null,
+        [],
+      ]) {
+        expect(
+          schema.validate(value).isValid,
+          isFalse,
+          reason: 'V$version must reject $value',
+        );
+      }
+    }
+  });
+
+  test('the retired V6 worldGamemodes stub rejects any value', () {
+    final schema = JsonSchema.create(
+      jsonDecode(
+            File(
+              _join(_repoRoot().path, [
+                'schemas',
+                'topiaforge.mod.v6.schema.json',
+              ]),
+            ).readAsStringSync(),
+          )
+          as Map<String, Object?>,
+    );
+    for (final value in <Object?>[
+      <Object?>[],
+      [
+        {'id': 'sample.mod.mode', 'name': 'Mode'},
+      ],
+      null,
+    ]) {
+      expect(
+        schema.validate({..._v6Manifest(), 'worldGamemodes': value}).isValid,
+        isFalse,
+        reason: 'worldGamemodes: $value should be rejected outright',
+      );
+    }
+  });
+
+  test('all 17 checked-in first-party manifests satisfy schema V6', () {
     final root = _repoRoot();
     final schemaJson =
         jsonDecode(
@@ -50,13 +95,23 @@ void main() {
             as Map<String, Object?>;
     final schema = JsonSchema.create(schemaJson);
     final manifestFiles = [
-      ...Directory(_join(root.path, ['mods']))
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('topiaforge.mod.json')),
+      for (final parts in [
+        ['mods'],
+        ['samples', 'multiplayer'],
+        ['tests', 'TopiaForge.SdkAcceptanceMod'],
+      ])
+        ...Directory(_join(root.path, parts))
+            .listSync(recursive: true, followLinks: false)
+            .whereType<File>()
+            .where((file) => file.path.endsWith('topiaforge.mod.json'))
+            .where(
+              (file) => !file.uri.pathSegments.any(
+                (part) => part == 'bin' || part == 'obj',
+              ),
+            ),
     ];
 
-    expect(manifestFiles, isNotEmpty);
+    expect(manifestFiles, hasLength(17));
     for (final file in manifestFiles) {
       final json = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
       final result = schema.validate(json);
@@ -126,56 +181,66 @@ void main() {
     }
   });
 
-  test('shared V5 fixtures agree across schema and domain validators', () {
-    final root = _repoRoot();
-    final schema = _manifestSchema();
-    final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
-    final cases = File(_join(fixtureRoot, ['corpus.txt']))
-        .readAsLinesSync()
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty && !line.startsWith('#'));
+  test(
+    'shared current and retired fixtures agree across schema and domain validators',
+    () {
+      final root = _repoRoot();
+      final schema = _manifestSchema();
+      final fixtureRoot = _join(root.path, ['tests', 'fixtures', 'manifests']);
+      final cases = File(_join(fixtureRoot, ['corpus.txt']))
+          .readAsLinesSync()
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty && !line.startsWith('#'));
 
-    for (final testCase in cases) {
-      final separator = testCase.indexOf(' ');
-      final expectation = testCase.substring(0, separator);
-      final fixtureName = testCase.substring(separator + 1).trim();
-      final json =
-          jsonDecode(File(_join(fixtureRoot, [fixtureName])).readAsStringSync())
-              as Map<String, Object?>;
-      final expectedValid = expectation == 'valid';
-      final expectedSchemaValid = expectation != 'invalid-schema';
-      final schemaValid = schema.validate(json).isValid;
-      var domainValid = false;
-      try {
-        domainValid = ModManifest.fromJson(
-          json,
-        ).validate().every((issue) => !issue.isBlocking);
-      } on FormatException {
-        domainValid = false;
-      } on TypeError {
-        domainValid = false;
+      for (final testCase in cases) {
+        final separator = testCase.indexOf(' ');
+        final expectation = testCase.substring(0, separator);
+        final fixtureName = testCase.substring(separator + 1).trim();
+        final json =
+            jsonDecode(
+                  File(_join(fixtureRoot, [fixtureName])).readAsStringSync(),
+                )
+                as Map<String, Object?>;
+        final expectedValid = expectation == 'valid';
+        final expectedSchemaValid = expectation != 'invalid-schema';
+        final schemaValid = schema.validate(json).isValid;
+        var domainValid = false;
+        try {
+          domainValid = ModManifest.fromJson(
+            json,
+          ).validate().every((issue) => !issue.isBlocking);
+        } on FormatException {
+          domainValid = false;
+        } on TypeError {
+          domainValid = false;
+        }
+
+        expect(
+          schemaValid,
+          expectedSchemaValid,
+          reason: 'JSON Schema disagreed for $fixtureName',
+        );
+        expect(
+          domainValid,
+          expectedValid,
+          reason: 'Dart validator disagreed for $fixtureName',
+        );
       }
-
-      expect(
-        schemaValid,
-        expectedSchemaValid,
-        reason: 'JSON Schema disagreed for $fixtureName',
-      );
-      expect(
-        domainValid,
-        expectedValid,
-        reason: 'Dart validator disagreed for $fixtureName',
-      );
-    }
-  });
+    },
+  );
 }
 
-JsonSchema _manifestSchema() {
+JsonSchema _manifestSchema({int? version}) {
   final root = _repoRoot();
   return JsonSchema.create(
     jsonDecode(
           File(
-            _join(root.path, ['schemas', 'topiaforge.mod.schema.json']),
+            _join(root.path, [
+              'schemas',
+              version == null
+                  ? 'topiaforge.mod.schema.json'
+                  : 'topiaforge.mod.v$version.schema.json',
+            ]),
           ).readAsStringSync(),
         )
         as Map<String, Object?>,
@@ -183,7 +248,7 @@ JsonSchema _manifestSchema() {
 }
 
 Map<String, Object?> _validManifest() => {
-  'schemaVersion': 5,
+  'schemaVersion': ModManifest.currentSchemaVersion,
   'name': 'sample.schema-parity',
   'displayName': 'Schema parity',
   'version': '1.2.3',
@@ -213,3 +278,16 @@ String _join(String root, List<String> parts) {
   final separator = Platform.pathSeparator;
   return [root, ...parts].join(separator);
 }
+
+Map<String, Object?> _v6Manifest() => {
+  'schemaVersion': 6,
+  'name': 'sample.schema-parity',
+  'displayName': 'Schema Parity',
+  'version': '1.0.0',
+  'author': {'name': 'Tester'},
+  'entryAssembly': 'Sample.SchemaParity.dll',
+  'entryType': 'Sample.SchemaParity.Mod',
+  'supportedGameVersionRange': '*',
+  'supportedLoaderVersionRange': '*',
+  'supportedSdkVersionRange': '*',
+};

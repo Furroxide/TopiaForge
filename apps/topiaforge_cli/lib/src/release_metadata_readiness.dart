@@ -1,6 +1,11 @@
 import 'dart:io';
 
-import 'release_readiness.dart';
+import 'release_candidate_qualification.dart';
+
+const releaseCandidateMetadataFileNames = [
+  'release-candidate-readiness-v1.json',
+  'release-candidate-acceptance-v1.json',
+];
 
 final class ReleaseMetadataReadiness {
   const ReleaseMetadataReadiness._({
@@ -20,59 +25,53 @@ final class ReleaseMetadataReadiness {
     required String version,
     required String targetSha,
     required bool allowUnresolved,
+    String? assetsDirectory,
   }) async {
-    ReleaseReadinessDecision decision;
     try {
-      decision = await ReleaseReadinessDecision.loadAtGitSha(
+      if (assetsDirectory == null) {
+        throw StateError('Detached candidate qualification requires --assets.');
+      }
+      final decision = await ReleaseCandidateQualification.loadAtGitSha(
         repositoryRoot: repositoryRoot,
         targetSha: targetSha,
         expectedReleaseVersion: version,
+        assetsDirectory: assetsDirectory,
+      );
+      if (!decision.isReady) {
+        throw StateError('Detached candidate qualification is not ready.');
+      }
+      return ReleaseMetadataReadiness._(
+        status: decision.status,
+        blobSha256: decision.decisionSha256,
+        summary: decision.toPublicSummary(),
+        blockingReasons: const [],
       );
     } on StateError {
       if (!allowUnresolved) rethrow;
-      return const ReleaseMetadataReadiness._(
-        status: 'unavailable',
-        blobSha256: null,
-        summary: null,
-        blockingReasons: [
-          'Release readiness is unavailable at the exact target SHA.',
-        ],
-      );
     } on ProcessException {
       if (!allowUnresolved) rethrow;
-      return const ReleaseMetadataReadiness._(
-        status: 'unavailable',
-        blobSha256: null,
-        summary: null,
-        blockingReasons: [
-          'Release readiness is unavailable at the exact target SHA.',
-        ],
-      );
+    } on FileSystemException {
+      if (!allowUnresolved) rethrow;
+    } on FormatException {
+      if (!allowUnresolved) rethrow;
     }
-
-    final blockingReasons = [
-      for (final gate in decision.gates)
-        if (!gate.satisfiesRelease)
-          'Release readiness gate ${gate.id} is ${gate.status}.',
-    ];
-    if (!decision.isReady && !allowUnresolved) {
-      throw StateError(
-        'Release readiness validation failed:\n'
-        '- ${blockingReasons.join('\n- ')}',
-      );
-    }
-    return ReleaseMetadataReadiness._(
-      status: decision.status,
-      blobSha256: decision.readinessBlobSha256,
-      summary: decision.toPublicSummary(),
-      blockingReasons: List.unmodifiable(blockingReasons),
+    return const ReleaseMetadataReadiness._(
+      status: 'unavailable',
+      blobSha256: null,
+      summary: null,
+      blockingReasons: [
+        'Detached candidate qualification is unavailable or invalid for the '
+            'exact target SHA and asset bytes.',
+      ],
     );
   }
 
   Map<String, Object?> toBomJson() => {
-    'binding': 'git-blob-at-target-sha',
-    'path': releaseReadinessPath,
-    'schemaPath': releaseReadinessSchemaPath,
+    'binding': 'detached-candidate-at-target-sha',
+    'path': releaseCandidateMetadataFileNames.first,
+    'schemaPath':
+        'schemas/topiaforge.release-candidate-readiness-v1.schema.json',
+    'acceptancePath': releaseCandidateMetadataFileNames.last,
     'status': status,
     'blobSha256': blobSha256,
     'summary': summary,

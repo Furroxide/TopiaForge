@@ -101,7 +101,7 @@ verify_asset_uploaders() {
     --argjson generated "$workflow_generated_json" \
     '
       def staging_uploader:
-        .uploader.login == "furroxide" and
+        (.uploader.login | type == "string" and ascii_downcase == "furroxide") and
         .uploader.id == 221987073 and
         .uploader.type == "User" and
         (
@@ -109,7 +109,7 @@ verify_asset_uploaders() {
           .performed_via_github_app == null
         );
       def workflow_uploader:
-        .uploader.login == "github-actions[bot]" and
+        (.uploader.login | type == "string" and ascii_downcase == "github-actions[bot]") and
         .uploader.id == 41898282 and
         .uploader.type == "Bot" and
         (
@@ -155,7 +155,7 @@ jq -e \
    .body == $body and
    .prerelease == $prerelease and
    (.draft | type == "boolean") and
-   .author.login == "furroxide" and
+   (.author.login | type == "string" and ascii_downcase == "furroxide") and
    .author.id == 221987073 and
    .author.type == "User"' \
   "$release_file" >/dev/null || {
@@ -183,6 +183,17 @@ jq -e 'type == "array" and length > 0 and length < 100' \
   exit 1
 }
 verify_asset_uploaders "$assets_file" "$release_state"
+
+asset_policy=$(bash "$script_dir/release-asset-policy.sh" "$repository_root" "${tag#v}")
+jq -e --argjson policy "$asset_policy" '
+  . as $assets |
+  all(.[]; .name as $name | ($policy.all | index($name)) != null) and
+  all($policy.human[]; . as $name |
+    any($assets[]; .name == $name and .state == "uploaded"))
+' "$assets_file" >/dev/null || {
+  echo 'Staged release asset inventory is outside the reviewed allowlist or missing qualified inputs.' >&2
+  exit 1
+}
 
 declare -A seen_names
 starter_count=0
@@ -231,7 +242,7 @@ while IFS= read -r encoded; do
     exit 1
   }
   downloaded_count=$((downloaded_count + 1))
-done < <(jq -r '.[] | @base64' "$assets_file")
+done < <(jq -r '.[] | @base64' "$assets_file" | tr -d '\r')
 
 [[ $downloaded_count -gt 0 ]] || {
   echo "Release $tag contains no complete assets." >&2

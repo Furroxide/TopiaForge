@@ -1,0 +1,28 @@
+{
+  "id": "wire-progress-native-boolean-coercion",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive progress codec native boolean coercion",
+  "transport": "progress",
+  "payload": {
+    "schemaVersion": 1,
+    "requestId": "request-01",
+    "sequence": 3,
+    "phase": "loading-world",
+    "nativeBusy": 1
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

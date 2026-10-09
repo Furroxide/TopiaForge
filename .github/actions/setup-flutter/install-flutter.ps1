@@ -15,6 +15,10 @@ function Get-RequiredEnvironmentPath {
     if ([string]::IsNullOrWhiteSpace($value)) {
         throw "Required environment variable '$Name' is not set."
     }
+    if (-not [System.IO.Path]::IsPathFullyQualified($value)) {
+        throw "Required environment variable '$Name' must be an absolute path; " +
+            "got '$value'."
+    }
 
     return [System.IO.Path]::GetFullPath($value)
 }
@@ -91,6 +95,13 @@ $archiveDirectory = Get-RequiredEnvironmentPath `
     -Name "TOPIAFORGE_FLUTTER_ARCHIVE_DIRECTORY"
 $installDirectory = Get-RequiredEnvironmentPath `
     -Name "TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY"
+$installLeafName = [System.IO.Path]::GetFileName(
+    [System.IO.Path]::TrimEndingDirectorySeparator($installDirectory)
+)
+if ($installLeafName -cne "topiaforge-flutter-sdk") {
+    throw "TOPIAFORGE_FLUTTER_INSTALL_DIRECTORY must name a dedicated " +
+        "'topiaforge-flutter-sdk' directory; got '$installDirectory'."
+}
 New-Item -ItemType Directory -Path $archiveDirectory -Force | Out-Null
 
 if (Test-Path -LiteralPath $installDirectory) {
@@ -99,6 +110,9 @@ if (Test-Path -LiteralPath $installDirectory) {
 New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
 
 $archiveName = [System.IO.Path]::GetFileName($downloadUri.AbsolutePath)
+if ([string]::IsNullOrEmpty($archiveName)) {
+    throw "The pinned Flutter archive path does not name a file."
+}
 $archivePath = Join-Path $archiveDirectory $archiveName
 if ((Test-Path -LiteralPath $archivePath -PathType Leaf) -and
     -not (Test-ArchiveDigest -Path $archivePath -ExpectedSha256 $expectedSha256)) {

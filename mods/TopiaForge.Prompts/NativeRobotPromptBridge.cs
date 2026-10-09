@@ -119,21 +119,32 @@ namespace TopiaForge.Prompts
             SafeDispose(patches, logger);
         }
 
+        // Pin only the parameters that actually discriminate the planning constructor, and ignore any the game
+        // adds later. An exact full-arity match compiles and loads fine but silently stops matching the moment
+        // Robotopia appends one field — the postfix then never applies and robot directives quietly stop
+        // reaching planning. Robotopia build 2409's model-provider failover work is exactly that kind of change.
         private static ConstructorInfo? ResolvePlanRequestConstructor()
         {
-            return typeof(global::RoboAPI.Agent.PlanRequest).GetConstructor(
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                new[]
+            ConstructorInfo? best = null;
+            foreach (var candidate in typeof(global::RoboAPI.Agent.PlanRequest).GetConstructors(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                var parameters = candidate.GetParameters();
+                if (parameters.Length < 2
+                    || parameters[0].ParameterType != typeof(global::ModelAsset)
+                    || parameters[1].ParameterType != typeof(global::AgentEnvironment))
                 {
-                    typeof(global::ModelAsset),
-                    typeof(global::AgentEnvironment),
-                    typeof(IReadOnlyList<string>),
-                    typeof(IReadOnlyList<string>),
-                    typeof(float),
-                    typeof(string),
-                },
-                modifiers: null);
+                    continue;
+                }
+
+                // Prefer the widest match so a narrower convenience overload never shadows the real one.
+                if (best == null || parameters.Length > best.GetParameters().Length)
+                {
+                    best = candidate;
+                }
+            }
+
+            return best;
         }
 
         // Harmony postfix. Every exception is contained here so a registry/provider failure can never break the

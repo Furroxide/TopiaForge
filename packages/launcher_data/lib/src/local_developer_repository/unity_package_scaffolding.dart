@@ -72,6 +72,15 @@ extension LocalDeveloperUnityPackageScaffolding on LocalDeveloperRepository {
     json['displayName'] = name.isEmpty ? id : name;
     _writeDeveloperTextAtomic(packageFile, _prettyJson(json));
 
+    // The template ships the project's own LICENSE.md, which names TopiaForge's
+    // copyright holder. The scaffolded package is the author's work, so replace
+    // it with the holder-free license text - the same text _builtInScaffoldLicense
+    // writes for a mod - rather than attributing their code to someone else.
+    _writeDeveloperTextAtomic(
+      File(p.join(root.path, 'LICENSE.md')),
+      agpl30LicenseText,
+    );
+
     final assemblyRoot = _unityPackageAssemblyRoot(id);
     final templateSources =
         root

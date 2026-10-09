@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-invalid-peer-range",
+  "displayName": "Invalid V6 Peer Range Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.InvalidMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "multiplayer": {
+    "mode": "session",
+    "presence": "required",
+    "protocol": { "version": "1.0.0", "peerVersionRange": "eventually" }
+  }
+}

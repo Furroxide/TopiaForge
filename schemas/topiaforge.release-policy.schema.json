@@ -86,6 +86,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "windowsDistribution": {
+          "description": "How the Windows artifacts are distributed. Absent means signed: shipping unsigned must be written down, never inferred from a missing certificate.",
+          "enum": ["signed", "unsigned"]
+        },
         "windowsCertificateSha256": {
           "type": "string",
           "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
