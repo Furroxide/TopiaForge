@@ -1,6 +1,6 @@
 # RC1 prerelease merge and publication handoff
 
-Updated 2026-09-24. Target: `release/0.1.0-rc.1` into `main`, then
+Updated 2026-10-09. Target: `release/0.1.0-rc.1` into `main`, then
 `v0.1.0-rc.1` as an early prerelease of 0.1.0. **Not qualified for publication.**
 This handoff records preparation; it supplies no reviewer approval or candidate
 acceptance. The [release checklist](../ReleaseChecklist.md),
@@ -10,9 +10,10 @@ acceptance. The [release checklist](../ReleaseChecklist.md),
 ## Scope and disclosures
 
 The existing catalog declares `prerelease: true`. RC1 distributes one Windows
-x64 archive for Robotopia build 2478 and thirteen first-party mod packages. The
-archive embeds two VPM packages. The build moved from 2409 on 2026-09-24 under
-the kept `requireLatestAtRelease` policy; see [the launch evidence](launch/Evidence.md#build-2478-retarget-2026-09-24). Linux and macOS are outside this release; no
+x64 archive for Robotopia build 2545 and thirteen first-party mod packages. The
+archive embeds two VPM packages. The build moved from 2409 to 2478 on 2026-09-24
+and to 2545 on 2026-10-09 under the kept `requireLatestAtRelease` policy; see
+[the launch evidence](launch/Evidence.md#build-2545-retarget-2026-10-09). Linux and macOS are outside this release; no
 future platform release date or version is promised.
 
 Windows executables are intentionally unsigned. This does not waive checksums,
@@ -117,6 +118,12 @@ and no native Sandbox row, provisioning retry or candidate acceptance ran.
 Source tests and Editor results are not candidate acceptance. The user answered
 the full-versus-reduced scope question; the resulting policy change is in
 effect.
+
+On 2026-10-09 the build-2545 retarget
+([PR #155](https://github.com/Furroxide/TopiaForge/pull/155)) adapted local
+world import to the changed import host and pinned the signatures of the game
+members the mods call. Its [launch evidence](launch/Evidence.md#build-2545-retarget-2026-10-09)
+records the audit and what did not run; again, no game was launched.
 
 ## After the user merges
 
