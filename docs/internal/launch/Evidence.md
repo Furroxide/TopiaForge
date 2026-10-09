@@ -542,7 +542,7 @@ The public manifest (`https://builds.tomatocake.dev/latest-build.json`) moved pa
 
 The archive hashes come from the public manifest. How the launcher, the manager and the release tooling find `installed-build.json` for a relocated install is a separate task; nothing here changes it.
 
-**Retarget.** `compat bump` had fallen behind two later changes:
+**Retarget ([#155](https://github.com/Furroxide/TopiaForge/pull/155)).** `compat bump` had fallen behind two later changes:
 
 - [#131](https://github.com/Furroxide/TopiaForge/pull/131) added `tests/TopiaForge.SandboxAcceptanceNative/expected-catalog-v1.json` after the 2478 retarget. The Sandbox parser refuses an inventory for another build, so the file must follow the pin. The dry run listed it only as an unlisted mention.
 - [#137](https://github.com/Furroxide/TopiaForge/pull/137) added a sentence to `docs/ArchitectureInventory.md` that opens with a capitalised, unquoted `Build 2478`, which no substitution matched. The tool's self-check stopped the first real run on it. Build 2545 still lists both preloaded assemblies in `ScriptingAssemblies.json`, so the sentence stays true.
