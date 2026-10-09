@@ -63,6 +63,34 @@ approval. The four non-game blocking approvals remain required before private
 preparation, and publication requires detached qualification of the exact
 candidate payloads and reviewed acceptance.
 
+## Release SBOM
+
+`release-sbom.spdx.json` (SPDX 2.3) describes each release-catalog component
+and, as a separate package related by `CONTAINS` from the component that ships
+it, every third-party component inside: the BepInEx runtime dependencies
+(UnityDoorstop as `LGPL-2.1-only`; HarmonyX, Harmony, MonoMod, and Mono.Cecil
+as `MIT`), the .NET runtime and NuGet assemblies, Flutter, the Dart SDK, the
+hosted pub packages each executable resolves from its tracked `pubspec.lock`,
+the OFL fonts, the CC0 launcher artwork, the TextMesh Pro resources, Material
+Icons, and the SPDX License List Data. The records, and the repository file
+each license comes from, are in
+`apps/topiaforge_cli/lib/src/release_spdx_third_party_records.dart`.
+
+A third-party package declares the upstream license this repository records
+for that exact release, or `NOASSERTION` where it records none; a license
+recorded for one version is never assumed for another. Its concluded license
+and copyright are always `NOASSERTION`. A TopiaForge component that ships
+third-party packages declares `AGPL-3.0-or-later` for its own code but, like a
+platform archive, concludes `NOASSERTION` for the package as a whole. Only
+purely first-party components conclude the project license: the mods, the VPM
+packages, the SDK, the launcher domain and data packages, the loader core, and
+the GameCompat surface. Metadata verification rejects an SBOM whose packages,
+third-party terms, or containment differ from this inventory.
+
+UnityDoorstop is recorded as `LGPL-2.1-only`, not `-or-later`. The vendored
+source archive's README licenses Doorstop 4 "under LGPLv2.1" without an "any
+later version" grant, and its sources carry no per-file notice.
+
 ## Contribution policy
 
 The canonical DCO 1.1 text is checked in as `DCO`; `CONTRIBUTING.md` explains

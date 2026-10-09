@@ -13,8 +13,50 @@
     "documentNamespace": { "type": "string", "format": "uri" },
     "creationInfo": { "type": "object" },
     "documentDescribes": { "type": "array", "minItems": 1 },
-    "packages": { "type": "array", "minItems": 1 },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "SPDXID", "downloadLocation", "filesAnalyzed", "licenseConcluded", "licenseDeclared", "copyrightText"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "SPDXID": { "type": "string", "pattern": "^SPDXRef-[A-Za-z0-9.-]+$" },
+          "versionInfo": { "type": "string", "minLength": 1 },
+          "downloadLocation": { "type": "string", "minLength": 1 },
+          "filesAnalyzed": { "const": false },
+          "licenseConcluded": { "type": "string", "minLength": 1 },
+          "licenseDeclared": { "type": "string", "minLength": 1 },
+          "copyrightText": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "files": { "type": "array", "minItems": 1 },
-    "relationships": { "type": "array", "minItems": 1 }
+    "relationships": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["spdxElementId", "relationshipType", "relatedSpdxElement"],
+        "properties": {
+          "spdxElementId": { "type": "string", "pattern": "^SPDXRef-[A-Za-z0-9.-]+$" },
+          "relationshipType": { "type": "string", "minLength": 1 },
+          "relatedSpdxElement": { "type": "string", "pattern": "^SPDXRef-[A-Za-z0-9.-]+$" }
+        }
+      }
+    },
+    "hasExtractedLicensingInfos": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["licenseId", "name", "extractedText"],
+        "properties": {
+          "licenseId": { "type": "string", "pattern": "^LicenseRef-[A-Za-z0-9.-]+$" },
+          "name": { "type": "string", "minLength": 1 },
+          "extractedText": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
   }
 }
