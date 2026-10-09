@@ -107,8 +107,11 @@ underlying coupling. Separately, range evaluation has no npm-style prerelease ex
 also admits `0.0.2600-x`; that is pre-existing behaviour, documented rather than special-cased.
 TopiaForge reads the launcher's `installed-build.json` marker from the game root first. In Tomato Cake's
 Windows/Proton layout it also checks beside the launcher-owned `Robotopia` directory, matching the real
-installation shape. An existing malformed higher-priority marker never falls through to a lower-priority
-one; users are directed to finish or repair the game installation instead.
+installation shape. When the official launcher has moved the game, the marker stays in its state
+directory, `%LOCALAPPDATA%\Tomato Cake\launcher`. TopiaForge checks it there last, and only for the exact
+`<game_dir>\Robotopia` folder named by that directory's `launcher-config.json`, so the marker is never
+attributed to another copy of the game. An existing malformed higher-priority marker never falls through to
+a lower-priority one; users are directed to finish or repair the game installation instead.
 
 Platform and architecture claims are made per release artifact and require their native CI jobs.
 Custom-world live acceptance is Windows/Proton-only for 0.x. Bundle content must declare an

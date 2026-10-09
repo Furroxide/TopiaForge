@@ -336,6 +336,7 @@ namespace TopiaForge.ModManager.Tests
                 TestRetiredEcosystemIdRootsRejected();
                 VersionUtilTests.Run();
                 GameCompatibilityTests.Run(root);
+                TomatoCakeLauncherStateTests.Run(root);
                 ManifestPathValidationTests.Run();
                 ManifestRetirementTests.Run();
                 ManifestV6Tests.Run(root);

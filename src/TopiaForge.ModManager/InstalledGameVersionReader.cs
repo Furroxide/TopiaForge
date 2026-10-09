@@ -16,6 +16,19 @@ namespace TopiaForge.ModManager
 
         internal static bool TryRead(string gameRoot, out string gameVersion, out string error)
         {
+            return TryRead(gameRoot, TomatoCakeLauncherState.DefaultStateDirectory(), out gameVersion, out error);
+        }
+
+        /// <summary>
+        /// Reads the marker for <paramref name="gameRoot"/>, consulting the Tomato Cake launcher state in
+        /// <paramref name="launcherStateDirectory"/> last, for a game the official launcher moved.
+        /// </summary>
+        internal static bool TryRead(
+            string gameRoot,
+            string? launcherStateDirectory,
+            out string gameVersion,
+            out string error)
+        {
             gameVersion = string.Empty;
             error = string.Empty;
             if (string.IsNullOrWhiteSpace(gameRoot))
@@ -27,7 +40,7 @@ namespace TopiaForge.ModManager
             IReadOnlyList<string> candidates;
             try
             {
-                candidates = CandidateMetadataFiles(gameRoot);
+                candidates = CandidateMetadataFiles(gameRoot, launcherStateDirectory);
             }
             catch (Exception ex)
             {
@@ -104,7 +117,7 @@ namespace TopiaForge.ModManager
             return false;
         }
 
-        private static IReadOnlyList<string> CandidateMetadataFiles(string gameRoot)
+        private static IReadOnlyList<string> CandidateMetadataFiles(string gameRoot, string? launcherStateDirectory)
         {
             var root = new DirectoryInfo(Path.GetFullPath(gameRoot));
             var roots = new List<string> { root.FullName };
@@ -112,6 +125,15 @@ namespace TopiaForge.ModManager
             if (root.Name.Equals("Robotopia", StringComparison.OrdinalIgnoreCase) && root.Parent != null)
             {
                 roots.Add(root.Parent.FullName);
+                // The official launcher keeps this marker in its own state directory after moving the game. It
+                // applies only when launcher-config.json names exactly this root's parent, and it comes last.
+                var launcherMarker = TomatoCakeLauncherState.InstalledBuildMarkerFor(
+                    root.FullName,
+                    launcherStateDirectory);
+                if (launcherMarker != null)
+                {
+                    roots.Add(Path.GetDirectoryName(launcherMarker)!);
+                }
             }
             else if (root.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase) && root.Parent != null)
             {
