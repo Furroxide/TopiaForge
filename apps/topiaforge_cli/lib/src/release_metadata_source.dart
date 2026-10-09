@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'bounded_file_reader.dart';
+import 'release_dart_runtime_packages.dart';
 import 'release_handoff_models.dart';
 import 'release_metadata_readiness.dart';
 import 'release_metadata_source_content.dart';
@@ -126,6 +127,8 @@ Future<void> verifyMetadataPublicationSource(
     'templates/TopiaForge.UnityWorldTemplate/Packages/'
         'io.github.furroxide.topiaforge.world-companion/LICENSE.md',
     if (policy.licenseFile != null) policy.licenseFile!,
+    // The SBOM reads the shipped Dart package versions from these lockfiles.
+    for (final shipment in releaseDartShipments.values) shipment.lockfile,
     for (final entity in legalFiles)
       if (entity is File) p.relative(entity.path, from: root),
   };

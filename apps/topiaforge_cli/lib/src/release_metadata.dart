@@ -15,6 +15,7 @@ import 'release_handoff_models.dart';
 import 'release_metadata_readiness.dart';
 import 'release_policy.dart';
 import 'release_spdx_metadata.dart';
+import 'release_spdx_third_party.dart';
 
 class ReleaseMetadataResult {
   const ReleaseMetadataResult({
@@ -76,6 +77,13 @@ class TopiaForgeReleaseMetadataBuilder {
       targetSha: targetSha,
       allowUnresolved: allowUnresolvedPolicy,
       assetsDirectory: assetsDirectory,
+    );
+    // Resolved before any output exists, so a stale third-party record stops
+    // the build instead of leaving a BOM without its SBOM.
+    final thirdParty = ReleaseSpdxThirdPartyInventory.load(
+      repositoryRoot: repositoryRoot,
+      policy: policy,
+      release: release,
     );
 
     final assets = Directory(assetsDirectory);
@@ -216,6 +224,7 @@ class TopiaForgeReleaseMetadataBuilder {
       release: release,
       targetSha: targetSha,
       artifacts: artifacts,
+      thirdParty: thirdParty,
     );
     _validateSchema(
       repositoryRoot,
@@ -386,7 +395,15 @@ class TopiaForgeReleaseMetadataBuilder {
         'Release BOM ecosystem, provenance, or legal inventory was changed.',
       );
     }
-    verifyReleaseSpdxSbom(sbom, release);
+    verifyReleaseSpdxSbom(
+      sbom,
+      release,
+      ReleaseSpdxThirdPartyInventory.load(
+        repositoryRoot: repositoryRoot,
+        policy: policy,
+        release: release,
+      ),
+    );
     final expected = <String, File>{
       for (final name in release.artifacts)
         name: File(p.join(assetsDirectory, name)),

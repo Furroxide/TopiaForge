@@ -162,11 +162,12 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | Component | Pinned release resolution | License |
 | --- | --- | --- |
 | Dart SDK | 3.12.2 | BSD-3-Clause |
-| archive | 4.0.9 | MIT |
+| archive | 4.2.0 | MIT AND BSD-3-Clause AND bzip2-1.0.6 |
 | async | 2.13.1 | BSD-3-Clause |
 | boolean_selector | 2.1.2 | BSD-3-Clause |
 | collection | 1.19.1 | BSD-3-Clause |
 | crypto | 3.0.7 | BSD-3-Clause |
+| cryptography | 2.9.0 | Apache-2.0 |
 | ffi | 2.2.0 | BSD-3-Clause |
 | http | 1.6.0 | BSD-3-Clause |
 | http_parser | 4.1.2 | BSD-3-Clause |
@@ -188,6 +189,12 @@ packaging copies the exact license texts resolved by `apps/topiaforge_cli/.dart_
 | unorm_dart | 0.3.2 | MIT (Copyright Yasuhiro Shimizu) |
 | uri | 1.0.0 | BSD-3-Clause |
 | web | 1.1.1 | BSD-3-Clause |
+
+Some packages carry further licence or notice files, which packaging copies into the same bundle as
+`<package>-<file>`. `archive` carries `LICENSE-other.md`: the notices of the zlib.js (MIT), JZLib (BSD-3-Clause),
+bzip2 (bzip2-1.0.6) and Bouncy Castle (MIT) code it derives from. `quiver` carries an Apache-2.0 `NOTICE` and a
+`PATENTS` grant, and `uri` carries a `PATENTS` grant. Packaging fails if a package carries such a file the release
+does not record.
 
 The Flutter 3.44.6 launcher embeds Flutter, Dart, plugins, and package dependencies. Flutter generates the complete
 `flutter_assets/NOTICES.Z` notice bundle during each platform build; release validation requires that bundle inside
