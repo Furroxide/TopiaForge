@@ -459,6 +459,23 @@ jobs:
       - name: Verify local Markdown links and anchors
         run: node website/scripts/check-markdown-links.mjs
 
+  # The release helper runs on the administrator's Windows workstation, where it
+  # validates paths, reads %LOCALAPPDATA% and refuses junctions. The Ubuntu audit
+  # job above covers only the helper's POSIX branch.
+  release-helpers-windows:
+    name: Test release helpers on Windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Test the Tomato Cake launcher state helper
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
+
   docs:
     name: Build guides, C# and Dart references, and search
     needs: [csharp-tests, template-matrix]
@@ -648,6 +665,7 @@ jobs:
       - dart-tests
       - flutter-tests
       - repository-audits
+      - release-helpers-windows
       - docs
       - template-matrix
     runs-on: ubuntu-latest
@@ -659,10 +677,11 @@ jobs:
           DART: ${{ needs.dart-tests.result }}
           FLUTTER: ${{ needs.flutter-tests.result }}
           REPOSITORY: ${{ needs.repository-audits.result }}
+          RELEASE_HELPERS_WINDOWS: ${{ needs.release-helpers-windows.result }}
           DOCS: ${{ needs.docs.result }}
           TEMPLATES: ${{ needs.template-matrix.result }}
         run: |
           set -euo pipefail
-          for result in "$CSHARP" "$DART" "$FLUTTER" "$REPOSITORY" "$DOCS" "$TEMPLATES"; do
+          for result in "$CSHARP" "$DART" "$FLUTTER" "$REPOSITORY" "$RELEASE_HELPERS_WINDOWS" "$DOCS" "$TEMPLATES"; do
             test "$result" = success
           done
