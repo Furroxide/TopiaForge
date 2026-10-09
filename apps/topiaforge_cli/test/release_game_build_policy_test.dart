@@ -6,7 +6,7 @@ import 'package:topiaforge/src/release_game_build_policy.dart';
 import 'package:test/test.dart';
 
 void main() {
-  const currentBuildId = 2478;
+  const currentBuildId = 2545;
   final root = _repositoryRoot();
   final metadata = _json(
     File(p.join(root, '.github', 'robotopia-game-build.json')),
