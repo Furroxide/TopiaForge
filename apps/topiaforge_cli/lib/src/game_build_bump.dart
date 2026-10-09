@@ -127,6 +127,7 @@ GameBuildBumpResult bumpRobotopiaGameBuild({
     'build `$from`': 'build `$to`',
     'Build `$from`': 'Build `$to`',
     'build $from': 'build $to',
+    'Build $from': 'Build $to',
     '"id":"$from"': '"id":"$to"',
     "'id': '$from'": "'id': '$to'",
     '"gameBuild": "$from"': '"gameBuild": "$to"',
@@ -260,6 +261,8 @@ const List<String> gameBuildBumpTargets = <String>[
   'tests/TopiaForge.SdkAcceptanceMod/topiaforge.mod.json',
   'tests/TopiaForge.SandboxAcceptanceMod/topiaforge.mod.json',
   'tests/TopiaForge.SandboxAcceptanceNative/topiaforge.mod.json',
+  // SandboxExpectedCatalog refuses an inventory whose gameBuild is not the pin.
+  'tests/TopiaForge.SandboxAcceptanceNative/expected-catalog-v1.json',
   'tests/sandbox-workbench-acceptance-v1.json',
   'tests/fixtures/manifests/v6-valid.json',
   'tests/fixtures/manifests/v6-valid-session.json',
