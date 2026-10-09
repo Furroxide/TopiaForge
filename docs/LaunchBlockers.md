@@ -21,7 +21,8 @@ with confirmed exit 0. Sixteen candidate authoring cycles and the full isolated
 game matrix remain pending. Reviewer requests, QA and token setup plans, signing
 recovery checklist, Sandbox automation plan and independent-tester handoff are
 prepared in the [launch hub](internal/launch/README.md). Actual approvals and native admission
-remain pending; credential closure is deferred, neutral build setup stays a plan,
+remain pending; credential closure, deferred on 2026-09-09, was resumed on
+2026-10-09 with a prepared request; neutral build setup stays a plan,
 and the native UX/accessibility operator handoff is prepared but unexecuted. See [current actions](internal/launch/NextActions.md)
 and [evidence boundaries](internal/launch/Evidence.md). The user subsequently authorized
 stages 1–2 of Sandbox automation (specification/verifier and offline lifecycle/rollback
@@ -500,17 +501,22 @@ automated tests cannot close Unity object lifetime.
   artwork by GrafxKid from OpenGameArt, keeping the same filenames. No Robotopia web asset remains in
   the launcher. CC0 carries no attribution or share-alike term, so the replacements raise no
   compatibility question against the AGPL grant; source URLs, upstream and installed SHA-256 values,
-  and the exact crop/keying transformations are recorded in
-  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). This closes the web-derived-art sub-item; the
-  earlier `0.x` non-blocking disposition recorded on 2026-08-24 no longer applies, and there is
-  nothing left to revisit before `1.0` for these three files.
+  and the exact crop, extension and keying transformations are recorded in
+  [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md). This closes the web-derived-art sub-item for the
+  shipped payload; the earlier `0.x` non-blocking disposition recorded on 2026-08-24 no longer applies.
+  No approver is recorded yet for the three CC0 files.
+
+  Earlier copies remain reachable in this public repository (observed 2026-10-09): commits before
+  [#128](https://github.com/Furroxide/TopiaForge/pull/128) still reference the replaced images through
+  Git LFS, and PR #128's description embeds before-and-after comparison images from the pushed
+  `media/pr-128-before-after` branch. Whether those copies must be removed is an open question for counsel
+  under this gate.
 
   Exit criteria: retain written authority or an approved clean-room/non-affiliation basis for the Robotopia and
   TopiaForge names, Robotopia injection, compatibility extraction/baselines, registry claims, web-derived art, adapted
   icons, fonts, and custom-world content. Remove or replace any item that lacks a distributable rights basis and
-  record provenance, transformation, hash, license, and approver for retained assets. The web-derived art
-  sub-item carries the dated disposition above for `0.x`; the naming, injection, and extraction
-  questions are unchanged and still need counsel.
+  record provenance, transformation, hash, license, and approver for retained assets. The naming, injection, and
+  extraction questions are unchanged and still need counsel.
 
 - [ ] **P0-OSS-01 — Complete the third-party redistribution audit.** *(re-opened 2026-08-06)* *(blocking)*
 
@@ -553,10 +559,15 @@ automated tests cannot close Unity object lifetime.
 
   Current state: canonical descriptive capabilities are present; `remote-ai` is the sole remote-inference label; Zombies live-brain
   and voice defaults are off; no request is sent to the RoboAPI backend, no token value is read, and no audio is
-  captured without explicit configuration. One qualification, corrected on 2026-08-13: RobotKit's availability probe
-  runs on every mod load and scene change, and it tests for the presence of the credential file and enumerates
-  microphone device names. It no longer parses or caches the token — that happens only on the request path, behind the
-  consumer opt-in — and enumerating device names starts no capture.
+  captured without explicit configuration. One qualification, corrected on 2026-08-13 and made precise on
+  2026-10-09: RobotKit's availability probe runs on every mod load, on scene load, activation and unload, about once
+  per second while the loader runs, and whenever a mod reads runtime capability availability. It tests for the
+  presence of the credential file and enumerates microphone device names. It no longer parses or caches the token —
+  that happens only on the request path, behind the consumer opt-in — and enumerating device names starts no capture.
+  Two paths outside RobotKit's opt-ins act on the game's own robot agent: TopiaForge Prompts appends an enabled
+  consumer's directive (Opposite Day's, for example) to the game's own planning requests, and Sandbox's "Preview
+  personality" writes creator-entered text into a robot's native personality. See
+  [`PrivacyAndCapabilities.md`](PrivacyAndCapabilities.md).
 
   Evidence progress 2026-08-28: the offline, timeout, caller-cancellation, response-cap, request-cap, and
   log-redaction rows of the acceptance matrix in
