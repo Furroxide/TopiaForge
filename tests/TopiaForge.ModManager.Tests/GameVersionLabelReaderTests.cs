@@ -10,8 +10,9 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeGameVersionTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            // Created atomically under an unpredictable name; a GetTempPath-derived root is untrusted input to
+            // CodeQL, and these fixtures pass it on to the production launcher-state reader.
+            var root = Directory.CreateTempSubdirectory("TopiaForgeGameVersionTests-").FullName;
 
             try
             {
