@@ -134,3 +134,7 @@ CODEOWNERS     text eol=lf
 # configuration files inside those extracted payloads.
 third_party/BepInEx/win_x64_5.4.23.5/**         binary !eol
 third_party/BepInEx/macos_universal_5.4.23.5/** binary !eol
+
+# Upstream .NET notices are pinned by SHA-256 over their exact CRLF bytes, so
+# the *.txt rule above must not normalise them or flag them as whitespace.
+third_party/dotnet/runtime-loader/*-ThirdPartyNotices.txt -text -whitespace

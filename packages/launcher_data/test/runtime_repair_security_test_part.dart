@@ -159,4 +159,143 @@ void _registerRuntimeRepairSecurityTests({
       expect(transaction.existsSync(), isFalse);
     },
   );
+
+  File installedNotice(String fileName) => File(
+    p.join(
+      gameRoot().path,
+      'BepInEx',
+      'plugins',
+      'TopiaForge.ModManager',
+      topiaForgeRuntimeLoaderNoticeDirectory,
+      fileName,
+    ),
+  );
+  // Commit order is the bundle, then the assemblies, then their notices, so
+  // failing on the final operation fails after every notice has landed.
+  int runtimeOperations() =>
+      Directory(
+        p.join(
+          repositoryRoot().path,
+          'third_party',
+          'BepInEx',
+          'win_x64_5.4.23.5',
+        ),
+      ).listSync(recursive: true).whereType<File>().length +
+      topiaForgeRuntimeLoaderDlls.length +
+      topiaForgeRuntimeLoaderNotices.length;
+  LocalLauncherRepository failingOnLastOperation({void Function()? before}) {
+    final operations = runtimeOperations();
+    final failing = LocalLauncherRepository(
+      dataRoot: p.join(repositoryRoot().parent.path, 'late-failure-data'),
+      repositoryRoot: repositoryRoot().path,
+      knownGamePath: gameRoot().path,
+      runtimeRepairCommitHook: (committed) {
+        if (committed == operations) {
+          before?.call();
+          throw StateError('injected late commit failure');
+        }
+      },
+    );
+    addTearDown(failing.dispose);
+    return failing;
+  }
+
+  test('a failed first install leaves no file or folder behind', () async {
+    List<String> gameTree() => [
+      for (final entity in gameRoot().listSync(
+        recursive: true,
+        followLinks: false,
+      ))
+        // The repair lock persists by design; it is not runtime content.
+        if (p.basename(entity.path) != '.topiaforge-runtime-repair.lock')
+          p.relative(entity.path, from: gameRoot().path),
+    ]..sort();
+    final before = gameTree();
+    var noticesLanded = false;
+    final failing = failingOnLastOperation(
+      before: () => noticesLanded = topiaForgeRuntimeLoaderNotices.every(
+        (notice) => installedNotice(notice.fileName).existsSync(),
+      ),
+    );
+    final install = await failing.selectGameDirectory(gameRoot().path);
+
+    final report = await failing.installOrRepairRuntime(install);
+
+    expect(report.ok, isFalse);
+    expect(noticesLanded, isTrue);
+    expect(gameTree(), before);
+  });
+
+  test('a failed repair restores the notices it replaced', () async {
+    for (final notice in topiaForgeRuntimeLoaderNotices) {
+      installedNotice(notice.fileName)
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('previous ${notice.fileName}');
+    }
+    final failing = failingOnLastOperation();
+    final install = await failing.selectGameDirectory(gameRoot().path);
+
+    final report = await failing.installOrRepairRuntime(install);
+
+    expect(report.ok, isFalse);
+    for (final notice in topiaForgeRuntimeLoaderNotices) {
+      expect(
+        installedNotice(notice.fileName).readAsStringSync(),
+        'previous ${notice.fileName}',
+      );
+    }
+    expect(
+      Directory(
+        p.join(gameRoot().path, '.topiaforge-runtime-transaction'),
+      ).existsSync(),
+      isFalse,
+    );
+  });
+
+  test(
+    'recovery removes an interrupted notice and the folders it created',
+    () async {
+      final notice = installedNotice('LICENSE')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync('partially installed notice');
+      final transaction = Directory(
+        p.join(gameRoot().path, '.topiaforge-runtime-transaction'),
+      )..createSync();
+      File(p.join(transaction.path, 'journal.json')).writeAsStringSync(
+        jsonEncode({
+          'formatVersion': 2,
+          'status': 'committing',
+          'operations': [
+            {
+              'relativePath':
+                  'BepInEx/plugins/TopiaForge.ModManager/licenses/LICENSE',
+              'phase': 'installed',
+              'hadOriginal': false,
+            },
+          ],
+          'createdDirectories': [
+            'BepInEx',
+            'BepInEx/plugins',
+            'BepInEx/plugins/TopiaForge.ModManager',
+            'BepInEx/plugins/TopiaForge.ModManager/licenses',
+          ],
+        }),
+      );
+      // Without a bundled runtime the repair stops right after recovery.
+      Directory(
+        p.join(repositoryRoot().path, 'third_party', 'BepInEx'),
+      ).deleteSync(recursive: true);
+      final install = await repository().selectGameDirectory(gameRoot().path);
+
+      final report = await repository().installOrRepairRuntime(install);
+
+      expect(report.ok, isFalse);
+      expect(notice.existsSync(), isFalse);
+      expect(
+        Directory(p.join(gameRoot().path, 'BepInEx')).existsSync(),
+        isFalse,
+      );
+      expect(transaction.existsSync(), isFalse);
+    },
+  );
 }

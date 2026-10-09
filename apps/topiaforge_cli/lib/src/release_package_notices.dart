@@ -75,6 +75,10 @@ class ReleasePackageNoticeWriter {
 
   /// Copies and verifies notices for the exact managed validator dependencies
   /// that are installed beside the game-side loader.
+  ///
+  /// The texts come from their checked-in copies, which runtime repair also
+  /// installs from a source checkout, and each must match the pinned text of
+  /// the restored package.
   Future<void> copyRuntimeLoaderNotices(
     String destinationRoot, {
     String nugetPackagesRoot = '',
@@ -83,15 +87,13 @@ class ReleasePackageNoticeWriter {
     final destination = Directory(
       p.join(destinationRoot, 'third_party', 'dotnet', 'runtime-loader'),
     )..createSync(recursive: true);
-    final license = File(
-      p.join(
-        repositoryRoot,
-        'third_party',
-        'dotnet',
-        'runtime-loader',
-        'LICENSE.txt',
-      ),
+    final checkedIn = p.join(
+      repositoryRoot,
+      'third_party',
+      'dotnet',
+      'runtime-loader',
     );
+    final license = File(p.join(checkedIn, 'LICENSE.txt'));
     await _requireSha256(
       license,
       _dotnetRuntimeLoaderLicenseSha256,
@@ -129,8 +131,14 @@ class ReleasePackageNoticeWriter {
       );
       _validateRuntimePackageNuspec(nuspec, assembly);
       final noticesName = '${assembly.packageId}-ThirdPartyNotices.txt';
+      final checkedInNotices = File(p.join(checkedIn, noticesName));
+      await _requireSha256(
+        checkedInNotices,
+        assembly.thirdPartyNoticesSha256,
+        '${assembly.packageId} checked-in third-party notices',
+      );
       fileOps.copyFileIfExists(
-        notices.path,
+        checkedInNotices.path,
         p.join(destination.path, noticesName),
       );
       packages.add({
