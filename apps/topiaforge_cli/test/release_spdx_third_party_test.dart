@@ -148,7 +148,12 @@ void main() {
         r'^\| ([^|]+?) \| ([^|]+?) \| ([^|]+?) \|$',
       ).firstMatch(line);
       if (row == null) break;
-      rows['${row[1]}@${row[2]}'] = row[3]!.split(' ').first;
+      // The column holds an SPDX expression, optionally followed by a
+      // parenthesised remark such as unorm_dart's copyright line.
+      rows['${row[1]}@${row[2]}'] = row[3]!.replaceFirst(
+        RegExp(r' \(.*\)$'),
+        '',
+      );
     }
     expect(rows, contains('Dart SDK@3.12.2'));
     expect(
