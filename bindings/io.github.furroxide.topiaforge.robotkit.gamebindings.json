@@ -90,13 +90,27 @@
       "matchMode": "DynamicInstance",
       "criticality": "Degraded",
       "feature": "Brain dormancy (fallback LLM disable)",
-      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:139",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:387",
       "parameters": [
         {
           "type": "System.Boolean",
-          "constrained": false
+          "constrained": true
         }
       ],
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.method.llmagent.reset",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "Reset",
+      "matchMode": "DynamicInstance",
+      "criticality": "Optional",
+      "feature": "Brain wake (best-effort re-run of the initial-state entry)",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:406",
+      "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Void"
     },
     {
@@ -224,15 +238,15 @@
       "matchMode": "PredicateOverload",
       "criticality": "Optional",
       "feature": "Robot emote animation (fire-and-forget)",
-      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:210",
+      "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:568",
       "parameters": [
         {
           "type": "System.String",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Threading.CancellationToken",
-          "constrained": false
+          "constrained": true
         }
       ],
       "returnType": "Cysharp.Threading.Tasks.UniTask"
@@ -260,6 +274,34 @@
       "feature": "Robot root resolution (MaybeBody, the non-throwing accessor asked first)",
       "sourceRef": "mods/TopiaForge.RobotKit/GameReflection.cs:567",
       "returnType": "RobotBody"
+    },
+    {
+      "id": "robotkit.method.agenthead.pushdisabletalkto",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "PushDisableTalkTo",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Suppress native talk-to while a robot's interaction disables it",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAgent.cs:698",
+      "parameters": [],
+      "exactParameters": true,
+      "returnType": "System.Void"
+    },
+    {
+      "id": "robotkit.method.agenthead.popdisabletalkto",
+      "kind": "Method",
+      "assembly": "GameCode",
+      "declaringType": "AgentHead",
+      "member": "PopDisableTalkTo",
+      "matchMode": "DynamicInstance",
+      "criticality": "Degraded",
+      "feature": "Restore native talk-to when a robot's interaction allows it again",
+      "sourceRef": "mods/TopiaForge.RobotKit/RobotAgent.cs:714",
+      "parameters": [],
+      "exactParameters": true,
+      "returnType": "System.Void"
     },
     {
       "id": "robotkit.type.robotbody.rootwalk",
@@ -350,7 +392,7 @@
       "matchMode": "PredicateOverload",
       "criticality": "Critical",
       "feature": "Native robot walk start",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:106",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:108",
       "parameters": [
         {
           "type": "AgentHead",
@@ -358,43 +400,43 @@
         },
         {
           "type": "ActionTarget",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "TaskGraph",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Threading.CancellationToken",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Boolean",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Single",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Single",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.TimeSpan",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Func`2[UnityEngine.Vector3,System.Boolean]",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Boolean",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Boolean",
-          "constrained": false
+          "constrained": true
         }
       ],
       "returnType": "Cysharp.Threading.Tasks.UniTask<ActionSuccess>"
@@ -480,8 +522,9 @@
       "matchMode": "StaticFullName",
       "criticality": "Optional",
       "feature": "Force ragdoll state",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:118",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:130",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Void"
     },
     {
@@ -573,7 +616,7 @@
       "matchMode": "PredicateOverload",
       "criticality": "Optional",
       "feature": "Reachability pathfinding (static entry)",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:197",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:211",
       "parameters": [
         {
           "type": "UnityEngine.Vector3",
@@ -585,19 +628,19 @@
         },
         {
           "type": "RoboPath.PathFindSettings",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "TaskGraph",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "System.Threading.CancellationToken",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "UnityEngine.GameObject",
-          "constrained": false
+          "constrained": true
         }
       ],
       "returnType": "Cysharp.Threading.Tasks.UniTask<RoboPath.Path>"
@@ -611,11 +654,11 @@
       "matchMode": "PredicateOverload",
       "criticality": "Optional",
       "feature": "Walkability sampler creation",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:204",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:222",
       "parameters": [
         {
           "type": "RoboPath.PathFindSettings",
-          "constrained": false
+          "constrained": true
         },
         {
           "type": "RoboPath.Goal",
@@ -623,7 +666,7 @@
         },
         {
           "type": "UnityEngine.GameObject",
-          "constrained": false
+          "constrained": true
         }
       ],
       "returnType": "IPathSampler"
@@ -666,8 +709,9 @@
       "matchMode": "StaticFullName",
       "criticality": "Optional",
       "feature": "Read prefab pathfind configuration",
-      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:215",
+      "sourceRef": "mods/TopiaForge.RobotKit/LocomotionBridge.cs:235",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "RoboPath.PathFindSettings"
     },
     {
@@ -967,6 +1011,7 @@
       "feature": "Player location (static finder method)",
       "sourceRef": "mods/TopiaForge.RobotKit/PlayerBridge.cs:21",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "PlayerController"
     },
     {
@@ -1158,6 +1203,7 @@
       "feature": "Restore a robot with no prior personality override",
       "sourceRef": "mods/TopiaForge.RobotKit/RobotPersonalityBindingSurface.cs:69",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Void"
     }
   ]
