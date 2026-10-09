@@ -1,9 +1,9 @@
 {
-  "capturedUtc": "2026-09-24T15:49:42.5095452Z",
+  "capturedUtc": "2026-10-09T17:27:47.5314390Z",
   "extractorVersion": "1.1.0-rc.1",
-  "gameCodeMvid": "6775eebf-1faf-4230-bd4d-2291f871625f",
-  "gameVersion": "0.0.2478",
-  "gameVersionLabel": "build 2478",
+  "gameCodeMvid": "6b9ceeb3-da23-4e7d-9501-d37875089749",
+  "gameVersion": "0.0.2545",
+  "gameVersionLabel": "build 2545",
   "referenceSet": [
     "02 City Streets 0.0.0.0",
     "AcidChamber 0.0.0.0",
@@ -252,7 +252,7 @@
     "GameCode|SentryRuntimeConfiguration": 1,
     "GameCode|SettingsScreen": 1
   },
-  "surfaceContentHash": "ab46f35237b80c532dac8794d3982ba10716b642796ffce62b37bfcb8bf23cdb",
+  "surfaceContentHash": "2357d580ce97960853843180ef7f19eb84513348e59f4657cd9e3d72c7641b3c",
   "types": {
     "GameCode|ActionTarget": {
       "assembly": "GameCode",
@@ -555,6 +555,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "lastSpeech",
+          "type": "Cysharp.Threading.Tasks.UniTask"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "maxOverhearEventDist",
           "type": "System.Single"
         },
@@ -623,6 +629,24 @@
           "isStatic": false,
           "name": "speechOverride",
           "type": "AgentHead+SpeechOverrideToken"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "subtitlesAtBottom",
+          "type": "System.Boolean"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "thinkingAudioCts",
+          "type": "System.Threading.CancellationTokenSource"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "thinkingAudioSession",
+          "type": "FMODAudioSession"
         }
       ],
       "fullName": "AgentHead",
@@ -634,9 +658,27 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "<Say>b__89_0",
+          "name": "<PlayThinkingAudio>b__80_0",
           "parameters": [],
           "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<Say>b__98_0",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<UpdateThinkingAudio>b__81_0",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
         },
         {
           "genericArity": 0,
@@ -863,6 +905,16 @@
         },
         {
           "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "PlayThinkingAudio",
+          "parameters": [
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
+        },
+        {
+          "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
           "name": "PopDisableTalkTo",
@@ -935,10 +987,26 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
+          "name": "StopThinkingAudio",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
           "name": "UpdateConversationTargetState",
           "parameters": [
             "System.Collections.Generic.List<AgentHead>"
           ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "UpdateThinkingAudio",
+          "parameters": [],
           "returnType": "System.Void"
         },
         {
@@ -1112,6 +1180,16 @@
           "name": "POIAwarenessRadius",
           "setterIsPublic": false,
           "type": "System.Single"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "SubtitlesAtBottom",
+          "setterIsPublic": false,
+          "type": "System.Boolean"
         },
         {
           "canRead": true,
@@ -1567,6 +1645,12 @@
         {
           "isPublic": false,
           "isStatic": true,
+          "name": "LOOK_ACTION",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
           "name": "PlayerLayerMask",
           "type": "System.Int32"
         },
@@ -1735,12 +1819,6 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "invertCamera",
-          "type": "System.Boolean"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
           "name": "isCrouched",
           "type": "System.Boolean"
         },
@@ -1807,6 +1885,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "lookAction",
+          "type": "UnityEngine.InputSystem.InputAction"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "lookDir",
           "type": "UnityEngine.Vector3"
         },
@@ -1820,12 +1904,6 @@
           "isPublic": false,
           "isStatic": false,
           "name": "maxLookAngle",
-          "type": "System.Single"
-        },
-        {
-          "isPublic": true,
-          "isStatic": false,
-          "name": "mouseSensitivity",
           "type": "System.Single"
         },
         {
@@ -2131,16 +2209,6 @@
           "isStatic": false,
           "name": "LogPlayerPosition",
           "parameters": [],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": false,
-          "name": "MouseSensitivyChanged",
-          "parameters": [
-            "System.Single"
-          ],
           "returnType": "System.Void"
         },
         {
@@ -2604,6 +2672,18 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "hintCompletedSound",
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "hintRevealedSound",
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "levelEntryPoints",
           "type": "LevelEntryPoints"
         },
@@ -2634,8 +2714,32 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "parkDollarDeclinedSound",
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "parkDollarDecreaseSound",
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "parkDollarIncreaseSound",
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "questMarkerPrefab",
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "robotThinkingLoop",
+          "type": "FMODAudioClipAsset"
         },
         {
           "isPublic": false,
@@ -2817,6 +2921,26 @@
           "getterIsPublic": true,
           "indexParameterCount": 0,
           "isStatic": true,
+          "name": "HintCompletedSound",
+          "setterIsPublic": false,
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
+          "name": "HintRevealedSound",
+          "setterIsPublic": false,
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
           "name": "Instance",
           "setterIsPublic": false,
           "type": "GlobalAssetsMap"
@@ -2877,9 +3001,49 @@
           "getterIsPublic": true,
           "indexParameterCount": 0,
           "isStatic": true,
+          "name": "ParkDollarDeclinedSound",
+          "setterIsPublic": false,
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
+          "name": "ParkDollarDecreaseSound",
+          "setterIsPublic": false,
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
+          "name": "ParkDollarIncreaseSound",
+          "setterIsPublic": false,
+          "type": "FMODAudioClipAsset"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
           "name": "QuestMarkerPrefab",
           "setterIsPublic": false,
           "type": "UnityEngine.GameObject"
+        },
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": true,
+          "name": "RobotThinkingLoop",
+          "setterIsPublic": false,
+          "type": "FMODAudioClipAsset"
         },
         {
           "canRead": true,
@@ -6256,12 +6420,6 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "analysisModel",
-          "type": "ModelAsset"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
           "name": "bios",
           "type": "UnityEngine.TextAsset[]"
         },
@@ -6456,16 +6614,6 @@
         }
       ],
       "properties": [
-        {
-          "canRead": true,
-          "canWrite": false,
-          "getterIsPublic": true,
-          "indexParameterCount": 0,
-          "isStatic": false,
-          "name": "AnalysisModel",
-          "setterIsPublic": false,
-          "type": "ModelAsset"
-        },
         {
           "canRead": true,
           "canWrite": false,
@@ -6693,6 +6841,12 @@
         {
           "isPublic": false,
           "isStatic": true,
+          "name": "INSPECT_ACTION_MAP",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": true,
           "name": "VIEWPORT_CENTER",
           "type": "UnityEngine.Vector2"
         },
@@ -6777,20 +6931,26 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "inspectUI",
-          "type": "GlobalButtonRoles"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
           "name": "interactCastRaySeparation",
           "type": "System.Single"
         },
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "interactHoldGeneration",
+          "type": "System.Int32"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "interactNarrowPhaseRadius",
           "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "interactWaitingForRelease",
+          "type": "System.Boolean"
         },
         {
           "isPublic": false,
@@ -6849,6 +7009,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "radialHoldTime",
+          "type": "System.Single"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "secondaryActionHoldBegin",
           "type": "System.Single"
         },
@@ -6902,6 +7068,14 @@
         },
         {
           "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ConfirmReply",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
           "name": "DropGrabbable",
@@ -6910,6 +7084,14 @@
             "System.Boolean"
           ],
           "returnType": "Cysharp.Threading.Tasks.UniTask"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "EnterInspectActionMap",
+          "parameters": [],
+          "returnType": "System.Void"
         },
         {
           "genericArity": 0,
@@ -7097,16 +7279,6 @@
         },
         {
           "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
-          "name": "OnClick",
-          "parameters": [
-            "UnityEngine.InputSystem.InputValue"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
           "name": "OnControlsChanged",
@@ -7233,16 +7405,6 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
-          "name": "OnPauseExit",
-          "parameters": [
-            "UnityEngine.InputSystem.InputValue"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
           "name": "OnPlayerHealthChanged",
           "parameters": [
             "Health"
@@ -7273,16 +7435,6 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
-          "name": "OnToggleTypeRecord",
-          "parameters": [
-            "UnityEngine.InputSystem.InputValue"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
           "name": "OnUse",
           "parameters": [
             "UnityEngine.InputSystem.InputValue"
@@ -7291,10 +7443,33 @@
         },
         {
           "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "OpenWheelAfterHold",
+          "parameters": [
+            "System.Int32",
+            "System.Collections.Generic.List<InteractWheelAction>",
+            "System.Threading.CancellationToken"
+          ],
+          "returnType": "Cysharp.Threading.Tasks.UniTask"
+        },
+        {
+          "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
           "name": "PlayBusyInteractSound",
           "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "PushToRecord",
+          "parameters": [
+            "System.Boolean",
+            "System.String"
+          ],
           "returnType": "System.Void"
         },
         {
@@ -7310,6 +7485,14 @@
           "isPublic": true,
           "isStatic": false,
           "name": "PushToRecordStop",
+          "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "ReleaseInteract",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -7372,7 +7555,8 @@
           "isStatic": false,
           "name": "ShowSubtitle",
           "parameters": [
-            "System.String"
+            "System.String",
+            "AgentHead"
           ],
           "returnType": "System.Void"
         },
@@ -7380,7 +7564,7 @@
           "genericArity": 0,
           "isPublic": true,
           "isStatic": false,
-          "name": "ToggleTypeRecord",
+          "name": "StartInteract",
           "parameters": [],
           "returnType": "System.Void"
         },
@@ -7450,9 +7634,27 @@
           "name": "UpdateSelectedInteractable",
           "parameters": [],
           "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "WheelActions",
+          "parameters": [],
+          "returnType": "System.Collections.Generic.List<InteractWheelAction>"
         }
       ],
       "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "AimedRobot",
+          "setterIsPublic": false,
+          "type": "AgentHead"
+        },
         {
           "canRead": true,
           "canWrite": false,
@@ -9311,18 +9513,6 @@
       "fields": [
         {
           "isPublic": false,
-          "isStatic": true,
-          "name": "KEY_FPS_VISIBLE",
-          "type": "System.String"
-        },
-        {
-          "isPublic": false,
-          "isStatic": true,
-          "name": "KEY_QUALITY_LEVEL",
-          "type": "System.String"
-        },
-        {
-          "isPublic": false,
           "isStatic": false,
           "name": "PlayerReflectionProbesToggle",
           "type": "UnityEngine.UI.Toggle"
@@ -9348,7 +9538,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "disableSubtitlesToggle",
+          "name": "disableChatBubblesToggle",
           "type": "UnityEngine.UI.Toggle"
         },
         {
@@ -9417,7 +9607,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "OnDisableSubtitlesToggleChanged",
+          "name": "OnDisableChatBubblesToggleChanged",
           "parameters": [
             "System.Boolean"
           ],
@@ -9495,7 +9685,7 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "RefreshDisableSubtitlesToggle",
+          "name": "RefreshDisableChatBubblesToggle",
           "parameters": [
             "System.Boolean"
           ],
@@ -10076,24 +10266,6 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "<LastImportSourceLabel>k__BackingField",
-          "type": "System.String"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "<LastImportedProject>k__BackingField",
-          "type": "UgcExportProject"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
-          "name": "<LastImportedScene>k__BackingField",
-          "type": "UgcExportScene"
-        },
-        {
-          "isPublic": false,
-          "isStatic": false,
           "name": "config",
           "type": "UgcImportHostConfig"
         },
@@ -10197,16 +10369,6 @@
         },
         {
           "genericArity": 0,
-          "isPublic": true,
-          "isStatic": false,
-          "name": "ImportFile",
-          "parameters": [
-            "System.String"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
           "name": "ImportFileInternal",
@@ -10277,6 +10439,32 @@
         },
         {
           "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ResolveSelectedFile",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SelectFile",
+          "parameters": [
+            "System.String"
+          ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "SelectLatestFile",
+          "parameters": [],
+          "returnType": "System.String"
+        },
+        {
+          "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
           "name": "SyncSelectedExportFilePath",
@@ -10304,36 +10492,6 @@
           "name": "EnvironmentPrefabMap",
           "setterIsPublic": false,
           "type": "UgcEnvironmentPrefabMap"
-        },
-        {
-          "canRead": true,
-          "canWrite": true,
-          "getterIsPublic": true,
-          "indexParameterCount": 0,
-          "isStatic": false,
-          "name": "LastImportSourceLabel",
-          "setterIsPublic": false,
-          "type": "System.String"
-        },
-        {
-          "canRead": true,
-          "canWrite": true,
-          "getterIsPublic": true,
-          "indexParameterCount": 0,
-          "isStatic": false,
-          "name": "LastImportedProject",
-          "setterIsPublic": false,
-          "type": "UgcExportProject"
-        },
-        {
-          "canRead": true,
-          "canWrite": true,
-          "getterIsPublic": true,
-          "indexParameterCount": 0,
-          "isStatic": false,
-          "name": "LastImportedScene",
-          "setterIsPublic": false,
-          "type": "UgcExportScene"
         },
         {
           "canRead": true,
@@ -10430,6 +10588,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "launchValues",
+          "type": "UgcPlayLauncherLastRun"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "loggedPlayStarted",
           "type": "System.Boolean"
         },
@@ -10484,7 +10648,7 @@
         {
           "isPublic": false,
           "isStatic": false,
-          "name": "waitingForPublishedCloudImport",
+          "name": "waitingForStartupImport",
           "type": "System.Boolean"
         }
       ],
@@ -10537,16 +10701,6 @@
             "UgcExportProject",
             "UgcExportScene",
             "System.String"
-          ],
-          "returnType": "System.Void"
-        },
-        {
-          "genericArity": 0,
-          "isPublic": false,
-          "isStatic": false,
-          "name": "CaptureInitialImport",
-          "parameters": [
-            "UgcImportHostSceneController"
           ],
           "returnType": "System.Void"
         },
@@ -10629,10 +10783,10 @@
           "genericArity": 0,
           "isPublic": false,
           "isStatic": false,
-          "name": "ImportPublishedCloudAsync",
+          "name": "ImportStartupAsync",
           "parameters": [
             "UgcImportHostSceneController",
-            "System.String",
+            "System.Func<System.Threading.CancellationToken, Cysharp.Threading.Tasks.UniTask<System.ValueTuple<UgcExportProject, System.String>>>",
             "System.Threading.CancellationToken"
           ],
           "returnType": "Cysharp.Threading.Tasks.UniTask"
@@ -10662,6 +10816,14 @@
             "UgcExportProject",
             "UgcExportScene"
           ],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": true,
+          "isStatic": false,
+          "name": "ReissueLaunchRequest",
+          "parameters": [],
           "returnType": "System.Void"
         },
         {
@@ -10726,6 +10888,18 @@
           "isStatic": false,
           "name": "Start",
           "parameters": [],
+          "returnType": "System.Void"
+        },
+        {
+          "genericArity": 0,
+          "isPublic": false,
+          "isStatic": false,
+          "name": "StartFileImport",
+          "parameters": [
+            "UgcImportHostSceneController",
+            "UgcPlayLaunchRequest",
+            "System.String"
+          ],
           "returnType": "System.Void"
         },
         {
@@ -10819,6 +10993,12 @@
           "isStatic": false,
           "name": "<SelectedExportFilePath>k__BackingField",
           "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
+          "name": "<Values>k__BackingField",
+          "type": "UgcPlayLauncherLastRun"
         }
       ],
       "fullName": "UgcPlayLaunchRequest",
@@ -10935,6 +11115,16 @@
           "name": "SelectedExportFilePath",
           "setterIsPublic": false,
           "type": "System.String"
+        },
+        {
+          "canRead": true,
+          "canWrite": true,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "Values",
+          "setterIsPublic": false,
+          "type": "UgcPlayLauncherLastRun"
         }
       ],
       "simpleName": "UgcPlayLaunchRequest",
@@ -11155,6 +11345,12 @@
         {
           "isPublic": false,
           "isStatic": false,
+          "name": "catalogBaseUrl",
+          "type": "System.String"
+        },
+        {
+          "isPublic": false,
+          "isStatic": false,
           "name": "defaultPersonality",
           "type": "PersonalityAsset"
         },
@@ -11265,6 +11461,16 @@
         }
       ],
       "properties": [
+        {
+          "canRead": true,
+          "canWrite": false,
+          "getterIsPublic": true,
+          "indexParameterCount": 0,
+          "isStatic": false,
+          "name": "CatalogBaseUrl",
+          "setterIsPublic": false,
+          "type": "System.String"
+        },
         {
           "canRead": true,
           "canWrite": false,

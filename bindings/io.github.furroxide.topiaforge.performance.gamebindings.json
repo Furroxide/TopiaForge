@@ -40,6 +40,7 @@
       "feature": "Reapply volume/quality settings after forcing low quality",
       "sourceRef": "mods/TopiaForge.Performance/GameReflectionLite.cs:179",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Void",
       "contractValue": ""
     },
@@ -65,8 +66,9 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Degraded",
       "feature": "Hook boot-time quality level setting to force low quality",
-      "sourceRef": "mods/TopiaForge.Performance/Appliers/PatchApplier.cs:48",
+      "sourceRef": "mods/TopiaForge.Performance/Appliers/PatchApplier.cs:49",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Void",
       "contractValue": ""
     },
@@ -124,8 +126,13 @@
       "matchMode": "SimpleNameWalk",
       "criticality": "Optional",
       "feature": "Hook Sentry configuration to quiet or disable telemetry",
-      "sourceRef": "mods/TopiaForge.Performance/Appliers/PatchApplier.cs:60",
-      "parameters": [],
+      "sourceRef": "mods/TopiaForge.Performance/Appliers/PatchApplier.cs:69",
+      "parameters": [
+        {
+          "type": "Sentry.Unity.SentryUnityOptions",
+          "constrained": true
+        }
+      ],
       "returnType": "System.Void",
       "contractValue": ""
     },
@@ -205,8 +212,9 @@
       "matchMode": "StaticFullName",
       "criticality": "Degraded",
       "feature": "Reapply game volume settings during revert",
-      "sourceRef": "mods/TopiaForge.Performance/Appliers/PatchApplier.cs:89",
+      "sourceRef": "mods/TopiaForge.Performance/Appliers/PatchApplier.cs:100",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Void",
       "contractValue": ""
     },
