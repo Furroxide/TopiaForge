@@ -73,7 +73,7 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   /// dependency planning while unconstrained installs remain usable.
   Future<({String? version, String label, LauncherIssue? issue})>
   _readInstalledGameBuild(GameLayout layout) async {
-    for (final file in _installedBuildCandidates(layout)) {
+    for (final file in await _installedBuildCandidates(layout)) {
       try {
         final type = FileSystemEntity.typeSync(file.path, followLinks: false);
         if (type == FileSystemEntityType.notFound) {
@@ -114,14 +114,24 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     ),
   );
 
-  List<File> _installedBuildCandidates(GameLayout layout) {
+  /// Build markers in priority order. The game root and, for a `Robotopia`
+  /// folder, its parent come first. The Tomato Cake state directory's marker
+  /// comes last, and only when `launcher-config.json` moved the game to
+  /// exactly this root.
+  Future<List<File>> _installedBuildCandidates(GameLayout layout) async {
     final root = Directory(layout.gameRoot).absolute.path;
     if (layout.kind != GameInstallLayout.macAppBundle) {
-      return [
-        File(p.join(root, 'installed-build.json')),
-        if (p.basename(root).toLowerCase() == 'robotopia')
-          File(p.join(p.dirname(root), 'installed-build.json')),
-      ];
+      final candidates = [File(p.join(root, 'installed-build.json'))];
+      if (p.basename(root).toLowerCase() == 'robotopia') {
+        candidates.add(File(p.join(p.dirname(root), 'installed-build.json')));
+        final launcherMarker = await _tomatoCakeLauncher
+            .installedBuildMarkerFor(root);
+        if (launcherMarker != null &&
+            !p.equals(launcherMarker.path, candidates.last.path)) {
+          candidates.add(launcherMarker);
+        }
+      }
+      return candidates;
     }
     final appRoot = p.basename(root) == 'Robotopia.app'
         ? root

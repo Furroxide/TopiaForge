@@ -18,7 +18,7 @@ namespace TopiaForge.RobotKit
             var playerType = Type.GetType("PlayerController, GameCode", throwOnError: false);
             if (playerType != null)
             {
-                var findPlayer = playerType.GetMethod("FindPlayer", StaticFlags);
+                var findPlayer = playerType.GetMethod("FindPlayer", StaticFlags, null, Type.EmptyTypes, null);
                 if (findPlayer != null)
                 {
                     try

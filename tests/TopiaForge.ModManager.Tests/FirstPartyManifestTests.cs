@@ -12,12 +12,12 @@ namespace TopiaForge.ModManager.Tests
     {
         // Robotopia compatibility is declared per mod, by whether the mod actually resolves GameCode symbols.
         // A mod with declared native bindings may claim only the build its bindings were verified against; a mod
-        // that rides the SDK alone gets a bounded range so an ordinary game update does not brick it. The range
-        // ceiling sits roughly two published steps above the pin (builds advance by about +100 each), so it
-        // admits the current build and the next one, and nothing beyond a review.
-        private const string BoundGameRange = "0.0.2478";
-        private const string SdkOnlyGameRange = ">=0.0.2478 <0.0.2600";
-        private const string InstalledGameVersion = "0.0.2478";
+        // that rides the SDK alone gets a bounded range so an ordinary game update does not brick it. Published
+        // builds do not step by a fixed amount, so the ceiling is reviewed at every bump rather than derived, and
+        // it admits nothing beyond that review.
+        private const string BoundGameRange = "0.0.2545";
+        private const string SdkOnlyGameRange = ">=0.0.2545 <0.0.2600";
+        private const string InstalledGameVersion = "0.0.2545";
 
         // Exactly the mods carrying a bindings/<id>.gamebindings.json manifest.
         private static readonly HashSet<string> GameBoundModIds = new(StringComparer.Ordinal)
