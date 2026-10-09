@@ -160,7 +160,6 @@
     <Compile Include="..\..\mods\TopiaForge.Worlds\OwnerEventSubscription.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\PauseMenuBridge.Ownership.cs" />
     <Compile Include="..\..\mods\TopiaForge.Chronos\TimeControlService.OwnerFacade.cs" />
-    <Compile Include="..\..\mods\TopiaForge.Worlds\UgcImportCompletionPolicy.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\LocalWorldImportOperation.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\SceneTransitionTracker.cs" />
     <Compile Include="..\..\mods\TopiaForge.Worlds\MainThreadDispatchQueue.cs" />

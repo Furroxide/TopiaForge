@@ -172,5 +172,10 @@ allowlisted advanced mod genuinely needs a new native binding:
 - `MetadataLoadContext` reads metadata only; it cannot prove a constructor is actually invocable beyond
   shape/accessibility, and cannot follow a runtime `SampleAt()→Sample→Hit` chain. Those are declared explicitly by
   the manifest author, not machine-derived.
+- Snapshots record parameter types, not parameter names. A Harmony hook that binds a target argument by name
+  (PerfFixes' `camera` and `collision`, the Performance Sentry `options`) breaks on a rename that `verify` cannot
+  see, so those names are compared against the new build by hand at each bump.
+- The audit requires a declaration for every `"X, GameCode"` type literal, but not for every member name. A member
+  looked up by name on a captured type is covered by the full surface diff, not by `verify`, until it is declared.
 - The live check needs both a Robotopia installation and this tool present, so for most end users the update-time signal
   arrives through the launcher (see the launcher Diagnostics integration), not the raw CLI.

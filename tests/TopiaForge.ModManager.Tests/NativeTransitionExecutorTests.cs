@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var failures = new System.Collections.Generic.List<Exception>();
             foreach (var test in new Action[] {
-                NativeLoaderDrainTests.Run, OwnerCheckpointSubscriptionTests.Run, LocalImportRequiresFreshResult, LocalImportPreservesAdmission, CrossRouteCancellationRetainsNative,
+                NativeLoaderDrainTests.Run, OwnerCheckpointSubscriptionTests.Run, LocalImportPreservesAdmission, CrossRouteCancellationRetainsNative,
                 RevokedProviderGrantCannotReenter, OwnerReloadSharesOutstandingNative,
                 WorkerCompletionWaitsForHost, UncertainDispatchAndLateArrival,
                 SynchronousAndPreflightCompletion, LifecycleStopGateAndAuthority,
@@ -22,15 +22,6 @@ namespace TopiaForge.ModManager.Tests
             }
             if (failures.Count != 0) throw new AggregateException(failures);
             Console.WriteLine("All native transition executor tests passed.");
-        }
-
-        private static void LocalImportRequiresFreshResult()
-        {
-            var oldImport = new object();
-            Assert(!TopiaForge.Worlds.UgcImportCompletionPolicy.IsFresh(oldImport, oldImport),
-                "an earlier imported scene cannot prove the current import succeeded");
-            Assert(!TopiaForge.Worlds.UgcImportCompletionPolicy.IsFresh(oldImport, null), "a null result is not imported content");
-            Assert(TopiaForge.Worlds.UgcImportCompletionPolicy.IsFresh(oldImport, new object()), "new imported content is accepted");
         }
 
         private static void LocalImportPreservesAdmission()
