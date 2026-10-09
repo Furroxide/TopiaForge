@@ -102,11 +102,23 @@ namespace TopiaForge.RobotKit
                     return false;
                 }
 
-                // The static convenience overload of Walk (the one that takes the AgentHead as its first arg).
+                // The static convenience overload of Walk (the one that takes the AgentHead as its first arg). Every
+                // position BeginWalk fills is pinned, so a re-typed argument leaves the walk unavailable instead of
+                // failing inside Invoke. TaskGraph is passed as null and never resolved, so it is matched by name.
                 walkMethod = WalkSessionType.GetMethods(StaticFlags).FirstOrDefault(candidate =>
                     candidate.Name == "Walk" &&
                     candidate.GetParameters() is { Length: 11 } parameters &&
-                    parameters[0].ParameterType == AgentHeadType);
+                    parameters[0].ParameterType == AgentHeadType &&
+                    parameters[1].ParameterType == ActionTargetType &&
+                    parameters[2].ParameterType.FullName == "TaskGraph" &&
+                    parameters[3].ParameterType == typeof(CancellationToken) &&
+                    parameters[4].ParameterType == typeof(bool) &&
+                    parameters[5].ParameterType == typeof(float) &&
+                    parameters[6].ParameterType == typeof(float) &&
+                    parameters[7].ParameterType == typeof(TimeSpan) &&
+                    parameters[8].ParameterType == typeof(Func<Vector3, bool>) &&
+                    parameters[9].ParameterType == typeof(bool) &&
+                    parameters[10].ParameterType == typeof(bool));
 
                 mostRelevantHead = AgentHeadType.GetMethod(
                     "MostRelevantHead", StaticFlags, null, new[] { typeof(GameObject) }, null);
@@ -200,13 +212,19 @@ namespace TopiaForge.RobotKit
                     candidate.Name == "Pathfind" &&
                     candidate.GetParameters() is { Length: 6 } parameters &&
                     parameters[0].ParameterType == typeof(Vector3) &&
-                    parameters[1].ParameterType == GoalType);
+                    parameters[1].ParameterType == GoalType &&
+                    parameters[2].ParameterType == PathFindSettingsType &&
+                    parameters[3].ParameterType.FullName == "TaskGraph" &&
+                    parameters[4].ParameterType == typeof(CancellationToken) &&
+                    parameters[5].ParameterType == typeof(GameObject));
 
                 // instance Pathfinder.CreateSampler(PathFindSettings settings, Goal goal, GameObject ignoreObject)
                 createSamplerMethod = PathfinderType.GetMethods(InstanceFlags).FirstOrDefault(candidate =>
                     candidate.Name == "CreateSampler" &&
                     candidate.GetParameters() is { Length: 3 } parameters &&
-                    parameters[1].ParameterType == GoalType);
+                    parameters[0].ParameterType == PathFindSettingsType &&
+                    parameters[1].ParameterType == GoalType &&
+                    parameters[2].ParameterType == typeof(GameObject));
 
                 // Goal(Vector3 position, float minStopDistance, float maxGoalDistance, Func<Vector3,bool> goalFilter)
                 goalFromPosition = GoalType.GetConstructor(

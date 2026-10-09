@@ -15,7 +15,7 @@ namespace TopiaForge.Worlds
         {
             if (!IsAvailable)
                 return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "The native export loader is unavailable.");
-            if (!TryValidateExport(plan.FilePath, out _, out var failure))
+            if (!TryLoadExport(plan.FilePath, out var project, out _, out var failure))
                 return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.InvalidArgument, failure);
             try
             {
@@ -24,7 +24,7 @@ namespace TopiaForge.Worlds
                 var hosts = nativeScene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren(importHostControllerType, true)).ToArray();
                 if (hosts.Length != 1)
                     return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "The session scene must contain exactly one local import host.");
-                return OperationResult<ILocalImportTransaction>.Success(new ImportTransaction(hosts[0], plan, overrides, scene));
+                return OperationResult<ILocalImportTransaction>.Success(new ImportTransaction(hosts[0], plan, overrides, scene, project!, exportProjectType!));
             }
             catch (Exception error)
             { return OperationResult<ILocalImportTransaction>.Failure(ModErrorCode.Unavailable, "Local import ownership bindings are unavailable: " + Unwrap(error).Message); }
@@ -38,9 +38,9 @@ namespace TopiaForge.Worlds
             private readonly object sceneRoot;
             private readonly PropertyInfo activeRoot;
             private readonly MethodInfo discardRoot;
-            private readonly PropertyInfo importedScene;
+            private readonly object project;
             private readonly MethodInfo configureFolder;
-            private readonly MethodInfo importFile;
+            private readonly MethodInfo importProject;
             private readonly NativeImportSelection selection;
             private readonly List<(string Id, GameObject Prefab, Vector3? Offset)> overrides = new List<(string, GameObject, Vector3?)>();
             private readonly object? assetConfig;
@@ -49,17 +49,19 @@ namespace TopiaForge.Worlds
             private LocalImportOwnership? temporary;
             private bool used;
             internal ImportTransaction(Component host, RoboWorldImportPlan plan,
-                IReadOnlyList<WorldAssetOverride> values, WorldSceneIdentity scene)
+                IReadOnlyList<WorldAssetOverride> values, WorldSceneIdentity scene, object project, Type projectType)
             {
-                this.host = host; this.plan = plan; this.scene = scene;
+                this.host = host; this.plan = plan; this.scene = scene; this.project = project;
                 var type = host.GetType();
-                importedScene = RequireProperty(type, "LastImportedScene", "UgcExportScene");
                 var rootProperty = RequireProperty(type, "SceneRoot", "UgcSceneRoot");
                 sceneRoot = rootProperty.GetValue(host) ?? throw new InvalidOperationException("The native import scene root is missing.");
                 activeRoot = RequireProperty(sceneRoot.GetType(), "ActiveImportRoot", typeof(Transform).FullName!);
                 discardRoot = RequireMethod(sceneRoot.GetType(), "DiscardSceneRebuild", typeof(void), typeof(Transform));
                 configureFolder = RequireMethod(type, "ConfigureRuntimeImportFolder", typeof(void), typeof(string));
-                importFile = RequireMethod(type, "ImportFile", typeof(void), typeof(string));
+                // Build 2545 removed the void ImportFile(path) and the LastImportedScene property that was its only
+                // result. ImportProject, which 2478 already exposed, takes the project parsed in Prepare and returns
+                // the scene it imported.
+                importProject = RequireMethod(type, "ImportProject", "UgcExportScene", projectType, typeof(string), typeof(string));
                 selection = new NativeImportSelection(host, type, plan);
                 if (values.Count == 0) return;
                 assetConfig = RequireProperty(type, "RuntimeAssetConfig", "UgcRuntimeAssetConfig").GetValue(host)
@@ -84,7 +86,6 @@ namespace TopiaForge.Worlds
                 used = true;
                 if (host == null || !UnityWorldScene.ContainsRoot(scene, host.gameObject))
                     return OperationResult<IDisposable>.Failure(ModErrorCode.InvalidState, "The captured import host left the session scene.");
-                var previousData = importedScene.GetValue(host);
                 var previousRoot = activeRoot.GetValue(sceneRoot) as Transform;
                 var previousOverrides = overrideTable == null ? null : new NativeImportOverrides(overrideTable);
                 temporary = new LocalImportOwnership(() => { }, () =>
@@ -100,12 +101,13 @@ namespace TopiaForge.Worlds
                     foreach (var value in overrides) setOverride!.Invoke(assetConfig, new object?[] { value.Id, value.Prefab, value.Offset });
                     configureFolder.Invoke(host, new object[] { plan.FolderPath });
                     NativeEntered = true;
-                    importFile.Invoke(host, new object[] { plan.FilePath });
+                    // A null scene id requests the project's own default scene, as UgcExportProject.ResolveScene's
+                    // optional parameter of the same name declares. The label is the file name, never the full path.
+                    var data = importProject.Invoke(host, new object?[] { project, null, plan.FileName });
                     NativeReturned = true;
-                    var data = importedScene.GetValue(host);
                     var root = activeRoot.GetValue(sceneRoot) as Transform;
                     if (root != null && !ReferenceEquals(previousRoot, root)) content = OwnRoot(root);
-                    if (!UgcImportCompletionPolicy.IsFresh(previousData, data) || content == null || !UnityWorldScene.ContainsRoot(scene, root!.gameObject))
+                    if (data == null || content == null || !UnityWorldScene.ContainsRoot(scene, root!.gameObject))
                         result = OperationResult<IDisposable>.Failure(ModErrorCode.External, "The native importer did not produce fresh owned content in the session scene.");
                     else result = OperationResult<IDisposable>.Success(content);
                 }
@@ -146,6 +148,11 @@ namespace TopiaForge.Worlds
         {
             var method = type.GetMethod(name, PublicInstance, null, arguments, null);
             return method != null && method.ReturnType == returnType ? method : throw new MissingMethodException(type.FullName, name);
+        }
+        private static MethodInfo RequireMethod(Type type, string name, string returnType, params Type[] arguments)
+        {
+            var method = type.GetMethod(name, PublicInstance, null, arguments, null);
+            return method != null && method.ReturnType.FullName == returnType ? method : throw new MissingMethodException(type.FullName, name);
         }
     }
 }

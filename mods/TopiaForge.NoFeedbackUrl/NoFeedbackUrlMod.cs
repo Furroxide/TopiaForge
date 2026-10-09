@@ -25,7 +25,10 @@ namespace TopiaForge.NoFeedbackUrl
 
             var target = typeof(global::OpenFeedBackURL).GetMethod(
                 "OpenFeedbackTask",
-                BindingFlags.Public | BindingFlags.Static);
+                BindingFlags.Public | BindingFlags.Static,
+                null,
+                Type.EmptyTypes,
+                null);
             if (target == null)
             {
                 Context.Logger.Warn("Could not find OpenFeedBackURL.OpenFeedbackTask; feedback URL suppression is inactive.");
