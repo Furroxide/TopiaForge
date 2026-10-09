@@ -322,6 +322,12 @@ void _worldCliTests(_CliTestHarness Function() currentHarness) {
         result.stdout.toString(),
         contains('Robotopia install not detected'),
       );
+      // The extractor finds Windows installs through known folders that no
+      // variable redirects, so doctor must not have found it at all.
+      expect(
+        result.stdout.toString(),
+        contains('the packaged GameCompat checker was not found'),
+      );
     },
   );
 

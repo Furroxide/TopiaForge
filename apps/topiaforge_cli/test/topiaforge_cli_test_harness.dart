@@ -55,7 +55,7 @@ class _CliTestHarness {
   /// Runs a command that discovers Robotopia by itself, such as `doctor`,
   /// without letting it reach a real install.
   ///
-  /// The script starts outside the repository. The CLI finds the built
+  /// The script starts outside any checkout. The CLI finds the built
   /// GameCompat extractor by walking up from its working directory, so it can
   /// neither verify a discovered game nor cache the verdict in it as
   /// `BepInEx/TopiaForge/compat-status.json`. Outside the package `dart` also
@@ -75,6 +75,19 @@ class _CliTestHarness {
   }) {
     final outside = Directory(p.join(temp.path, 'outside-checkout'))
       ..createSync();
+    // Fail closed when the system temp directory sits inside a checkout: the
+    // CLI would find that checkout's built extractor after all.
+    for (final start in {outside.path, outside.resolveSymbolicLinksSync()}) {
+      for (var dir = Directory(start); ; dir = dir.parent) {
+        if (File(p.join(dir.path, 'TopiaForge.slnx')).existsSync()) {
+          throw StateError(
+            '$start is inside the checkout ${dir.path}; point the system '
+            'temp directory outside it.',
+          );
+        }
+        if (dir.parent.path == dir.path) break;
+      }
+    }
     // Without a checkout above it, the toolchain check reads the pinned .NET
     // SDK from global.json in the working directory.
     File(
