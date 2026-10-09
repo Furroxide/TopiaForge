@@ -67,6 +67,21 @@ TopiaForge.Mods.UnityUi.dll
 TopiaForge.Mods.Worlds.dll
 ```
 
+The loader's licence texts, which the launcher installs beside it, are the only other entries allowed in that folder. They are allowed, not required, and only under these exact names:
+
+```text
+licenses/Audiowide-OFL.txt
+licenses/LICENSE
+licenses/Quicksand-OFL.txt
+licenses/System.Collections.Immutable-LICENSE.txt
+licenses/System.Collections.Immutable-ThirdPartyNotices.txt
+licenses/System.Reflection.Metadata-LICENSE.txt
+licenses/System.Reflection.Metadata-ThirdPartyNotices.txt
+licenses/THIRD_PARTY_NOTICES.md
+```
+
+An observer built from earlier sources, such as the v6 checkpoint at `37f9088`, refuses a game copy that carries them, so re-stage it from current sources before using such a copy.
+
 Do not include nested duplicate loader assemblies, other plugins, additional BepInEx patchers, fixture packages or manager state/configuration. The [input parser and inventory verifier](../../../tools/TopiaForge.Acceptance.Windows/ProvisioningLaunch.cs) and [input read leases](../../../tools/TopiaForge.Acceptance.Windows/ProvisioningInputLease.cs) enforce the executable contract; the reviewed input must also satisfy this preparation inventory.
 
 ## Observation and ownership

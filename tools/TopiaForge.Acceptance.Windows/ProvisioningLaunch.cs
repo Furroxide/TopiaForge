@@ -14,6 +14,14 @@ internal sealed record ProvisioningLaunch(string InputPath, string InputSha256, 
         "TopiaForge.Mods.CreatorContent.dll", "TopiaForge.Mods.Interop.Unity.dll", "TopiaForge.Mods.Multiplayer.dll",
         "TopiaForge.Mods.Prompts.dll", "TopiaForge.Mods.RobotKit.dll", "TopiaForge.Mods.UnityUi.dll", "TopiaForge.Mods.Worlds.dll"
     };
+    /// <summary>Licence texts the launcher installs in the loader's licenses folder. BepInEx loads only DLLs.</summary>
+    internal static readonly string[] LoaderNoticeNames =
+    {
+        "Audiowide-OFL.txt", "LICENSE", "Quicksand-OFL.txt", "System.Collections.Immutable-LICENSE.txt",
+        "System.Collections.Immutable-ThirdPartyNotices.txt", "System.Reflection.Metadata-LICENSE.txt",
+        "System.Reflection.Metadata-ThirdPartyNotices.txt", "THIRD_PARTY_NOTICES.md"
+    };
+    internal const string LoaderDirectory = "BepInEx/plugins/TopiaForge.ModManager/";
     internal string Executable => Path.Combine(GameRoot, "Robotopia.exe");
     internal string ManagerRoot => Path.Combine(GameRoot, "BepInEx", "TopiaForge");
     internal static ProvisioningLaunch Read(string path)
@@ -102,16 +110,16 @@ internal sealed record ProvisioningLaunch(string InputPath, string InputSha256, 
         foreach (var name in new[] { "Robotopia.exe", "UnityPlayer.dll" })
             if (BoundedJson.Hash(Path.Combine(SourceGameRoot, name)) != expected[name].Sha256)
                 throw new InvalidDataException("QA game differs from the verified binary source.");
-        // Only the known loader plugin family may load; unrelated BepInEx plugins are refused.
+        // Only the known loader plugin family may load; unrelated BepInEx plugins are refused. The loader's own
+        // licence texts are the one non-DLL exception: exact names, inventoried and hashed like every other file.
         if (Files.Any(row => row.Path.StartsWith("BepInEx/patchers/", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("Provisioning may not load extra preloader patchers.");
         foreach (var name in LoaderNames)
-            if (!Files.Any(row => row.Path == "BepInEx/plugins/TopiaForge.ModManager/" + name))
+            if (!Files.Any(row => row.Path == LoaderDirectory + name))
                 throw new InvalidDataException("Provisioning requires the complete known loader family.");
         foreach (var row in Files.Where(row => row.Path.StartsWith("BepInEx/plugins/", StringComparison.OrdinalIgnoreCase)))
-            if (!row.Path.StartsWith("BepInEx/plugins/TopiaForge.ModManager/", StringComparison.Ordinal)
-                || !row.Path.EndsWith(".dll", StringComparison.Ordinal)
-                || !LoaderNames.Any(name => row.Path == "BepInEx/plugins/TopiaForge.ModManager/" + name))
+            if (!LoaderNames.Any(name => row.Path == LoaderDirectory + name)
+                && !LoaderNoticeNames.Any(name => row.Path == LoaderDirectory + "licenses/" + name))
                 throw new InvalidDataException("Provisioning may not load unrelated plugins.");
     }
     private static IEnumerable<string> Walk(string root)

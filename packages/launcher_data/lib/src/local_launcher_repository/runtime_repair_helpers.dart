@@ -249,6 +249,20 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
       );
       return;
     }
+    // The loader never lands without its licence texts.
+    final missingNotices = _missingRuntimeLoaderNoticeSources();
+    if (missingNotices.isNotEmpty) {
+      issues.add(
+        LauncherIssue(
+          severity: IssueSeverity.error,
+          message:
+              'Loader licence notices were not found: '
+              '${missingNotices.join(', ')}. Restore the complete TopiaForge '
+              'release or checkout, then repair again.',
+        ),
+      );
+      return;
+    }
     _requireRuntimeDirectory(
       _repositoryRoot,
       loaderSource,
@@ -262,6 +276,7 @@ extension LocalLauncherRuntimeRepair on LocalLauncherRepository {
         p.posix.join('BepInEx', 'plugins', 'TopiaForge.ModManager', dll),
       );
     }
+    await _stageRuntimeLoaderNotices(transaction);
   }
 
   Future<void> _openPath(String path) async {

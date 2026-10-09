@@ -23,6 +23,7 @@ This supersedes the earlier MIT declaration.
 | Surface | Declaration and placement |
 | --- | --- |
 | Repository and platform archives | Root `LICENSE`; release packaging copies `LICENSE` and `DCO` beside the product payload. |
+| Game-side loader | A `licenses` folder beside the loader assemblies wherever they are placed: the payload's loader directory, the Windows archive-root overlay, and the game's plugin folder after launcher install or repair. It holds `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the font and .NET texts; release validation and runtime repair both require it. |
 | Fourteen first-party mods | SPDX `AGPL-3.0-or-later` and package-relative `LICENSE`; the packer injects the reviewed shared mod license into every first-party archive. |
 | Eleven SDK NuGet packages | `PackageLicenseExpression` is `AGPL-3.0-or-later` through the shared pack policy or an equivalent project declaration. |
 | VPM resolver and world companion | SPDX `AGPL-3.0-or-later` in each `package.json` with the complete license text in the package directory. |

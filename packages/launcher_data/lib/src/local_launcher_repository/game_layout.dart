@@ -106,6 +106,68 @@ final topiaForgeRuntimeLoaderDlls = List<String>.unmodifiable(
   topiaForgeRuntimeLoaderAssemblies.map((assembly) => assembly.fileName),
 );
 
+/// Folder beside the loader assemblies that holds their licence texts.
+///
+/// BepInEx loads only `*.dll` files from its plugin tree, and the loader
+/// resolves framework assemblies by exact `<name>.dll` paths, so nothing in
+/// this folder is ever loaded.
+const topiaForgeRuntimeLoaderNoticeDirectory = 'licenses';
+
+/// One licence or notice text installed beside the TopiaForge loader.
+final class TopiaForgeRuntimeLoaderNotice {
+  /// Creates a notice installed as [fileName] from [sourcePath].
+  const TopiaForgeRuntimeLoaderNotice({
+    required this.fileName,
+    required this.sourcePath,
+  });
+
+  /// File name inside [topiaForgeRuntimeLoaderNoticeDirectory].
+  final String fileName;
+
+  /// Canonical repository-relative POSIX path of the text. A source checkout
+  /// and an extracted release payload both carry it, so runtime repair and
+  /// release packaging copy the same file.
+  final String sourcePath;
+}
+
+/// Licence texts that travel with [topiaForgeRuntimeLoaderAssemblies].
+///
+/// `LICENSE` covers the eleven TopiaForge assemblies. The OFL texts cover
+/// `TopiaForge.Mods.UnityUi.dll`, whose embedded UI bundle carries glyph data
+/// derived from Quicksand and Audiowide. Each pinned System package gets the
+/// .NET MIT licence and its third-party notices. `THIRD_PARTY_NOTICES.md`
+/// records which text covers which file.
+final topiaForgeRuntimeLoaderNotices =
+    List<TopiaForgeRuntimeLoaderNotice>.unmodifiable([
+      const TopiaForgeRuntimeLoaderNotice(
+        fileName: 'LICENSE',
+        sourcePath: 'LICENSE',
+      ),
+      const TopiaForgeRuntimeLoaderNotice(
+        fileName: 'THIRD_PARTY_NOTICES.md',
+        sourcePath: 'THIRD_PARTY_NOTICES.md',
+      ),
+      for (final font in const ['Audiowide', 'Quicksand'])
+        TopiaForgeRuntimeLoaderNotice(
+          fileName: '$font-OFL.txt',
+          sourcePath: 'tools/unity-ui-bundle/Assets/Fonts/$font-OFL.txt',
+        ),
+      for (final assembly in topiaForgeRuntimeLoaderAssemblies.where(
+        (entry) => entry.isPinnedPackage,
+      )) ...[
+        TopiaForgeRuntimeLoaderNotice(
+          fileName: '${assembly.packageId}-LICENSE.txt',
+          sourcePath: 'third_party/dotnet/runtime-loader/LICENSE.txt',
+        ),
+        TopiaForgeRuntimeLoaderNotice(
+          fileName: '${assembly.packageId}-ThirdPartyNotices.txt',
+          sourcePath:
+              'third_party/dotnet/runtime-loader/'
+              '${assembly.packageId}-ThirdPartyNotices.txt',
+        ),
+      ],
+    ]);
+
 /// Transitive metadata-reader dependencies supplied by Robotopia build 2309.
 const topiaForgeRuntimeProfileAssemblies = <TopiaForgeRuntimeProfileAssembly>[
   TopiaForgeRuntimeProfileAssembly(

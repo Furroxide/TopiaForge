@@ -128,18 +128,12 @@ class ReleasePackagePayloadWriter {
       await fileOps.setExecutableBit(p.join(bundleDest, 'libdoorstop.dylib'));
     }
 
-    final loaderDest = p.join(
-      destinationRoot,
-      'src',
-      'TopiaForge.ModManager',
-      'bin',
-      'Release',
-      'netstandard2.1',
+    copyReleaseLoaderPayload(
+      repositoryRoot: repositoryRoot,
+      builtLoaderDirectory: pluginOut,
+      destination: releaseLoaderDirectory(destinationRoot),
+      fileOps: fileOps,
     );
-    Directory(loaderDest).createSync(recursive: true);
-    for (final dll in releaseLoaderDlls) {
-      fileOps.copyFileIfExists(p.join(pluginOut, dll), p.join(loaderDest, dll));
-    }
 
     if (platform == ReleasePackagePlatform.windows) {
       _copyWindowsOverlayRuntime(destinationRoot, bepInEx, pluginOut);
@@ -451,16 +445,12 @@ class ReleasePackagePayloadWriter {
       Directory(p.join(bepInEx, 'BepInEx')),
       Directory(p.join(destinationRoot, 'BepInEx')),
     );
-    final pluginDir = p.join(
-      destinationRoot,
-      'BepInEx',
-      'plugins',
-      'TopiaForge.ModManager',
+    copyReleaseLoaderPayload(
+      repositoryRoot: repositoryRoot,
+      builtLoaderDirectory: pluginOut,
+      destination: releaseLoaderOverlayDirectory(destinationRoot),
+      fileOps: fileOps,
     );
-    Directory(pluginDir).createSync(recursive: true);
-    for (final dll in releaseLoaderDlls) {
-      fileOps.copyFileIfExists(p.join(pluginOut, dll), p.join(pluginDir, dll));
-    }
   }
 
   ReleasePackageNoticeWriter get _noticeWriter => ReleasePackageNoticeWriter(
