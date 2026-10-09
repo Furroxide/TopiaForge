@@ -37,8 +37,8 @@ to redistribute assets or evidence of a successful test.
 - Obtain actual attributable approvals for `P0-IP-01`, `P0-OSS-01`,
   `P0-PRIV-01`, and `P0-CRED-01`, and integrate their valid safe references.
   Their tracked records are blocked with no evidence IDs. `P0-GAME-01` is
-  advisory under the owner's disposition. Credential closure was previously deferred;
-  release intent does not supply closure evidence.
+  advisory under the owner's disposition. Credential closure, deferred on 2026-09-09,
+  was resumed on 2026-10-09; release intent does not supply closure evidence.
 - The game-QA policy is in effect. Under the user's 2026-09-24 decision,
   `P0-GAME-01` is advisory with an owner disposition and stays blocked.
   `P1-UX-01` and `P1-E2E-01` carry accepted-risk dispositions. A frozen
