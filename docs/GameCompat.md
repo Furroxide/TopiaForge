@@ -111,7 +111,8 @@ dotnet run --project src/TopiaForge.GameCompat.Extractor -- extract --out surfac
 ```
 
 Managed-dir resolution order: `--managed <dir>`, `$RobotopiaManagedDir`, `$RobotopiaGameDir\Robotopia_Data\Managed`,
-then the default launcher install path.
+the default launcher install path, then, on Windows, `<game_dir>\Robotopia\Robotopia_Data\Managed` when the
+official launcher's `launcher-config.json` records that it moved the game to `game_dir`.
 
 ## Bumping the pinned build
 
@@ -126,9 +127,13 @@ topiaforge compat bump --build <id>   --windows-sha256 <hex> --mac-sha256 <hex> 
 
 The hashes are not derivable from the repository, so they are supplied explicitly. Take the Windows and Mac
 archive SHA-256 values from the public `latest-build.json`. Take the other three from an official install of
-the new build: the SHA-256 and entry count of `%LOCALAPPDATA%\Tomato Cake\launcher\filelist.json`, and the
-SHA-256 of `Robotopia\Robotopia.exe`. `tools/release/verify-robotopia-install.ps1` cannot read them in
-advance, because it verifies an install against the current pin; run it after the bump to confirm the new pin.
+the new build: the SHA-256 and entry count of the `filelist.json` beside the `Robotopia` game folder, and the
+SHA-256 of `Robotopia\Robotopia.exe`. For a default install that manifest is
+`%LOCALAPPDATA%\Tomato Cake\launcher\filelist.json`. After the official launcher moves the game it is
+`<game_dir>\filelist.json`, and a `filelist.json` left behind in `%LOCALAPPDATA%\Tomato Cake\launcher`
+describes an earlier build; never measure from it. `tools/release/verify-robotopia-install.ps1` cannot read
+them in advance, because it verifies an install against the current pin; run it after the bump to confirm the
+new pin.
 Everything else is derived from the new build id.
 
 Afterwards the command **re-scans every file it owns for the old build id** and fails if any remains, so a
