@@ -46,6 +46,7 @@
       "feature": "Enumerate the bounded Robotopia item registry",
       "sourceRef": "mods/TopiaForge.CreatorContent/CreatorBuiltInCatalog.cs:110",
       "parameters": [],
+      "exactParameters": true,
       "returnType": "System.Collections.Generic.IEnumerable<EquippableItemEntry>"
     },
     {
