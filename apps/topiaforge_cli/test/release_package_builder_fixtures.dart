@@ -152,6 +152,10 @@ Directory _writeFixtureRepo(Directory temp) {
       package,
       'LICENSE',
     ], '$package license');
+    for (final file
+        in dartCliSupplementaryNotices[package] ?? const <String>[]) {
+      _writeFile(repo, ['license-packages', package, file], '$package $file');
+    }
     _writeFile(repo, [
       'license-packages',
       package,

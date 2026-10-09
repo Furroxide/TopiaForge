@@ -22,11 +22,15 @@ const releaseVendoredComponents =
 const releaseSpdxRecordedLicenses = <String, String>{
   // THIRD_PARTY_NOTICES.md, the table of the standalone executable's runtime.
   'Dart SDK@3.12.2': 'BSD-3-Clause',
-  'archive@4.0.9': 'MIT',
+  // archive's own LICENSE is MIT; its LICENSE-other.md adds the terms of the
+  // zlib.js (MIT), JZLib (BSD-3-Clause), bzip2 (bzip2-1.0.6) and Bouncy
+  // Castle (MIT) code it derives from.
+  'archive@4.2.0': 'MIT AND BSD-3-Clause AND bzip2-1.0.6',
   'async@2.13.1': 'BSD-3-Clause',
   'boolean_selector@2.1.2': 'BSD-3-Clause',
   'collection@1.19.1': 'BSD-3-Clause',
   'crypto@3.0.7': 'BSD-3-Clause',
+  'cryptography@2.9.0': 'Apache-2.0',
   'ffi@2.2.0': 'BSD-3-Clause',
   'http@1.6.0': 'BSD-3-Clause',
   'http_parser@4.1.2': 'BSD-3-Clause',

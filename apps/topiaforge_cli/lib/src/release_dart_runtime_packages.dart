@@ -40,6 +40,21 @@ const dartCliRuntimePackages = <String>[
   'web',
 ];
 
+/// Licence, notice and patent-grant files that [dartCliRuntimePackages]
+/// entries carry beside their primary licence.
+///
+/// Apache-2.0 section 4(d) requires a NOTICE file's attributions to travel
+/// with redistributions, and `archive`'s `LICENSE-other.md` holds the notices
+/// of the zlib, JZLib, bzip2 and Bouncy Castle code it derives from, so the
+/// licence bundle copies each file here as `<package>-<file>`. Packaging fails
+/// when a package carries such a file this map does not name, so a dependency
+/// update cannot drop one silently.
+const dartCliSupplementaryNotices = <String, List<String>>{
+  'archive': ['LICENSE-other.md'],
+  'quiver': ['NOTICE', 'PATENTS'],
+  'uri': ['PATENTS'],
+};
+
 /// Hosted pub packages compiled into the Flutter launcher.
 ///
 /// The runtime dependency closure of `apps/topiaforge_launcher_flutter`
