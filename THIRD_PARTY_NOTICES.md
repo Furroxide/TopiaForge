@@ -218,6 +218,15 @@ and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.
 
+The loader's licence texts are installed beside its assemblies, in a `licenses`
+folder wherever they are placed: the payload's
+`src/TopiaForge.ModManager/bin/Release/netstandard2.1`, the Windows archive-root
+`BepInEx/plugins/TopiaForge.ModManager`, and the same plugin folder in the game
+when the launcher installs or repairs the runtime. The folder holds the project
+`LICENSE`, this file, the Quicksand and Audiowide OFL texts for the glyph data
+inside `TopiaForge.Mods.UnityUi.dll`, and the MIT licence and third-party
+notices of each System package above.
+
 The CLI's publication gate includes a generated identifier allowlist from SPDX License List Data 3.28.0.
 
 - Project: SPDX License List Data

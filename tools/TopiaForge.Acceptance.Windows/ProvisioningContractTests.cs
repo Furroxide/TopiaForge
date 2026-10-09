@@ -48,6 +48,23 @@ internal static class ProvisioningContractTests
         Refuse(() => ProvisioningLaunch.Read(fixture.InputPath).VerifyFiles());
         File.Delete(nestedPath); // Exact test-owned duplicate only.
         File.WriteAllText(fixture.InputPath, fixture.Input.ToJsonString());
+        // The loader's licence texts are inventoried like any game file and accepted by exact name only.
+        var notice = ProvisioningLaunch.LoaderDirectory + "licenses/" + ProvisioningLaunch.LoaderNoticeNames[0];
+        var noticePath = ProvisioningGameInputs.Child(input.GameRoot, notice);
+        Directory.CreateDirectory(Path.GetDirectoryName(noticePath)!);
+        File.WriteAllText(noticePath, "synthetic licence text");
+        var noticeInput = fixture.Input.DeepClone();
+        noticeInput["files"]!.AsArray().Add(JsonSerializer.SerializeToNode(new ProvisioningFile(notice, BoundedJson.Hash(noticePath)), BoundedJson.Options));
+        File.WriteAllText(fixture.InputPath, noticeInput.ToJsonString());
+        ProvisioningLaunch.Read(fixture.InputPath).VerifyFiles(); count++;
+        var unreviewed = ProvisioningLaunch.LoaderDirectory + "licenses/unreviewed.txt";
+        var unreviewedPath = ProvisioningGameInputs.Child(input.GameRoot, unreviewed);
+        File.WriteAllText(unreviewedPath, "unreviewed");
+        noticeInput["files"]!.AsArray().Add(JsonSerializer.SerializeToNode(new ProvisioningFile(unreviewed, BoundedJson.Hash(unreviewedPath)), BoundedJson.Options));
+        File.WriteAllText(fixture.InputPath, noticeInput.ToJsonString());
+        Refuse(() => ProvisioningLaunch.Read(fixture.InputPath).VerifyFiles());
+        File.Delete(unreviewedPath); File.Delete(noticePath); // Exact test-owned notices only.
+        File.WriteAllText(fixture.InputPath, fixture.Input.ToJsonString());
         var extra = Path.Combine(input.GameRoot, "unexpected.dll");
         File.WriteAllText(extra, "extra");
         Refuse(input.VerifyFiles);

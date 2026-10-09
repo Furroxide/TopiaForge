@@ -21,6 +21,7 @@ part 'launch_safe_mode_recovery_test_part.dart';
 part 'launch_creation_receipt_test_part.dart';
 part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
+part 'runtime_loader_notices_test_part.dart';
 part 'restart_requirement_test_part.dart';
 part 'world_catalog_test_part.dart';
 
@@ -112,6 +113,11 @@ void main() {
     gameRoot: () => gameRoot,
   );
   _registerRuntimeRepairSecurityTests(
+    repository: () => repository,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerRuntimeLoaderNoticeTests(
     repository: () => repository,
     repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,

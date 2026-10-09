@@ -351,6 +351,9 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
       }
     }
 
+    if (!await _runtimeLoaderNoticesCurrent(pluginDir)) {
+      return ComponentState.partial;
+    }
     return ComponentState.ready;
   }
 
