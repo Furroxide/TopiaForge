@@ -1,6 +1,6 @@
 # Launch preparation evidence
 
-Updated 2026-09-24. These are source and local-preparation observations. **No final-main candidate, qualified game/authoring evidence or new gate approval is established.** Private originals are retained locally; [the action list](NextActions.md) supplies current next steps.
+Updated 2026-10-09. These are source and local-preparation observations. **No final-main candidate, qualified game/authoring evidence or new gate approval is established.** Private originals are retained locally; [the action list](NextActions.md) supplies current next steps.
 
 ## Reviewed source and automated verification
 
@@ -579,3 +579,48 @@ Local checks on the head:
 - The two items carried over from 2478: the game accepts a null damage source, and `TeleportTo` places the player.
 
 The 2478 QA game copies and the staged retry `20260924T172541Z` no longer match the pinned build. Any optional QA needs fresh 2545 copies and a new source checkpoint.
+
+## Relocated official install (2026-10-09)
+
+By 2026-10-09 the official Tomato Cake launcher had moved Robotopia build 2545 off its default location on the maintainer's machine. Read-only observations:
+
+- `%LOCALAPPDATA%\Tomato Cake\launcher\launcher-config.json` held only `game_dir`, naming a `Tomato Cake\launcher` folder on drive D:.
+- The game lived in `<game_dir>\Robotopia`. The current official manifest, `<game_dir>\filelist.json`, has SHA-256 `2172c2554e040c5bae2c85262c8f94bf610598349c299e7fc86db06f54c151d1` and 416 entries.
+- `installed-build.json` (`{"id":2545,"dev":false}`) stayed in `%LOCALAPPDATA%\Tomato Cake\launcher`. Beside it sat a stale `filelist.json` from an earlier build: SHA-256 `f83f74eef4b4836c3a7cb2c3a80740c4226ddc6918c8c3cd5852f7e676039d4a`, also 416 entries, 103 of which differ from the current manifest.
+- Nothing remained at the old default location, `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`. `analytics-id.json` was not read.
+
+Every TopiaForge lookup missed that layout:
+
+- The launcher and the CLI never discovered the game.
+- A selected game reported "Robotopia build metadata is missing".
+- The in-game loader would refuse every mod with a game constraint.
+- The GameCompat extractor found no install.
+- `Get-RobotopiaInstalledBuildId` stopped release builds with "Robotopia installed-build.json is missing."
+
+**Relocated-install support ([#152](https://github.com/Furroxide/TopiaForge/pull/152)).** The launcher, the in-game loader, the GameCompat extractor and the release scripts now read `launcher-config.json` with the same strict rules:
+
+- **The record.** A regular file of at most 64 KiB holding one strict UTF-8 JSON object, with no byte order mark and no duplicate properties. Unknown properties are tolerated, as the `installed-build.json` readers already tolerate `dev`.
+- **`game_dir`.** An absolute local path that exists without passing through a reparse point; UNC and device paths are refused.
+- **Discovery.** `<game_dir>\Robotopia` is offered alongside the default path, after every existing candidate.
+- **The build marker.** The state directory's `installed-build.json` is read last, and only for that exact folder, so it is never attributed to another install. The stale `filelist.json` is never read.
+- **Release defaults.** `release-admin.ps1` now defaults `-GameDirectory` to the install the official launcher runs.
+- **Other platforms.** The macOS and Proton layouts are unchanged.
+
+Local checks before the change was opened for review:
+
+- Solution build with 0 warnings, and the five C# harnesses.
+- `launcher_domain` 1,081 tests; `launcher_data` 614 tests with 4 platform skips; CLI 1,148 tests with 4 platform skips.
+- `launcher_ui` 3 tests, the Flutter launcher 78 tests and the Windows debug build.
+- The new 27-case launcher-state PowerShell suite, the release-admin, isolation and path suites, and PSScriptAnalyzer over `tools` with 0 findings.
+- Fifteen deliberately broken variants of the change, across PowerShell, Dart and C#, each failed at least one new test.
+- The new Dart tests also passed with an 8.3 short temp root, the spelling the hosted Windows runner uses.
+
+Read-only probes of the moved install found the same thing in every layer:
+
+- Dart discovery found `<game_dir>\Robotopia` from the Tomato Cake source, with build 2545.
+- The extractor found its `Managed` directory without `--managed` and labelled it build 2545. Before #155 its `verify` reported `broken` against the build-2478 bindings. Rebased onto #155, it reports `ok`: 214 verifiable bindings and 0 errors. Its surface hash, `2357d580ce97960853843180ef7f19eb84513348e59f4657cd9e3d72c7641b3c`, equals the baseline #155 refreshed through a scratch layout. The extractor now reads the moved install's marker directly, so that workaround is no longer needed.
+- The PowerShell helper returned build 2545 and named the moved folder as the default game directory.
+
+The CLI `doctor` test inherits the developer's environment. During `dart test` it therefore wrote TopiaForge's `BepInEx\TopiaForge\compat-status.json` cache into the moved game, as it would into any detected install. That file and the two folders created for it were removed. A second cache file appeared at 19:19, written by another run whose extractor lacked this change. It was removed at the user's request, which restored the install. A follow-up to make the test hermetic was proposed separately.
+
+**Not established.** No game was launched, so the in-game loader path rests on the C# harness. The macOS layout was not examined and is unchanged.
