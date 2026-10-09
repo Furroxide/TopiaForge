@@ -21,15 +21,29 @@ namespace TopiaForge.GameCompat.Extractor
 
         internal static string Read(string managedDir)
         {
-            return ReadInfo(managedDir).Label;
+            return Read(managedDir, TomatoCakeLauncherState.DefaultStateDirectory());
         }
 
         internal static string ReadCanonicalVersion(string managedDir)
         {
-            return ReadInfo(managedDir).CanonicalVersion;
+            return ReadCanonicalVersion(managedDir, TomatoCakeLauncherState.DefaultStateDirectory());
         }
 
-        private static GameVersionInfo ReadInfo(string managedDir)
+        /// <summary>
+        /// Reads the label, consulting the Tomato Cake launcher state in <paramref name="launcherStateDirectory"/>
+        /// last, for a game the official launcher moved.
+        /// </summary>
+        internal static string Read(string managedDir, string? launcherStateDirectory)
+        {
+            return ReadInfo(managedDir, launcherStateDirectory).Label;
+        }
+
+        internal static string ReadCanonicalVersion(string managedDir, string? launcherStateDirectory)
+        {
+            return ReadInfo(managedDir, launcherStateDirectory).CanonicalVersion;
+        }
+
+        private static GameVersionInfo ReadInfo(string managedDir, string? launcherStateDirectory)
         {
             try
             {
@@ -39,7 +53,7 @@ namespace TopiaForge.GameCompat.Extractor
                     return cachedBuild;
                 }
 
-                var layout = ResolveLayout(managedDir);
+                var layout = ResolveLayout(managedDir, launcherStateDirectory);
                 if (layout == null)
                 {
                     return GameVersionInfo.Empty;
@@ -48,10 +62,19 @@ namespace TopiaForge.GameCompat.Extractor
                 foreach (var metadataRoot in layout.MetadataRoots)
                 {
                     var installedBuild = ReadInstalledBuild(Path.Combine(metadataRoot, "installed-build.json"));
-                    if (installedBuild.Label.Length > 0)
+                    if (installedBuild == null)
                     {
-                        return installedBuild;
+                        continue;
                     }
+
+                    if (installedBuild.Value.Label.Length > 0)
+                    {
+                        return installedBuild.Value;
+                    }
+
+                    // An existing but rejected marker ends the search: a lower-priority marker may
+                    // describe another copy of the game. Only the bundle's own Info.plist remains.
+                    break;
                 }
 
                 return layout.InfoPlist == null
@@ -122,7 +145,7 @@ namespace TopiaForge.GameCompat.Extractor
             return true;
         }
 
-        private static InstallLayout? ResolveLayout(string managedDir)
+        private static InstallLayout? ResolveLayout(string managedDir, string? launcherStateDirectory)
         {
             if (string.IsNullOrWhiteSpace(managedDir))
             {
@@ -166,7 +189,9 @@ namespace TopiaForge.GameCompat.Extractor
 
             // Windows and Proton use Robotopia_Data/Managed. The launcher metadata,
             // when present, is stored either at the game install root or beside the
-            // launcher-owned Robotopia directory.
+            // launcher-owned Robotopia directory. After the official launcher moves
+            // the game, it stays in the launcher's state directory, which applies
+            // only when launcher-config.json names exactly this install's parent.
             if (data.Name.EndsWith("_Data", StringComparison.OrdinalIgnoreCase) && data.Parent != null)
             {
                 var roots = new List<string> { data.Parent.FullName };
@@ -174,6 +199,13 @@ namespace TopiaForge.GameCompat.Extractor
                     && data.Parent.Parent != null)
                 {
                     roots.Add(data.Parent.Parent.FullName);
+                    var launcherMarker = TomatoCakeLauncherState.InstalledBuildMarkerFor(
+                        data.Parent.FullName,
+                        launcherStateDirectory);
+                    if (launcherMarker != null)
+                    {
+                        roots.Add(Path.GetDirectoryName(launcherMarker)!);
+                    }
                 }
 
                 return new InstallLayout(roots, infoPlist: null);
@@ -182,14 +214,18 @@ namespace TopiaForge.GameCompat.Extractor
             return null;
         }
 
-        private static GameVersionInfo ReadInstalledBuild(string path)
+        /// <summary>
+        /// Reads one launcher marker. Returns null when no marker exists at <paramref name="path"/>, and
+        /// <see cref="GameVersionInfo.Empty"/> when a marker exists but is rejected.
+        /// </summary>
+        private static GameVersionInfo? ReadInstalledBuild(string path)
         {
             try
             {
                 var bytes = ReadBounded(path);
                 if (bytes == null)
                 {
-                    return GameVersionInfo.Empty;
+                    return null;
                 }
 
                 using var document = JsonDocument.Parse(
