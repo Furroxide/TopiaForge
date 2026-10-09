@@ -253,22 +253,6 @@
       "isStatic": false
     },
     {
-      "id": "worlds.import.host.LastImportedScene",
-      "kind": "Property",
-      "assembly": "GameCode",
-      "declaringType": "UgcImportHostSceneController",
-      "matchMode": "StaticFullName",
-      "criticality": "Critical",
-      "feature": "Owned native import transaction",
-      "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
-      "member": "LastImportedScene",
-      "returnType": "UgcExportScene",
-      "isPublic": true,
-      "isStatic": false,
-      "requireReadable": true,
-      "indexParameterCount": 0
-    },
-    {
       "id": "worlds.import.host.SceneRoot",
       "kind": "Property",
       "assembly": "GameCode",
@@ -301,7 +285,7 @@
       "indexParameterCount": 0
     },
     {
-      "id": "worlds.import.host.ImportFile",
+      "id": "worlds.import.host.ImportProject",
       "kind": "Method",
       "assembly": "GameCode",
       "declaringType": "UgcImportHostSceneController",
@@ -309,10 +293,18 @@
       "criticality": "Critical",
       "feature": "Owned native import transaction",
       "sourceRef": "mods/TopiaForge.Worlds/UgcImportHostBridge.Import.cs",
-      "member": "ImportFile",
-      "returnType": "System.Void",
+      "member": "ImportProject",
+      "returnType": "UgcExportScene",
       "exactParameters": true,
       "parameters": [
+        {
+          "type": "UgcExportProject",
+          "constrained": true
+        },
+        {
+          "type": "System.String",
+          "constrained": true
+        },
         {
           "type": "System.String",
           "constrained": true
