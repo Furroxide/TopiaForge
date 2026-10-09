@@ -33,12 +33,19 @@ NOTICES = "THIRD_PARTY_NOTICES.md"
 # Non-source files a user can receive. Text, code, and Unity YAML are excluded:
 # they are readable in review, and the licence question here is about opaque
 # redistributed bytes.
+#
+# The set is closed, so a binary type it does not name is invisible here rather
+# than a failure. The Windows launcher icon escaped that way: `.ico` was missing
+# while `app_icon.ico` was embedded into the launcher executable. The tests
+# therefore fail when any binary file in the repository has a suffix this set
+# does not name.
 ASSET_SUFFIXES = {
     ".7z",
     ".bundle",
     ".dll",
     ".dylib",
     ".gif",
+    ".ico",
     ".jpeg",
     ".jpg",
     ".mp3",

@@ -107,6 +107,10 @@ checked, and this section claims to cover every non-source file a user receives:
   `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
 - `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
   the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `apps/topiaforge_launcher_flutter/windows/runner/resources/app_icon.ico` — the same icon at eight
+  sizes from 16 to 256 pixels, embedded into the Windows launcher executable by `Runner.rc`.
+  `icons_launcher` generates it from `topiaforge-app-icon.png`; the five sizes it shares with the macOS
+  set are pixel-identical to those files.
 - `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
   site's copies of the same marks.
 
