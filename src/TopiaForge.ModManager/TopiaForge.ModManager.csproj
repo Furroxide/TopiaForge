@@ -31,8 +31,8 @@
   <!-- System.Reflection.Metadata is used by the non-executing package validator in
        ModManager.Core. Robotopia's Unity player provides System.Memory,
        System.Buffers, and System.Runtime.CompilerServices.Unsafe. Build 2409 did not
-       provide Metadata or its Immutable dependency; build 2478 preloads 8.0 copies,
-       which RuntimePayloadDependencyTests proves satisfy every loader reference.
+       provide Metadata or its Immutable dependency; builds 2478 and 2545 preload 8.0
+       copies, which RuntimePayloadDependencyTests proves satisfy every loader reference.
        Restore the exact packages here and copy those two assemblies beside the loader. -->
   <ItemGroup>
     <PackageReference Include="System.Collections.Immutable"
