@@ -35,8 +35,17 @@ The built-in service considers, in order:
 
 1. the player's saved selection;
 2. `ROBOTOPIA_GAME_DIR`;
-3. the documented Tomato Cake location on Windows or macOS; and
+3. the documented Tomato Cake location on Windows or macOS, plus, on Windows,
+   the folder the official launcher moved the game to; and
 4. Steam library manifests on Windows, macOS, and Linux/Proton.
+
+`TomatoCakeLauncherState` reads that move from the official launcher's
+`launcher-config.json` strictly: a bounded, strict JSON object without duplicate
+properties whose `game_dir` is an absolute local path free of links and other
+reparse points. The game is then offered at `<game_dir>\Robotopia`, alongside
+the default path. The launcher's `installed-build.json` stays in its state
+directory after a move. Build detection reads it last, and only for that exact
+folder, so it never describes a different install.
 
 Steam discovery does not assume an app id or scan arbitrary prefixes. It reads
 Steam's declared `libraryfolders.vdf` files and accepts only an app manifest
@@ -49,7 +58,10 @@ Tests can inject a `GameInstallDiscoveryService` or individual
 `GameInstallDiscoveryAdapter` implementations. Passing the legacy
 `knownGamePath` constructor argument intentionally creates a fixed-only service
 that bypasses saved settings, so an explicit CLI `--game-dir` always wins and
-repository tests never inspect the developer machine. Multi-install enumeration
+repository tests never inspect the developer machine. Build detection still
+consults the official launcher's relocation record for a `Robotopia` folder,
+because only that record can supply a moved game's build; inject a
+`TomatoCakeLauncherState` to control it. Multi-install enumeration
 is exposed through the optional domain `GameInstallDiscoveryRepository`
 capability; consumers of a plain `LauncherRepository` can retain the existing
 single-install `detectKnownInstall()` contract.
