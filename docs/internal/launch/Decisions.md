@@ -97,3 +97,10 @@ embedded image links in PR #128 now return 404. The deleted commits stay
 retrievable by commit ID until GitHub removes unreferenced objects, and the
 pre-#128 Git LFS history is unchanged; whether those copies must be removed
 remains a `P0-IP-01` question for counsel.
+
+Two more selections followed once the fixes were in draft PRs:
+
+| Topic | Selected option | Effect |
+| --- | --- | --- |
+| Vendored TextMesh Pro shader | **“Approve the one-line change”** | The UI-bundle PR drops `#pragma enable_d3d11_debug_symbols` from `TMP_SDF-Mobile.shader`. With it, Windows builds of the bundle were not reproducible and embedded the build account's paths. The change is recorded as a local modification in `THIRD_PARTY_NOTICES.md` |
+| Merging the pre-repin fix PRs | **“Merge each when green”** | Once the build-2545 retarget lands, each of the documentation, UI-bundle, loader-notice and SBOM PRs is updated with the new base. Each is squash-merged into `release/0.1.0-rc.1` after every required check and CodeQL pass. The repin PR that follows still needs the user's separate approval |
