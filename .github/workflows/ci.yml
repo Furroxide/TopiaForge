@@ -349,6 +349,7 @@ jobs:
           bash tools/test-verify-release-candidate.sh
           bash tools/test-verify-release-governance.sh
           pwsh -NoProfile -File tools/release/test-verify-robotopia-install.ps1
+          pwsh -NoProfile -File tools/release/test-tomato-cake-launcher-state.ps1
           pwsh -NoProfile -File tools/release/test-handoff-signature.ps1
           pwsh -NoProfile -File tools/release/test-windows-signing-policy.ps1
 
