@@ -11,7 +11,7 @@ param(
     [string]$SteamRoot = $env:TOPIAFORGE_STEAM_ROOT,
     [string]$CompatDataRoot = $env:TOPIAFORGE_COMPAT_DATA_ROOT,
     [string]$UnityPath = "C:\Program Files\Unity\Hub\Editor\6000.0.23f1\Editor\Unity.exe",
-    [string]$GameDirectory = "$env:LOCALAPPDATA\Tomato Cake\launcher\Robotopia",
+    [string]$GameDirectory,
     [string]$AcceptanceIsolationRecord,
     [string]$PythonPath = $env:TOPIAFORGE_PYTHON,
     [string]$StateRoot,
@@ -19,9 +19,15 @@ param(
 )
 
 . (Join-Path $PSScriptRoot "release/acceptance-isolation.ps1")
+. (Join-Path $PSScriptRoot "release/tomato-cake-launcher-state.ps1")
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+# Without -GameDirectory, use the install the official launcher runs: the
+# folder its launcher-config.json moved the game to, else its default.
+if (-not $PSBoundParameters.ContainsKey("GameDirectory")) {
+    $GameDirectory = Get-TomatoCakeOfficialGameDirectory
+}
 # Invocation paths follow the caller CWD, then remain stable across build worktrees.
 if (-not [string]::IsNullOrWhiteSpace($AcceptanceIsolationRecord)) {
     $AcceptanceIsolationRecord = [System.IO.Path]::GetFullPath($AcceptanceIsolationRecord)
@@ -673,45 +679,6 @@ function Get-GitHubRepositoryFromRemote {
         throw "Git origin must identify exactly one github.com owner/repository."
     }
     return $suffix
-}
-
-function Get-RobotopiaInstalledBuildId {
-    param([Parameter(Mandatory = $true)][string]$GameRoot)
-    $resolvedGameRoot = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd("\", "/")
-    $candidates = [System.Collections.Generic.List[string]]::new()
-    $candidates.Add((Join-Path $resolvedGameRoot "installed-build.json"))
-    if ((Split-Path -Leaf $resolvedGameRoot).Equals(
-            "Robotopia",
-            [System.StringComparison]::OrdinalIgnoreCase
-        )) {
-        $candidates.Add((Join-Path (Split-Path -Parent $resolvedGameRoot) `
-                    "installed-build.json"))
-    }
-    foreach ($candidate in $candidates) {
-        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-            continue
-        }
-        $length = (Get-Item -LiteralPath $candidate).Length
-        if ($length -le 0 -or $length -gt 4096) {
-            throw "Robotopia installed-build.json is invalid."
-        }
-        try {
-            $metadata = Get-Content -LiteralPath $candidate -Raw |
-                ConvertFrom-Json
-            if ($metadata.PSObject.Properties.Name -notcontains "id") {
-                throw "missing id"
-            }
-            $idText = [string]$metadata.id
-            if ($idText -notmatch "^[1-9][0-9]*$") {
-                throw "invalid id"
-            }
-            return [int]$idText
-        }
-        catch {
-            throw "Robotopia installed-build.json is invalid."
-        }
-    }
-    throw "Robotopia installed-build.json is missing."
 }
 
 function Get-RobotopiaOfficialInstall {

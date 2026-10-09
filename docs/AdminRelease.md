@@ -85,8 +85,13 @@ the same controlled checkout and state paths; do not copy GitHub credentials
 into the QA profile. Pass `-GameDirectory` explicitly at preflight: it must name
 the verified source installation in the record's `sourceGameRoot`, accessible to
 both sessions and separate from the record's admitted QA `gameRoot`. Its frozen
-path persists across sessions; omitting it selects the operator's default local
-installation. Missing provisioning fails closed;
+path persists across sessions; omitting it selects the installation the official
+launcher runs for the operator: `<game_dir>\Robotopia` when its
+`launcher-config.json` records a move, otherwise
+`%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`. For a moved game the build id
+comes from the `installed-build.json` that stays in
+`%LOCALAPPDATA%\Tomato Cake\launcher`, which applies only when `-GameDirectory`
+is exactly that `<game_dir>\Robotopia`. Missing provisioning fails closed;
 no tool creates a user account or imports normal-player saves automatically.
 
 The private schema-3 `acceptance-result.json` retains the actual acknowledgement

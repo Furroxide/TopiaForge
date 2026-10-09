@@ -273,6 +273,39 @@ Assert-True (
     )
 ) "Windows launcher health must use the archive-root launcher directory."
 
+# Both release entry points read the Robotopia build through one shared,
+# relocation-aware helper; a private copy would miss a moved game again.
+foreach ($installStateConsumer in @(
+        @{ Path = $scriptPath; Load = '. (Join-Path $PSScriptRoot "release/tomato-cake-launcher-state.ps1")' },
+        @{ Path = $windowsBuilderPath; Load = '. (Join-Path $PSScriptRoot "tomato-cake-launcher-state.ps1")' }
+    )) {
+    $consumerTokens = $null
+    $consumerErrors = $null
+    $consumerAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $installStateConsumer.Path,
+        [ref]$consumerTokens,
+        [ref]$consumerErrors
+    )
+    $privateCopies = @($consumerAst.FindAll({
+                param($node)
+                $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq "Get-RobotopiaInstalledBuildId"
+            }, $true))
+    Assert-True (
+        $consumerErrors.Count -eq 0 -and
+        $privateCopies.Count -eq 0 -and
+        (Get-Content -LiteralPath $installStateConsumer.Path -Raw).Contains(
+            $installStateConsumer.Load
+        )
+    ) "$($installStateConsumer.Path) must load the shared Tomato Cake launcher-state helper instead of its own build lookup."
+}
+Assert-True (
+    $adminSource.Contains(
+        'if (-not $PSBoundParameters.ContainsKey("GameDirectory")) {'
+    ) -and
+    $adminSource.Contains('$GameDirectory = Get-TomatoCakeOfficialGameDirectory')
+) "release-admin.ps1 must default -GameDirectory to the official launcher's install."
+
 $protonRunnerPath = Join-Path $PSScriptRoot "release/test-proton.sh"
 Assert-True (
     Test-Path -LiteralPath $protonRunnerPath -PathType Leaf
@@ -654,6 +687,42 @@ exit 0
             (Get-RobotopiaInstalledBuildId $gameRoot) -eq
                 [int]$policy.gameBuild.id
         ) "The launcher-owned Robotopia build marker was not recognized."
+
+        # After the official launcher moves the game, installed-build.json
+        # stays in its state directory. It applies only to the exact
+        # <game_dir>\Robotopia that launcher-config.json names.
+        $launcherState = Join-Path $testRoot "launcher-state"
+        $relocatedParent = Join-Path $testRoot "relocated-games"
+        $relocatedGame = Join-Path $relocatedParent "Robotopia"
+        $unrelatedGame = Join-Path (Join-Path $testRoot "unrelated") "Robotopia"
+        New-Item -ItemType Directory -Force -Path `
+            $launcherState, $relocatedGame, $unrelatedGame | Out-Null
+        Set-Content -LiteralPath (Join-Path $launcherState "installed-build.json") `
+            -Value "{`"id`":$($policy.gameBuild.id),`"dev`":false}" -Encoding ascii
+        Assert-ThrowsMatch -Action {
+            Get-RobotopiaInstalledBuildId $relocatedGame `
+                -LauncherStateDirectory $launcherState
+        } -Pattern "installed-build\.json is missing" `
+            -Message "A launcher-state marker applied without launcher-config.json."
+        Set-Content -LiteralPath (Join-Path $launcherState "launcher-config.json") `
+            -Value (@{
+                game_dir = [System.IO.Path]::GetFullPath($relocatedParent)
+            } | ConvertTo-Json -Compress) -Encoding ascii
+        Assert-True (
+            (Get-RobotopiaInstalledBuildId $relocatedGame `
+                    -LauncherStateDirectory $launcherState) -eq
+                [int]$policy.gameBuild.id
+        ) "The relocated Robotopia build marker was not recognized."
+        Assert-ThrowsMatch -Action {
+            Get-RobotopiaInstalledBuildId $unrelatedGame `
+                -LauncherStateDirectory $launcherState
+        } -Pattern "missing\. Tomato Cake's launcher-config\.json moved the game" `
+            -Message "A launcher-state marker applied to a different install."
+        Assert-True (
+            (Get-TomatoCakeOfficialGameDirectory `
+                -StateDirectory $launcherState) -ceq
+                [System.IO.Path]::GetFullPath($relocatedGame)
+        ) "The default game directory did not follow launcher-config.json."
 
         $canonical = Join-Path $testState "ecosystem-dist.tar"
         Set-Content -LiteralPath $canonical -Value "canonical" -Encoding ascii

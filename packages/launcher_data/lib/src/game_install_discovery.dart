@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+import 'tomato_cake_launcher_state.dart';
+
 part 'steam_game_install_discovery.dart';
 
 typedef GameInstallValidator = Future<GameInstall> Function(String path);
@@ -58,7 +60,12 @@ class EnvironmentGameInstallDiscoveryAdapter
   }
 }
 
-/// Returns only Tomato Cake's documented per-platform install location.
+/// Returns Tomato Cake's documented per-platform install location and, on
+/// Windows, the directory the official launcher moved the game to.
+///
+/// A relocation is read from `launcher-config.json` through
+/// [TomatoCakeLauncherState] and is only offered alongside the default path,
+/// never instead of it.
 class TomatoCakeGameInstallDiscoveryAdapter
     implements GameInstallDiscoveryAdapter {
   TomatoCakeGameInstallDiscoveryAdapter({
@@ -78,9 +85,15 @@ class TomatoCakeGameInstallDiscoveryAdapter
   Future<List<String>> discoverPaths() async {
     if (_hostPlatform == 'windows') {
       final localAppData = _environment['LOCALAPPDATA']?.trim() ?? '';
-      return localAppData.isEmpty
-          ? const []
-          : [p.join(localAppData, 'Tomato Cake', 'launcher', 'Robotopia')];
+      if (localAppData.isEmpty) return const [];
+      final relocated = await TomatoCakeLauncherState(
+        environment: _environment,
+        hostPlatform: _hostPlatform,
+      ).relocatedGameRoot();
+      return [
+        p.join(localAppData, 'Tomato Cake', 'launcher', 'Robotopia'),
+        ?relocated,
+      ];
     }
     if (_hostPlatform == 'macos') {
       final home = _environment['HOME']?.trim() ?? '';
