@@ -74,6 +74,11 @@ void main() {
       'tests/sandbox-workbench-acceptance-v1.json',
       '{\n  "gameBuild": 2409,\n  "scope": "supplementary-offline-contracts"\n}\n',
     );
+    _write(
+      root,
+      'tests/TopiaForge.SandboxAcceptanceNative/expected-catalog-v1.json',
+      '{\n  "kind": "sandbox-native-expected-catalog-v1",\n  "gameBuild": 2409\n}\n',
+    );
   });
 
   tearDown(() {
@@ -152,6 +157,14 @@ void main() {
     // The Sandbox contract pins the build as a bare JSON integer.
     expect(
       _read(root, 'tests/sandbox-workbench-acceptance-v1.json'),
+      contains('"gameBuild": 2509'),
+    );
+    // So does the reviewed native inventory, which is refused off the pin.
+    expect(
+      _read(
+        root,
+        'tests/TopiaForge.SandboxAcceptanceNative/expected-catalog-v1.json',
+      ),
       contains('"gameBuild": 2509'),
     );
   });
