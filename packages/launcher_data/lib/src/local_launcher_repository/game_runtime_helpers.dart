@@ -117,13 +117,17 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
   /// Build markers in priority order. The game root and, for a `Robotopia`
   /// folder, its parent come first. The Tomato Cake state directory's marker
   /// comes last, and only when `launcher-config.json` moved the game to
-  /// exactly this root.
+  /// exactly this root. After such a move, a copy left at the old default
+  /// location skips its parent, because that is the state directory.
   Future<List<File>> _installedBuildCandidates(GameLayout layout) async {
     final root = Directory(layout.gameRoot).absolute.path;
     if (layout.kind != GameInstallLayout.macAppBundle) {
       final candidates = [File(p.join(root, 'installed-build.json'))];
       if (p.basename(root).toLowerCase() == 'robotopia') {
-        candidates.add(File(p.join(p.dirname(root), 'installed-build.json')));
+        final parent = p.dirname(root);
+        if (!await _tomatoCakeLauncher.stateMarkerBelongsElsewhere(parent)) {
+          candidates.add(File(p.join(parent, 'installed-build.json')));
+        }
         final launcherMarker = await _tomatoCakeLauncher
             .installedBuildMarkerFor(root);
         if (launcherMarker != null &&

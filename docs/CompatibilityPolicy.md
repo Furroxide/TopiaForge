@@ -110,8 +110,10 @@ Windows/Proton layout it also checks beside the launcher-owned `Robotopia` direc
 installation shape. When the official launcher has moved the game, the marker stays in its state
 directory, `%LOCALAPPDATA%\Tomato Cake\launcher`. TopiaForge checks it there last, and only for the exact
 `<game_dir>\Robotopia` folder named by that directory's `launcher-config.json`, so the marker is never
-attributed to another copy of the game. An existing malformed higher-priority marker never falls through to
-a lower-priority one; users are directed to finish or repair the game installation instead.
+attributed to another copy of the game. That includes a copy left at the old default location: its parent
+is the state directory, but after a move it does not read that marker as the one beside its `Robotopia`
+folder. An existing malformed higher-priority marker never falls through to a lower-priority one; users
+are directed to finish or repair the game installation instead.
 
 Platform and architecture claims are made per release artifact and require their native CI jobs.
 Custom-world live acceptance is Windows/Proton-only for 0.x. Bundle content must declare an
