@@ -165,13 +165,19 @@ final class TomatoCakeLauncherState {
   /// `launcher-config.json` validly names a different `game_dir`. The marker
   /// then describes the moved install, so a copy left at the old default
   /// location must not read it as the marker beside its `Robotopia` folder.
-  /// Without a usable record the old rule stands.
+  /// Directories are compared by the filesystem's own spelling, so an 8.3
+  /// alias or link to the state directory still counts as the state
+  /// directory. Without a usable record the old rule stands.
   Future<bool> stateMarkerBelongsElsewhere(String directory) async {
     final state = stateDirectory;
     if (state == null) return false;
     final gameDirectory = (await readConfig()).gameDirectory;
     if (gameDirectory == null) return false;
-    return p.equals(directory, state) && !p.equals(gameDirectory, state);
+    final candidate = _identityPath(directory);
+    final resolvedState = _identityPath(state);
+    if (candidate == null || resolvedState == null) return false;
+    return p.equals(candidate, resolvedState) &&
+        !p.equals(_identityPath(gameDirectory) ?? gameDirectory, resolvedState);
   }
 
   /// Describes why [value] is not an absolute local directory path, or
@@ -258,6 +264,18 @@ final class TomatoCakeLauncherConfig {
 }
 
 const _maxGameDirectoryLength = 32767;
+
+/// The filesystem's own spelling of an existing directory, so that two
+/// spellings of one directory, such as a Windows 8.3 short name or a link
+/// and the real path, compare equal. Returns `null` when [path] cannot be
+/// resolved.
+String? _identityPath(String path) {
+  try {
+    return p.normalize(Directory(path).resolveSymbolicLinksSync());
+  } on FileSystemException {
+    return null;
+  }
+}
 
 /// Returns the canonical form of an existing directory after checking that
 /// no component from the volume root down to [path] is a link or other
