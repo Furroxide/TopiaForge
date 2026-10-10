@@ -263,11 +263,55 @@ function Get-TomatoCakeLauncherInstalledBuildPath {
     return [System.IO.Path]::Combine($StateDirectory, "installed-build.json")
 }
 
+# The filesystem's own spelling of an existing directory on Windows, so that
+# two spellings of one directory, such as an 8.3 short name and its long name,
+# compare equal. Falls back to the full path when the directory cannot be
+# opened, and on other hosts.
+function Get-TomatoCakeDirectoryIdentity {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $full = [System.IO.Path]::GetFullPath($Path).TrimEnd("\", "/")
+    if (-not $IsWindows) {
+        return $full
+    }
+    if (-not ('TopiaForgeDirectoryIdentity' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+public static class TopiaForgeDirectoryIdentity {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+    static extern SafeFileHandle CreateFileW(string path, uint access, uint sharing, IntPtr security, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+    static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder path, uint capacity, uint flags);
+    public static string FinalPath(string path) {
+        // Zero requested access and full sharing keep this a read-only lookup; backup semantics open a directory.
+        using (var handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
+            if (handle.IsInvalid) return null;
+            var buffer = new StringBuilder(32768);
+            var length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+            if (length == 0 || length >= buffer.Capacity) return null;
+            var actual = buffer.ToString();
+            return actual.StartsWith(@"\\?\", StringComparison.Ordinal) ? actual.Substring(4) : actual;
+        }
+    }
+}
+'@
+    }
+    $actual = [TopiaForgeDirectoryIdentity]::FinalPath($full)
+    if ([string]::IsNullOrEmpty($actual)) {
+        return $full
+    }
+    return $actual.TrimEnd("\", "/")
+}
+
 # True when Directory is the state directory itself and launcher-config.json
 # validly names a different game_dir. The state directory's
 # installed-build.json then describes the moved install, so a copy left at the
 # old default location must not read it as the marker beside its Robotopia
-# folder. Without a usable record the old rule stands.
+# folder. Directories are compared by the filesystem's own spelling, so an 8.3
+# alias of the state directory still counts. Without a usable record the old
+# rule stands.
 function Test-TomatoCakeStateMarkerBelongsElsewhere {
     param(
         [Parameter(Mandatory = $true)][string]$Directory,
@@ -287,14 +331,15 @@ function Test-TomatoCakeStateMarkerBelongsElsewhere {
         [System.StringComparison]::Ordinal
     }
     try {
-        $state = [System.IO.Path]::GetFullPath($StateDirectory).TrimEnd("\", "/")
-        $candidate = [System.IO.Path]::GetFullPath($Directory).TrimEnd("\", "/")
+        $state = Get-TomatoCakeDirectoryIdentity -Path $StateDirectory
+        $candidate = Get-TomatoCakeDirectoryIdentity -Path $Directory
+        $gameDirectory = Get-TomatoCakeDirectoryIdentity -Path $config.GameDirectory
     }
     catch {
         return $false
     }
     return $candidate.Equals($state, $comparison) -and
-        -not $config.GameDirectory.Equals($state, $comparison)
+        -not $gameDirectory.Equals($state, $comparison)
 }
 
 # The directory the official launcher runs the game from: <game_dir>\Robotopia

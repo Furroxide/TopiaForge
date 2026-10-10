@@ -262,6 +262,26 @@ namespace TopiaForge.ModManager.Tests
                    && error.Contains("not found", StringComparison.Ordinal),
                 "a copy left at the old default location should not borrow the moved game's marker: " + error);
 
+            if (OperatingSystem.IsWindows())
+            {
+                // An 8.3 short name and a junction name the same directory. .NET's GetFullPath already expands
+                // short names, but Unity's Mono runtime does not, and no path text resolves a junction. Keep the
+                // Robotopia leaf so the parent rule still applies.
+                var shortState = TomatoCakeLauncherFixture.ShortPath(fixture.State);
+                var junction = Path.Combine(fixture.Root, "state-junction");
+                TomatoCakeLauncherFixture.LinkDirectory(junction, fixture.State);
+                foreach (var alias in new[] { shortState, junction })
+                {
+                    Assert(TomatoCakeLauncherState.StateMarkerBelongsElsewhere(alias, fixture.State),
+                        "another spelling of the state directory should still be the state directory: " + alias);
+                    Assert(ReadVersion(Path.Combine(alias, "Robotopia"), fixture.State) == string.Empty,
+                        "another spelling should not let the old default copy borrow the moved marker: " + alias);
+                }
+
+                Assert(ReadVersion(fixture.DefaultGameRoot, shortState) == string.Empty,
+                    "an 8.3 spelling of the state directory should not lend the moved marker either");
+            }
+
             fixture.WriteGameDirectory(fixture.State);
             Assert(ReadVersion(fixture.DefaultGameRoot, fixture.State) == "0.0.2545",
                 "a record naming the default parent should leave the marker with the default copy");

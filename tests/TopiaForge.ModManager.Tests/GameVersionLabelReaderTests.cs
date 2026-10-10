@@ -156,6 +156,27 @@ namespace TopiaForge.ModManager.Tests
                 "the moved game should read the launcher marker");
             Assert(GameVersionLabelReader.Read(stale, fixture.State) == string.Empty,
                 "a copy left at the old default location should not borrow the moved game's marker");
+
+            if (OperatingSystem.IsWindows())
+            {
+                // An 8.3 short name and a junction name the same directory; see TomatoCakeLauncherStateTests.
+                var junction = Path.Combine(fixture.Root, "state-junction");
+                TomatoCakeLauncherFixture.LinkDirectory(junction, fixture.State);
+                try
+                {
+                    foreach (var alias in new[] { TomatoCakeLauncherFixture.ShortPath(fixture.State), junction })
+                    {
+                        var aliasStale = Path.Combine(alias, "Robotopia", "Robotopia_Data", "Managed");
+                        Assert(GameVersionLabelReader.Read(aliasStale, fixture.State) == string.Empty,
+                            "another spelling should not let the old default copy borrow the moved marker: " + alias);
+                    }
+                }
+                finally
+                {
+                    // Remove the link itself; this suite deletes its root strictly, without following links.
+                    Directory.Delete(junction);
+                }
+            }
         }
 
         private static void FindsRelocatedManagedDirectoryLast(string root)
