@@ -263,6 +263,40 @@ function Get-TomatoCakeLauncherInstalledBuildPath {
     return [System.IO.Path]::Combine($StateDirectory, "installed-build.json")
 }
 
+# True when Directory is the state directory itself and launcher-config.json
+# validly names a different game_dir. The state directory's
+# installed-build.json then describes the moved install, so a copy left at the
+# old default location must not read it as the marker beside its Robotopia
+# folder. Without a usable record the old rule stands.
+function Test-TomatoCakeStateMarkerBelongsElsewhere {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [AllowNull()][AllowEmptyString()][string]$StateDirectory
+    )
+    if ([string]::IsNullOrEmpty($StateDirectory)) {
+        return $false
+    }
+    $config = Read-TomatoCakeLauncherConfig -StateDirectory $StateDirectory
+    if ($null -eq $config.GameDirectory) {
+        return $false
+    }
+    $comparison = if ($IsWindows) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    try {
+        $state = [System.IO.Path]::GetFullPath($StateDirectory).TrimEnd("\", "/")
+        $candidate = [System.IO.Path]::GetFullPath($Directory).TrimEnd("\", "/")
+    }
+    catch {
+        return $false
+    }
+    return $candidate.Equals($state, $comparison) -and
+        -not $config.GameDirectory.Equals($state, $comparison)
+}
+
 # The directory the official launcher runs the game from: <game_dir>\Robotopia
 # after a move, otherwise its default location. Without a state directory the
 # historical default expression is kept unchanged.
@@ -284,8 +318,10 @@ function Get-TomatoCakeOfficialGameDirectory {
 # Reads the Robotopia build id from installed-build.json. The game root and,
 # for a Robotopia folder, its parent come first, as before. The launcher state
 # directory's marker comes last, and only when launcher-config.json moved the
-# game to exactly GameRoot. The first marker that exists decides, so a broken
-# higher-priority marker fails closed instead of falling through.
+# game to exactly GameRoot. After such a move, a copy left at the old default
+# location skips its parent, because that is the state directory. The first
+# marker that exists decides, so a broken higher-priority marker fails closed
+# instead of falling through.
 function Get-RobotopiaInstalledBuildId {
     param(
         [Parameter(Mandatory = $true)][string]$GameRoot,
@@ -300,8 +336,11 @@ function Get-RobotopiaInstalledBuildId {
             "Robotopia",
             [System.StringComparison]::OrdinalIgnoreCase
         )) {
-        $candidates.Add((Join-Path (Split-Path -Parent $resolvedGameRoot) `
-                    "installed-build.json"))
+        $parentDirectory = Split-Path -Parent $resolvedGameRoot
+        if (-not (Test-TomatoCakeStateMarkerBelongsElsewhere `
+                    -Directory $parentDirectory -StateDirectory $LauncherStateDirectory)) {
+            $candidates.Add((Join-Path $parentDirectory "installed-build.json"))
+        }
         $launcherMarker = Get-TomatoCakeLauncherInstalledBuildPath `
             -GameRoot $resolvedGameRoot -StateDirectory $LauncherStateDirectory
         if ($null -ne $launcherMarker) {

@@ -158,6 +158,22 @@ final class TomatoCakeLauncherState {
     return File(p.join(state, installedBuildFileName));
   }
 
+  /// Whether the state directory's `installed-build.json` belongs to an
+  /// install other than the `Robotopia` folder inside [directory].
+  ///
+  /// True when [directory] is the state directory itself and
+  /// `launcher-config.json` validly names a different `game_dir`. The marker
+  /// then describes the moved install, so a copy left at the old default
+  /// location must not read it as the marker beside its `Robotopia` folder.
+  /// Without a usable record the old rule stands.
+  Future<bool> stateMarkerBelongsElsewhere(String directory) async {
+    final state = stateDirectory;
+    if (state == null) return false;
+    final gameDirectory = (await readConfig()).gameDirectory;
+    if (gameDirectory == null) return false;
+    return p.equals(directory, state) && !p.equals(gameDirectory, state);
+  }
+
   /// Describes why [value] is not an absolute local directory path, or
   /// returns `null` when its shape is acceptable.
   ///
