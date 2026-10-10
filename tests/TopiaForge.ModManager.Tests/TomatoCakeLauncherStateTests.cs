@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             AttributesTheStateMarkerOnlyToTheRelocatedGame(TomatoCakeLauncherFixture.Create(testRoot, "attribution"));
             ChecksGameDirectoryShapes();
             RuntimeReaderFollowsTheRelocation(testRoot);
+            StaleDefaultCopyDoesNotBorrowTheMovedMarker(testRoot);
             Console.WriteLine("TomatoCakeLauncherStateTests passed.");
         }
 
@@ -239,6 +240,35 @@ namespace TopiaForge.ModManager.Tests
             relocated.WriteConfig("{\"game_dir\":" + value + ",\"game_dir\":" + value + "}");
             Assert(ReadVersion(relocated.RelocatedGameRoot, relocated.State) == string.Empty,
                 "a malformed launcher-config.json should lend no marker");
+        }
+
+        private static void StaleDefaultCopyDoesNotBorrowTheMovedMarker(string testRoot)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(testRoot, "runtime-stale-default");
+            Directory.CreateDirectory(fixture.DefaultGameRoot);
+            Directory.CreateDirectory(fixture.RelocatedGameRoot);
+            fixture.WriteStateMarker(2545);
+            Assert(!TomatoCakeLauncherState.StateMarkerBelongsElsewhere(fixture.State, fixture.State),
+                "without launcher-config.json the state marker should stay with the default copy");
+
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            Assert(TomatoCakeLauncherState.StateMarkerBelongsElsewhere(fixture.State, fixture.State),
+                "after a move the state marker should belong to the relocated game");
+            Assert(!TomatoCakeLauncherState.StateMarkerBelongsElsewhere(fixture.RelocatedParent, fixture.State),
+                "only the state directory itself should lose its marker");
+            Assert(ReadVersion(fixture.RelocatedGameRoot, fixture.State) == "0.0.2545",
+                "the relocated game should keep the launcher marker");
+            Assert(!InstalledGameVersionReader.TryRead(fixture.DefaultGameRoot, fixture.State, out _, out var error)
+                   && error.Contains("not found", StringComparison.Ordinal),
+                "a copy left at the old default location should not borrow the moved game's marker: " + error);
+
+            fixture.WriteGameDirectory(fixture.State);
+            Assert(ReadVersion(fixture.DefaultGameRoot, fixture.State) == "0.0.2545",
+                "a record naming the default parent should leave the marker with the default copy");
+
+            fixture.WriteConfig("{\"game_dir\":7}");
+            Assert(ReadVersion(fixture.DefaultGameRoot, fixture.State) == "0.0.2545",
+                "a malformed launcher-config.json should leave the default copy's marker alone");
         }
 
         private static string ReadVersion(string gameRoot, string? state)

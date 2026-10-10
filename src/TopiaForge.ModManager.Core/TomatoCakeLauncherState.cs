@@ -170,6 +170,33 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>
+        /// True when <paramref name="directory"/> is the state directory itself and launcher-config.json validly
+        /// names a different game_dir. The state directory's installed-build.json then describes the moved install,
+        /// so a copy left at the old default location must not read it as the marker beside its Robotopia folder.
+        /// Without a usable record the old rule stands.
+        /// </summary>
+        internal static bool StateMarkerBelongsElsewhere(string directory, string? stateDirectory)
+        {
+            if (string.IsNullOrEmpty(stateDirectory) || string.IsNullOrWhiteSpace(directory) ||
+                !TryReadGameDirectory(stateDirectory, out var gameDirectory, out _))
+            {
+                return false;
+            }
+
+            try
+            {
+                var comparison = WindowsPaths ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                var state = TrimTrailingSeparators(Path.GetFullPath(stateDirectory));
+                return string.Equals(TrimTrailingSeparators(Path.GetFullPath(directory)), state, comparison) &&
+                       !string.Equals(gameDirectory, state, comparison);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Describes why <paramref name="value"/> is not an absolute local directory path, or returns null when its
         /// shape is acceptable. With <paramref name="windowsPaths"/> the path must start with a drive letter such as
         /// D:\, so UNC shares and \\?\ or \\.\ device paths are refused and reading the record never reaches a network
