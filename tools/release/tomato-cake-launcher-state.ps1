@@ -263,6 +263,85 @@ function Get-TomatoCakeLauncherInstalledBuildPath {
     return [System.IO.Path]::Combine($StateDirectory, "installed-build.json")
 }
 
+# The filesystem's own spelling of an existing directory on Windows, so that
+# two spellings of one directory, such as an 8.3 short name and its long name,
+# compare equal. Falls back to the full path when the directory cannot be
+# opened, and on other hosts.
+function Get-TomatoCakeDirectoryIdentity {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $full = [System.IO.Path]::GetFullPath($Path).TrimEnd("\", "/")
+    if (-not $IsWindows) {
+        return $full
+    }
+    if (-not ('TopiaForgeDirectoryIdentity' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+public static class TopiaForgeDirectoryIdentity {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+    static extern SafeFileHandle CreateFileW(string path, uint access, uint sharing, IntPtr security, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+    static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder path, uint capacity, uint flags);
+    public static string FinalPath(string path) {
+        // Zero requested access and full sharing keep this a read-only lookup; backup semantics open a directory.
+        using (var handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero)) {
+            if (handle.IsInvalid) return null;
+            var buffer = new StringBuilder(32768);
+            var length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+            if (length == 0 || length >= buffer.Capacity) return null;
+            var actual = buffer.ToString();
+            return actual.StartsWith(@"\\?\", StringComparison.Ordinal) ? actual.Substring(4) : actual;
+        }
+    }
+}
+'@
+    }
+    $actual = [TopiaForgeDirectoryIdentity]::FinalPath($full)
+    if ([string]::IsNullOrEmpty($actual)) {
+        return $full
+    }
+    return $actual.TrimEnd("\", "/")
+}
+
+# True when Directory is the state directory itself and launcher-config.json
+# validly names a different game_dir. The state directory's
+# installed-build.json then describes the moved install, so a copy left at the
+# old default location must not read it as the marker beside its Robotopia
+# folder. Directories are compared by the filesystem's own spelling, so an 8.3
+# alias of the state directory still counts. Without a usable record the old
+# rule stands.
+function Test-TomatoCakeStateMarkerBelongsElsewhere {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [AllowNull()][AllowEmptyString()][string]$StateDirectory
+    )
+    if ([string]::IsNullOrEmpty($StateDirectory)) {
+        return $false
+    }
+    $config = Read-TomatoCakeLauncherConfig -StateDirectory $StateDirectory
+    if ($null -eq $config.GameDirectory) {
+        return $false
+    }
+    $comparison = if ($IsWindows) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
+    }
+    try {
+        $state = Get-TomatoCakeDirectoryIdentity -Path $StateDirectory
+        $candidate = Get-TomatoCakeDirectoryIdentity -Path $Directory
+        $gameDirectory = Get-TomatoCakeDirectoryIdentity -Path $config.GameDirectory
+    }
+    catch {
+        return $false
+    }
+    return $candidate.Equals($state, $comparison) -and
+        -not $gameDirectory.Equals($state, $comparison)
+}
+
 # The directory the official launcher runs the game from: <game_dir>\Robotopia
 # after a move, otherwise its default location. Without a state directory the
 # historical default expression is kept unchanged.
@@ -284,8 +363,10 @@ function Get-TomatoCakeOfficialGameDirectory {
 # Reads the Robotopia build id from installed-build.json. The game root and,
 # for a Robotopia folder, its parent come first, as before. The launcher state
 # directory's marker comes last, and only when launcher-config.json moved the
-# game to exactly GameRoot. The first marker that exists decides, so a broken
-# higher-priority marker fails closed instead of falling through.
+# game to exactly GameRoot. After such a move, a copy left at the old default
+# location skips its parent, because that is the state directory. The first
+# marker that exists decides, so a broken higher-priority marker fails closed
+# instead of falling through.
 function Get-RobotopiaInstalledBuildId {
     param(
         [Parameter(Mandatory = $true)][string]$GameRoot,
@@ -300,8 +381,11 @@ function Get-RobotopiaInstalledBuildId {
             "Robotopia",
             [System.StringComparison]::OrdinalIgnoreCase
         )) {
-        $candidates.Add((Join-Path (Split-Path -Parent $resolvedGameRoot) `
-                    "installed-build.json"))
+        $parentDirectory = Split-Path -Parent $resolvedGameRoot
+        if (-not (Test-TomatoCakeStateMarkerBelongsElsewhere `
+                    -Directory $parentDirectory -StateDirectory $LauncherStateDirectory)) {
+            $candidates.Add((Join-Path $parentDirectory "installed-build.json"))
+        }
         $launcherMarker = Get-TomatoCakeLauncherInstalledBuildPath `
             -GameRoot $resolvedGameRoot -StateDirectory $LauncherStateDirectory
         if ($null -ne $launcherMarker) {
