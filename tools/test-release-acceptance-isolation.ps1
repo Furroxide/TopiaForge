@@ -105,6 +105,38 @@ try {
             Assert-IsolationCondition ([System.IO.Path]::IsPathFullyQualified($AcceptanceIsolationRecord)) 'Relative record would change meaning inside a build worktree.'
         }
     }
+    Test-IsolationCase 'default game directory follows the official launcher' {
+        $admin = Join-Path $PSScriptRoot 'release-admin.ps1'
+        if (-not $IsWindows) {
+            & {
+                . $admin -Command preflight -StateRoot $testRoot
+                Assert-IsolationCondition ($GameDirectory -ceq "$env:LOCALAPPDATA\Tomato Cake\launcher\Robotopia") 'The historical default changed off Windows.'
+            }
+            return
+        }
+        $previous = $env:LOCALAPPDATA
+        try {
+            $localAppData = Join-Path $testRoot 'LocalAppData'
+            $state = [System.IO.Path]::Combine($localAppData, 'Tomato Cake', 'launcher')
+            $moved = Join-Path $testRoot 'moved-game'
+            New-Item -ItemType Directory -Force -Path $state, (Join-Path $moved 'Robotopia') | Out-Null
+            $env:LOCALAPPDATA = $localAppData
+            & {
+                . $admin -Command preflight -StateRoot $testRoot
+                Assert-IsolationCondition ($GameDirectory -ceq (Join-Path $state 'Robotopia')) 'Without a launcher record the default moved.'
+            }
+            [System.IO.File]::WriteAllText((Join-Path $state 'launcher-config.json'), (@{ game_dir = $moved } | ConvertTo-Json -Compress))
+            & {
+                . $admin -Command preflight -StateRoot $testRoot
+                Assert-IsolationCondition ($GameDirectory -ceq (Join-Path $moved 'Robotopia')) 'The default did not follow launcher-config.json.'
+            }
+            & {
+                . $admin -Command preflight -StateRoot $testRoot -GameDirectory (Join-Path $testRoot 'explicit')
+                Assert-IsolationCondition ($GameDirectory -ceq (Join-Path $testRoot 'explicit')) 'An explicit -GameDirectory was replaced.'
+            }
+        }
+        finally { $env:LOCALAPPDATA = $previous }
+    }
     Test-IsolationCase 'output cleanup cannot contain the provisioning record' {
         $before=Get-Sha256 $AcceptanceIsolationRecord
         Assert-IsolationFailure {

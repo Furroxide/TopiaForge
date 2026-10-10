@@ -384,7 +384,7 @@ namespace TopiaForge.RobotKit
             // Re-enable the LLM first (mirror of the dormant writes), preferring the captured original values.
             if (!SetFieldIfPresent(type, agent, "llmDisabled", original?.LlmDisabled ?? false))
             {
-                var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags);
+                var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags, null, new[] { typeof(bool) }, null);
                 try
                 {
                     enableTestMode?.Invoke(agent, new object[] { true });
@@ -475,7 +475,7 @@ namespace TopiaForge.RobotKit
                 // Disable the actual LLM call without disabling the component.
                 if (!SetFieldIfPresent(type, agent, "llmDisabled", true))
                 {
-                    var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags);
+                    var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags, null, new[] { typeof(bool) }, null);
                     enableTestMode?.Invoke(agent, new object[] { false });
                 }
             }
@@ -566,7 +566,10 @@ namespace TopiaForge.RobotKit
             try
             {
                 var method = body.GetType().GetMethods(InstanceFlags).FirstOrDefault(candidate =>
-                    candidate.Name == "StartEmote" && candidate.GetParameters().Length == 2);
+                    candidate.Name == "StartEmote" &&
+                    candidate.GetParameters() is { Length: 2 } parameters &&
+                    parameters[0].ParameterType == typeof(string) &&
+                    parameters[1].ParameterType == typeof(System.Threading.CancellationToken));
                 method?.Invoke(body, new object[] { emojiShortcode ?? string.Empty, System.Threading.CancellationToken.None });
             }
             catch (Exception ex)

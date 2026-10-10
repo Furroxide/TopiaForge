@@ -85,8 +85,13 @@ the same controlled checkout and state paths; do not copy GitHub credentials
 into the QA profile. Pass `-GameDirectory` explicitly at preflight: it must name
 the verified source installation in the record's `sourceGameRoot`, accessible to
 both sessions and separate from the record's admitted QA `gameRoot`. Its frozen
-path persists across sessions; omitting it selects the operator's default local
-installation. Missing provisioning fails closed;
+path persists across sessions; omitting it selects the installation the official
+launcher runs for the operator: `<game_dir>\Robotopia` when its
+`launcher-config.json` records a move, otherwise
+`%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`. For a moved game the build id
+comes from the `installed-build.json` that stays in
+`%LOCALAPPDATA%\Tomato Cake\launcher`, which applies only when `-GameDirectory`
+is exactly that `<game_dir>\Robotopia`. Missing provisioning fails closed;
 no tool creates a user account or imports normal-player saves automatically.
 
 The private schema-3 `acceptance-result.json` retains the actual acknowledgement
@@ -144,7 +149,7 @@ The checkout must be a clean `main` exactly equal to `origin/main`. Configure:
   Unity `6000.0.23f1`, MSVC `14.51.36231`, Windows SDK
   `10.0.26100.0`, Python 3.11 or newer, Git LFS, 7-Zip, tar, `jq`, `bash`
   (Git for Windows), WSL, and GitHub CLI;
-- an activated local Unity license and the Robotopia build-2478 installation.
+- an activated local Unity license and the Robotopia build-2545 installation.
 
 On Windows systems where `python` resolves to the nonfunctional Microsoft
 Store alias, set `TOPIAFORGE_PYTHON` (or pass `-PythonPath`) to an absolute,
@@ -334,7 +339,7 @@ The deterministic procedure is:
    plus the WSL2/WSLg environment, without launching the game:
 
 ```bash
-tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2478 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
+tools/release/test-proton.sh --preflight-only --repo "$repo" --source-sha "$sha" --version 0.1.0-rc.1 --game-dir "$gameDir" --game-build-id 2545 --proton-executable "$proton" --steam-root "$steamRoot" --compat-data-root "$compatData"
 ```
 
 If Steam has moved `Proton 10.0` to a newer build, the appmanifest will carry a
@@ -405,7 +410,7 @@ The generated descriptor is deterministic JSON and binds at least:
   "archiveSha256": "64-lowercase-hex",
   "archiveSize": 123456,
   "canonicalEcosystemSha256": "64-lowercase-hex",
-  "gameBuildId": 2478,
+  "gameBuildId": 2545,
   "protonVersion": "10.0-4",
   "protonRuntimeSha256": "64-lowercase-hex",
   "wineDllOverrides": "winhttp=n,b",

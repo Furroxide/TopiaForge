@@ -19,6 +19,8 @@
       "assembly": "GameCode",
       "declaringType": "OpenFeedBackURL",
       "member": "OpenFeedbackTask",
+      "returnType": "System.Void",
+      "exactParameters": true,
       "matchMode": "StaticFullName",
       "criticality": "Critical",
       "feature": "NoFeedbackUrl: intercept feedback URL task",

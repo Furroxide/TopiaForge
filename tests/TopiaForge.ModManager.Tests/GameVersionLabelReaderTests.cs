@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
 using TopiaForge.GameCompat.Extractor;
+using Extractor = TopiaForge.GameCompat.Extractor;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -8,14 +10,18 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static void Run()
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeGameVersionTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            // Created atomically under an unpredictable name; a GetTempPath-derived root is untrusted input to
+            // CodeQL, and these fixtures pass it on to the production launcher-state reader.
+            var root = Directory.CreateTempSubdirectory("TopiaForgeGameVersionTests-").FullName;
 
             try
             {
                 ReadsLauncherBuildBesideMacApp(root);
                 FallsBackToMacBundleVersion(root);
                 ReadsLauncherBuildFromWindowsInstall(root);
+                ReadsRelocatedLauncherBuild(root);
+                StopsAtRejectedMarker(root);
+                FindsRelocatedManagedDirectoryLast(root);
                 ReadsPublicManagedReferenceCacheBuild(root);
                 IgnoresAmbiguousChangelog(root);
                 RejectsOversizedMetadata(root);
@@ -76,6 +82,84 @@ namespace TopiaForge.ModManager.Tests
             File.WriteAllText(Path.Combine(install, "installed-build.json"), "{\"id\":\"311\"}");
             Assert(GameVersionLabelReader.ReadCanonicalVersion(managed) == "0.0.311",
                 "Windows/Proton capture should prefer metadata inside the install root");
+        }
+
+        private static void ReadsRelocatedLauncherBuild(string root)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(root, "relocated-build");
+            var managed = Path.Combine(fixture.RelocatedGameRoot, "Robotopia_Data", "Managed");
+            Directory.CreateDirectory(managed);
+            fixture.WriteStateMarker(2545);
+            fixture.WriteStaleStateManifest();
+
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
+                "capture should not attribute the launcher marker without launcher-config.json");
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == "build 2545",
+                "capture should read the launcher marker for a game the official launcher moved");
+            Assert(GameVersionLabelReader.ReadCanonicalVersion(managed, fixture.State) == "0.0.2545",
+                "capture should expose the relocated game's canonical build SemVer");
+            Assert(GameVersionLabelReader.Read(managed, null) == string.Empty,
+                "capture should not consult the launcher without a state directory");
+
+            File.WriteAllText(Path.Combine(fixture.RelocatedParent, "installed-build.json"), "{\"id\":2546}");
+            Assert(GameVersionLabelReader.ReadCanonicalVersion(managed, fixture.State) == "0.0.2546",
+                "metadata beside the game should outrank the launcher marker");
+            File.Delete(Path.Combine(fixture.RelocatedParent, "installed-build.json"));
+
+            var otherManaged = Path.Combine(fixture.Root, "other", "Robotopia", "Robotopia_Data", "Managed");
+            Directory.CreateDirectory(otherManaged);
+            Assert(GameVersionLabelReader.Read(otherManaged, fixture.State) == string.Empty,
+                "capture should not lend the launcher marker to an install outside game_dir");
+
+            var value = TomatoCakeLauncherFixture.Json(fixture.RelocatedParent);
+            fixture.WriteConfig("{\"game_dir\":" + value + ",\"game_dir\":" + value + "}");
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
+                "a malformed launcher-config.json should lend no marker");
+        }
+
+        private static void StopsAtRejectedMarker(string root)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(root, "rejected-marker");
+            var managed = Path.Combine(fixture.RelocatedGameRoot, "Robotopia_Data", "Managed");
+            Directory.CreateDirectory(managed);
+            fixture.WriteStateMarker(2545);
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == "build 2545",
+                "the launcher marker should apply while no higher-priority marker exists");
+
+            var besideGame = Path.Combine(fixture.RelocatedParent, "installed-build.json");
+            File.WriteAllText(besideGame, "{not-json");
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
+                "a malformed marker beside the game should not fall through to the launcher marker");
+
+            File.WriteAllText(besideGame, "{\"id\":2546}");
+            File.WriteAllText(Path.Combine(fixture.RelocatedGameRoot, "installed-build.json"), "{\"id\":0}");
+            Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
+                "a rejected marker in the game root should not fall through to the marker beside it");
+        }
+
+        private static void FindsRelocatedManagedDirectoryLast(string root)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(root, "relocated-managed");
+            var managed = Path.Combine(fixture.RelocatedGameRoot, "Robotopia_Data", "Managed");
+            Directory.CreateDirectory(managed);
+            var explicitManaged = Path.Combine(root, "explicit", "Managed");
+
+            var withoutRecord = Extractor.Program.ManagedDirCandidates(explicitManaged, fixture.State).ToList();
+            Assert(withoutRecord[0] == explicitManaged && !withoutRecord.Contains(managed),
+                "without launcher-config.json the extractor should keep its existing candidates only");
+
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            var withRecord = Extractor.Program.ManagedDirCandidates(explicitManaged, fixture.State).ToList();
+            Assert(withRecord[0] == explicitManaged && withRecord[withRecord.Count - 1] == managed,
+                "the relocated Managed directory should be the extractor's last candidate");
+            Assert(withRecord.Take(withRecord.Count - 1).SequenceEqual(withoutRecord),
+                "the relocation should leave every existing candidate in place and in order");
+
+            fixture.WriteConfig("{\"game_dir\":7}");
+            Assert(!Extractor.Program.ManagedDirCandidates(explicitManaged, fixture.State).Contains(managed),
+                "a malformed launcher-config.json should add no Managed directory");
         }
 
         private static void IgnoresAmbiguousChangelog(string root)
