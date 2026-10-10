@@ -97,6 +97,19 @@ void main() {
         fixture.relocatedGameRoot.path,
       ]),
     );
+    final installs = {
+      for (final candidate in candidates)
+        candidate.install.path: candidate.install,
+    };
+    expect(
+      installs[fixture.relocatedGameRoot.path]!.gameVersion,
+      currentVersion,
+    );
+    // The state directory's marker now describes the moved game, so the copy
+    // left at the old default location must not borrow it as its parent's.
+    final stale = installs[fixture.defaultGameRoot.path]!;
+    expect(stale.gameVersion, isNull);
+    expect(issues(stale), contains('build metadata is missing'));
   });
 
   test(
@@ -159,6 +172,17 @@ void main() {
 
     expect(install.gameVersion, isNull);
     expect(issues(install), contains('build metadata is missing'));
+  });
+
+  test('a malformed config leaves the default copy its marker', () async {
+    createWindowsGame(fixture.defaultGameRoot);
+    fixture.writeStateMarker(currentBuildId);
+    fixture.writeConfig('{"game_dir":7}');
+
+    final candidates = await repository.discoverGameInstalls();
+
+    expect(candidates.single.install.path, fixture.defaultGameRoot.path);
+    expect(candidates.single.install.gameVersion, currentVersion);
   });
 
   test('other hosts leave their layouts unchanged', () async {

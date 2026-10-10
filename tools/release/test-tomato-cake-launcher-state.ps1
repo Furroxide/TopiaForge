@@ -291,6 +291,31 @@ try {
         Assert-ThrowsMatch { Get-RobotopiaInstalledBuildId $other -LauncherStateDirectory $fixture.State } "missing\. Tomato Cake's launcher-config\.json moved the game to"
     }
 
+    Test-Case "Get-RobotopiaInstalledBuildId keeps a moved game's marker from the old default copy" {
+        $fixture = Initialize-Fixture "build-stale-default"
+        [System.IO.Directory]::CreateDirectory($fixture.DefaultGame) | Out-Null
+        [System.IO.Directory]::CreateDirectory($fixture.Game) | Out-Null
+        Write-StateMarker $fixture 2545
+        Assert-True (-not (Test-TomatoCakeStateMarkerBelongsElsewhere -Directory $fixture.State -StateDirectory $fixture.State)) "Without a record the state marker left the default copy."
+        Write-GameDirectory $fixture $fixture.Parent
+        Assert-True (Test-TomatoCakeStateMarkerBelongsElsewhere -Directory $fixture.State -StateDirectory $fixture.State) "After a move the state marker stayed with the default copy."
+        Assert-True ((Get-RobotopiaInstalledBuildId $fixture.Game -LauncherStateDirectory $fixture.State) -eq 2545) "The moved game lost the launcher marker."
+        Assert-ThrowsMatch { Get-RobotopiaInstalledBuildId $fixture.DefaultGame -LauncherStateDirectory $fixture.State } "missing\. Tomato Cake's launcher-config\.json moved the game to"
+        if ($IsWindows) {
+            # An 8.3 short name and a junction name the same directory. Path text alone cannot resolve a
+            # junction. Keep the Robotopia leaf so the parent rule still applies.
+            $junction = [System.IO.Path]::Combine($fixture.Root, "state-junction")
+            Add-DirectoryLink -Path $junction -Target $fixture.State
+            $shortState = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($fixture.State).ShortPath
+            foreach ($alias in @($shortState, $junction)) {
+                Assert-True (Test-TomatoCakeStateMarkerBelongsElsewhere -Directory $alias -StateDirectory $fixture.State) "Another spelling of the state directory was not the state directory: $alias"
+                Assert-ThrowsMatch { Get-RobotopiaInstalledBuildId ([System.IO.Path]::Combine($alias, "Robotopia")) -LauncherStateDirectory $fixture.State } "missing\. Tomato Cake's launcher-config\.json moved the game to"
+            }
+        }
+        Write-ConfigText $fixture '{"game_dir":7}'
+        Assert-True ((Get-RobotopiaInstalledBuildId $fixture.DefaultGame -LauncherStateDirectory $fixture.State) -eq 2545) "A malformed record took the default copy's marker."
+    }
+
     Test-Case "a marker beside the game outranks a stale launcher marker" {
         $fixture = Initialize-Fixture "build-stale"
         [System.IO.Directory]::CreateDirectory($fixture.Game) | Out-Null

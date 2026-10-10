@@ -124,7 +124,13 @@ namespace TopiaForge.ModManager
 
             if (root.Name.Equals("Robotopia", StringComparison.OrdinalIgnoreCase) && root.Parent != null)
             {
-                roots.Add(root.Parent.FullName);
+                // After a move, the state directory's marker describes the moved install, so a copy left at the old
+                // default location must not borrow it as the marker beside its Robotopia folder.
+                if (!TomatoCakeLauncherState.StateMarkerBelongsElsewhere(root.Parent.FullName, launcherStateDirectory))
+                {
+                    roots.Add(root.Parent.FullName);
+                }
+
                 // The official launcher keeps this marker in its own state directory after moving the game. It
                 // applies only when launcher-config.json names exactly this root's parent, and it comes last.
                 var launcherMarker = TomatoCakeLauncherState.InstalledBuildMarkerFor(
