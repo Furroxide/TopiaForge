@@ -18,6 +18,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
     {
         internal const int WireFormatRevision = 1;
 
+        /// <summary>
+        /// Per-connection client-to-server design budget in encoded bytes per second. 32 KiB/s is 256 kbit/s, the
+        /// per-connection ceiling recorded in docs/internal/MultiplayerTransportOptions.md. It is a budget, not a
+        /// wire constraint: it is never encoded, never hashed into a schema digest, and never enters a contract lock.
+        /// </summary>
+        internal const int PerConnectionInboundBudgetBytesPerSecond = 32 * 1024;
+
         private const string ContractAttribute = "TopiaForge.Mods.MultiplayerContractAttribute";
         private const string StateAttribute = "TopiaForge.Mods.ReplicatedStateAttribute";
         private const string ObjectAttribute = "TopiaForge.Mods.ReplicatedObjectAttribute";
@@ -129,6 +136,14 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             "Multiplayer contract '{0}' must declare an explicit stable Id; class and namespace names are not wire identities",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
+            true);
+
+        private static readonly DiagnosticDescriptor InboundBudgetExceeded = new DiagnosticDescriptor(
+            "TFMP014",
+            "Multiplayer contract exceeds the per-connection inbound budget",
+            "Contract '{0}' declares a worst-case client-to-server rate of {1} bytes/second across its commands and replicated objects, above the {2}-byte/second per-connection design budget; lower MaximumPerSecond or MaximumPayloadBytes",
+            "TopiaForge.Multiplayer",
+            DiagnosticSeverity.Warning,
             true);
 
         private static readonly SymbolDisplayFormat FullyQualified = SymbolDisplayFormat.FullyQualifiedFormat
@@ -384,9 +399,49 @@ namespace TopiaForge.Mods.Multiplayer.Generators
 
             if (invalid) return;
 
+            ReportInboundBudget(context, contract, commands, objects);
+
             var source = Render(contract, contractId, states, commands, objects, events, codecModels);
             var hintName = Sanitize(contract.ToDisplayString()) + ".Multiplayer.g.cs";
             context.AddSource(hintName, source);
+        }
+
+        /// <summary>
+        /// Reports the declared worst-case client-to-server rate against the recorded per-connection design budget.
+        /// </summary>
+        /// <remarks>
+        /// This is deliberately partial coverage. Commands and replicated objects each declare an explicit
+        /// <c>MaximumPerSecond</c> and <c>MaximumPayloadBytes</c>, so their inbound ceiling is expressible from the
+        /// frozen contract. Replicated state and presentation events declare neither a rate nor a fan-out, so the
+        /// server-to-client direction - the one a relay meters, and the one lobby size multiplies - cannot be checked
+        /// here. See docs/internal/MultiplayerTransportOptions.md for the recorded gap. The diagnostic is a warning
+        /// because the budget is a pre-gate design constraint rather than a shipped wire invariant.
+        /// </remarks>
+        private static void ReportInboundBudget(
+            SourceProductionContext context,
+            INamedTypeSymbol contract,
+            IReadOnlyList<CommandModel> commands,
+            IReadOnlyList<ObjectModel> objects)
+        {
+            var declared = 0L;
+            foreach (var command in commands)
+            {
+                declared += (long)command.MaximumPerSecond * command.MaximumPayloadBytes;
+            }
+
+            foreach (var item in objects)
+            {
+                declared += (long)item.MaximumPerSecond * item.MaximumPayloadBytes;
+            }
+
+            if (declared <= PerConnectionInboundBudgetBytesPerSecond) return;
+
+            context.ReportDiagnostic(Diagnostic.Create(
+                InboundBudgetExceeded,
+                contract.Locations.FirstOrDefault(),
+                contract.ToDisplayString(),
+                declared.ToString(CultureInfo.InvariantCulture),
+                PerConnectionInboundBudgetBytesPerSecond.ToString(CultureInfo.InvariantCulture)));
         }
 
         private static bool RegisterId(

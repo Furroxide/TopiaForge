@@ -17,11 +17,15 @@ class TopiaForgeLauncherApp extends StatelessWidget {
     required this.repository,
     this.developerRepository,
     this.updateRepository,
+    this.reachabilityProbe,
   });
 
   final LauncherRepository repository;
   final DeveloperRepository? developerRepository;
   final LauncherUpdateRepository? updateRepository;
+
+  /// Developer-only NAT reachability probe. Null in tests and whenever the host cannot supply one.
+  final ReachabilityProbeGateway? reachabilityProbe;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +36,7 @@ class TopiaForgeLauncherApp extends StatelessWidget {
           repository,
           developerRepository: developerRepository,
           updateRepository: updateRepository,
+          reachabilityProbe: reachabilityProbe,
         )..add(const LauncherStarted()),
         child: BlocListener<LauncherBloc, LauncherState>(
           listenWhen: (previous, current) =>
