@@ -25,7 +25,9 @@ the player's selected installation. Its discovery precedence is:
 
 1. The saved selection.
 2. **`ROBOTOPIA_GAME_DIR`** environment variable.
-3. **Windows default:** `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`.
+3. **Windows default:** `%LOCALAPPDATA%\Tomato Cake\launcher\Robotopia`, and also the folder the
+   official launcher moved the game to (see
+   [If the official launcher moved the game](#if-the-official-launcher-moved-the-game)).
 4. **macOS default:** `~/Library/Application Support/Tomato Cake/launcher` (the folder containing
    `Robotopia.app`).
 5. Steam libraries declared in `libraryfolders.vdf`, when an app manifest has
@@ -35,6 +37,28 @@ the player's selected installation. Its discovery precedence is:
 The launcher does not guess a Steam app id, recursively scan Wine/Proton
 prefixes, or accept a folder name without validating the Robotopia payload. Use
 **Select Folder** for another store or a custom location.
+
+### If the official launcher moved the game
+
+On Windows the official Tomato Cake launcher can move Robotopia to another folder or drive. It then
+records the new parent folder as `game_dir` in `%LOCALAPPDATA%\Tomato Cake\launcher\launcher-config.json`,
+and the game lives in `<game_dir>\Robotopia`. TopiaForge offers that folder alongside the default one,
+so the desktop launcher, CLI commands without `--game-dir`, and `topiaforge doctor` find the moved game
+without a saved selection or `ROBOTOPIA_GAME_DIR`.
+
+The official launcher keeps the game's build marker, `installed-build.json`, in
+`%LOCALAPPDATA%\Tomato Cake\launcher` after the move. TopiaForge, the in-game loader and the
+release tools read it from there only for the exact `<game_dir>\Robotopia` folder that
+`launcher-config.json` names. A copy of the game anywhere else never borrows that build number. A
+`filelist.json` left in `%LOCALAPPDATA%\Tomato Cake\launcher` describes an earlier build and is
+never read; the current one sits beside the moved game, in `<game_dir>`.
+
+TopiaForge ignores `launcher-config.json` unless it is a small, strict JSON object with exactly one
+`game_dir`, and `game_dir` is an absolute path on a local drive letter that exists without passing
+through a link or junction. UNC network paths are refused. If the moved game reports
+"Robotopia build metadata is missing", check that the selected folder is exactly `<game_dir>\Robotopia`,
+then repair the game in the official launcher and refresh TopiaForge. As a last resort, point
+`ROBOTOPIA_GAME_DIR` or **Select Folder** at the moved game folder.
 
 CLI commands use `--game-dir` as an exclusive explicit override. Without that
 option they use the same repository adapters and take the highest-precedence

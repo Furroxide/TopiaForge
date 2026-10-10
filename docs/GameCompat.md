@@ -3,7 +3,7 @@
 Safe TopiaForge consumer mods don't compile against `GameCode.dll` and use the V1 SDK instead. Loader-owned
 adapters, specialist providers, and explicitly allowlisted advanced mods still need a bounded native integration
 layer. Those implementations may resolve Robotopia symbols by name — for example `Type.GetType("RobotBody, GameCode")`,
-`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 218 declared bindings across nine current
+`GetMethod("Damage")`, or `Enum.ToObject(DamageType, (int)x)`. There are 220 declared bindings across nine current
 native implementations. When a Robotopia update renames, removes, re-signs, or **re-orders** one of those symbols, a
 guarded binding can otherwise fail quietly. This subsystem turns that runtime drift into a loud, offline,
 reviewable signal while keeping native details out of consumer mods.
@@ -67,9 +67,9 @@ selection, overrides, owned import roots, and cleanup. Manager sources and actua
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
-The build 2478 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
-metadata verification resolve 207 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
-bindings, errors, or warnings. All 33 Manager and 35 Worlds bindings are verifiable. The remaining uncheckable
+The build 2545 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
+metadata verification resolve 209 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
+bindings, errors, or warnings. All 33 Manager and 34 Worlds bindings are verifiable. The remaining uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.
@@ -111,7 +111,8 @@ dotnet run --project src/TopiaForge.GameCompat.Extractor -- extract --out surfac
 ```
 
 Managed-dir resolution order: `--managed <dir>`, `$RobotopiaManagedDir`, `$RobotopiaGameDir\Robotopia_Data\Managed`,
-then the default launcher install path.
+the default launcher install path, then, on Windows, `<game_dir>\Robotopia\Robotopia_Data\Managed` when the
+official launcher's `launcher-config.json` records that it moved the game to `game_dir`.
 
 ## Bumping the pinned build
 
@@ -126,9 +127,13 @@ topiaforge compat bump --build <id>   --windows-sha256 <hex> --mac-sha256 <hex> 
 
 The hashes are not derivable from the repository, so they are supplied explicitly. Take the Windows and Mac
 archive SHA-256 values from the public `latest-build.json`. Take the other three from an official install of
-the new build: the SHA-256 and entry count of `%LOCALAPPDATA%\Tomato Cake\launcher\filelist.json`, and the
-SHA-256 of `Robotopia\Robotopia.exe`. `tools/release/verify-robotopia-install.ps1` cannot read them in
-advance, because it verifies an install against the current pin; run it after the bump to confirm the new pin.
+the new build: the SHA-256 and entry count of the `filelist.json` beside the `Robotopia` game folder, and the
+SHA-256 of `Robotopia\Robotopia.exe`. For a default install that manifest is
+`%LOCALAPPDATA%\Tomato Cake\launcher\filelist.json`. After the official launcher moves the game it is
+`<game_dir>\filelist.json`, and a `filelist.json` left behind in `%LOCALAPPDATA%\Tomato Cake\launcher`
+describes an earlier build; never measure from it. `tools/release/verify-robotopia-install.ps1` cannot read
+them in advance, because it verifies an install against the current pin; run it after the bump to confirm the
+new pin.
 Everything else is derived from the new build id.
 
 Afterwards the command **re-scans every file it owns for the old build id** and fails if any remains, so a
@@ -172,5 +177,10 @@ allowlisted advanced mod genuinely needs a new native binding:
 - `MetadataLoadContext` reads metadata only; it cannot prove a constructor is actually invocable beyond
   shape/accessibility, and cannot follow a runtime `SampleAt()→Sample→Hit` chain. Those are declared explicitly by
   the manifest author, not machine-derived.
+- Snapshots record parameter types, not parameter names. A Harmony hook that binds a target argument by name
+  (PerfFixes' `camera` and `collision`, the Performance Sentry `options`) breaks on a rename that `verify` cannot
+  see, so those names are compared against the new build by hand at each bump.
+- The audit requires a declaration for every `"X, GameCode"` type literal, but not for every member name. A member
+  looked up by name on a captured type is covered by the full surface diff, not by `verify`, until it is declared.
 - The live check needs both a Robotopia installation and this tool present, so for most end users the update-time signal
   arrives through the launcher (see the launcher Diagnostics integration), not the raw CLI.

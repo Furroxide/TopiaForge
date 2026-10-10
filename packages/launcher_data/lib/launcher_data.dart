@@ -23,6 +23,7 @@ export 'src/local_launcher_update_repository.dart';
 export 'src/safe_zip_archive.dart';
 export 'src/sdk_reference_pack.dart';
 export 'src/manifest_migration_writer.dart';
+export 'src/tomato_cake_launcher_state.dart';
 
 export 'src/json_duplicate_properties.dart';
 export 'src/launch_storage_keys.dart';
