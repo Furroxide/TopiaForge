@@ -192,13 +192,21 @@ namespace TopiaForge.GameCompat.Extractor
             // launcher-owned Robotopia directory. After the official launcher moves
             // the game, it stays in the launcher's state directory, which applies
             // only when launcher-config.json names exactly this install's parent.
+            // A copy left at the old default location then has the state
+            // directory as its parent, and must not read that marker.
             if (data.Name.EndsWith("_Data", StringComparison.OrdinalIgnoreCase) && data.Parent != null)
             {
                 var roots = new List<string> { data.Parent.FullName };
                 if (data.Parent.Name.Equals("Robotopia", StringComparison.OrdinalIgnoreCase)
                     && data.Parent.Parent != null)
                 {
-                    roots.Add(data.Parent.Parent.FullName);
+                    if (!TomatoCakeLauncherState.StateMarkerBelongsElsewhere(
+                            data.Parent.Parent.FullName,
+                            launcherStateDirectory))
+                    {
+                        roots.Add(data.Parent.Parent.FullName);
+                    }
+
                     var launcherMarker = TomatoCakeLauncherState.InstalledBuildMarkerFor(
                         data.Parent.FullName,
                         launcherStateDirectory);

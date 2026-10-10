@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 
 namespace TopiaForge.ModManager.Core
 {
@@ -168,6 +170,78 @@ namespace TopiaForge.ModManager.Core
                 return null;
             }
         }
+
+        /// <summary>
+        /// True when <paramref name="directory"/> is the state directory itself and launcher-config.json validly
+        /// names a different game_dir. The state directory's installed-build.json then describes the moved install,
+        /// so a copy left at the old default location must not read it as the marker beside its Robotopia folder.
+        /// Directories are compared by the filesystem's own spelling, so an 8.3 alias of the state directory still
+        /// counts as the state directory. Without a usable record the old rule stands.
+        /// </summary>
+        internal static bool StateMarkerBelongsElsewhere(string directory, string? stateDirectory)
+        {
+            if (string.IsNullOrEmpty(stateDirectory) || string.IsNullOrWhiteSpace(directory) ||
+                !TryReadGameDirectory(stateDirectory, out var gameDirectory, out _))
+            {
+                return false;
+            }
+
+            try
+            {
+                var comparison = WindowsPaths ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                var state = IdentityPath(stateDirectory);
+                return string.Equals(IdentityPath(directory), state, comparison) &&
+                       !string.Equals(IdentityPath(gameDirectory), state, comparison);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// The filesystem's own spelling of an existing directory on Windows, so that two spellings of one directory,
+        /// such as an 8.3 short name and its long name, compare equal. Falls back to the full path when the directory
+        /// cannot be opened, and on other hosts.
+        /// </summary>
+        private static string IdentityPath(string path)
+        {
+            var full = TrimTrailingSeparators(Path.GetFullPath(path));
+            if (!WindowsPaths)
+            {
+                return full;
+            }
+
+            // Zero requested access and full sharing keep this a read-only lookup; backup semantics open a directory.
+            using var handle = CreateFileW(full, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                return full;
+            }
+
+            var buffer = new StringBuilder(32768);
+            var length = GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+            if (length == 0 || length >= buffer.Capacity)
+            {
+                return full;
+            }
+
+            var actual = buffer.ToString();
+            return TrimTrailingSeparators(actual.StartsWith(@"\\?\", StringComparison.Ordinal) ? actual.Substring(4) : actual);
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern SafeFileHandle CreateFileW(
+            string path,
+            uint access,
+            uint sharing,
+            IntPtr security,
+            uint disposition,
+            uint flags,
+            IntPtr template);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder path, uint capacity, uint flags);
 
         /// <summary>
         /// Describes why <paramref name="value"/> is not an absolute local directory path, or returns null when its

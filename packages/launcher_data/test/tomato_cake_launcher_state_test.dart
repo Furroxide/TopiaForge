@@ -223,6 +223,39 @@ void main() {
         isNull,
       );
     });
+
+    test('recognises the state directory by identity, not spelling', () async {
+      fixture.relocatedParent.createSync(recursive: true);
+      fixture.writeGameDirectory(fixture.relocatedParent.path);
+      final link = p.join(fixture.root.path, 'LocalAppData link');
+      linkDirectory(link, fixture.localAppData.path);
+      final linkedState = p.join(link, 'Tomato Cake', 'launcher');
+      final state = fixture.launcherState();
+      final linked = TomatoCakeLauncherState(
+        environment: {'LOCALAPPDATA': link},
+        hostPlatform: 'windows',
+      );
+
+      for (final spelling in [
+        fixture.stateDirectory.path,
+        fixture.alternateSpelling(fixture.stateDirectory),
+        linkedState,
+      ]) {
+        expect(
+          await state.stateMarkerBelongsElsewhere(spelling),
+          isTrue,
+          reason: spelling,
+        );
+      }
+      expect(
+        await linked.stateMarkerBelongsElsewhere(fixture.stateDirectory.path),
+        isTrue,
+      );
+      expect(
+        await state.stateMarkerBelongsElsewhere(fixture.relocatedParent.path),
+        isFalse,
+      );
+    });
   });
 
   group('game_dir shape', () {

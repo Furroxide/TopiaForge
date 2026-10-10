@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
                 ReadsLauncherBuildFromWindowsInstall(root);
                 ReadsRelocatedLauncherBuild(root);
                 StopsAtRejectedMarker(root);
+                StaleDefaultCopyGetsNoMovedMarker(root);
                 FindsRelocatedManagedDirectoryLast(root);
                 ReadsPublicManagedReferenceCacheBuild(root);
                 IgnoresAmbiguousChangelog(root);
@@ -137,6 +138,45 @@ namespace TopiaForge.ModManager.Tests
             File.WriteAllText(Path.Combine(fixture.RelocatedGameRoot, "installed-build.json"), "{\"id\":0}");
             Assert(GameVersionLabelReader.Read(managed, fixture.State) == string.Empty,
                 "a rejected marker in the game root should not fall through to the marker beside it");
+        }
+
+        private static void StaleDefaultCopyGetsNoMovedMarker(string root)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(root, "stale-default");
+            var stale = Path.Combine(fixture.DefaultGameRoot, "Robotopia_Data", "Managed");
+            var moved = Path.Combine(fixture.RelocatedGameRoot, "Robotopia_Data", "Managed");
+            Directory.CreateDirectory(stale);
+            Directory.CreateDirectory(moved);
+            fixture.WriteStateMarker(2545);
+            Assert(GameVersionLabelReader.Read(stale, fixture.State) == "build 2545",
+                "without launcher-config.json the default copy should keep reading the state marker");
+
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            Assert(GameVersionLabelReader.Read(moved, fixture.State) == "build 2545",
+                "the moved game should read the launcher marker");
+            Assert(GameVersionLabelReader.Read(stale, fixture.State) == string.Empty,
+                "a copy left at the old default location should not borrow the moved game's marker");
+
+            if (OperatingSystem.IsWindows())
+            {
+                // An 8.3 short name and a junction name the same directory; see TomatoCakeLauncherStateTests.
+                var junction = Path.Combine(fixture.Root, "state-junction");
+                TomatoCakeLauncherFixture.LinkDirectory(junction, fixture.State);
+                try
+                {
+                    foreach (var alias in new[] { TomatoCakeLauncherFixture.ShortPath(fixture.State), junction })
+                    {
+                        var aliasStale = Path.Combine(alias, "Robotopia", "Robotopia_Data", "Managed");
+                        Assert(GameVersionLabelReader.Read(aliasStale, fixture.State) == string.Empty,
+                            "another spelling should not let the old default copy borrow the moved marker: " + alias);
+                    }
+                }
+                finally
+                {
+                    // Remove the link itself; this suite deletes its root strictly, without following links.
+                    Directory.Delete(junction);
+                }
+            }
         }
 
         private static void FindsRelocatedManagedDirectoryLast(string root)
