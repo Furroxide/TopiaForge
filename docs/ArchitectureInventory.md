@@ -21,11 +21,11 @@ not merely build projects. Update it whenever a public contract, generator, or r
 
 The canonical Robotopia-side loader payload contains thirteen managed assemblies: eleven
 `TopiaForge.*` implementations/contracts plus pinned `System.Reflection.Metadata`
-and `System.Collections.Immutable` 10.0.9. Robotopia build 2478 supplies the
+and `System.Collections.Immutable` 10.0.9. Robotopia build 2545 supplies the
 required `System.Memory`, `System.Buffers`, and
 `System.Runtime.CompilerServices.Unsafe` Unity/Mono profile assemblies; release
 tests verify their exact identities and hashes instead of shadowing them in the
-plugin directory. Build 2478 also preloads its own `System.Reflection.Metadata`
+plugin directory. Build 2545 also preloads its own `System.Reflection.Metadata`
 and `System.Collections.Immutable` 8.0, so the loader may bind to those copies;
 the payload test proves every type and member the loader references exists in
 them. Launcher repair and CLI release packaging consume the same inventory from
@@ -54,7 +54,7 @@ from the thirteen-package release payload.
 | --- | --- | --- |
 | `.topiaforgemod` ZIP + `topiaforge.mod.json` | Manifest V6 is the sole 1.0 schema; omitted multiplayer metadata means standalone-only, while an explicit block opts into bounded protocol/content metadata; retired V4 is rejected with migration guidance | CLI/scaffolds/first-party builds produce; launcher and runtime dispatch/validate/consume |
 | SemVer and version ranges | SemVer 2.0 precedence; exact, wildcard, and comparator-set ranges | C# Core and Dart domain must pass shared parity fixtures |
-| Robotopia build version | Numeric build `N` maps to `0.0.N`; the supported build is `0.0.2478` | Extractor/runtime detect; launcher plans; manifests constrain |
+| Robotopia build version | Numeric build `N` maps to `0.0.N`; the supported build is `0.0.2545` | Extractor/runtime detect; launcher plans; manifests constrain |
 | Manager/profile/session state | Versioned, normalized, bounded, atomic, and strict; installed versions coexist, exact profile pins fail closed, and unpinned profiles select the highest compatible SemVer | Launcher data writes; runtime reads process-scoped session state |
 | Registry entry/index | Format 2, append-only published history, HTTPS + SHA-256 | CLI builds/validates; launcher data consumes as untrusted input |
 | World and TopiaForgeUi bundle manifests | Exact Unity `6000.0.23f1`, target, inputs, and SHA-256 provenance | Unity batch builders produce; CLI/package/runtime validate |
@@ -75,7 +75,7 @@ author identity is supplied.
 
 ## Compatibility, registry, and repository support data
 
-- `baselines/gamecode.surface.baseline.json` is the reviewed build-2478 compatibility surface. The extractor may
+- `baselines/gamecode.surface.baseline.json` is the reviewed build-2545 compatibility surface. The extractor may
   propose an update, but release validation rejects an unexplained or different-build baseline.
 - `bindings/*.gamebindings.json` are the nine first-party provider/advanced-mod runtime binding declarations
   consumed by the compatibility audit. Safe consumer mods such as GravityGun, OppositeDay, Sandbox, and Zombies have no binding

@@ -48,7 +48,7 @@ namespace TopiaForge.ModManager.Tests
             AssertReference(immutable, "System.Runtime.CompilerServices.Unsafe", new Version(6, 0, 0, 0));
 
             var managedDirectory = GetRobotopiaManagedDirectory();
-            // Build 2409 shipped neither assembly. Build 2478 preloads its own 8.0 copies through
+            // Build 2409 shipped neither assembly. Builds 2478 and 2545 preload their own 8.0 copies through
             // ScriptingAssemblies.json, before any plugin loads. Under Unity's Mono the first-loaded copy of an
             // assembly name usually wins, so the loader may bind to the game's copies instead of the bundled 10.0
             // ones, or bind the bundled Metadata against the game's Immutable. Whichever copy binds, every type and

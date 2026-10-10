@@ -69,6 +69,11 @@ void main() {
       'docs/ReleaseChecklist.md',
       '- [x] Robotopia support is build `2409` (`0.0.2409`).\n',
     );
+    _write(
+      root,
+      'docs/ArchitectureInventory.md',
+      'Build 2409 also preloads its own Metadata copy.\n',
+    );
   });
 
   tearDown(() {
@@ -143,6 +148,11 @@ void main() {
     expect(
       _read(root, 'docs/ReleaseChecklist.md'),
       contains('build `2509` (`0.0.2509`)'),
+    );
+    // A sentence may open with the build, capitalised and unquoted.
+    expect(
+      _read(root, 'docs/ArchitectureInventory.md'),
+      contains('Build 2509 also preloads'),
     );
   });
 
