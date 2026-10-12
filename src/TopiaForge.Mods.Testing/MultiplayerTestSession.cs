@@ -204,7 +204,7 @@ namespace TopiaForge.Mods.Testing
             }
 
             var sender = snapshot.LocalParticipantId.Value;
-            var sequence = ++nextCommandSequence;
+            var sequence = AllocateSubmissionSequence();
             var submittedAt = snapshot.Tick;
             var predicted = command.Prediction == PredictionMode.Owner && !HasServerSide;
             var pending = new PendingTestCommand<TRequest, TResponse>(
@@ -503,6 +503,12 @@ namespace TopiaForge.Mods.Testing
 
         internal void SetParticipants(IReadOnlyList<MultiplayerParticipant> participants) =>
             ReplaceSnapshot(participants: participants);
+
+        /// <summary>
+        /// Allocates this node's next submission sequence. Commands and object inputs share it, so every submission
+        /// from one sender has a distinct sequence and therefore a distinct deterministic random stream.
+        /// </summary>
+        internal ulong AllocateSubmissionSequence() => ++nextCommandSequence;
 
         internal void SetTick(NetworkTick tick)
         {

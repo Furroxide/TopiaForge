@@ -39,6 +39,7 @@ namespace TopiaForge.Multiplayer
         private readonly Func<long> timeMilliseconds;
         private MultiplayerSessionSnapshot snapshot;
         private ulong nextObjectId;
+        private long nextSubmissionSequence;
         private bool commandTransactionActive;
         private bool sessionObserverDispatchActive;
         private int sessionObserverDispatchThreadId;
@@ -348,8 +349,10 @@ namespace TopiaForge.Multiplayer
                     var context = new MultiplayerCommandContext(
                         localParticipantId,
                         confirmedAt,
+                        NextSubmissionSequence(),
+                        Snapshot.Seed,
                         cancellationToken,
-                        (id, bytes, audience) => BufferPresentation(ownerModId, events, id, bytes, audience));
+                        (id, bytes, target) => BufferTargetedPresentation(ownerModId, events, id, bytes, target));
                     OperationResult<TResponse> result;
                     try
                     {
@@ -719,6 +722,28 @@ namespace TopiaForge.Multiplayer
                 : OperationResult<bool>.Success(true);
         }
 
+        // Every submission from the single local sender gets its own sequence, so command random streams differ.
+        private ulong NextSubmissionSequence() => (ulong)Interlocked.Increment(ref nextSubmissionSequence);
+
+        // Loopback has one participant: named targets either select it or select nobody.
+        private OperationResult<bool> BufferTargetedPresentation(
+            string ownerModId,
+            List<BufferedPresentation> events,
+            string id,
+            byte[] bytes,
+            PresentationTarget target)
+        {
+            if (target.TryGetAudience(out var audience)) return BufferPresentation(ownerModId, events, id, bytes, audience);
+            if (target.Kind == PresentationTargetKind.Only && !IsParticipant(target.Participant))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The target participant is not in this session.");
+            }
+
+            return target.Selects(localParticipantId, localParticipantId)
+                ? BufferPresentation(ownerModId, events, id, bytes, MultiplayerAudience.Everyone)
+                : OperationResult<bool>.Success(true);
+        }
+
         public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor) =>
             RegisterContract(ProviderOwnerModId, descriptor);
 
@@ -901,9 +926,11 @@ namespace TopiaForge.Multiplayer
                         localParticipantId,
                         item.Id,
                         confirmedAt,
+                        NextSubmissionSequence(),
+                        Snapshot.Seed,
                         item.OwnerId.HasValue && item.OwnerId.Value.Equals(localParticipantId),
                         cancellationToken,
-                        (id, bytes, audience) => BufferPresentation(item.OwnerModId, events, id, bytes, audience));
+                        (id, bytes, target) => BufferTargetedPresentation(item.OwnerModId, events, id, bytes, target));
                     OperationResult<TState> result;
                     try
                     {

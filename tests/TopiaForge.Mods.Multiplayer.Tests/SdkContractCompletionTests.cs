@@ -299,6 +299,59 @@ internal static class SdkContractCompletionTests
             "the interim rig has no replicated presence");
     }
 
+    internal static void SubmissionSequencesAreSenderScoped()
+    {
+        using var rig = MultiplayerTestRig.CreateDedicatedServer();
+        var client = rig.AddRemoteClient("pilot");
+        var objectType = new ReplicatedObjectType<CounterValue, AddRequest>("sequenced");
+        var canonical = new List<ulong>();
+        foreach (var node in new[] { rig.Server, client })
+        {
+            var isServer = ReferenceEquals(node, rig.Server);
+            Require(
+                node.Session.RegisterObjectType(new ReplicatedObjectTypeDefinition<CounterValue, AddRequest>(
+                    objectType,
+                    CounterCodec,
+                    RequestCodec,
+                    (command, state, input) =>
+                    {
+                        if (isServer) canonical.Add(command.Sequence);
+                        return OperationResult<CounterValue>.Success(new CounterValue(state.Value + input.Amount));
+                    })),
+                "register sequenced objects");
+        }
+
+        rig.Flush();
+        var first = Require(rig.Server.Session.SpawnObject(objectType, new CounterValue(0), client.ParticipantId), "spawn first");
+        var second = Require(rig.Server.Session.SpawnObject(objectType, new CounterValue(0), client.ParticipantId), "spawn second");
+        rig.Flush();
+        var a = rig.GetObject<CounterValue, AddRequest>(client, first.Id).SubmitInputAsync(new AddRequest(1));
+        var b = rig.GetObject<CounterValue, AddRequest>(client, second.Id).SubmitInputAsync(new AddRequest(1));
+        rig.Flush();
+        Assert(a.GetAwaiter().GetResult().Result.Succeeded && b.GetAwaiter().GetResult().Result.Succeeded &&
+               canonical.Count == 2 && canonical[0] != canonical[1],
+            "inputs from one sender to different objects get distinct sequences, so their random streams differ");
+
+        using var loopback = new global::TopiaForge.Multiplayer.LoopbackMultiplayerSession("sequence-test");
+        var roll = new MultiplayerCommandType<AddRequest, CounterValue>("roll");
+        var draws = new List<(ulong Sequence, ulong Draw)>();
+        Require(
+            loopback.RegisterCommand(new MultiplayerCommandDefinition<AddRequest, CounterValue>(
+                roll,
+                RequestCodec,
+                CounterCodec,
+                (command, request) =>
+                {
+                    draws.Add((command.Sequence, command.CreateRandom().NextUInt64()));
+                    return OperationResult<CounterValue>.Success(new CounterValue(request.Amount));
+                })),
+            "register loopback roll");
+        loopback.SubmitAsync(roll, new AddRequest(1)).GetAwaiter().GetResult();
+        loopback.SubmitAsync(roll, new AddRequest(1)).GetAwaiter().GetResult();
+        Assert(draws.Count == 2 && draws[0].Sequence != draws[1].Sequence && draws[0].Draw != draws[1].Draw,
+            "loopback commands get distinct sequences and therefore distinct random streams");
+    }
+
     private static int? Ping(int? milliseconds) =>
         new MultiplayerParticipant(
             new ParticipantId("p"), "Player", false, true, false, MultiplayerConnectionQuality.Unknown, milliseconds, default)
