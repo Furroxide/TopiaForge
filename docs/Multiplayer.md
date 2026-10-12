@@ -197,22 +197,33 @@ The contract also carries what live sessions need. It is additive, so existing m
 - Participants report `IsHost`, a bucketed `Quality`, `PingMilliseconds` rounded to 10 ms, and `PlayerKey`.
   Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
 
-Until the live session engine replaces them, the loopback provider and the test rig implement parts of this surface:
-the rig delivers ticks, sequences, seeds, and targeted events, while player actions, replicated presence, and
-`Apply` report `Unavailable` rather than pretending to succeed.
+The test rig runs the session engine, so ticks, sequences, seeds, targeted events, and `Apply` behave there as they
+will in a live session. The loopback provider covers less of the surface until the engine replaces it too. In both,
+player actions and replicated presence report `Unavailable` rather than pretending to succeed.
 
 ## Test before transport
 
-`MultiplayerTestRig` in `TopiaForge.Mods.Testing` supplies standalone, remote-client, listen-server, and headless
-dedicated-server roles. It can drive deterministic latency, loss, duplication, and reordering; late joins and
-reconnects; accepted/rejected prediction; rollback/replay; ownership; and stale input. A session becomes `Ready` only
-after its canonical snapshot is installed. `Disconnect(client)` cancels that client's pending work and updates
-participant connectivity; `Reconnect(client)` installs an exact canonical state/object snapshot before returning to
-`Ready`, so tests can cover ownership release and despawns that occurred while the client was offline. Transient
-presentation events are dropped before `Ready`, deduplicated under reliable retries, and scoped to one connection
-generation. `StartNewSession(id)` exercises the stable-facade contract: registrations remain active, the old session
-token cancels, replicated state resets to its declared default, old objects/subscriptions retire, and connected
-clients receive the replacement snapshot before `Ready`.
+`MultiplayerTestRig` in `TopiaForge.Mods.Testing` runs the same session engine as the provider, connected by a
+deterministic virtual transport instead of sockets. It supplies standalone, remote-client, listen-server, and headless
+dedicated-server roles. The virtual transport models the live session channel, which is reliable and ordered: a
+delayed, lost, or duplicated frame holds later frames behind it rather than letting them overtake it.
+
+- **Conditions.** `MultiplayerNetworkConditions` sets latency and cadences of loss, duplication, and delay.
+  `WithDownstreamRate` adds the live 10 Hz coalescing, and `WithBandwidth` limits each link's byte rate.
+- **Scripted faults.** `rig.Network` holds and releases frames, partitions a client, and stalls a process. It can
+  also lose a frame for good, which breaks the connection, or replay one, which the channel discards.
+- **Connections.** `Disconnect(client)` cancels that client's pending work and releases the objects it owned.
+  `Reconnect(client)` installs an exact canonical snapshot before `Ready`, so tests can cover despawns that happened
+  while the client was offline. `Interrupt` and `Resume` take a client through `Reconnecting`, and `Kick` ends its
+  session.
+- **Sessions.** `StartNewSession(id)` keeps registrations and subscriptions and cancels the old session token. It also
+  resets replicated state to its declared default, despawns old objects, and resynchronizes connected clients before
+  `Ready`.
+- **Accounting.** `Traffic(node)` reports the bytes and frames a node sent and received.
+  `CreateOwnerSession(node, modId)` adds a second mod's session to a node.
+
+A session becomes `Ready` only after its canonical snapshot is installed. A client receives presentation events only
+after it acknowledges `Ready`, so an event published while it synchronizes is dropped, never delivered late.
 
 Use the real-game loopback provider for ordinary Robotopia smoke tests. It executes server-canonical work once in the
 standalone process and exercises generated serialization and registration without claiming that a live network is
