@@ -44,6 +44,8 @@ namespace TopiaForge.Multiplayer.Engine
             this.dispose = dispose ?? throw new ArgumentNullException(nameof(dispose));
         }
 
+        internal bool IsDisposed => Volatile.Read(ref dispose) == null;
+
         public void Dispose() => Interlocked.Exchange(ref dispose, null)?.Invoke();
     }
 

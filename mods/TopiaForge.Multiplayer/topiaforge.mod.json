@@ -7,7 +7,7 @@
   "author": {
     "name": "TopiaForge"
   },
-  "description": "Stable multiplayer API preview and standalone loopback provider. Live networking is not included yet.",
+  "description": "Stable multiplayer API and session engine, hosting a solo session. Live networking is not included yet.",
   "entryAssembly": "TopiaForge.Multiplayer.dll",
   "entryType": "TopiaForge.Multiplayer.MultiplayerMod",
   "dependencies": {},
@@ -19,7 +19,7 @@
     "multiplayer",
     "framework",
     "sdk",
-    "loopback"
+    "session"
   ],
   "license": "AGPL-3.0-or-later",
   "licenseFiles": [

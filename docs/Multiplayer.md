@@ -6,7 +6,7 @@ description: Build and deterministically test server-canonical TopiaForge mods f
 # Multiplayer API preview
 
 TopiaForge does not ship live multiplayer yet. `TopiaForge.Mods.Multiplayer` freezes the future-facing public
-contract, generated wire format, real-game loopback provider, and deterministic multi-peer test rig before a supported
+contract, generated wire format, real-game solo provider, and deterministic multi-peer test rig before a supported
 live transport exists. A V6 mod that omits `multiplayer` is shared implicitly: admission requires the identical package
 on every peer, and `"mode": "standalone"` keeps a mod out of sessions. Replicated state, commands, and objects remain an
 explicit module opt-in, not a claim that arbitrary local mutations can be synchronized safely.
@@ -198,8 +198,8 @@ The contract also carries what live sessions need. It is additive, so existing m
   Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
 
 The test rig runs the session engine, so ticks, sequences, seeds, targeted events, and `Apply` behave there as they
-will in a live session. The loopback provider covers less of the surface until the engine replaces it too. In both,
-player actions and replicated presence report `Unavailable` rather than pretending to succeed.
+will in a live session. The provider runs the same engine in solo sessions. In both, player actions and replicated
+presence report `Unavailable` rather than pretending to succeed.
 
 ## Test before transport
 
@@ -225,9 +225,9 @@ delayed, lost, or duplicated frame holds later frames behind it rather than lett
 A session becomes `Ready` only after its canonical snapshot is installed. A client receives presentation events only
 after it acknowledges `Ready`, so an event published while it synchronizes is dropped, never delivered late.
 
-Use the real-game loopback provider for ordinary Robotopia smoke tests. It executes server-canonical work once in the
-standalone process and exercises generated serialization and registration without claiming that a live network is
-present.
+Use the real-game provider for ordinary smoke tests in Robotopia. It hosts a solo session: the local player is the
+host, canonical work runs once and inline, and a command's events are presented before its confirmation is observed.
+It exercises generated serialization and registration without claiming that a live network is present.
 
 Two build-checked first-party examples keep the intended author experience honest:
 
