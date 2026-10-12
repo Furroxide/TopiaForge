@@ -69,10 +69,13 @@ internal sealed class TransportPair
 
     internal RecordingTransportDiagnostics ClientDiagnostics { get; } = new();
 
-    /// <summary>Connects the client and runs until the host accepts; returns both ends.</summary>
-    internal (TransportConnection Client, TransportConnection Host) Establish(byte[]? pin = null, long maximumMicros = 10_000_000)
+    /// <summary>Connects the client over <paramref name="kind"/> and runs until the host accepts; returns both ends.</summary>
+    internal (TransportConnection Client, TransportConnection Host) Establish(
+        byte[]? pin = null,
+        long maximumMicros = 10_000_000,
+        TransportPathKind kind = TransportPathKind.Direct)
     {
-        var client = Client.Connect(VirtualDatagramNetwork.PathTo(HostNode), Network.Now, pin);
+        var client = Client.Connect(VirtualDatagramNetwork.PathTo(HostNode, kind), Network.Now, pin);
         TransportConnection? host = null;
         var done = Network.RunUntil(
             () => client.State == TransportConnectionState.Established && (host != null || Host.TryAccept(out host)),
@@ -130,6 +133,14 @@ internal sealed class RecordingFrameSink : IFrameSink
     public void OnWindow(ulong maximumOffset) => Windows.Add(maximumOffset);
 
     public void OnDatagram(byte channel, ulong sequence, byte[] payload) => Datagrams.Add((channel, sequence, payload));
+
+    internal List<byte[]> Challenges { get; } = new();
+
+    internal List<byte[]> Responses { get; } = new();
+
+    public void OnPathChallenge(byte[] data) => Challenges.Add(data);
+
+    public void OnPathResponse(byte[] data) => Responses.Add(data);
 }
 
 /// <summary>
@@ -203,8 +214,8 @@ internal sealed class RawTransportPeer
         network.Inject(Node, target, completion);
     }
 
-    /// <summary>Seals whatever frames <paramref name="write"/> produces into the next protected packet.</summary>
-    internal byte[] Send(VirtualNode target, Action<PacketWriter> write)
+    /// <summary>Seals whatever frames <paramref name="write"/> produces into the next protected packet, sent over <paramref name="kind"/>.</summary>
+    internal byte[] Send(VirtualNode target, Action<PacketWriter> write, TransportPathKind kind = TransportPathKind.Direct)
     {
         var plaintext = new byte[ProtectedPacket.MaximumFramesBytes];
         var writer = new PacketWriter();
@@ -215,9 +226,12 @@ internal sealed class RawTransportPeer
         ProtectedPacket.WriteHeader(datagram, RemoteId, number);
         var header = datagram.AsSpan(0, ProtectedPacket.HeaderSize).ToArray();
         send!.Seal(number, header, plaintext, 0, writer.Written, datagram, ProtectedPacket.HeaderSize);
-        network.Inject(Node, target, datagram);
+        network.Inject(Node, target, datagram, kind);
         return datagram;
     }
+
+    /// <summary>Gets the size of every protected datagram <see cref="ReadAll"/> opened.</summary>
+    internal List<int> OpenedSizes { get; } = new();
 
     /// <summary>Opens every protected packet that has arrived and records its frames.</summary>
     internal void ReadAll()
@@ -230,6 +244,7 @@ internal sealed class RawTransportPeer
             var header = bytes.AsSpan(0, ProtectedPacket.HeaderSize).ToArray();
             var number = ProtectedPacket.ReadPacketNumber(bytes, 0);
             if (!receive.TryOpen(number, header, bytes, ProtectedPacket.HeaderSize, bytes.Length - ProtectedPacket.HeaderSize, plaintext, 0, out var length)) continue;
+            OpenedSizes.Add(bytes.Length);
             FrameReader.Read(plaintext, 0, length, Received, new List<PacketRange>());
         }
     }

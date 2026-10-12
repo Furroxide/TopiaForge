@@ -139,7 +139,7 @@ internal static class TransportLifecycleTests
         }
     }
 
-    internal static void ReplayedForgedAndStrayPacketsAreDropped()
+    internal static void ReplayedForgedAndMisaddressedPacketsAreDropped()
     {
         var pair = new TransportPair(24);
         var (client, host) = pair.Establish();
@@ -171,21 +171,20 @@ internal static class TransportLifecycleTests
         misaddressed[1] ^= 0xFF;
         var dropped = pair.Host.Statistics.DatagramsDropped;
         var received = new List<byte[]>();
-        Inject(pair.Network.AddRaw("stray"), captured);
         Inject(pair.ClientNode, farAhead);
         Inject(pair.ClientNode, flipped);
         Inject(pair.ClientNode, misaddressed);
         pair.Network.RunFor(50_000);
         Drain(host, received);
-        That(received.Count == 0 && pair.Host.Statistics.DatagramsDropped == dropped + 4,
-            "a fresh packet from another path, a forged packet number, a flipped byte and an unknown id are all dropped");
+        That(received.Count == 0 && pair.Host.Statistics.DatagramsDropped == dropped + 3,
+            "a forged packet number, a flipped byte and an unknown id are all dropped");
         Inject(pair.ClientNode, captured);
         pair.Network.RunFor(50_000);
         Drain(host, received);
         That(received.Count == 1 && received[0].SequenceEqual(Pattern(200, 1)), "the genuine packet still opens: no forgery moved the replay window");
         Inject(pair.ClientNode, captured);
         pair.Network.RunFor(50_000);
-        That(pair.Host.Statistics.DatagramsDropped == dropped + 5, "and a replay of it is dropped");
+        That(pair.Host.Statistics.DatagramsDropped == dropped + 4, "and a replay of it is dropped");
         holding = false;
         client.Send(ProviderChannel.Session, Pattern(10, 2), 0, 10);
         That(pair.Network.RunUntil(() =>

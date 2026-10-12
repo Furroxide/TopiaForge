@@ -33,10 +33,13 @@ namespace TopiaForge.Multiplayer.Transport
             AckEliciting = 2
         }
 
-        /// <summary>Gets whether something waits to go out in a packet that asks for an acknowledgement.</summary>
+        /// <summary>
+        /// Gets whether something waits to go out in a packet that asks for an acknowledgement. A queued datagram counts
+        /// only once its class may send it.
+        /// </summary>
         private bool HasElicitingWork =>
             probesPending > 0 || pingPending || windowPending || receiveStream.IsWindowUpdateDue || sendStream.HasDataToSend ||
-            realtime.QueuedCount > 0 || voice.QueuedCount > 0;
+            IsDatagramReady(realtime) || IsDatagramReady(voice);
 
         /// <summary>Gets whether a graceful close has delivered everything and only its CLOSE remains.</summary>
         private bool IsReadyToClose => State == TransportConnectionState.Closing && gracefulClose && sendStream.IsFullyAcknowledged;
@@ -88,9 +91,12 @@ namespace TopiaForge.Multiplayer.Transport
                     return;
                 }
 
+                // The connection's own pacer gates first, so only a connection it would let through presses on the uplink.
                 var ackDue = acks.IsAckDue(now, options.MaximumAckDelayMicros);
                 var probe = probesPending > 0;
-                if (!HasElicitingWork || (!probe && !pacer.CanSend(TransportOptions.MaximumDatagramBytes, now)))
+                if (!HasElicitingWork ||
+                    (!probe && (!pacer.CanSend(TransportOptions.MaximumDatagramBytes, now) ||
+                                !endpoint.Uplink.CanSend(TransportOptions.MaximumDatagramBytes, now))))
                 {
                     if (ackDue) SendAckOnly();
                     return;
@@ -148,7 +154,12 @@ namespace TopiaForge.Multiplayer.Transport
             var size = Seal(writer.Written);
             packet.Size = size;
             loss.OnSent(packet);
-            if (eliciting) pacer.OnSent(size);
+            if (eliciting)
+            {
+                pacer.OnSent(size);
+                endpoint.Uplink.OnSent(size);
+            }
+
             return eliciting ? PacketOutcome.AckEliciting : PacketOutcome.AckOnly;
         }
 
@@ -182,6 +193,7 @@ namespace TopiaForge.Multiplayer.Transport
             sendStream.Release();
             realtime.ClearQueued();
             voice.ClearQueued();
+            ClearPaths();
         }
 
         private PacketWriter BeginPacket()
@@ -202,26 +214,42 @@ namespace TopiaForge.Multiplayer.Transport
             return true;
         }
 
-        private static bool WriteDatagrams(PacketWriter writer, DatagramChannel channel)
+        /// <summary>Writes queued datagrams while they fit the packet and their class's share allows them.</summary>
+        private bool WriteDatagrams(PacketWriter writer, DatagramChannel channel)
         {
             var wrote = false;
             while (channel.QueuedCount > 0)
             {
                 var payload = channel.PeekQueued();
-                if (FrameWriter.DatagramSize(channel.NextSequence, payload.Length) > writer.Remaining) break;
+                var size = FrameWriter.DatagramSize(channel.NextSequence, payload.Length);
+                if (size > writer.Remaining || !shaper.CanSend(channel.Number, size, now)) break;
                 FrameWriter.WriteDatagram(writer, channel.Number, channel.TakeQueued(), payload);
+                shaper.OnSent(channel.Number, size);
                 wrote = true;
             }
 
             return wrote;
         }
 
+        private bool IsDatagramReady(DatagramChannel channel) =>
+            channel.QueuedCount > 0 && shaper.CanSend(channel.Number, HeadDatagramSize(channel), now);
+
+        /// <summary>Gets when the head of a channel's queue may go, or <see cref="long.MaxValue"/> when nothing waits.</summary>
+        private long DatagramReadyAt(DatagramChannel channel) =>
+            channel.QueuedCount == 0 ? long.MaxValue : shaper.NextAvailable(channel.Number, HeadDatagramSize(channel), now);
+
+        private static int HeadDatagramSize(DatagramChannel channel) =>
+            FrameWriter.DatagramSize(channel.NextSequence, channel.PeekQueued().Length);
+
         /// <summary>Gets how many stream bytes fit in the rest of the packet, after a STREAM header for them.</summary>
         private int StreamRoom(PacketWriter writer) =>
             writer.Remaining - 1 - PacketWriter.VarUIntSize(sendStream.WriteOffset) - PacketWriter.VarUIntSize((ulong)writer.Remaining);
 
-        /// <summary>Seals the frames written so far into a pooled datagram and queues it; returns its size.</summary>
-        private int Seal(int frameBytes)
+        /// <summary>
+        /// Seals the frames written so far into a pooled datagram and queues it for <paramref name="destination"/>, the
+        /// validated path unless a path frame says otherwise; returns its size.
+        /// </summary>
+        private int Seal(int frameBytes, TransportPath? destination = null)
         {
             var number = nextPacketNumber++;
             var buffer = endpoint.RentBuffer();
@@ -229,7 +257,7 @@ namespace TopiaForge.Multiplayer.Transport
             var header = endpoint.SendHeader;
             Buffer.BlockCopy(buffer, 0, header, 0, ProtectedPacket.HeaderSize);
             var size = ProtectedPacket.HeaderSize + sendKey!.Seal(number, header, endpoint.SendPlaintext, 0, frameBytes, buffer, ProtectedPacket.HeaderSize);
-            endpoint.Enqueue(Path, buffer, size);
+            endpoint.Enqueue(destination ?? Path, buffer, size);
             PacketsSent++;
             BytesSent += size;
             lastSentAt = now;
