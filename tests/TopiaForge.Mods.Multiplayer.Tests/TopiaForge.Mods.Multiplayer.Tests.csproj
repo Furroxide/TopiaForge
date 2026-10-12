@@ -14,5 +14,7 @@
     <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.DroneSample\TopiaForge.Multiplayer.DroneSample.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
+    <!-- The compile-check engine assembly grants this harness its internals for the white-box tests. -->
+    <ProjectReference Include="..\..\src\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.csproj" />
   </ItemGroup>
 </Project>

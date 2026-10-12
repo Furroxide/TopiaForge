@@ -63,6 +63,9 @@
           Pack="true" PackagePath="lib\netstandard2.1\TopiaForge.Mods.Worlds.dll" />
   </ItemGroup>
 
+  <!-- The multiplayer rig runs the same session engine as the provider, linked in as internal source. -->
+  <Import Project="..\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.props" />
+
   <ItemGroup>
     <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.Chronos\TopiaForge.Mods.Chronos.csproj" />
     <TopiaForgeTestingRuntimeProject Include="..\TopiaForge.Mods.CreatorContent\TopiaForge.Mods.CreatorContent.csproj" />
