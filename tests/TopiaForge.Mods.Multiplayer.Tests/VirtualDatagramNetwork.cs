@@ -18,23 +18,41 @@ internal sealed class NetworkConditions
     internal double DuplicateRate { get; set; }
 }
 
-/// <summary>One attachment point: a transport endpoint, or a raw inbox a test reads and writes by hand.</summary>
+/// <summary>
+/// One attachment point: a transport endpoint, or a raw inbox a test reads and writes by hand. A node is reachable
+/// three ways, as in the field: directly, through a relay, and on the LAN. A datagram sent to one of its addresses
+/// arrives as if from the sender's address of the same kind, the way a relay shows each side only its channel.
+/// </summary>
 internal sealed class VirtualNode
 {
+    private readonly int index;
+    private int rebinds;
+
     internal VirtualNode(string name, int index, TransportEndpoint? endpoint)
     {
         Name = name;
         Endpoint = endpoint;
-        Address = new byte[] { 10, 0, 0, (byte)index, 0x6A, 0x72 };
+        this.index = index;
     }
 
     internal string Name { get; }
 
     internal TransportEndpoint? Endpoint { get; }
 
-    internal byte[] Address { get; }
+    /// <summary>Gets the direct address; a NAT rebinding changes it.</summary>
+    internal byte[] Address => AddressOf(TransportPathKind.Direct);
 
     internal Queue<(VirtualNode From, byte[] Bytes)> Inbox { get; } = new();
+
+    internal byte[] AddressOf(TransportPathKind kind) => kind switch
+    {
+        TransportPathKind.Relayed => new byte[] { 100, 64, 0, (byte)index, 0x0D, 0x96 },
+        TransportPathKind.Lan => new byte[] { 192, 168, 0, (byte)index, 0x6A, 0x72 },
+        _ => new byte[] { 10, (byte)rebinds, 0, (byte)index, 0x6A, 0x72 }
+    };
+
+    /// <summary>Moves the node to a new direct address, as a NAT does when its mapping expires; the old one goes dead.</summary>
+    internal void Rebind() => rebinds++;
 }
 
 /// <summary>
@@ -70,6 +88,12 @@ internal sealed class VirtualDatagramNetwork
     /// <summary>Gets or sets an observer of every datagram an endpoint sends, before the network acts on it.</summary>
     internal Action<VirtualNode, VirtualNode?, byte[]>? Observe { get; set; }
 
+    /// <summary>Gets or sets an observer that also sees the path each datagram was addressed to, and so its kind.</summary>
+    internal Action<VirtualNode, TransportPath, byte[]>? ObservePath { get; set; }
+
+    /// <summary>Gets or sets a filter on the destination path, which can make one kind of path unreachable.</summary>
+    internal Func<VirtualNode, TransportPath, bool>? Unreachable { get; set; }
+
     internal long Sent { get; private set; }
 
     internal long Delivered { get; private set; }
@@ -86,10 +110,12 @@ internal sealed class VirtualDatagramNetwork
     internal VirtualNode AddRaw(string name) => Add(name, null);
 
     /// <summary>Gets the path a node uses to reach <paramref name="target"/>: its address, as the I/O layer would key it.</summary>
-    internal static TransportPath PathTo(VirtualNode target) => new(target.Address, TransportPathKind.Direct);
+    internal static TransportPath PathTo(VirtualNode target, TransportPathKind kind = TransportPathKind.Direct) =>
+        new(target.AddressOf(kind), kind);
 
     /// <summary>Sends bytes from a node as if its socket had, through the same conditions as endpoint traffic.</summary>
-    internal void Inject(VirtualNode from, VirtualNode to, byte[] bytes) => Schedule(from, to, (byte[])bytes.Clone());
+    internal void Inject(VirtualNode from, VirtualNode to, byte[] bytes, TransportPathKind kind = TransportPathKind.Direct) =>
+        Schedule(from, to, kind, (byte[])bytes.Clone());
 
     /// <summary>Cuts or restores both directions between two nodes. Datagrams already in flight still arrive.</summary>
     internal void Partition(VirtualNode left, VirtualNode right, bool cut)
@@ -175,7 +201,7 @@ internal sealed class VirtualDatagramNetwork
             inFlight.RemoveAt(0);
             Delivered++;
             var to = datagram.To;
-            if (to.Endpoint != null) to.Endpoint.Receive(PathTo(datagram.From), datagram.Bytes, 0, datagram.Bytes.Length, Now);
+            if (to.Endpoint != null) to.Endpoint.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
             else to.Inbox.Enqueue((datagram.From, datagram.Bytes));
         }
 
@@ -187,13 +213,28 @@ internal sealed class VirtualDatagramNetwork
             {
                 var bytes = new byte[outgoing.Length];
                 Buffer.BlockCopy(outgoing.Buffer, 0, bytes, 0, outgoing.Length);
-                var target = nodes.FirstOrDefault(candidate => candidate.Address.AsSpan().SequenceEqual(outgoing.Path.KeyBytes));
+                var (target, kind) = Resolve(outgoing.Path.KeyBytes);
                 node.Endpoint.Release(outgoing);
                 Observe?.Invoke(node, target, bytes);
-                if (target == null) Lost++;
-                else Schedule(node, target, bytes);
+                ObservePath?.Invoke(node, outgoing.Path, bytes);
+                if (target == null || (Unreachable?.Invoke(node, outgoing.Path) ?? false)) Lost++;
+                else Schedule(node, target, kind, bytes);
             }
         }
+    }
+
+    /// <summary>Finds the node and kind an address belongs to; an address a rebinding retired belongs to nobody.</summary>
+    private (VirtualNode? Node, TransportPathKind Kind) Resolve(byte[] key)
+    {
+        foreach (var node in nodes)
+        {
+            foreach (var kind in new[] { TransportPathKind.Direct, TransportPathKind.Relayed, TransportPathKind.Lan })
+            {
+                if (node.AddressOf(kind).AsSpan().SequenceEqual(key)) return (node, kind);
+            }
+        }
+
+        return (null, TransportPathKind.Direct);
     }
 
     private long NextEvent()
@@ -207,14 +248,17 @@ internal sealed class VirtualDatagramNetwork
         return next;
     }
 
-    private void Schedule(VirtualNode from, VirtualNode to, byte[] bytes)
+    private void Schedule(VirtualNode from, VirtualNode to, TransportPathKind kind, byte[] bytes)
     {
         if (bytes.Length > TransportOptions.MaximumDatagramBytes) throw new InvalidOperationException("A datagram exceeded 1,200 bytes.");
         Sent++;
         transcript.AppendData(BitConverter.GetBytes(Now));
-        transcript.AppendData(new[] { from.Address[3], to.Address[3] });
+        transcript.AppendData(new[] { from.Address[3], to.Address[3], (byte)kind });
         transcript.AppendData(BitConverter.GetBytes(bytes.Length));
         transcript.AppendData(bytes);
+
+        // The receiver sees the sender's address of the same kind, as it stands when the datagram leaves.
+        var source = new TransportPath(from.AddressOf(kind), kind);
         var lost = random.NextDouble() < Conditions.LossRate;
         var copies = random.NextDouble() < Conditions.DuplicateRate ? 2 : 1;
         if (lost || partitions.Contains((from, to)) || (Drop?.Invoke(from, to, bytes) ?? false))
@@ -227,7 +271,7 @@ internal sealed class VirtualDatagramNetwork
         for (var copy = 0; copy < copies; copy++)
         {
             var jitter = Conditions.JitterMicros > 0 ? random.NextInt64(0, Conditions.JitterMicros + 1) : 0;
-            Insert(new InFlight(Now + Math.Max(1, Conditions.LatencyMicros) + jitter, ++ordinal, from, to, bytes));
+            Insert(new InFlight(Now + Math.Max(1, Conditions.LatencyMicros) + jitter, ++ordinal, from, to, source, bytes));
         }
     }
 
@@ -238,5 +282,5 @@ internal sealed class VirtualDatagramNetwork
         inFlight.Insert(index, datagram);
     }
 
-    private sealed record InFlight(long DeliverAt, long Ordinal, VirtualNode From, VirtualNode To, byte[] Bytes);
+    private sealed record InFlight(long DeliverAt, long Ordinal, VirtualNode From, VirtualNode To, TransportPath Source, byte[] Bytes);
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TopiaForge.Multiplayer.Transport.Crypto;
 using TopiaForge.Multiplayer.Transport.Handshake;
 using TopiaForge.Multiplayer.Transport.Packets;
+using TopiaForge.Multiplayer.Transport.Shaping;
 
 namespace TopiaForge.Multiplayer.Transport
 {
@@ -24,6 +25,8 @@ namespace TopiaForge.Multiplayer.Transport
 
         /// <summary>Gets or sets the datagrams discarded because the caller stopped draining the outbound queue.</summary>
         internal long OutboundOverflow { get; set; }
+
+        internal long InfoRepliesSent { get; set; }
     }
 
     /// <summary>
@@ -46,6 +49,7 @@ namespace TopiaForge.Multiplayer.Transport
         private readonly byte[] idBytes = new byte[HandshakePackets.ConnectionIdSize];
         private long connectionCounter;
         private int halfOpen;
+        private int pollOffset;
         private bool disposed;
 
         /// <summary>Creates an endpoint for this install's X25519 static key.</summary>
@@ -59,6 +63,8 @@ namespace TopiaForge.Multiplayer.Transport
             staticPublicKey = X25519.DerivePublicKey(this.staticPrivateKey);
             cookies = new CookieGuard(options.Random, now);
             limiter = new HandshakeLimiter(options.HandshakesPerSecondPerSource, options.HandshakesPerSecond);
+            queryLimiter = new HandshakeLimiter(options.HandshakesPerSecondPerSource, options.HandshakesPerSecond);
+            Uplink = new UplinkGovernor(options.UplinkBytesPerSecond, now);
             EphemeralSource = NewEphemeralKey;
         }
 
@@ -75,6 +81,15 @@ namespace TopiaForge.Multiplayer.Transport
 
         /// <summary>Gets the session bytes all connections hold for their readers.</summary>
         internal long ReassemblyBytes { get; private set; }
+
+        /// <summary>Gets the outbound budget every connection shares, and the shedding it drives.</summary>
+        internal UplinkGovernor Uplink { get; }
+
+        /// <summary>
+        /// Gets how far the endpoint is shedding load: 0 normal, 1 voice halved, 2 voice stopped, 3 the engine should
+        /// also lower its delta rate.
+        /// </summary>
+        internal int SheddingLevel => Uplink.SheddingLevel;
 
         /// <summary>Gets or sets who receives datagrams the transport does not own: STUN and TURN ChannelData.</summary>
         internal Action<TransportPath, ArraySegment<byte>>? ForeignDatagramHandler { get; set; }
@@ -107,6 +122,7 @@ namespace TopiaForge.Multiplayer.Transport
                 throw new ArgumentException("A static key is 32 bytes.", nameof(expectedRemoteStaticKey));
             }
 
+            if (!Permits(path)) throw new ArgumentException("A relay-only endpoint never connects over a direct path.", nameof(path));
             if (ConnectionCount >= Options.MaximumConnections) throw new InvalidOperationException("The endpoint already holds its maximum number of connections.");
             var connection = new TransportConnection(this, path, true, NewConnectionId(), ++connectionCounter, now);
             Register(connection);
@@ -137,8 +153,21 @@ namespace TopiaForge.Multiplayer.Transport
                 return;
             }
 
+            // A relay-only endpoint ignores a direct path entirely, so nothing it does ever answers one.
+            if (!Permits(path))
+            {
+                Statistics.DatagramsDropped++;
+                return;
+            }
+
             switch (first)
             {
+                case PacketType.InfoQuery:
+                    ReceiveInfoQuery(path, datagram, offset, count, now);
+                    return;
+                case PacketType.InfoReply:
+                    ReceiveInfoReply(path, datagram, offset, count, now);
+                    return;
                 case PacketType.Initiation:
                     ReceiveInitiation(path, datagram, offset, count, now);
                     return;
@@ -158,16 +187,30 @@ namespace TopiaForge.Multiplayer.Transport
             }
         }
 
-        /// <summary>Runs every connection's timers and sends what their pacers allow, then forgets closed connections.</summary>
+        /// <summary>
+        /// Runs every connection's timers and sends what their pacers and the shared uplink allow, then forgets closed
+        /// connections. The order rotates each poll, so no connection always meets a spent uplink last.
+        /// </summary>
         internal void Poll(long now)
         {
             ThrowIfDisposed();
-            for (var index = 0; index < connections.Count; index++) connections[index].Poll(now);
+            Uplink.Poll(now);
+            ExpireQueries(now);
+            var count = connections.Count;
+            if (count > 0)
+            {
+                pollOffset = (pollOffset + 1) % count;
+                for (var step = 0; step < count; step++) connections[(pollOffset + step) % count].Poll(now);
+            }
+
             for (var index = connections.Count - 1; index >= 0; index--)
             {
                 if (connections[index].State == TransportConnectionState.Closed) Unregister(index);
             }
         }
+
+        /// <summary>Gets whether the endpoint's privacy setting allows <paramref name="path"/>: relay-only refuses direct ones.</summary>
+        internal bool Permits(TransportPath path) => !Options.RelayOnly || path.Kind != TransportPathKind.Direct;
 
         /// <summary>Gets when <see cref="Poll"/> must next run, or <see cref="long.MaxValue"/> when nothing is pending.</summary>
         internal long NextTimeoutMicros()
@@ -221,6 +264,8 @@ namespace TopiaForge.Multiplayer.Transport
             initiations.Clear();
             accepted.Clear();
             outbound.Clear();
+            outstandingQueries.Clear();
+            infoReplies.Clear();
             halfOpen = 0;
             ReassemblyBytes = 0;
             Array.Clear(staticPrivateKey, 0, staticPrivateKey.Length);

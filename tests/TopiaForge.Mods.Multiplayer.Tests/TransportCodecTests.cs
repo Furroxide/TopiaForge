@@ -72,8 +72,8 @@ internal static class TransportCodecTests
         FrameWriter.WriteClose(writer, CloseCode.FlowControl);
         That(FrameWriter.AckSize(ranges, 4_000) == 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1, "ACK sizing matches what it writes");
         var sink = new RecordingFrameSink();
-        var eliciting = FrameReader.Read(buffer, 0, writer.Written, sink, new List<PacketRange>());
-        That(eliciting == true, "a packet with a PING asks for an acknowledgement");
+        var read = FrameReader.Read(buffer, 0, writer.Written, sink, new List<PacketRange>());
+        That(read == (FrameRead.AckEliciting | FrameRead.NonProbing), "a packet with a PING asks for an acknowledgement and uses its path");
         That(sink.LastAck.Select(range => (range.Smallest, range.Largest)).SequenceEqual(new[] { (90UL, 100UL), (50UL, 60UL), (0UL, 10UL) }),
             "ACK ranges read back newest first");
         That(sink.Pings == 1 && sink.Windows.SequenceEqual(new[] { 3UL * 1024 * 1024 }) && sink.Closes.SequenceEqual(new[] { CloseCode.FlowControl }),
@@ -85,8 +85,19 @@ internal static class TransportCodecTests
         writer.Reset(buffer, 0, buffer.Length);
         FrameWriter.WriteAck(writer, new List<PacketRange> { new(5, 5) }, 0);
         FrameWriter.WriteClose(writer, CloseCode.Normal);
-        That(FrameReader.Read(buffer, 0, writer.Written, new RecordingFrameSink(), new List<PacketRange>()) == false,
+        That(FrameReader.Read(buffer, 0, writer.Written, new RecordingFrameSink(), new List<PacketRange>()) == FrameRead.NonProbing,
             "ACK and CLOSE alone ask for nothing");
+
+        writer.Reset(buffer, 0, buffer.Length);
+        var challenge = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        FrameWriter.WritePathFrame(writer, FrameType.PathChallenge, challenge);
+        FrameWriter.WritePathFrame(writer, FrameType.PathResponse, challenge.Reverse().ToArray());
+        writer.WriteZeros(40);
+        var paths = new RecordingFrameSink();
+        That(FrameReader.Read(buffer, 0, writer.Written, paths, new List<PacketRange>()) == FrameRead.None,
+            "path frames and padding only probe: they ask for nothing and move nothing");
+        That(paths.Challenges.Single().SequenceEqual(challenge) && paths.Responses.Single().SequenceEqual(challenge.Reverse()),
+            "PATH_CHALLENGE and PATH_RESPONSE read back their eight bytes");
         writer.Reset(buffer, 0, buffer.Length);
         FrameWriter.WriteClose(writer, (CloseCode)99);
         var unknownCode = new RecordingFrameSink();
@@ -100,7 +111,8 @@ internal static class TransportCodecTests
         {
             ("an empty packet", Array.Empty<byte>()),
             ("an unknown frame type", new byte[] { 0x7F }),
-            ("a reserved path frame", new byte[] { FrameType.PathChallenge }),
+            ("a truncated path challenge", new byte[] { FrameType.PathChallenge, 1, 2, 3 }),
+            ("a reserved frame type", new byte[] { 0x32 }),
             ("a truncated window", new byte[] { FrameType.Window, 0x80 }),
             ("a stream frame past its bytes", new byte[] { FrameType.Stream, 0, 5, 1, 2 }),
             ("a stream frame larger than a datagram", new byte[] { FrameType.Stream, 0, 0xB1, 0x09 }),

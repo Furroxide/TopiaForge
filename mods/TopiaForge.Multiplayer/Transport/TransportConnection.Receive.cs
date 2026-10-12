@@ -9,22 +9,25 @@ namespace TopiaForge.Multiplayer.Transport
 {
     /// <summary>
     /// Protected packets in: replay check, then authentication, then the frames. A packet that fails either check is
-    /// dropped without a trace, so a forgery never moves the replay window or the timers.
+    /// dropped without a trace, so a forgery never moves the replay window or the timers. An authenticated packet
+    /// counts from any path the endpoint allows, but answers go only to the validated path until another is proven.
     /// </summary>
     internal sealed partial class TransportConnection
     {
         private const int MaximumCloseResends = 3;
 
         private CloseCode? violation;
+        private TransportPath? receivingFrom;
+        private int receivingSize;
+        private ulong largestReceived;
+        private bool anyReceived;
 
         /// <summary>Takes one protected packet addressed to this connection; returns whether it authenticated.</summary>
         internal bool ReceiveProtected(TransportPath from, byte[] data, int offset, int count, long time)
         {
             now = time;
             var key = receiveKey;
-
-            // Paths are fixed until path validation lands; a packet from elsewhere is dropped, never followed.
-            if (key == null || State == TransportConnectionState.Closed || !from.Equals(Path)) return false;
+            if (key == null || State == TransportConnectionState.Closed) return false;
             var number = ProtectedPacket.ReadPacketNumber(data, offset);
             if (!replay.CanAccept(number)) return false;
             var header = endpoint.ReceiveHeader;
@@ -37,16 +40,25 @@ namespace TopiaForge.Multiplayer.Transport
             lastReceivedAt = now;
             IsStalled = false;
             peerConfirmed = true;
+            var newest = !anyReceived || number > largestReceived;
+            if (newest)
+            {
+                largestReceived = number;
+                anyReceived = true;
+            }
+
             if (State == TransportConnectionState.Draining)
             {
                 if (sentClose && closeResends < MaximumCloseResends) closeResendPending = true;
                 return true;
             }
 
-            bool? ackEliciting;
+            FrameRead read;
+            receivingFrom = from;
+            receivingSize = count;
             try
             {
-                ackEliciting = FrameReader.Read(plaintext, 0, length, this, ackRanges);
+                read = FrameReader.Read(plaintext, 0, length, this, ackRanges);
             }
             catch (ProtocolException exception)
             {
@@ -55,9 +67,14 @@ namespace TopiaForge.Multiplayer.Transport
                 CloseWithError(code, TransportCloseReason.ProtocolViolation, exception.Message);
                 return true;
             }
+            finally
+            {
+                receivingFrom = null;
+            }
 
-            // Null means stream bytes could not be buffered: leave the packet unacknowledged so they come again.
-            if (ackEliciting.HasValue) acks.OnPacketReceived(number, ackEliciting.Value, now);
+            // A refused packet could not buffer its stream bytes: leave it unacknowledged so they come again.
+            if ((read & FrameRead.Refused) == 0) acks.OnPacketReceived(number, (read & FrameRead.AckEliciting) != 0, now);
+            if (newest && (read & FrameRead.NonProbing) != 0) OnPeerUsing(from);
             return true;
         }
 

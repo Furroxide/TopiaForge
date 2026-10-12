@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using TopiaForge.Multiplayer.Engine;
 using TopiaForge.Multiplayer.Transport.Crypto;
 using TopiaForge.Multiplayer.Transport.Packets;
+using TopiaForge.Multiplayer.Transport.Paths;
 using TopiaForge.Multiplayer.Transport.Recovery;
+using TopiaForge.Multiplayer.Transport.Shaping;
 using TopiaForge.Multiplayer.Transport.Streams;
 
 namespace TopiaForge.Multiplayer.Transport
@@ -76,8 +78,10 @@ namespace TopiaForge.Multiplayer.Transport
         private readonly TransportOptions options;
         private readonly AckTracker acks = new AckTracker();
         private readonly LossDetector loss = new LossDetector();
-        private readonly RttEstimator rtt;
         private readonly Pacer pacer;
+        private readonly ClassShaper shaper;
+        private readonly PathValidator validator;
+        private RttEstimator rtt;
         private readonly SessionSendStream sendStream = new SessionSendStream(0);
         private readonly SessionReceiveStream receiveStream;
         private readonly DatagramChannel realtime = new DatagramChannel((byte)EngineChannel.Realtime);
@@ -106,6 +110,8 @@ namespace TopiaForge.Multiplayer.Transport
             this.now = now;
             rtt = new RttEstimator(options.InitialRttMicros);
             pacer = new Pacer(options.SustainedBytesPerSecond, options.BurstBytesPerSecond, options.BurstMicros, now);
+            shaper = new ClassShaper(options.VoiceBytesPerSecond, options.RealtimeBytesPerSecond, now);
+            validator = new PathValidator(options.Random);
             receiveStream = new SessionReceiveStream(options.StreamWindowBytes, options.MaximumFrameBytes);
             onAcknowledged = OnPacketAcknowledged;
             onLost = OnPacketLost;
@@ -116,7 +122,8 @@ namespace TopiaForge.Multiplayer.Transport
 
         internal bool IsInitiator { get; }
 
-        internal TransportPath Path { get; }
+        /// <summary>Gets the validated path packets go out on. It changes only after a path validation succeeds.</summary>
+        internal TransportPath Path { get; private set; }
 
         internal ulong LocalConnectionId { get; }
 
@@ -251,6 +258,7 @@ namespace TopiaForge.Multiplayer.Transport
             sendStream.Release();
             realtime.ClearQueued();
             voice.ClearQueued();
+            ClearPaths();
             if (CloseReason != TransportCloseReason.HandshakeFailed)
             {
                 endpoint.Report(TransportDiagnosticKind.Closed, Number, Describe(CloseReason));

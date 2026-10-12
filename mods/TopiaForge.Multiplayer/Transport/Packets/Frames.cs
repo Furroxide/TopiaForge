@@ -6,6 +6,7 @@ namespace TopiaForge.Multiplayer.Transport.Packets
 {
     internal static class FrameType
     {
+        internal const byte Padding = 0x00;
         internal const byte Ping = 0x01;
         internal const byte Ack = 0x02;
         internal const byte Close = 0x03;
@@ -15,8 +16,17 @@ namespace TopiaForge.Multiplayer.Transport.Packets
         internal const byte PathChallenge = 0x30;
         internal const byte PathResponse = 0x31;
 
-        /// <summary>Gets whether a frame asks the peer for an acknowledgement.</summary>
-        internal static bool IsAckEliciting(byte type) => type != Ack && type != Close;
+        /// <summary>Gets the bytes a PATH_CHALLENGE or PATH_RESPONSE carries.</summary>
+        internal const int PathDataSize = 8;
+
+        /// <summary>
+        /// Gets whether a frame asks the peer for an acknowledgement. Path frames do not: validation retries on its own
+        /// timer, and its packets travel on a path the acknowledgements may never use.
+        /// </summary>
+        internal static bool IsAckEliciting(byte type) => type != Ack && type != Close && !IsProbing(type);
+
+        /// <summary>Gets whether a frame only probes a path. A packet of nothing else never moves a connection.</summary>
+        internal static bool IsProbing(byte type) => type == Padding || type == PathChallenge || type == PathResponse;
     }
 
     /// <summary>Why a connection closed. Codes travel in CLOSE frames; no frame carries free text.</summary>
@@ -114,6 +124,13 @@ namespace TopiaForge.Multiplayer.Transport.Packets
             writer.WriteVarUInt((ulong)payload.Length);
             writer.WriteBytes(payload, 0, payload.Length);
         }
+
+        /// <summary>Writes a PATH_CHALLENGE or PATH_RESPONSE with its eight bytes.</summary>
+        internal static void WritePathFrame(PacketWriter writer, byte type, byte[] data)
+        {
+            writer.WriteByte(type);
+            writer.WriteBytes(data, 0, FrameType.PathDataSize);
+        }
     }
 
     /// <summary>What a connection does with each frame of an authenticated packet.</summary>
@@ -131,6 +148,26 @@ namespace TopiaForge.Multiplayer.Transport.Packets
         void OnWindow(ulong maximumOffset);
 
         void OnDatagram(byte channel, ulong sequence, byte[] payload);
+
+        void OnPathChallenge(byte[] data);
+
+        void OnPathResponse(byte[] data);
+    }
+
+    /// <summary>What reading a packet's frames found.</summary>
+    [Flags]
+    internal enum FrameRead
+    {
+        None = 0,
+
+        /// <summary>A frame asked for an acknowledgement.</summary>
+        AckEliciting = 1,
+
+        /// <summary>A frame other than PADDING, PATH_CHALLENGE or PATH_RESPONSE: the peer uses this path for real.</summary>
+        NonProbing = 2,
+
+        /// <summary>The sink refused stream bytes, so the packet must go unacknowledged and the rest went unread.</summary>
+        Refused = 4
     }
 
     /// <summary>
@@ -141,21 +178,27 @@ namespace TopiaForge.Multiplayer.Transport.Packets
     {
         private const int MaximumRanges = 32;
 
-        /// <summary>Delivers every frame to <paramref name="sink"/>; returns whether the packet asked for an acknowledgement.</summary>
-        /// <returns>
-        /// Null when the sink refused stream bytes, so the caller must leave the packet unacknowledged.
-        /// </returns>
-        internal static bool? Read(byte[] buffer, int offset, int count, IFrameSink sink, List<PacketRange> scratch)
+        /// <summary>Delivers every frame to <paramref name="sink"/> and reports what the packet held.</summary>
+        internal static FrameRead Read(byte[] buffer, int offset, int count, IFrameSink sink, List<PacketRange> scratch)
         {
             var reader = new ProtocolReader(buffer, offset, count);
             if (reader.AtEnd) throw new ProtocolException("A protected packet carried no frames.");
-            var ackEliciting = false;
+            var result = FrameRead.None;
             while (!reader.AtEnd)
             {
                 var type = reader.ReadByte();
-                ackEliciting |= FrameType.IsAckEliciting(type);
+                if (FrameType.IsAckEliciting(type)) result |= FrameRead.AckEliciting;
+                if (!FrameType.IsProbing(type)) result |= FrameRead.NonProbing;
                 switch (type)
                 {
+                    case FrameType.Padding:
+                        break;
+                    case FrameType.PathChallenge:
+                        sink.OnPathChallenge(ReadPathData(reader));
+                        break;
+                    case FrameType.PathResponse:
+                        sink.OnPathResponse(ReadPathData(reader));
+                        break;
                     case FrameType.Ping:
                         sink.OnPing();
                         break;
@@ -171,7 +214,7 @@ namespace TopiaForge.Multiplayer.Transport.Packets
                         var streamOffset = reader.ReadVarUInt();
                         var data = reader.ReadBytes(TransportOptions.MaximumDatagramBytes);
                         if (streamOffset > ulong.MaxValue - (ulong)data.Length) throw new ProtocolException("A stream frame overflowed the stream.");
-                        if (!sink.OnStream(streamOffset, data)) return null;
+                        if (!sink.OnStream(streamOffset, data)) return result | FrameRead.Refused;
                         break;
                     case FrameType.Window:
                         sink.OnWindow(reader.ReadVarUInt());
@@ -186,7 +229,14 @@ namespace TopiaForge.Multiplayer.Transport.Packets
                 }
             }
 
-            return ackEliciting;
+            return result;
+        }
+
+        private static byte[] ReadPathData(ProtocolReader reader)
+        {
+            var data = new byte[FrameType.PathDataSize];
+            for (var index = 0; index < data.Length; index++) data[index] = reader.ReadByte();
+            return data;
         }
 
         private static void ReadAck(ProtocolReader reader, List<PacketRange> ranges, out ulong delay)

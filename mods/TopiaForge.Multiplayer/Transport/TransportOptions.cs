@@ -30,7 +30,10 @@ namespace TopiaForge.Multiplayer.Transport
         ProtocolViolation = 2,
 
         /// <summary>A handshake was refused or abandoned.</summary>
-        HandshakeFailed = 3
+        HandshakeFailed = 3,
+
+        /// <summary>A connection moved to a path it had just validated.</summary>
+        PathChanged = 4
     }
 
     /// <summary>Receives transport events. A report names a connection by its local number, never by path or address.</summary>
@@ -50,6 +53,13 @@ namespace TopiaForge.Multiplayer.Transport
 
         /// <summary>Gets or sets whether every Initiation must carry a cookie, not only under load.</summary>
         internal bool AlwaysRequireCookie { get; set; }
+
+        /// <summary>
+        /// Gets or sets the player's "hide my IP" choice. The endpoint then uses only relayed and LAN paths: it never
+        /// sends a transport datagram to a direct Internet path, and drops every one that arrives from such a path.
+        /// STUN and TURN traffic still reaches the NAT layer, which needs it to reach the relay.
+        /// </summary>
+        internal bool RelayOnly { get; set; }
 
         internal int MaximumConnections { get; set; } = 64;
 
@@ -84,6 +94,21 @@ namespace TopiaForge.Multiplayer.Transport
 
         internal long BurstMicros { get; set; } = 2_000_000;
 
+        /// <summary>
+        /// Gets or sets the voice share of each connection: 96 kbit/s, the host's downstream cap. A client's endpoint
+        /// sets 4 KiB/s, the 32 kbit/s upstream cap.
+        /// </summary>
+        internal int VoiceBytesPerSecond { get; set; } = 12 * 1024;
+
+        /// <summary>Gets or sets the Realtime share of each connection: 64 kbit/s.</summary>
+        internal int RealtimeBytesPerSecond { get; set; } = 8 * 1024;
+
+        /// <summary>Gets the Session share each connection keeps whatever the datagram classes do: 96 kbit/s.</summary>
+        internal const int SessionGuaranteeBytesPerSecond = 12 * 1024;
+
+        /// <summary>Gets or sets the outbound budget all connections share: 4,000 kbit/s, the default host uplink.</summary>
+        internal long UplinkBytesPerSecond { get; set; } = 500_000;
+
         /// <summary>Gets the most bytes a session frame's length prefix takes.</summary>
         internal const int FramePrefixBytes = 5;
 
@@ -108,6 +133,15 @@ namespace TopiaForge.Multiplayer.Transport
             {
                 throw new ArgumentOutOfRangeException(nameof(BurstBytesPerSecond));
             }
+
+            // The datagram classes are capped so Session always keeps its guaranteed share of the sustained rate.
+            if (VoiceBytesPerSecond < 0 || RealtimeBytesPerSecond < 0 ||
+                SustainedBytesPerSecond - VoiceBytesPerSecond - RealtimeBytesPerSecond < SessionGuaranteeBytesPerSecond)
+            {
+                throw new ArgumentOutOfRangeException(nameof(VoiceBytesPerSecond));
+            }
+
+            if (UplinkBytesPerSecond < BurstBytesPerSecond) throw new ArgumentOutOfRangeException(nameof(UplinkBytesPerSecond));
 
             // A frame completes only inside the window, so the window must hold the largest frame and its prefix.
             if (MaximumFrameBytes < 1 || StreamWindowBytes < MaximumFrameBytes + FramePrefixBytes)
