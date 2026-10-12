@@ -192,16 +192,7 @@ void main() {
         MultiplayerAdmissionMismatchCode.serverOnlyModOnClient,
       ]),
     );
-
-    final listenHost = const MultiplayerAdmissionPlanner().evaluate(
-      server: _profile('server', [
-        _mode('example.client', ModMultiplayerMode.clientLocal),
-        _mode('example.server', ModMultiplayerMode.serverOnly),
-      ]),
-      client: _profile('client', const []),
-      serverRole: MultiplayerAdmissionServerRole.listenHost,
-    );
-    expect(listenHost.isAdmitted, isTrue);
+    // The listen-host role is covered in both languages by the parity fixture.
   });
 
   test('requires mutual protocol compatibility and exact omitted ranges', () {
