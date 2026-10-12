@@ -234,10 +234,12 @@ const _ownedCopyrightText = 'Copyright (C) 2026 furroxide';
 const _vendoredComponentLicenses = <String, String>{'bepInEx': 'MIT'};
 
 /// First-party mods whose package compiles vendored third-party source, mapped
-/// to the terms that source's authors declare. Each carries the matching
-/// `THIRD_PARTY_NOTICES.md`; a test keeps this map and those files in step.
+/// to an SPDX expression of the terms that source's authors declare. Each
+/// carries the matching `THIRD_PARTY_NOTICES.md`; tests keep this map and the
+/// licences those files name in step.
 const modsWithVendoredSource = <String, String>{
-  'io.github.furroxide.topiaforge.multiplayer': 'MIT',
+  // BouncyCastle C# for the transport, Concentus for voice.
+  'io.github.furroxide.topiaforge.multiplayer': 'MIT AND BSD-3-Clause',
 };
 
 /// Release artifacts built solely from first-party sources. Everything else is

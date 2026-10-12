@@ -129,6 +129,31 @@ void main() {
     }
     expect(withNotices, modsWithVendoredSource.keys.toSet());
   });
+
+  test('each vendoring mod declares exactly the licences its notices name', () {
+    final license = RegExp(r'^- License: (\S+)\s*$', multiLine: true);
+    for (final entry in modsWithVendoredSource.entries) {
+      final directory = Directory(p.join(root, 'mods'))
+          .listSync()
+          .whereType<Directory>()
+          .singleWhere((candidate) {
+            final manifest = File(
+              p.join(candidate.path, 'topiaforge.mod.json'),
+            );
+            return manifest.existsSync() &&
+                (jsonDecode(manifest.readAsStringSync()) as Map)['name'] ==
+                    entry.key;
+          });
+      final notices = File(
+        p.join(directory.path, 'THIRD_PARTY_NOTICES.md'),
+      ).readAsStringSync();
+      final named = {
+        for (final match in license.allMatches(notices)) match.group(1)!,
+      };
+      expect(named, isNotEmpty, reason: entry.key);
+      expect(entry.value.split(' AND ').toSet(), named, reason: entry.key);
+    }
+  });
 }
 
 List<Map<String, Object?>> _packages(Map<String, Object?> sbom) =>
