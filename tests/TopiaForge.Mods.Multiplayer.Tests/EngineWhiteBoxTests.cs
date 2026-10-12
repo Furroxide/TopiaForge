@@ -36,6 +36,7 @@ internal static class EngineWhiteBoxTests
         Assert(joined.Contains(MessageType.JoinAccepted) && joined.Contains(MessageType.SnapshotEnd) && joined[^1] == MessageType.Commit,
             "a raw join receives acceptance, a snapshot and a commit");
 
+        peer.Send((frame, body) => SessionMessages.WriteEpochMessage(frame, body, MessageType.ReadyAck, 0));
         var payload = Encode(RequestCodec, new AddRequest(1));
         peer.SendCommand(0, 5, "add", payload);
         peer.SendCommand(0, 5, "add", payload);
@@ -307,6 +308,120 @@ internal static class EngineWhiteBoxTests
         harness.Advance(61);
         Assert(!harness.Host.Snapshot.TryGetParticipant(new ParticipantId("leaver"), out _),
             "the record expires once the grace period passes");
+    }
+
+    internal static void JoinRequestsNeedAValidDisplayName()
+    {
+        using var harness = new EngineHarness();
+        var good = harness.AddClient("good");
+        var bad = harness.AddRawPeer("bad-name");
+        bad.Join("\u0007bell");
+        harness.Flush();
+        var ended = bad.Receive().LastOrDefault(message => message.Type == MessageType.SessionEnded);
+        Assert(ended.Body != null && JoinMessages.ReadEndReason(ended.Reader()) == MultiplayerSessionEndReason.ProtocolMismatch &&
+               bad.End.State == EngineLinkState.Closed,
+            "a join request whose display name is not a valid identity ends that connection");
+        Assert(good.Engine.Snapshot.State == MultiplayerSessionState.Ready &&
+               !harness.Host.Snapshot.TryGetParticipant(new ParticipantId("bad-name"), out _),
+            "the bad name never reaches the participant list, so no other client is affected");
+    }
+
+    internal static void SubmissionsWaitForTheReadyAcknowledgement()
+    {
+        using var harness = new EngineHarness();
+        var executions = 0;
+        Require(harness.HostSession.RegisterCommand(new MultiplayerCommandDefinition<AddRequest, CounterValue>(
+            AddCommandType,
+            RequestCodec,
+            CounterCodec,
+            (_, request) =>
+            {
+                executions++;
+                return OperationResult<CounterValue>.Success(new CounterValue(request.Amount));
+            })), "register add");
+        var payload = Encode(RequestCodec, new AddRequest(1));
+        var peer = harness.AddRawPeer("eager");
+        peer.Send((frame, body) =>
+        {
+            JoinMessages.WriteJoinRequest(
+                frame,
+                body,
+                new JoinRequestMessage(SessionEngine.ProtocolVersion, "Eager", Array.Empty<ContractEntry>(), Array.Empty<byte>()));
+            ReplicationMessages.WriteCommand(frame, body, new InternWriter(), 0, 1, EngineHarness.Owner, "add", payload);
+        });
+        harness.Flush();
+        var early = peer.Receive().Where(message => message.Type == MessageType.CommandResult)
+            .Select(message => ReplicationMessages.ReadResult(message.Reader())).Single();
+        Assert(early.Outcome.Code == ModErrorCode.InvalidState && executions == 0,
+            "a submission sent before the snapshot is acknowledged is refused and never executes");
+
+        peer.Send((frame, body) =>
+        {
+            SessionMessages.WriteEpochMessage(frame, body, MessageType.ReadyAck, 0);
+            ReplicationMessages.WriteCommand(frame, body, new InternWriter(), 0, 1, EngineHarness.Owner, "add", payload);
+        });
+        harness.Flush();
+        var ready = peer.Receive().Where(message => message.Type == MessageType.CommandResult)
+            .Select(message => ReplicationMessages.ReadResult(message.Reader())).Single();
+        Assert(ready.Outcome.Succeeded && executions == 1, "after the acknowledgement the same sequence executes once");
+    }
+
+    internal static void DespawnPayloadsMustDecode()
+    {
+        var diagnostics = new RecordingDiagnostics();
+        var options = new EngineOptions { StepRateHz = 60, Diagnostics = diagnostics };
+        var network = new VirtualEngineTransport(new VirtualLinkConditions());
+        var pair = network.Connect("client");
+        var client = SessionEngine.CreateClient(options, new MultiplayerSessionId("placeholder"), 0);
+        var facade = client.CreateFacade(EngineHarness.Owner);
+        var boxType = new ReplicatedObjectType<CounterValue, AddRequest>("box");
+        Require(facade.RegisterObjectType(new ReplicatedObjectTypeDefinition<CounterValue, AddRequest>(
+            boxType,
+            CounterCodec,
+            RequestCodec,
+            (_, state, _) => OperationResult<CounterValue>.Success(state))), "register box");
+        client.Connect(pair.ClientEnd, "Client");
+        var host = new RawPeer(pair.HostEnd);
+        host.Send((frame, body) =>
+        {
+            var intern = new InternWriter();
+            JoinMessages.WriteJoinAccepted(frame, body, new JoinAcceptedMessage
+            {
+                SessionId = "raw-session",
+                Seed = 1,
+                ParticipantId = "client",
+                StepRateHz = 60,
+                NextSequence = 1
+            });
+            SessionMessages.WriteEpochMessage(frame, body, MessageType.SnapshotBegin, 0);
+            ReplicationMessages.WriteObjectSpawned(frame, body, intern, new ObjectWireMessage
+            {
+                Owner = EngineHarness.Owner,
+                TypeId = "box",
+                ObjectId = "box-1",
+                Bytes = Encode(CounterCodec, new CounterValue(1))
+            });
+            SessionMessages.WriteEmpty(frame, body, MessageType.SnapshotEnd);
+            SessionMessages.WriteCommit(frame, body, 0, 0);
+        });
+        network.Now = 1;
+        network.DeliverDue(1);
+        client.Pump(20_000);
+        Assert(client.Snapshot.State == MultiplayerSessionState.Ready && facade.GetObjects(boxType).Count == 1,
+            "the client joins and discovers the object");
+
+        host.Send((frame, body) =>
+        {
+            ReplicationMessages.WriteObjectDespawned(frame, body, "box-1", 1, new[] { (byte)'{' });
+            SessionMessages.WriteCommit(frame, body, 1, 0);
+        });
+        network.Now = 2;
+        network.DeliverDue(2);
+        client.Pump(40_000);
+        Assert(client.Snapshot.State == MultiplayerSessionState.Ended &&
+               client.Snapshot.EndReason == MultiplayerSessionEndReason.ProtocolMismatch &&
+               diagnostics.Count(EngineDiagnosticKind.CodecFailed) == 1,
+            "a despawn whose final state does not decode ends the session like any other bad canonical payload");
     }
 
     private static MultiplayerContractDescriptor Descriptor(string digest) =>

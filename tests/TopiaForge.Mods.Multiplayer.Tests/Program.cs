@@ -42,6 +42,8 @@ internal static class Program
             MultiplayerRigTests.GeneratedDroneSamplePredicts();
             MultiplayerRigTests.CommandsSpawnAndEmitOnlyWhenTheyCommit();
             MultiplayerRigTests.HostCodeAppliesObjectChangesOutsideInputs();
+            MultiplayerRigTests.ReconnectSnapshotsResetStatesTheHostDropped();
+            MultiplayerRigTests.RetiredTokenCallbacksSeeTheReplacementSession();
             MultiplayerRigTests.HandlersCannotRegisterOrNestSubmissions();
             MultiplayerRigTests.SessionReplacementResynchronizesRemoteClients();
             MultiplayerRigAdditionTests.HeldFramesWaitForRelease();
@@ -65,6 +67,9 @@ internal static class Program
             EngineWhiteBoxTests.CancellationFromAnotherThreadCompletesAtTheNextPump();
             EngineWhiteBoxTests.MismatchedContractsAreRejectedAtJoin();
             EngineWhiteBoxTests.DepartedParticipantsExpireAfterTheGracePeriod();
+            EngineWhiteBoxTests.JoinRequestsNeedAValidDisplayName();
+            EngineWhiteBoxTests.SubmissionsWaitForTheReadyAcknowledgement();
+            EngineWhiteBoxTests.DespawnPayloadsMustDecode();
             LoopbackProviderTests.RateLimitsEachAuthenticatedSenderPerCommand();
             LoopbackProviderTests.PreAdmissionRejectionsDoNotAdvanceCanonicalTick();
             LoopbackProviderTests.SessionObserversRunAfterSettlementAndCannotReenterCommands();
