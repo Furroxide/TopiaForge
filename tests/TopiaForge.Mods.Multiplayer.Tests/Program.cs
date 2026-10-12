@@ -57,6 +57,7 @@ internal static class Program
             MultiplayerRigAdditionTests.OwnerSessionsKeepWireIdsApart();
             MultiplayerRigAdditionTests.DownstreamRateCoalescesChanges();
             MultiplayerRigAdditionTests.BandwidthDelaysLargeFrames();
+            MultiplayerRigAdditionTests.RateLimitsArePerSender();
             EngineWhiteBoxTests.StaleDuplicateAndOldEpochSubmissionsAreRejected();
             EngineWhiteBoxTests.MalformedTrafficEndsOnlyTheOffendingConnection();
             EngineWhiteBoxTests.ClientEndsWhenTheHostViolatesTheProtocol();
@@ -88,14 +89,19 @@ internal static class Program
             EngineReconciliationTests.CommandEventsAddressTheCommandsSender();
             EngineReconciliationTests.ReRegisteredStatesKeepTheirCanonicalValue();
             EngineReconciliationTests.AFrameHoldsOneMaximumMessageAfterTheSoftLimit();
-            LoopbackProviderTests.RateLimitsEachAuthenticatedSenderPerCommand();
-            LoopbackProviderTests.PreAdmissionRejectionsDoNotAdvanceCanonicalTick();
-            LoopbackProviderTests.SessionObserversRunAfterSettlementAndCannotReenterCommands();
-            LoopbackProviderTests.RejectedAndThrowingCommandsRollbackAllStateAndPresentation();
-            LoopbackProviderTests.ReplicatedObjectsEnforceInputAndStateCodecBounds();
-            LoopbackProviderTests.CommandTransactionsRejectReentrantGraphMutation();
-            LoopbackProviderTests.OwnerFacadesIsolateConsumerLifetimes();
-            LoopbackProviderTests.MutableValuesNeverEscapeCanonicalStorage();
+            EngineOwnerTests.RetiringAnOwnerCancelsOnlyItsSubmissions();
+            EngineOwnerTests.ARegistrationOutlivedByItsFacadeIsCancelled();
+            SoloProviderTests.SoloSessionIsReadyWithTheLocalPlayerHosting();
+            SoloProviderTests.SoloCommandsConfirmInlineAfterTheirEvents();
+            SoloProviderTests.RateLimitsUseASlidingWindowOnProviderTime();
+            SoloProviderTests.RejectedSubmissionsLeaveNoTrace();
+            SoloProviderTests.ObserversRunAfterSettlementAndMaySubmitAgain();
+            SoloProviderTests.RejectedAndThrowingCommandsRollBackStateAndEvents();
+            SoloProviderTests.ObjectInputsEnforceCodecBounds();
+            SoloProviderTests.HandlersDeferGraphChangesAndRefuseRegistration();
+            SoloProviderTests.OwnerFacadesIsolateConsumersAndCloseWithThem();
+            SoloProviderTests.MutableValuesNeverEscapeCanonicalStorage();
+            SoloProviderTests.SoloPumpAllocatesNothing();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

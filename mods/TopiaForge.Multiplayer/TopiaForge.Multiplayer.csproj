@@ -19,5 +19,7 @@
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
+  <!-- The provider runs the same session engine as the test rig, linked in as internal source. -->
+  <Import Project="..\..\src\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.props" />
   <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />
 </Project>

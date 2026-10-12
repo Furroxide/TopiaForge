@@ -159,11 +159,14 @@ namespace TopiaForge.Multiplayer.Engine
                 MultiplayerSessionState.Connecting,
                 startMicros);
 
-        /// <summary>Creates an owner-scoped facade; every facade of an engine shares its snapshot and clock.</summary>
-        internal EngineSessionFacade CreateFacade(string ownerModId)
+        /// <summary>
+        /// Creates an owner-scoped facade; every facade of an engine shares its snapshot and clock. A facade bound to a
+        /// mod lifetime closes when that mod stops.
+        /// </summary>
+        internal EngineSessionFacade CreateFacade(string ownerModId, IModLifetime? lifetime = null)
         {
             if (!ProtocolLimits.IsValidIdentity(ownerModId)) throw new ArgumentException("An owner mod id is required.", nameof(ownerModId));
-            return new EngineSessionFacade(this, ownerModId);
+            return new EngineSessionFacade(this, ownerModId, lifetime);
         }
 
         /// <summary>Advances the engine to <paramref name="now"/>: link traffic, fixed steps, outbound flush, callbacks.</summary>

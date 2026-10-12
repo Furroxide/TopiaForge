@@ -83,7 +83,7 @@ Machine setup and the resumable command sequence are in
       cancellation, and latency/loss/duplication/reordering without listen-host double execution.
 - [ ] Required/optional/client-local/server-only admission and exact-profile tests produce structured mismatch
       reports; packed session mods always synchronize and hash the generated contract lock.
-- [ ] The real-game acceptance mod binds a generated contract through the standalone loopback provider; dedicated
+- [ ] The real-game acceptance mod binds a generated contract through the solo provider; dedicated
       test hosts expose no local-player/presentation access. Live transport and Robotopia hosting remain explicitly
       unsupported pending [`MultiplayerHostingFeasibility.md`](MultiplayerHostingFeasibility.md).
 - [ ] The Counter and Drone multiplayer dogfood samples compile against only the stable package surface and exercise

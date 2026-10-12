@@ -40,6 +40,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets the object an input targets, or null for a command.</summary>
         internal virtual ObjectRecord? Target => null;
 
+        /// <summary>Gets the owner mod of the command or object type this submission targets.</summary>
+        internal abstract string Owner { get; }
+
         internal void RegisterCancellation(CancellationToken cancellationToken)
         {
             if (!cancellationToken.CanBeCanceled) return;
@@ -93,6 +96,8 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal Task<MultiplayerCommandConfirmation<TResponse>> Task => completion.Task;
 
+        internal override string Owner => binding.Key.Owner;
+
         internal override void Write(ProtocolWriter frame, ProtocolWriter body, InternWriter intern) =>
             ReplicationMessages.WriteCommand(frame, body, intern, Epoch, Sequence, binding.Key.Owner, binding.Key.Id, Payload);
 
@@ -133,6 +138,8 @@ namespace TopiaForge.Multiplayer.Engine
         internal Task<MultiplayerCommandConfirmation<TState>> Task => completion.Task;
 
         internal override ObjectRecord? Target => record;
+
+        internal override string Owner => record.Type.Key.Owner;
 
         internal override void Write(ProtocolWriter frame, ProtocolWriter body, InternWriter intern) =>
             ReplicationMessages.WriteObjectInput(frame, body, Epoch, Sequence, record.Id.Value, Payload);

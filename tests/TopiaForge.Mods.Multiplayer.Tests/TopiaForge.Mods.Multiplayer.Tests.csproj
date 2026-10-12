@@ -9,7 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\mods\TopiaForge.Multiplayer\TopiaForge.Multiplayer.csproj" />
+    <!-- The provider links the engine too; an alias keeps its internal engine types from colliding with the
+         compile-check assembly's. Tests reach provider types through `extern alias provider`. -->
+    <ProjectReference Include="..\..\mods\TopiaForge.Multiplayer\TopiaForge.Multiplayer.csproj" Aliases="provider" />
     <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.CounterSample\TopiaForge.Multiplayer.CounterSample.csproj" />
     <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.DroneSample\TopiaForge.Multiplayer.DroneSample.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
