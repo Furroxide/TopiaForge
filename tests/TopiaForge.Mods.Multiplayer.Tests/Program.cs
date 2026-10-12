@@ -171,6 +171,7 @@ internal static class Program
             NetworkDescriptorTests.DescriptorMembersMustAgree();
             NetworkDescriptorTests.SignedDescriptorsMatchTheSharedFixtures();
             NetworkDescriptorTests.DescriptorsRefuseWhatTheyCannotRepresent();
+            NetworkDescriptorTests.SignedValuesCannotBeChangedFromOutside();
             NetworkLinkTests.LinksMatchTheSharedFixtures();
             NetworkLinkTests.IPv6AddressesFollowRfc5952();
             NetworkLinkTests.LanFormatsMatchTheSharedFixtures();

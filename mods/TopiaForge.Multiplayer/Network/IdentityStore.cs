@@ -43,9 +43,17 @@ namespace TopiaForge.Multiplayer.Network
             var bytes = await files.ReadAsync(IdentityPath, cancellationToken).ConfigureAwait(false);
             if (bytes != null)
             {
-                if (LocalIdentity.TryParse(bytes, out var identity, out var error)) return identity!;
-                await files.WriteAsync(UnreadablePath, bytes, cancellationToken).ConfigureAwait(false);
-                IdentityReplaced?.Invoke("The multiplayer identity file was unreadable (" + error + "), so a new identity was created.");
+                // The file holds every secret, so the buffer read from it is zeroed whatever happens next.
+                try
+                {
+                    if (LocalIdentity.TryParse(bytes, out var identity, out var error)) return identity!;
+                    await files.WriteAsync(UnreadablePath, bytes, cancellationToken).ConfigureAwait(false);
+                    IdentityReplaced?.Invoke("The multiplayer identity file was unreadable (" + error + "), so a new identity was created.");
+                }
+                finally
+                {
+                    Array.Clear(bytes, 0, bytes.Length);
+                }
             }
 
             return await CreateAsync(cancellationToken).ConfigureAwait(false);
@@ -57,7 +65,21 @@ namespace TopiaForge.Multiplayer.Network
         private async Task<LocalIdentity> CreateAsync(CancellationToken cancellationToken)
         {
             var identity = LocalIdentity.Create(unixSeconds());
-            await files.WriteAsync(IdentityPath, identity.Serialize(), cancellationToken).ConfigureAwait(false);
+            var bytes = identity.Serialize();
+            try
+            {
+                await files.WriteAsync(IdentityPath, bytes, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                identity.Dispose();
+                throw;
+            }
+            finally
+            {
+                Array.Clear(bytes, 0, bytes.Length);
+            }
+
             return identity;
         }
     }

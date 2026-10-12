@@ -81,6 +81,34 @@ internal static class NetworkDescriptorTests
         That(!SignedServerDescriptor.TryVerify(oversized, null, out _, out var oversizedError) && oversizedError.Contains("larger"), "an oversized document is refused before parsing");
     }
 
+    internal static void SignedValuesCannotBeChangedFromOutside()
+    {
+        var fixture = NetworkFixtures.Load("descriptor/cases.json");
+        var seed = NetworkFixtures.Hex(fixture.GetProperty("keys")[0].Text("signingSeed"));
+        var baseline = Build(fixture.GetProperty("valid")[0].GetProperty("descriptor"));
+        var packages = baseline.Packages.ToList();
+        var descriptor = Rebuild(baseline, packages: packages);
+        var digest = descriptor.PackageDigest;
+        packages.Add(Package("zzz.added.later"));
+        packages.RemoveAt(0);
+        That(descriptor.Packages.Count == baseline.Packages.Count && descriptor.Packages[0].Id == baseline.Packages[0].Id &&
+             CanonicalJson.Serialize(descriptor.ToJson()).SequenceEqual(CanonicalJson.Serialize(baseline.ToJson())) && descriptor.PackageDigest == digest,
+            "changing the caller's list after construction changes nothing the descriptor signs");
+
+        var key = descriptor.TransportKey;
+        key[0] ^= 0xFF;
+        That(!descriptor.TransportKey.SequenceEqual(key) && descriptor.SigningKey.SequenceEqual(baseline.SigningKey), "returned keys are copies");
+
+        var signed = SignedServerDescriptor.Sign(descriptor, seed);
+        var served = signed.Bytes;
+        served[0] = (byte)'[';
+        var signature = signed.Signature;
+        signature[0] ^= 0xFF;
+        That(signed.Bytes[0] == (byte)'{' && WireText.ToHex(WireText.Sha256(signed.Bytes)) == signed.Sha256 && signed.Length == served.Length &&
+             SignedServerDescriptor.TryVerify(signed.Bytes, descriptor.ServerId, out _, out _) && !signed.Signature.SequenceEqual(signature),
+            "the served bytes and the signature are copies, so the pinned hash always matches what is served");
+    }
+
     internal static void CanonicalJsonAcceptsOnlyOneSpelling()
     {
         var value = new JsonObjectNode()

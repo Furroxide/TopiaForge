@@ -78,6 +78,14 @@ internal static class NetworkIdentityTests
             "the next load returns the same identity");
         That(created.Fingerprint == Convert.ToHexString(created.TransportPublicKey).ToLowerInvariant() &&
              created.ServerId == ServerDescriptor.ServerIdOf(created.SigningPublicKey), "the fingerprint and server id derive from the public keys");
+        That(files.LastRead != null && files.LastRead.All(value => value == 0) && files.LastWritten.All(written => written.All(value => value == 0)),
+            "every buffer that held the identity's secrets is zeroed once it is read or written");
+        var exposed = created.TransportPublicKey;
+        exposed[0] ^= 0xFF;
+        var signing = created.SigningPublicKey;
+        signing[0] ^= 0xFF;
+        That(created.Fingerprint == Convert.ToHexString(created.TransportPublicKey).ToLowerInvariant() &&
+             created.ServerId == ServerDescriptor.ServerIdOf(created.SigningPublicKey), "changing a returned key changes nothing inside the identity");
 
         files.Contents[IdentityStore.IdentityPath] = Encoding.UTF8.GetBytes("{\"schema\":\"topiaforge.identity/1\"}");
         using var fresh = store.LoadOrCreateAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -128,12 +136,22 @@ internal static class NetworkIdentityTests
     {
         internal Dictionary<string, byte[]> Contents { get; } = new();
 
-        public Task<byte[]?> ReadAsync(string relativePath, CancellationToken cancellationToken) =>
-            Task.FromResult(Contents.TryGetValue(relativePath, out var bytes) ? (byte[]?)bytes.ToArray() : null);
+        /// <summary>Gets the last buffer handed to the store, which the store must zero after use.</summary>
+        internal byte[]? LastRead { get; private set; }
+
+        /// <summary>Gets every buffer the store wrote from, which it must zero after writing.</summary>
+        internal List<byte[]> LastWritten { get; } = new();
+
+        public Task<byte[]?> ReadAsync(string relativePath, CancellationToken cancellationToken)
+        {
+            LastRead = Contents.TryGetValue(relativePath, out var bytes) ? bytes.ToArray() : null;
+            return Task.FromResult(LastRead);
+        }
 
         public Task WriteAsync(string relativePath, byte[] content, CancellationToken cancellationToken)
         {
             Contents[relativePath] = content.ToArray();
+            if (relativePath == IdentityStore.IdentityPath) LastWritten.Add(content);
             return Task.CompletedTask;
         }
     }

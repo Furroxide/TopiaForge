@@ -83,6 +83,9 @@ namespace TopiaForge.Multiplayer.Network
 
         private static readonly Regex GameBuildText = new Regex("^[0-9A-Za-z._-]{1,16}$", RegexOptions.CultureInvariant);
 
+        private readonly byte[] signingKey;
+        private readonly byte[] transportKey;
+
         internal ServerDescriptor(
             byte[] signingKey,
             byte[] transportKey,
@@ -113,18 +116,24 @@ namespace TopiaForge.Multiplayer.Network
             if (world != null && !WireText.IsDisplayText(world, MaximumTargetNameLength)) throw new ArgumentException("A world name is 1 to 48 printable characters.", nameof(world));
             if (packages == null) throw new ArgumentNullException(nameof(packages));
             if (packages.Count > MaximumPackages) throw new ArgumentException("A descriptor lists at most 512 packages.", nameof(packages));
-            for (var index = 0; index < packages.Count; index++)
+
+            // The list is copied before it is checked, so the caller cannot change it after the digest is taken.
+            var copy = new DescriptorPackage[packages.Count];
+            for (var index = 0; index < copy.Length; index++) copy[index] = packages[index];
+            for (var index = 0; index < copy.Length; index++)
             {
-                if (packages[index] == null) throw new ArgumentException("A package entry is missing.", nameof(packages));
-                if (index > 0 && string.CompareOrdinal(packages[index - 1].Id, packages[index].Id) >= 0)
+                if (copy[index] == null) throw new ArgumentException("A package entry is missing.", nameof(packages));
+                if (index > 0 && string.CompareOrdinal(copy[index - 1].Id, copy[index].Id) >= 0)
                 {
                     throw new ArgumentException("Packages are listed once each, in ordinal order of their ids.", nameof(packages));
                 }
             }
 
-            SigningKey = (byte[])signingKey.Clone();
-            TransportKey = (byte[])transportKey.Clone();
-            ServerId = ServerIdOf(signingKey);
+            var snapshot = Array.AsReadOnly(copy);
+
+            this.signingKey = (byte[])signingKey.Clone();
+            this.transportKey = (byte[])transportKey.Clone();
+            ServerId = ServerIdOf(this.signingKey);
             IssuedAt = issuedAt;
             Name = name;
             GameBuild = gameBuild;
@@ -137,15 +146,15 @@ namespace TopiaForge.Multiplayer.Network
             HostServesPackages = hostServesPackages;
             Gamemode = gamemode;
             World = world;
-            Packages = packages;
-            PackageDigest = WireText.ToHex(WireText.Sha256(CanonicalJson.Serialize(PackagesNode(packages))));
+            Packages = snapshot;
+            PackageDigest = WireText.ToHex(WireText.Sha256(CanonicalJson.Serialize(PackagesNode(snapshot))));
         }
 
-        /// <summary>Gets the host's Ed25519 public key.</summary>
-        internal byte[] SigningKey { get; }
+        /// <summary>Gets a copy of the host's Ed25519 public key.</summary>
+        internal byte[] SigningKey => (byte[])signingKey.Clone();
 
-        /// <summary>Gets the host's X25519 static key, which the transport handshake must present.</summary>
-        internal byte[] TransportKey { get; }
+        /// <summary>Gets a copy of the host's X25519 static key, which the transport handshake must present.</summary>
+        internal byte[] TransportKey => (byte[])transportKey.Clone();
 
         /// <summary>Gets the lowercase hexadecimal SHA-256 of <see cref="SigningKey"/>.</summary>
         internal string ServerId { get; }

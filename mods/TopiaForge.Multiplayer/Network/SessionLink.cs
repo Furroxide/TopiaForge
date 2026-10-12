@@ -196,9 +196,15 @@ namespace TopiaForge.Multiplayer.Network
                 }
             }
 
-            // A name of digits and dots only would read as a malformed address, so it is refused rather than resolved.
-            var last = labels[labels.Length - 1];
-            if (last[0] >= '0' && last[0] <= '9') return false;
+            // A name of digits and dots only would read as a malformed address, so it is refused rather than resolved;
+            // labels may otherwise start with a digit (RFC 1123).
+            var numeric = true;
+            foreach (var character in host)
+            {
+                if (character != '.' && (character < '0' || character > '9')) numeric = false;
+            }
+
+            if (numeric) return false;
             normalized = host.ToLowerInvariant();
             return true;
         }
