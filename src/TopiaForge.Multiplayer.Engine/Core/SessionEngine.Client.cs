@@ -603,7 +603,7 @@ namespace TopiaForge.Multiplayer.Engine
             lost?.Link.Close();
             CancelAllPending(string.IsNullOrEmpty(message) ? "The multiplayer session ended." : message);
             localParticipantId = null;
-            EnterEnded(reason);
+            FinishClientSession(reason, message);
         }
 
         private void FailContract(string what)

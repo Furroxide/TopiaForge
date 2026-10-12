@@ -67,6 +67,18 @@ internal sealed class EngineHarness : IDisposable
         return (engine, engine.CreateFacade(Owner), pair.ClientEnd);
     }
 
+    /// <summary>Pumps <paramref name="engine"/> with the others from now on, and shuts it down with them.</summary>
+    internal void Track(SessionEngine engine) => engines.Add(engine);
+
+    /// <summary>Opens a link from <paramref name="engine"/> to the host, which accepts it, and joins over it.</summary>
+    internal VirtualLinkEnd Join(SessionEngine engine, string identity, byte[]? content = null)
+    {
+        var pair = Network.Connect(identity);
+        Host.Accept(pair.HostEnd);
+        engine.Connect(pair.ClientEnd, identity, content);
+        return pair.ClientEnd;
+    }
+
     internal RawPeer AddRawPeer(string identity)
     {
         var pair = Network.Connect(identity);
