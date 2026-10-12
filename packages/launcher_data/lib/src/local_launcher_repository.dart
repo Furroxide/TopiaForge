@@ -58,6 +58,7 @@ part 'local_launcher_repository/process_helpers.dart';
 part 'local_launcher_repository/acceptance_launch_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
 part 'local_launcher_repository/registry_source_models.dart';
+part 'local_launcher_repository/registry_source_parsing.dart';
 part 'local_launcher_repository/repository_hooks.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
