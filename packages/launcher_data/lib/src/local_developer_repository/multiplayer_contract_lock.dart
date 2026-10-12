@@ -1,6 +1,20 @@
 part of '../local_developer_repository.dart';
 
 const _multiplayerContractLockName = 'topiaforge.multiplayer.lock.json';
+
+/// The contract lock format. Version 3 dropped the mod's protocol version from
+/// the hashed body: the lock is a synchronized file, so hashing the version
+/// made every protocol bump a content mismatch even inside a declared
+/// `peerVersionRange`. The generator's descriptor marker below is a separate
+/// encoding and stays at v2.
+const multiplayerContractLockSchemaVersion = 3;
+
+/// The lock `topiaforge mod add multiplayer` writes before the first sync.
+Map<String, Object?> initialMultiplayerContractLock() => {
+  'schemaVersion': multiplayerContractLockSchemaVersion,
+  'contracts': <Object?>[],
+};
+
 const _multiplayerContractMarker = '// TopiaForge.MultiplayerContractLock:v2:';
 const _multiplayerContractSeparator = '\u001f';
 
@@ -83,7 +97,7 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
     final lockFile = File(p.join(root.path, _multiplayerContractLockName));
     _writeDeveloperTextAtomic(
       lockFile,
-      '${_prettyJson(_expectedMultiplayerContractLock(manifest, contracts))}\n',
+      '${_prettyJson(_expectedMultiplayerContractLock(contracts))}\n',
     );
     return lockFile.path;
   }
@@ -278,11 +292,9 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
   }
 
   Map<String, Object?> _expectedMultiplayerContractLock(
-    ModManifest manifest,
     List<_GeneratedMultiplayerContract> contracts,
   ) => {
-    'schemaVersion': 2,
-    'protocolVersion': ?manifest.multiplayer?.protocol?.version,
+    'schemaVersion': multiplayerContractLockSchemaVersion,
     'contracts': contracts.map((contract) => contract.toJson()).toList(),
   };
 
@@ -316,7 +328,14 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
         '$remedy',
       );
     }
-    final expected = _expectedMultiplayerContractLock(manifest, contracts);
+    if (actual is Map && actual['schemaVersion'] == 2) {
+      throw StateError(
+        '$_multiplayerContractLockName uses lock schemaVersion 2, which also '
+        'hashed the mod protocol version, so every protocol bump looked like a '
+        'content change to admission. $remedy',
+      );
+    }
+    final expected = _expectedMultiplayerContractLock(contracts);
     if (jsonEncode(actual) != jsonEncode(expected)) {
       throw StateError(
         '$_multiplayerContractLockName is stale or tampered and does not '
