@@ -89,6 +89,8 @@ internal static class Program
             EngineReconciliationTests.CommandEventsAddressTheCommandsSender();
             EngineReconciliationTests.ReRegisteredStatesKeepTheirCanonicalValue();
             EngineReconciliationTests.AFrameHoldsOneMaximumMessageAfterTheSoftLimit();
+            EngineOwnerTests.RetiringAnOwnerCancelsOnlyItsSubmissions();
+            EngineOwnerTests.ARegistrationOutlivedByItsFacadeIsCancelled();
             SoloProviderTests.SoloSessionIsReadyWithTheLocalPlayerHosting();
             SoloProviderTests.SoloCommandsConfirmInlineAfterTheirEvents();
             SoloProviderTests.RateLimitsUseASlidingWindowOnProviderTime();
