@@ -196,5 +196,19 @@ internal static class TransportPathTests
         That(raw.OpenedSizes.Contains(challenge.Length) && raw.OpenedSizes.All(size => size <= TransportOptions.MaximumDatagramBytes),
             "and the answer is no larger than the challenge that provoked it (" + challenge.Length + ")");
         That(!accepted!.IsValidatingPath && accepted.PathChanges == 0, "a packet of path frames alone never makes the connection move");
+
+        // A packet packing several challenges still earns one answer, so the answers never outweigh the datagram.
+        raw.OpenedSizes.Clear();
+        var packed = raw.Send(node, writer =>
+        {
+            for (var index = 0; index < 4; index++) FrameWriter.WritePathFrame(writer, FrameType.PathChallenge, new byte[] { (byte)index, 1, 2, 3, 4, 5, 6, 7 });
+            writer.WriteZeros(writer.Remaining);
+        }, TransportPathKind.Lan);
+        network.RunFor(100_000);
+        raw.ReadAll();
+        // Keepalives may also arrive meanwhile; they are small, while each answer is padded to the challenge's size.
+        var answers = raw.OpenedSizes.Where(size => size > 200).ToList();
+        That(raw.Received.Responses.Count == 2 && raw.Received.Responses[1][0] == 0 && answers.Count == 1 && answers.Sum() <= packed.Length,
+            "four challenges in one datagram earn one answer (" + string.Join(", ", raw.OpenedSizes) + " bytes back for " + packed.Length + ")");
     }
 }

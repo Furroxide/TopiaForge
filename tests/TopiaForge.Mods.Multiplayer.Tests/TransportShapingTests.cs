@@ -15,6 +15,33 @@ internal static class TransportShapingTests
     private const int RealtimeRate = 8 * 1024;
     private const int SustainedRate = 32 * 1024;
 
+    internal static void ARateOfZeroSendsNothing()
+    {
+        var bucket = new TokenBucket(0, ClassShaper.DepthBytes, 0);
+        That(!bucket.CanSpend(1, 0) && !bucket.CanSpend(1, 60_000_000) && bucket.NextAvailable(1, 0) == long.MaxValue,
+            "a bucket created at rate zero holds everything back, full or not");
+
+        var shaper = new ClassShaper(VoiceRate, RealtimeRate, 0);
+        That(shaper.CanSend((byte)ProviderChannel.Voice, TransportOptions.MaximumDatagramBytes, 0), "voice starts with a full bucket");
+        shaper.ApplyShedding(2, 0);
+        That(!shaper.CanSend((byte)ProviderChannel.Voice, 1, 0) && shaper.NextAvailable((byte)ProviderChannel.Voice, 1, 0) == long.MaxValue,
+            "shedding voice stops it at once, with its tokens left unspent");
+        That(shaper.CanSend((byte)ProviderChannel.Realtime, TransportOptions.MaximumDatagramBytes, 0), "realtime is untouched");
+        shaper.ApplyShedding(0, 1_000_000);
+        That(shaper.CanSend((byte)ProviderChannel.Voice, TransportOptions.MaximumDatagramBytes, 1_000_000), "voice resumes when shedding ends");
+
+        var silent = new TransportPair(85, configureHost: options => options.VoiceBytesPerSecond = 0);
+        var (_, host) = silent.Establish();
+        var voiceSent = 0;
+        silent.Network.Observe = (from, _, bytes) =>
+        {
+            if (from == silent.HostNode && bytes.Length > 300) voiceSent++;
+        };
+        for (var index = 0; index < 20; index++) host.Send(ProviderChannel.Voice, new byte[400], 0, 400);
+        silent.Network.RunFor(2_000_000);
+        That(voiceSent == 0 && silent.Network.Spins == 0, "a connection configured for no voice sends none and never spins (" + voiceSent + ")");
+    }
+
     internal static void DatagramClassesStayWithinTheirShares()
     {
         var pair = new TransportPair(80);
@@ -110,7 +137,8 @@ internal static class TransportShapingTests
         var total = shares.Sum();
         That(total <= (64 * 1024 * seconds) + (64 * 1024 / 10) + (3 * 16 * 1024), "the host never outruns its uplink (" + total + " bytes in " + seconds + " s)");
         That(shares.All(share => share >= total * 0.25), "each connection gets a fair part (" + string.Join(", ", shares) + ")");
-        That(maximumLevel >= 2 && voiceLate < voiceEarly / 4, "sustained pressure stops voice first (level " + maximumLevel + ", voice " + voiceEarly + " then " + voiceLate + ")");
+        That(maximumLevel == provider::TopiaForge.Multiplayer.Transport.Shaping.UplinkGovernor.MaximumLevel && voiceLate < voiceEarly / 4,
+            "sustained pressure climbs every shedding level and stops voice first (level " + maximumLevel + ", voice " + voiceEarly + " then " + voiceLate + ")");
         That(network.RunUntil(() => host.SheddingLevel == 0, 60_000_000), "once the pressure ends, shedding steps back down");
     }
 

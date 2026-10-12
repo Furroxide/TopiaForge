@@ -155,12 +155,14 @@ internal static class Program
             TransportPathTests.AStrayCopyNeverMovesTheConnection();
             TransportPathTests.OnlyTheEchoedChallengeValidatesAPath();
             TransportPathTests.ChallengesAreAnsweredOnTheirOwnPathAtTheirOwnSize();
+            TransportShapingTests.ARateOfZeroSendsNothing();
             TransportShapingTests.DatagramClassesStayWithinTheirShares();
             TransportShapingTests.SessionKeepsItsShareUnderDatagramLoad();
             TransportShapingTests.IdleClassesLeaveTheirShareToSession();
             TransportShapingTests.TheUplinkIsSharedFairlyAndShedsVoiceFirst();
             TransportInfoTests.BrowsersLearnSessionInfoWithoutAHandshake();
             TransportInfoTests.InfoRepliesAreBoundedMatchedAndRateLimited();
+            TransportInfoTests.QueriesExpireWithoutAPoll();
             TransportEngineTests.EnginesRunASessionOverTheTransport();
             TransportFuzzTests.HostileDatagramsNeverDisturbASession();
             TransportFuzzTests.SeededRunsRepeatEveryByte();

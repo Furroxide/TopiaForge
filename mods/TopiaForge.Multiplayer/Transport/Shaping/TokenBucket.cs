@@ -31,8 +31,10 @@ namespace TopiaForge.Multiplayer.Transport.Shaping
             ratePerSecond = bytesPerSecond;
         }
 
+        /// <summary>Whether <paramref name="bytes"/> may go now. At rate zero nothing may, whatever tokens are left.</summary>
         internal bool CanSpend(int bytes, long now)
         {
+            if (ratePerSecond == 0) return false;
             Refill(now);
             return tokens >= bytes * Scale;
         }
@@ -43,10 +45,10 @@ namespace TopiaForge.Multiplayer.Transport.Shaping
         /// <summary>Gets the earliest time the bucket holds <paramref name="bytes"/>, or <see cref="long.MaxValue"/> at rate zero.</summary>
         internal long NextAvailable(int bytes, long now)
         {
+            if (ratePerSecond == 0) return long.MaxValue;
             Refill(now);
             var deficit = (bytes * Scale) - tokens;
             if (deficit <= 0) return now;
-            if (ratePerSecond == 0) return long.MaxValue;
             return now + ((deficit + ratePerSecond - 1) / ratePerSecond);
         }
 

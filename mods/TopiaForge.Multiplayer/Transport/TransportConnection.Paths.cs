@@ -17,6 +17,7 @@ namespace TopiaForge.Multiplayer.Transport
 
         private readonly Queue<PendingResponse> pathResponses = new Queue<PendingResponse>();
         private readonly List<PathCandidate> dueChallenges = new List<PathCandidate>(PathValidator.MaximumCandidates);
+        private bool answeredThisDatagram;
 
         /// <summary>Gets how many times the connection moved to a validated path.</summary>
         internal int PathChanges { get; private set; }
@@ -43,8 +44,11 @@ namespace TopiaForge.Multiplayer.Transport
         void IFrameSink.OnPathChallenge(byte[] data)
         {
             // The answer goes back on the path the challenge came in on, never larger than the datagram that carried it.
-            if (receivingFrom == null || pathResponses.Count >= MaximumPendingResponses) return;
+            // One datagram earns one answer however many challenges it packs, so the answers to a datagram never
+            // outweigh it; a correct peer sends one challenge per packet.
+            if (receivingFrom == null || answeredThisDatagram || pathResponses.Count >= MaximumPendingResponses) return;
             pathResponses.Enqueue(new PendingResponse(receivingFrom, data, receivingSize));
+            answeredThisDatagram = true;
         }
 
         void IFrameSink.OnPathResponse(byte[] data)

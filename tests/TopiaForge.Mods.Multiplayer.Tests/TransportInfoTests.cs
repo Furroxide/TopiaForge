@@ -82,6 +82,37 @@ internal static class TransportInfoTests
         That(browser.Inbox.Count == 10, "a source gets ten replies a second (" + browser.Inbox.Count + ")");
     }
 
+    internal static void QueriesExpireWithoutAPoll()
+    {
+        var pair = new TransportPair(92);
+        pair.Host.SetInfo(new byte[] { 1 });
+        var hostPath = VirtualDatagramNetwork.PathTo(pair.HostNode);
+        byte[]? query = null;
+        pair.Network.Observe = (_, _, bytes) =>
+        {
+            if (bytes[0] == PacketType.InfoQuery) query = bytes;
+        };
+
+        // The host never answers, so the browser has nothing but the query to wake it.
+        pair.Network.Drop = (from, _, _) => from == pair.HostNode;
+        var start = pair.Network.Now;
+        pair.Client.QueryInfo(hostPath, start);
+        That(pair.Client.NextTimeoutMicros() == start + 5_000_000, "a browser with no connections still wakes when its query expires");
+        pair.Network.RunFor(1_000);
+        var id = PacketWriter.ReadUInt64(query!, 2);
+        That(pair.Client.OutstandingQueryCount == 1, "the query waits for its reply");
+
+        // A reply that turns up after the lifetime matches nothing, even if the endpoint was never polled meanwhile.
+        var late = start + 5_000_001;
+        pair.Client.Receive(hostPath, Reply(id, new byte[] { 1 }), 0, InfoPackets.ReplyHeaderSize + 1, late);
+        That(!pair.Client.TryReceiveInfo(out _) && pair.Client.OutstandingQueryCount == 0, "a late reply is refused and the query forgotten");
+
+        pair.Network.RunFor(late - pair.Network.Now + 1);
+        pair.Client.QueryInfo(hostPath, pair.Network.Now);
+        That(pair.Network.RunUntil(() => pair.Client.OutstandingQueryCount == 0, 6_000_000) && pair.Network.Spins == 0,
+            "an unanswered query expires on schedule without a busy loop");
+    }
+
     private static byte[] Query(ulong id)
     {
         var datagram = new byte[InfoPackets.QuerySize];
