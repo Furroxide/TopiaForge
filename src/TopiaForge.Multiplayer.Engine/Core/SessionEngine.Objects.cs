@@ -213,6 +213,48 @@ namespace TopiaForge.Multiplayer.Engine
             return OperationResult<bool>.Success(true);
         }
 
+        /// <summary>
+        /// Retires an owner whose facade closed, at the next settle point. A host despawns the owner's objects
+        /// canonically, so every peer sees them leave; a client drops its copies and cancels the owner's pending
+        /// submissions.
+        /// </summary>
+        internal void RetireOwner(string owner) => Defer(() => RetireOwnerNow(owner));
+
+        private void RetireOwnerNow(string owner)
+        {
+            if (ended) return;
+            var retired = new List<ObjectRecord>();
+            foreach (var record in objectList)
+            {
+                if (record.Life == ObjectLife.Live && string.Equals(record.Type.Key.Owner, owner, StringComparison.Ordinal)) retired.Add(record);
+            }
+
+            if (Role == EngineRole.Host)
+            {
+                if (retired.Count == 0) return;
+                RunTopLevel(() =>
+                {
+                    foreach (var record in retired)
+                    {
+                        scope.TouchObject(record);
+                        record.Life = ObjectLife.PendingDespawn;
+                        scope.Despawned.Add(record);
+                    }
+
+                    return OperationResult<bool>.Success(true);
+                });
+                return;
+            }
+
+            foreach (var record in retired)
+            {
+                record.Life = ObjectLife.Despawned;
+                RemoveObject(record);
+            }
+
+            CancelOwnerSubmissions(owner, "The mod that submitted this stopped.");
+        }
+
         private NetworkObjectId AllocateObjectId() =>
             new NetworkObjectId(options.ObjectIdPrefix + (++nextObjectNumber).ToString(CultureInfo.InvariantCulture));
 

@@ -228,6 +228,36 @@ internal static class MultiplayerRigAdditionTests
             "it arrives once the link has carried it (" + (rig.Tick.Value - start) + " more ticks)");
     }
 
+    internal static void RateLimitsArePerSender()
+    {
+        using var rig = MultiplayerTestRig.CreateDedicatedServer();
+        var limited = new MultiplayerCommandType<AddRequest, CounterValue>("limited");
+        var first = rig.AddRemoteClient("first-sender");
+        var second = rig.AddRemoteClient("second-sender");
+        foreach (var node in new[] { rig.Server, first, second })
+        {
+            Require(node.Session.RegisterCommand(new MultiplayerCommandDefinition<AddRequest, CounterValue>(
+                limited,
+                RequestCodec,
+                CounterCodec,
+                (_, request) => OperationResult<CounterValue>.Success(new CounterValue(request.Amount)),
+                maximumPerSecond: 1)), "register limited command");
+        }
+
+        rig.Flush();
+        var submissions = new[]
+        {
+            first.Session.SubmitAsync(limited, new AddRequest(1)),
+            second.Session.SubmitAsync(limited, new AddRequest(1)),
+            first.Session.SubmitAsync(limited, new AddRequest(1)),
+            second.Session.SubmitAsync(limited, new AddRequest(1))
+        };
+        rig.Flush();
+        var codes = submissions.Select(item => item.GetAwaiter().GetResult().Result.ErrorCode).ToArray();
+        Assert(codes.SequenceEqual(new[] { ModErrorCode.None, ModErrorCode.None, ModErrorCode.RateLimited, ModErrorCode.RateLimited }),
+            "each sender has its own allowance: one sender's burst never uses up another's");
+    }
+
     private static (MultiplayerTestNode Server, MultiplayerTestNode Client, IReplicatedState<CounterValue> ServerState, IReplicatedState<CounterValue> ClientState)
         AppendPair(MultiplayerTestRig rig)
     {
