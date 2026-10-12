@@ -75,6 +75,7 @@ BouncyCastle in the game; Mono has no binding redirects to settle such a conflic
   - Every file has a renamed namespace, internal top-level types and LF line endings.
   - Every file compiles BouncyCastle's own netstandard2.0 code paths.
   - Eight files drop members that need types left out of the subset (`SecureRandom`, `BigInteger`, `Nat512`).
+  - Three files gain an internal `Wipe` that zeroes key material once the provider is done with it.
 - Full change list: `mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md`, which ships in the provider package. It
   lists every change, with each file's upstream blob hash.
 - License text: `mods/TopiaForge.Multiplayer/ThirdParty/BouncyCastle/LICENSE.md`

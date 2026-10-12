@@ -24,8 +24,9 @@ X25519, Ed25519 and ChaCha20-Poly1305 for the multiplayer transport. The source 
 
 | File | Change |
 | --- | --- |
-| `crypto/macs/Poly1305.cs` | Dropped the import of, and a doc link to, the unvendored `Poly1305KeyGenerator`. |
-| `crypto/modes/ChaCha20Poly1305.cs` | `Init` takes only `ParametersWithIV`; the `AeadParameters` branch is gone, as the provider passes associated data per message. |
+| `crypto/macs/Poly1305.cs` | Dropped the import of, and a doc link to, the unvendored `Poly1305KeyGenerator`. Added an internal `Wipe` that zeroes the one-time key and the accumulator. |
+| `crypto/modes/ChaCha20Poly1305.cs` | `Init` takes only `ParametersWithIV`; the `AeadParameters` branch is gone, as the provider passes associated data per message. Added an internal `Wipe` that zeroes the key copy, the ChaCha20 engine state and keystream, the buffers and the Poly1305 state. |
+| `crypto/parameters/KeyParameter.cs` | Added an internal `Wipe` that zeroes the key copy. |
 | `math/ec/rfc7748/X25519.cs` | Removed both `GeneratePrivateKey(SecureRandom, ...)` overloads; keys come from the provider's `RandomNumberGenerator`. |
 | `math/ec/rfc8032/Ed25519.cs` | Removed the four `GeneratePrivateKey(SecureRandom, ...)` overloads, for the same reason. |
 | `math/raw/Mod.cs` | Removed both `Random(SecureRandom, ...)` overloads; `Platform.Is64BitProcess` became `Environment.Is64BitProcess`. |

@@ -88,5 +88,8 @@ namespace TopiaForge.Multiplayer.ThirdParty.BouncyCastle.Crypto.Parameters
             Arrays.Reverse(m_key, reversed.m_key);
             return reversed;
         }
+
+        // TopiaForge: zeroes this copy of the key once its owner is done with it.
+        internal void Wipe() => Array.Clear(m_key, 0, m_key.Length);
     }
 }
