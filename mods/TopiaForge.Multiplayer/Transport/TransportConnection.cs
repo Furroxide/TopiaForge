@@ -233,13 +233,20 @@ namespace TopiaForge.Multiplayer.Transport
         private DatagramChannel? ChannelFor(byte channel) =>
             channel == (byte)EngineChannel.Realtime ? realtime : channel == (byte)EngineChannel.Voice ? voice : null;
 
-        /// <summary>Ends the connection for good. Diagnostics hear of it once, by number and fixed text.</summary>
+        /// <summary>
+        /// Ends the connection for good and zeroes its keys, since nothing is sent or opened once it is closed.
+        /// Diagnostics hear of it once, by number and fixed text.
+        /// </summary>
         private void Finish(TransportCloseReason reason)
         {
             if (State == TransportConnectionState.Closed) return;
             State = TransportConnectionState.Closed;
             if (CloseReason == TransportCloseReason.None) CloseReason = reason;
             DisposeHandshake();
+            sendKey?.Dispose();
+            receiveKey?.Dispose();
+            sendKey = null;
+            receiveKey = null;
             loss.Clear();
             realtime.ClearQueued();
             voice.ClearQueued();

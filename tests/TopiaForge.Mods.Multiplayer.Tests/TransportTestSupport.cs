@@ -303,6 +303,25 @@ internal static class TransportFrames
     }
 }
 
+/// <summary>Reads the key material the transport keeps in private fields, so tests can see it zeroed.</summary>
+internal static class TransportSecrets
+{
+    internal static CipherState KeyOf(TransportConnection connection, string field) => (CipherState)Field(connection, field);
+
+    internal static bool IsZero(object owner, string field) => ((byte[])Field(owner, field)).All(value => value == 0);
+
+    internal static object Field(object owner, string name)
+    {
+        for (var type = owner.GetType(); type != null; type = type.BaseType)
+        {
+            var field = type.GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (field != null) return field.GetValue(owner) ?? throw new InvalidOperationException("Field " + name + " is null.");
+        }
+
+        throw new InvalidOperationException("No field " + name + " on " + owner.GetType().Name + ".");
+    }
+}
+
 internal static class TransportAssert
 {
     internal static void That(bool condition, string message)

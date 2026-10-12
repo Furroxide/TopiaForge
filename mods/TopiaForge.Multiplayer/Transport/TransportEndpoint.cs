@@ -205,7 +205,7 @@ namespace TopiaForge.Multiplayer.Transport
 
         internal void Release(OutgoingDatagram datagram) => pool.Return(datagram.Buffer);
 
-        /// <summary>Ends every connection without a word and wipes the static key.</summary>
+        /// <summary>Ends every connection without a word, which wipes their keys, then wipes the static key and cookie secrets.</summary>
         public void Dispose()
         {
             if (disposed) return;
@@ -224,6 +224,7 @@ namespace TopiaForge.Multiplayer.Transport
             halfOpen = 0;
             ReassemblyBytes = 0;
             Array.Clear(staticPrivateKey, 0, staticPrivateKey.Length);
+            cookies.Wipe();
         }
 
         internal byte[] RentBuffer() => pool.Rent();

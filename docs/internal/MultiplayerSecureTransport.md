@@ -196,6 +196,10 @@ The engine's three channels map onto two mechanisms.
   address.
 - Diagnostics name connections by a counter, never by path or address.
 - No frame carries a free-text message, so nothing a mod or a player typed can travel outside the session stream.
+- Keys follow the hygiene rules of `MultiplayerTransportCrypto.md`. A connection zeroes both directions' keys when it
+  closes, and a draining connection keeps them only to answer stray packets with CLOSE. Disposing the endpoint ends
+  every connection and zeroes the static key and both cookie secrets. A rotating cookie secret is zeroed as it is
+  discarded.
 
 ## 10. Tests
 

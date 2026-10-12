@@ -7,6 +7,7 @@ using ProviderChannel = provider::TopiaForge.Multiplayer.Engine.EngineChannel;
 using ProviderLinkState = provider::TopiaForge.Multiplayer.Engine.EngineLinkState;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportFrames;
+using static TopiaForge.Mods.Multiplayer.Tests.TransportSecrets;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
@@ -54,6 +55,7 @@ internal static class TransportLifecycleTests
         var pair = new TransportPair(23);
         pair.Network.Conditions.LossRate = 0.1;
         var (client, host) = pair.Establish(maximumMicros: 30_000_000);
+        var keys = new[] { client, host }.SelectMany(end => new[] { KeyOf(end, "sendKey"), KeyOf(end, "receiveKey") }).ToList();
         var frames = Enumerable.Range(0, 5).Select(index => Pattern((index * 4_000) + 10, index)).ToList();
         foreach (var frame in frames) client.Send(ProviderChannel.Session, frame, 0, frame.Length);
         client.Close();
@@ -70,9 +72,26 @@ internal static class TransportLifecycleTests
              client.CloseReason == TransportCloseReason.Local,
             "both sides finish draining");
         That(pair.Client.ConnectionCount == 0 && pair.Host.ConnectionCount == 0, "and the endpoints forget the connection");
+        That(keys.All(key => !key.HasKey), "both sides zero both directions' keys once closed");
         var attempt = pair.Client.Connect(VirtualDatagramNetwork.PathTo(pair.HostNode), pair.Network.Now);
         attempt.Close();
         That(attempt.State == TransportConnectionState.Closed && attempt.CloseReason == TransportCloseReason.Local, "closing mid-handshake abandons it");
+    }
+
+    internal static void DisposingAnEndpointWipesItsSecrets()
+    {
+        var pair = new TransportPair(25, host => host.AlwaysRequireCookie = true);
+        var (client, _) = pair.Establish();
+        var keys = new[] { KeyOf(client, "sendKey"), KeyOf(client, "receiveKey") };
+        pair.Host.Dispose();
+        pair.Client.Dispose();
+        That(client.State == TransportConnectionState.Closed && keys.All(key => !key.HasKey), "disposing an endpoint ends its connections and zeroes their keys");
+        That(IsZero(pair.Client, "staticPrivateKey") && IsZero(pair.Host, "staticPrivateKey"), "and its static key");
+        var cookies = Field(pair.Host, "cookies");
+        That(IsZero(cookies, "currentSecret") && IsZero(cookies, "previousSecret"), "and its cookie secrets");
+        Throws<ObjectDisposedException>(
+            () => pair.Host.Receive(VirtualDatagramNetwork.PathTo(pair.ClientNode), new byte[1], 0, 1, pair.Network.Now),
+            "a disposed endpoint takes nothing more");
     }
 
     internal static void ProtocolViolationsCloseTheConnection()
