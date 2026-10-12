@@ -101,6 +101,25 @@ namespace TopiaForge.Mods.UnityUi
             return this;
         }
 
+        /// <summary>Single-line label that ends in an ellipsis instead of overflowing (table cells, name tags).</summary>
+        public TopiaForgeLabel Ellipsis()
+        {
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            return this;
+        }
+
+        /// <summary>
+        /// Shows text exactly as given: rich-text tags and escape sequences are not interpreted, so
+        /// player-supplied names and messages cannot restyle the label or break its layout.
+        /// </summary>
+        public TopiaForgeLabel PlainText()
+        {
+            text.richText = false;
+            text.parseCtrlCharacters = false;
+            return this;
+        }
+
         /// <summary>Dirty-checked text update.</summary>
         public void SetText(string value)
         {

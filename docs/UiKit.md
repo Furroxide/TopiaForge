@@ -119,5 +119,75 @@ QA catalog. Provider work follows the repository's dirty-setter, pooling, virtua
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
 
+## Multiplayer kit widgets
+
+These renderer widgets are the building blocks for multiplayer screens such as the scoreboard, chat,
+voice settings, the connecting overlay and name tags. They are not part of the safe `Context.Ui`
+contract. Their math and state live in the Unity-free `Core/` folder and are covered by
+`UiKitMultiplayerCoreTests`, including a check that the per-frame paths allocate nothing. The UI
+Gallery's ONLINE page shows each one in its states.
+
+### Sortable table (`TopiaForgeTableView<T>`)
+
+`container.TableView(columns)` adds sortable headers over the virtualized list view. Build columns
+with `TopiaForgeTableColumn<T>.Text`, `Number` or `Custom`, then chain `Width` or `Flex`, `Align`,
+and `Sortable`, `SortBy` or `DescendingFirst`. A header click sorts by that column, a second click
+flips the direction, and a chevron marks both. Sorting is stable and never reorders the caller's
+list. Selection reports the caller's index and follows its row through re-sorts; `Keyed` makes it
+follow the row through new data too. Rows are the list view's buttons, so focus and keyboard
+behaviour match the list view, and `MoveSelection` is the Up/Down hook. Text cells are plain text,
+so markup in a player name is shown literally.
+
+### Signal bars (`TopiaForgeSignalBars`)
+
+A connection glyph with zero to four bars and an unknown state drawn as flat stubs, so unknown
+differs from no bars by shape. `SetPing` maps a round trip through `TopiaForgeSignalThresholds` (60,
+120, 200 and 350 ms by default), `SetQuality` takes a normalized quality, and `SetLevel` takes a
+bucketed level, so callers translate their own quality type. `ShowMilliseconds` adds a ping label
+that is rewritten only when the value changes.
+
+### Phase stepper (`TopiaForgePhaseStepper`)
+
+`PhaseStepper(...)` and `VerticalPhaseStepper(...)` draw a step rail in which each step is pending,
+active, done, failed or skipped. `Start`, `Advance`, `MoveTo`, `Fail`, `Skip`, `Complete` and `Reset`
+follow `TopiaForgePhaseStepperState`, and `SetDetail` and `SetProgress` fill the line under a step
+("Relay", "3/7"). Status reads without color: a number, a check, a cross or a chevron. The active
+node breathes unless motion is reduced.
+
+### Chat log (`TopiaForgeChatLog`)
+
+A bounded HUD log that evicts its oldest line. Every line passes through `TopiaForgePlainText`:
+rich-text tags, escapes, line breaks and bidirectional overrides cannot restyle or spoof the log, and
+lines are bounded (300 characters by default, author names 32). While closed, the newest lines (eight
+by default) show for 8 seconds and then fade over 1.5; reduced motion hides them at once instead.
+`SetOpen(true)` shows the whole history on a backdrop with scrollback. Lines are pooled, so a new
+message rebinds one line. Tones mark player, system, whisper and error lines.
+
+### Talk indicator (`TopiaForgeTalkIndicator`)
+
+A microphone glyph for idle, talking, muted, muted by host, mic busy and no mic. Each state differs in
+glyph or halo (`TopiaForgeTalkPresentation`), and `ShowCaption` names it in text. The talking halo
+breathes with the host's motion intensity and holds still under reduced motion; its driver runs only
+while it breathes. `HideWhenIdle` suits name tags and scoreboard rows.
+
+### Level meter (`TopiaForgeLevelMeter`)
+
+`SetLevel(rms, peak)` takes linear samples every frame and maps them to dBFS through
+`TopiaForgeLevelMath` across `Range` (-60 to 0 dB by default), rising instantly and falling smoothly.
+`SetThreshold` draws the voice-activation marker and `PeakHold` the falling peak mark. The fill tone
+follows the zone: muted below the threshold, success when active, warning when hot and danger when
+clipping.
+
+### Name tags (`TopiaForgeNametagLayer`)
+
+`hud.Nametags()` tracks persistent world-space tags: unlike floaters, a tag stays until it is removed.
+`Track(anchor, name)` follows any `ITopiaForgeNametagAnchor`, such as `TopiaForgeWorldPointAnchor` (an
+engine-independent point) or `TopiaForgeTransformAnchor`, plus a vertical offset. Each frame the layer
+projects anchors with the camera's matrices (`TopiaForgeCameraFrame`), hides tags behind the camera,
+offscreen or out of range, and fades and scales the rest with `TopiaForgeNametagFalloff` (hidden
+within 0.6 m and beyond 40 m by default). A handle sets the name, a secondary line, a badge such as
+HOST, and the talking glyph slot. Names are plain text, and a removed handle stays inert even after
+its pooled tag is reused.
+
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.
