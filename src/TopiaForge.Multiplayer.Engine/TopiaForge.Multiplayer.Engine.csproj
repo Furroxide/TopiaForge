@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile check for the session engine. The engine ships only as internal source linked into
+       TopiaForge.Mods.Testing and the multiplayer provider through TopiaForge.Multiplayer.Engine.props;
+       this assembly exists so the engine builds on its own and the white-box tests can reach it. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TopiaForge.Multiplayer.Engine</AssemblyName>
+    <RootNamespace>TopiaForge.Multiplayer.Engine</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TopiaForge.Mods.Abstractions\TopiaForge.Mods.Abstractions.csproj" />
+    <ProjectReference Include="..\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TopiaForge.Mods.Multiplayer.Tests" />
+  </ItemGroup>
+</Project>
