@@ -714,11 +714,23 @@ type public sealed class TopiaForge.Mods.Testing.ModTestAssertionException : Sys
 
 type public sealed class TopiaForge.Mods.Testing.MultiplayerNetworkConditions : System.Object
   constructor .ctor(System.Int32 latencyTicks = 0, System.Int32 dropEvery = 0, System.Int32 duplicateEvery = 0, System.Int32 reorderEvery = 0, System.Int32 retryDelayTicks = 1)
+  method TopiaForge.Mods.Testing.MultiplayerNetworkConditions WithBandwidth(System.Int32 bytesPerSecond)
+  method TopiaForge.Mods.Testing.MultiplayerNetworkConditions WithDownstreamRate(System.Int32 hertz)
+  property System.Int32 BandwidthBytesPerSecond { get; }
+  property System.Int32 DownstreamRateHz { get; }
   property System.Int32 DropEvery { get; }
   property System.Int32 DuplicateEvery { get; }
   property System.Int32 LatencyTicks { get; }
   property System.Int32 ReorderEvery { get; }
   property System.Int32 RetryDelayTicks { get; }
+
+type public sealed class TopiaForge.Mods.Testing.MultiplayerTestNetwork : System.Object
+  method System.Void DropPermanently(TopiaForge.Mods.Testing.MultiplayerTestNode from, TopiaForge.Mods.Testing.MultiplayerTestNode to)
+  method System.Void HoldNext(TopiaForge.Mods.Testing.MultiplayerTestNode from, TopiaForge.Mods.Testing.MultiplayerTestNode to, System.Int32 frames = 1)
+  method System.Void Partition(TopiaForge.Mods.Testing.MultiplayerTestNode client, System.Int32 ticks)
+  method System.Void Release(TopiaForge.Mods.Testing.MultiplayerTestNode from, TopiaForge.Mods.Testing.MultiplayerTestNode to)
+  method System.Void ReplayLast(TopiaForge.Mods.Testing.MultiplayerTestNode from, TopiaForge.Mods.Testing.MultiplayerTestNode to)
+  method System.Void Stall(TopiaForge.Mods.Testing.MultiplayerTestNode node, System.Int32 ticks)
 
 type public sealed class TopiaForge.Mods.Testing.MultiplayerTestNode : System.Object
   property System.Boolean IsReady { get; }
@@ -732,10 +744,15 @@ type public sealed class TopiaForge.Mods.Testing.MultiplayerTestRig : System.Obj
   method System.Void AdvanceTime(System.TimeSpan duration)
   method System.Void Disconnect(TopiaForge.Mods.Testing.MultiplayerTestNode client)
   method System.Void Flush(System.Int32 maximumTicks = 256)
+  method System.Void Interrupt(TopiaForge.Mods.Testing.MultiplayerTestNode client)
+  method System.Void Kick(TopiaForge.Mods.Testing.MultiplayerTestNode client)
   method System.Void Reconnect(TopiaForge.Mods.Testing.MultiplayerTestNode client)
+  method System.Void Resume(TopiaForge.Mods.Testing.MultiplayerTestNode client)
   method System.Void StartNewSession(System.String sessionId)
+  method TopiaForge.Mods.IMultiplayerSession CreateOwnerSession(TopiaForge.Mods.Testing.MultiplayerTestNode node, System.String modId)
   method TopiaForge.Mods.IReplicatedObject<TState, TInput> GetObject<TState, TInput>(TopiaForge.Mods.Testing.MultiplayerTestNode node, TopiaForge.Mods.NetworkObjectId id) where TState : class where TInput : class
   method TopiaForge.Mods.Testing.MultiplayerTestNode AddRemoteClient(System.String participantId, System.String? displayName = null)
+  method TopiaForge.Mods.Testing.MultiplayerTestTraffic Traffic(TopiaForge.Mods.Testing.MultiplayerTestNode node)
   method [static] TopiaForge.Mods.Testing.MultiplayerTestRig CreateDedicatedServer(TopiaForge.Mods.Testing.MultiplayerNetworkConditions? conditions = null)
   method [static] TopiaForge.Mods.Testing.MultiplayerTestRig CreateListenServer(TopiaForge.Mods.Testing.MultiplayerNetworkConditions? conditions = null)
   method [static] TopiaForge.Mods.Testing.MultiplayerTestRig CreateStandalone(TopiaForge.Mods.Testing.MultiplayerNetworkConditions? conditions = null)
@@ -743,6 +760,7 @@ type public sealed class TopiaForge.Mods.Testing.MultiplayerTestRig : System.Obj
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.Testing.MultiplayerTestNode> Nodes { get; }
   property TopiaForge.Mods.NetworkTick Tick { get; }
   property TopiaForge.Mods.Testing.MultiplayerNetworkConditions Conditions { get; }
+  property TopiaForge.Mods.Testing.MultiplayerTestNetwork Network { get; }
   property TopiaForge.Mods.Testing.MultiplayerTestNode Server { get; }
 
 type public enum TopiaForge.Mods.Testing.MultiplayerTestRole : System.Int32
@@ -751,3 +769,9 @@ type public enum TopiaForge.Mods.Testing.MultiplayerTestRole : System.Int32
   field const TopiaForge.Mods.Testing.MultiplayerTestRole ListenServer = 2 (ListenServer)
   field const TopiaForge.Mods.Testing.MultiplayerTestRole RemoteClient = 1 (RemoteClient)
   field const TopiaForge.Mods.Testing.MultiplayerTestRole Standalone = 0 (Standalone)
+
+type public sealed class TopiaForge.Mods.Testing.MultiplayerTestTraffic : System.Object
+  property System.Int64 BytesReceived { get; }
+  property System.Int64 BytesSent { get; }
+  property System.Int64 FramesReceived { get; }
+  property System.Int64 FramesSent { get; }
