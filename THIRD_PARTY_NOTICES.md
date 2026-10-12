@@ -59,6 +59,26 @@ TopiaForge artwork for offline launcher theming.
   `packages/launcher_ui/lib/src/pixel_robot.dart`, which retired the bundled `robot.webp`.
 - Local changes: filenames were normalized for launcher packaging.
 
+## Vendored source
+
+The multiplayer provider compiles a subset of the BouncyCastle C# cryptography library into
+`TopiaForge.Multiplayer.dll`. It supplies X25519, Ed25519 and ChaCha20-Poly1305, which Mono's class library lacks.
+It ships as source under a renamed internal namespace, not as a bundled assembly, so it cannot collide with another
+BouncyCastle in the game; Mono has no binding redirects to settle such a conflict.
+
+- Project: BouncyCastle C# (bc-csharp)
+- Version/tag: 2.7.0 (`release-2.7.0`, commit `4007498b13582d90ee1eda5d9920c324428b98b3`)
+- Upstream: https://github.com/bcgit/bc-csharp/tree/release-2.7.0/crypto/src
+- License: MIT
+- Location: 40 files under `mods/TopiaForge.Multiplayer/ThirdParty/BouncyCastle/`, mirroring `crypto/src/`.
+- Local changes:
+  - Every file has a renamed namespace, internal top-level types and LF line endings.
+  - Every file compiles BouncyCastle's own netstandard2.0 code paths.
+  - Eight files drop members that need types left out of the subset (`SecureRandom`, `BigInteger`, `Nat512`).
+- Full change list: `mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md`, which ships in the provider package. It
+  lists every change, with each file's upstream blob hash.
+- License text: `mods/TopiaForge.Multiplayer/ThirdParty/BouncyCastle/LICENSE.md`
+
 ## First-party binary and generated assets
 
 These ship in the release archive, are not third-party redistribution, and are recorded here so the
