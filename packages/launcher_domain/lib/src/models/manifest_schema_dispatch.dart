@@ -19,7 +19,8 @@ _ManifestSchemaContract _dispatchManifestSchema(Map<String, Object?> json) {
     throw FormatException(
       'Manifest schemaVersion $schemaVersion was retired before TopiaForge 1.0. Run '
       '`topiaforge migrate-manifest` to migrate to schemaVersion 6; omit '
-      'multiplayer for a standalone-only mod.',
+      'multiplayer to share the mod with every peer, or set its mode to '
+      'standalone to keep it out of multiplayer.',
     );
   }
   switch (schemaVersion) {

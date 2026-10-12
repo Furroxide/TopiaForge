@@ -59,7 +59,7 @@ namespace TopiaForge.ModManager.Core
                 errors.Add(
                     "schemaVersion " + manifest.SchemaVersion + " was retired before TopiaForge 1.0; migrate this manifest to " +
                     "schemaVersion 6 with 'topiaforge migrate-manifest --project <path>'. " +
-                    "The multiplayer field is optional for standalone-only mods.");
+                    "Without a multiplayer field the mod is shared with every peer.");
                 return errors;
             }
             else if (!ModManifest.IsSupportedSchemaVersion(manifest.SchemaVersion))
@@ -204,21 +204,10 @@ namespace TopiaForge.ModManager.Core
                 return;
             }
 
-            var isClientLocal = string.Equals(
-                multiplayer.Mode,
-                ModMultiplayerMetadata.ClientLocalMode,
-                StringComparison.Ordinal);
-            var isServerOnly = string.Equals(
-                multiplayer.Mode,
-                ModMultiplayerMetadata.ServerOnlyMode,
-                StringComparison.Ordinal);
-            var isSession = string.Equals(
-                multiplayer.Mode,
-                ModMultiplayerMetadata.SessionMode,
-                StringComparison.Ordinal);
-            if (!isClientLocal && !isServerOnly && !isSession)
+            var isSession = manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Session;
+            if (manifest.EffectiveMultiplayerMode == null)
             {
-                errors.Add("multiplayer.mode must be client-local, server-only, or session.");
+                errors.Add("multiplayer.mode must be client-local, server-only, session, or standalone.");
             }
 
             if (!isSession)

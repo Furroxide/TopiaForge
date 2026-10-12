@@ -7,8 +7,8 @@ description: Canonical TopiaForge package manifest, including optional multiplay
 
 Manifest V6 is the current authoring contract and the canonical schema alias. It is strict: unknown fields are
 rejected unless their name begins with `x-`, and collections, strings, paths, and dependency graphs are
-bounded before an assembly loads. The `multiplayer` object is optional. Omitting it is the canonical
-standalone-only declaration.
+bounded before an assembly loads. The `multiplayer` object is optional. Omitting it shares the mod implicitly:
+every peer in a session must enable the identical package. `"mode": "standalone"` keeps a mod out of multiplayer.
 
 Manifest V4 and V5 were retired before the first public release. Tooling rejects them with a migration command
 instead of carrying a second permanent contract.
@@ -18,7 +18,7 @@ The editor-friendly `topiaforge.mod.schema.json` URL names the latest supported 
 The V4 and V5 versioned schemas are rejecting stubs. Use the migration command below
 for existing V3/V4/V5 source projects; no retired reader can activate a package.
 
-## Minimal standalone manifest
+## Minimal manifest
 
 ```json
 {
@@ -79,7 +79,7 @@ extensions. Refer to the versioned schema for the exact ASCII regular expression
 | `contentTargets` | Optional unique list of up to 64 target tokens, each 1–64 lowercase ASCII letters, digits, `_`, `.`, `-`, starting alphanumeric. |
 | `builtWith` | Optional nonempty object with SemVer values for any of `sdkVersion`, `loaderVersion`, `gameVersion`, `toolVersion`; written by tooling. |
 | `apiAssemblies` | Optional unique list of up to 64 portable relative `.dll` paths exported to declared dependants. |
-| `multiplayer` | Optional admission metadata described below; absence means standalone-only. |
+| `multiplayer` | Optional admission metadata described below; absence means the mod is shared implicitly. |
 | `contributions` | Optional nonempty world/gamemode/launch-target declarations described below. Requires `world-service`. |
 | `x-*` | At most 32 extension properties; names match `x-[A-Za-z0-9_.-]{1,64}`; values retain their JSON types and receive no core semantics. Overall input size/depth/property bounds still apply. |
 
@@ -146,10 +146,12 @@ declared specialist provider.
 
 | Mode | Contract |
 | --- | --- |
+| *(no `multiplayer` block)* | Shared implicitly. The mod runs on every peer, and every peer must enable the identical package: same id, version and package SHA-256. This is the default, so a mod that never mentions multiplayer still joins sessions without changes. |
 | `client-local` | Runs on an interactive client, is optional per player, performs no shared-world mutation, and does not participate in the session handshake. `presence`, `protocol`, and `synchronizedFiles` are not allowed. |
 | `server-only` | Runs only on the logical server, including listen and dedicated hosts. Clients do not install it. `presence`, `protocol`, and `synchronizedFiles` are not allowed. |
 | `session` + `required` | A mutually compatible copy is required on the server and every client. |
 | `session` + `optional` | Activates only between peers that both have mutually compatible copies. |
+| `standalone` | Refuses multiplayer. A peer that enables it cannot host or join a session until it is disabled. `presence`, `protocol`, and `synchronizedFiles` are not allowed. |
 
 For `session`, `presence` and `protocol.version` are required. `peerVersionRange` is optional; when omitted, peers
 must advertise exactly the same protocol version. Protocol versions are independent from package versions.
@@ -173,9 +175,14 @@ compatibility. A curated server may later require the opt-in `exact-profile` pol
 
 Admission completes before a world is loaded or a network-session callback runs. The default policy compares the
 Robotopia build, the TopiaForge multiplayer protocol, required mod presence, mutual per-mod protocol ranges, and
-exact synchronized-file hashes. V6 mods without multiplayer metadata block multiplayer with a per-mod explanation;
-they remain fully supported in standalone play. Optional session mods that do not negotiate remain non-fatal, while
-the admission report retains structured inactive reasons for launcher diagnostics. Retired V4 and V5 packages fail manifest
+exact synchronized-file hashes. A mod without multiplayer metadata must be the identical package on both peers;
+a missing copy or a different package hash blocks admission with a per-mod explanation. A `standalone` mod blocks
+multiplayer on whichever peer enables it, and remains fully supported in single-player play. Optional session mods
+that do not negotiate remain non-fatal, while the admission report retains structured inactive reasons for launcher
+diagnostics.
+
+A player-hosted listen server is also a client, so its own `client-local` and `server-only` mods are legitimate. A
+dedicated server rejects `client-local` mods, and every client rejects `server-only` ones. Retired V4 and V5 packages fail manifest
 validation before admission.
 
 TopiaForge never silently disables a mod and never downloads and executes a server package. A launcher may offer a

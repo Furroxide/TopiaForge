@@ -192,6 +192,7 @@ void main() {
         MultiplayerAdmissionMismatchCode.serverOnlyModOnClient,
       ]),
     );
+    // The listen-host role is covered in both languages by the parity fixture.
   });
 
   test('requires mutual protocol compatibility and exact omitted ranges', () {
@@ -252,10 +253,9 @@ void main() {
   });
 
   test('reports standalone, missing, protocol, and content failures', () {
-    final standalone = _manifest('example.standalone');
     final report = const MultiplayerAdmissionPlanner().evaluate(
       server: _profile('server', [
-        MultiplayerAdmissionMod(manifest: standalone),
+        _mode('example.standalone', ModMultiplayerMode.standalone),
         _session('example.required', hash: _hash('a')),
         _session(
           'example.protocol',

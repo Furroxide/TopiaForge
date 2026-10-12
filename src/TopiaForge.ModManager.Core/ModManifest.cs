@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 
@@ -172,15 +173,52 @@ namespace TopiaForge.ModManager.Core
         public ModMultiplayerMetadata? Multiplayer { get; set; }
 
         /// <summary>
-        /// True when this manifest opts into the versioned multiplayer contract.
+        /// True when this manifest carries an explicit multiplayer block.
         /// </summary>
         [IgnoreDataMember]
         public bool DeclaresMultiplayer =>
             IsSupportedSchemaVersion(SchemaVersion) && Multiplayer != null;
 
-        /// <summary>True for manifests that may only be admitted to a standalone session.</summary>
+        /// <summary>
+        /// True when the manifest has no multiplayer block. Such a mod is shared implicitly: every peer must
+        /// enable the identical package.
+        /// </summary>
         [IgnoreDataMember]
-        public bool IsStandaloneOnly => !DeclaresMultiplayer;
+        public bool IsImplicitlyShared =>
+            IsSupportedSchemaVersion(SchemaVersion) && Multiplayer == null;
+
+        /// <summary>True for manifests that explicitly refuse every multiplayer session.</summary>
+        [IgnoreDataMember]
+        public bool IsStandaloneOnly =>
+            DeclaresMultiplayer &&
+            string.Equals(Multiplayer!.Mode, ModMultiplayerMetadata.StandaloneMode, StringComparison.Ordinal);
+
+        /// <summary>
+        /// Gets how this mod takes part in multiplayer sessions, or null when the schema is unsupported or the
+        /// declared mode is unknown.
+        /// </summary>
+        [IgnoreDataMember]
+        public ModMultiplayerEffectiveMode? EffectiveMultiplayerMode
+        {
+            get
+            {
+                if (!IsSupportedSchemaVersion(SchemaVersion)) return null;
+                if (Multiplayer == null) return ModMultiplayerEffectiveMode.ImplicitShared;
+                switch (Multiplayer.Mode)
+                {
+                    case ModMultiplayerMetadata.SessionMode:
+                        return ModMultiplayerEffectiveMode.Session;
+                    case ModMultiplayerMetadata.ClientLocalMode:
+                        return ModMultiplayerEffectiveMode.ClientLocal;
+                    case ModMultiplayerMetadata.ServerOnlyMode:
+                        return ModMultiplayerEffectiveMode.ServerOnly;
+                    case ModMultiplayerMetadata.StandaloneMode:
+                        return ModMultiplayerEffectiveMode.Standalone;
+                    default:
+                        return null;
+                }
+            }
+        }
 
         [DataMember(Name = "vpmDependencies", EmitDefaultValue = false)]
         private Dictionary<string, string>? UnsupportedVpmDependencies { get; set; }
@@ -244,6 +282,25 @@ namespace TopiaForge.ModManager.Core
 
     }
 
+    /// <summary>How one mod takes part in multiplayer sessions once its manifest is read.</summary>
+    public enum ModMultiplayerEffectiveMode
+    {
+        /// <summary>No multiplayer block: required on every peer as the identical package.</summary>
+        ImplicitShared = 0,
+
+        /// <summary>A declared session mod negotiated by presence, protocol, and synchronized files.</summary>
+        Session = 1,
+
+        /// <summary>Runs only on the peer that enables it and is never required of others.</summary>
+        ClientLocal = 2,
+
+        /// <summary>Runs only on the logical server.</summary>
+        ServerOnly = 3,
+
+        /// <summary>Refuses every multiplayer session.</summary>
+        Standalone = 4
+    }
+
     /// <summary>Transport-neutral multiplayer admission metadata introduced by manifest schema V5.</summary>
     [DataContract]
     public sealed class ModMultiplayerMetadata
@@ -251,6 +308,7 @@ namespace TopiaForge.ModManager.Core
         public const string ClientLocalMode = "client-local";
         public const string ServerOnlyMode = "server-only";
         public const string SessionMode = "session";
+        public const string StandaloneMode = "standalone";
         public const string RequiredPresence = "required";
         public const string OptionalPresence = "optional";
         public const string ContractLockFileName = "topiaforge.multiplayer.lock.json";
