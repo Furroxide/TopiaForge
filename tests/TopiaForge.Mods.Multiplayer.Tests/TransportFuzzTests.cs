@@ -13,7 +13,8 @@ internal static class TransportFuzzTests
 {
     private static readonly byte[] TransportTypes =
     {
-        PacketType.Initiation, PacketType.Retry, PacketType.Response, PacketType.Completion, PacketType.InfoQuery, PacketType.Protected
+        PacketType.Initiation, PacketType.Retry, PacketType.Response, PacketType.Completion, PacketType.InfoQuery,
+        PacketType.InfoReply, PacketType.Protected
     };
 
     internal static void HostileDatagramsNeverDisturbASession()
@@ -24,18 +25,24 @@ internal static class TransportFuzzTests
         {
             if (captured.Count < 256) captured.Add(bytes);
         };
+        pair.Host.SetInfo(new byte[] { 1, 2, 3 });
         var (client, host) = pair.Establish();
         Exchange(pair, client, host, 1);
         var random = new Random(50);
         var attacker = pair.Network.AddRaw("attacker");
         var sources = new[] { attacker, pair.ClientNode, pair.HostNode };
+        var kinds = new[] { TransportPathKind.Direct, TransportPathKind.Relayed, TransportPathKind.Lan };
         for (var round = 0; round < 4_000; round++)
         {
             var source = sources[random.Next(sources.Length)];
             var target = source == pair.HostNode ? pair.ClientNode : random.Next(2) == 0 ? pair.HostNode : pair.ClientNode;
-            pair.Network.Inject(source, target, Hostile(random, captured));
+            pair.Network.Inject(source, target, Hostile(random, captured), kinds[random.Next(kinds.Length)]);
+            if (round % 200 == 0) pair.Client.QueryInfo(VirtualDatagramNetwork.PathTo(pair.HostNode), pair.Network.Now);
             if (round % 40 == 0) pair.Network.RunFor(10_000);
         }
+
+        That(host.Path.Equals(VirtualDatagramNetwork.PathTo(pair.ClientNode)) && client.Path.Equals(VirtualDatagramNetwork.PathTo(pair.HostNode)),
+            "no hostile datagram moved either side off its path");
 
         // Oversized datagrams never reach a decoder, even ones addressed to a live connection.
         var dropped = pair.Host.Statistics.DatagramsDropped;
