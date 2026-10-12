@@ -10,7 +10,6 @@ namespace TopiaForge.Multiplayer.Engine
     {
         private readonly List<HostConnection> connections = new List<HostConnection>();
         private readonly List<ParticipantRecord> participantRecords = new List<ParticipantRecord>();
-        private readonly Queue<PresentationDelivery> localPresentation = new Queue<PresentationDelivery>();
         private readonly FlushContext flush = new FlushContext();
         private ulong nextParticipantNumber;
         private long nextDownstreamAt;
@@ -19,7 +18,6 @@ namespace TopiaForge.Multiplayer.Engine
         {
             get
             {
-                if (localPresentation.Count > 0) return true;
                 foreach (var connection in connections)
                 {
                     if (connection.HasOutbound || connection.HasPendingDeltas) return true;
@@ -76,7 +74,6 @@ namespace TopiaForge.Multiplayer.Engine
             nextObjectNumber = 0;
             foreach (var binding in commands.Values) binding.ResetForNewSession();
             foreach (var record in participantRecords) record.LastSequence = 0;
-            localPresentation.Clear();
             presentationDeliveries.Clear();
             var replaced = new SessionReplacedMessage(sessionId.Value, seed.Value, epoch);
             foreach (var connection in connections)
@@ -158,7 +155,6 @@ namespace TopiaForge.Multiplayer.Engine
                 foreach (var connection in connections.ToArray()) ProcessConnection(connection);
             }
 
-            while (localPresentation.Count > 0) presentationDeliveries.Enqueue(localPresentation.Dequeue());
             ExpireDepartedParticipants();
             ScheduleClockSync();
             FlushHost();
@@ -557,10 +553,12 @@ namespace TopiaForge.Multiplayer.Engine
                 if (item.Target.Selects(connection.Participant.Id, item.Sender)) connection.Enqueue(new PresentationItem(item.Key, item.Bytes));
             }
 
+            // The host's own player sees the event at the settle point after it commits, before any confirmation of
+            // the same operation, exactly as a remote client sees it with the frame that carries it.
             if (ProcessKind == MultiplayerProcessKind.Interactive && localParticipantId.HasValue &&
                 item.Target.Selects(localParticipantId.Value, item.Sender))
             {
-                localPresentation.Enqueue(new PresentationDelivery(item.Key, item.Bytes));
+                presentationDeliveries.Enqueue(new PresentationDelivery(item.Key, item.Bytes));
             }
         }
 

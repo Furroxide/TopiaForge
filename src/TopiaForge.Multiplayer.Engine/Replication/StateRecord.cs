@@ -62,8 +62,8 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Checks that canonical bytes from the wire decode with the local codec.</summary>
         internal abstract bool CanDecode(byte[] bytes);
 
-        /// <summary>Notifies subscribers of the current value, each with its own decoded copy.</summary>
-        internal abstract void NotifySubscribers();
+        /// <summary>Notifies subscribers of <paramref name="reported"/>, each with its own decoded copy.</summary>
+        internal abstract void NotifySubscribers(byte[] reported);
     }
 
     internal sealed class StateRecord<T> : StateRecord, IReplicatedState<T> where T : class
@@ -108,12 +108,14 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal override bool CanDecode(byte[] bytes) => bytes.Length <= MaximumBytes && EngineCodec.Decode(codec, bytes).Succeeded;
 
-        internal override void NotifySubscribers()
+        internal override void NotifySubscribers(byte[] reported)
         {
             if (subscribers.Count == 0) return;
+            // Every observer in this round sees the value being reported, even if an earlier observer changes the
+            // state again; that change is reported in a later round.
             foreach (var subscriber in subscribers.ToArray())
             {
-                var copy = EngineCodec.Decode(codec, CurrentBytes);
+                var copy = EngineCodec.Decode(codec, reported);
                 if (!copy.TryGetValue(out var value))
                 {
                     Engine.ReportCodecFailure("replicated state '" + Key + "'", copy.ErrorMessage);

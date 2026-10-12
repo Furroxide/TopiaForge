@@ -310,7 +310,7 @@ namespace TopiaForge.Multiplayer.Engine
                         if (!record.IsActive || !record.VisibleValueChanged) continue;
                         record.NotifiedBytes = record.CurrentBytes;
                         record.NotifiedVersion = record.CurrentVersion;
-                        record.NotifySubscribers();
+                        record.NotifySubscribers(record.NotifiedBytes);
                         continue;
                     }
 
