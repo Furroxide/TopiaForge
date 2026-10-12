@@ -94,7 +94,6 @@ namespace TopiaForge.Mods.Testing
         private TState confirmed;
         private ulong version;
         private ulong confirmedVersion;
-        private ulong nextSequence;
         private ulong highestCanonicalConfirmationSequence;
         private bool disposed;
 
@@ -151,7 +150,7 @@ namespace TopiaForge.Mods.Testing
                 return Task.FromResult(Failure(copied.ErrorCode, copied.ErrorMessage));
             }
 
-            var sequence = ++nextSequence;
+            var sequence = session.AllocateSubmissionSequence();
             var wasPredicted = definition.Prediction == PredictionMode.Owner
                 && OwnerId.HasValue
                 && OwnerId.Value.Equals(sender.Value)

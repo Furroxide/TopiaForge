@@ -9,14 +9,11 @@ namespace TopiaForge.Mods
         /// <summary>Gets the manifest id used to declare the multiplayer runtime provider.</summary>
         public const string Id = "io.github.furroxide.topiaforge.multiplayer";
 
-        /// <summary>
-        /// Gets the live-provider protocol version implemented by this contract line. It is a static field rather than
-        /// a constant so compiled mods read the installed SDK's value instead of one baked in when they were built.
-        /// </summary>
-        public static readonly string ProtocolVersion = "1.0.0";
+        /// <summary>Gets the live-provider protocol version implemented by this stable contract line.</summary>
+        public const string ProtocolVersion = "1.0.0";
 
-        /// <summary>Gets the mutually negotiated peer range accepted by this contract line.</summary>
-        public static readonly string PeerVersionRange = ">=1.0.0 <2.0.0";
+        /// <summary>Gets the mutually negotiated peer range accepted by this stable contract line.</summary>
+        public const string PeerVersionRange = ">=1.0.0 <2.0.0";
     }
 
     /// <summary>Describes whether the current process has interactive presentation systems.</summary>
