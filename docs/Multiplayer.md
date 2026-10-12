@@ -66,10 +66,7 @@ public partial class ScoreMod : TopiaForgeMod
 
     protected override void OnLoad()
     {
-        var binding = BindMultiplayer(Context.RequireMultiplayer());
-        if (!binding.TryGetValue(out var lease))
-            throw new InvalidOperationException(binding.ErrorMessage);
-        Context.Lifetime.Track(lease);
+        // The generated contract is already bound; there is nothing to wire up here.
     }
 
     [MultiplayerCommand("add-score", Prediction = PredictionMode.Owner)]
@@ -95,6 +92,19 @@ public partial class ScoreMod : TopiaForgeMod
 }
 ```
 
+TopiaForge binds the generated contract after it attaches `Context` and before `OnLoad` runs, so a contract needs no
+binding code. A mod that still calls `BindMultiplayer` for the same session gets a harmless success; mods compiled
+before automatic binding keep binding themselves.
+
+To run code once per session, implement `partial void OnMultiplayerSessionStarted(MultiplayerSessionSnapshot
+snapshot)`, `OnMultiplayerSessionEnded(MultiplayerSessionSnapshot snapshot)`, or both. Started runs on the first
+`Ready` snapshot of each session. Ended runs with the last snapshot seen for it when it ends or another session
+replaces it. Both run on every peer, so check `snapshot.HasWorldAuthority` before spawning canonical objects. Contracts
+without either hook carry no session tracking at all.
+
+Each presentation event also gets `Emit...To` and `Publish...To`, which take a `PresentationTarget` such as
+`PresentationTarget.Only(player)` or `PresentationTarget.AllExcept(player)`.
+
 Ordinary commands receive the transport-authenticated `SenderId`; they must validate authorization against canonical
 session state. Only replicated-object handlers receive `ReplicatedObjectCommandContext`, whose `TargetObjectId` and
 `SenderOwnsTarget` are computed by the provider for the exact canonical object being mutated.
@@ -102,7 +112,11 @@ session state. Only replicated-object handlers receive `ReplicatedObjectCommandC
 Unsupported native or polymorphic payloads, recursive graphs, unbounded strings/arrays, invalid handler signatures,
 duplicate IDs, and generated proxy-name collisions fail compilation. Owner-predicted command and object handlers also
 fail compilation when they touch process-local context/services, mutate arbitrary fields, hide work behind author
-helpers/getters/constructors, or use random/clock APIs. Refresh the checked-in contract lock after changing a contract:
+helpers/getters/constructors, or use random/clock APIs; `command.CreateRandom()` is the prediction-safe source of
+random numbers. A warning flags a handler without prediction that drives local UI, input, player, audio, or Unity
+state, because only the host would see it. Each code is explained in the
+[diagnostics reference](Diagnostics.md#multiplayer-contract-diagnostics). Refresh the checked-in contract lock after
+changing a contract:
 
 ```sh
 topiaforge mod sync multiplayer
@@ -159,6 +173,33 @@ invariants that generated code normally supplies.
 - presentation events are transient accepted effects, deliberately separate from snapshot state. Every peer registers
   the generated bounded codec, while only presentation-capable peers attach the local handler; and
 - `MultiplayerSessionSnapshot` exposes readiness, participants, tick, session seed, logical sides, and process kind.
+
+## Session contract for live play
+
+The contract also carries what live sessions need. It is additive, so existing mods compile and load unchanged.
+
+- `command.CreateRandom(salt)` returns a `DeterministicRandom` (xoshiro256** seeded through SplitMix64) built from
+  the session seed, the authenticated sender, and the sender-scoped `command.Sequence`. A predicted handler and the
+  server's canonical run draw identical values; never seed from `Tick` or wall-clock time. The sequence of values is
+  frozen for protocol major version 1.
+- `PresentationTarget` adds `Only(participant)` and `AllExcept(participant)` to the `Everyone`, `Sender`, and
+  `Others` audiences, both for events emitted from a command and for direct `PublishPresentation` calls.
+- `SubscribeTick` delivers canonical fixed steps on the main thread, only where this process holds world authority:
+  the host, or single-player play.
+- `IReplicatedObject.Apply` changes an object's state transactionally from server code outside an input handler,
+  such as a tick subscription.
+- `[ReplicatedState]` and `[ReplicatedObject]` accept `Delivery` (`Coalesced` by default, or `Immediate`) and
+  `MaximumUpdatesPerSecond` (zero uses the provider's snapshot rate).
+- `session.Players` is an `IPlayerDirectory` of `IPlayer` handles. Each handle carries identity, host status, and the
+  player's key, which is stable on one host and unlinkable across hosts. Each handle also reads replicated position,
+  aim, and health, and routes `Damage`, `Heal`, `Teleport`, per-player `Input`, and per-player `Ui` to the process
+  that owns the player. Single-player play has exactly one player, so player-aware code needs no separate path.
+- Participants report `IsHost`, a bucketed `Quality`, `PingMilliseconds` rounded to 10 ms, and `PlayerKey`.
+  Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
+
+Until the live session engine replaces them, the loopback provider and the test rig implement parts of this surface:
+the rig delivers ticks, sequences, seeds, and targeted events, while player actions, replicated presence, and
+`Apply` report `Unavailable` rather than pretending to succeed.
 
 ## Test before transport
 

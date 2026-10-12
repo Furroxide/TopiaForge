@@ -6,6 +6,20 @@
 assembly TopiaForge.Mods.Multiplayer, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null
 target-framework .NETStandard,Version=v2.1
 
+type public sealed class TopiaForge.Mods.DeterministicRandom : System.Object
+  constructor .ctor(System.UInt64 seed)
+  method System.Boolean NextBoolean()
+  method System.Double NextDouble()
+  method System.Int32 Next(System.Int32 maxExclusive)
+  method System.Int32 Next(System.Int32 minInclusive, System.Int32 maxExclusive)
+  method System.Single NextSingle()
+  method System.UInt32 NextUInt32()
+  method System.UInt64 NextUInt64()
+  method [static] TopiaForge.Mods.DeterministicRandom ForCommand(TopiaForge.Mods.SessionSeed seed, TopiaForge.Mods.ParticipantId sender, System.UInt64 sequence, System.UInt64 salt = 0)
+
+type public interface TopiaForge.Mods.IGeneratedMultiplayerBinding : TopiaForge.Mods.IGeneratedMultiplayerContract
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> BindMultiplayer(TopiaForge.Mods.IMultiplayerSession session)
+
 type public interface TopiaForge.Mods.IGeneratedMultiplayerContract
   method [abstract,virtual,newslot] TopiaForge.Mods.IMultiplayerCodec<T> GetCodec<T>() where T : class
   property TopiaForge.Mods.MultiplayerContractDescriptor MultiplayerContractDescriptor { get [abstract,virtual,newslot]; }
@@ -20,21 +34,62 @@ type public interface TopiaForge.Mods.IMultiplayerCommandRegistration : System.I
   property System.String Id { get [abstract,virtual,newslot]; }
 
 type public interface TopiaForge.Mods.IMultiplayerSession
+  method [abstract,virtual,newslot] System.Boolean TryGetAvatar(TopiaForge.Mods.ParticipantId participantId, out TopiaForge.Mods.IEntity? avatar)
+  method [abstract,virtual,newslot] System.Boolean TryGetEntity(TopiaForge.Mods.NetworkObjectId id, out TopiaForge.Mods.IEntity? entity)
   method [abstract,virtual,newslot] System.Boolean TryGetNetworkObjectId(TopiaForge.Mods.IEntity entity, out TopiaForge.Mods.NetworkObjectId id)
   method [abstract,virtual,newslot] System.Boolean TryGetObject<TState, TInput>(TopiaForge.Mods.ReplicatedObjectType<TState, TInput> type, TopiaForge.Mods.NetworkObjectId id, out TopiaForge.Mods.IReplicatedObject<TState, TInput>? replicatedObject) where TState : class where TInput : class
+  method [abstract,virtual,newslot] System.Boolean TryGetPose(TopiaForge.Mods.ParticipantId participantId, out TopiaForge.Mods.MultiplayerPose pose)
   method [abstract,virtual,newslot] System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IReplicatedObject<TState, TInput>> GetObjects<TState, TInput>(TopiaForge.Mods.ReplicatedObjectType<TState, TInput> type) where TState : class where TInput : class
   method [abstract,virtual,newslot] System.IDisposable SubscribeChanged(System.Action<TopiaForge.Mods.MultiplayerSessionSnapshot> handler)
   method [abstract,virtual,newslot] System.IDisposable SubscribeObjects<TState, TInput>(TopiaForge.Mods.ReplicatedObjectType<TState, TInput> type, System.Action<TopiaForge.Mods.ReplicatedObjectChange<TState, TInput>> handler) where TState : class where TInput : class
+  method [abstract,virtual,newslot] System.IDisposable SubscribeTick(System.Action<TopiaForge.Mods.MultiplayerTickContext> handler)
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.MultiplayerCommandConfirmation<TResponse>> SubmitAsync<TRequest, TResponse>(TopiaForge.Mods.MultiplayerCommandType<TRequest, TResponse> commandType, TRequest request, System.Threading.CancellationToken cancellationToken = null) where TRequest : class where TResponse : class
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> DespawnObject(TopiaForge.Mods.NetworkObjectId id)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> PublishPresentation<TEvent>(TopiaForge.Mods.PresentationEventType<TEvent> eventType, TEvent value, TopiaForge.Mods.MultiplayerAudience audience = 0 (Everyone)) where TEvent : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> PublishPresentation<TEvent>(TopiaForge.Mods.PresentationEventType<TEvent> eventType, TEvent value, TopiaForge.Mods.PresentationTarget target) where TEvent : class
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.IDisposable> RegisterContract(TopiaForge.Mods.MultiplayerContractDescriptor descriptor)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IMultiplayerCommandRegistration> RegisterCommand<TRequest, TResponse>(TopiaForge.Mods.MultiplayerCommandDefinition<TRequest, TResponse> definition) where TRequest : class where TResponse : class
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IPresentationEventRegistration> RegisterPresentation<TEvent>(TopiaForge.Mods.PresentationEventDefinition<TEvent> definition) where TEvent : class
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IReplicatedObject<TState, TInput>> SpawnObject<TState, TInput>(TopiaForge.Mods.ReplicatedObjectType<TState, TInput> type, TState initialState, System.Nullable<TopiaForge.Mods.ParticipantId> ownerId = null) where TState : class where TInput : class
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IReplicatedObjectTypeRegistration> RegisterObjectType<TState, TInput>(TopiaForge.Mods.ReplicatedObjectTypeDefinition<TState, TInput> definition) where TState : class where TInput : class
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IReplicatedState<T>> RegisterState<T>(TopiaForge.Mods.ReplicatedStateDefinition<T> definition) where T : class
   property System.Threading.CancellationToken CurrentSessionToken { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IPlayerDirectory Players { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.MultiplayerSessionSnapshot Snapshot { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPlayer
+  method [abstract,virtual,newslot] System.Boolean TryGetHealth(out TopiaForge.Mods.PlayerHealthSnapshot? health)
+  method [abstract,virtual,newslot] System.Boolean TryGetSnapshot(out TopiaForge.Mods.PlayerSnapshot? snapshot)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Teleport(TopiaForge.Mods.Vec3 position, System.Nullable<System.Single> yawDegrees = null)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Damage(TopiaForge.Mods.PlayerDamageRequest request)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.PlayerHealthSnapshot> Heal(System.Single amount, System.String source)
+  property System.Boolean IsHost { get [abstract,virtual,newslot]; }
+  property System.Boolean IsLocal { get [abstract,virtual,newslot]; }
+  property System.Boolean IsPresent { get [abstract,virtual,newslot]; }
+  property System.String DisplayName { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IEntity? Entity { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IPlayerInput Input { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IPlayerUi Ui { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.MultiplayerPlayerKey Key { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.ParticipantId Id { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPlayerDirectory
+  method [abstract,virtual,newslot] System.Boolean TryGet(TopiaForge.Mods.ParticipantId id, out TopiaForge.Mods.IPlayer? player)
+  method [abstract,virtual,newslot] System.IDisposable SubscribeJoined(System.Action<TopiaForge.Mods.IPlayer> handler)
+  method [abstract,virtual,newslot] System.IDisposable SubscribeLeft(System.Action<TopiaForge.Mods.IPlayer> handler)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IScoreboardColumn> RegisterScoreboardColumn(TopiaForge.Mods.ScoreboardColumnDefinition definition)
+  property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.IPlayer> Players { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IPlayer? Local { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IPlayerInput
+  method [abstract,virtual,newslot] System.Boolean IsHeld(System.String actionName)
+  method [abstract,virtual,newslot] System.Boolean WasPressed(System.String actionName)
+  method [abstract,virtual,newslot] System.Boolean WasReleased(System.String actionName)
+
+type public interface TopiaForge.Mods.IPlayerUi
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> ShowToast(System.String message, TopiaForge.Mods.UiTone tone = 0 (Neutral))
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiModal> ShowModal(TopiaForge.Mods.UiModalRequest request, System.Action<System.Boolean> completed)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IUiSurface> CreateSurface(TopiaForge.Mods.UiSurfaceRequest request)
 
 type public interface TopiaForge.Mods.IPresentationEventRegistration : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }
@@ -43,6 +98,7 @@ type public interface TopiaForge.Mods.IPresentationEventRegistration : System.ID
 type public interface TopiaForge.Mods.IReplicatedObject<TState, TInput> where TState : class where TInput : class
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.MultiplayerCommandConfirmation<TState>> SubmitInputAsync(TInput input, System.Threading.CancellationToken cancellationToken = null)
   method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> TransferOwnership(System.Nullable<TopiaForge.Mods.ParticipantId> ownerId)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<TState> Apply(System.Func<TState, TopiaForge.Mods.OperationResult<TState>> updater)
   property System.Boolean IsSpawned { get [abstract,virtual,newslot]; }
   property System.Nullable<TopiaForge.Mods.ParticipantId> OwnerId { get [abstract,virtual,newslot]; }
   property System.String TypeId { get [abstract,virtual,newslot]; }
@@ -60,6 +116,12 @@ type public interface TopiaForge.Mods.IReplicatedState<T> : System.IDisposable w
   property System.String Id { get [abstract,virtual,newslot]; }
   property System.UInt64 Version { get [abstract,virtual,newslot]; }
   property T Value { get [abstract,virtual,newslot]; }
+
+type public interface TopiaForge.Mods.IScoreboardColumn : System.IDisposable
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> Clear(TopiaForge.Mods.ParticipantId player)
+  method [abstract,virtual,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetValue(TopiaForge.Mods.ParticipantId player, System.String displayValue, System.Int64 sortKey = 0)
+  property System.Boolean IsActive { get [abstract,virtual,newslot]; }
+  property System.String Id { get [abstract,virtual,newslot]; }
 
 type public enum TopiaForge.Mods.MultiplayerAudience : System.Int32
   field System.Int32 value__
@@ -83,10 +145,15 @@ type public sealed class TopiaForge.Mods.MultiplayerCommandConfirmation<T> : Sys
 
 type public class TopiaForge.Mods.MultiplayerCommandContext : System.Object
   constructor .ctor(TopiaForge.Mods.ParticipantId senderId, TopiaForge.Mods.NetworkTick tick, System.Threading.CancellationToken cancellationToken, System.Func<System.String, System.Byte[], TopiaForge.Mods.MultiplayerAudience, TopiaForge.Mods.OperationResult<System.Boolean>> emit)
+  constructor .ctor(TopiaForge.Mods.ParticipantId senderId, TopiaForge.Mods.NetworkTick tick, System.UInt64 sequence, TopiaForge.Mods.SessionSeed seed, System.Threading.CancellationToken cancellationToken, System.Func<System.String, System.Byte[], TopiaForge.Mods.PresentationTarget, TopiaForge.Mods.OperationResult<System.Boolean>> emit)
+  method TopiaForge.Mods.DeterministicRandom CreateRandom(System.UInt64 salt = 0)
   method TopiaForge.Mods.OperationResult<System.Boolean> Emit<TEvent>(TopiaForge.Mods.PresentationEventType<TEvent> eventType, TEvent value, TopiaForge.Mods.MultiplayerAudience audience = 0 (Everyone)) where TEvent : class
+  method TopiaForge.Mods.OperationResult<System.Boolean> Emit<TEvent>(TopiaForge.Mods.PresentationEventType<TEvent> eventType, TEvent value, TopiaForge.Mods.PresentationTarget target) where TEvent : class
   property System.Threading.CancellationToken CancellationToken { get; }
+  property System.UInt64 Sequence { get; }
   property TopiaForge.Mods.NetworkTick Tick { get; }
   property TopiaForge.Mods.ParticipantId SenderId { get; }
+  property TopiaForge.Mods.SessionSeed Seed { get; }
 
 type public sealed class TopiaForge.Mods.MultiplayerCommandDefinition<TRequest, TResponse> : System.Object where TRequest : class where TResponse : class
   constructor .ctor(TopiaForge.Mods.MultiplayerCommandType<TRequest, TResponse> type, TopiaForge.Mods.IMultiplayerCodec<TRequest> requestCodec, TopiaForge.Mods.IMultiplayerCodec<TResponse> responseCodec, System.Func<TopiaForge.Mods.MultiplayerCommandContext, TRequest, TopiaForge.Mods.OperationResult<TResponse>> handler, TopiaForge.Mods.PredictionMode prediction = 0 (None), System.Int32 maximumPerSecond = 30, System.Int32 maximumPayloadBytes = 16384)
@@ -102,6 +169,14 @@ type public sealed class TopiaForge.Mods.MultiplayerCommandDefinition<TRequest, 
 type public sealed class TopiaForge.Mods.MultiplayerCommandType<TRequest, TResponse> : System.Object where TRequest : class where TResponse : class
   constructor .ctor(System.String id)
   property System.String Id { get; }
+
+type public enum TopiaForge.Mods.MultiplayerConnectionQuality : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.MultiplayerConnectionQuality Excellent = 1 (Excellent)
+  field const TopiaForge.Mods.MultiplayerConnectionQuality Fair = 3 (Fair)
+  field const TopiaForge.Mods.MultiplayerConnectionQuality Good = 2 (Good)
+  field const TopiaForge.Mods.MultiplayerConnectionQuality Poor = 4 (Poor)
+  field const TopiaForge.Mods.MultiplayerConnectionQuality Unknown = 0 (Unknown)
 
 type public static class TopiaForge.Mods.MultiplayerContextExtensions : System.Object
   method extension [static] System.Boolean TryGetMultiplayer(TopiaForge.Mods.IModContext context, out TopiaForge.Mods.IMultiplayerSession? session)
@@ -122,6 +197,11 @@ type public sealed class TopiaForge.Mods.MultiplayerContractDescriptor : System.
   property System.String Id { get; }
   property System.String SchemaSha256 { get; }
 
+type public enum TopiaForge.Mods.MultiplayerDelivery : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.MultiplayerDelivery Coalesced = 0 (Coalesced)
+  field const TopiaForge.Mods.MultiplayerDelivery Immediate = 1 (Immediate)
+
 type public flags enum TopiaForge.Mods.MultiplayerExecutionSide : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.MultiplayerExecutionSide Client = 1 (Client)
@@ -135,16 +215,67 @@ type public static class TopiaForge.Mods.MultiplayerModule : System.Object
 
 type public sealed class TopiaForge.Mods.MultiplayerParticipant : System.Object
   constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected)
+  constructor .ctor(TopiaForge.Mods.ParticipantId id, System.String displayName, System.Boolean isLocal, System.Boolean isConnected, System.Boolean isHost, TopiaForge.Mods.MultiplayerConnectionQuality quality, System.Nullable<System.Int32> pingMilliseconds, TopiaForge.Mods.MultiplayerPlayerKey playerKey)
   field const System.Int32 MaximumDisplayNameLength = 128
+  field const System.Int32 MaximumPingMilliseconds = 60000
   property System.Boolean IsConnected { get; }
+  property System.Boolean IsHost { get; }
   property System.Boolean IsLocal { get; }
+  property System.Nullable<System.Int32> PingMilliseconds { get; }
   property System.String DisplayName { get; }
+  property TopiaForge.Mods.MultiplayerConnectionQuality Quality { get; }
+  property TopiaForge.Mods.MultiplayerPlayerKey PlayerKey { get; }
   property TopiaForge.Mods.ParticipantId Id { get; }
+
+type public readonly struct TopiaForge.Mods.MultiplayerPlayerKey : System.ValueType, System.IEquatable<TopiaForge.Mods.MultiplayerPlayerKey>
+  constructor .ctor(System.String value)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.MultiplayerPlayerKey other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property System.Boolean IsValid { get; }
+  property System.String Value { get; }
+
+type public readonly struct TopiaForge.Mods.MultiplayerPose : System.ValueType, System.IEquatable<TopiaForge.Mods.MultiplayerPose>
+  constructor .ctor(TopiaForge.Mods.NetworkTick sampledAt, TopiaForge.Mods.Vec3 position, TopiaForge.Mods.Ray aim, TopiaForge.Mods.Vec3 velocity, System.Single health, System.Single maximumHealth, TopiaForge.Mods.MultiplayerPoseFlags flags = 0 (None), System.String? heldItemId = null)
+  field const System.Int32 MaximumHeldItemIdLength = 128
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.MultiplayerPose other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  property System.Single Health { get; }
+  property System.Single MaximumHealth { get; }
+  property System.String? HeldItemId { get; }
+  property TopiaForge.Mods.MultiplayerPoseFlags Flags { get; }
+  property TopiaForge.Mods.NetworkTick SampledAt { get; }
+  property TopiaForge.Mods.Ray Aim { get; }
+  property TopiaForge.Mods.Vec3 Position { get; }
+  property TopiaForge.Mods.Vec3 Velocity { get; }
+
+type public flags enum TopiaForge.Mods.MultiplayerPoseFlags : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.MultiplayerPoseFlags Away = 8 (Away)
+  field const TopiaForge.Mods.MultiplayerPoseFlags Crouching = 1 (Crouching)
+  field const TopiaForge.Mods.MultiplayerPoseFlags None = 0 (None)
+  field const TopiaForge.Mods.MultiplayerPoseFlags Talking = 2 (Talking)
+  field const TopiaForge.Mods.MultiplayerPoseFlags Typing = 4 (Typing)
 
 type public enum TopiaForge.Mods.MultiplayerProcessKind : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.MultiplayerProcessKind Headless = 1 (Headless)
   field const TopiaForge.Mods.MultiplayerProcessKind Interactive = 0 (Interactive)
+
+type public enum TopiaForge.Mods.MultiplayerSessionEndReason : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.MultiplayerSessionEndReason AdmissionRejected = 7 (AdmissionRejected)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason Banned = 4 (Banned)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason HostEnded = 2 (HostEnded)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason Kicked = 3 (Kicked)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason Left = 1 (Left)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason None = 0 (None)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason ProtocolMismatch = 8 (ProtocolMismatch)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason Replaced = 6 (Replaced)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason TimedOut = 5 (TimedOut)
+  field const TopiaForge.Mods.MultiplayerSessionEndReason TransportFailed = 9 (TransportFailed)
 
 type public readonly struct TopiaForge.Mods.MultiplayerSessionId : System.ValueType, System.IEquatable<TopiaForge.Mods.MultiplayerSessionId>
   constructor .ctor(System.String value)
@@ -157,13 +288,17 @@ type public readonly struct TopiaForge.Mods.MultiplayerSessionId : System.ValueT
 
 type public sealed class TopiaForge.Mods.MultiplayerSessionSnapshot : System.Object
   constructor .ctor(TopiaForge.Mods.MultiplayerSessionId id, TopiaForge.Mods.MultiplayerSessionState state, TopiaForge.Mods.MultiplayerProcessKind processKind, TopiaForge.Mods.MultiplayerExecutionSide executionSides, System.Nullable<TopiaForge.Mods.ParticipantId> localParticipantId, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.MultiplayerParticipant> participants, TopiaForge.Mods.NetworkTick tick, TopiaForge.Mods.SessionSeed seed)
+  constructor .ctor(TopiaForge.Mods.MultiplayerSessionId id, TopiaForge.Mods.MultiplayerSessionState state, TopiaForge.Mods.MultiplayerProcessKind processKind, TopiaForge.Mods.MultiplayerExecutionSide executionSides, System.Nullable<TopiaForge.Mods.ParticipantId> localParticipantId, System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.MultiplayerParticipant> participants, TopiaForge.Mods.NetworkTick tick, TopiaForge.Mods.SessionSeed seed, System.Nullable<TopiaForge.Mods.ParticipantId> hostParticipantId, TopiaForge.Mods.MultiplayerSessionEndReason endReason)
   field const System.Int32 MaximumParticipantCount = 256
+  method System.Boolean TryGetParticipant(TopiaForge.Mods.ParticipantId id, out TopiaForge.Mods.MultiplayerParticipant? participant)
   property System.Boolean HasPresentation { get; }
   property System.Boolean HasWorldAuthority { get; }
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.MultiplayerParticipant> Participants { get; }
+  property System.Nullable<TopiaForge.Mods.ParticipantId> HostParticipantId { get; }
   property System.Nullable<TopiaForge.Mods.ParticipantId> LocalParticipantId { get; }
   property TopiaForge.Mods.MultiplayerExecutionSide ExecutionSides { get; }
   property TopiaForge.Mods.MultiplayerProcessKind ProcessKind { get; }
+  property TopiaForge.Mods.MultiplayerSessionEndReason EndReason { get; }
   property TopiaForge.Mods.MultiplayerSessionId Id { get; }
   property TopiaForge.Mods.MultiplayerSessionState State { get; }
   property TopiaForge.Mods.NetworkTick Tick { get; }
@@ -174,7 +309,13 @@ type public enum TopiaForge.Mods.MultiplayerSessionState : System.Int32
   field const TopiaForge.Mods.MultiplayerSessionState Connecting = 0 (Connecting)
   field const TopiaForge.Mods.MultiplayerSessionState Ended = 3 (Ended)
   field const TopiaForge.Mods.MultiplayerSessionState Ready = 2 (Ready)
+  field const TopiaForge.Mods.MultiplayerSessionState Reconnecting = 4 (Reconnecting)
   field const TopiaForge.Mods.MultiplayerSessionState Synchronizing = 1 (Synchronizing)
+
+type public readonly struct TopiaForge.Mods.MultiplayerTickContext : System.ValueType
+  constructor .ctor(TopiaForge.Mods.NetworkTick tick, System.Double deltaSeconds)
+  property System.Double DeltaSeconds { get; }
+  property TopiaForge.Mods.NetworkTick Tick { get; }
 
 type public sealed class TopiaForge.Mods.NetworkBoundAttribute : System.Attribute
   constructor .ctor(System.Int32 maximum)
@@ -226,11 +367,37 @@ type public sealed class TopiaForge.Mods.PresentationEventType<TEvent> : System.
   property System.String Id { get; }
   property TopiaForge.Mods.IMultiplayerCodec<TEvent> Codec { get; }
 
+type public readonly struct TopiaForge.Mods.PresentationTarget : System.ValueType, System.IEquatable<TopiaForge.Mods.PresentationTarget>
+  method System.Boolean Selects(TopiaForge.Mods.ParticipantId participant, TopiaForge.Mods.ParticipantId sender)
+  method System.Boolean TryGetAudience(out TopiaForge.Mods.MultiplayerAudience audience)
+  method [static] TopiaForge.Mods.PresentationTarget AllExcept(TopiaForge.Mods.ParticipantId participant)
+  method [static] TopiaForge.Mods.PresentationTarget FromAudience(TopiaForge.Mods.MultiplayerAudience audience)
+  method [static] TopiaForge.Mods.PresentationTarget Only(TopiaForge.Mods.ParticipantId participant)
+  method [virtual,final,newslot] System.Boolean Equals(TopiaForge.Mods.PresentationTarget other)
+  method [virtual] System.Boolean Equals(System.Object? obj)
+  method [virtual] System.Int32 GetHashCode()
+  method [virtual] System.String ToString()
+  property TopiaForge.Mods.ParticipantId Participant { get; }
+  property TopiaForge.Mods.PresentationTargetKind Kind { get; }
+  property static TopiaForge.Mods.PresentationTarget Everyone { get [static]; }
+  property static TopiaForge.Mods.PresentationTarget Others { get [static]; }
+  property static TopiaForge.Mods.PresentationTarget Sender { get [static]; }
+
+type public enum TopiaForge.Mods.PresentationTargetKind : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.PresentationTargetKind AllExcept = 4 (AllExcept)
+  field const TopiaForge.Mods.PresentationTargetKind Everyone = 0 (Everyone)
+  field const TopiaForge.Mods.PresentationTargetKind Only = 3 (Only)
+  field const TopiaForge.Mods.PresentationTargetKind Others = 2 (Others)
+  field const TopiaForge.Mods.PresentationTargetKind Sender = 1 (Sender)
+
 type public sealed class TopiaForge.Mods.ReplicatedObjectAttribute : System.Attribute
   constructor .ctor(System.String typeId)
   property System.Int32 MaximumPayloadBytes { get; set; }
   property System.Int32 MaximumPerSecond { get; set; }
+  property System.Int32 MaximumUpdatesPerSecond { get; set; }
   property System.String Id { get; }
+  property TopiaForge.Mods.MultiplayerDelivery Delivery { get; set; }
   property TopiaForge.Mods.PredictionMode Prediction { get; set; }
 
 type public sealed class TopiaForge.Mods.ReplicatedObjectChange<TState, TInput> : System.Object where TState : class where TInput : class
@@ -250,6 +417,7 @@ type public enum TopiaForge.Mods.ReplicatedObjectChangeKind : System.Int32
 
 type public sealed class TopiaForge.Mods.ReplicatedObjectCommandContext : TopiaForge.Mods.MultiplayerCommandContext
   constructor .ctor(TopiaForge.Mods.ParticipantId senderId, TopiaForge.Mods.NetworkObjectId targetObjectId, TopiaForge.Mods.NetworkTick tick, System.Boolean senderOwnsTarget, System.Threading.CancellationToken cancellationToken, System.Func<System.String, System.Byte[], TopiaForge.Mods.MultiplayerAudience, TopiaForge.Mods.OperationResult<System.Boolean>> emit)
+  constructor .ctor(TopiaForge.Mods.ParticipantId senderId, TopiaForge.Mods.NetworkObjectId targetObjectId, TopiaForge.Mods.NetworkTick tick, System.UInt64 sequence, TopiaForge.Mods.SessionSeed seed, System.Boolean senderOwnsTarget, System.Threading.CancellationToken cancellationToken, System.Func<System.String, System.Byte[], TopiaForge.Mods.PresentationTarget, TopiaForge.Mods.OperationResult<System.Boolean>> emit)
   property System.Boolean SenderOwnsTarget { get; }
   property TopiaForge.Mods.NetworkObjectId TargetObjectId { get; }
 
@@ -259,18 +427,22 @@ type public sealed class TopiaForge.Mods.ReplicatedObjectType<TState, TInput> : 
 
 type public sealed class TopiaForge.Mods.ReplicatedObjectTypeDefinition<TState, TInput> : System.Object where TState : class where TInput : class
   constructor .ctor(TopiaForge.Mods.ReplicatedObjectType<TState, TInput> type, TopiaForge.Mods.IMultiplayerCodec<TState> stateCodec, TopiaForge.Mods.IMultiplayerCodec<TInput> inputCodec, System.Func<TopiaForge.Mods.ReplicatedObjectCommandContext, TState, TInput, TopiaForge.Mods.OperationResult<TState>> handler, TopiaForge.Mods.PredictionMode prediction = 0 (None), System.Int32 maximumPerSecond = 30, System.Int32 maximumPayloadBytes = 16384)
+  constructor .ctor(TopiaForge.Mods.ReplicatedObjectType<TState, TInput> type, TopiaForge.Mods.IMultiplayerCodec<TState> stateCodec, TopiaForge.Mods.IMultiplayerCodec<TInput> inputCodec, System.Func<TopiaForge.Mods.ReplicatedObjectCommandContext, TState, TInput, TopiaForge.Mods.OperationResult<TState>> handler, TopiaForge.Mods.PredictionMode prediction, System.Int32 maximumPerSecond, System.Int32 maximumPayloadBytes, TopiaForge.Mods.MultiplayerDelivery delivery, System.Int32 maximumUpdatesPerSecond)
   property System.Func<TopiaForge.Mods.ReplicatedObjectCommandContext, TState, TInput, TopiaForge.Mods.OperationResult<TState>> Handler { get; }
   property System.Int32 MaximumPayloadBytes { get; }
   property System.Int32 MaximumPerSecond { get; }
+  property System.Int32 MaximumUpdatesPerSecond { get; }
   property System.String TypeId { get; }
   property TopiaForge.Mods.IMultiplayerCodec<TInput> InputCodec { get; }
   property TopiaForge.Mods.IMultiplayerCodec<TState> StateCodec { get; }
+  property TopiaForge.Mods.MultiplayerDelivery Delivery { get; }
   property TopiaForge.Mods.PredictionMode Prediction { get; }
   property TopiaForge.Mods.ReplicatedObjectType<TState, TInput> Type { get; }
 
 type public sealed class TopiaForge.Mods.ReplicatedState<T> : System.Object, System.IDisposable, TopiaForge.Mods.IReplicatedState<T> where T : class
   constructor .ctor(T initialValue)
   method TopiaForge.Mods.OperationResult<System.IDisposable> Bind(TopiaForge.Mods.IMultiplayerSession session, System.String id, TopiaForge.Mods.IMultiplayerCodec<T> codec)
+  method TopiaForge.Mods.OperationResult<System.IDisposable> Bind(TopiaForge.Mods.IMultiplayerSession session, System.String id, TopiaForge.Mods.IMultiplayerCodec<T> codec, TopiaForge.Mods.MultiplayerDelivery delivery, System.Int32 maximumUpdatesPerSecond)
   method [virtual,final,newslot] System.IDisposable SubscribeChanged(System.Action<T> handler)
   method [virtual,final,newslot] System.Void Dispose()
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<T> Update(System.Func<T, TopiaForge.Mods.OperationResult<T>> updater)
@@ -280,13 +452,25 @@ type public sealed class TopiaForge.Mods.ReplicatedState<T> : System.Object, Sys
 
 type public sealed class TopiaForge.Mods.ReplicatedStateAttribute : System.Attribute
   constructor .ctor(System.String id)
+  property System.Int32 MaximumUpdatesPerSecond { get; set; }
   property System.String Id { get; }
+  property TopiaForge.Mods.MultiplayerDelivery Delivery { get; set; }
 
 type public sealed class TopiaForge.Mods.ReplicatedStateDefinition<T> : System.Object where T : class
   constructor .ctor(System.String id, T initialValue, TopiaForge.Mods.IMultiplayerCodec<T> codec)
+  constructor .ctor(System.String id, T initialValue, TopiaForge.Mods.IMultiplayerCodec<T> codec, TopiaForge.Mods.MultiplayerDelivery delivery, System.Int32 maximumUpdatesPerSecond)
+  property System.Int32 MaximumUpdatesPerSecond { get; }
   property System.String Id { get; }
   property T InitialValue { get; }
   property TopiaForge.Mods.IMultiplayerCodec<T> Codec { get; }
+  property TopiaForge.Mods.MultiplayerDelivery Delivery { get; }
+
+type public sealed class TopiaForge.Mods.ScoreboardColumnDefinition : System.Object
+  constructor .ctor(System.String id, System.String title, System.Int32 order = 0)
+  field const System.Int32 MaximumTextLength = 64
+  property System.Int32 Order { get; }
+  property System.String Id { get; }
+  property System.String Title { get; }
 
 type public readonly struct TopiaForge.Mods.SessionSeed : System.ValueType, System.IEquatable<TopiaForge.Mods.SessionSeed>
   constructor .ctor(System.UInt64 value)

@@ -21,25 +21,25 @@ namespace TopiaForge.Mods.Testing
         internal BufferedTestPresentation(
             string id,
             byte[] bytes,
-            MultiplayerAudience audience,
+            PresentationTarget target,
             ulong sequence = 0)
         {
             Id = id;
             Bytes = bytes == null ? throw new ArgumentNullException(nameof(bytes)) : (byte[])bytes.Clone();
-            Audience = audience;
+            Target = target;
             Sequence = sequence;
         }
 
         internal string Id { get; }
         internal byte[] Bytes { get; }
-        internal MultiplayerAudience Audience { get; }
+        internal PresentationTarget Target { get; }
         internal ulong Sequence { get; }
 
         internal BufferedTestPresentation Copy() =>
-            new BufferedTestPresentation(Id, Bytes, Audience, Sequence);
+            new BufferedTestPresentation(Id, Bytes, Target, Sequence);
 
         internal BufferedTestPresentation WithSequence(ulong sequence) =>
-            new BufferedTestPresentation(Id, Bytes, Audience, sequence);
+            new BufferedTestPresentation(Id, Bytes, Target, sequence);
     }
 
     internal interface ITestPresentation : IPresentationEventRegistration

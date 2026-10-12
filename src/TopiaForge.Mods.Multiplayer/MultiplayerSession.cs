@@ -74,7 +74,7 @@ namespace TopiaForge.Mods
     /// <summary>Provides authenticated sender, tick, cancellation, and buffered-event context to a command.</summary>
     public class MultiplayerCommandContext
     {
-        private readonly Func<string, byte[], MultiplayerAudience, OperationResult<bool>> emit;
+        private readonly Func<string, byte[], PresentationTarget, OperationResult<bool>> emit;
 
         /// <summary>Creates command context. Runtime providers, generators, and tests normally construct this value.</summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -83,6 +83,22 @@ namespace TopiaForge.Mods
             NetworkTick tick,
             CancellationToken cancellationToken,
             Func<string, byte[], MultiplayerAudience, OperationResult<bool>> emit)
+            : this(senderId, tick, 0, default, cancellationToken, AdaptAudienceEmit(emit))
+        {
+        }
+
+        /// <summary>
+        /// Creates command context with the sender-scoped command sequence and session seed that make
+        /// <see cref="CreateRandom"/> deterministic, and a target-aware event buffer.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public MultiplayerCommandContext(
+            ParticipantId senderId,
+            NetworkTick tick,
+            ulong sequence,
+            SessionSeed seed,
+            CancellationToken cancellationToken,
+            Func<string, byte[], PresentationTarget, OperationResult<bool>> emit)
         {
             if (!senderId.IsValid)
             {
@@ -93,6 +109,8 @@ namespace TopiaForge.Mods
 
             SenderId = senderId;
             Tick = tick;
+            Sequence = sequence;
+            Seed = seed;
             CancellationToken = cancellationToken;
             this.emit = emit ?? throw new ArgumentNullException(nameof(emit));
         }
@@ -106,6 +124,22 @@ namespace TopiaForge.Mods
         /// <summary>Gets cancellation tied to the session and command deadline.</summary>
         public CancellationToken CancellationToken { get; }
 
+        /// <summary>
+        /// Gets the sender-scoped submission sequence. Prediction and confirmation see the same value, so it is a
+        /// safe ingredient for determinism, unlike <see cref="Tick"/>.
+        /// </summary>
+        public ulong Sequence { get; }
+
+        /// <summary>Gets the session seed the command runs under.</summary>
+        public SessionSeed Seed { get; }
+
+        /// <summary>
+        /// Creates this command's deterministic random stream. Prediction and the server's canonical run draw the same
+        /// values; use a different <paramref name="salt"/> for each independent stream inside one handler.
+        /// </summary>
+        public DeterministicRandom CreateRandom(ulong salt = 0) =>
+            DeterministicRandom.ForCommand(Seed, SenderId, Sequence, salt);
+
         /// <summary>Buffers a transient event until canonical command acceptance.</summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public OperationResult<bool> Emit<TEvent>(
@@ -113,9 +147,19 @@ namespace TopiaForge.Mods
             TEvent value,
             MultiplayerAudience audience = MultiplayerAudience.Everyone) where TEvent : class
         {
+            if (!Enum.IsDefined(typeof(MultiplayerAudience), audience)) throw new ArgumentOutOfRangeException(nameof(audience));
+            return Emit(eventType, value, PresentationTarget.FromAudience(audience));
+        }
+
+        /// <summary>Buffers a targeted transient event until canonical command acceptance.</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public OperationResult<bool> Emit<TEvent>(
+            PresentationEventType<TEvent> eventType,
+            TEvent value,
+            PresentationTarget target) where TEvent : class
+        {
             if (eventType == null) throw new ArgumentNullException(nameof(eventType));
             if (value == null) throw new ArgumentNullException(nameof(value));
-            if (!Enum.IsDefined(typeof(MultiplayerAudience), audience)) throw new ArgumentOutOfRangeException(nameof(audience));
             var encoded = eventType.Codec.Encode(value);
             if (!encoded.TryGetValue(out var bytes))
                 return OperationResult<bool>.Failure(encoded.ErrorCode, encoded.ErrorMessage);
@@ -123,7 +167,18 @@ namespace TopiaForge.Mods
                 return OperationResult<bool>.Failure(
                     ModErrorCode.InvalidArgument,
                     "The presentation-event codec exceeded its declared maximum size.");
-            return emit(eventType.Id, (byte[])bytes.Clone(), audience);
+            return emit(eventType.Id, (byte[])bytes.Clone(), target);
+        }
+
+        private static Func<string, byte[], PresentationTarget, OperationResult<bool>> AdaptAudienceEmit(
+            Func<string, byte[], MultiplayerAudience, OperationResult<bool>> emit)
+        {
+            if (emit == null) throw new ArgumentNullException(nameof(emit));
+            return (id, bytes, target) => target.TryGetAudience(out var audience)
+                ? emit(id, bytes, audience)
+                : OperationResult<bool>.Failure(
+                    ModErrorCode.Unavailable,
+                    "This provider supports only Everyone, Sender, and Others presentation targets.");
         }
     }
 
@@ -141,14 +196,24 @@ namespace TopiaForge.Mods
             Func<string, byte[], MultiplayerAudience, OperationResult<bool>> emit)
             : base(senderId, tick, cancellationToken, emit)
         {
-            if (!targetObjectId.IsValid)
-            {
-                throw new ArgumentException(
-                    "A replicated-object command context requires a valid target identity.",
-                    nameof(targetObjectId));
-            }
+            TargetObjectId = RequireTarget(targetObjectId);
+            SenderOwnsTarget = senderOwnsTarget;
+        }
 
-            TargetObjectId = targetObjectId;
+        /// <summary>Creates replicated-object command context with sequence, seed, and target-aware events.</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public ReplicatedObjectCommandContext(
+            ParticipantId senderId,
+            NetworkObjectId targetObjectId,
+            NetworkTick tick,
+            ulong sequence,
+            SessionSeed seed,
+            bool senderOwnsTarget,
+            CancellationToken cancellationToken,
+            Func<string, byte[], PresentationTarget, OperationResult<bool>> emit)
+            : base(senderId, tick, sequence, seed, cancellationToken, emit)
+        {
+            TargetObjectId = RequireTarget(targetObjectId);
             SenderOwnsTarget = senderOwnsTarget;
         }
 
@@ -157,6 +222,18 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets whether the authenticated sender currently owns this exact target.</summary>
         public bool SenderOwnsTarget { get; }
+
+        private static NetworkObjectId RequireTarget(NetworkObjectId targetObjectId)
+        {
+            if (!targetObjectId.IsValid)
+            {
+                throw new ArgumentException(
+                    "A replicated-object command context requires a valid target identity.",
+                    nameof(targetObjectId));
+            }
+
+            return targetObjectId;
+        }
     }
 
     /// <summary>Generator/provider SPI identifying one stable multiplayer command wire type.</summary>
@@ -380,6 +457,38 @@ namespace TopiaForge.Mods
             PresentationEventType<TEvent> eventType,
             TEvent value,
             MultiplayerAudience audience = MultiplayerAudience.Everyone) where TEvent : class;
+
+        /// <summary>Publishes a targeted canonical presentation event; non-authority callers fail.</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        OperationResult<bool> PublishPresentation<TEvent>(
+            PresentationEventType<TEvent> eventType,
+            TEvent value,
+            PresentationTarget target) where TEvent : class;
+
+        /// <summary>
+        /// Registers a generated contract descriptor so session admission can compare it with other peers. Generated
+        /// bindings call this first; the registration lives until disposed.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor);
+
+        /// <summary>
+        /// Subscribes to canonical fixed simulation steps. Handlers run on the main thread only where this process holds
+        /// world authority: the host, or single-player play. Clients never receive steps.
+        /// </summary>
+        IDisposable SubscribeTick(Action<MultiplayerTickContext> handler);
+
+        /// <summary>Tries to resolve a server-assigned network object identity to this process's entity.</summary>
+        bool TryGetEntity(NetworkObjectId id, out IEntity? entity);
+
+        /// <summary>Tries to get a participant's avatar entity.</summary>
+        bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar);
+
+        /// <summary>Tries to get a participant's latest replicated pose.</summary>
+        bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose);
+
+        /// <summary>Gets the players in the current session; single-player play has exactly the local player.</summary>
+        IPlayerDirectory Players { get; }
     }
 
     /// <summary>Convenience resolution for the dependency-scoped multiplayer provider.</summary>

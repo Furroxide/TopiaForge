@@ -94,7 +94,6 @@ namespace TopiaForge.Mods.Testing
         private TState confirmed;
         private ulong version;
         private ulong confirmedVersion;
-        private ulong nextSequence;
         private ulong highestCanonicalConfirmationSequence;
         private bool disposed;
 
@@ -151,7 +150,7 @@ namespace TopiaForge.Mods.Testing
                 return Task.FromResult(Failure(copied.ErrorCode, copied.ErrorMessage));
             }
 
-            var sequence = ++nextSequence;
+            var sequence = session.AllocateSubmissionSequence();
             var wasPredicted = definition.Prediction == PredictionMode.Owner
                 && OwnerId.HasValue
                 && OwnerId.Value.Equals(sender.Value)
@@ -189,6 +188,15 @@ namespace TopiaForge.Mods.Testing
             }
 
             return item.Task;
+        }
+
+        // Direct server-side changes arrive with the engine-hosted rig; objects change only through inputs here.
+        public OperationResult<TState> Apply(Func<TState, OperationResult<TState>> updater)
+        {
+            if (updater == null) throw new ArgumentNullException(nameof(updater));
+            return OperationResult<TState>.Failure(
+                ModErrorCode.Unavailable,
+                "Applying replicated-object state outside an input handler needs the live session engine.");
         }
 
         public OperationResult<bool> TransferOwnership(ParticipantId? ownerId)
@@ -387,7 +395,7 @@ namespace TopiaForge.Mods.Testing
                     }
                     else
                     {
-                        var outcome = InvokeHandler(sender, owns, input);
+                        var outcome = InvokeHandler(sender, sequence, owns, input);
                         result = outcome.Result;
                         TState? currentCopy = null;
                         TState? confirmedCopy = null;
@@ -482,6 +490,7 @@ namespace TopiaForge.Mods.Testing
                 && OwnerId.Value.Equals(session.Snapshot.LocalParticipantId.Value);
             var outcome = InvokeHandler(
                 session.Snapshot.LocalParticipantId ?? default,
+                item.Sequence,
                 owns,
                 item.Input);
             if (!outcome.Result.TryGetValue(out var next))
@@ -516,7 +525,7 @@ namespace TopiaForge.Mods.Testing
                     "The canonical server no longer contains this replicated object."));
         }
 
-        private ObjectOutcome InvokeHandler(ParticipantId sender, bool owns, TInput input)
+        private ObjectOutcome InvokeHandler(ParticipantId sender, ulong sequence, bool owns, TInput input)
         {
             var copied = MultiplayerTestCodec.RoundTrip(definition.InputCodec, input);
             if (!copied.TryGetValue(out var inputCopy))
@@ -539,11 +548,13 @@ namespace TopiaForge.Mods.Testing
                 sender,
                 Id,
                 session.Snapshot.Tick,
+                sequence,
+                session.Snapshot.Seed,
                 owns,
                 session.CurrentSessionToken,
-                (id, value, audience) =>
+                (id, value, target) =>
                 {
-                    events.Add(new BufferedTestPresentation(id, value, audience));
+                    events.Add(new BufferedTestPresentation(id, value, target));
                     return OperationResult<bool>.Success(true);
                 });
             OperationResult<TState> result;
