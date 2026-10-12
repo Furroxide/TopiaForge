@@ -15,7 +15,7 @@ using TopiaForge.Mods.Multiplayer.Generators;
 
 namespace TopiaForge.Mods.Multiplayer.Generators.Tests
 {
-    internal static class Program
+    internal static partial class Program
     {
         private const string ValidContractSource = """
             #nullable enable
@@ -162,6 +162,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 ContractDescriptorDefensivelyCopiesAndValidates();
                 LowLevelSpiIsHiddenFromOrdinaryIntelliSense();
                 GeneratedBindingCleansUpFailedAndThrowingRegistrations();
+                RunLiveSessionGeneratorTests();
                 Console.WriteLine("All TopiaForge multiplayer generator tests passed.");
                 return 0;
             }
@@ -305,8 +306,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             AssertNoErrors(result);
             var generated = SingleGeneratedSource(result).SourceText.ToString();
             Assert(generated.Contains("session.RegisterPresentation", StringComparison.Ordinal) &&
-                   generated.Contains("session.Snapshot.HasPresentation ?", StringComparison.Ordinal),
-                "Every peer must register the event codec while only presentation-capable peers attach the local handler.");
+                   generated.Contains(
+                       "session.Snapshot.ProcessKind == global::TopiaForge.Mods.MultiplayerProcessKind.Interactive ?",
+                       StringComparison.Ordinal) &&
+                   !generated.Contains("HasPresentation", StringComparison.Ordinal),
+                "Every peer must register the event codec while only interactive processes attach the local handler; " +
+                "the process kind never changes, unlike the sides of whichever session was current at bind time.");
         }
 
         private static void ReportsNonPartialContract() => ExpectDiagnostic("TFMP001", """
@@ -1041,8 +1046,11 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 new object[] { connectFailureSession })!;
             Assert(!(bool)failed.GetType().GetProperty("Succeeded")!.GetValue(failed)!,
                 "An already-connected author state should return a generated binding failure.");
-            Assert(connectFailureSession.CreatedRegistrationCount == 0,
-                "An already-connected state must fail before creating another provider registration.");
+            Assert(connectFailureSession.ContractRegistrationCount == 1 &&
+                   connectFailureSession.CreatedRegistrationCount == 1 &&
+                   connectFailureSession.AllCreatedRegistrationsDisposed,
+                "An already-connected state must fail before any state or handler registration, releasing the " +
+                "contract registration that binding makes first.");
             connection.Dispose();
 
             var sequentialContract = Activator.CreateInstance(contractType)!;
@@ -1312,14 +1320,17 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
         private sealed class ThrowingBindingSession : IMultiplayerSession
         {
             private readonly bool throwOnPresentation;
+            private readonly bool failContractRegistration;
             private readonly List<Func<bool>> disposedChecks = new List<Func<bool>>();
+            private readonly List<Action<MultiplayerSessionSnapshot>> changed = new List<Action<MultiplayerSessionSnapshot>>();
             private readonly List<IResettableTrackingState> states = new List<IResettableTrackingState>();
             private System.Threading.CancellationTokenSource currentSession =
                 new System.Threading.CancellationTokenSource();
 
-            internal ThrowingBindingSession(bool throwOnPresentation)
+            internal ThrowingBindingSession(bool throwOnPresentation, bool failContractRegistration = false)
             {
                 this.throwOnPresentation = throwOnPresentation;
+                this.failContractRegistration = failContractRegistration;
                 Snapshot = new MultiplayerSessionSnapshot(
                     new MultiplayerSessionId("binding-test"),
                     MultiplayerSessionState.Ready,
@@ -1339,6 +1350,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             internal bool AllCreatedRegistrationsDisposed => disposedChecks.Count > 0 && disposedChecks.All(check => check());
             internal int CreatedRegistrationCount => disposedChecks.Count;
             internal int SubmissionCount { get; private set; }
+            internal int ContractRegistrationCount { get; private set; }
 
             internal void ReplaceRegisteredStateForTest(object value)
             {
@@ -1361,9 +1373,30 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                     Snapshot.Participants,
                     new NetworkTick(0),
                     Snapshot.Seed);
+                foreach (var handler in changed.ToArray()) handler(Snapshot);
             }
 
-            public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler) => new EmptyDisposable();
+            internal void EndSession()
+            {
+                Snapshot = new MultiplayerSessionSnapshot(
+                    Snapshot.Id,
+                    MultiplayerSessionState.Ended,
+                    Snapshot.ProcessKind,
+                    Snapshot.ExecutionSides,
+                    Snapshot.LocalParticipantId,
+                    Snapshot.Participants,
+                    Snapshot.Tick,
+                    Snapshot.Seed,
+                    null,
+                    MultiplayerSessionEndReason.HostEnded);
+                foreach (var handler in changed.ToArray()) handler(Snapshot);
+            }
+
+            public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler)
+            {
+                changed.Add(handler);
+                return new CallbackDisposable(() => changed.Remove(handler));
+            }
 
             public OperationResult<IReplicatedState<T>> RegisterState<T>(ReplicatedStateDefinition<T> definition)
                 where T : class
@@ -1472,8 +1505,18 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 PresentationTarget target)
                 where TEvent : class => OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "Not used.");
 
-            public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor) =>
-                OperationResult<IDisposable>.Success(new EmptyDisposable());
+            public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor)
+            {
+                if (failContractRegistration)
+                {
+                    return OperationResult<IDisposable>.Failure(ModErrorCode.Conflict, "Deliberate contract conflict.");
+                }
+
+                ContractRegistrationCount++;
+                var disposed = false;
+                disposedChecks.Add(() => disposed);
+                return OperationResult<IDisposable>.Success(new CallbackDisposable(() => disposed = true));
+            }
 
             public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler) => new EmptyDisposable();
 
@@ -1496,6 +1539,20 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             }
 
             public IPlayerDirectory Players => throw new NotSupportedException("Not used.");
+        }
+
+        private sealed class CallbackDisposable : IDisposable
+        {
+            private Action? callback;
+
+            internal CallbackDisposable(Action callback) => this.callback = callback;
+
+            public void Dispose()
+            {
+                var captured = callback;
+                callback = null;
+                captured?.Invoke();
+            }
         }
 
         private sealed class TrackingCommandRegistration : IMultiplayerCommandRegistration

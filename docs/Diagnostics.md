@@ -129,6 +129,106 @@ opting into the unstable interop package does not move the code off the game loo
 The explicitly unstable interop package requires Robotopia managed reference assemblies. Install
 Robotopia and run `topiaforge restore`, or remove the package and use the safe SDK.
 
+## Multiplayer contract diagnostics
+
+The multiplayer generator reports these while it builds a `[MultiplayerContract]`. Errors stop the build;
+warnings mark contracts that build but will behave badly in a session.
+
+### TFMP001
+
+**Multiplayer contract must be partial.**
+
+Mark the `[MultiplayerContract]` class `partial` and keep it top-level and non-generic; the generator adds the descriptor, codecs, binding, and typed proxies to it.
+
+### TFMP002
+
+**Invalid multiplayer command.**
+
+A `[MultiplayerCommand]` handler is a non-static, non-async, non-generic method shaped `OperationResult<TResponse> Handle(MultiplayerCommandContext command, TRequest request)`. The request and response are classes, and no parameter is `ref`, `in`, or `out`. Out-of-range settings report TFMP016 instead.
+
+### TFMP003
+
+**Unsupported multiplayer payload type.**
+
+Payloads are concrete classes with a compiler-generated parameterless constructor and deterministic primitive, enum, string, array, or nested payload members. Native Unity or game objects, interfaces, polymorphic and recursive graphs, and constructors or initializers with side effects are rejected.
+
+### TFMP004
+
+**Unbounded multiplayer payload.**
+
+Give every string and array member `[NetworkBound(maximum)]`, so the generated codec has a hard size limit.
+
+### TFMP005
+
+**Predicted handler is nondeterministic.**
+
+An owner-predicted handler runs on the sender and again on the server, and both runs must agree. Draw random numbers from `command.CreateRandom()` and never read clocks, `System.Random`, or new GUIDs.
+
+### TFMP006
+
+**Predicted handler performs a process-local side effect.**
+
+Predicted handlers may only update generated replicated state, read their own data, and emit buffered presentation events. Move UI, audio, file, and service calls into a `[PresentationEvent]` handler. One expression reports once, at its outermost offending call.
+
+### TFMP007
+
+**Duplicate multiplayer wire id.**
+
+Every state, command, object, and event id in one contract must be unique.
+
+### TFMP008
+
+**Multiplayer payload exceeds its limit.**
+
+The generated codec can produce more bytes than `MaximumPayloadBytes` allows. Raise the limit or tighten the `[NetworkBound]` values it adds up from.
+
+### TFMP009
+
+**Invalid multiplayer wire id.**
+
+Ids are non-empty, contain no control characters, and stay at most 128 characters after the contract id prefix is added.
+
+### TFMP010
+
+**Invalid replicated object handler.**
+
+A `[ReplicatedObject]` handler is a non-async, non-generic method shaped `OperationResult<TState> Apply(ReplicatedObjectCommandContext command, TState state, TInput input)`, with class state and input types and no `ref`, `in`, or `out` parameters.
+
+### TFMP011
+
+**Multiplayer payload exceeds the transport limit.**
+
+Replicated state and presentation-event codecs must stay within the 1 MiB transport limit.
+
+### TFMP012
+
+**Generated multiplayer member name collision.**
+
+A declaration would generate a member, such as `Submit...Async` or `Emit...To`, that already exists. Rename the handler or the conflicting member.
+
+### TFMP013
+
+**Multiplayer contract id is required.**
+
+Set `[MultiplayerContract(Id = "...")]`. The id is a permanent wire identity, so class and namespace names are never used.
+
+### TFMP014
+
+**Contract exceeds the per-connection inbound budget.**
+
+A warning: the declared worst-case client-to-server rate exceeds 32 KiB/s. Lower `MaximumPerSecond` or `MaximumPayloadBytes` to what the commands really need.
+
+### TFMP015
+
+**Server-only handler uses local presentation.**
+
+A warning: a handler with `Prediction = None` runs only on the session authority, so UI, input, local-player, audio, or Unity calls there affect the host rather than the player who acted. Publish a presentation event, or address the player through `IPlayer.Ui`.
+
+### TFMP016
+
+**Invalid multiplayer setting.**
+
+A setting is outside its range: `Prediction` is `None` or `Owner`, `MaximumPerSecond` is 1 to 1000, `MaximumPayloadBytes` is 64 to 1048576, `Delivery` is `Coalesced` or `Immediate`, and `MaximumUpdatesPerSecond` is 1 to 60, or 0 for the provider's snapshot rate.
 ## Runtime diagnostics
 
 Use `Context.Runtime.UnavailableCapabilities` to explain why a Robotopia binding or provider feature is
