@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "about": "LAN beacons (UDP 27251) and the session info a host returns to an info query. Beacon bytes are hex; session info is canonical JSON of at most 1,188 bytes.",
+  "beacons": {
+    "valid": [
+      {
+        "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+        "gamePort": 27250,
+        "hex": "e601c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3726a"
+      },
+      {
+        "serverId": "cf82f7bc6b072f456554dd30c31b12fe5af423bbe03ff908124a1a08f0f16443",
+        "gamePort": 50123,
+        "hex": "e601cf82f7bc6b072f456554dd30c31b12fe5af423bbe03ff908124a1a08f0f16443cbc3"
+      }
+    ],
+    "invalid": [
+      {
+        "hex": "e601c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb372",
+        "about": "One byte short."
+      },
+      {
+        "hex": "e601c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3726a00",
+        "about": "One byte long."
+      },
+      {
+        "hex": "e501c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3726a",
+        "about": "Another packet type."
+      },
+      {
+        "hex": "e602c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3726a",
+        "about": "Another beacon version."
+      },
+      {
+        "hex": "e601c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb30000",
+        "about": "Port zero."
+      }
+    ]
+  },
+  "sessionInfo": {
+    "maximumBytes": 1188,
+    "valid": [
+      {
+        "id": "typical",
+        "info": {
+          "schema": "topiaforge.session-info/1",
+          "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+          "descriptorSha256": "7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645",
+          "name": "Sam's Sandbox",
+          "gameBuild": "2545",
+          "runtimeVersion": "0.2.0",
+          "protocolVersion": "1.0.0",
+          "gamemode": "Open Sandbox",
+          "world": "Test City",
+          "players": 3,
+          "maxPlayers": 8,
+          "passwordRequired": false,
+          "voice": true
+        },
+        "canonical": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"passwordRequired\":false,\"players\":3,\"protocolVersion\":\"1.0.0\",\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.session-info/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":\"Test City\"}"
+      },
+      {
+        "id": "no-target",
+        "info": {
+          "schema": "topiaforge.session-info/1",
+          "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+          "descriptorSha256": "7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645",
+          "name": "Sam's Sandbox",
+          "gameBuild": "2545",
+          "runtimeVersion": "0.2.0",
+          "protocolVersion": "1.0.0",
+          "gamemode": null,
+          "world": null,
+          "players": 0,
+          "maxPlayers": 8,
+          "passwordRequired": false,
+          "voice": true
+        },
+        "canonical": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":null,\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"passwordRequired\":false,\"players\":0,\"protocolVersion\":\"1.0.0\",\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.session-info/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":null}"
+      },
+      {
+        "id": "widest",
+        "info": {
+          "schema": "topiaforge.session-info/1",
+          "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+          "descriptorSha256": "7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645",
+          "name": "東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東",
+          "gameBuild": "xxxxxxxxxxxxxxxx",
+          "runtimeVersion": "1.0.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "protocolVersion": "1.0.0-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "gamemode": "東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東",
+          "world": "東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東",
+          "players": 16,
+          "maxPlayers": 16,
+          "passwordRequired": true,
+          "voice": true
+        },
+        "canonical": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"xxxxxxxxxxxxxxxx\",\"gamemode\":\"東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東\",\"maxPlayers\":16,\"name\":\"東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東\",\"passwordRequired\":true,\"players\":16,\"protocolVersion\":\"1.0.0-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"runtimeVersion\":\"1.0.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"schema\":\"topiaforge.session-info/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":\"東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東東\"}",
+        "bytes": 935
+      }
+    ],
+    "invalid": [
+      {
+        "text": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"passwordRequired\":false,\"players\":9,\"protocolVersion\":\"1.0.0\",\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.session-info/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":\"Test City\"}",
+        "about": "More players than the maximum."
+      },
+      {
+        "text": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"host\":\"192.168.1.20\",\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"passwordRequired\":false,\"players\":3,\"protocolVersion\":\"1.0.0\",\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.session-info/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":\"Test City\"}",
+        "about": "No unknown members, and never an address."
+      },
+      {
+        "text": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"passwordRequired\":false,\"players\":3,\"protocolVersion\":\"1.0.0\",\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.session-info/2\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":\"Test City\"}",
+        "about": "Another schema."
+      },
+      {
+        "text": "{\"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\", \"gameBuild\": \"2545\", \"gamemode\": \"Open Sandbox\", \"maxPlayers\": 8, \"name\": \"Sam's Sandbox\", \"passwordRequired\": false, \"players\": 3, \"protocolVersion\": \"1.0.0\", \"runtimeVersion\": \"0.2.0\", \"schema\": \"topiaforge.session-info/1\", \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\", \"voice\": true, \"world\": \"Test City\"}",
+        "about": "Not canonical."
+      },
+      {
+        "text": "{\"descriptorSha256\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"passwordRequired\":false,\"players\":3,\"protocolVersion\":\"1.0.0\",\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.session-info/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"voice\":true,\"world\":\"Test City\"}",
+        "about": "Hexadecimal is lowercase."
+      }
+    ]
+  }
+}
