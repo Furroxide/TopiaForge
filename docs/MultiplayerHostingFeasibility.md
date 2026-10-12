@@ -5,7 +5,7 @@ description: Evidence required before TopiaForge advertises live transport or de
 
 # Multiplayer hosting feasibility gate
 
-The stable multiplayer contract, loopback provider, and deterministic test rig do not prove that Robotopia can be
+The stable multiplayer contract, solo provider, and deterministic test rig do not prove that Robotopia can be
 run, rebuilt, licensed, or redistributed as a dedicated server. TopiaForge must keep live transport and dedicated
 hosting experimental until this gate is closed with evidence for the exact supported Robotopia build.
 
@@ -76,7 +76,7 @@ headless flags is insufficient if it still depends on presentation state or lack
 
 ## Release decision
 
-Until every item passes, TopiaForge may ship only the stable transport-neutral contract, real-game standalone
-loopback, and synthetic multi-peer rig. It must not advertise live multiplayer, dedicated Robotopia hosting, hosted
+Until every item passes, TopiaForge may ship only the stable transport-neutral contract, the real-game solo
+provider, and synthetic multi-peer rig. It must not advertise live multiplayer, dedicated Robotopia hosting, hosted
 server downloads, or automatic server-package execution. A listen-server transport and a dedicated-server transport
 receive separate go/no-go decisions because the former does not resolve the latter's build and licensing constraints.

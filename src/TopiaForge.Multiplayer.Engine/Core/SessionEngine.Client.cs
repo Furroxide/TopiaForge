@@ -512,6 +512,20 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         /// <summary>
+        /// Cancels the pending submissions of an owner whose facade closed, as its caller would. Sent ones stay listed
+        /// until the host's commit covers them, but their registrations are gone, so their predictions change nothing.
+        /// </summary>
+        private void CancelOwnerSubmissions(string owner, string message)
+        {
+            foreach (var submission in pending.ToArray())
+            {
+                if (string.Equals(submission.Owner, owner, StringComparison.Ordinal)) CancelPending(submission, message);
+            }
+
+            reconcileRequested = true;
+        }
+
+        /// <summary>
         /// Abandons every pending submission when the connection or the session goes away. A submission whose result
         /// already arrived completes with that result, because the host did execute it.
         /// </summary>

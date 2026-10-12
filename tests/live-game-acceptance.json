@@ -62,7 +62,7 @@
     {
       "id": "integration.multiplayer-loopback",
       "probeMethod": "RunMultiplayerLoopbackChecks",
-      "description": "The declared multiplayer module resolves through the extension boundary, binds generated state/command/event codecs, and executes them canonically through a ready interactive client-plus-server standalone loopback session."
+      "description": "The declared multiplayer module resolves through the extension boundary, binds generated state/command/event codecs, and executes them canonically through a ready interactive client-plus-server solo session."
     },
     {
       "id": "integration.provider-scope",

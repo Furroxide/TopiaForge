@@ -1,3 +1,5 @@
+extern alias provider;
+
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 
@@ -332,11 +334,11 @@ internal static class SdkContractCompletionTests
                canonical.Count == 2 && canonical[0] != canonical[1],
             "inputs from one sender to different objects get distinct sequences, so their random streams differ");
 
-        using var loopback = new global::TopiaForge.Multiplayer.LoopbackMultiplayerSession("sequence-test");
+        using var solo = new provider::TopiaForge.Multiplayer.MultiplayerProvider("sequence-test", clockMicros: () => 0);
         var roll = new MultiplayerCommandType<AddRequest, CounterValue>("roll");
         var draws = new List<(ulong Sequence, ulong Draw)>();
         Require(
-            loopback.RegisterCommand(new MultiplayerCommandDefinition<AddRequest, CounterValue>(
+            solo.RegisterCommand(new MultiplayerCommandDefinition<AddRequest, CounterValue>(
                 roll,
                 RequestCodec,
                 CounterCodec,
@@ -345,11 +347,11 @@ internal static class SdkContractCompletionTests
                     draws.Add((command.Sequence, command.CreateRandom().NextUInt64()));
                     return OperationResult<CounterValue>.Success(new CounterValue(request.Amount));
                 })),
-            "register loopback roll");
-        loopback.SubmitAsync(roll, new AddRequest(1)).GetAwaiter().GetResult();
-        loopback.SubmitAsync(roll, new AddRequest(1)).GetAwaiter().GetResult();
+            "register solo roll");
+        solo.SubmitAsync(roll, new AddRequest(1)).GetAwaiter().GetResult();
+        solo.SubmitAsync(roll, new AddRequest(1)).GetAwaiter().GetResult();
         Assert(draws.Count == 2 && draws[0].Sequence != draws[1].Sequence && draws[0].Draw != draws[1].Draw,
-            "loopback commands get distinct sequences and therefore distinct random streams");
+            "solo commands get distinct sequences and therefore distinct random streams");
     }
 
     private static int? Ping(int? milliseconds) =>

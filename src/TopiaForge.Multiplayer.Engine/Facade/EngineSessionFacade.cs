@@ -8,21 +8,27 @@ using TopiaForge.Mods.Internal;
 namespace TopiaForge.Multiplayer.Engine
 {
     /// <summary>
-    /// The <see cref="IMultiplayerSession"/> one owner mod sees. Its registrations are keyed by the owner, and
-    /// disposing the facade disposes everything registered through it.
+    /// The <see cref="IMultiplayerSession"/> one owner mod sees. Its registrations are keyed by the owner. Disposing
+    /// the facade, or stopping the mod lifetime it is bound to, retires the owner's objects and disposes everything
+    /// registered through it; a closing facade refuses new work with <see cref="ModErrorCode.Cancelled"/>.
     /// </summary>
     internal sealed class EngineSessionFacade : IMultiplayerSession, IDisposable
     {
+        private const string ClosingMessage = "The mod is stopping and cannot change its multiplayer session.";
         private readonly SessionEngine engine;
+        private readonly IModLifetime? lifetime;
         private readonly List<IDisposable> owned = new List<IDisposable>();
         private readonly object ownedGate = new object();
         private SnapshotPlayerDirectory? players;
+        private int nextPrune = 32;
         private bool disposed;
 
-        internal EngineSessionFacade(SessionEngine engine, string ownerModId)
+        internal EngineSessionFacade(SessionEngine engine, string ownerModId, IModLifetime? lifetime = null)
         {
             this.engine = engine;
+            this.lifetime = lifetime;
             OwnerModId = ownerModId;
+            lifetime?.Track(this);
         }
 
         internal string OwnerModId { get; }
@@ -35,30 +41,44 @@ namespace TopiaForge.Multiplayer.Engine
 
         public IPlayerDirectory Players => players ??= new SnapshotPlayerDirectory(() => engine.Snapshot);
 
-        public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler) => Own(engine.SubscribeSession(handler));
+        private bool IsClosing => disposed || (lifetime?.IsStopping ?? false);
+
+        public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler)
+        {
+            ThrowIfClosing();
+            return Own(engine.SubscribeSession(handler));
+        }
 
         public OperationResult<IReplicatedState<T>> RegisterState<T>(ReplicatedStateDefinition<T> definition) where T : class =>
-            OwnResult(engine.RegisterState(OwnerModId, definition));
+            IsClosing ? Closing<IReplicatedState<T>>() : OwnResult(engine.RegisterState(OwnerModId, definition));
 
         public OperationResult<IMultiplayerCommandRegistration> RegisterCommand<TRequest, TResponse>(
             MultiplayerCommandDefinition<TRequest, TResponse> definition)
             where TRequest : class
             where TResponse : class =>
-            OwnResult(engine.RegisterCommand(OwnerModId, definition));
+            IsClosing ? Closing<IMultiplayerCommandRegistration>() : OwnResult(engine.RegisterCommand(OwnerModId, definition));
 
         public OperationResult<IReplicatedObjectTypeRegistration> RegisterObjectType<TState, TInput>(
             ReplicatedObjectTypeDefinition<TState, TInput> definition)
             where TState : class
             where TInput : class =>
-            OwnResult(engine.RegisterObjectType(OwnerModId, definition));
+            IsClosing ? Closing<IReplicatedObjectTypeRegistration>() : OwnResult(engine.RegisterObjectType(OwnerModId, definition));
 
         public Task<MultiplayerCommandConfirmation<TResponse>> SubmitAsync<TRequest, TResponse>(
             MultiplayerCommandType<TRequest, TResponse> commandType,
             TRequest request,
             CancellationToken cancellationToken = default)
             where TRequest : class
-            where TResponse : class =>
-            engine.SubmitCommand(OwnerModId, commandType, request, cancellationToken);
+            where TResponse : class
+        {
+            if (!IsClosing) return engine.SubmitCommand(OwnerModId, commandType, request, cancellationToken);
+            var tick = engine.CurrentTick;
+            return Task.FromResult(new MultiplayerCommandConfirmation<TResponse>(
+                tick,
+                tick,
+                false,
+                OperationResult<TResponse>.Failure(ModErrorCode.Cancelled, ClosingMessage)));
+        }
 
         public OperationResult<IReplicatedObject<TState, TInput>> SpawnObject<TState, TInput>(
             ReplicatedObjectType<TState, TInput> type,
@@ -66,9 +86,10 @@ namespace TopiaForge.Multiplayer.Engine
             ParticipantId? ownerId = null)
             where TState : class
             where TInput : class =>
-            engine.SpawnObject(OwnerModId, type, initialState, ownerId);
+            IsClosing ? Closing<IReplicatedObject<TState, TInput>>() : engine.SpawnObject(OwnerModId, type, initialState, ownerId);
 
-        public OperationResult<bool> DespawnObject(NetworkObjectId id) => engine.DespawnObject(OwnerModId, id);
+        public OperationResult<bool> DespawnObject(NetworkObjectId id) =>
+            IsClosing ? Closing<bool>() : engine.DespawnObject(OwnerModId, id);
 
         public IReadOnlyList<IReplicatedObject<TState, TInput>> GetObjects<TState, TInput>(ReplicatedObjectType<TState, TInput> type)
             where TState : class
@@ -87,8 +108,11 @@ namespace TopiaForge.Multiplayer.Engine
             ReplicatedObjectType<TState, TInput> type,
             Action<ReplicatedObjectChange<TState, TInput>> handler)
             where TState : class
-            where TInput : class =>
-            Own(engine.SubscribeObjects(OwnerModId, type, handler));
+            where TInput : class
+        {
+            ThrowIfClosing();
+            return Own(engine.SubscribeObjects(OwnerModId, type, handler));
+        }
 
         public bool TryGetNetworkObjectId(IEntity entity, out NetworkObjectId id)
         {
@@ -99,7 +123,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         public OperationResult<IPresentationEventRegistration> RegisterPresentation<TEvent>(PresentationEventDefinition<TEvent> definition)
             where TEvent : class =>
-            OwnResult(engine.RegisterPresentation(OwnerModId, definition));
+            IsClosing ? Closing<IPresentationEventRegistration>() : OwnResult(engine.RegisterPresentation(OwnerModId, definition));
 
         public OperationResult<bool> PublishPresentation<TEvent>(
             PresentationEventType<TEvent> eventType,
@@ -108,7 +132,7 @@ namespace TopiaForge.Multiplayer.Engine
             where TEvent : class
         {
             if (!Enum.IsDefined(typeof(MultiplayerAudience), audience)) throw new ArgumentOutOfRangeException(nameof(audience));
-            return engine.PublishPresentation(OwnerModId, eventType, value, PresentationTarget.FromAudience(audience));
+            return PublishPresentation(eventType, value, PresentationTarget.FromAudience(audience));
         }
 
         public OperationResult<bool> PublishPresentation<TEvent>(
@@ -116,12 +140,16 @@ namespace TopiaForge.Multiplayer.Engine
             TEvent value,
             PresentationTarget target)
             where TEvent : class =>
-            engine.PublishPresentation(OwnerModId, eventType, value, target);
+            IsClosing ? Closing<bool>() : engine.PublishPresentation(OwnerModId, eventType, value, target);
 
         public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor) =>
-            OwnResult(engine.RegisterContract(OwnerModId, descriptor));
+            IsClosing ? Closing<IDisposable>() : OwnResult(engine.RegisterContract(OwnerModId, descriptor));
 
-        public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler) => Own(engine.SubscribeTick(handler));
+        public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler)
+        {
+            ThrowIfClosing();
+            return Own(engine.SubscribeTick(handler));
+        }
 
         public bool TryGetEntity(NetworkObjectId id, out IEntity? entity)
         {
@@ -141,7 +169,7 @@ namespace TopiaForge.Multiplayer.Engine
             return false;
         }
 
-        /// <summary>Disposes every registration and subscription made through this facade.</summary>
+        /// <summary>Retires the owner's objects and disposes every registration and subscription made through this facade.</summary>
         public void Dispose()
         {
             IDisposable[] leases;
@@ -153,7 +181,16 @@ namespace TopiaForge.Multiplayer.Engine
                 owned.Clear();
             }
 
+            engine.RetireOwner(OwnerModId);
             for (var index = leases.Length - 1; index >= 0; index--) leases[index].Dispose();
+        }
+
+        private static OperationResult<T> Closing<T>() where T : notnull =>
+            OperationResult<T>.Failure(ModErrorCode.Cancelled, ClosingMessage);
+
+        private void ThrowIfClosing()
+        {
+            if (IsClosing) throw new ObjectDisposedException(nameof(IMultiplayerSession), ClosingMessage);
         }
 
         private OperationResult<T> OwnResult<T>(OperationResult<T> result) where T : notnull
@@ -168,6 +205,14 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 if (!disposed)
                 {
+                    // Registrations disposed one by one stay in the list until the next prune, so a mod that
+                    // subscribes and unsubscribes for a whole session cannot grow it without bound.
+                    if (owned.Count >= nextPrune)
+                    {
+                        owned.RemoveAll(IsRetired);
+                        nextPrune = Math.Max(32, owned.Count * 2);
+                    }
+
                     owned.Add(disposable);
                     return disposable;
                 }
@@ -176,5 +221,15 @@ namespace TopiaForge.Multiplayer.Engine
             disposable.Dispose();
             return disposable;
         }
+
+        private static bool IsRetired(IDisposable item) => item switch
+        {
+            EngineLease lease => lease.IsDisposed,
+            StateRecord state => !state.IsActive,
+            CommandBinding command => !command.IsActive,
+            ObjectTypeBinding objectType => !objectType.IsActive,
+            PresentationBinding presentation => !presentation.IsActive,
+            _ => false
+        };
     }
 }

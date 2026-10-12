@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace TopiaForge.Mods
 {
-    /// <summary>Identifies the optional multiplayer contract and loopback runtime provider.</summary>
+    /// <summary>Identifies the optional multiplayer contract and its runtime provider.</summary>
     public static class MultiplayerModule
     {
         /// <summary>Gets the manifest id used to declare the multiplayer runtime provider.</summary>
@@ -43,7 +43,7 @@ namespace TopiaForge.Mods
     /// <summary>Describes admission and snapshot readiness for a multiplayer session.</summary>
     public enum MultiplayerSessionState
     {
-        /// <summary>The transport or loopback provider is establishing the session.</summary>
+        /// <summary>The provider is establishing the session.</summary>
         Connecting = 0,
 
         /// <summary>Canonical state is being applied before callbacks may run.</summary>

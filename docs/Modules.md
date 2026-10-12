@@ -92,8 +92,8 @@ effect dynamically, so unloading the consumer restores normal planning without r
 
 ## Multiplayer
 
-Multiplayer is a stable API preview with a generated contract, standalone loopback provider, and deterministic
-multi-peer test rig. New scaffolds use Manifest V6; the add command preserves the input manifest version, pins all three multiplayer components to the same
+Multiplayer is a stable API preview with a generated contract, a provider that runs the session engine in solo
+sessions, and a deterministic multi-peer test rig. New scaffolds use Manifest V6; the add command preserves the input manifest version, pins all three multiplayer components to the same
 release, and adds multiplayer metadata; removing
 the module preserves unrelated contribution declarations. Shared state is
 server-canonical with optional owner prediction. See [Multiplayer API preview](Multiplayer.md) and
