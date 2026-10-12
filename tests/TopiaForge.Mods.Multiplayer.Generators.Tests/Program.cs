@@ -953,7 +953,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 typeof(PresentationEventType<>),
                 typeof(PresentationEventDefinition<>),
                 typeof(IPresentationEventRegistration),
-                typeof(MultiplayerContractDescriptor)
+                typeof(MultiplayerContractDescriptor),
+                typeof(IGeneratedMultiplayerBinding)
             };
             foreach (var type in hiddenTypes)
             {
@@ -964,11 +965,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                      {
                          "RegisterState", "RegisterCommand", "RegisterObjectType", "SubmitAsync", "SpawnObject",
                          "DespawnObject", "GetObjects", "TryGetObject", "SubscribeObjects", "RegisterPresentation",
-                         "PublishPresentation"
+                         "PublishPresentation", "RegisterContract"
                      })
             {
-                var method = typeof(IMultiplayerSession).GetMethods().Single(item => item.Name == methodName);
-                Assert(IsHiddenFromEditor(method), methodName + " must remain provider/generator SPI.");
+                var methods = typeof(IMultiplayerSession).GetMethods().Where(item => item.Name == methodName).ToArray();
+                Assert(methods.Length > 0 && methods.All(IsHiddenFromEditor),
+                    methodName + " must remain provider/generator SPI in every overload.");
             }
 
             Assert(!IsHiddenFromEditor(typeof(IMultiplayerSession)) &&
@@ -1027,7 +1029,9 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             var generatedCodec = contractType.GetMethod("GetCodec")!.MakeGenericMethod(stateType)
                 .Invoke(connectFailureContract, null)!;
             var preconnectedSession = new ThrowingBindingSession(throwOnPresentation: false);
-            var connectionResult = handle.GetType().GetMethod("Bind")!.Invoke(
+            var connectionResult = handle.GetType().GetMethods()
+                .Single(method => method.Name == "Bind" && method.GetParameters().Length == 3)
+                .Invoke(
                 handle,
                 new object[] { preconnectedSession, "sample.contract/score", generatedCodec })!;
             var connection = (IDisposable)InvokeSuccessfulResult(connectionResult);
@@ -1461,6 +1465,37 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 TEvent value,
                 MultiplayerAudience audience = MultiplayerAudience.Everyone)
                 where TEvent : class => OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "Not used.");
+
+            public OperationResult<bool> PublishPresentation<TEvent>(
+                PresentationEventType<TEvent> eventType,
+                TEvent value,
+                PresentationTarget target)
+                where TEvent : class => OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, "Not used.");
+
+            public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor) =>
+                OperationResult<IDisposable>.Success(new EmptyDisposable());
+
+            public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler) => new EmptyDisposable();
+
+            public bool TryGetEntity(NetworkObjectId id, out IEntity? entity)
+            {
+                entity = null;
+                return false;
+            }
+
+            public bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar)
+            {
+                avatar = null;
+                return false;
+            }
+
+            public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose)
+            {
+                pose = default;
+                return false;
+            }
+
+            public IPlayerDirectory Players => throw new NotSupportedException("Not used.");
         }
 
         private sealed class TrackingCommandRegistration : IMultiplayerCommandRegistration

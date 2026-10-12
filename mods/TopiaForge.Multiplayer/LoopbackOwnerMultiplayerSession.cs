@@ -30,6 +30,53 @@ namespace TopiaForge.Multiplayer
         public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler) =>
             TrackSubscription(() => session.SubscribeChanged(handler));
 
+        public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler) =>
+            TrackSubscription(() => session.SubscribeTick(handler));
+
+        public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor)
+        {
+            if (lifetime.IsStopping)
+            {
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.Cancelled,
+                    "The mod is stopping and cannot register a multiplayer contract.");
+            }
+
+            var registered = session.RegisterContract(ownerModId, descriptor);
+            if (!registered.TryGetValue(out var lease)) return registered;
+            try
+            {
+                return OperationResult<IDisposable>.Success(lifetime.Track(lease));
+            }
+            catch (ObjectDisposedException)
+            {
+                lease.Dispose();
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.Cancelled,
+                    "The mod stopped before its multiplayer contract could be registered.");
+            }
+        }
+
+        public OperationResult<bool> PublishPresentation<TEvent>(
+            PresentationEventType<TEvent> eventType,
+            TEvent value,
+            PresentationTarget target) where TEvent : class =>
+            lifetime.IsStopping
+                ? OperationResult<bool>.Failure(
+                    ModErrorCode.Cancelled,
+                    "The mod is stopping and cannot publish presentation events.")
+                : session.PublishPresentation(ownerModId, eventType, value, target);
+
+        public bool TryGetEntity(NetworkObjectId id, out IEntity? entity) => session.TryGetEntity(id, out entity);
+
+        public bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar) =>
+            session.TryGetAvatar(participantId, out avatar);
+
+        public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose) =>
+            session.TryGetPose(participantId, out pose);
+
+        public IPlayerDirectory Players => session.Players;
+
         public OperationResult<IReplicatedState<T>> RegisterState<T>(ReplicatedStateDefinition<T> definition)
             where T : class =>
             TrackResult(
@@ -410,6 +457,13 @@ namespace TopiaForge.Multiplayer
                         ModErrorCode.Cancelled,
                         "The mod is stopping and cannot transfer replicated-object ownership.")
                     : replicatedObject.TransferOwnership(ownerId);
+
+            public OperationResult<TState> Apply(Func<TState, OperationResult<TState>> updater) =>
+                lifetime.IsStopping
+                    ? OperationResult<TState>.Failure(
+                        ModErrorCode.Cancelled,
+                        "The mod is stopping and cannot change replicated objects.")
+                    : replicatedObject.Apply(updater);
 
             private NetworkTick SnapshotTick() => session.Snapshot.Tick;
 
