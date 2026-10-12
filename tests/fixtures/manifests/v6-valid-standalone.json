@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-standalone",
+  "displayName": "V6 Standalone Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.StandaloneMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "multiplayer": { "mode": "standalone" }
+}

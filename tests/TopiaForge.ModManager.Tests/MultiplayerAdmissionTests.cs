@@ -115,6 +115,16 @@ namespace TopiaForge.ModManager.Tests
                 "client-local mods must be rejected from the logical server profile");
             Assert(reversed.Mismatches.Any(item => item.Code == MultiplayerAdmissionMismatchCode.ServerOnlyModOnClient),
                 "server-only mods must be rejected from the interactive client profile");
+
+            var listenHost = MultiplayerAdmissionPlanner.Evaluate(
+                Profile(
+                    "server",
+                    Mode("example.client", ModMultiplayerMetadata.ClientLocalMode),
+                    Mode("example.server", ModMultiplayerMetadata.ServerOnlyMode)),
+                Profile("client"),
+                serverRole: MultiplayerAdmissionServerRole.ListenHost);
+            Assert(listenHost.IsAdmitted,
+                "a listen host is also a player, so its own client-local and server-only mods are legitimate");
         }
 
         private static void GeneratedContractLockHashesParticipateInAdmission()
@@ -166,10 +176,9 @@ namespace TopiaForge.ModManager.Tests
 
         private static void RejectsStandaloneMissingProtocolAndContentMismatches()
         {
-            var standalone = Manifest("example.standalone");
             var server = Profile(
                 "server",
-                new MultiplayerAdmissionMod(standalone),
+                Mode("example.standalone", ModMultiplayerMetadata.StandaloneMode),
                 Session("example.required", "1.0.0", "1.0.0", Hash('a')),
                 Session("example.protocol", "1.0.0", "1.0.0", Hash('a')));
             var client = Profile(
@@ -177,7 +186,7 @@ namespace TopiaForge.ModManager.Tests
                 Session("example.protocol", "2.0.0", "2.0.0", Hash('b')));
             var report = MultiplayerAdmissionPlanner.Evaluate(server, client);
             Assert(report.Mismatches.Any(item => item.Code == MultiplayerAdmissionMismatchCode.StandaloneOnlyMod),
-                "undeclared V5 mods should block multiplayer");
+                "an explicitly standalone mod should block multiplayer");
             Assert(report.Mismatches.Any(item => item.Code == MultiplayerAdmissionMismatchCode.MissingRequiredMod),
                 "missing required mod should block");
             Assert(report.Mismatches.Any(item => item.Code == MultiplayerAdmissionMismatchCode.ModProtocolMismatch),

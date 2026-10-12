@@ -88,7 +88,7 @@ Mods should disable only the affected feature and show a useful message.
 
 ## Manifest, restore, and packaging
 
-`topiaforge.mod.json` schema V6 is canonical. Omit `multiplayer` for a standalone-only mod; add it through the multiplayer module command when needed. Required dependencies and optional dependencies are
+`topiaforge.mod.json` schema V6 is canonical. Omit `multiplayer` and the mod is shared implicitly, so every peer in a session needs the identical package; declare `"mode": "standalone"` to keep a mod out of multiplayer, or add the multiplayer module command when needed. Required dependencies and optional dependencies are
 ID-to-range maps. Compatibility ranges, platform/architecture/content constraints, capabilities,
 load-order hints, exported API assemblies, and namespaced `x-*` metadata are validated before code
 executes. Read [Manifest V6](ManifestV6.md) for every field and

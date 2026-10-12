@@ -192,6 +192,16 @@ void main() {
         MultiplayerAdmissionMismatchCode.serverOnlyModOnClient,
       ]),
     );
+
+    final listenHost = const MultiplayerAdmissionPlanner().evaluate(
+      server: _profile('server', [
+        _mode('example.client', ModMultiplayerMode.clientLocal),
+        _mode('example.server', ModMultiplayerMode.serverOnly),
+      ]),
+      client: _profile('client', const []),
+      serverRole: MultiplayerAdmissionServerRole.listenHost,
+    );
+    expect(listenHost.isAdmitted, isTrue);
   });
 
   test('requires mutual protocol compatibility and exact omitted ranges', () {
@@ -252,10 +262,9 @@ void main() {
   });
 
   test('reports standalone, missing, protocol, and content failures', () {
-    final standalone = _manifest('example.standalone');
     final report = const MultiplayerAdmissionPlanner().evaluate(
       server: _profile('server', [
-        MultiplayerAdmissionMod(manifest: standalone),
+        _mode('example.standalone', ModMultiplayerMode.standalone),
         _session('example.required', hash: _hash('a')),
         _session(
           'example.protocol',

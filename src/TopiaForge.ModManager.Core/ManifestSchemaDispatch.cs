@@ -20,7 +20,8 @@ namespace TopiaForge.ModManager.Core
                 throw new InvalidDataException(
                     "Manifest schemaVersion " + schemaVersion + " was retired before TopiaForge 1.0. " +
                     "Run 'topiaforge migrate-manifest --project <path>' to create schemaVersion 6; " +
-                    "omit multiplayer for a standalone-only mod.");
+                    "omit multiplayer to share the mod with every peer, or set its mode to standalone to keep it out of " +
+                    "multiplayer.");
             }
 
             if (schemaVersion == ModManifest.ManifestV6SchemaVersion)

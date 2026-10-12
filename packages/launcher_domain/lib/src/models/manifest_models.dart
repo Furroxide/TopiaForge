@@ -114,12 +114,37 @@ class ModManifest {
   final List<String> apiAssemblies;
 
   /// Optional multiplayer admission metadata. Its absence means the mod is
-  /// standalone-only.
+  /// shared implicitly: every peer must enable the identical package.
   final ModMultiplayerMetadata? multiplayer;
 
   /// Distinguishes a missing value from a malformed non-object value so the
   /// validator can report the correct version-specific contract error.
   final bool multiplayerIsPresent;
+
+  /// Whether the manifest has no multiplayer block and is therefore shared
+  /// implicitly as the identical package on every peer.
+  bool get isImplicitlyShared =>
+      isSupportedSchemaVersion(schemaVersion) && !multiplayerIsPresent;
+
+  /// Whether the manifest explicitly refuses every multiplayer session.
+  bool get isStandaloneOnly =>
+      effectiveMultiplayerMode == ModMultiplayerEffectiveMode.standalone;
+
+  /// How this mod takes part in multiplayer sessions, or null when the schema
+  /// is unsupported or the declared block or mode is invalid.
+  ModMultiplayerEffectiveMode? get effectiveMultiplayerMode {
+    if (!isSupportedSchemaVersion(schemaVersion)) return null;
+    if (!multiplayerIsPresent) {
+      return ModMultiplayerEffectiveMode.implicitShared;
+    }
+    return switch (multiplayer?.mode) {
+      ModMultiplayerMode.session => ModMultiplayerEffectiveMode.session,
+      ModMultiplayerMode.clientLocal => ModMultiplayerEffectiveMode.clientLocal,
+      ModMultiplayerMode.serverOnly => ModMultiplayerEffectiveMode.serverOnly,
+      ModMultiplayerMode.standalone => ModMultiplayerEffectiveMode.standalone,
+      null => null,
+    };
+  }
 
   /// Namespaced `x-*` extension fields survive a read/edit/write cycle.
   /// Retired aliases and invalid unknown fields remain visible so validation

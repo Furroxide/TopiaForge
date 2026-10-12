@@ -18,7 +18,8 @@ namespace TopiaForge.ModManager.Core
         ServerOnlyModOnClient = 7,
         ExactProfileMismatch = 8,
         ClientLocalModOnServer = 9,
-        OptionalSessionModUnavailable = 10
+        OptionalSessionModUnavailable = 10,
+        ImplicitSharedContentMismatch = 11
     }
 
     /// <summary>Controls whether admission uses wire compatibility or exact curated profile equality.</summary>
@@ -26,6 +27,19 @@ namespace TopiaForge.ModManager.Core
     {
         Compatible = 0,
         ExactProfile = 1
+    }
+
+    /// <summary>Describes the process that hosts the logical server side of a session.</summary>
+    public enum MultiplayerAdmissionServerRole
+    {
+        /// <summary>A server without a local player. Client-local mods have no place in its profile.</summary>
+        DedicatedServer = 0,
+
+        /// <summary>
+        /// A player-hosted listen server whose process is also an interactive client, so the host's own
+        /// client-local and server-only mods are both legitimate.
+        /// </summary>
+        ListenHost = 1
     }
 
     /// <summary>One enabled packaged mod offered by a peer during admission.</summary>
@@ -120,7 +134,10 @@ namespace TopiaForge.ModManager.Core
         public IReadOnlyList<MultiplayerAdmissionMismatch> InactiveSessionReasons { get; }
     }
 
-    /// <summary>Applies server-canonical V5 presence, protocol, and content admission rules.</summary>
+    /// <summary>
+    /// Applies server-canonical V6 admission rules: implicit sharing for mods without a multiplayer block,
+    /// presence, protocol, and content negotiation for declared session mods, and logical-side rules for the rest.
+    /// </summary>
     public static class MultiplayerAdmissionPlanner
     {
         private static readonly Regex Sha256Regex = new Regex("^[A-Fa-f0-9]{64}$", RegexOptions.Compiled);
@@ -128,11 +145,16 @@ namespace TopiaForge.ModManager.Core
         public static MultiplayerAdmissionReport Evaluate(
             MultiplayerAdmissionProfile server,
             MultiplayerAdmissionProfile client,
-            MultiplayerAdmissionPolicy policy = MultiplayerAdmissionPolicy.Compatible)
+            MultiplayerAdmissionPolicy policy = MultiplayerAdmissionPolicy.Compatible,
+            MultiplayerAdmissionServerRole serverRole = MultiplayerAdmissionServerRole.DedicatedServer)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
             if (client == null) throw new ArgumentNullException(nameof(client));
             if (!Enum.IsDefined(typeof(MultiplayerAdmissionPolicy), policy)) throw new ArgumentOutOfRangeException(nameof(policy));
+            if (!Enum.IsDefined(typeof(MultiplayerAdmissionServerRole), serverRole))
+            {
+                throw new ArgumentOutOfRangeException(nameof(serverRole));
+            }
 
             var mismatches = new List<MultiplayerAdmissionMismatch>();
             var inactiveSessionReasons = new List<MultiplayerAdmissionMismatch>();
@@ -173,7 +195,7 @@ namespace TopiaForge.ModManager.Core
             var clientMods = Index(client, "client", mismatches);
             RejectStandaloneOnly(serverMods, "server", mismatches);
             RejectStandaloneOnly(clientMods, "client", mismatches);
-            RejectWrongSideMods(serverMods, clientMods, mismatches);
+            RejectWrongSideMods(serverMods, clientMods, serverRole, mismatches);
 
             var active = new SortedSet<string>(StringComparer.Ordinal);
             var allIds = new SortedSet<string>(serverMods.Keys, StringComparer.Ordinal);
@@ -182,6 +204,12 @@ namespace TopiaForge.ModManager.Core
             {
                 serverMods.TryGetValue(id, out var serverMod);
                 clientMods.TryGetValue(id, out var clientMod);
+                if (IsImplicitlyShared(serverMod) || IsImplicitlyShared(clientMod))
+                {
+                    CompareImplicitShared(id, serverMod, clientMod, active, mismatches);
+                    continue;
+                }
+
                 var serverMetadata = serverMod?.Manifest.Multiplayer;
                 var clientMetadata = clientMod?.Manifest.Multiplayer;
                 var serverSession = IsSession(serverMetadata);
@@ -396,16 +424,14 @@ namespace TopiaForge.ModManager.Core
             ModMultiplayerMetadata multiplayer,
             ICollection<string> errors)
         {
-            var isClientLocal = string.Equals(multiplayer.Mode, ModMultiplayerMetadata.ClientLocalMode, StringComparison.Ordinal);
-            var isServerOnly = string.Equals(multiplayer.Mode, ModMultiplayerMetadata.ServerOnlyMode, StringComparison.Ordinal);
-            var isSession = string.Equals(multiplayer.Mode, ModMultiplayerMetadata.SessionMode, StringComparison.Ordinal);
-            if (!isClientLocal && !isServerOnly && !isSession)
+            var mode = manifest.EffectiveMultiplayerMode;
+            if (mode == null)
             {
-                errors.Add("multiplayer.mode must be client-local, server-only, or session");
+                errors.Add("multiplayer.mode must be client-local, server-only, session, or standalone");
                 return;
             }
 
-            if (!isSession)
+            if (mode != ModMultiplayerEffectiveMode.Session)
             {
                 if (multiplayer.PresenceWasPresent || !string.IsNullOrEmpty(multiplayer.Presence) ||
                     multiplayer.Protocol != null || multiplayer.SynchronizedFilesWasPresent ||
@@ -488,7 +514,7 @@ namespace TopiaForge.ModManager.Core
             {
                 mismatches.Add(new MultiplayerAdmissionMismatch(
                     MultiplayerAdmissionMismatchCode.StandaloneOnlyMod,
-                    "The " + side + " enables a standalone-only mod. Disable it in an explicitly confirmed derived profile or add multiplayer metadata.",
+                    "The " + side + " enables a mod that declares itself standalone. Disable it in an explicitly confirmed derived profile to play together.",
                     item.Key));
             }
         }
@@ -496,12 +522,15 @@ namespace TopiaForge.ModManager.Core
         private static void RejectWrongSideMods(
             IReadOnlyDictionary<string, MultiplayerAdmissionMod> serverMods,
             IReadOnlyDictionary<string, MultiplayerAdmissionMod> clientMods,
+            MultiplayerAdmissionServerRole serverRole,
             ICollection<MultiplayerAdmissionMismatch> mismatches)
         {
-            foreach (var item in serverMods.Where(item => string.Equals(
-                         item.Value.Manifest.Multiplayer?.Mode,
-                         ModMultiplayerMetadata.ClientLocalMode,
-                         StringComparison.Ordinal)))
+            foreach (var item in serverMods.Where(item =>
+                         serverRole == MultiplayerAdmissionServerRole.DedicatedServer &&
+                         string.Equals(
+                             item.Value.Manifest.Multiplayer?.Mode,
+                             ModMultiplayerMetadata.ClientLocalMode,
+                             StringComparison.Ordinal)))
             {
                 mismatches.Add(new MultiplayerAdmissionMismatch(
                     MultiplayerAdmissionMismatchCode.ClientLocalModOnServer,
@@ -523,6 +552,58 @@ namespace TopiaForge.ModManager.Core
                     "absent",
                     ModMultiplayerMetadata.ServerOnlyMode));
             }
+        }
+
+        private static bool IsImplicitlyShared(MultiplayerAdmissionMod? item) =>
+            item != null && item.Manifest.IsImplicitlyShared;
+
+        /// <summary>
+        /// A mod without a multiplayer block is required of every peer as the identical package, whichever peer
+        /// enables it, so a mismatched or missing copy always blocks admission.
+        /// </summary>
+        private static void CompareImplicitShared(
+            string id,
+            MultiplayerAdmissionMod? server,
+            MultiplayerAdmissionMod? client,
+            ISet<string> active,
+            ICollection<MultiplayerAdmissionMismatch> mismatches)
+        {
+            if (server == null)
+            {
+                AddMissing(
+                    id,
+                    "The client enables this implicitly shared mod, so the server must enable the identical package.",
+                    "absent",
+                    ModeDisplay(client),
+                    mismatches);
+                return;
+            }
+
+            if (client == null)
+            {
+                AddMissing(
+                    id,
+                    "The server requires this implicitly shared mod on every client as the identical package.",
+                    ModeDisplay(server),
+                    "absent",
+                    mismatches);
+                return;
+            }
+
+            if (Sha256Regex.IsMatch(server.PackageSha256) &&
+                Sha256Regex.IsMatch(client.PackageSha256) &&
+                string.Equals(server.PackageSha256, client.PackageSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                active.Add(id);
+                return;
+            }
+
+            mismatches.Add(new MultiplayerAdmissionMismatch(
+                MultiplayerAdmissionMismatchCode.ImplicitSharedContentMismatch,
+                "Implicitly shared mods must be the identical package on every peer.",
+                id,
+                server.Manifest.Version + "@" + server.PackageSha256,
+                client.Manifest.Version + "@" + client.PackageSha256));
         }
 
         private static bool IsSession(ModMultiplayerMetadata? metadata) =>
@@ -645,7 +726,7 @@ namespace TopiaForge.ModManager.Core
             item == null
                 ? "absent"
                 : item.Manifest.Multiplayer == null
-                    ? "standalone-only"
+                    ? "implicit"
                     : item.Manifest.Multiplayer.Mode;
 
         private static void AddInvalid(

@@ -6,6 +6,7 @@ valid v6-valid-extension-payload.json
 valid v6-valid-session.json
 valid v6-valid-client-local.json
 valid v6-valid-server-only.json
+valid v6-valid-standalone.json
 valid v6-missing-multiplayer.json
 invalid-schema v6-missing-compatibility.json
 invalid-schema v6-unknown-field.json
@@ -43,6 +44,7 @@ invalid-schema v6-too-many-root-fields.json
 invalid-schema v4-retired.json
 invalid-schema v6-session-missing-protocol.json
 invalid-schema v6-client-session-fields.json
+invalid-schema v6-standalone-session-fields.json
 invalid-schema v6-unknown-multiplayer-field.json
 invalid-schema v6-unsafe-synchronized-path.json
 invalid-semantic v6-invalid-peer-version-range.json
