@@ -8,7 +8,6 @@ namespace TopiaForge.Multiplayer.Engine
 {
     internal sealed partial class SessionEngine
     {
-        private const int SoftFrameBytes = 64 * 1024;
         private readonly List<PendingSubmission> pending = new List<PendingSubmission>();
         private readonly Dictionary<WireKey, StagedState> unboundStates = new Dictionary<WireKey, StagedState>();
         private readonly Dictionary<string, ObjectWireMessage> unboundObjects = new Dictionary<string, ObjectWireMessage>(StringComparer.Ordinal);
@@ -27,6 +26,11 @@ namespace TopiaForge.Multiplayer.Engine
 
         private bool ClientHasPendingWork => channel != null && channel.HasOutbound;
 
+        private bool ClientFlushOpen => channel != null && channel.FlushOpen;
+
+        /// <summary>Gets how many submissions await the host, including cancelled ones still replaying.</summary>
+        internal int PendingSubmissionCount => pending.Count;
+
         /// <summary>Joins a host over <paramref name="link"/>, replacing any previous connection.</summary>
         internal void Connect(IEngineLink link, string displayName, byte[]? content = null)
         {
@@ -43,17 +47,12 @@ namespace TopiaForge.Multiplayer.Engine
             EndOperation();
         }
 
-        internal void RequestCancellation(PendingSubmission submission)
-        {
-            if (IsOwnerThread && !scope.IsOpen && !settling)
-            {
-                CancelPending(submission, "The multiplayer submission was cancelled.");
-                EndOperation();
-                return;
-            }
-
-            inbox.Enqueue(() => CancelPending(submission, "The multiplayer submission was cancelled."));
-        }
+        /// <summary>
+        /// Cancels a submission for its caller. It takes effect at the next settle point, so a token cancelled in the
+        /// middle of an engine operation never interrupts it.
+        /// </summary>
+        internal void RequestCancellation(PendingSubmission submission) =>
+            Defer(() => CancelPending(submission, "The multiplayer submission was cancelled."));
 
         private Task<MultiplayerCommandConfirmation<T>> SubmitPending<T>(
             PendingSubmission submission,
@@ -131,6 +130,8 @@ namespace TopiaForge.Multiplayer.Engine
                 throw new ProtocolException("The host sent session traffic before accepting the join.");
             }
 
+            // Every host flush ends with a Commit; until it arrives, the flush's changes are only partly applied.
+            if (type != MessageType.Commit) current.FlushOpen = true;
             switch (type)
             {
                 case MessageType.JoinAccepted:
@@ -193,7 +194,7 @@ namespace TopiaForge.Multiplayer.Engine
                 case MessageType.ClockSync:
                     var hostMicros = body.ReadVarUInt();
                     ObserveHostTick(body.ReadVarUInt());
-                    current.ClockReplies.Add(hostMicros);
+                    current.PendingClockReply = hostMicros;
                     break;
                 default:
                     if (!MessageType.IsIgnorable(type)) throw new ProtocolException("The host sent an unknown critical message.");
@@ -225,6 +226,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void ApplyCommit(ClientChannel current, ulong hostTick, ulong acknowledged)
         {
+            current.FlushOpen = false;
             ObserveHostTick(hostTick);
             if (acknowledged > acknowledgedSequence) acknowledgedSequence = acknowledged;
             if (current.SnapshotCompleted)
@@ -236,13 +238,15 @@ namespace TopiaForge.Multiplayer.Engine
                 MarkSessionChanged();
             }
 
+            // A result's effects are part of the confirmed values once its flush commits. A submission its caller
+            // already cancelled leaves the list here too, without completing a second time.
             for (var index = 0; index < pending.Count; index++)
             {
                 var submission = pending[index];
                 var result = submission.Result;
-                if (result == null || !submission.TryFinish()) continue;
+                if (result == null) continue;
                 pending.RemoveAt(index--);
-                QueueCompletion(submission, new NetworkTick(result.ConfirmedAt), result.Outcome);
+                if (submission.TryFinish()) QueueCompletion(submission, new NetworkTick(result.ConfirmedAt), result.Outcome);
             }
 
             reconcileRequested = true;
@@ -254,12 +258,15 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var submission in pending)
             {
                 if (submission.Sequence != result.Sequence) continue;
-                if (!submission.Finished) submission.Result = result;
+                submission.Result ??= result;
                 return;
             }
         }
 
-        /// <summary>Resets current values to confirmed ones and replays predictions the host has not processed yet.</summary>
+        /// <summary>
+        /// Resets current values to confirmed ones and replays predictions the host has not processed yet. It runs only
+        /// between host flushes, where the acknowledged sequence matches the confirmed values exactly.
+        /// </summary>
         private void Reconcile()
         {
             foreach (var record in stateList)
@@ -273,8 +280,8 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var record in objectList) record.RevertToConfirmed();
             foreach (var submission in pending.ToArray())
             {
-                if (!submission.Finished && submission.Predicted && submission.Result == null &&
-                    submission.Sequence > acknowledgedSequence)
+                // A cancelled submission that was already sent keeps replaying: the host still executes it.
+                if (submission.Predicted && submission.Result == null && submission.Sequence > acknowledgedSequence)
                 {
                     RunPrediction(submission);
                 }
@@ -474,32 +481,48 @@ namespace TopiaForge.Multiplayer.Engine
             }
         }
 
+        /// <summary>
+        /// Cancels inputs for a despawned object that never left this client. Sent ones wait for the host, whose result
+        /// is the truth: an input that despawned its own target still succeeded.
+        /// </summary>
         private void CancelPendingInputs(ObjectRecord record, string message)
         {
             for (var index = 0; index < pending.Count; index++)
             {
                 var submission = pending[index];
-                if (!ReferenceEquals(submission.Target, record) || !submission.TryFinish()) continue;
+                if (!ReferenceEquals(submission.Target, record) || submission.Sent || !submission.TryFinish()) continue;
                 pending.RemoveAt(index--);
                 channel?.Unsent.Remove(submission);
                 QueueCompletion(submission, CurrentTick, WireOutcome.Failure(ModErrorCode.Cancelled, message));
             }
         }
 
+        /// <summary>
+        /// Completes a submission as cancelled. One that was never sent is withdrawn and its prediction rolls back; one
+        /// already on the wire still executes, so its prediction keeps replaying until the host's commit covers it.
+        /// </summary>
         private void CancelPending(PendingSubmission submission, string message)
         {
             if (!submission.TryFinish()) return;
+            QueueCompletion(submission, CurrentTick, WireOutcome.Failure(ModErrorCode.Cancelled, message));
+            if (submission.Sent) return;
             pending.Remove(submission);
             channel?.Unsent.Remove(submission);
-            QueueCompletion(submission, CurrentTick, WireOutcome.Failure(ModErrorCode.Cancelled, message));
             if (submission.Predicted) reconcileRequested = true;
         }
 
+        /// <summary>
+        /// Abandons every pending submission when the connection or the session goes away. A submission whose result
+        /// already arrived completes with that result, because the host did execute it.
+        /// </summary>
         private void CancelAllPending(string message)
         {
             foreach (var submission in pending.ToArray())
             {
-                if (submission.TryFinish()) QueueCompletion(submission, CurrentTick, WireOutcome.Failure(ModErrorCode.Cancelled, message));
+                if (!submission.TryFinish()) continue;
+                var result = submission.Result;
+                if (result != null) QueueCompletion(submission, new NetworkTick(result.ConfirmedAt), result.Outcome);
+                else QueueCompletion(submission, CurrentTick, WireOutcome.Failure(ModErrorCode.Cancelled, message));
             }
 
             pending.Clear();
@@ -543,8 +566,8 @@ namespace TopiaForge.Multiplayer.Engine
             unboundObjects.Clear();
             tombstones.Clear();
             presentationDeliveries.Clear();
-            nextSequence = 0;
-            acknowledgedSequence = 0;
+            // Sequences keep counting across sessions, so a late result from the old session can never match a
+            // submission made in the new one.
             MarkSessionChanged();
         }
 
@@ -630,12 +653,16 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 submission.Write(clientFrame, clientBody, current.OutIntern);
                 submission.Sent = true;
-                if (clientFrame.Length >= SoftFrameBytes) SendClientFrame(current);
+                if (clientFrame.Length >= ProtocolLimits.SoftFrameBytes) SendClientFrame(current);
             }
 
             current.Unsent.Clear();
-            foreach (var echoed in current.ClockReplies) SessionMessages.WriteClockSyncReply(clientFrame, clientBody, echoed);
-            current.ClockReplies.Clear();
+            if (current.PendingClockReply.HasValue)
+            {
+                SessionMessages.WriteClockSyncReply(clientFrame, clientBody, current.PendingClockReply.Value);
+                current.PendingClockReply = null;
+            }
+
             SendClientFrame(current);
         }
 

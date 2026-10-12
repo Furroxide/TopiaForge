@@ -215,7 +215,7 @@ delayed, lost, or duplicated frame holds later frames behind it rather than lett
 - **Connections.** `Disconnect(client)` cancels that client's pending work and releases the objects it owned.
   `Reconnect(client)` installs an exact canonical snapshot before `Ready`, so tests can cover despawns that happened
   while the client was offline. `Interrupt` and `Resume` take a client through `Reconnecting`, and `Kick` ends its
-  session.
+  session. `Kick` and `StartNewSession` throw if called inside a command or tick handler, before they change anything.
 - **Sessions.** `StartNewSession(id)` keeps registrations and subscriptions and cancels the old session token. It also
   resets replicated state to its declared default, despawns old objects, and resynchronizes connected clients before
   `Ready`.

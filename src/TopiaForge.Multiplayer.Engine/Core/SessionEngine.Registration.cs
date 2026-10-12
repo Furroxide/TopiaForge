@@ -175,6 +175,15 @@ namespace TopiaForge.Multiplayer.Engine
             record.IsActive = false;
             if (states.TryGetValue(record.Key, out var current) && ReferenceEquals(current, record)) states.Remove(record.Key);
             stateList.Remove(record);
+            if (Role == EngineRole.Host)
+            {
+                OnHostStateUnregistered(record);
+            }
+            else if (record.ConfirmedVersion > 0 || !EngineCodec.BytesEqual(record.ConfirmedBytes, record.InitialBytes))
+            {
+                // A client keeps the canonical value for an id it no longer registers, so registering again adopts it.
+                unboundStates[record.Key] = new StagedState(record.Key, record.ConfirmedVersion, record.ConfirmedBytes);
+            }
         });
 
         internal void UnregisterCommand(CommandBinding binding) => Post(() =>

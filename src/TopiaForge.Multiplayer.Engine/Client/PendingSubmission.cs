@@ -5,8 +5,8 @@ using TopiaForge.Mods;
 namespace TopiaForge.Multiplayer.Engine
 {
     /// <summary>
-    /// A client's command or object input from submission until the host's result completes it. Its prediction can
-    /// replay any number of times until the host acknowledges its sequence.
+    /// A client's command or object input from submission until the host's commit covers it. Its prediction can replay
+    /// any number of times until then, even after its caller cancelled it, because a sent submission still executes.
     /// </summary>
     internal abstract class PendingSubmission
     {
@@ -28,8 +28,13 @@ namespace TopiaForge.Multiplayer.Engine
         internal byte[] Payload { get; }
         internal NetworkTick SubmittedAt { get; }
         internal bool Predicted { get; }
+
+        /// <summary>Gets or sets whether the submission reached the link. A sent submission always executes on the host.</summary>
         internal bool Sent { get; set; }
+
+        /// <summary>Gets whether the caller's task has completed, with a result or as cancelled.</summary>
         internal bool Finished { get; private set; }
+
         internal SubmissionResultMessage? Result { get; set; }
 
         /// <summary>Gets the object an input targets, or null for a command.</summary>
@@ -47,7 +52,7 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Runs the owner prediction inside <paramref name="scope"/>.</summary>
         internal abstract WireOutcome Predict(TransactionScope scope);
 
-        /// <summary>Marks the submission finished so it stops replaying; returns false if it already was.</summary>
+        /// <summary>Marks the caller's task as about to complete; returns false if it already has.</summary>
         internal bool TryFinish()
         {
             if (Finished) return false;
@@ -135,6 +140,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal override WireOutcome Predict(TransactionScope scope)
         {
             if (record.Life != ObjectLife.Live) return WireOutcome.Failure(ModErrorCode.NotFound, "The replicated object is not spawned.");
+            if (!record.Type.IsActive) return WireOutcome.Failure(ModErrorCode.InvalidState, "The replicated-object type registration is inactive.");
             var owns = record.CurrentOwner.HasValue && record.CurrentOwner.Value.Equals(scope.Sender);
             return record.InvokeInput(scope.Sender, Sequence, owns, Payload, scope);
         }

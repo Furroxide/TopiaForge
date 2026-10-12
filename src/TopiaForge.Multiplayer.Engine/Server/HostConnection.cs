@@ -37,6 +37,12 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool CloseAfterFlush { get; set; }
         internal long NextClockSyncAt { get; set; }
 
+        /// <summary>Gets or sets whether a clock probe awaits its reply. Only the latest probe's echo is accepted.</summary>
+        internal bool ProbePending { get; set; }
+
+        /// <summary>Gets or sets the host time the pending clock probe carried.</summary>
+        internal long ProbeMicros { get; set; }
+
         /// <summary>Gets or sets the path state the host last reported in the participant list.</summary>
         internal EngineLinkState ReportedLinkState { get; set; } = EngineLinkState.Open;
 
@@ -52,6 +58,28 @@ namespace TopiaForge.Multiplayer.Engine
         {
             PendingStates.Clear();
             PendingObjects.Clear();
+        }
+
+        /// <summary>Forgets a state for good: its pending delta and its update-rate history.</summary>
+        internal void ForgetState(StateRecord record)
+        {
+            PendingStates.Remove(record);
+            StateSentAt.Remove(record);
+        }
+
+        /// <summary>Forgets a despawned object: its pending change and its update-rate history.</summary>
+        internal void ForgetObject(ObjectRecord record)
+        {
+            PendingObjects.Remove(record);
+            ObjectSentAt.Remove(record);
+        }
+
+        /// <summary>Drops pending deltas and update-rate history: a session replacement resends everything in a snapshot.</summary>
+        internal void ResetForNewSession()
+        {
+            ClearPendingDeltas();
+            StateSentAt.Clear();
+            ObjectSentAt.Clear();
         }
     }
 
