@@ -37,6 +37,7 @@ part 'local_launcher_repository/diagnostics_helpers.dart';
 part 'local_launcher_repository/game_runtime_helpers.dart';
 part 'local_launcher_repository/manager_state_helpers.dart';
 part 'local_launcher_repository/manager_state_validation.dart';
+part 'local_launcher_repository/mod_state_mutations.dart';
 part 'local_launcher_repository/installed_package_validation.dart';
 part 'local_launcher_repository/noncritical_logging.dart';
 part 'local_launcher_repository/package_install_receipt.dart';
@@ -317,57 +318,15 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     GameInstall install,
     String modId,
     bool enabled,
-  ) async {
-    _requireSafeModId(modId);
-    final state = await _readManagerState(install);
-    for (final item in (state['mods'] as List).whereType<Map>()) {
-      if ((item['id'] as String?)?.toLowerCase() == modId.toLowerCase()) {
-        item['enabled'] = enabled;
-        item['restartRequired'] = true;
-        item['updatedAtUtc'] = DateTime.now().toUtc().toIso8601String();
-      }
-    }
-    await _saveManagerState(install, state);
-    await _appendLauncherLogBestEffort(
-      '${enabled ? 'Enabled' : 'Disabled'} $modId.',
-    );
-    return _loadInstalledMods(install);
-  }
+  ) => _setModEnabled(install, modId, enabled);
 
   @override
-  Future<List<InstalledMod>> disableAllMods(GameInstall install) async {
-    final state = await _readManagerState(install);
-    for (final item in (state['mods'] as List).whereType<Map>()) {
-      item['enabled'] = false;
-      item['restartRequired'] = true;
-      item['updatedAtUtc'] = DateTime.now().toUtc().toIso8601String();
-    }
-    await _saveManagerState(install, state);
-    await _appendLauncherLogBestEffort('Disabled all mods.');
-    return _loadInstalledMods(install);
-  }
+  Future<List<InstalledMod>> disableAllMods(GameInstall install) =>
+      _disableAllMods(install);
 
   @override
-  Future<List<InstalledMod>> uninstallMod(
-    GameInstall install,
-    String modId,
-  ) async {
-    _requireSafeModId(modId);
-    final modRoot = Directory(p.join(_packagesRoot(install).path, modId));
-    if (modRoot.existsSync()) {
-      modRoot.deleteSync(recursive: true);
-    }
-
-    final state = await _readManagerState(install);
-    final mods = (state['mods'] as List).whereType<Map>().toList();
-    mods.removeWhere(
-      (item) => (item['id'] as String?)?.toLowerCase() == modId.toLowerCase(),
-    );
-    state['mods'] = mods;
-    await _saveManagerState(install, state);
-    await _appendLauncherLogBestEffort('Uninstalled $modId.');
-    return _loadInstalledMods(install);
-  }
+  Future<List<InstalledMod>> uninstallMod(GameInstall install, String modId) =>
+      _uninstallMod(install, modId);
 
   @override
   Future<List<LauncherProfile>> saveProfiles(
