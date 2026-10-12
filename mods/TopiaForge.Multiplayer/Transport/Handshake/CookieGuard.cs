@@ -41,11 +41,29 @@ namespace TopiaForge.Multiplayer.Transport.Handshake
                 FixedTimeEquals(cookie, Compute(previousSecret, currentSlot - 1, path, initiatorConnectionId));
         }
 
+        /// <summary>Zeroes both secrets. The endpoint calls this as it is disposed, and uses the guard no more.</summary>
+        internal void Wipe()
+        {
+            Array.Clear(currentSecret, 0, currentSecret.Length);
+            Array.Clear(previousSecret, 0, previousSecret.Length);
+        }
+
+        /// <summary>Moves to the current slot, zeroing each secret it discards.</summary>
         private void Rotate(long now)
         {
             var slot = now / SlotMicros;
             if (slot <= currentSlot) return;
-            previousSecret = slot == currentSlot + 1 ? currentSecret : NewSecret();
+            Array.Clear(previousSecret, 0, previousSecret.Length);
+            if (slot == currentSlot + 1)
+            {
+                previousSecret = currentSecret;
+            }
+            else
+            {
+                Array.Clear(currentSecret, 0, currentSecret.Length);
+                previousSecret = NewSecret();
+            }
+
             currentSecret = NewSecret();
             currentSlot = slot;
         }

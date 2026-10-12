@@ -173,6 +173,7 @@ internal static class TransportComponentTests
     internal static void CookiesBindPathIdAndTime()
     {
         var guard = new CookieGuard(new SeededTransportRandom(5), 0);
+        var firstSecret = (byte[])TransportSecrets.Field(guard, "currentSecret");
         var pathA = new TransportPath(new byte[] { 1, 2, 3 }, TransportPathKind.Direct);
         var pathB = new TransportPath(new byte[] { 1, 2, 4 }, TransportPathKind.Direct);
         var cookie = guard.Issue(pathA, 77, 1_000);
@@ -183,6 +184,7 @@ internal static class TransportComponentTests
         That(!guard.Verify(tampered, pathA, 77, 5_000) && !guard.Verify(new byte[15], pathA, 77, 5_000), "tampered or short cookies fail");
         That(guard.Verify(cookie, pathA, 77, CookieGuard.SlotMicros + 10), "the previous slot's secret still verifies");
         That(!guard.Verify(cookie, pathA, 77, (2 * CookieGuard.SlotMicros) + 10), "two rotations later it does not");
+        That(firstSecret.All(value => value == 0), "and the secret that issued it has been zeroed");
         That(new TransportPath(new byte[] { 1, 2, 3 }, TransportPathKind.Relayed).ToString() == "Relayed path", "a path never prints its key");
     }
 

@@ -144,6 +144,7 @@ internal static class Program
             TransportLifecycleTests.KeepalivesHoldAnIdleConnectionOpen();
             TransportLifecycleTests.SilentPeersStallThenTimeOut();
             TransportLifecycleTests.AGracefulCloseDeliversQueuedFramesFirst();
+            TransportLifecycleTests.DisposingAnEndpointWipesItsSecrets();
             TransportLifecycleTests.ProtocolViolationsCloseTheConnection();
             TransportLifecycleTests.ReplayedForgedAndStrayPacketsAreDropped();
             TransportEngineTests.EnginesRunASessionOverTheTransport();
