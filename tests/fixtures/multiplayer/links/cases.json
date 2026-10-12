@@ -1,0 +1,206 @@
+{
+  "schema": 1,
+  "about": "topiaforge://join links and invite codes, shared by the game, the launcher and the control plane. Valid inputs parse to the listed fields and format back to the canonical link; invalid inputs are refused.",
+  "alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ",
+  "valid": [
+    {
+      "input": "topiaforge://join/ABCDE12345",
+      "kind": "invite",
+      "inviteCode": "ABCDE12345",
+      "canonical": "topiaforge://join/ABCDE12345"
+    },
+    {
+      "input": "TopiaForge://join/abcde-12345",
+      "kind": "invite",
+      "inviteCode": "ABCDE12345",
+      "canonical": "topiaforge://join/ABCDE12345"
+    },
+    {
+      "input": "topiaforge://join/oilOIL0123",
+      "kind": "invite",
+      "inviteCode": "0110110123",
+      "canonical": "topiaforge://join/0110110123"
+    },
+    {
+      "input": "topiaforge://join/server/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "kind": "server",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "canonical": "topiaforge://join/server/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.1.20/27250",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "192.168.1.20",
+      "port": 27250,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.1.20/27250"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/2001:DB8:0:0:0:0:0:1/27250",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "2001:db8::1",
+      "port": 27250,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/2001:db8::1/27250"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/2001:db8:0:0:1:0:0:1/1",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "2001:db8::1:0:0:1",
+      "port": 1,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/2001:db8::1:0:0:1/1"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/::ffff:10.0.0.7/65535",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "10.0.0.7",
+      "port": 65535,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/10.0.0.7/65535"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/Play.Example.ORG/27250",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "play.example.org",
+      "port": 27250,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/play.example.org/27250"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/::1/27250",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "::1",
+      "port": 27250,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/::1/27250"
+    }
+  ],
+  "invalid": [
+    {
+      "input": "topiaforge://join/ABCDE12345?x=1",
+      "about": "No query strings."
+    },
+    {
+      "input": "topiaforge://join/ABCDE12345#top",
+      "about": "No fragments."
+    },
+    {
+      "input": "topiaforge://join/ABCDE%2012345",
+      "about": "No percent-encoding."
+    },
+    {
+      "input": "topiaforge://join/ABCDE12345/",
+      "about": "No trailing slash."
+    },
+    {
+      "input": "topiaforge://JOIN/ABCDE12345",
+      "about": "Only the scheme ignores case."
+    },
+    {
+      "input": "https://join/ABCDE12345",
+      "about": "Another scheme."
+    },
+    {
+      "input": "topiaforge://join/ABCDEU2345",
+      "about": "U is not in Crockford base32."
+    },
+    {
+      "input": "topiaforge://join/ABCDE1234",
+      "about": "Nine characters."
+    },
+    {
+      "input": "topiaforge://join/ABCDE123456",
+      "about": "Eleven characters."
+    },
+    {
+      "input": "topiaforge://join/server/C5F39060271EBD2F22D9BF155A26BF459274E31B795145FD9D862DC206D98BB3",
+      "about": "Server ids are lowercase."
+    },
+    {
+      "input": "topiaforge://join/server/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb",
+      "about": "Server ids are 64 characters."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.1.20/0",
+      "about": "Port 0."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.1.20/65536",
+      "about": "Port above 65535."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.1.20/080",
+      "about": "Ports have no leading zero."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.1.20",
+      "about": "A direct link needs a port."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/999.1.1.1/27250",
+      "about": "Not an address, and digits cannot end a name."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.001.20/27250",
+      "about": "IPv4 parts have no leading zero."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/[::1]/27250",
+      "about": "IPv6 is written without brackets."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/bad_host.example/27250",
+      "about": "Host names are letters, digits and hyphens."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/-bad.example/27250",
+      "about": "Labels do not start with a hyphen."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/example.com./27250",
+      "about": "No trailing dot."
+    },
+    {
+      "input": "topiaforge://join/ ABCDE12345",
+      "about": "No spaces inside a link."
+    },
+    {
+      "input": "topiaforge://join/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "about": "At most 512 characters."
+    },
+    {
+      "input": "topiaforge://join/",
+      "about": "Nothing to join."
+    }
+  ],
+  "inviteCodes": [
+    {
+      "input": "abcde-12345",
+      "canonical": "ABCDE12345",
+      "display": "ABCDE-12345"
+    },
+    {
+      "input": "ABCDE 12345",
+      "canonical": "ABCDE12345",
+      "display": "ABCDE-12345"
+    },
+    {
+      "input": "0o1iL-zzzzz",
+      "canonical": "00111ZZZZZ",
+      "display": "00111-ZZZZZ"
+    },
+    {
+      "input": "ABCDEU2345",
+      "canonical": null
+    },
+    {
+      "input": "ABCD",
+      "canonical": null
+    },
+    {
+      "input": "ABCDE_12345",
+      "canonical": null
+    }
+  ]
+}
