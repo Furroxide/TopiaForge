@@ -40,6 +40,7 @@ namespace TopiaForge.Multiplayer.Engine
         private long nowMicros;
         private bool ended;
         private bool settling;
+        private bool pumping;
         private MultiplayerSessionSnapshot? snapshot;
         private volatile MultiplayerSessionSnapshot? publishedSnapshot;
         private bool snapshotDirty = true;
@@ -130,6 +131,11 @@ namespace TopiaForge.Multiplayer.Engine
             string hostDisplayName,
             long startMicros)
         {
+            if (hostParticipant.HasValue && !ProtocolLimits.IsValidIdentity(hostDisplayName))
+            {
+                throw new ArgumentException("The host player needs a bounded display name.", nameof(hostDisplayName));
+            }
+
             var engine = new SessionEngine(
                 options,
                 EngineRole.Host,
@@ -164,13 +170,25 @@ namespace TopiaForge.Multiplayer.Engine
         internal void Pump(long now)
         {
             RequireOwnerThread();
-            if (scope.IsOpen || settling) throw new InvalidOperationException("The engine cannot be pumped from inside a transaction or callback.");
-            if (now > nowMicros) nowMicros = now;
-            DrainInbox();
-            if (!ended)
+            if (scope.IsOpen || settling || pumping)
             {
-                if (Role == EngineRole.Host) PumpHost();
-                else PumpClient();
+                throw new InvalidOperationException("The engine cannot be pumped from inside a transaction, a callback or another pump.");
+            }
+
+            pumping = true;
+            try
+            {
+                if (now > nowMicros) nowMicros = now;
+                DrainInbox();
+                if (!ended)
+                {
+                    if (Role == EngineRole.Host) PumpHost();
+                    else PumpClient();
+                }
+            }
+            finally
+            {
+                pumping = false;
             }
 
             Settle();
@@ -186,6 +204,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal void Shutdown(MultiplayerSessionEndReason reason)
         {
             RequireOwnerThread();
+            if (scope.IsOpen) throw new InvalidOperationException("The session cannot end inside a transaction.");
             if (ended) return;
             if (Role == EngineRole.Host) ShutdownHost(reason);
             else ShutdownClient();
@@ -259,6 +278,16 @@ namespace TopiaForge.Multiplayer.Engine
             if (!scope.IsOpen && !settling) Settle();
         }
 
+        /// <summary>
+        /// Runs <paramref name="action"/> at the next settle point. From the owner thread outside any engine operation,
+        /// that is now; inside one, or from another thread, it waits so the operation finishes first.
+        /// </summary>
+        internal void Defer(Action action)
+        {
+            inbox.Enqueue(action);
+            if (IsOwnerThread && !scope.IsOpen && !settling && !pumping) Settle();
+        }
+
         internal void MarkSessionChanged(bool participantsChanged = false)
         {
             snapshotDirty = true;
@@ -290,7 +319,7 @@ namespace TopiaForge.Multiplayer.Engine
                 while (true)
                 {
                     if (DrainInbox()) continue;
-                    if (Role == EngineRole.Client && reconcileRequested)
+                    if (Role == EngineRole.Client && reconcileRequested && !ClientFlushOpen)
                     {
                         reconcileRequested = false;
                         Reconcile();

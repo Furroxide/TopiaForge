@@ -176,7 +176,8 @@ namespace TopiaForge.Multiplayer.Engine
             if (value == null) throw new ArgumentNullException(nameof(value));
             RequireOwnerThread();
             if (ended) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The multiplayer session has ended.");
-            if (Role != EngineRole.Host)
+            var predicting = scope.IsOpen && scope.Kind == TransactionKind.Prediction;
+            if (Role != EngineRole.Host && !predicting)
             {
                 return OperationResult<bool>.Failure(
                     ModErrorCode.NotAuthoritative,
@@ -193,8 +194,13 @@ namespace TopiaForge.Multiplayer.Engine
 
             var encoded = EngineCodec.Encode(eventType.Codec, value);
             if (!encoded.TryGetValue(out var bytes)) return OperationResult<bool>.Failure(encoded.ErrorCode, encoded.ErrorMessage);
-            var item = new BufferedEvent(key, bytes, target, localParticipantId ?? default);
-            if (scope.IsOpen && scope.Kind == TransactionKind.Canonical)
+
+            // A prediction drops the event, as Emit does: the canonical run publishes it.
+            if (predicting) return OperationResult<bool>.Success(true);
+
+            // Inside a command, Sender and Others are relative to the participant who sent it.
+            var item = new BufferedEvent(key, bytes, target, scope.IsOpen ? scope.Sender : localParticipantId ?? default);
+            if (scope.IsOpen)
             {
                 scope.Events.Add(item);
             }

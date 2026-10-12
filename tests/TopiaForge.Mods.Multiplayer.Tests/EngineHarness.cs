@@ -114,6 +114,84 @@ internal sealed class EngineHarness : IDisposable
     }
 }
 
+/// <summary>
+/// One client engine whose host is a <see cref="RawPeer"/>, so a test decides exactly which frames arrive and when the
+/// client pumps between them.
+/// </summary>
+internal sealed class RawHostClient
+{
+    private ulong tick;
+
+    internal RawHostClient()
+    {
+        Network = new VirtualEngineTransport(new VirtualLinkConditions());
+        var pair = Network.Connect("client");
+        Engine = SessionEngine.CreateClient(
+            new EngineOptions
+            {
+                StepRateHz = 60,
+                Diagnostics = Diagnostics,
+                CallbackFailures = EngineCallbackFailureMode.Propagate
+            },
+            new MultiplayerSessionId("placeholder"),
+            0);
+        Session = Engine.CreateFacade(EngineHarness.Owner);
+        ClientEnd = pair.ClientEnd;
+        Host = new RawPeer(pair.HostEnd);
+    }
+
+    internal RecordingDiagnostics Diagnostics { get; } = new();
+
+    internal VirtualEngineTransport Network { get; }
+
+    internal SessionEngine Engine { get; }
+
+    internal EngineSessionFacade Session { get; }
+
+    internal VirtualLinkEnd ClientEnd { get; }
+
+    internal RawPeer Host { get; }
+
+    /// <summary>Gets the host's intern table toward this client; every interned message a test writes must share it.</summary>
+    internal InternWriter Intern { get; } = new();
+
+    /// <summary>Connects and accepts the join with an empty snapshot, leaving the client ready as participant "client".</summary>
+    internal void Join()
+    {
+        Engine.Connect(ClientEnd, "Client");
+        Host.Send((frame, body) =>
+        {
+            JoinMessages.WriteJoinAccepted(frame, body, new JoinAcceptedMessage
+            {
+                SessionId = "raw-session",
+                Seed = 1,
+                ParticipantId = "client",
+                StepRateHz = 60,
+                NextSequence = 1
+            });
+            SessionMessages.WriteEpochMessage(frame, body, MessageType.SnapshotBegin, 0);
+            SessionMessages.WriteEmpty(frame, body, MessageType.SnapshotEnd);
+            SessionMessages.WriteParticipants(frame, body, new[]
+            {
+                new ParticipantEntry("client", "Client", true, false, MultiplayerConnectionQuality.Unknown, null, null)
+            });
+            SessionMessages.WriteCommit(frame, body, 0, 0);
+        });
+        Pump();
+        Pump();
+        Host.Receive();
+    }
+
+    /// <summary>Moves one tick: frames in flight arrive, then the client pumps once.</summary>
+    internal void Pump()
+    {
+        tick++;
+        Network.Now = tick;
+        Network.DeliverDue(tick);
+        Engine.Pump((long)(tick * 1_000_000UL / 60));
+    }
+}
+
 internal sealed class RecordingDiagnostics : IEngineDiagnostics
 {
     internal List<EngineDiagnostic> Reports { get; } = new();

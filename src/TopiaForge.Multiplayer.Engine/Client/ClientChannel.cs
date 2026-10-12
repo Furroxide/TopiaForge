@@ -29,11 +29,20 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool JoinPending { get; set; } = true;
         internal bool ReadyAckPending { get; set; }
         internal List<PendingSubmission> Unsent { get; } = new List<PendingSubmission>();
-        internal List<ulong> ClockReplies { get; } = new List<ulong>();
+
+        /// <summary>Gets or sets the host time of the latest clock probe, echoed once; older probes go unanswered.</summary>
+        internal ulong? PendingClockReply { get; set; }
+
         internal SnapshotStaging? Staging { get; set; }
         internal bool SnapshotCompleted { get; set; }
 
-        internal bool HasOutbound => JoinPending || ReadyAckPending || Unsent.Count > 0 || ClockReplies.Count > 0;
+        /// <summary>
+        /// Gets or sets whether a host flush has started arriving without its closing <c>Commit</c>. Confirmed values
+        /// are then only partly updated, so reconciliation waits for the <c>Commit</c>.
+        /// </summary>
+        internal bool FlushOpen { get; set; }
+
+        internal bool HasOutbound => JoinPending || ReadyAckPending || Unsent.Count > 0 || PendingClockReply.HasValue;
     }
 
     /// <summary>Canonical values received between <c>SnapshotBegin</c> and <c>SnapshotEnd</c>.</summary>

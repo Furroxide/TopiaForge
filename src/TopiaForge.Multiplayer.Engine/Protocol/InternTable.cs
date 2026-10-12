@@ -5,11 +5,15 @@ namespace TopiaForge.Multiplayer.Engine
 {
     /// <summary>
     /// Sender half of a per-connection string intern table for owner and wire ids. A reference is a varint; zero
-    /// introduces a new string that takes the next index. It is valid only on an ordered channel, where every
-    /// definition reaches the reader before its first use.
+    /// introduces a new string that takes the next index. Once the table is full, new strings travel inline after
+    /// <see cref="InlineReference"/> and take no index, so a long-lived connection never runs out of names. The table is
+    /// valid only on an ordered channel, where every definition reaches the reader before its first use.
     /// </summary>
     internal sealed class InternWriter
     {
+        /// <summary>Gets the reference that marks a string sent inline, without an index.</summary>
+        internal const ulong InlineReference = ProtocolLimits.MaximumInternedStrings + 1;
+
         private readonly Dictionary<string, uint> ids = new Dictionary<string, uint>(StringComparer.Ordinal);
 
         internal void Write(ProtocolWriter writer, string value)
@@ -22,7 +26,9 @@ namespace TopiaForge.Multiplayer.Engine
 
             if (ids.Count >= ProtocolLimits.MaximumInternedStrings)
             {
-                throw new InvalidOperationException("The connection exceeded its interned-string budget.");
+                writer.WriteVarUInt(InlineReference);
+                writer.WriteString(value);
+                return;
             }
 
             writer.WriteVarUInt(0);
@@ -38,7 +44,8 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal string Read(ProtocolReader reader)
         {
-            var id = reader.ReadVarUInt(ProtocolLimits.MaximumInternedStrings);
+            var id = reader.ReadVarUInt(InternWriter.InlineReference);
+            if (id == InternWriter.InlineReference) return reader.ReadIdentity();
             if (id != 0)
             {
                 if ((int)id > values.Count) throw new ProtocolException("An interned id was used before it was defined.");
@@ -47,7 +54,7 @@ namespace TopiaForge.Multiplayer.Engine
 
             if (values.Count >= ProtocolLimits.MaximumInternedStrings)
             {
-                throw new ProtocolException("The peer exceeded the interned-string budget.");
+                throw new ProtocolException("The peer defined more interned strings than the table holds.");
             }
 
             var value = reader.ReadIdentity();

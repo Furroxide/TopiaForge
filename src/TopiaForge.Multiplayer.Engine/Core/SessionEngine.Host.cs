@@ -10,9 +10,14 @@ namespace TopiaForge.Multiplayer.Engine
     {
         private readonly List<HostConnection> connections = new List<HostConnection>();
         private readonly List<ParticipantRecord> participantRecords = new List<ParticipantRecord>();
-        private readonly FlushContext flush = new FlushContext();
         private ulong nextParticipantNumber;
-        private long nextDownstreamAt;
+        private bool participantsDirty;
+
+        /// <summary>
+        /// Gets how many participant records a host keeps, connected or within their grace period: room for every
+        /// admitted player and as many recently departed ones, within the bound every snapshot and peer enforces.
+        /// </summary>
+        private int ParticipantRecordLimit => Math.Min(ProtocolLimits.MaximumParticipants, options.MaximumParticipants * 2);
 
         private bool HostHasPendingWork
         {
@@ -21,6 +26,7 @@ namespace TopiaForge.Multiplayer.Engine
                 foreach (var connection in connections)
                 {
                     if (connection.HasOutbound || connection.HasPendingDeltas) return true;
+                    if (participantsDirty && connection.IsJoined) return true;
                 }
 
                 return false;
@@ -73,21 +79,21 @@ namespace TopiaForge.Multiplayer.Engine
             DespawnAllLocally();
             nextObjectNumber = 0;
             foreach (var binding in commands.Values) binding.ResetForNewSession();
-            foreach (var record in participantRecords) record.LastSequence = 0;
             presentationDeliveries.Clear();
+            // Submission sequences keep counting, so nothing sent in the old session can pass for the new one. Results
+            // already queued still reach their clients ahead of the replacement.
             var replaced = new SessionReplacedMessage(sessionId.Value, seed.Value, epoch);
+            SnapshotItem? snapshotItem = null;
             foreach (var connection in connections)
             {
                 if (!connection.IsJoined) continue;
-                connection.ClearPendingDeltas();
+                connection.ResetForNewSession();
                 connection.Enqueue(new SessionReplacedItem(replaced));
-                connection.Enqueue(CaptureSnapshot());
+                connection.Enqueue(snapshotItem ??= CaptureSnapshot());
                 connection.Phase = HostConnectionPhase.Accepted;
-                connection.AcknowledgedSequence = 0;
             }
 
-            BroadcastParticipants();
-            MarkSessionChanged(participantsChanged: true);
+            MarkParticipantsChanged();
             EndOperation();
         }
 
@@ -95,6 +101,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool Kick(ParticipantId participant, MultiplayerSessionEndReason reason, string message)
         {
             RequireOwnerThread();
+            if (scope.IsOpen) throw new InvalidOperationException("A participant cannot be removed inside a transaction.");
             var connection = FindParticipant(participant)?.Connection;
             if (connection == null) return false;
             EndConnection(connection, reason, message);
@@ -145,6 +152,16 @@ namespace TopiaForge.Multiplayer.Engine
             var entries = new List<ParticipantEntry>(participantRecords.Count);
             foreach (var record in participantRecords) entries.Add(record.ToEntry());
             return entries;
+        }
+
+        /// <summary>
+        /// Marks the participant list changed: the snapshot rebuilds, and each joined connection receives the new list
+        /// once, at the next flush, however many changes happened before it.
+        /// </summary>
+        private void MarkParticipantsChanged()
+        {
+            participantsDirty = true;
+            MarkSessionChanged(participantsChanged: true);
         }
 
         private void PumpHost()
@@ -209,11 +226,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (linkState != EngineLinkState.Closed && linkState != connection.ReportedLinkState)
             {
                 connection.ReportedLinkState = linkState;
-                if (connection.IsJoined)
-                {
-                    BroadcastParticipants();
-                    MarkSessionChanged(participantsChanged: true);
-                }
+                if (connection.IsJoined) MarkParticipantsChanged();
             }
 
             while (connection.Phase != HostConnectionPhase.Closed && connection.Link.TryReceive(out var channelKind, out var frame))
@@ -309,20 +322,7 @@ namespace TopiaForge.Multiplayer.Engine
 
             var decision = (options.JoinPolicy ?? DefaultJoinPolicy.Instance).Evaluate(
                 new JoinRequestContext(identity, request, RegisteredContracts(), connected, options.MaximumParticipants));
-            if (decision.Accepted && record == null)
-            {
-                var id = AllocateParticipantId(identity);
-                if (!id.HasValue)
-                {
-                    decision = JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The host could not assign a participant id.");
-                }
-                else
-                {
-                    record = new ParticipantRecord(id.Value, identity, request.DisplayName, isHost: false);
-                    participantRecords.Add(record);
-                }
-            }
-
+            if (decision.Accepted && record == null) decision = AdmitNewParticipant(identity, request.DisplayName, out record) ?? decision;
             if (!decision.Accepted || record == null)
             {
                 connection.Phase = HostConnectionPhase.Rejected;
@@ -353,8 +353,42 @@ namespace TopiaForge.Multiplayer.Engine
             }));
             connection.Enqueue(CaptureSnapshot());
             connection.ClearPendingDeltas();
-            BroadcastParticipants();
-            MarkSessionChanged(participantsChanged: true);
+            MarkParticipantsChanged();
+        }
+
+        /// <summary>
+        /// Creates the record for an identity the host has not seen within the grace period, or returns why it cannot.
+        /// When the records are at their limit, the longest-departed participant makes room; if every record is
+        /// connected, the join is refused.
+        /// </summary>
+        private JoinDecision? AdmitNewParticipant(string identity, string displayName, out ParticipantRecord? record)
+        {
+            record = null;
+            var id = AllocateParticipantId(identity);
+            if (!id.HasValue) return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The host could not assign a participant id.");
+            if (participantRecords.Count >= ParticipantRecordLimit && !EvictLongestDepartedParticipant())
+            {
+                return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The session is full.");
+            }
+
+            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false);
+            participantRecords.Add(record);
+            return null;
+        }
+
+        private bool EvictLongestDepartedParticipant()
+        {
+            ParticipantRecord? evicted = null;
+            foreach (var candidate in participantRecords)
+            {
+                if (candidate.IsConnected || candidate.Identity == null) continue;
+                if (evicted == null || candidate.DepartedAtMicros < evicted.DepartedAtMicros) evicted = candidate;
+            }
+
+            if (evicted == null) return false;
+            participantRecords.Remove(evicted);
+            MarkParticipantsChanged();
+            return true;
         }
 
         private ParticipantId? AllocateParticipantId(string identity)
@@ -454,6 +488,13 @@ namespace TopiaForge.Multiplayer.Engine
                 return WireOutcome.Failure(ModErrorCode.NotFound, "The canonical server no longer contains this replicated object.");
             }
 
+            if (!record.Type.IsActive)
+            {
+                return WireOutcome.Failure(
+                    ModErrorCode.NotFound,
+                    "The canonical server has no active registration for replicated-object type '" + record.Type.Key.Id + "'.");
+            }
+
             if (payload.Length > record.Type.MaximumPayloadBytes)
             {
                 return WireOutcome.Failure(ModErrorCode.InvalidArgument, "The replicated-object input exceeded its declared bound.");
@@ -473,115 +514,10 @@ namespace TopiaForge.Multiplayer.Engine
             return RunCanonical(sender, () => record.InvokeInput(sender, sequence, owns, payload, scope));
         }
 
-        private SnapshotItem CaptureSnapshot()
-        {
-            var capturedStates = new List<StagedState>(stateList.Count);
-            foreach (var record in stateList)
-            {
-                if (record.IsActive) capturedStates.Add(new StagedState(record.Key, record.ConfirmedVersion, record.ConfirmedBytes));
-            }
-
-            var capturedObjects = new List<ObjectWireMessage>(objectList.Count);
-            foreach (var record in objectList)
-            {
-                if (record.Life == ObjectLife.Live) capturedObjects.Add(ToWire(record));
-            }
-
-            return new SnapshotItem(epoch, capturedStates, capturedObjects);
-        }
-
-        private static ObjectWireMessage ToWire(ObjectRecord record) =>
-            new ObjectWireMessage
-            {
-                Owner = record.Type.Key.Owner,
-                TypeId = record.Type.Key.Id,
-                ObjectId = record.Id.Value,
-                OwnerParticipant = record.ConfirmedOwner?.Value,
-                Version = record.ConfirmedVersion,
-                Bytes = record.ConfirmedBytes
-            };
-
-        private void OnHostStateRegistered(StateRecord record)
-        {
-            foreach (var connection in connections)
-            {
-                if (connection.IsJoined) connection.PendingStates.Add(record);
-            }
-        }
-
-        private void OnStateCommitted(StateRecord record)
-        {
-            if (Role != EngineRole.Host) return;
-            foreach (var connection in connections)
-            {
-                if (connection.IsJoined) connection.PendingStates.Add(record);
-            }
-        }
-
-        private void OnObjectChanged(ObjectRecord record)
-        {
-            if (Role != EngineRole.Host) return;
-            foreach (var connection in connections)
-            {
-                if (connection.IsJoined) connection.PendingObjects.Add(record);
-            }
-        }
-
-        private void OnObjectSpawned(ObjectRecord record)
-        {
-            if (Role != EngineRole.Host) return;
-            ObjectWireMessage? message = null;
-            foreach (var connection in connections)
-            {
-                if (!connection.IsJoined) continue;
-                message ??= ToWire(record);
-                connection.Enqueue(new SpawnItem(record, message));
-            }
-        }
-
-        private void OnObjectDespawned(ObjectRecord record)
-        {
-            if (Role != EngineRole.Host) return;
-            foreach (var connection in connections)
-            {
-                if (!connection.IsJoined) continue;
-                connection.PendingObjects.Remove(record);
-                connection.Enqueue(new DespawnItem(record));
-            }
-        }
-
-        /// <summary>Routes a committed event to every ready recipient its target selects, and to the host's own player.</summary>
-        private void PublishEvent(BufferedEvent item)
-        {
-            foreach (var connection in connections)
-            {
-                if (connection.Phase != HostConnectionPhase.Ready || connection.Participant == null) continue;
-                if (item.Target.Selects(connection.Participant.Id, item.Sender)) connection.Enqueue(new PresentationItem(item.Key, item.Bytes));
-            }
-
-            // The host's own player sees the event at the settle point after it commits, before any confirmation of
-            // the same operation, exactly as a remote client sees it with the frame that carries it.
-            if (ProcessKind == MultiplayerProcessKind.Interactive && localParticipantId.HasValue &&
-                item.Target.Selects(localParticipantId.Value, item.Sender))
-            {
-                presentationDeliveries.Enqueue(new PresentationDelivery(item.Key, item.Bytes));
-            }
-        }
-
-        private void BroadcastParticipants()
-        {
-            List<ParticipantEntry>? entries = null;
-            foreach (var connection in connections)
-            {
-                if (!connection.IsJoined) continue;
-                entries ??= HostParticipantEntries();
-                connection.Enqueue(new ParticipantsItem(entries));
-            }
-        }
-
         private void DropConnection(HostConnection connection)
         {
             if (connection.Phase == HostConnectionPhase.Closed) return;
+            if (scope.IsOpen) throw new InvalidOperationException("A connection cannot close inside a transaction.");
             var wasJoined = connection.IsJoined;
             connection.Phase = HostConnectionPhase.Closed;
             connections.Remove(connection);
@@ -592,38 +528,34 @@ namespace TopiaForge.Multiplayer.Engine
             record.IsConnected = false;
             record.DepartedAtMicros = nowMicros;
             ReleaseOwnership(record.Id);
-            BroadcastParticipants();
-            MarkSessionChanged(participantsChanged: true);
+            MarkParticipantsChanged();
         }
 
         private void EndConnection(HostConnection connection, MultiplayerSessionEndReason reason, string message)
         {
             if (connection.Phase == HostConnectionPhase.Closed) return;
+            if (scope.IsOpen) throw new InvalidOperationException("A connection cannot close inside a transaction.");
             connection.Enqueue(new SessionEndedItem(reason, message));
             FlushConnection(connection, downstreamDue: true);
             DropConnection(connection);
         }
 
+        /// <summary>
+        /// Returns a departed participant's objects to server ownership as canonical changes. It commits without a
+        /// transaction of its own and leaves the notifications to the settle point of the operation that called it,
+        /// because it runs in the middle of joins, frames, kicks and shutdown.
+        /// </summary>
         private void ReleaseOwnership(ParticipantId participant)
         {
-            var owned = new List<ObjectRecord>();
             foreach (var record in objectList)
             {
-                if (record.Life == ObjectLife.Live && record.CurrentOwner.HasValue && record.CurrentOwner.Value.Equals(participant)) owned.Add(record);
+                if (record.Life != ObjectLife.Live || !record.CurrentOwner.HasValue || !record.CurrentOwner.Value.Equals(participant)) continue;
+                record.CurrentOwner = null;
+                record.CurrentVersion++;
+                record.Confirm();
+                QueueObjectChange(record, ReplicatedObjectChangeKind.Changed);
+                OnObjectChanged(record);
             }
-
-            if (owned.Count == 0) return;
-            RunTopLevel(() =>
-            {
-                foreach (var record in owned)
-                {
-                    scope.TouchObject(record);
-                    record.CurrentOwner = null;
-                    record.CurrentVersion++;
-                }
-
-                return OperationResult<bool>.Success(true);
-            });
         }
 
         private void ExpireDepartedParticipants()
@@ -638,157 +570,7 @@ namespace TopiaForge.Multiplayer.Engine
                 removed = true;
             }
 
-            if (!removed) return;
-            BroadcastParticipants();
-            MarkSessionChanged(participantsChanged: true);
-        }
-
-        private void ScheduleClockSync()
-        {
-            if (options.ClockSyncIntervalMicros <= 0) return;
-            foreach (var connection in connections)
-            {
-                if (connection.Phase != HostConnectionPhase.Ready || nowMicros < connection.NextClockSyncAt) continue;
-                connection.NextClockSyncAt = nowMicros + options.ClockSyncIntervalMicros;
-                connection.Enqueue(new ClockSyncItem(nowMicros, tick, connection.Participant?.RttMicros ?? -1));
-            }
-        }
-
-        private void ObserveRoundTrip(HostConnection connection, ulong echoedMicros)
-        {
-            var record = connection.Participant;
-            if (record == null || echoedMicros > (ulong)nowMicros) return;
-            var sample = nowMicros - (long)echoedMicros;
-            var previousPing = record.PingMilliseconds;
-            var previousQuality = record.Quality;
-            record.RttMicros = record.RttMicros < 0 ? sample : record.RttMicros + ((sample - record.RttMicros) / 8);
-            if (previousPing == record.PingMilliseconds && previousQuality == record.Quality) return;
-            BroadcastParticipants();
-            MarkSessionChanged(participantsChanged: true);
-        }
-
-        private void FlushHost()
-        {
-            if (connections.Count == 0) return;
-            var downstreamDue = options.DownstreamRateHz == 0 || nowMicros >= nextDownstreamAt;
-            if (downstreamDue && options.DownstreamRateHz > 0) nextDownstreamAt = nowMicros + (1_000_000 / options.DownstreamRateHz);
-            foreach (var connection in connections.ToArray()) FlushConnection(connection, downstreamDue);
-        }
-
-        private void FlushConnection(HostConnection connection, bool downstreamDue)
-        {
-            if (connection.Phase == HostConnectionPhase.Closed) return;
-            if (!connection.HasOutbound && !connection.HasPendingDeltas) return;
-            var context = flush;
-            context.Frame.Reset();
-            context.SkippedSpawns.Clear();
-            context.WroteMessage = false;
-            context.SplitIfLarge = () => SplitHostFrame(connection);
-            foreach (var item in connection.Queue)
-            {
-                item.Write(connection, context);
-                context.WroteMessage = true;
-                SplitHostFrame(connection);
-            }
-
-            connection.Queue.Clear();
-            if (connection.IsJoined)
-            {
-                WritePendingStates(connection, downstreamDue);
-                WritePendingObjects(connection, downstreamDue);
-                if (context.WroteMessage || connection.CommitNeeded)
-                {
-                    SessionMessages.WriteCommit(context.Frame, context.Body, tick, connection.AcknowledgedSequence);
-                }
-            }
-
-            SendHostFrame(connection);
-            context.SplitIfLarge = null;
-            connection.ForceFlush = false;
-            connection.CommitNeeded = false;
-            if (connection.CloseAfterFlush)
-            {
-                connection.CloseAfterFlush = false;
-                DropConnection(connection);
-            }
-        }
-
-        private void WritePendingStates(HostConnection connection, bool downstreamDue)
-        {
-            if (connection.PendingStates.Count == 0) return;
-            var context = flush;
-            connection.PendingStates.CopyTo(context.States);
-            foreach (var record in context.States)
-            {
-                if (!record.IsActive)
-                {
-                    connection.PendingStates.Remove(record);
-                    continue;
-                }
-
-                if (!IsDue(connection.ForceFlush, downstreamDue, record.Delivery, record.MaximumUpdatesPerSecond, connection.StateSentAt, record)) continue;
-                ReplicationMessages.WriteStateDelta(
-                    context.Frame,
-                    context.Body,
-                    connection.OutIntern,
-                    record.Key.Owner,
-                    record.Key.Id,
-                    record.ConfirmedVersion,
-                    record.ConfirmedBytes);
-                context.WroteMessage = true;
-                if (record.MaximumUpdatesPerSecond > 0) connection.StateSentAt[record] = nowMicros;
-                connection.PendingStates.Remove(record);
-                SplitHostFrame(connection);
-            }
-        }
-
-        private void WritePendingObjects(HostConnection connection, bool downstreamDue)
-        {
-            if (connection.PendingObjects.Count == 0) return;
-            var context = flush;
-            connection.PendingObjects.CopyTo(context.Objects);
-            foreach (var record in context.Objects)
-            {
-                if (record.Life != ObjectLife.Live)
-                {
-                    connection.PendingObjects.Remove(record);
-                    continue;
-                }
-
-                if (!IsDue(connection.ForceFlush, downstreamDue, record.Type.Delivery, record.Type.MaximumUpdatesPerSecond, connection.ObjectSentAt, record)) continue;
-                ReplicationMessages.WriteObjectChanged(context.Frame, context.Body, ToWire(record));
-                context.WroteMessage = true;
-                if (record.Type.MaximumUpdatesPerSecond > 0) connection.ObjectSentAt[record] = nowMicros;
-                connection.PendingObjects.Remove(record);
-                SplitHostFrame(connection);
-            }
-        }
-
-        private bool IsDue<TRecord>(
-            bool forced,
-            bool downstreamDue,
-            MultiplayerDelivery delivery,
-            int maximumUpdatesPerSecond,
-            Dictionary<TRecord, long> sentAt,
-            TRecord record)
-            where TRecord : class
-        {
-            if (forced) return true;
-            if (delivery != MultiplayerDelivery.Immediate && !downstreamDue) return false;
-            if (maximumUpdatesPerSecond <= 0 || !sentAt.TryGetValue(record, out var last)) return true;
-            return nowMicros - last >= 1_000_000 / maximumUpdatesPerSecond;
-        }
-
-        private void SplitHostFrame(HostConnection connection)
-        {
-            if (flush.Frame.Length >= SoftFrameBytes) SendHostFrame(connection);
-        }
-
-        private void SendHostFrame(HostConnection connection)
-        {
-            if (flush.Frame.Length == 0) return;
-            if (connection.Link.State != EngineLinkState.Closed) connection.Link.Send(EngineChannel.Session, flush.Frame.AsSegment());
-            flush.Frame.Reset();
+            if (removed) MarkParticipantsChanged();
         }
 
         private void ShutdownHost(MultiplayerSessionEndReason reason)

@@ -146,8 +146,19 @@ namespace TopiaForge.Multiplayer.Engine
     {
         internal const int IdentityCharacters = 128;
         internal const int MessageCharacters = 512;
-        internal const int MaximumFrameBytes = (1024 * 1024) + (64 * 1024);
         internal const int MaximumPayloadBytes = 1024 * 1024;
+
+        /// <summary>Gets the size at which a sender ends a frame, after the message that reached it.</summary>
+        internal const int SoftFrameBytes = 64 * 1024;
+
+        /// <summary>Gets the room one message needs beyond its payload: its envelope, ids, versions and lengths.</summary>
+        internal const int MessageOverheadBytes = 8 * 1024;
+
+        /// <summary>
+        /// Gets the largest frame a peer accepts. A sender splits only after a message crosses
+        /// <see cref="SoftFrameBytes"/>, so a frame can hold just under that much and then one maximum-size message.
+        /// </summary>
+        internal const int MaximumFrameBytes = SoftFrameBytes + MaximumPayloadBytes + MessageOverheadBytes;
         internal const int MaximumOpaqueBytes = 64 * 1024;
         internal const int MaximumContracts = 256;
         internal const int MaximumParticipants = 256;
