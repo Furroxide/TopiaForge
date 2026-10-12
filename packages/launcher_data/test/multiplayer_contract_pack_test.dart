@@ -53,15 +53,11 @@ void main() {
     ).writeAsStringSync(jsonEncode(manifest));
   }
 
-  void writeEmptyContractLock({String? protocol = '1.0.0'}) {
+  void writeEmptyContractLock() {
     File(
       p.join(projectDir.path, 'topiaforge.multiplayer.lock.json'),
     ).writeAsStringSync(
-      jsonEncode({
-        'schemaVersion': 2,
-        'protocolVersion': ?protocol,
-        'contracts': <Object?>[],
-      }),
+      jsonEncode({'schemaVersion': 3, 'contracts': <Object?>[]}),
     );
   }
 
@@ -317,7 +313,7 @@ ${emitContract ? 'printf \'%s\\n\' ${_shellQuote(generatedContractMarker(wireFor
 </Project>
 ''');
     await useFakeMultiplayerBuild(emitContract: false);
-    writeEmptyContractLock(protocol: null);
+    writeEmptyContractLock();
 
     final archive = readPackage(
       await repository.packModDirectory(projectDir.path),
@@ -347,7 +343,10 @@ ${emitContract ? 'printf \'%s\\n\' ${_shellQuote(generatedContractMarker(wireFor
       projectDir.path,
     );
     final lock = jsonDecode(File(lockPath).readAsStringSync()) as Map;
-    expect(lock['protocolVersion'], '1.0.0');
+    expect(lock['schemaVersion'], multiplayerContractLockSchemaVersion);
+    // The lock is a synchronized file, so it must not hash the protocol
+    // version that peerVersionRange negotiates.
+    expect(lock, isNot(contains('protocolVersion')));
     expect((lock['contracts'] as List).single, {
       'id': 'sample.contract',
       'wireFormatRevision': 1,
@@ -428,11 +427,28 @@ ${emitContract ? 'printf \'%s\\n\' ${_shellQuote(generatedContractMarker(wireFor
     );
     File(
       p.join(projectDir.path, 'topiaforge.multiplayer.lock.json'),
-    ).writeAsStringSync('{"schemaVersion":2,"contracts":[{"id":"guess"}]}');
+    ).writeAsStringSync('{"schemaVersion":3,"contracts":[{"id":"guess"}]}');
     await expectLater(
       repository.packModDirectory(projectDir.path),
       throwsA(
         predicate((error) => error.toString().contains('stale or tampered')),
+      ),
+    );
+
+    // A lock written before schemaVersion 3 gets a specific refresh path.
+    File(
+      p.join(projectDir.path, 'topiaforge.multiplayer.lock.json'),
+    ).writeAsStringSync(
+      '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}',
+    );
+    await expectLater(
+      repository.packModDirectory(projectDir.path),
+      throwsA(
+        predicate(
+          (error) =>
+              error.toString().contains('lock schemaVersion 2') &&
+              error.toString().contains('mod sync multiplayer'),
+        ),
       ),
     );
   });
