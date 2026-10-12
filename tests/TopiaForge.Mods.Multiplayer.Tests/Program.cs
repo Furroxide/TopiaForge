@@ -91,6 +91,11 @@ internal static class Program
             EngineReconciliationTests.AFrameHoldsOneMaximumMessageAfterTheSoftLimit();
             EngineOwnerTests.RetiringAnOwnerCancelsOnlyItsSubmissions();
             EngineOwnerTests.ARegistrationOutlivedByItsFacadeIsCancelled();
+            EngineRoleTests.ASoloSessionJoinsAnotherHostAndComesBack();
+            EngineRoleTests.AnEndedClientSessionReturnsToSolo();
+            EngineRoleTests.AHostClosesItsConnectionsAndPlaysOn();
+            EngineRoleTests.RoleChangesRefuseWhatTheyCannotDo();
+            EngineRoleTests.JoinPoliciesSeeTheLinkARequestCameOver();
             SoloProviderTests.SoloSessionIsReadyWithTheLocalPlayerHosting();
             SoloProviderTests.SoloCommandsConfirmInlineAfterTheirEvents();
             SoloProviderTests.RateLimitsUseASlidingWindowOnProviderTime();

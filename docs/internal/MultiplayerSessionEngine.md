@@ -31,6 +31,30 @@ mods an `IMultiplayerSession`; every facade of an engine shares its snapshot, cl
 Solo is a host that has accepted no links. Opening a solo session to other players accepts links on the same engine,
 so nothing restarts.
 
+### Role changes
+
+One engine serves a process for its whole life, so the registrations, facades and subscriptions mods hold stay valid
+as the process joins other hosts and comes back. To mods, each change looks like the session replacement they already
+handle: the current session's token is cancelled, values return to their declared defaults, objects despawn, and the
+snapshot names the new session.
+
+| Call | From | To |
+| --- | --- | --- |
+| `SwitchToClient(placeholder)` | An interactive solo host with no connections | A client waiting for `Connect`, in `Connecting` |
+| `SwitchToSolo(start)` | A client, connected or not, its session ended or not. A connected client says `Leave` first. | A fresh solo session, `Ready` |
+| `CloseConnections(reason, message)` | A host with connections | The same session, played on alone |
+
+- **Closing connections** ends each client's session with the reason. Departed players leave the participant list at
+  once rather than after their grace period, and the host's values and objects stay.
+- **Returning to solo automatically.** `EngineOptions.AfterClientSessionEnds` decides what a client does when its
+  session ends: rejected, kicked, ended by the host, or failed on a protocol error. The provider sets it to go back to
+  solo play, so mods see one more replacement rather than an ended session. Without it, as in the rig, the session
+  ends as before.
+- **Limits.** None of the three runs inside a transaction. A host serving clients must close them before joining
+  elsewhere.
+- **Join policies** see the link a request came over (`JoinRequestContext.Link`), so a provider's policy can check a
+  proof bound to that link's handshake.
+
 ## Threading and settle points
 
 Every API call, callback and task completion runs on the thread that created the engine. Other threads may cancel a

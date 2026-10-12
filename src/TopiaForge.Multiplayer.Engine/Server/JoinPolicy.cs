@@ -8,18 +8,23 @@ namespace TopiaForge.Multiplayer.Engine
     internal sealed class JoinRequestContext
     {
         internal JoinRequestContext(
+            IEngineLink link,
             string peerIdentity,
             JoinRequestMessage request,
             IReadOnlyList<ContractEntry> hostContracts,
             int connectedParticipants,
             int maximumParticipants)
         {
+            Link = link;
             PeerIdentity = peerIdentity;
             Request = request;
             HostContracts = hostContracts;
             ConnectedParticipants = connectedParticipants;
             MaximumParticipants = maximumParticipants;
         }
+
+        /// <summary>Gets the link the request came over, which a provider's policy may ask for its channel binding.</summary>
+        internal IEngineLink Link { get; }
 
         internal string PeerIdentity { get; }
         internal JoinRequestMessage Request { get; }
