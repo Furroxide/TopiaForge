@@ -1,0 +1,1485 @@
+using System;
+using System.Runtime.CompilerServices;
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+#endif
+using System.Text;
+
+
+namespace TopiaForge.Multiplayer.ThirdParty.BouncyCastle.Utilities
+{
+    /// <summary> General array utilities.</summary>
+    internal static class Arrays
+    {
+        private static int ObjectHash(object obj) => obj == null ? 0 : obj.GetHashCode();
+
+        public static readonly byte[] EmptyBytes = Array.Empty<byte>();
+        public static readonly int[] EmptyInts = Array.Empty<int>();
+
+        public static bool AreAllZeroes(byte[] buf, int off, int len)
+        {
+            uint bits = 0;
+            for (int i = 0; i < len; ++i)
+            {
+                bits |= buf[off + i];
+            }
+            return bits == 0;
+        }
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+        public static bool AreAllZeroes(ReadOnlySpan<byte> buf)
+        {
+            uint bits = 0;
+            for (int i = 0; i < buf.Length; ++i)
+            {
+                bits |= buf[i];
+            }
+            return bits == 0;
+        }
+#endif
+
+        public static bool AreEqual(bool[] a, bool[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        public static bool AreEqual(char[] a, char[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        /// <summary>
+        /// Are two arrays equal.
+        /// </summary>
+        /// <param name="a">Left side.</param>
+        /// <param name="b">Right side.</param>
+        /// <returns>True if equal.</returns>
+        public static bool AreEqual(byte[] a, byte[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        public static bool AreEqual(byte[] a, int aFromIndex, int aToIndex, byte[] b, int bFromIndex, int bToIndex)
+        {
+            int aLength = aToIndex - aFromIndex;
+            int bLength = bToIndex - bFromIndex;
+
+            if (aLength != bLength)
+                return false;
+
+            for (int i = 0; i < aLength; ++i)
+            {
+                if (a[aFromIndex + i] != b[bFromIndex + i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        [CLSCompliant(false)]
+        public static bool AreEqual(ulong[] a, int aFromIndex, int aToIndex, ulong[] b, int bFromIndex, int bToIndex)
+        {
+            int aLength = aToIndex - aFromIndex;
+            int bLength = bToIndex - bFromIndex;
+
+            if (aLength != bLength)
+                return false;
+
+            for (int i = 0; i < aLength; ++i)
+            {
+                if (a[aFromIndex + i] != b[bFromIndex + i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static bool AreEqual(object[] a, object[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            int length = a.Length;
+            if (length != b.Length)
+                return false;
+
+            for (int i = 0; i < length; ++i)
+            {
+                if (!object.Equals(a[i], b[i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static bool AreEqual(object[] a, int aFromIndex, int aToIndex, object[] b, int bFromIndex, int bToIndex)
+        {
+            int aLength = aToIndex - aFromIndex;
+            int bLength = bToIndex - bFromIndex;
+
+            if (aLength != bLength)
+                return false;
+
+            for (int i = 0; i < aLength; ++i)
+            {
+                if (!object.Equals(a[aFromIndex + i], b[bFromIndex + i]))
+                    return false;
+            }
+
+            return true;
+        }
+
+        [Obsolete("Use 'FixedTimeEquals' instead")]
+        public static bool ConstantTimeAreEqual(byte[] a, byte[] b) => FixedTimeEquals(a, b);
+
+        [Obsolete("Use 'FixedTimeEquals' instead")]
+        public static bool ConstantTimeAreEqual(int len, byte[] a, int aOff, byte[] b, int bOff) =>
+            FixedTimeEquals(len, a, aOff, b, bOff);
+
+        public static bool FixedTimeEquals(byte[] a, byte[] b)
+        {
+            if (null == a || null == b)
+                return false;
+
+            return InternalFixedTimeEquals(a, b);
+        }
+
+        public static bool FixedTimeEquals(int len, byte[] a, int aOff, byte[] b, int bOff)
+        {
+            if (len < 0)
+                throw new ArgumentOutOfRangeException(nameof(len), "cannot be negative");
+
+            ValidateSegment(a, aOff, len);
+            ValidateSegment(b, bOff, len);
+
+            return InternalFixedTimeEquals(len, a, aOff, b, bOff);
+        }
+
+        [CLSCompliant(false)]
+        public static bool FixedTimeEquals(int len, ulong[] a, int aOff, ulong[] b, int bOff)
+        {
+            if (len < 0)
+                throw new ArgumentOutOfRangeException(nameof(len), "cannot be negative");
+
+            ValidateSegment(a, aOff, len);
+            ValidateSegment(b, bOff, len);
+
+            return InternalFixedTimeEquals(len, a, aOff, b, bOff);
+        }
+
+        public static bool AreEqual(int[] a, int[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        [CLSCompliant(false)]
+        public static bool AreEqual(uint[] a, uint[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        public static bool AreEqual(long[] a, long[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        [CLSCompliant(false)]
+        public static bool AreEqual(ulong[] a, ulong[] b)
+        {
+            if (a == b)
+                return true;
+
+            if (a == null || b == null)
+                return false;
+
+            return HaveSameContents(a, b);
+        }
+
+        private static bool HaveSameContents(bool[] a, bool[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HaveSameContents(char[] a, char[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HaveSameContents(byte[] a, byte[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HaveSameContents(int[] a, int[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HaveSameContents(uint[] a, uint[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HaveSameContents(long[] a, long[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool HaveSameContents(ulong[] a, ulong[] b)
+        {
+            int i = a.Length;
+            if (i != b.Length)
+                return false;
+            while (i != 0)
+            {
+                --i;
+                if (a[i] != b[i])
+                    return false;
+            }
+            return true;
+        }
+
+        public static string ToString(object[] a)
+        {
+            StringBuilder sb = new StringBuilder("[");
+            if (a.Length > 0)
+            {
+                sb.Append(a[0]);
+                for (int index = 1; index < a.Length; ++index)
+                {
+                    sb.Append(", ").Append(a[index]);
+                }
+            }
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        public static int GetHashCode(byte[] data)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(data);
+            return hc.ToHashCode();
+#else
+            int i = data.Length;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= data[i];
+            }
+
+            return hc;
+#endif
+        }
+
+        public static int GetHashCode(byte[] data, int off, int len)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(data.AsSpan(off, len));
+            return hc.ToHashCode();
+#else
+            int i = len;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= data[off + i];
+            }
+
+            return hc;
+#endif
+        }
+
+        public static int GetHashCode(int[] data)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan()));
+            return hc.ToHashCode();
+#else
+            int i = data.Length;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= data[i];
+            }
+
+            return hc;
+#endif
+        }
+
+        [CLSCompliant(false)]
+        public static int GetHashCode(ushort[] data)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan()));
+            return hc.ToHashCode();
+#else
+            int i = data.Length;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= data[i];
+            }
+
+            return hc;
+#endif
+        }
+
+        public static int GetHashCode(int[] data, int off, int len)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan(off, len)));
+            return hc.ToHashCode();
+#else
+            int i = len;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= data[off + i];
+            }
+
+            return hc;
+#endif
+        }
+
+        [CLSCompliant(false)]
+        public static int GetHashCode(uint[] data)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan()));
+            return hc.ToHashCode();
+#else
+            int i = data.Length;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= (int)data[i];
+            }
+
+            return hc;
+#endif
+        }
+
+        [CLSCompliant(false)]
+        public static int GetHashCode(uint[] data, int off, int len)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan(off, len)));
+            return hc.ToHashCode();
+#else
+            int i = len;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                hc *= 257;
+                hc ^= (int)data[off + i];
+            }
+
+            return hc;
+#endif
+        }
+
+        [CLSCompliant(false)]
+        public static int GetHashCode(ulong[] data)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan()));
+            return hc.ToHashCode();
+#else
+            int i = data.Length;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                ulong di = data[i];
+                hc *= 257;
+                hc ^= (int)di;
+                hc *= 257;
+                hc ^= (int)(di >> 32);
+            }
+
+            return hc;
+#endif
+        }
+
+        [CLSCompliant(false)]
+        public static int GetHashCode(ulong[] data, int off, int len)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            hc.AddBytes(MemoryMarshal.AsBytes(data.AsSpan(off, len)));
+            return hc.ToHashCode();
+#else
+            int i = len;
+            int hc = i + 1;
+
+            while (--i >= 0)
+            {
+                ulong di = data[off + i];
+                hc *= 257;
+                hc ^= (int)di;
+                hc *= 257;
+                hc ^= (int)(di >> 32);
+            }
+
+            return hc;
+#endif
+        }
+
+        public static int GetHashCode(object[] data)
+        {
+            if (data == null)
+                return 0;
+
+            int len = data.Length;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            for (int i = 0; i < len; ++i)
+            {
+                hc.Add(data[i]);
+            }
+            return hc.ToHashCode();
+#else
+            int hc = len + 1;
+            for (int i = 0; i < len; ++i)
+            {
+                hc *= 257;
+                hc ^= ObjectHash(data[i]);
+            }
+            return hc;
+#endif
+        }
+
+        public static int GetHashCode(object[] data, int off, int len)
+        {
+            if (data == null)
+                return 0;
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            HashCode hc = default;
+            for (int i = 0; i < len; ++i)
+            {
+                hc.Add(data[off + i]);
+            }
+            return hc.ToHashCode();
+#else
+            int hc = len + 1;
+            for (int i = 0; i < len; ++i)
+            {
+                hc *= 257;
+                hc ^= ObjectHash(data[off + i]);
+            }
+            return hc;
+#endif
+        }
+
+        public static bool[] Clone(bool[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            bool[] result = GC.AllocateUninitializedArray<bool>(data.Length);
+#else
+            bool[] result = new bool[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(bool));
+            return result;
+        }
+
+        public static byte[] Clone(byte[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            byte[] result = GC.AllocateUninitializedArray<byte>(data.Length);
+#else
+            byte[] result = new byte[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length);
+            return result;
+        }
+
+        public static short[] Clone(short[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            short[] result = GC.AllocateUninitializedArray<short>(data.Length);
+#else
+            short[] result = new short[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(short));
+            return result;
+        }
+
+        [CLSCompliant(false)]
+        public static ushort[] Clone(ushort[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            ushort[] result = GC.AllocateUninitializedArray<ushort>(data.Length);
+#else
+            ushort[] result = new ushort[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(ushort));
+            return result;
+        }
+
+        public static int[] Clone(int[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            int[] result = GC.AllocateUninitializedArray<int>(data.Length);
+#else
+            int[] result = new int[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(int));
+            return result;
+        }
+
+        [CLSCompliant(false)]
+        public static uint[] Clone(uint[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            uint[] result = GC.AllocateUninitializedArray<uint>(data.Length);
+#else
+            uint[] result = new uint[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(uint));
+            return result;
+        }
+
+        public static long[] Clone(long[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            long[] result = GC.AllocateUninitializedArray<long>(data.Length);
+#else
+            long[] result = new long[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(long));
+            return result;
+        }
+
+        [CLSCompliant(false)]
+        public static ulong[] Clone(ulong[] data)
+        {
+            if (data == null)
+                return null;
+
+#if NET5_0_OR_GREATER
+            ulong[] result = GC.AllocateUninitializedArray<ulong>(data.Length);
+#else
+            ulong[] result = new ulong[data.Length];
+#endif
+            Buffer.BlockCopy(data, 0, result, 0, data.Length * sizeof(ulong));
+            return result;
+        }
+
+        public static byte[] Clone(byte[] data, byte[] existing)
+        {
+            if (data == null)
+                return null;
+            if (existing == null || existing.Length != data.Length)
+                return Clone(data);
+            Array.Copy(data, 0, existing, 0, existing.Length);
+            return existing;
+        }
+
+        [CLSCompliant(false)]
+        public static ulong[] Clone(ulong[] data, ulong[] existing)
+        {
+            if (data == null)
+                return null;
+            if (existing == null || existing.Length != data.Length)
+                return Clone(data);
+            Array.Copy(data, 0, existing, 0, existing.Length);
+            return existing;
+        }
+
+        public static bool Contains(byte[] a, byte n)
+        {
+            for (int i = 0; i < a.Length; ++i)
+            {
+                if (a[i] == n)
+                    return true;
+            }
+            return false;
+        }
+
+        public static bool Contains(short[] a, short n)
+        {
+            for (int i = 0; i < a.Length; ++i)
+            {
+                if (a[i] == n)
+                    return true;
+            }
+            return false;
+        }
+
+        public static bool Contains(int[] a, int n)
+        {
+            for (int i = 0; i < a.Length; ++i)
+            {
+                if (a[i] == n)
+                    return true;
+            }
+            return false;
+        }
+
+        // TODO[api] Redundant with generic version
+        public static void Fill(byte[] buf, byte b) => Fill<byte>(buf, b);
+
+        // TODO[api] Redundant with generic version
+        [CLSCompliant(false)]
+        public static void Fill(ulong[] buf, ulong b) => Fill<ulong>(buf, b);
+
+        // TODO[api] Redundant with generic version
+        public static void Fill(byte[] buf, int from, int to, byte b) => Fill<byte>(buf, from, to, b);
+
+        public static void Fill<T>(T[] ts, T t)
+        {
+#if NETCOREAPP2_0_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            Array.Fill(ts, t);
+#else
+            ValidateBuffer(ts);
+            for (int i = 0; i < ts.Length; ++i)
+            {
+                ts[i] = t;
+            }
+#endif
+        }
+
+        public static void Fill<T>(T[] ts, int from, int to, T t)
+        {
+#if NETCOREAPP2_0_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            Array.Fill(ts, t, startIndex: from, count: to - from);
+#else
+            ValidateRange(ts, from, to);
+            for (int i = from; i < to; ++i)
+            {
+                ts[i] = t;
+            }
+#endif
+        }
+
+        public static byte[] CopyOf(byte[] data, int newLength)
+        {
+            byte[] tmp = new byte[newLength];
+            Array.Copy(data, 0, tmp, 0, System.Math.Min(newLength, data.Length));
+            return tmp;
+        }
+
+        public static char[] CopyOf(char[] data, int newLength)
+        {
+            char[] tmp = new char[newLength];
+            Array.Copy(data, 0, tmp, 0, System.Math.Min(newLength, data.Length));
+            return tmp;
+        }
+
+        public static int[] CopyOf(int[] data, int newLength)
+        {
+            int[] tmp = new int[newLength];
+            Array.Copy(data, 0, tmp, 0, System.Math.Min(newLength, data.Length));
+            return tmp;
+        }
+
+        [CLSCompliant(false)]
+        public static uint[] CopyOf(uint[] data, int newLength)
+        {
+            uint[] tmp = new uint[newLength];
+            Array.Copy(data, 0, tmp, 0, System.Math.Min(newLength, data.Length));
+            return tmp;
+        }
+
+        public static long[] CopyOf(long[] data, int newLength)
+        {
+            long[] tmp = new long[newLength];
+            Array.Copy(data, 0, tmp, 0, System.Math.Min(newLength, data.Length));
+            return tmp;
+        }
+
+        /**
+         * Make a copy of a range of bytes from the passed in data array. The range can
+         * extend beyond the end of the input array, in which case the return array will
+         * be padded with zeroes.
+         *
+         * @param data the array from which the data is to be copied.
+         * @param from the start index at which the copying should take place.
+         * @param to the final index of the range (exclusive).
+         *
+         * @return a new byte array containing the range given.
+         */
+        public static byte[] CopyOfRange(byte[] data, int from, int to)
+        {
+            int newLength = GetLength(from, to);
+            byte[] tmp = new byte[newLength];
+            Array.Copy(data, from, tmp, 0, System.Math.Min(newLength, data.Length - from));
+            return tmp;
+        }
+
+        public static int[] CopyOfRange(int[] data, int from, int to)
+        {
+            int newLength = GetLength(from, to);
+            int[] tmp = new int[newLength];
+            Array.Copy(data, from, tmp, 0, System.Math.Min(newLength, data.Length - from));
+            return tmp;
+        }
+
+        public static long[] CopyOfRange(long[] data, int from, int to)
+        {
+            int newLength = GetLength(from, to);
+            long[] tmp = new long[newLength];
+            Array.Copy(data, from, tmp, 0, System.Math.Min(newLength, data.Length - from));
+            return tmp;
+        }
+
+        private static int GetLength(int from, int to)
+        {
+            int newLength = to - from;
+            if (newLength < 0)
+                throw new ArgumentException(from + " > " + to);
+            return newLength;
+        }
+
+        public static byte[] Append(byte[] a, byte b)
+        {
+            if (a == null)
+                return new byte[] { b };
+
+            int length = a.Length;
+            byte[] result = new byte[length + 1];
+            Array.Copy(a, 0, result, 0, length);
+            result[length] = b;
+            return result;
+        }
+
+        public static short[] Append(short[] a, short b)
+        {
+            if (a == null)
+                return new short[] { b };
+
+            int length = a.Length;
+            short[] result = new short[length + 1];
+            Array.Copy(a, 0, result, 0, length);
+            result[length] = b;
+            return result;
+        }
+
+        public static int[] Append(int[] a, int b)
+        {
+            if (a == null)
+                return new int[] { b };
+
+            int length = a.Length;
+            int[] result = new int[length + 1];
+            Array.Copy(a, 0, result, 0, length);
+            result[length] = b;
+            return result;
+        }
+
+        public static byte[] Concatenate(byte[] a, byte[] b)
+        {
+            if (a == null)
+                return Clone(b);
+            if (b == null)
+                return Clone(a);
+
+            byte[] rv = new byte[a.Length + b.Length];
+            Array.Copy(a, 0, rv, 0, a.Length);
+            Array.Copy(b, 0, rv, a.Length, b.Length);
+            return rv;
+        }
+
+        [CLSCompliant(false)]
+        public static ushort[] Concatenate(ushort[] a, ushort[] b)
+        {
+            if (a == null)
+                return Clone(b);
+            if (b == null)
+                return Clone(a);
+
+            ushort[] rv = new ushort[a.Length + b.Length];
+            Array.Copy(a, 0, rv, 0, a.Length);
+            Array.Copy(b, 0, rv, a.Length, b.Length);
+            return rv;
+        }
+
+        public static byte[] ConcatenateAll(params byte[][] vs)
+        {
+            byte[][] nonNull = new byte[vs.Length][];
+            int count = 0;
+            int totalLength = 0;
+
+            for (int i = 0; i < vs.Length; ++i)
+            {
+                byte[] v = vs[i];
+                if (v != null)
+                {
+                    nonNull[count++] = v;
+                    totalLength += v.Length;
+                }
+            }
+
+            byte[] result = new byte[totalLength];
+            int pos = 0;
+
+            for (int j = 0; j < count; ++j)
+            {
+                byte[] v = nonNull[j];
+                Array.Copy(v, 0, result, pos, v.Length);
+                pos += v.Length;
+            }
+
+            return result;
+        }
+
+        public static int[] Concatenate(int[] a, int[] b)
+        {
+            if (a == null)
+                return Clone(b);
+            if (b == null)
+                return Clone(a);
+
+            int[] rv = new int[a.Length + b.Length];
+            Array.Copy(a, 0, rv, 0, a.Length);
+            Array.Copy(b, 0, rv, a.Length, b.Length);
+            return rv;
+        }
+
+        [CLSCompliant(false)]
+        public static uint[] Concatenate(uint[] a, uint[] b)
+        {
+            if (a == null)
+                return Clone(b);
+            if (b == null)
+                return Clone(a);
+
+            uint[] rv = new uint[a.Length + b.Length];
+            Array.Copy(a, 0, rv, 0, a.Length);
+            Array.Copy(b, 0, rv, a.Length, b.Length);
+            return rv;
+        }
+
+        public static byte[] Prepend(byte[] a, byte b)
+        {
+            if (a == null)
+                return new byte[] { b };
+
+            int length = a.Length;
+            byte[] result = new byte[length + 1];
+            Array.Copy(a, 0, result, 1, length);
+            result[0] = b;
+            return result;
+        }
+
+        public static short[] Prepend(short[] a, short b)
+        {
+            if (a == null)
+                return new short[] { b };
+
+            int length = a.Length;
+            short[] result = new short[length + 1];
+            Array.Copy(a, 0, result, 1, length);
+            result[0] = b;
+            return result;
+        }
+
+        public static int[] Prepend(int[] a, int b)
+        {
+            if (a == null)
+                return new int[] { b };
+
+            int length = a.Length;
+            int[] result = new int[length + 1];
+            Array.Copy(a, 0, result, 1, length);
+            result[0] = b;
+            return result;
+        }
+
+        public static T[] Prepend<T>(T[] a, T b)
+        {
+            if (a == null)
+                return new T[1] { b };
+
+            T[] result = new T[1 + a.Length];
+            result[0] = b;
+            a.CopyTo(result, 1);
+            return result;
+        }
+
+        public static byte[] Reverse(byte[] a)
+        {
+            if (a == null)
+                return null;
+
+            int p1 = 0, p2 = a.Length;
+            byte[] result = new byte[p2];
+
+            while (--p2 >= 0)
+            {
+                result[p2] = a[p1++];
+            }
+
+            return result;
+        }
+
+        public static int[] Reverse(int[] a)
+        {
+            if (a == null)
+                return null;
+
+            int p1 = 0, p2 = a.Length;
+            int[] result = new int[p2];
+
+            while (--p2 >= 0)
+            {
+                result[p2] = a[p1++];
+            }
+
+            return result;
+        }
+
+        internal static void Reverse<T>(T[] input, T[] output)
+        {
+            int last = input.Length - 1;
+            for (int i = 0; i <= last; ++i)
+            {
+                output[i] = input[last - i];
+            }
+        }
+
+        public static T[] ReverseInPlace<T>(T[] array)
+        {
+            if (null == array)
+                return null;
+
+            Array.Reverse(array);
+            return array;
+        }
+
+        public static void ReverseInPlace<T>(T[] array, int index, int length)
+        {
+            Array.Reverse(array, index, length);
+        }
+
+        public static void Clear(byte[] data)
+        {
+            if (null != data)
+            {
+                Array.Clear(data, 0, data.Length);
+            }
+        }
+
+        public static void Clear(int[] data)
+        {
+            if (null != data)
+            {
+                Array.Clear(data, 0, data.Length);
+            }
+        }
+
+        public static bool IsNullOrContainsNull(object[] array)
+        {
+            if (null == array)
+                return true;
+
+            int count = array.Length;
+            for (int i = 0; i < count; ++i)
+            {
+                if (null == array[i])
+                    return true;
+            }
+            return false;
+        }
+
+        public static bool IsNullOrEmpty(byte[] array)
+        {
+            return null == array || array.Length < 1;
+        }
+
+        public static bool IsNullOrEmpty(object[] array)
+        {
+            return null == array || array.Length < 1;
+        }
+
+        public static T[] CopyBuffer<T>(T[] buf)
+        {
+            ValidateBuffer(buf);
+            return InternalCopyBuffer(buf);
+        }
+
+        public static void CopyBufferToSegment<T>(T[] srcBuf, T[] dstBuf, int dstOff, int dstLen)
+        {
+            ValidateBuffer(srcBuf);
+            ValidateSegment(dstBuf, dstOff, dstLen);
+            InternalCopyBufferToSegment(srcBuf, dstBuf, dstOff, dstLen);
+        }
+
+        public static T[] CopySegment<T>(T[] buf, int off, int len)
+        {
+            ValidateSegment(buf, off, len);
+            return InternalCopySegment(buf, off, len);
+        }
+
+        public static T[] CreateBuffer<T>(int len)
+        {
+            ValidateBufferLength(len);
+            return new T[len];
+        }
+
+        internal static T[] InternalCopyBuffer<T>(T[] buf)
+        {
+#if NET5_0_OR_GREATER
+            T[] result = GC.AllocateUninitializedArray<T>(buf.Length);
+#else
+            T[] result = new T[buf.Length];
+#endif
+            Array.Copy(buf, 0, result, 0, buf.Length);
+            return result;
+        }
+
+        internal static void InternalCopyBufferToSegment<T>(T[] srcBuf, T[] dstBuf, int dstOff, int dstLen)
+        {
+            if (srcBuf.Length != dstLen)
+                throw new ArgumentOutOfRangeException(nameof(dstLen));
+
+            Array.Copy(srcBuf, 0, dstBuf, dstOff, dstLen);
+        }
+
+        internal static T[] InternalCopySegment<T>(T[] buf, int off, int len)
+        {
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+            return buf.AsSpan(off, len).ToArray();
+#else
+            T[] result = new T[len];
+            Array.Copy(buf, off, result, 0, len);
+            return result;
+#endif
+        }
+
+#if NET6_0_OR_GREATER
+        public static int MaxLength => Array.MaxLength;
+#else
+        public static int MaxLength => 0X7FFFFFC7;
+#endif
+
+        public static bool SegmentsOverlap(int aOff, int aLen, int bOff, int bLen)
+        {
+            return aLen > 0
+                && bLen > 0
+                && aOff - bOff < bLen
+                && bOff - aOff < aLen;
+        }
+
+        public static void ValidateBuffer<T>(T[] buf)
+        {
+            if (buf == null)
+                throw new ArgumentNullException(nameof(buf));
+        }
+
+        public static void ValidateBufferLength(int len)
+        {
+            if (len < 0)
+                throw new ArgumentOutOfRangeException(nameof(len));
+        }
+
+        public static void ValidateRange<T>(T[] buf, int from, int to)
+        {
+            if (buf == null)
+                throw new ArgumentNullException(nameof(buf));
+            if ((from | (buf.Length - from)) < 0)
+                throw new ArgumentOutOfRangeException(nameof(from));
+            if (((to - from) | (buf.Length - to)) < 0)
+                throw new ArgumentOutOfRangeException(nameof(to));
+        }
+
+        public static void ValidateSegment<T>(T[] buf, int off, int len)
+        {
+            if (buf == null)
+                throw new ArgumentNullException(nameof(buf));
+            int available = buf.Length - off;
+            if ((off | available) < 0)
+                throw new ArgumentOutOfRangeException(nameof(off));
+            int remaining = available - len;
+            if ((len | remaining) < 0)
+                throw new ArgumentOutOfRangeException(nameof(len));
+        }
+
+        public static void ZeroMemory(byte[] buf)
+        {
+            ValidateBuffer(buf);
+            InternalZeroMemory(buf);
+        }
+
+        public static void ZeroMemory(byte[] buf, int off, int len)
+        {
+            ValidateSegment(buf, off, len);
+            InternalZeroMemory(buf, off, len);
+        }
+
+        public static void ZeroMemory(char[] buf)
+        {
+            ValidateBuffer(buf);
+            InternalZeroMemory(buf);
+        }
+
+        internal static void ZeroMemory(uint[] buf)
+        {
+            ValidateBuffer(buf);
+            InternalZeroMemory(buf);
+        }
+
+        internal static void ZeroMemory(uint[] buf, int off, int len)
+        {
+            ValidateSegment(buf, off, len);
+            InternalZeroMemory(buf, off, len);
+        }
+
+        internal static void ZeroMemory(ulong[] buf)
+        {
+            ValidateBuffer(buf);
+            InternalZeroMemory(buf);
+        }
+
+        internal static void ZeroMemory(ulong[] buf, int off, int len)
+        {
+            ValidateSegment(buf, off, len);
+            InternalZeroMemory(buf, off, len);
+        }
+
+#if NETCOREAPP2_1_OR_GREATER || BOUNCYCASTLE_NETSTANDARD2_1_PATHS
+        public static byte[] Concatenate(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
+        {
+            byte[] rv = new byte[a.Length + b.Length];
+            a.CopyTo(rv);
+            b.CopyTo(rv.AsSpan(a.Length));
+            return rv;
+        }
+
+        public static byte[] Concatenate(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, ReadOnlySpan<byte> c)
+        {
+            byte[] rv = new byte[a.Length + b.Length + c.Length];
+            a.CopyTo(rv);
+            b.CopyTo(rv.AsSpan(a.Length));
+            c.CopyTo(rv.AsSpan(a.Length + b.Length));
+            return rv;
+        }
+
+        public static byte[] Concatenate(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, ReadOnlySpan<byte> c,
+            ReadOnlySpan<byte> d)
+        {
+            byte[] rv = new byte[a.Length + b.Length + c.Length + d.Length];
+            a.CopyTo(rv);
+            b.CopyTo(rv.AsSpan(a.Length));
+            c.CopyTo(rv.AsSpan(a.Length + b.Length));
+            d.CopyTo(rv.AsSpan(a.Length + b.Length + c.Length));
+            return rv;
+        }
+
+        [Obsolete("Use 'FixedTimeEquals' instead")]
+        public static bool ConstantTimeAreEqual(Span<byte> a, Span<byte> b) => FixedTimeEquals(a, b);
+
+        public static void Fill<T>(Span<T> ts, T t) => ts.Fill(t);
+
+        public static bool FixedTimeEquals(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) =>
+            CryptographicOperations.FixedTimeEquals(a, b);
+
+        internal static bool InternalFixedTimeEquals(byte[] a, byte[] b) =>
+            CryptographicOperations.FixedTimeEquals(a, b);
+
+        internal static bool InternalFixedTimeEquals(int len, byte[] a, int aOff, byte[] b, int bOff) =>
+            CryptographicOperations.FixedTimeEquals(a.AsSpan(aOff, len), b.AsSpan(bOff, len));
+
+        internal static bool InternalFixedTimeEquals(int len, ulong[] a, int aOff, ulong[] b, int bOff) =>
+            CryptographicOperations.FixedTimeEquals(
+                MemoryMarshal.AsBytes(a.AsSpan(aOff, len)),
+                MemoryMarshal.AsBytes(b.AsSpan(bOff, len)));
+
+        internal static void InternalZeroMemory(byte[] buf) => CryptographicOperations.ZeroMemory(buf);
+
+        internal static void InternalZeroMemory(byte[] buf, int off, int len) =>
+            CryptographicOperations.ZeroMemory(buf.AsSpan(off, len));
+
+        internal static void InternalZeroMemory(char[] buf) =>
+            CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(buf.AsSpan()));
+
+        internal static void InternalZeroMemory(uint[] buf) => ZeroMemory(buf.AsSpan());
+
+        internal static void InternalZeroMemory(uint[] buf, int off, int len) => ZeroMemory(buf.AsSpan(off, len));
+
+        internal static void InternalZeroMemory(ulong[] buf) => ZeroMemory(buf.AsSpan());
+
+        internal static void InternalZeroMemory(ulong[] buf, int off, int len) => ZeroMemory(buf.AsSpan(off, len));
+
+        public static T[] Prepend<T>(ReadOnlySpan<T> a, T b)
+        {
+            T[] result = new T[1 + a.Length];
+            result[0] = b;
+            a.CopyTo(result.AsSpan(1));
+            return result;
+        }
+
+        public static void ZeroMemory(Span<byte> buffer) => CryptographicOperations.ZeroMemory(buffer);
+
+        internal static void ZeroMemory(Span<uint> buffer) =>
+            CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(buffer));
+
+        internal static void ZeroMemory(Span<ulong> buffer) =>
+            CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(buffer));
+#else
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static bool InternalFixedTimeEquals(byte[] a, byte[] b)
+        {
+            int len = a.Length;
+            if (len != b.Length)
+                return false;
+
+            int d = 0;
+            for (int i = 0; i < len; ++i)
+            {
+                d |= a[i] ^ b[i];
+            }
+            return 0 == d;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static bool InternalFixedTimeEquals(int len, byte[] a, int aOff, byte[] b, int bOff)
+        {
+            int d = 0;
+            for (int i = 0; i < len; ++i)
+            {
+                d |= a[aOff + i] ^ b[bOff + i];
+            }
+            return 0 == d;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static bool InternalFixedTimeEquals(int len, ulong[] a, int aOff, ulong[] b, int bOff)
+        {
+            ulong d = 0;
+            for (int i = 0; i < len; ++i)
+            {
+                d |= a[aOff + i] ^ b[bOff + i];
+            }
+            return 0UL == d;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(byte[] buf)
+        {
+            for (int i = 0; i < buf.Length; ++i)
+            {
+                buf[i] = 0;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(char[] buf)
+        {
+            for (int i = 0; i < buf.Length; ++i)
+            {
+                buf[i] = '\0';
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(byte[] buf, int off, int len)
+        {
+            for (int i = 0; i < len; ++i)
+            {
+                buf[off + i] = 0;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(uint[] buf)
+        {
+            for (int i = 0; i < buf.Length; ++i)
+            {
+                buf[i] = 0U;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(uint[] buf, int off, int len)
+        {
+            for (int i = 0; i < len; ++i)
+            {
+                buf[off + i] = 0U;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(ulong[] buf)
+        {
+            for (int i = 0; i < buf.Length; ++i)
+            {
+                buf[i] = 0UL;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        internal static void InternalZeroMemory(ulong[] buf, int off, int len)
+        {
+            for (int i = 0; i < len; ++i)
+            {
+                buf[off + i] = 0UL;
+            }
+        }
+#endif
+    }
+}

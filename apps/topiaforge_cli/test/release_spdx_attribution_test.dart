@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -74,9 +75,15 @@ void main() {
   });
 
   test('only first-party artifacts are concluded as owned', () {
+    final mixed = {
+      for (final entry in release.mods.entries)
+        if (modsWithVendoredSource.containsKey(entry.key))
+          './${entry.key}-${entry.value}.topiaforgemod',
+    };
+    expect(mixed, isNotEmpty, reason: 'a vendoring mod ships in this release');
     for (final entry in _files(sbom)) {
       final fileName = entry['fileName'] as String;
-      if (fileName.endsWith('.topiaforgemod')) {
+      if (fileName.endsWith('.topiaforgemod') && !mixed.contains(fileName)) {
         expect(
           entry['licenseConcluded'],
           policy.licenseExpression,
@@ -85,11 +92,42 @@ void main() {
         expect(entry['copyrightText'], ownedCopyright, reason: fileName);
       } else {
         // Platform archives redistribute the vendored loader payload and
-        // third-party fonts, so the project concludes nothing about them.
+        // third-party fonts, and a vendoring mod compiles third-party source,
+        // so the project concludes nothing about them.
         expect(entry['licenseConcluded'], 'NOASSERTION', reason: fileName);
         expect(entry['copyrightText'], 'NOASSERTION', reason: fileName);
       }
     }
+  });
+
+  test('a mod that compiles vendored source declares both licences', () {
+    final byName = _byName(sbom);
+    for (final entry in modsWithVendoredSource.entries) {
+      final package = byName[entry.key];
+      expect(package, isNotNull, reason: entry.key);
+      expect(
+        package!['licenseDeclared'],
+        '${policy.licenseExpression} AND ${entry.value}',
+        reason: entry.key,
+      );
+      expect(package['licenseConcluded'], 'NOASSERTION', reason: entry.key);
+      expect(package['copyrightText'], 'NOASSERTION', reason: entry.key);
+    }
+  });
+
+  test('vendoring mods are exactly those that carry third-party notices', () {
+    final withNotices = <String>{};
+    for (final directory in Directory(
+      p.join(root, 'mods'),
+    ).listSync().whereType<Directory>()) {
+      final manifest = File(p.join(directory.path, 'topiaforge.mod.json'));
+      if (!manifest.existsSync()) continue;
+      final notices = File(p.join(directory.path, 'THIRD_PARTY_NOTICES.md'));
+      if (!notices.existsSync()) continue;
+      final decoded = jsonDecode(manifest.readAsStringSync()) as Map;
+      withNotices.add(decoded['name'] as String);
+    }
+    expect(withNotices, modsWithVendoredSource.keys.toSet());
   });
 }
 

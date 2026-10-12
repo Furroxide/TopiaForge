@@ -23,7 +23,8 @@
   ],
   "license": "AGPL-3.0-or-later",
   "licenseFiles": [
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "capabilities": [],
   "multiplayer": {

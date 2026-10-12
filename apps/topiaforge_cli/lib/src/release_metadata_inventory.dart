@@ -236,6 +236,8 @@ class ReleaseMetadataInventoryBuilder {
       'packages/launcher_ui/fonts/Audiowide-OFL.txt',
       'packages/launcher_ui/fonts/Quicksand-OFL.txt',
       'tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt',
+      // Notices for vendored source a mod compiles, packed into its package.
+      'mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md',
       if (policy.licenseFile != null) policy.licenseFile!,
       // Owned license texts that are physically redistributed: the shared mod
       // license injected into every .topiaforgemod, the launcher UI package
