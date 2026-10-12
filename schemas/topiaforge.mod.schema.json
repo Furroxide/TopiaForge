@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json",
   "title": "TopiaForge Mod Manifest V6",
-  "description": "TopiaForge Manifest V6 for trusted, in-process mods. Worlds, gamemodes and launch targets are declared separately under `contributions`, so a launch entry names its implementation owner and its world policy instead of carrying display metadata alone. Multiplayer metadata is optional; absence means standalone-only. Capabilities are disclosure metadata, not a security sandbox.",
+  "description": "TopiaForge Manifest V6 for trusted, in-process mods. Worlds, gamemodes and launch targets are declared separately under `contributions`, so a launch entry names its implementation owner and its world policy instead of carrying display metadata alone. Multiplayer metadata is optional; without it the mod is shared implicitly and every peer needs the identical package, while mode standalone keeps a mod out of multiplayer. Capabilities are disclosure metadata, not a security sandbox.",
   "type": "object",
   "maxProperties": 64,
   "required": [
@@ -349,7 +349,8 @@
           "enum": [
             "client-local",
             "server-only",
-            "session"
+            "session",
+            "standalone"
           ]
         },
         "presence": {
@@ -398,7 +399,8 @@
               "mode": {
                 "enum": [
                   "client-local",
-                  "server-only"
+                  "server-only",
+                  "standalone"
                 ]
               }
             }

@@ -69,8 +69,9 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
     final manifest = _readContractLockManifest(root);
     if (!manifest.multiplayerIsPresent || manifest.multiplayer == null) {
       throw StateError(
-        'The mod is standalone-only. Run `topiaforge mod add multiplayer` '
-        'before synchronizing a multiplayer contract lock.',
+        'The mod has no multiplayer block, so it is shared implicitly and has '
+        'no contract to lock. Run `topiaforge mod add multiplayer` before '
+        'synchronizing a multiplayer contract lock.',
       );
     }
     final projects = _entryProjectCandidates(root);

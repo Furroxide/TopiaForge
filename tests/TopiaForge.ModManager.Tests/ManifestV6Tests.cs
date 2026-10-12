@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
 
         public static void Run(string root)
         {
-            SchemaDispatchAllowsStandaloneV6();
+            SchemaDispatchSharesUndeclaredV6Implicitly();
             V6SessionMetadataRoundTrips();
             V6ModesHaveClosedSemantics();
             ProtocolAndSynchronizedPathsAreValidated();
@@ -24,13 +24,33 @@ namespace TopiaForge.ModManager.Tests
             Console.WriteLine("ManifestV6Tests passed.");
         }
 
-        private static void SchemaDispatchAllowsStandaloneV6()
+        private static void SchemaDispatchSharesUndeclaredV6Implicitly()
         {
-            var standalone = ModManifestJson.Deserialize(ManifestJson(6, string.Empty));
-            Assert(standalone.IsStandaloneOnly && !standalone.DeclaresMultiplayer,
-                "V6 without multiplayer metadata must remain standalone-only");
+            var undeclared = ModManifestJson.Deserialize(ManifestJson(6, string.Empty));
+            Assert(undeclared.IsImplicitlyShared && !undeclared.IsStandaloneOnly && !undeclared.DeclaresMultiplayer,
+                "V6 without multiplayer metadata must be shared implicitly, not standalone-only");
+            Assert(undeclared.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.ImplicitShared,
+                "an absent multiplayer block must resolve to implicit sharing");
+            Assert(ManifestValidator.Validate(undeclared).Count == 0,
+                "a canonical V6 manifest without multiplayer metadata must be valid");
+
+            var standalone = ModManifestJson.Deserialize(ManifestJson(
+                6,
+                ",\"multiplayer\":{\"mode\":\"standalone\"}"));
+            Assert(standalone.IsStandaloneOnly && standalone.DeclaresMultiplayer && !standalone.IsImplicitlyShared,
+                "only an explicit standalone mode refuses multiplayer");
+            Assert(standalone.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Standalone,
+                "standalone mode must resolve to its own effective mode");
             Assert(ManifestValidator.Validate(standalone).Count == 0,
                 "a canonical standalone V6 manifest must be valid");
+
+            var unknown = new ModManifest
+            {
+                SchemaVersion = ModManifest.ManifestV6SchemaVersion,
+                Multiplayer = new ModMultiplayerMetadata { Mode = "everyone" }
+            };
+            Assert(unknown.EffectiveMultiplayerMode == null && !unknown.IsStandaloneOnly && !unknown.IsImplicitlyShared,
+                "an unknown mode must not resolve to any effective mode");
             Assert(ManifestSchemaDispatch.Resolve(ModManifest.ManifestV6SchemaVersion) == ManifestSchemaContract.V6,
                 "the V6 selector must dispatch to its dedicated reader");
             AssertThrows<InvalidDataException>(() => ModManifestJson.Deserialize(ManifestJson(7, string.Empty)),
@@ -83,6 +103,7 @@ namespace TopiaForge.ModManager.Tests
                      {
                          ModMultiplayerMetadata.ClientLocalMode,
                          ModMultiplayerMetadata.ServerOnlyMode,
+                         ModMultiplayerMetadata.StandaloneMode,
                      })
             {
                 var manifest = ModManifestJson.Deserialize(ManifestJson(

@@ -3,7 +3,8 @@ part of '../models.dart';
 enum ModMultiplayerMode {
   clientLocal('client-local'),
   serverOnly('server-only'),
-  session('session');
+  session('session'),
+  standalone('standalone');
 
   const ModMultiplayerMode(this.wireName);
 
@@ -15,6 +16,25 @@ enum ModMultiplayerMode {
     }
     return null;
   }
+}
+
+/// How one mod takes part in multiplayer sessions once its manifest is read.
+enum ModMultiplayerEffectiveMode {
+  /// No multiplayer block: required on every peer as the identical package.
+  implicitShared,
+
+  /// A declared session mod negotiated by presence, protocol, and
+  /// synchronized files.
+  session,
+
+  /// Runs only on the peer that enables it and is never required of others.
+  clientLocal,
+
+  /// Runs only on the logical server.
+  serverOnly,
+
+  /// Refuses every multiplayer session.
+  standalone,
 }
 
 enum ModMultiplayerPresence {
