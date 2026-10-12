@@ -221,12 +221,15 @@
   </ItemGroup>
 
   <!-- The TopiaForgeUi kit's Core/ folder is its Unity-free island (tokens, scheme resolution, contrast math,
-       easing, sprite-coverage math, virtual-list math, window clamp/snap, sorting-band allocation).
+       easing, sprite-coverage math, virtual-list math, window clamp/snap, sorting-band allocation,
+       and the widget math behind signal bars, meters, steppers, chat, name tags and tables).
        Compiling it here both unit-tests the logic and mechanically enforces that nothing in Core/
-       ever grows a UnityEngine dependency (this net10.0 build would fail). -->
+       ever grows a UnityEngine dependency (this net10.0 build would fail). The procedural icon
+       raster is Unity-free too and is compiled in so every icon's coverage stays tested. -->
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\*.cs" />
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Runtime\TopiaForgeStateFileCodec.cs" />
+    <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Rendering\TopiaForgeIconRaster.cs" />
   </ItemGroup>
 
   <!-- Unity editor tooling keeps filesystem primitives in Unity-free helpers so adversarial reads and
