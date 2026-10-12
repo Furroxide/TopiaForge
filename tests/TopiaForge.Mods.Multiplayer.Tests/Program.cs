@@ -166,6 +166,18 @@ internal static class Program
             TransportEngineTests.EnginesRunASessionOverTheTransport();
             TransportFuzzTests.HostileDatagramsNeverDisturbASession();
             TransportFuzzTests.SeededRunsRepeatEveryByte();
+            NetworkDescriptorTests.CanonicalJsonAcceptsOnlyOneSpelling();
+            NetworkDescriptorTests.EncodingsHaveOneSpellingPerValue();
+            NetworkDescriptorTests.DescriptorMembersMustAgree();
+            NetworkDescriptorTests.SignedDescriptorsMatchTheSharedFixtures();
+            NetworkDescriptorTests.DescriptorsRefuseWhatTheyCannotRepresent();
+            NetworkDescriptorTests.SignedValuesCannotBeChangedFromOutside();
+            NetworkLinkTests.LinksMatchTheSharedFixtures();
+            NetworkLinkTests.IPv6AddressesFollowRfc5952();
+            NetworkLinkTests.LanFormatsMatchTheSharedFixtures();
+            NetworkIdentityTests.SecretsMatchTheSharedFixtures();
+            NetworkIdentityTests.IdentitiesPersistAndSurviveDamage();
+            NetworkIdentityTests.KnownHostsRememberServersNotAddresses();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
