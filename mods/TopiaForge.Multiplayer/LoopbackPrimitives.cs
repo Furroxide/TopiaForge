@@ -385,6 +385,15 @@ namespace TopiaForge.Multiplayer
         internal OperationResult<bool> TryAcquire(ParticipantId senderId, long nowMilliseconds) =>
             registration.TryAcquire(senderId, nowMilliseconds);
 
+        // Direct server-side changes arrive with the session engine; loopback objects change only through inputs.
+        public OperationResult<TState> Apply(Func<TState, OperationResult<TState>> updater)
+        {
+            if (updater == null) throw new ArgumentNullException(nameof(updater));
+            return OperationResult<TState>.Failure(
+                ModErrorCode.Unavailable,
+                "Applying replicated-object state outside an input handler needs the live session engine.");
+        }
+
         internal OperationResult<TState> Apply(ReplicatedObjectCommandContext context, TInput input)
         {
             lock (gate)

@@ -397,9 +397,7 @@ namespace TopiaForge.Mods.Testing
             {
                 if (!target.Snapshot.HasPresentation || target.Snapshot.State != MultiplayerSessionState.Ready) continue;
                 var localId = target.Snapshot.LocalParticipantId;
-                var isSender = localId.HasValue && localId.Value.Equals(sender);
-                if (sequenced.Audience == MultiplayerAudience.Sender && !isSender) continue;
-                if (sequenced.Audience == MultiplayerAudience.Others && isSender) continue;
+                if (!localId.HasValue || !sequenced.Target.Selects(localId.Value, sender)) continue;
                 var captured = sequenced.Copy();
                 SendReliable(target, () => target.DeliverPresentation(captured));
             }

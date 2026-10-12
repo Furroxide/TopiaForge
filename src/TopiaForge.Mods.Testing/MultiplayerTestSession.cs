@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Mods.Testing
 {
@@ -31,6 +32,9 @@ namespace TopiaForge.Mods.Testing
         private readonly HashSet<ulong> deliveredPresentationSequences = new HashSet<ulong>();
         private readonly List<Action<MultiplayerSessionSnapshot>> changedHandlers =
             new List<Action<MultiplayerSessionSnapshot>>();
+        private readonly List<Action<MultiplayerTickContext>> tickHandlers = new List<Action<MultiplayerTickContext>>();
+        private readonly HashSet<string> registeredContracts = new HashSet<string>(StringComparer.Ordinal);
+        private SnapshotPlayerDirectory? players;
         private readonly List<IPendingTestCommand> pendingCommands = new List<IPendingTestCommand>();
         private readonly Dictionary<string, ulong> lastCanonicalCommandSequence =
             new Dictionary<string, ulong>(StringComparer.Ordinal);
@@ -423,6 +427,16 @@ namespace TopiaForge.Mods.Testing
             MultiplayerAudience audience = MultiplayerAudience.Everyone)
             where TEvent : class
         {
+            if (!Enum.IsDefined(typeof(MultiplayerAudience), audience)) throw new ArgumentOutOfRangeException(nameof(audience));
+            return PublishPresentation(eventType, value, PresentationTarget.FromAudience(audience));
+        }
+
+        public OperationResult<bool> PublishPresentation<TEvent>(
+            PresentationEventType<TEvent> eventType,
+            TEvent value,
+            PresentationTarget target)
+            where TEvent : class
+        {
             if (eventType == null) throw new ArgumentNullException(nameof(eventType));
             if (value == null) throw new ArgumentNullException(nameof(value));
             if (!HasServerSide)
@@ -441,14 +455,62 @@ namespace TopiaForge.Mods.Testing
                 return OperationResult<bool>.Failure(encoded.ErrorCode, encoded.ErrorMessage);
 
             var sender = snapshot.LocalParticipantId ?? default;
-            rig.DispatchPresentation(new BufferedTestPresentation(eventType.Id, bytes, audience), sender);
+            rig.DispatchPresentation(new BufferedTestPresentation(eventType.Id, bytes, target), sender);
             return OperationResult<bool>.Success(true);
         }
+
+        public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor)
+        {
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+            ThrowIfEnded();
+            if (!registeredContracts.Add(descriptor.Id))
+            {
+                return OperationResult<IDisposable>.Failure(
+                    ModErrorCode.Conflict,
+                    "Multiplayer contract '" + descriptor.Id + "' is already registered on this node.");
+            }
+
+            return OperationResult<IDisposable>.Success(new TestLease(() => registeredContracts.Remove(descriptor.Id)));
+        }
+
+        public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler)
+        {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            ThrowIfEnded();
+            tickHandlers.Add(handler);
+            return new TestLease(() => tickHandlers.Remove(handler));
+        }
+
+        public bool TryGetEntity(NetworkObjectId id, out IEntity? entity)
+        {
+            entity = null;
+            return false;
+        }
+
+        public bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar)
+        {
+            avatar = null;
+            return false;
+        }
+
+        public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose)
+        {
+            pose = default;
+            return false;
+        }
+
+        public IPlayerDirectory Players => players ??= new SnapshotPlayerDirectory(() => Snapshot);
 
         internal void SetParticipants(IReadOnlyList<MultiplayerParticipant> participants) =>
             ReplaceSnapshot(participants: participants);
 
-        internal void SetTick(NetworkTick tick) => ReplaceSnapshot(tick: tick);
+        internal void SetTick(NetworkTick tick)
+        {
+            ReplaceSnapshot(tick: tick);
+            if (ended || !snapshot.HasWorldAuthority || snapshot.State != MultiplayerSessionState.Ready) return;
+            var context = new MultiplayerTickContext(tick, 1.0 / MultiplayerTestRig.TicksPerSecond);
+            foreach (var handler in tickHandlers.ToArray()) handler(context);
+        }
 
         internal void DisconnectTransport(IReadOnlyList<MultiplayerParticipant> participants)
         {

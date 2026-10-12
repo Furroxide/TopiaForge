@@ -160,6 +160,33 @@ invariants that generated code normally supplies.
   the generated bounded codec, while only presentation-capable peers attach the local handler; and
 - `MultiplayerSessionSnapshot` exposes readiness, participants, tick, session seed, logical sides, and process kind.
 
+## Session contract for live play
+
+The contract also carries what live sessions need. It is additive, so existing mods compile and load unchanged.
+
+- `command.CreateRandom(salt)` returns a `DeterministicRandom` (xoshiro256** seeded through SplitMix64) built from
+  the session seed, the authenticated sender, and the sender-scoped `command.Sequence`. A predicted handler and the
+  server's canonical run draw identical values; never seed from `Tick` or wall-clock time. The sequence of values is
+  frozen for protocol major version 1.
+- `PresentationTarget` adds `Only(participant)` and `AllExcept(participant)` to the `Everyone`, `Sender`, and
+  `Others` audiences, both for events emitted from a command and for direct `PublishPresentation` calls.
+- `SubscribeTick` delivers canonical fixed steps on the main thread, only where this process holds world authority:
+  the host, or single-player play.
+- `IReplicatedObject.Apply` changes an object's state transactionally from server code outside an input handler,
+  such as a tick subscription.
+- `[ReplicatedState]` and `[ReplicatedObject]` accept `Delivery` (`Coalesced` by default, or `Immediate`) and
+  `MaximumUpdatesPerSecond` (zero uses the provider's snapshot rate).
+- `session.Players` is an `IPlayerDirectory` of `IPlayer` handles. Each handle carries identity, host status, and the
+  player's key, which is stable on one host and unlinkable across hosts. Each handle also reads replicated position,
+  aim, and health, and routes `Damage`, `Heal`, `Teleport`, per-player `Input`, and per-player `Ui` to the process
+  that owns the player. Single-player play has exactly one player, so player-aware code needs no separate path.
+- Participants report `IsHost`, a bucketed `Quality`, `PingMilliseconds` rounded to 10 ms, and `PlayerKey`.
+  Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
+
+Until the live session engine replaces them, the loopback provider and the test rig implement parts of this surface:
+the rig delivers ticks, sequences, seeds, and targeted events, while player actions, replicated presence, and
+`Apply` report `Unavailable` rather than pretending to succeed.
+
 ## Test before transport
 
 `MultiplayerTestRig` in `TopiaForge.Mods.Testing` supplies standalone, remote-client, listen-server, and headless
