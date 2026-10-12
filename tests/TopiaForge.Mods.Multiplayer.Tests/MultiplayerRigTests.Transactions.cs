@@ -94,6 +94,44 @@ internal static partial class MultiplayerRigTests
         Assert(!rejected.Succeeded && serverObject.State.Value == 8 && serverObject.Version == 3, "a failed apply changes nothing");
     }
 
+    internal static void ReconnectSnapshotsResetStatesTheHostDropped()
+    {
+        using var rig = MultiplayerTestRig.CreateDedicatedServer();
+        var serverTemporary = RegisterState(rig.Server.Session, "temporary", 0);
+        var client = rig.AddRemoteClient("returning");
+        var clientTemporary = RegisterState(client.Session, "temporary", 0);
+        rig.Flush();
+        Require(serverTemporary.Update(_ => OperationResult<CounterValue>.Success(new CounterValue(5))), "host update");
+        rig.Flush();
+        Assert(clientTemporary.Value.Value == 5, "the client follows the host while connected");
+        rig.Disconnect(client);
+        serverTemporary.Dispose();
+        rig.Reconnect(client);
+        rig.Flush();
+        Assert(client.IsReady && clientTemporary.Value.Value == 0 && clientTemporary.Version == 0,
+            "an exact snapshot returns a state the host no longer has to its declared default");
+    }
+
+    internal static void RetiredTokenCallbacksSeeTheReplacementSession()
+    {
+        using var rig = MultiplayerTestRig.CreateStandalone();
+        var facade = rig.Server.Session;
+        var state = RegisterState(facade, "token-state", 4);
+        Require(state.Update(_ => OperationResult<CounterValue>.Success(new CounterValue(9))), "advance before replacement");
+        string? seenId = null;
+        var seenValue = -1;
+        var replacementTokenLive = false;
+        using var registration = facade.CurrentSessionToken.Register(() =>
+        {
+            seenId = facade.Snapshot.Id.Value;
+            seenValue = state.Value.Value;
+            replacementTokenLive = !facade.CurrentSessionToken.IsCancellationRequested;
+        });
+        rig.StartNewSession("topiaforge-token-session-two");
+        Assert(seenId == "topiaforge-token-session-two" && seenValue == 4 && replacementTokenLive,
+            "a retired token's callbacks run once the replacement is complete, never against a half-replaced session");
+    }
+
     internal static void HandlersCannotRegisterOrNestSubmissions()
     {
         using var rig = MultiplayerTestRig.CreateStandalone();

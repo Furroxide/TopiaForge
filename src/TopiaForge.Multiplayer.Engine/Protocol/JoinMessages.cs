@@ -90,7 +90,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal static JoinRequestMessage ReadJoinRequest(ProtocolReader reader)
         {
             var protocolVersion = reader.ReadString(32);
-            var displayName = reader.ReadString(ProtocolLimits.IdentityCharacters);
+            var displayName = reader.ReadIdentity();
             var count = (int)reader.ReadVarUInt(ProtocolLimits.MaximumContracts);
             var contracts = new List<ContractEntry>(count);
             for (var index = 0; index < count; index++)

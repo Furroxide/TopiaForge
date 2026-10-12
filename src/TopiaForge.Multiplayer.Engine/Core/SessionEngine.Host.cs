@@ -63,7 +63,7 @@ namespace TopiaForge.Multiplayer.Engine
             seed = newSeed;
             epoch++;
             // Tokens already handed out stay readable, so the retired source is cancelled but never disposed.
-            previous.Cancel();
+            RetireSessionToken(previous);
             foreach (var record in stateList)
             {
                 record.ResetTo(record.InitialBytes, 0);
@@ -390,7 +390,13 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var record = connection.Participant!;
             WireOutcome outcome;
-            if (message.Epoch != epoch)
+            if (connection.Phase != HostConnectionPhase.Ready)
+            {
+                outcome = WireOutcome.Failure(
+                    ModErrorCode.InvalidState,
+                    "Submissions wait until the connection acknowledges the session snapshot.");
+            }
+            else if (message.Epoch != epoch)
             {
                 outcome = WireOutcome.Failure(ModErrorCode.Conflict, "The submission belongs to an earlier session.");
             }

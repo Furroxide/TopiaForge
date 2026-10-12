@@ -338,6 +338,14 @@ namespace TopiaForge.Multiplayer.Engine
                 if (!incoming.Contains(key)) unboundStates.Remove(key);
             }
 
+            // The snapshot is an exact replacement: a state the host no longer has returns to its declared default.
+            foreach (var record in stateList)
+            {
+                if (!record.IsActive || incoming.Contains(record.Key)) continue;
+                record.ConfirmedBytes = record.InitialBytes;
+                record.ConfirmedVersion = 0;
+            }
+
             var objectIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in staging.Objects) objectIds.Add(item.ObjectId);
             foreach (var record in objectList.ToArray())
@@ -425,11 +433,14 @@ namespace TopiaForge.Multiplayer.Engine
             tombstones.Add(message.ObjectId);
             unboundObjects.Remove(message.ObjectId);
             if (!objects.TryGetValue(message.ObjectId, out var record)) return;
-            if (record.Type.CanDecodeState(message.Bytes))
+            if (!record.Type.CanDecodeState(message.Bytes))
             {
-                record.ConfirmedBytes = message.Bytes;
-                record.ConfirmedVersion = message.Version;
+                FailContract("replicated object '" + message.ObjectId + "'");
+                return;
             }
+
+            record.ConfirmedBytes = message.Bytes;
+            record.ConfirmedVersion = message.Version;
 
             record.RevertToConfirmed();
             record.Life = ObjectLife.Despawned;
@@ -519,7 +530,7 @@ namespace TopiaForge.Multiplayer.Engine
             seed = newSeed;
             epoch = newEpoch;
             // Tokens already handed out stay readable, so the retired source is cancelled but never disposed.
-            previous.Cancel();
+            RetireSessionToken(previous);
             CancelAllPending(message);
             foreach (var record in stateList)
             {

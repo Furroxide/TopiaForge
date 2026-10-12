@@ -436,9 +436,25 @@ namespace TopiaForge.Multiplayer.Engine
             ended = true;
             state = MultiplayerSessionState.Ended;
             endReason = reason;
-            sessionCancellation.Cancel();
+            RetireSessionToken(sessionCancellation);
             MarkSessionChanged();
         }
+
+        /// <summary>
+        /// Cancels a retired session token first thing at the next settle point. By then the replacement or end is
+        /// complete, so cancellation callbacks observe a coherent session, and they run under the callback policy.
+        /// </summary>
+        private void RetireSessionToken(CancellationTokenSource retired) => inbox.Enqueue(() =>
+        {
+            try
+            {
+                retired.Cancel();
+            }
+            catch (AggregateException exception) when (options.CallbackFailures == EngineCallbackFailureMode.Report)
+            {
+                Report(new EngineDiagnostic(EngineDiagnosticKind.CallbackFailed, "A session-token callback threw.", null, exception));
+            }
+        });
 
         private readonly struct PresentationDelivery
         {
