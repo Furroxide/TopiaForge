@@ -119,61 +119,74 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(migrateNoOp.stdout, contains('valid schema V6; no files changed'));
   });
 
-  test('mod remove multiplayer leaves V6 without a multiplayer block', () async {
-    final created = await currentHarness().runCli([
-      'new',
-      'mod',
-      't.remove-multiplayer',
-      '--dir',
-      currentHarness().temp.path,
-    ]);
-    expect(created.exitCode, 0, reason: '${created.stdout}\n${created.stderr}');
-    final projectDir = p.join(
-      currentHarness().temp.path,
-      't.remove-multiplayer',
-    );
-    final added = await currentHarness().runCli([
-      'mod',
-      'add',
-      'multiplayer',
-      '--project',
-      projectDir,
-    ]);
-    expect(added.exitCode, 0, reason: '${added.stdout}\n${added.stderr}');
+  test(
+    'mod remove multiplayer leaves V6 without a multiplayer block',
+    () async {
+      final created = await currentHarness().runCli([
+        'new',
+        'mod',
+        't.remove-multiplayer',
+        '--dir',
+        currentHarness().temp.path,
+      ]);
+      expect(
+        created.exitCode,
+        0,
+        reason: '${created.stdout}\n${created.stderr}',
+      );
+      final projectDir = p.join(
+        currentHarness().temp.path,
+        't.remove-multiplayer',
+      );
+      final added = await currentHarness().runCli([
+        'mod',
+        'add',
+        'multiplayer',
+        '--project',
+        projectDir,
+      ]);
+      expect(added.exitCode, 0, reason: '${added.stdout}\n${added.stderr}');
 
-    final removed = await currentHarness().runCli([
-      'mod',
-      'remove',
-      'multiplayer',
-      '--project',
-      projectDir,
-    ]);
-    expect(removed.exitCode, 0, reason: '${removed.stdout}\n${removed.stderr}');
+      final removed = await currentHarness().runCli([
+        'mod',
+        'remove',
+        'multiplayer',
+        '--project',
+        projectDir,
+      ]);
+      expect(
+        removed.exitCode,
+        0,
+        reason: '${removed.stdout}\n${removed.stderr}',
+      );
 
-    final manifest =
-        jsonDecode(
-              File(
-                p.join(projectDir, 'topiaforge.mod.json'),
-              ).readAsStringSync(),
-            )
-            as Map<String, Object?>;
-    expect(manifest['schemaVersion'], 6);
-    expect(manifest, isNot(contains('multiplayer')));
-    expect(
-      (manifest['dependencies'] as Map? ?? const {}).keys,
-      isNot(contains('io.github.furroxide.topiaforge.multiplayer')),
-    );
-    expect(
-      File(p.join(projectDir, 'topiaforge.multiplayer.lock.json')).existsSync(),
-      isFalse,
-    );
-    final project = Directory(projectDir)
-        .listSync()
-        .whereType<File>()
-        .singleWhere((file) => p.extension(file.path) == '.csproj');
-    expect(
-      project.readAsStringSync(),
-      isNot(contains('TopiaForge.Mods.Multiplayer')),
-    );
-  });
+      final manifest =
+          jsonDecode(
+                File(
+                  p.join(projectDir, 'topiaforge.mod.json'),
+                ).readAsStringSync(),
+              )
+              as Map<String, Object?>;
+      expect(manifest['schemaVersion'], 6);
+      expect(manifest, isNot(contains('multiplayer')));
+      expect(
+        (manifest['dependencies'] as Map? ?? const {}).keys,
+        isNot(contains('io.github.furroxide.topiaforge.multiplayer')),
+      );
+      expect(
+        File(
+          p.join(projectDir, 'topiaforge.multiplayer.lock.json'),
+        ).existsSync(),
+        isFalse,
+      );
+      final project = Directory(projectDir)
+          .listSync()
+          .whereType<File>()
+          .singleWhere((file) => p.extension(file.path) == '.csproj');
+      expect(
+        project.readAsStringSync(),
+        isNot(contains('TopiaForge.Mods.Multiplayer')),
+      );
+    },
+  );
 }
