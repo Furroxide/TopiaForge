@@ -34,6 +34,7 @@ part 'topiaforge_check_commands.dart';
 part 'topiaforge_compat_commands.dart';
 part 'topiaforge_acceptance_commands.dart';
 part 'topiaforge_dev_commands.dart';
+part 'topiaforge_dev_stages.dart';
 part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_launcher_commands.dart';
