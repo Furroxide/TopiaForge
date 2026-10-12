@@ -102,6 +102,16 @@ internal static class Program
             SoloProviderTests.OwnerFacadesIsolateConsumersAndCloseWithThem();
             SoloProviderTests.MutableValuesNeverEscapeCanonicalStorage();
             SoloProviderTests.SoloPumpAllocatesNothing();
+            TransportCryptoVectorTests.X25519MatchesRfc7748();
+            TransportCryptoVectorTests.Ed25519MatchesRfc8032();
+            TransportCryptoVectorTests.ChaCha20Poly1305MatchesRfc8439();
+            TransportCryptoVectorTests.HkdfMatchesRfc5869();
+            NoiseHandshakeTests.NoiseXXMatchesAnIndependentTranscript();
+            NoiseHandshakeTests.NoiseXXMatchesTheCacophonyVectors();
+            NoiseHandshakeTests.NoiseXXRejectsTamperingAndMismatches();
+            NoiseHandshakeTests.CipherStateFollowsTheNoiseRules();
+            NoiseHandshakeTests.ReplayWindowAcceptsEachCounterOnce();
+            NoiseHandshakeTests.KeysAreWipedWhenTheirOwnerIsDone();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

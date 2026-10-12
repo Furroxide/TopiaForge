@@ -95,7 +95,25 @@ Map<String, Object?> buildReleaseSpdxSbom({
   final ownedCopyright = policy.hasApprovedLicense
       ? _ownedCopyrightText
       : 'NOASSERTION';
+  // A mod that compiles vendored third-party source declares both licences,
+  // and the project concludes nothing about such a package as a whole.
+  final mixedModArtifacts = {
+    for (final entry in release.mods.entries)
+      if (modsWithVendoredSource.containsKey(entry.key))
+        '${entry.key}-${entry.value}$_ownedArtifactExtension',
+  };
   Map<String, Object?> packageFor(MapEntry<String, String> entry) {
+    final embedded = modsWithVendoredSource[entry.key];
+    if (embedded != null) {
+      return _spdxPackage(
+        name: entry.key,
+        version: entry.value,
+        spdxId: _spdxId('Package', entry.key),
+        license: policy.hasApprovedLicense
+            ? '${policy.licenseExpression} AND $embedded'
+            : 'NOASSERTION',
+      );
+    }
     final vendored = _vendoredComponentLicenses[entry.key];
     return _spdxPackage(
       name: entry.key,
@@ -107,12 +125,15 @@ Map<String, Object?> buildReleaseSpdxSbom({
     );
   }
 
-  // Mod packages are first-party throughout. Platform archives bundle the
-  // vendored loader payload and third-party fonts alongside owned code, so the
-  // project concludes nothing about such an archive as a whole.
+  // Mod packages are first-party unless the mod compiles vendored source.
+  // Platform archives bundle the vendored loader payload and third-party fonts
+  // alongside owned code, so the project concludes nothing about such an
+  // archive as a whole.
   Map<String, Object?> fileFor(Map<String, Object?> artifact) {
     final name = artifact['name'].toString();
-    final owned = name.endsWith(_ownedArtifactExtension);
+    final owned =
+        name.endsWith(_ownedArtifactExtension) &&
+        !mixedModArtifacts.contains(name);
     return {
       'fileName': './$name',
       'SPDXID': _spdxId('File', name),
@@ -211,6 +232,13 @@ const _ownedCopyrightText = 'Copyright (C) 2026 furroxide';
 /// mapped to the terms their own authors declare. Keys must match
 /// `release/catalog.json` exactly; anything absent here is treated as owned.
 const _vendoredComponentLicenses = <String, String>{'bepInEx': 'MIT'};
+
+/// First-party mods whose package compiles vendored third-party source, mapped
+/// to the terms that source's authors declare. Each carries the matching
+/// `THIRD_PARTY_NOTICES.md`; a test keeps this map and those files in step.
+const modsWithVendoredSource = <String, String>{
+  'io.github.furroxide.topiaforge.multiplayer': 'MIT',
+};
 
 /// Release artifacts built solely from first-party sources. Everything else is
 /// a platform archive that also redistributes third-party payload.

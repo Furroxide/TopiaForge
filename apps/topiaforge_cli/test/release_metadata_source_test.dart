@@ -251,6 +251,7 @@ final class _SourceFixture {
       'packages/launcher_ui/fonts/Audiowide-OFL.txt',
       'packages/launcher_ui/fonts/Quicksand-OFL.txt',
       'tools/unity-ui-bundle/Assets/TextMesh Pro/Fonts/LiberationSans - OFL.txt',
+      'mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md',
       'templates/TopiaForge.UnityWorldTemplate/Packages/'
           'io.github.furroxide.topiaforge.vpm-resolver/LICENSE.md',
       'templates/TopiaForge.UnityWorldTemplate/Packages/'
