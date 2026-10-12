@@ -39,6 +39,8 @@ namespace TopiaForge.Multiplayer.Transport
             }
 
             IsStalled = now - lastReceivedAt >= options.StallMicros;
+            shaper.ApplyShedding(endpoint.Uplink.SheddingLevel, now);
+            PollPaths();
             if (loss.OnTimer(now, rtt, options.MaximumAckDelayMicros, onLost)) probesPending = ProbesPerTimeout;
             PollCompletion();
             if (now - lastSentAt >= options.KeepaliveMicros) pingPending = true;
@@ -58,13 +60,22 @@ namespace TopiaForge.Multiplayer.Transport
                     return long.MaxValue;
             }
 
-            if (pendingClose.HasValue || probesPending > 0 || IsReadyToClose) return now;
+            if (pendingClose.HasValue || probesPending > 0 || IsReadyToClose || pathResponses.Count > 0) return now;
             var deadline = Math.Min(lastReceivedAt + options.IdleTimeoutMicros, lastSentAt + options.KeepaliveMicros);
             if (!IsStalled) deadline = Math.Min(deadline, lastReceivedAt + options.StallMicros);
             deadline = Math.Min(deadline, acks.AckDeadline(options.MaximumAckDelayMicros));
             deadline = Math.Min(deadline, loss.TimerDeadline(rtt, options.MaximumAckDelayMicros));
+            deadline = Math.Min(deadline, validator.NextTimeout());
             if (IsInitiator && !peerConfirmed && completionDatagram != null) deadline = Math.Min(deadline, completionResendAt);
-            if (HasElicitingWork) deadline = Math.Min(deadline, pacer.NextAvailable(TransportOptions.MaximumDatagramBytes, now));
+
+            // Work goes out when both the connection's pacer and the shared uplink allow it, and a datagram also
+            // waits for its class's share.
+            var sendable = Math.Max(
+                pacer.NextAvailable(TransportOptions.MaximumDatagramBytes, now),
+                endpoint.Uplink.NextAvailable(TransportOptions.MaximumDatagramBytes, now));
+            if (HasElicitingWork) deadline = Math.Min(deadline, sendable);
+            deadline = Math.Min(deadline, Math.Max(sendable, DatagramReadyAt(realtime)));
+            deadline = Math.Min(deadline, Math.Max(sendable, DatagramReadyAt(voice)));
             return deadline;
         }
     }

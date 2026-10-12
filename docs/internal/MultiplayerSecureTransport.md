@@ -1,18 +1,18 @@
 # Multiplayer secure transport — design record
 
-Status: Implementing (WS2e of the live-multiplayer plan) · Date: 2026-10-12 · Owner: multiplayer
+Status: Implementing (WS2e of the live-multiplayer plan) · Date: 2026-10-13 · Owner: multiplayer
 
 This records the datagram transport that carries a session between two peers. It is sans-I/O: it owns no sockets,
 threads or clocks. The I/O layer (WS2f) hands it datagrams, the current time and paths, and sends what it produces.
 The code lives in `mods/TopiaForge.Multiplayer/Transport/`, inside the provider only, and every type is internal.
 The cryptography it uses is recorded in `MultiplayerTransportCrypto.md`.
 
-WS2e lands in two pull requests:
+WS2e landed in two pull requests:
 
-1. **Core** (this record's sections 1 to 9): packets, the handshake over datagrams, protected packets, recovery,
-   the session stream, datagram channels, timers and the outbound budget.
-2. **Paths and shaping**: path validation for migration and relay-to-direct upgrade, the per-class shaper with
-   shedding, and the unauthenticated info query.
+1. **Core** (sections 1 to 9): packets, the handshake over datagrams, protected packets, recovery, the session
+   stream, datagram channels, timers and the outbound budget.
+2. **Paths and shaping** (sections 10 to 12): path validation for migration and relay-to-direct upgrade, the traffic
+   classes with the shared uplink and its shedding, and the unauthenticated info query.
 
 ## 1. The I/O boundary
 
@@ -23,9 +23,10 @@ WS2e lands in two pull requests:
   - `Poll(now)` runs timers and the pacer;
   - `TryDequeueDatagram` yields outbound datagrams from a buffer pool, which the caller returns once sent;
   - `NextTimeoutMicros` says when `Poll` must run again;
-  - `Connect` starts an outbound connection, and `TryAccept` yields inbound ones once their handshake completes.
-- Randomness (connection ids, ephemeral keys, cookie secrets) comes from an injected source, so a test with a seeded
-  source reproduces every byte.
+  - `Connect` starts an outbound connection, and `TryAccept` yields inbound ones once their handshake completes;
+  - `SetInfo`, `QueryInfo` and `TryReceiveInfo` run the info query (section 12).
+- Randomness (connection ids, ephemeral keys, cookie secrets, path challenges, query ids) comes from an injected
+  source, so a test with a seeded source reproduces every byte.
 - Time is engine microseconds from a monotonic clock, as everywhere in the session engine.
 
 ## 2. Datagrams
@@ -43,10 +44,10 @@ The first byte classifies a datagram, compatible with RFC 7983 so STUN and TURN 
 | `0xE1` | Retry | Stateless cookie challenge |
 | `0xE2` | Response | Handshake message 2 |
 | `0xE3` | Completion | Handshake message 3 |
+| `0xE4` | InfoQuery | A browser's question, padded to exactly 1,200 bytes |
+| `0xE5` | InfoReply | The host's answer |
 | `0xE8` | Protected | Authenticated, encrypted frames |
 | Anything else | — | Dropped |
-
-`0xE4` and `0xE5` are reserved for the info query and its reply (second pull request).
 
 ## 3. Handshake
 
@@ -61,8 +62,8 @@ initiator's connection id, so the transcript authenticates the id the initiator 
 | Completion | `E3`, responder connection id (8), Noise message 3. Its encrypted payload carries the initiator's initial stream window. |
 
 - **Connection ids** are 8 random bytes, one chosen by each side, QUIC-style. A packet names the receiver's id, so a
-  relayed peer and a direct peer can never collapse into one, and a connection can survive a change of path once
-  path validation lands. The responder's id travels encrypted and authenticated.
+  relayed peer and a direct peer can never collapse into one, and a connection survives a change of path
+  (section 10). The responder's id travels encrypted and authenticated.
 - **Retransmission.** The initiator retransmits the Initiation with exponential backoff from 250 ms, capped at 2 s.
   The responder answers a duplicate Initiation (same initiator id and ephemeral key) with the Response it cached, and
   never retransmits on its own.
@@ -77,7 +78,7 @@ initiator's connection id, so the transcript authenticates the id the initiator 
   rather than the 250 ms default.
 - **Pinning.** `Connect` may name the responder's expected static key; a different key ends the attempt.
 - **Timeout.** A handshake that has not completed after 5 s is abandoned on either side.
-- **Version.** An unknown version is dropped. The info query (second pull request) reports the version before a join.
+- **Version.** An unknown version is dropped. The info query (section 12) reports the version before a join.
 
 ### Abuse controls
 
@@ -97,8 +98,8 @@ initiator's connection id, so the transcript authenticates the id the initiator 
   default. Half-open handshakes do not count against the connection limit, so when several complete at once, the
   endpoint turns away each one past the limit with CLOSE (`Overloaded`). The engine's admission decides who may join a
   session; this cap only bounds transport state.
-- **Paths.** Until path validation lands in the second pull request, a connection stays on the path its handshake
-  used. Handshake messages and protected packets from any other path are dropped, even genuine ones.
+- **Paths.** Handshake messages must come from the path the handshake started on, even genuine ones. Protected packets
+  may arrive on any path the endpoint allows (section 10).
 - **Reporting.** A responder's half-open handshake is unauthenticated traffic, so its failures are counted in the
   endpoint's statistics rather than reported one by one. An initiator's failure is always reported.
 
@@ -115,19 +116,23 @@ explicit nonce of the direction's `CipherState`.
 
 ## 5. Frames
 
-Frames are a type byte and varint fields. Every frame except ACK and CLOSE asks for an acknowledgement.
+Frames are a type byte and varint fields. Every frame except ACK, CLOSE, PADDING and the two path frames asks for an
+acknowledgement. PADDING and the path frames only probe: a packet of nothing else never moves a connection.
 
 | Type | Frame | Fields |
 | --- | --- | --- |
+| `0x00` | PADDING | — |
 | `0x01` | PING | — |
 | `0x02` | ACK | largest acknowledged, ack delay (µs), range count, first range, then gap and length per range (QUIC encoding, at most 32 ranges) |
 | `0x03` | CLOSE | reason code |
 | `0x10` | STREAM | offset, length, bytes of the session stream |
 | `0x11` | WINDOW | the highest stream offset the receiver accepts |
 | `0x20` | DATAGRAM | channel, sequence, length, bytes |
+| `0x30` | PATH_CHALLENGE | 8 random bytes |
+| `0x31` | PATH_RESPONSE | the 8 bytes of the challenge it answers |
 
-`0x30` and `0x31`, PATH_CHALLENGE and PATH_RESPONSE, are reserved for the second pull request. An unknown frame type,
-a truncated frame or a field out of bounds is a protocol error: the receiver sends CLOSE and the connection ends.
+An unknown frame type, a truncated frame or a field out of bounds is a protocol error: the receiver sends CLOSE and
+the connection ends.
 
 ## 6. Recovery
 
@@ -145,7 +150,7 @@ Recovery follows RFC 9002.
   two probes.
 - **Retransmission.** Lost STREAM ranges go back in the queue and travel in new packets. A lost WINDOW resends the
   current value. DATAGRAM frames are never retransmitted.
-- There is no congestion window yet. The outbound budget (section 8) limits the rate.
+- There is no congestion window yet. The outbound budget (sections 8 and 11) limits the rate.
 
 ## 7. Channels
 
@@ -172,8 +177,8 @@ The engine's three channels map onto two mechanisms.
 - **Realtime and Voice (unreliable, sequenced).** Each frame is one DATAGRAM frame with a per-channel sequence. The
   receiver delivers only frames newer than the last one it delivered on that channel. A frame must fit one packet
   (1,153 bytes of payload); a larger one is refused when sent, as is any datagram before the handshake completes.
-  Up to 64 frames per channel wait for the pacer and up to 128 received datagrams wait for the reader; past either
-  limit the oldest is dropped.
+  Up to 64 frames per channel wait for their class's share and the pacer, and up to 128 received datagrams wait for
+  the reader; past either limit the oldest is dropped.
 
 ## 8. Timers and the outbound budget
 
@@ -183,13 +188,14 @@ The engine's three channels map onto two mechanisms.
 | Stall | 3 s without an authenticated packet: the link reports `Stalled` |
 | Idle timeout | 10 s without an authenticated packet: the connection closes |
 | Handshake timeout | 5 s |
+| Path validation | Up to 3 challenges, a probe timeout apart and at least 250 ms |
 | Close drain | 3 probe timeouts after sending CLOSE |
 
 - **Budget.** Each connection paces its outbound traffic with a token bucket: 256 kbit/s sustained (32 KiB/s),
-  bursting to 512 kbit/s for up to 2 s. ACK and CLOSE packets are exempt. Probes skip the gate, so an exhausted
+  bursting to 512 kbit/s for up to 2 s. ACK, CLOSE and path packets are exempt. Probes skip the gate, so an exhausted
   budget never delays loss recovery, but they are charged, so they cannot raise the rate. This is the provider-side
-  downstream ceiling `MultiplayerTransportOptions.md` requires. The second pull request splits it into the per-class
-  shares (Session, Voice, Realtime) and the host-wide uplink with shedding.
+  downstream ceiling `MultiplayerTransportOptions.md` requires; section 11 divides it between the traffic classes and
+  adds the host-wide uplink.
 - **Output.** The endpoint queues at most 1,024 datagrams for the I/O layer. Past that it drops new ones, as a
   congested link would, and recovery resends what mattered.
 - **Graceful close.** `Close` stops new sends. The connection keeps retransmitting until the session stream is fully
@@ -200,6 +206,10 @@ The engine's three channels map onto two mechanisms.
 
 - Paths are opaque keys. The engine sees a peer identity, the lowercase hex of the peer's static key, and never an
   address.
+- **Relay-only.** With `RelayOnly` set, the player's "hide my IP" choice, the endpoint uses only relayed and LAN paths.
+  It never connects, probes or queries over a direct Internet path, and drops every transport datagram that arrives
+  from one, so nothing it sends ever goes there. STUN and TURN still reach the NAT layer, which needs them to reach
+  the relay.
 - Diagnostics name connections by a counter, never by path or address.
 - No frame carries a free-text message, so nothing a mod or a player typed can travel outside the session stream.
 - Keys follow the hygiene rules of `MultiplayerTransportCrypto.md`. A connection zeroes both directions' keys when it
@@ -207,12 +217,78 @@ The engine's three channels map onto two mechanisms.
   every connection and zeroes the static key and both cookie secrets. A rotating cookie secret is zeroed as it is
   discarded.
 
-## 10. Tests
+## 10. Paths
+
+A connection sends on one validated path. Authenticated packets count from any path the endpoint allows, but the
+connection moves only after validating the new path, as QUIC does. A PATH_CHALLENGE with eight random bytes goes out
+there, padded to a full datagram, which also shows the path carries 1,200 bytes. A PATH_RESPONSE echoing those bytes,
+arriving on any path, proves the peer receives there.
+
+- **The peer moves.** When the peer's newest packet with more than probing frames arrives from another path, as when
+  its NAT rebinds, the connection validates that path and moves once it is answered. A newer packet from the current
+  path cancels the check.
+- **Upgrades.** `ProbePath` tries a path this side found, as when a relayed connection finds a direct one (WS7). The
+  connection moves when the peer answers; the peer then sees this side's traffic arrive on the new path and follows
+  the same way.
+- **Answers.** A PATH_RESPONSE goes back on the path its challenge arrived on, never larger than the datagram that
+  carried the challenge. A datagram earns one answer however many challenges it packs, so the answers never outweigh
+  it; a correct peer sends one challenge per packet.
+- **Limits.** At most two paths are tried at once, each with up to three challenges, after which it is abandoned and
+  the connection stays where it was. A stray copy of a genuine packet can therefore draw at most three challenges
+  toward its source.
+- **After a move** the RTT estimate starts again from the validation's own round trip, and diagnostics report
+  `PathChanged` by connection number.
+- Connection ids do not change on a move. An observer on both paths could link them; the threat the design answers is
+  the session's peers and mods, which never see a path at all.
+
+## 11. Traffic classes and the uplink
+
+Each connection's 256 kbit/s budget (section 8) is shared by three classes:
+
+| Class | Share |
+| --- | --- |
+| Voice | Capped at 96 kbit/s, the host's downstream rate. A client's endpoint sets 32 kbit/s upstream. |
+| Realtime | Capped at 64 kbit/s |
+| Session | No cap of its own: whatever the others leave, and at least 96 kbit/s |
+
+- **Classes.** Voice and Realtime have token buckets two datagrams deep. A datagram waits in its channel's queue
+  until its class may send it. Session takes the rest of the pacer's budget, so it uses the whole connection while the
+  datagram classes are idle. Packet overhead comes out of every class, so under full datagram load Session's payload
+  runs a little under its share.
+- **Uplink.** All connections share a host-wide budget, 4,000 kbit/s by default, with a tenth of a second of burst.
+  The connection's own pacer gates first, then the uplink. The poll order rotates, so no connection always meets a
+  spent uplink last.
+- **Shedding.** While connections keep finding the uplink spent, the shedding level rises one step a second: level 1
+  halves voice, level 2 stops it, and level 3 also asks the engine to lower its delta rate (WS3 connects
+  `SheddingLevel` to the engine). Three quiet seconds lower it a step. A class at a rate of zero sends nothing at all,
+  whatever its bucket still holds.
+
+## 12. Info query
+
+Before joining, a browser asks a host about its session without a handshake.
+
+| Datagram | Layout |
+| --- | --- |
+| InfoQuery | `E4`, version, query id (8, random), zero padding to 1,200 bytes |
+| InfoReply | `E5`, the responder's version, query id (8), info length (2, little-endian), info (at most 1,188 bytes) |
+
+- A host answers only while `SetInfo` has given it info. The info is public and travels unauthenticated, so it must
+  never name an address; WS2f decides its content.
+- A reply to a query of another version carries the responder's version and no info, so the browser can say why it
+  cannot join.
+- Queries share the handshake's budgets: 10 a second per source and 200 per endpoint.
+- The browser keeps at most 64 queries outstanding, for 5 s each, and accepts a reply only from the path the query
+  went to and with its id. Replies queue for `TryReceiveInfo` with the measured round trip.
+- A query's expiry is one of the endpoint's timers, so a browser with no connections still wakes to forget it, and a
+  reply is checked against the lifetime when it arrives, however rarely the endpoint is polled.
+
+## 13. Tests
 
 - **Same bytes.** `VirtualDatagramNetwork`, in the test project, carries the endpoints' own datagrams
-  deterministically. It models latency, jitter, loss, duplication, partitions and the 1,200-byte limit, and polls
-  each endpoint exactly when its next timer falls due. With seeded random sources, two runs exchange identical
-  datagrams at identical times, and the network counts any poll that found nothing to do, so busy loops fail tests.
+  deterministically. Each node is reachable directly, through a relay and on the LAN, and its direct address can be
+  rebound as a NAT does. The network models latency, jitter, loss, duplication, partitions, unreachable paths and the
+  1,200-byte limit, and polls each endpoint exactly when its next timer falls due. With seeded random sources, two
+  runs exchange identical datagrams at identical times, and a poll that finds nothing to do fails the test.
 - **Codecs and parts.** `TransportCodecTests` covers the datagram layouts, the handshake payloads and every frame,
   including malformed input. `TransportComponentTests` checks `AckTracker`, `RttEstimator` and `LossDetector` against
   the RFC 9002 arithmetic, plus the streams, the pacer, the datagram channels, `CookieGuard` and `HandshakeLimiter`.
@@ -221,11 +297,19 @@ The engine's three channels map onto two mechanisms.
   messages from another path, undersized windows, and replies that never outweigh what provoked them.
 - **Delivery and lifecycle.** `TransportDeliveryTests` and `TransportLifecycleTests` cover delivery under loss,
   duplication and reordering, of frames up to the engine's 1,122,304-byte maximum, within the outbound budget. They
-  also cover flow control under loss, the process cap, sequenced channels, probes for tail loss and the backlog cap.
-  Then keepalive, stall and idle timeout, graceful close, each protocol violation, and replayed, forged, stray and
-  misaddressed packets. `RawTransportPeer` speaks the protocol by hand to send what a correct peer never would.
+  also cover flow control under loss, the process cap and its fair shares, sequenced channels, probes for tail loss
+  and the backlog cap. Then keepalive, stall and idle timeout, graceful close, each protocol violation, and replayed,
+  forged and misaddressed packets. `RawTransportPeer` speaks the protocol by hand to send what a correct peer never
+  would.
+- **Paths, classes and info.** `TransportPathTests` covers NAT rebinding, relay-to-direct upgrade, unanswered probes,
+  relay-only privacy, stray copies, echoed challenges, response sizes, and a datagram packing four challenges.
+  `TransportShapingTests` measures the class caps, Session's share under datagram load and alone, a rate of zero, and
+  three connections sharing a small uplink fairly while it climbs every shedding level, voice first.
+  `TransportInfoTests` covers the query round trip, sizes, matching, a version mismatch, the rate limits, and expiry
+  without a poll.
 - **End to end.** `TransportEngineTests` runs the provider's own session engine, host and client, over the transport
   on a lossy network: the client joins, a command round-trips, and leaving closes both connections normally.
-- **Fuzzing.** `TransportFuzzTests` sends 4,000 seeded hostile datagrams against a live session: random bytes, typed
-  random bytes, and captured datagrams flipped, cut, extended or replayed from other paths, plus oversized ones. The
-  session must stand and still deliver. A seeded run must also repeat every byte.
+- **Fuzzing.** `TransportFuzzTests` sends 4,000 seeded hostile datagrams against a live session, over every kind of
+  path: random bytes, typed random bytes, forged info replies, and captured datagrams flipped, cut, extended or
+  replayed. Oversized ones are included. The session must stand, stay on its paths and still deliver. A seeded run
+  must also repeat every byte.
