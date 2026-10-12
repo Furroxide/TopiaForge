@@ -57,155 +57,102 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
     final gameDir = _option(args, '--game-dir');
 
     try {
-      final workspace = await _runDevStage(
-        const _DevStage(
-          code: 'TFDEV100',
-          label: 'restore',
-          action: 'Restore the exact SDK and dependency locks.',
-          remediation:
-              'Run `topiaforge restore --project <path>` and resolve every reported lock, feed, or SDK issue.',
-        ),
-        () async {
-          final restored = await developerRepository.resolveDeveloperProject(
-            requestedProject,
-            restore: true,
+      final workspace = await _runDevStage(_DevStage.restore, () async {
+        final restored = await developerRepository.resolveDeveloperProject(
+          requestedProject,
+          restore: true,
+        );
+        if (!restored.hasProject) {
+          throw StateError(
+            'No TopiaForge project was found from $requestedProject.',
           );
-          if (!restored.hasProject) {
-            throw StateError(
-              'No TopiaForge project was found from $requestedProject.',
-            );
-          }
-          if (restored.hasBlockingIssues) {
-            throw StateError(
-              restored.issues
-                  .where((issue) => issue.isBlocking)
-                  .map((issue) => issue.message)
-                  .join(' '),
-            );
-          }
-          return restored;
-        },
-      );
+        }
+        if (restored.hasBlockingIssues) {
+          throw StateError(
+            restored.issues
+                .where((issue) => issue.isBlocking)
+                .map((issue) => issue.message)
+                .join(' '),
+          );
+        }
+        return restored;
+      });
       final projectRoot = workspace.projectRoot;
       final dotnet = await _runDevStage(
-        const _DevStage(
-          code: 'TFDEV105',
-          label: 'toolchain',
-          action: 'Activate the project-pinned .NET SDK.',
-          remediation:
-              'Install the exact SDK pinned by global.json, then rerun `topiaforge restore`.',
-        ),
+        _DevStage.toolchain,
         () => resolveRepositoryDotnetSdk(Directory(projectRoot)),
       );
 
-      await _runDevStage(
-        const _DevStage(
-          code: 'TFDEV110',
-          label: 'build',
-          action: 'Build the mod against the locked SDK.',
-          remediation:
-              'Fix the compiler diagnostics, then run `dotnet build --no-restore` from the mod project.',
-        ),
-        () async {
-          final manifest = await developerRepository.readModManifest(
-            projectRoot,
+      await _runDevStage(_DevStage.build, () async {
+        final manifest = await developerRepository.readModManifest(projectRoot);
+        final entryProject = _findEntryProject(
+          Directory(projectRoot),
+          manifest,
+        );
+        await _runDevDotnet(dotnet.executable, [
+          'build',
+          entryProject.path,
+          '-c',
+          configuration,
+          '--no-restore',
+          '--nologo',
+        ], projectRoot);
+      });
+
+      await _runDevStage(_DevStage.test, () async {
+        final tests = _findDevTestProjects(projectRoot);
+        if (tests.isEmpty) {
+          stdout.writeln(
+            '  No *.Tests.csproj project found; test stage skipped.',
           );
-          final entryProject = _findEntryProject(
-            Directory(projectRoot),
-            manifest,
-          );
+          return;
+        }
+        for (final testProject in tests) {
           await _runDevDotnet(dotnet.executable, [
-            'build',
-            entryProject.path,
+            'test',
+            testProject.path,
             '-c',
             configuration,
             '--no-restore',
             '--nologo',
           ], projectRoot);
-        },
-      );
+        }
+      });
 
-      await _runDevStage(
-        const _DevStage(
-          code: 'TFDEV120',
-          label: 'test',
-          action: 'Run every generated or authored test project.',
-          remediation:
-              'Fix the failing test or test-host error, then run `dotnet test --no-restore`.',
-        ),
-        () async {
-          final tests = _findDevTestProjects(projectRoot);
-          if (tests.isEmpty) {
-            stdout.writeln(
-              '  No *.Tests.csproj project found; test stage skipped.',
-            );
-            return;
-          }
-          for (final testProject in tests) {
-            await _runDevDotnet(dotnet.executable, [
-              'test',
-              testProject.path,
-              '-c',
-              configuration,
-              '--no-restore',
-              '--nologo',
-            ], projectRoot);
-          }
-        },
-      );
+      final packagePath = await _runDevStage(_DevStage.pack, () {
+        final output = p.join(
+          projectRoot,
+          'bin',
+          'TopiaForgeDev',
+          configuration,
+        );
+        final hasProjectFile = File(
+          p.join(projectRoot, 'topiaforge.project.json'),
+        ).existsSync();
+        return hasProjectFile
+            ? developerRepository.packProject(
+                projectRoot,
+                outputDir: output,
+                configuration: configuration,
+              )
+            : developerRepository.packModDirectory(
+                projectRoot,
+                outputDir: output,
+                configuration: configuration,
+              );
+      });
 
-      final packagePath = await _runDevStage(
-        const _DevStage(
-          code: 'TFDEV130',
-          label: 'pack',
-          action: 'Create the installable .topiaforgemod archive.',
-          remediation:
-              'Check the manifest, entry assembly, package files, and Release build output; then run `topiaforge pack`.',
-        ),
-        () {
-          final output = p.join(
-            projectRoot,
-            'bin',
-            'TopiaForgeDev',
-            configuration,
-          );
-          final hasProjectFile = File(
-            p.join(projectRoot, 'topiaforge.project.json'),
-          ).existsSync();
-          return hasProjectFile
-              ? developerRepository.packProject(
-                  projectRoot,
-                  outputDir: output,
-                  configuration: configuration,
-                )
-              : developerRepository.packModDirectory(
-                  projectRoot,
-                  outputDir: output,
-                  configuration: configuration,
-                );
-        },
-      );
-
-      await _runDevStage(
-        const _DevStage(
-          code: 'TFDEV140',
-          label: 'validate',
-          action: 'Validate the exact archive that will be installed.',
-          remediation:
-              'Run `topiaforge check package <archive>` and correct every blocking manifest or archive issue.',
-        ),
-        () async {
-          await developerRepository.checkPackage(packagePath);
-          final assemblyErrors = await _managedPackageValidationErrors(
-            packagePath,
-            dotnetExecutable: dotnet.executable,
-            dotnetRoot: projectRoot,
-          );
-          if (assemblyErrors.isNotEmpty) {
-            throw StateError(assemblyErrors.join(' '));
-          }
-        },
-      );
+      await _runDevStage(_DevStage.validate, () async {
+        await developerRepository.checkPackage(packagePath);
+        final assemblyErrors = await _managedPackageValidationErrors(
+          packagePath,
+          dotnetExecutable: dotnet.executable,
+          dotnetRoot: projectRoot,
+        );
+        if (assemblyErrors.isNotEmpty) {
+          throw StateError(assemblyErrors.join(' '));
+        }
+      });
 
       final launcher = LocalLauncherRepository(
         acceptanceIsolation: acceptanceIsolation,
@@ -215,55 +162,31 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
         workingDirectory: projectRoot,
       );
       try {
-        final install = await _runDevStage(
-          const _DevStage(
-            code: 'TFDEV150',
-            label: 'install',
-            action: 'Install the validated package into Robotopia.',
-            remediation:
-                'Pass `--game-dir <Robotopia folder>` or set ROBOTOPIA_GAME_DIR, then run `topiaforge doctor`.',
-          ),
-          () async {
-            final detected = await launcher.detectKnownInstall();
-            if (detected == null) throw StateError(_noInstallRemedy);
-            await launcher.installPackage(packagePath, detected);
-            return detected;
-          },
-        );
+        final install = await _runDevStage(_DevStage.install, () async {
+          final detected = await launcher.detectKnownInstall();
+          if (detected == null) throw StateError(_noInstallRemedy);
+          await launcher.installPackage(packagePath, detected);
+          return detected;
+        });
 
         if (launch) {
-          await _runDevStage(
-            const _DevStage(
-              code: 'TFDEV160',
-              label: 'launch',
-              action: 'Launch Robotopia with the selected profile.',
-              remediation:
-                  'Run `topiaforge doctor`, repair the runtime in the launcher, and retry with `--no-tail` while diagnosing.',
-            ),
-            () async {
-              final snapshot = await launcher.loadSnapshot();
-              final code = await _runLaunchWorkflow(
-                launcher,
-                install,
-                _launchProfile(snapshot, launchOptions),
-                launchOptions,
-              );
-              if (code != 0) throw _DevLaunchExit(code);
-            },
-          );
+          await _runDevStage(_DevStage.launch, () async {
+            final snapshot = await launcher.loadSnapshot();
+            final code = await _runLaunchWorkflow(
+              launcher,
+              install,
+              _launchProfile(snapshot, launchOptions),
+              launchOptions,
+            );
+            if (code != 0) throw _DevLaunchExit(code);
+          });
         } else {
           stdout.writeln('[launch] skipped (non-interactive or --no-launch).');
         }
 
         if (tail) {
           await _runDevStage(
-            const _DevStage(
-              code: 'TFDEV170',
-              label: 'tail',
-              action: 'Tail launcher and manager logs with source labels.',
-              remediation:
-                  'Inspect BepInEx/TopiaForge/logs and the launcher diagnostics bundle, or rerun with `--no-tail`.',
-            ),
+            _DevStage.tail,
             () => _tailDevLogs(launcher, install),
           );
         } else {
@@ -276,29 +199,7 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
       stdout.writeln('TopiaForge dev loop completed: $packagePath');
       return 0;
     } on _DevStageFailure catch (failure) {
-      stderr.writeln('${failure.stage.code}: ${failure.stage.label} failed.');
-      stderr.writeln('Cause: ${_devCause(failure.cause)}');
-      stderr.writeln('Remediation: ${failure.stage.remediation}');
-      stderr.writeln(
-        'Docs: https://docs.topiaforge.dev/diagnostics/${failure.stage.code}',
-      );
-      return failure.cause is _DevLaunchExit
-          ? (failure.cause as _DevLaunchExit).code
-          : 1;
-    }
-  }
-
-  Future<T> _runDevStage<T>(
-    _DevStage stage,
-    Future<T> Function() action,
-  ) async {
-    stdout.writeln('[${stage.label}] ${stage.action}');
-    try {
-      final value = await action();
-      stdout.writeln('[${stage.label}] complete.');
-      return value;
-    } on Object catch (error) {
-      throw _DevStageFailure(stage, error);
+      return _reportDevStageFailure(failure);
     }
   }
 
@@ -420,38 +321,6 @@ extension _TopiaForgeDevCommands on _TopiaForgeCli {
   }
 }
 
-final class _DevStage {
-  const _DevStage({
-    required this.code,
-    required this.label,
-    required this.action,
-    required this.remediation,
-  });
-
-  final String code;
-  final String label;
-  final String action;
-  final String remediation;
-}
-
-final class _DevStageFailure implements Exception {
-  const _DevStageFailure(this.stage, this.cause);
-
-  final _DevStage stage;
-  final Object cause;
-}
-
-String _devCause(Object error) {
-  final text = error is StateError ? error.message : error.toString();
-  return _boundedDevText(text.replaceAll(RegExp(r'\s+'), ' ').trim());
-}
-
-String _boundedDevText(String text) {
-  const limit = 4000;
-  if (text.length <= limit) return text;
-  return '…${text.substring(text.length - limit)}';
-}
-
 int _devLineOverlap(List<String> previous, List<String> current) {
   final maximum = previous.length < current.length
       ? previous.length
@@ -467,15 +336,4 @@ int _devLineOverlap(List<String> previous, List<String> current) {
     if (matches) return count;
   }
   return 0;
-}
-
-final class _DevLaunchExit implements Exception {
-  const _DevLaunchExit(this.code);
-  final int code;
-  @override
-  String toString() => code == 3
-      ? 'Session startup is unconfirmed.'
-      : code == 130
-      ? 'Stopped waiting for session startup.'
-      : 'Session startup failed.';
 }
