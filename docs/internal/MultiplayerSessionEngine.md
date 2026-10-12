@@ -113,8 +113,9 @@ reconciles. A submission already on the wire still executes; the client simply s
   `SnapshotEnd`. The client applies the snapshot as an exact replacement — objects missing from it are despawned and
   notified — then reports `Ready` and sends `ReadyAck`.
 - **Presentation events** go only to connections that have acknowledged `Ready` for the current session, and are
-  selected per recipient with `PresentationTarget.Selects`. The host's own player receives its events through a local
-  queue drained at the next pump, which is why a solo `PublishPresentation` is not delivered inside the call.
+  selected per recipient with `PresentationTarget.Selects`. The host's own player receives them at the settle point
+  after they commit. A solo command's events are therefore presented before its confirmation is observed, as they
+  are on a remote client, where the events and the result arrive in one frame.
 - **Unregistered ids:** a client keeps canonical values for states and object types it has not registered and adopts
   them when it registers.
 

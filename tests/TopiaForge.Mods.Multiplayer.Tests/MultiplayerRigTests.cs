@@ -769,8 +769,8 @@ internal static partial class MultiplayerRigTests
         Assert(objectNotifications == 3,
             "object subscriptions survive replacement: they see the old object despawn and the new one spawn");
         Assert(facade.PublishPresentation(AcceptedEventType, new TestEvent("new-session")).Succeeded &&
-               presentationCount == 0,
-            "standalone presentation remains transport-scheduled until the deterministic rig advances");
+               presentationCount == 1,
+            "the host's own player sees a published event at the settle point of the publishing call");
         rig.Flush();
         Assert(presentationCount == 1,
             "presentation registration is reapplied to the replacement session");
