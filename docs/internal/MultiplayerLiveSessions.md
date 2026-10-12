@@ -6,9 +6,13 @@ This records how live LAN and direct sessions are found, trusted and joined. The
 `MultiplayerSecureTransport.md`, and its cryptography in `MultiplayerTransportCrypto.md`. The code lives in
 `mods/TopiaForge.Multiplayer/Network/`, inside the provider only, and every type is internal.
 
-WS2f lands in steps. This first one defines the identity, the documents and the wire formats that the game, the
-launcher and the control plane share, with fixtures all three replay. The network thread, the sockets, and the host
-and join flows follow.
+WS2f lands in steps:
+
+1. **Identity and formats** (sections 1 to 10): the identity, the documents and the wire formats that the game, the
+   launcher and the control plane share, with fixtures all three replay.
+2. **The network runtime** (sections 11 to 13): the network thread, the UDP socket, and the links the session engine
+   sees.
+3. **Hosting and joining**, which follow: LAN discovery, the descriptor endpoint, and the host and join flows.
 
 ## 1. Identity
 
@@ -185,3 +189,66 @@ deterministic, so signing a valid case's descriptor with its key must reproduce 
 - RFC 5952 address forms;
 - identity persistence, damage and rotation;
 - the known-hosts record and its cap.
+
+`NetworkStackTests` runs links over the virtual network: frames both ways with player keys and a shared handshake
+hash, a stalled reader holding a fast sender to its budget and window, an overloaded link closing, graceful closes
+that deliver everything (more than the budget included), refused attempts, and disposal. `NetworkSocketTests` uses real
+sockets on the loopback interface: path classification, the driver over IPv4 and IPv6, an oversized datagram, an
+unreachable port, and two session engines joining across two network threads, a command round trip and a leave, all
+in under five seconds.
+
+## 11. The network thread
+
+- **Ownership.** One thread owns a socket, a `NetworkStack` (the transport endpoint plus the links over its
+  connections), the transport's cryptography and its timers. Live connections therefore keep their keepalives and
+  retransmissions going while the main thread stalls, as it does through a scene load.
+- **The loop.** Each turn runs the queued commands, reads up to 1,024 waiting datagrams, polls the stack, sends what it
+  yields, and reports accepted links and info replies. The thread then sleeps until its next timer or a datagram, and
+  at most 2 ms, so frames the main thread queues go out within that.
+- **Talking to it.** The main thread posts commands, takes events and reads each link's own queues; nothing else is
+  shared.
+- **Faults.** A failed turn is reported by exception type only, never its message, because socket messages can name
+  addresses. The loop carries on, and after 64 failures in a row it stops and closes every link.
+- **Stopping.** `Stop` closes every link gracefully and waits up to a grace period for them to finish, then disposes
+  the stack, which wipes the transport's keys, and the socket. The deadline is fixed when `Stop` is called, not by a
+  queued command, so the thread ends on time even if its queue never drains.
+- **Testing.** `NetworkStack` is sans-I/O like the transport, so the deterministic virtual network drives exactly the
+  code the thread runs.
+
+## 12. Links
+
+A `NetworkLink` is a connection as the session engine sees it: `IEngineLink`, naming its peer by transport key and
+never by address. Both directions are bounded queues between the two threads.
+
+| Direction | Bound |
+| --- | --- |
+| Session frames in | The network thread moves frames out of the transport only while the main thread has less than 2 MiB waiting. A stalled main thread therefore holds the sender back through the transport's own flow control, instead of growing memory. |
+| Realtime and voice in | The newest 128 frames; older ones are dropped, as the transport drops stale datagrams. |
+| Out | The main thread may queue up to 32 MiB. Past that the link closes, since the transport's 16 MiB backlog cap would refuse it anyway. |
+
+- **Closing.** The network thread reads a link's close request before draining its outbound queue, so a graceful close
+  delivers everything the engine sent before asking. Once a connection is ending nothing more can arrive, so its
+  remaining frames move to the link regardless of the budget, and the engine reads every one before it sees the link
+  close.
+- **What a link carries.** On a host, the player key derived for the peer (section 7). On both sides, the transport
+  handshake hash, which password proofs bind to.
+- **Connecting.** An outbound connection is a `ConnectAttempt` the main thread polls. It becomes established with its
+  link, or fails with the transport's reason: a key that does not match the pin, a timeout, or relay-only refusing a
+  direct path before anything is sent.
+
+## 13. The UDP socket
+
+`UdpSocketDriver` is one dual-mode socket bound to every local address. It carries the workarounds the Mono spike
+measured (`MultiplayerMonoSpike.md`, section 1):
+
+- IPv4 destinations are sent as IPv4-mapped IPv6, because Mono fails to send to a plain IPv4 endpoint from a dual-mode
+  socket.
+- On Windows the connection-reset ioctl is turned off, so an ICMP port-unreachable cannot break the next receive. A
+  host's fixed port is bound exclusively there, so no other process can share it.
+- Every datagram is read whole into scratch space first, because Windows reports the whole queue as available and
+  Linux truncates silently. One larger than a transport datagram is dropped.
+- Transient socket errors lose that one datagram, as any network may, and recovery resends what mattered.
+
+Paths come from `UdpPaths`. A key is a type byte, the 16-byte IPv6 form of the address and the port: 19 bytes that
+only this layer and the transport see. Private, link-local, unique-local and loopback addresses make LAN paths, which
+relay-only still allows; every other address, carrier-grade NAT included, makes a direct path.
