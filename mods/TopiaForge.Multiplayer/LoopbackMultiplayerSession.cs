@@ -33,10 +33,13 @@ namespace TopiaForge.Multiplayer
         private readonly Dictionary<LoopbackOwnerScopedId, ILoopbackPresentationRegistration> presentations =
             new Dictionary<LoopbackOwnerScopedId, ILoopbackPresentationRegistration>();
         private readonly List<Action<MultiplayerSessionSnapshot>> changedHandlers = new List<Action<MultiplayerSessionSnapshot>>();
+        private readonly Dictionary<string, string> contractOwners = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly SnapshotPlayerDirectory players;
         private readonly ParticipantId localParticipantId;
         private readonly Func<long> timeMilliseconds;
         private MultiplayerSessionSnapshot snapshot;
         private ulong nextObjectId;
+        private long nextSubmissionSequence;
         private bool commandTransactionActive;
         private bool sessionObserverDispatchActive;
         private int sessionObserverDispatchThreadId;
@@ -60,6 +63,7 @@ namespace TopiaForge.Multiplayer
                 new[] { new MultiplayerParticipant(localParticipantId, "Local player", true, true) },
                 new NetworkTick(0),
                 new SessionSeed(0x544f504941464f52UL));
+            players = new SnapshotPlayerDirectory(() => Snapshot);
         }
 
         public MultiplayerSessionSnapshot Snapshot
@@ -345,8 +349,10 @@ namespace TopiaForge.Multiplayer
                     var context = new MultiplayerCommandContext(
                         localParticipantId,
                         confirmedAt,
+                        NextSubmissionSequence(),
+                        Snapshot.Seed,
                         cancellationToken,
-                        (id, bytes, audience) => BufferPresentation(ownerModId, events, id, bytes, audience));
+                        (id, bytes, target) => BufferTargetedPresentation(ownerModId, events, id, bytes, target));
                     OperationResult<TResponse> result;
                     try
                     {
@@ -684,6 +690,113 @@ namespace TopiaForge.Multiplayer
             }
         }
 
+        public OperationResult<bool> PublishPresentation<TEvent>(
+            PresentationEventType<TEvent> eventType,
+            TEvent value,
+            PresentationTarget target) where TEvent : class
+            => PublishPresentation(ProviderOwnerModId, eventType, value, target);
+
+        internal OperationResult<bool> PublishPresentation<TEvent>(
+            string ownerModId,
+            PresentationEventType<TEvent> eventType,
+            TEvent value,
+            PresentationTarget target) where TEvent : class
+        {
+            if (target.TryGetAudience(out var audience))
+            {
+                return PublishPresentation(ownerModId, eventType, value, audience);
+            }
+
+            if (eventType == null) throw new ArgumentNullException(nameof(eventType));
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            // Loopback has one participant, which is both the sender and the only possible recipient.
+            if (target.Kind == PresentationTargetKind.Only && !IsParticipant(target.Participant))
+            {
+                return OperationResult<bool>.Failure(
+                    ModErrorCode.NotFound,
+                    "The target participant is not in this session.");
+            }
+
+            return target.Selects(localParticipantId, localParticipantId)
+                ? PublishPresentation(ownerModId, eventType, value, MultiplayerAudience.Everyone)
+                : OperationResult<bool>.Success(true);
+        }
+
+        // Every submission from the single local sender gets its own sequence, so command random streams differ.
+        private ulong NextSubmissionSequence() => (ulong)Interlocked.Increment(ref nextSubmissionSequence);
+
+        // Loopback has one participant: named targets either select it or select nobody.
+        private OperationResult<bool> BufferTargetedPresentation(
+            string ownerModId,
+            List<BufferedPresentation> events,
+            string id,
+            byte[] bytes,
+            PresentationTarget target)
+        {
+            if (target.TryGetAudience(out var audience)) return BufferPresentation(ownerModId, events, id, bytes, audience);
+            if (target.Kind == PresentationTargetKind.Only && !IsParticipant(target.Participant))
+            {
+                return OperationResult<bool>.Failure(ModErrorCode.NotFound, "The target participant is not in this session.");
+            }
+
+            return target.Selects(localParticipantId, localParticipantId)
+                ? BufferPresentation(ownerModId, events, id, bytes, MultiplayerAudience.Everyone)
+                : OperationResult<bool>.Success(true);
+        }
+
+        public OperationResult<IDisposable> RegisterContract(MultiplayerContractDescriptor descriptor) =>
+            RegisterContract(ProviderOwnerModId, descriptor);
+
+        internal OperationResult<IDisposable> RegisterContract(string ownerModId, MultiplayerContractDescriptor descriptor)
+        {
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+            lock (gate)
+            {
+                ThrowIfDisposed();
+                if (contractOwners.ContainsKey(descriptor.Id))
+                {
+                    return OperationResult<IDisposable>.Failure(
+                        ModErrorCode.Conflict,
+                        "Multiplayer contract '" + descriptor.Id + "' is already registered.");
+                }
+
+                contractOwners.Add(descriptor.Id, ownerModId);
+            }
+
+            return OperationResult<IDisposable>.Success(new DelegateLease(() =>
+            {
+                lock (gate) contractOwners.Remove(descriptor.Id);
+            }));
+        }
+
+        // The loopback provider has no fixed step; canonical ticks arrive with the session engine.
+        public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler)
+        {
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            lock (gate) ThrowIfDisposed();
+            return new DelegateLease(() => { });
+        }
+
+        public bool TryGetEntity(NetworkObjectId id, out IEntity? entity)
+        {
+            entity = null;
+            return false;
+        }
+
+        public bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar)
+        {
+            avatar = null;
+            return false;
+        }
+
+        public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose)
+        {
+            pose = default;
+            return false;
+        }
+
+        public IPlayerDirectory Players => players;
+
         public void Dispose()
         {
             List<IDisposable> owned;
@@ -813,9 +926,11 @@ namespace TopiaForge.Multiplayer
                         localParticipantId,
                         item.Id,
                         confirmedAt,
+                        NextSubmissionSequence(),
+                        Snapshot.Seed,
                         item.OwnerId.HasValue && item.OwnerId.Value.Equals(localParticipantId),
                         cancellationToken,
-                        (id, bytes, audience) => BufferPresentation(item.OwnerModId, events, id, bytes, audience));
+                        (id, bytes, target) => BufferTargetedPresentation(item.OwnerModId, events, id, bytes, target));
                     OperationResult<TState> result;
                     try
                     {

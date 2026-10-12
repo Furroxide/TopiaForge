@@ -7,6 +7,15 @@ internal static class Program
         try
         {
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
+            SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
+            SdkContractCompletionTests.PresentationTargetsSelectExactRecipients();
+            SdkContractCompletionTests.ParticipantsAndSnapshotsCarryHostAndEndReason();
+            SdkContractCompletionTests.PosesAndDefinitionsValidateBoundedData();
+            SdkContractCompletionTests.RigCommandsSharePredictionInputsAndTargetEvents();
+            SdkContractCompletionTests.RigTicksRunOnlyWithWorldAuthority();
+            SdkContractCompletionTests.InterimProvidersRegisterContractsAndExposePlayers();
+            GeneratedLockStabilityTests.SampleLocksMatchGeneratedDescriptors();
+            SdkContractCompletionTests.SubmissionSequencesAreSenderScoped();
             MultiplayerRigTests.RolesExposeCorrectSides();
             MultiplayerRigTests.ServerAndTwoClientsConverge();
             MultiplayerRigTests.RejectedPredictionRollsBack();

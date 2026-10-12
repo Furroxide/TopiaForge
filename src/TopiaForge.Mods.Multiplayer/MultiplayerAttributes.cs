@@ -45,6 +45,18 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets the stable mod-local state id.</summary>
         public string Id { get; }
+
+        /// <summary>
+        /// Gets or sets how committed changes travel to other peers. The default coalesces them into the next
+        /// downstream snapshot.
+        /// </summary>
+        public MultiplayerDelivery Delivery { get; set; }
+
+        /// <summary>
+        /// Gets or sets the most downstream updates per second, from 1 to 60. Zero, the default, uses the provider's
+        /// snapshot rate.
+        /// </summary>
+        public int MaximumUpdatesPerSecond { get; set; }
     }
 
     /// <summary>Marks a canonical replicated-object input handler for generated type registration and typed proxies.</summary>
@@ -68,6 +80,18 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets or sets the encoded state or input payload limit.</summary>
         public int MaximumPayloadBytes { get; set; } = 16 * 1024;
+
+        /// <summary>
+        /// Gets or sets how committed changes travel to other peers. The default coalesces them into the next
+        /// downstream snapshot.
+        /// </summary>
+        public MultiplayerDelivery Delivery { get; set; }
+
+        /// <summary>
+        /// Gets or sets the most downstream updates per second, from 1 to 60. Zero, the default, uses the provider's
+        /// snapshot rate.
+        /// </summary>
+        public int MaximumUpdatesPerSecond { get; set; }
     }
 
     /// <summary>Marks a transactional command handler for generated submission and registration.</summary>

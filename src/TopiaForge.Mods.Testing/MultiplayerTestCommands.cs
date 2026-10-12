@@ -59,6 +59,8 @@ namespace TopiaForge.Mods.Testing
         internal CommandOutcome<TResponse> Invoke(
             ParticipantId sender,
             NetworkTick tick,
+            ulong sequence,
+            SessionSeed seed,
             TRequest request,
             CancellationToken cancellationToken)
         {
@@ -81,10 +83,12 @@ namespace TopiaForge.Mods.Testing
             var context = new MultiplayerCommandContext(
                 sender,
                 tick,
+                sequence,
+                seed,
                 cancellationToken,
-                (id, value, audience) =>
+                (id, value, target) =>
                 {
-                    events.Add(new BufferedTestPresentation(id, value, audience));
+                    events.Add(new BufferedTestPresentation(id, value, target));
                     return OperationResult<bool>.Success(true);
                 });
             OperationResult<TResponse> result;
@@ -239,6 +243,8 @@ namespace TopiaForge.Mods.Testing
             var predicted = pending.Command.Invoke(
                 snapshot.LocalParticipantId ?? default,
                 snapshot.Tick,
+                pending.Sequence,
+                snapshot.Seed,
                 pending.Request,
                 currentSession.Token);
 
@@ -308,7 +314,13 @@ namespace TopiaForge.Mods.Testing
                 }
                 else
                 {
-                    var outcome = command.Invoke(sender, snapshot.Tick, request, currentSession.Token);
+                    var outcome = command.Invoke(
+                        sender,
+                        snapshot.Tick,
+                        sequence,
+                        snapshot.Seed,
+                        request,
+                        currentSession.Token);
                     result = outcome.Result;
                     var completed = FinishCanonicalStateTransaction(before, result.Succeeded);
                     if (!completed.Succeeded)
