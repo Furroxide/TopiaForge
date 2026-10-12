@@ -91,6 +91,10 @@ Run `topiaforge restore` after adding a module or dependency. Commit `packages.l
 `topiaforge.sdk.lock.json` so CI and another developer restore the same contract versions. A
 multiplayer project also commits generator-owned `topiaforge.multiplayer.lock.json`; refresh it
 with `topiaforge mod sync multiplayer` after restore and whenever its multiplayer contract changes.
+The lock records only generated contract descriptors. Locks written before lock `schemaVersion` 3 also
+recorded the mod's protocol version, which turned every protocol bump into a content mismatch even inside a
+declared `peerVersionRange`; `topiaforge pack` rejects them with that explanation, and one
+`topiaforge mod sync multiplayer` rewrites them.
 
 ## Stage failures
 
