@@ -71,8 +71,13 @@ namespace TopiaForge.ModManager.Tests
                     manifest.Id + " must declare the compatible V1 SDK line");
                 Assert(manifest.License == "AGPL-3.0-or-later",
                     manifest.Id + " must use the approved project license");
-                Assert(manifest.LicenseFiles.SequenceEqual(new[] { "LICENSE" }),
-                    manifest.Id + " must include the approved project license in its package");
+                // A mod that vendors third-party source ships that source's notices beside the project license.
+                var expectedLicenseFiles = File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "THIRD_PARTY_NOTICES.md"))
+                    ? new[] { "LICENSE", "THIRD_PARTY_NOTICES.md" }
+                    : new[] { "LICENSE" };
+                Assert(manifest.LicenseFiles.SequenceEqual(expectedLicenseFiles),
+                    manifest.Id + " must include the approved project license in its package, and its third-party " +
+                    "notices when it carries them");
                 AssertDeclaredLicenseFilesResolve(repoRoot, path, manifest);
                 Assert(!manifest.Capabilities.Contains("ai", StringComparer.OrdinalIgnoreCase),
                     manifest.Id + " must use descriptive capabilities instead of the ambiguous ai alias");
