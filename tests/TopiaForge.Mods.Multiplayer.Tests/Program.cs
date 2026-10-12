@@ -183,6 +183,18 @@ internal static class Program
             NetworkIdentityTests.SecretsMatchTheSharedFixtures();
             NetworkIdentityTests.IdentitiesPersistAndSurviveDamage();
             NetworkIdentityTests.KnownHostsRememberServersNotAddresses();
+            OpusVoiceCodecTests.RoundTripKeepsSyntheticSpeech();
+            OpusVoiceCodecTests.PacketsStayWithinTheirBounds();
+            OpusVoiceCodecTests.ForwardErrorCorrectionBeatsConcealment();
+            OpusVoiceCodecTests.SilenceBecomesDiscontinuousTransmission();
+            OpusVoiceCodecTests.EncodedOutputMatchesItsFrozenHash();
+            OpusVoiceCodecTests.TocValidationAcceptsOnlyMonoTwentyMillisecondFrames();
+            OpusVoiceCostTests.FourSpeakersCodeWithinRealTime();
+            OpusVoiceCostTests.TheWrapperAllocatesNothingOfItsOwn();
+            OpusVoiceCostTests.HostilePacketsAreConcealedNeverThrown();
+            OpusVoiceCostTests.SettingsAreBoundedAndApplied();
+            OpusVoiceCostTests.ResetsStartFreshStreams();
+            OpusVoiceCostTests.TheResamplerConvertsCaptureRates();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
