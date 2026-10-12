@@ -241,7 +241,8 @@ once over HTTPS to read its headers.
 
 **Implication.** Plan on TLS 1.2 and HTTP/1.1 only: UnityTLS lists no TLS 1.3, and every request went
 out as HTTP/1.1. Do not plan QUIC or HTTP/3 through it. WSS through `ClientWebSocket` works for
-signalling or a relay fallback, at about 120 ms per connection and the path RTT per message.
+signalling or a relay fallback. Connection setup took 119 to 458 ms depending on the endpoint and
+path, and each message then costs about the path RTT.
 
 ### 3. Clocks and sleeping
 
@@ -319,7 +320,9 @@ dependencies). Each benchmark ran with 0.25 s warm-up and 1.0 s timed, first on 
 - The main thread and the background thread agree within about 5 %. The exception is one background
   verify reading in run 2, 17 % lower.
 - The per-packet parameter objects caused 17 to 23 Boehm collections in each 1 s ChaCha20 benchmark.
-  That rate is negligible at session packet rates, but a production wrapper should cache them.
+  That rate is negligible at session packet rates. A production wrapper can reuse buffers and the keyed
+  cipher state, but every packet still needs parameters carrying its own unique nonce: reusing a nonce
+  under the same key breaks ChaCha20-Poly1305, and BouncyCastle rejects it.
 
 **Implications:**
 
@@ -457,8 +460,9 @@ New-Item -ItemType Junction -Path "$root\MonoBleedingEdge" -Target "$game\MonoBl
 'winhttp.dll', 'doorstop_config.ini', '.doorstop_version' | ForEach-Object { Copy-Item "$bep\$_" "$root\$_" }
 Copy-Item "$bep\BepInEx\core\*" "$root\BepInEx\core\"
 # Plugins go in $root\BepInEx\plugins\<name>\. Launch with the overlay root as the working directory:
+# Start-Process joins its arguments into one command line, so a path with spaces needs its own quotes.
 Start-Process "$root\Robotopia.exe" -WorkingDirectory $root -ArgumentList '-screen-fullscreen', '0',
-    '-screen-width', '960', '-screen-height', '540', '-logFile', "$root\player.log"
+    '-screen-width', '960', '-screen-height', '540', '-logFile', "`"$root\player.log`""
 ```
 
 Notes on the recipe:
@@ -469,8 +473,9 @@ Notes on the recipe:
   the overlay.
 - Each overlay holds 48 MB of real files. The 5.4 GB data folder is shared through the junction.
 - Remove a junction without touching its target with `[System.IO.Directory]::Delete('<link>', $false)`.
-- The real install was never modified. Its root listing was identical before and after, and it still
-  has no `winhttp.dll`.
+- Only the real install's root listing was compared: it was identical before and after, and it still
+  has no `winhttp.dll`. The shared folders are writable junction targets, so a change made inside them
+  would not show up in that comparison.
 
 ### Observations (S1 run 2)
 
