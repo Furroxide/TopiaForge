@@ -23,7 +23,9 @@ void _validateManifestMultiplayer(
 
   final mode = multiplayer.mode;
   if (mode == null) {
-    error('multiplayer.mode must be client-local, server-only, or session.');
+    error(
+      'multiplayer.mode must be client-local, server-only, session, or standalone.',
+    );
     return;
   }
 

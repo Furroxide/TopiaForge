@@ -349,7 +349,8 @@
           "enum": [
             "client-local",
             "server-only",
-            "session"
+            "session",
+            "standalone"
           ]
         },
         "presence": {
@@ -398,7 +399,8 @@
               "mode": {
                 "enum": [
                   "client-local",
-                  "server-only"
+                  "server-only",
+                  "standalone"
                 ]
               }
             }

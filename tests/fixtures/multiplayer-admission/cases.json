@@ -1,0 +1,1066 @@
+{
+  "schemaVersion": 1,
+  "description": "Cross-language multiplayer admission parity cases. MultiplayerAdmissionParityTests.cs and multiplayer_admission_parity_test.dart replay every case through the C# and Dart planners and require identical reports, including messages and order. Each mod's manifest is manifestBase overlaid with its own fields and read through each language's real manifest reader.",
+  "defaults": {
+    "gameBuild": "0.0.2545",
+    "protocolVersion": "1.0.0",
+    "peerVersionRange": ">=1.0.0 <2.0.0"
+  },
+  "manifestBase": {
+    "schemaVersion": 6,
+    "displayName": "Admission Fixture",
+    "author": {
+      "name": "TopiaForge Tests"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixtures.AdmissionMod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*"
+  },
+  "mods": {
+    "plain-1.0.0": {
+      "packageSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest": {
+        "name": "example.plain",
+        "version": "1.0.0"
+      }
+    },
+    "plain-1.0.0-upper-hash": {
+      "packageSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "manifest": {
+        "name": "example.plain",
+        "version": "1.0.0"
+      }
+    },
+    "plain-1.1.0": {
+      "packageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "manifest": {
+        "name": "example.plain",
+        "version": "1.1.0"
+      }
+    },
+    "plain-unhashed": {
+      "packageSha256": "",
+      "manifest": {
+        "name": "example.plain",
+        "version": "1.0.0"
+      }
+    },
+    "plain-as-session": {
+      "packageSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "manifest": {
+        "name": "example.plain",
+        "version": "1.1.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "required",
+          "protocol": {
+            "version": "1.0.0",
+            "peerVersionRange": "1.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "solo-standalone": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.solo",
+        "version": "1.0.0",
+        "multiplayer": {
+          "mode": "standalone"
+        }
+      }
+    },
+    "hud-client-local": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.hud",
+        "version": "1.0.0",
+        "multiplayer": {
+          "mode": "client-local"
+        }
+      }
+    },
+    "fps-client-local": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.fps",
+        "version": "1.0.0",
+        "multiplayer": {
+          "mode": "client-local"
+        }
+      }
+    },
+    "admin-server-only": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.admin",
+        "version": "1.0.0",
+        "multiplayer": {
+          "mode": "server-only"
+        }
+      }
+    },
+    "gameplay-1.2.0": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.gameplay",
+        "version": "1.2.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "required",
+          "protocol": {
+            "version": "1.2.0",
+            "peerVersionRange": ">=1.0.0 <2.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json",
+            "Content/rules.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Content/rules.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "gameplay-1.4.0": {
+      "packageSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "manifest": {
+        "name": "example.gameplay",
+        "version": "1.4.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "required",
+          "protocol": {
+            "version": "1.4.0",
+            "peerVersionRange": ">=1.0.0 <2.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json",
+            "Content/rules.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Content/rules.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "gameplay-2.0.0": {
+      "packageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "manifest": {
+        "name": "example.gameplay",
+        "version": "2.0.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "required",
+          "protocol": {
+            "version": "2.0.0",
+            "peerVersionRange": "2.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json",
+            "Content/rules.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Content/rules.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "gameplay-1.2.0-other-rules": {
+      "packageSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "manifest": {
+        "name": "example.gameplay",
+        "version": "1.2.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "required",
+          "protocol": {
+            "version": "1.2.0",
+            "peerVersionRange": ">=1.0.0 <2.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json",
+            "Content/rules.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Content/rules.json": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    },
+    "gameplay-client-local": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.gameplay",
+        "version": "1.2.0",
+        "multiplayer": {
+          "mode": "client-local"
+        }
+      }
+    },
+    "cosmetics-optional-1": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.cosmetics",
+        "version": "1.0.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "optional",
+          "protocol": {
+            "version": "1.0.0",
+            "peerVersionRange": "1.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "cosmetics-optional-2": {
+      "packageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "manifest": {
+        "name": "example.cosmetics",
+        "version": "2.0.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "optional",
+          "protocol": {
+            "version": "2.0.0",
+            "peerVersionRange": "2.0.0"
+          },
+          "synchronizedFiles": [
+            "topiaforge.multiplayer.lock.json"
+          ]
+        },
+        "hashes": {
+          "topiaforge.multiplayer.lock.json": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    "duplicate-upper": {
+      "packageSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest": {
+        "name": "Example.Duplicate",
+        "version": "1.0.0"
+      }
+    },
+    "duplicate-lower": {
+      "packageSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest": {
+        "name": "example.duplicate",
+        "version": "1.0.0"
+      }
+    },
+    "invalid-session": {
+      "packageSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "manifest": {
+        "name": "example.invalid",
+        "version": "1.0.0",
+        "multiplayer": {
+          "mode": "session",
+          "presence": "required",
+          "synchronizedFiles": [
+            "Content/rules.json"
+          ]
+        },
+        "hashes": {
+          "Content/rules.json": "not-a-sha"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "implicit mods with identical packages are admitted and active",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [
+          "example.plain"
+        ],
+        "mismatches": [],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "implicit package hashes compare case-insensitively",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "plain-1.0.0-upper-hash"
+        ]
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [
+          "example.plain"
+        ],
+        "mismatches": [],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "an implicit mod at another version blocks admission",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "plain-1.1.0"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "implicitSharedContentMismatch",
+            "modId": "example.plain",
+            "message": "Implicitly shared mods must be the identical package on every peer.",
+            "serverValue": "1.0.0@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "clientValue": "1.1.0@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a host's implicit mod is required of every client",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "missingRequiredMod",
+            "modId": "example.plain",
+            "message": "The server requires this implicitly shared mod on every client as the identical package.",
+            "serverValue": "implicit",
+            "clientValue": "absent"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a client's implicit mod must also be enabled on the server",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": []
+      },
+      "client": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "missingRequiredMod",
+            "modId": "example.plain",
+            "message": "The client enables this implicitly shared mod, so the server must enable the identical package.",
+            "serverValue": "absent",
+            "clientValue": "implicit"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "implicit mods without package hashes cannot be proven identical",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "plain-unhashed"
+        ]
+      },
+      "client": {
+        "mods": [
+          "plain-unhashed"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "implicitSharedContentMismatch",
+            "modId": "example.plain",
+            "message": "Implicitly shared mods must be the identical package on every peer.",
+            "serverValue": "1.0.0@",
+            "clientValue": "1.0.0@"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "an implicit mod is not satisfied by a declared session build of the same id",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "plain-1.0.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "plain-as-session"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "implicitSharedContentMismatch",
+            "modId": "example.plain",
+            "message": "Implicitly shared mods must be the identical package on every peer.",
+            "serverValue": "1.0.0@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "clientValue": "1.1.0@cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "an explicitly standalone mod blocks either peer",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "solo-standalone"
+        ]
+      },
+      "client": {
+        "mods": [
+          "solo-standalone"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "standaloneOnlyMod",
+            "modId": "example.solo",
+            "message": "The client enables a mod that declares itself standalone. Disable it in an explicitly confirmed derived profile to play together.",
+            "serverValue": "",
+            "clientValue": ""
+          },
+          {
+            "code": "standaloneOnlyMod",
+            "modId": "example.solo",
+            "message": "The server enables a mod that declares itself standalone. Disable it in an explicitly confirmed derived profile to play together.",
+            "serverValue": "",
+            "clientValue": ""
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a dedicated server rejects client-local mods",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "hud-client-local"
+        ]
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "clientLocalModOnServer",
+            "modId": "example.hud",
+            "message": "A client-local mod is enabled in the logical server profile.",
+            "serverValue": "client-local",
+            "clientValue": "absent"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a listen host keeps its own client-local and server-only mods",
+      "policy": "compatible",
+      "serverRole": "listenHost",
+      "server": {
+        "mods": [
+          "hud-client-local",
+          "admin-server-only"
+        ]
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [],
+        "mismatches": [],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "server-only mods are rejected from a joining client",
+      "policy": "compatible",
+      "serverRole": "listenHost",
+      "server": {
+        "mods": []
+      },
+      "client": {
+        "mods": [
+          "admin-server-only"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "serverOnlyModOnClient",
+            "modId": "example.admin",
+            "message": "A server-only mod is enabled in the interactive client profile.",
+            "serverValue": "absent",
+            "clientValue": "server-only"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "client-local mods never require a copy on the other peer",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": []
+      },
+      "client": {
+        "mods": [
+          "hud-client-local"
+        ]
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [],
+        "mismatches": [],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "mutually compatible required session mods activate",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "gameplay-1.4.0"
+        ]
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [
+          "example.gameplay"
+        ],
+        "mismatches": [],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a required session mod missing on the client blocks",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "missingRequiredMod",
+            "modId": "example.gameplay",
+            "message": "The server requires a session-compatible copy of this mod on every client.",
+            "serverValue": "session/required",
+            "clientValue": "absent"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a same-id client-local build does not satisfy required session presence",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "gameplay-client-local"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "missingRequiredMod",
+            "modId": "example.gameplay",
+            "message": "The server requires a session-compatible copy of this mod on every client.",
+            "serverValue": "session/required",
+            "clientValue": "client-local"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "an optional session mod on one peer stays inactive",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "cosmetics-optional-1"
+        ]
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [],
+        "mismatches": [],
+        "inactiveSessionReasons": [
+          {
+            "code": "optionalSessionModUnavailable",
+            "modId": "example.cosmetics",
+            "message": "The optional session mod is present on only one peer and remains inactive.",
+            "serverValue": "session",
+            "clientValue": "absent"
+          }
+        ]
+      }
+    },
+    {
+      "name": "incompatible optional protocols stay inactive",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "cosmetics-optional-1"
+        ]
+      },
+      "client": {
+        "mods": [
+          "cosmetics-optional-2"
+        ]
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [],
+        "mismatches": [],
+        "inactiveSessionReasons": [
+          {
+            "code": "modProtocolMismatch",
+            "modId": "example.cosmetics",
+            "message": "The mod protocol ranges are not mutually compatible.",
+            "serverValue": "1.0.0 accepts 1.0.0",
+            "clientValue": "2.0.0 accepts 2.0.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "incompatible required protocols block",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "gameplay-2.0.0"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "modProtocolMismatch",
+            "modId": "example.gameplay",
+            "message": "The mod protocol ranges are not mutually compatible.",
+            "serverValue": "1.2.0 accepts >=1.0.0 <2.0.0",
+            "clientValue": "2.0.0 accepts 2.0.0"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "different synchronized content blocks a required session mod",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "gameplay-1.2.0-other-rules"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "synchronizedContentMismatch",
+            "modId": "example.gameplay",
+            "message": "Synchronized content differs at 'Content/rules.json'.",
+            "serverValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "clientValue": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "exact profile compares the package identity of session mods",
+      "policy": "exactProfile",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "gameplay-1.4.0"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "exactProfileMismatch",
+            "modId": "example.gameplay",
+            "message": "The exact-profile policy requires equal package versions and archive hashes.",
+            "serverValue": "1.2.0@ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "clientValue": "1.4.0@cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "exact profile curates the optional session inventory",
+      "policy": "exactProfile",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "cosmetics-optional-1"
+        ]
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "exactProfileMismatch",
+            "modId": "example.cosmetics",
+            "message": "The exact-profile policy requires the same session-mod inventory on both peers.",
+            "serverValue": "session",
+            "clientValue": "absent"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "the game build and TopiaForge protocol must agree",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": []
+      },
+      "client": {
+        "mods": [],
+        "gameBuild": "0.0.2534",
+        "protocolVersion": "2.0.0",
+        "peerVersionRange": ">=2.0.0 <3.0.0"
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "gameBuildMismatch",
+            "modId": "",
+            "message": "Robotopia builds must match exactly.",
+            "serverValue": "0.0.2545",
+            "clientValue": "0.0.2534"
+          },
+          {
+            "code": "topiaForgeProtocolMismatch",
+            "modId": "",
+            "message": "The TopiaForge multiplayer protocol ranges are not mutually compatible.",
+            "serverValue": "1.0.0 accepts >=1.0.0 <2.0.0",
+            "clientValue": "2.0.0 accepts >=2.0.0 <3.0.0"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "an omitted TopiaForge peer range requires exact protocol equality",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [],
+        "peerVersionRange": ""
+      },
+      "client": {
+        "mods": [],
+        "protocolVersion": "1.1.0"
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "topiaForgeProtocolMismatch",
+            "modId": "",
+            "message": "The TopiaForge multiplayer protocol ranges are not mutually compatible.",
+            "serverValue": "1.0.0 accepts exactly 1.0.0",
+            "clientValue": "1.1.0 accepts >=1.0.0 <2.0.0"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "invalid profiles fail structurally and deterministically",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "duplicate-upper",
+          "duplicate-lower",
+          "invalid-session"
+        ],
+        "protocolVersion": "not-semver",
+        "peerVersionRange": "bad range"
+      },
+      "client": {
+        "mods": []
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "invalidProfile",
+            "modId": "",
+            "message": "The server profile has invalid TopiaForge multiplayer protocol metadata.",
+            "serverValue": "not-semver accepts bad range",
+            "clientValue": ""
+          },
+          {
+            "code": "invalidProfile",
+            "modId": "example.duplicate",
+            "message": "The server profile contains duplicate normalized mod ids.",
+            "serverValue": "example.duplicate",
+            "clientValue": ""
+          },
+          {
+            "code": "invalidProfile",
+            "modId": "example.invalid",
+            "message": "The server manifest is invalid for multiplayer admission: every synchronized file must have a packed SHA-256 hash.",
+            "serverValue": "every synchronized file must have a packed SHA-256 hash",
+            "clientValue": ""
+          },
+          {
+            "code": "invalidProfile",
+            "modId": "example.invalid",
+            "message": "The server manifest is invalid for multiplayer admission: session protocol is required.",
+            "serverValue": "session protocol is required",
+            "clientValue": ""
+          },
+          {
+            "code": "invalidProfile",
+            "modId": "example.invalid",
+            "message": "The server manifest is invalid for multiplayer admission: session synchronized files must include the canonical generated multiplayer contract lock.",
+            "serverValue": "session synchronized files must include the canonical generated multiplayer contract lock",
+            "clientValue": ""
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    },
+    {
+      "name": "a listen host's full profile admits a matching joiner",
+      "policy": "compatible",
+      "serverRole": "listenHost",
+      "server": {
+        "mods": [
+          "plain-1.0.0",
+          "hud-client-local",
+          "admin-server-only",
+          "gameplay-1.2.0",
+          "cosmetics-optional-1"
+        ]
+      },
+      "client": {
+        "mods": [
+          "plain-1.0.0",
+          "gameplay-1.4.0",
+          "fps-client-local"
+        ]
+      },
+      "expect": {
+        "admitted": true,
+        "activeSessionMods": [
+          "example.gameplay",
+          "example.plain"
+        ],
+        "mismatches": [],
+        "inactiveSessionReasons": [
+          {
+            "code": "optionalSessionModUnavailable",
+            "modId": "example.cosmetics",
+            "message": "The optional session mod is present on only one peer and remains inactive.",
+            "serverValue": "session",
+            "clientValue": "absent"
+          }
+        ]
+      }
+    },
+    {
+      "name": "several failures sort by code, then mod id",
+      "policy": "compatible",
+      "serverRole": "dedicatedServer",
+      "server": {
+        "mods": [
+          "solo-standalone",
+          "plain-1.0.0",
+          "gameplay-1.2.0"
+        ]
+      },
+      "client": {
+        "mods": [
+          "admin-server-only",
+          "plain-1.1.0"
+        ]
+      },
+      "expect": {
+        "admitted": false,
+        "activeSessionMods": [],
+        "mismatches": [
+          {
+            "code": "standaloneOnlyMod",
+            "modId": "example.solo",
+            "message": "The server enables a mod that declares itself standalone. Disable it in an explicitly confirmed derived profile to play together.",
+            "serverValue": "",
+            "clientValue": ""
+          },
+          {
+            "code": "missingRequiredMod",
+            "modId": "example.gameplay",
+            "message": "The server requires a session-compatible copy of this mod on every client.",
+            "serverValue": "session/required",
+            "clientValue": "absent"
+          },
+          {
+            "code": "serverOnlyModOnClient",
+            "modId": "example.admin",
+            "message": "A server-only mod is enabled in the interactive client profile.",
+            "serverValue": "absent",
+            "clientValue": "server-only"
+          },
+          {
+            "code": "implicitSharedContentMismatch",
+            "modId": "example.plain",
+            "message": "Implicitly shared mods must be the identical package on every peer.",
+            "serverValue": "1.0.0@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "clientValue": "1.1.0@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "inactiveSessionReasons": []
+      }
+    }
+  ]
+}

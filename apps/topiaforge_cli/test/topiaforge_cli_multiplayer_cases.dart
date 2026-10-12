@@ -119,7 +119,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(migrateNoOp.stdout, contains('valid schema V6; no files changed'));
   });
 
-  test('mod remove multiplayer keeps the project on standalone V6', () async {
+  test('mod remove multiplayer leaves V6 without a multiplayer block', () async {
     final created = await currentHarness().runCli([
       'new',
       'mod',
