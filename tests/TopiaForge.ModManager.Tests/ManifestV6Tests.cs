@@ -11,7 +11,7 @@ namespace TopiaForge.ModManager.Tests
     internal static class ManifestV6Tests
     {
         private static readonly byte[] ContractLockBytes = System.Text.Encoding.UTF8.GetBytes(
-            "{\"schemaVersion\":2,\"protocolVersion\":\"1.0.0\",\"contracts\":[]}");
+            "{\"schemaVersion\":3,\"contracts\":[]}");
 
         public static void Run(string root)
         {

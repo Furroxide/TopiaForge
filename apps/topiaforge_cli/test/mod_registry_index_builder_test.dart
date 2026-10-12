@@ -126,8 +126,7 @@ void main() {
     'directory index retains packed contract lock admission metadata',
     () async {
       const lockPath = 'topiaforge.multiplayer.lock.json';
-      const lockBytes =
-          '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}';
+      const lockBytes = '{"schemaVersion":3,"contracts":[]}';
       final lockHash = sha256.convert(utf8.encode(lockBytes)).toString();
       final packages = Directory(p.join(temp.path, 'packages'))..createSync();
       File(
@@ -296,8 +295,7 @@ void main() {
 
   test('registry entry retains packed contract lock admission metadata', () {
     const lockPath = 'topiaforge.multiplayer.lock.json';
-    const lockBytes =
-        '{"schemaVersion":2,"protocolVersion":"1.0.0","contracts":[]}';
+    const lockBytes = '{"schemaVersion":3,"contracts":[]}';
     final lockHash = sha256.convert(utf8.encode(lockBytes)).toString();
     final package = readModPackage(
       _packageBytes(

@@ -240,7 +240,7 @@ internal static class Program
         Directory.CreateDirectory(contentRoot);
         var synchronizedContent = "{\"difficulty\":8}"u8.ToArray();
         var contractLock =
-            "{\"schemaVersion\":2,\"protocolVersion\":\"1.0.0\",\"contracts\":[]}"u8.ToArray();
+            "{\"schemaVersion\":3,\"contracts\":[]}"u8.ToArray();
         File.WriteAllBytes(Path.Combine(contentRoot, "gameplay-rules.json"), synchronizedContent);
         File.WriteAllBytes(Path.Combine(packageRoot, lockPath), contractLock);
         File.WriteAllBytes(Path.Combine(packageRoot, "Example.dll"), "managed fixture"u8.ToArray());

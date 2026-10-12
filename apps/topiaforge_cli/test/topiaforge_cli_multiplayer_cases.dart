@@ -61,12 +61,11 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
       p.join(projectDir, 'topiaforge.multiplayer.lock.json'),
     );
     expect(jsonDecode(lockFile.readAsStringSync()), {
-      'schemaVersion': 2,
-      'protocolVersion': '1.0.0',
+      'schemaVersion': 3,
       'contracts': <Object?>[],
     });
 
-    const generatedLock = '{"schemaVersion":2,"contracts":[{"id":"kept"}]}';
+    const generatedLock = '{"schemaVersion":3,"contracts":[{"id":"kept"}]}';
     lockFile.writeAsStringSync(generatedLock);
     final addedAgain = await currentHarness().runCli([
       'mod',
@@ -99,8 +98,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     );
     expect(synchronized.stdout, contains('Synchronized'));
     expect(jsonDecode(lockFile.readAsStringSync()), {
-      'schemaVersion': 2,
-      'protocolVersion': '1.0.0',
+      'schemaVersion': 3,
       'contracts': <Object?>[],
     });
 

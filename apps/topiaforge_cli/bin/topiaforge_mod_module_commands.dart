@@ -147,13 +147,7 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
       final contractLock = File(
         p.join(root.path, 'topiaforge.multiplayer.lock.json'),
       );
-      final protocolVersion =
-          updatedManifest.multiplayer?.protocol?.version ?? '';
-      final initialContractLock = <String, Object?>{
-        'schemaVersion': 2,
-        if (protocolVersion.isNotEmpty) 'protocolVersion': protocolVersion,
-        'contracts': <Object?>[],
-      };
+      final initialContractLock = initialMultiplayerContractLock();
       updates[contractLock] = add
           ? (contractLock.existsSync()
                 ? readBoundedTextFileSync(
