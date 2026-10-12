@@ -231,7 +231,8 @@ arriving on any path, proves the peer receives there.
   connection moves when the peer answers; the peer then sees this side's traffic arrive on the new path and follows
   the same way.
 - **Answers.** A PATH_RESPONSE goes back on the path its challenge arrived on, never larger than the datagram that
-  carried the challenge.
+  carried the challenge. A datagram earns one answer however many challenges it packs, so the answers never outweigh
+  it; a correct peer sends one challenge per packet.
 - **Limits.** At most two paths are tried at once, each with up to three challenges, after which it is abandoned and
   the connection stays where it was. A stray copy of a genuine packet can therefore draw at most three challenges
   toward its source.
@@ -259,7 +260,8 @@ Each connection's 256 kbit/s budget (section 8) is shared by three classes:
   spent uplink last.
 - **Shedding.** While connections keep finding the uplink spent, the shedding level rises one step a second: level 1
   halves voice, level 2 stops it, and level 3 also asks the engine to lower its delta rate (WS3 connects
-  `SheddingLevel` to the engine). Three quiet seconds lower it a step.
+  `SheddingLevel` to the engine). Three quiet seconds lower it a step. A class at a rate of zero sends nothing at all,
+  whatever its bucket still holds.
 
 ## 12. Info query
 
@@ -277,6 +279,8 @@ Before joining, a browser asks a host about its session without a handshake.
 - Queries share the handshake's budgets: 10 a second per source and 200 per endpoint.
 - The browser keeps at most 64 queries outstanding, for 5 s each, and accepts a reply only from the path the query
   went to and with its id. Replies queue for `TryReceiveInfo` with the measured round trip.
+- A query's expiry is one of the endpoint's timers, so a browser with no connections still wakes to forget it, and a
+  reply is checked against the lifetime when it arrives, however rarely the endpoint is polled.
 
 ## 13. Tests
 
@@ -298,10 +302,11 @@ Before joining, a browser asks a host about its session without a handshake.
   forged and misaddressed packets. `RawTransportPeer` speaks the protocol by hand to send what a correct peer never
   would.
 - **Paths, classes and info.** `TransportPathTests` covers NAT rebinding, relay-to-direct upgrade, unanswered probes,
-  relay-only privacy, stray copies, echoed challenges and response sizes. `TransportShapingTests` measures the class
-  caps, Session's share under datagram load and alone, and three connections sharing a small uplink fairly while it
-  sheds voice first. `TransportInfoTests` covers the query round trip, sizes, matching, a version mismatch and the
-  rate limits.
+  relay-only privacy, stray copies, echoed challenges, response sizes, and a datagram packing four challenges.
+  `TransportShapingTests` measures the class caps, Session's share under datagram load and alone, a rate of zero, and
+  three connections sharing a small uplink fairly while it climbs every shedding level, voice first.
+  `TransportInfoTests` covers the query round trip, sizes, matching, a version mismatch, the rate limits, and expiry
+  without a poll.
 - **End to end.** `TransportEngineTests` runs the provider's own session engine, host and client, over the transport
   on a lossy network: the client joins, a command round-trips, and leaving closes both connections normally.
 - **Fuzzing.** `TransportFuzzTests` sends 4,000 seeded hostile datagrams against a live session, over every kind of

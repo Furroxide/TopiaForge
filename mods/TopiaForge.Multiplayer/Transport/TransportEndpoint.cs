@@ -215,7 +215,7 @@ namespace TopiaForge.Multiplayer.Transport
         /// <summary>Gets when <see cref="Poll"/> must next run, or <see cref="long.MaxValue"/> when nothing is pending.</summary>
         internal long NextTimeoutMicros()
         {
-            var deadline = long.MaxValue;
+            var deadline = NextQueryExpiry();
             foreach (var connection in connections) deadline = Math.Min(deadline, connection.NextTimeout());
             return deadline;
         }

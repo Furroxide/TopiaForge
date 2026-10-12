@@ -56,6 +56,7 @@ namespace TopiaForge.Multiplayer.Transport
             FrameRead read;
             receivingFrom = from;
             receivingSize = count;
+            answeredThisDatagram = false;
             try
             {
                 read = FrameReader.Read(plaintext, 0, length, this, ackRanges);

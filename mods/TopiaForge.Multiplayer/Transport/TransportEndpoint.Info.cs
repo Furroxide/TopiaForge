@@ -108,6 +108,8 @@ namespace TopiaForge.Multiplayer.Transport
 
         private void ReceiveInfoReply(TransportPath path, byte[] datagram, int offset, int count, long now)
         {
+            // A query's lifetime holds however rarely the endpoint is polled: a late reply matches nothing.
+            ExpireQueries(now);
             if (!InfoPackets.TryReadReply(datagram, offset, count, out var version, out var id, out var info) ||
                 !outstandingQueries.TryGetValue(id, out var query) || !query.Path.Equals(path))
             {
@@ -118,6 +120,17 @@ namespace TopiaForge.Multiplayer.Transport
             outstandingQueries.Remove(id);
             if (infoReplies.Count >= MaximumQueuedReplies) infoReplies.Dequeue();
             infoReplies.Enqueue(new TransportInfoReply(path, version, info, now - query.SentAt));
+        }
+
+        /// <summary>Gets how many queries await a reply.</summary>
+        internal int OutstandingQueryCount => outstandingQueries.Count;
+
+        /// <summary>Gets when the oldest outstanding query expires, or <see cref="long.MaxValue"/> when none is outstanding.</summary>
+        private long NextQueryExpiry()
+        {
+            var deadline = long.MaxValue;
+            foreach (var entry in outstandingQueries) deadline = Math.Min(deadline, entry.Value.SentAt + QueryLifetimeMicros);
+            return deadline;
         }
 
         private void ExpireQueries(long now)
