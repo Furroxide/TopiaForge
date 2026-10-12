@@ -46,7 +46,7 @@ namespace TopiaForge.Multiplayer.Engine
         public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler)
         {
             ThrowIfClosing();
-            return Own(engine.SubscribeSession(handler));
+            return OwnSubscription(engine.SubscribeSession(handler));
         }
 
         public OperationResult<IReplicatedState<T>> RegisterState<T>(ReplicatedStateDefinition<T> definition) where T : class =>
@@ -111,7 +111,7 @@ namespace TopiaForge.Multiplayer.Engine
             where TInput : class
         {
             ThrowIfClosing();
-            return Own(engine.SubscribeObjects(OwnerModId, type, handler));
+            return OwnSubscription(engine.SubscribeObjects(OwnerModId, type, handler));
         }
 
         public bool TryGetNetworkObjectId(IEntity entity, out NetworkObjectId id)
@@ -148,7 +148,7 @@ namespace TopiaForge.Multiplayer.Engine
         public IDisposable SubscribeTick(Action<MultiplayerTickContext> handler)
         {
             ThrowIfClosing();
-            return Own(engine.SubscribeTick(handler));
+            return OwnSubscription(engine.SubscribeTick(handler));
         }
 
         public bool TryGetEntity(NetworkObjectId id, out IEntity? entity)
@@ -193,13 +193,23 @@ namespace TopiaForge.Multiplayer.Engine
             if (IsClosing) throw new ObjectDisposedException(nameof(IMultiplayerSession), ClosingMessage);
         }
 
+        /// <summary>
+        /// Takes ownership of a new registration. If the facade closed while it was being made, the registration is
+        /// disposed and the caller gets <see cref="ModErrorCode.Cancelled"/> instead of a handle that is already dead.
+        /// </summary>
         private OperationResult<T> OwnResult<T>(OperationResult<T> result) where T : notnull
         {
-            if (result.TryGetValue(out var value) && value is IDisposable disposable) Own(disposable);
+            if (result.TryGetValue(out var value) && value is IDisposable disposable && !TryOwn(disposable)) return Closing<T>();
             return result;
         }
 
-        private TDisposable Own<TDisposable>(TDisposable disposable) where TDisposable : IDisposable
+        private IDisposable OwnSubscription(IDisposable subscription)
+        {
+            if (!TryOwn(subscription)) throw new ObjectDisposedException(nameof(IMultiplayerSession), ClosingMessage);
+            return subscription;
+        }
+
+        private bool TryOwn(IDisposable disposable)
         {
             lock (ownedGate)
             {
@@ -214,12 +224,12 @@ namespace TopiaForge.Multiplayer.Engine
                     }
 
                     owned.Add(disposable);
-                    return disposable;
+                    return true;
                 }
             }
 
             disposable.Dispose();
-            return disposable;
+            return false;
         }
 
         private static bool IsRetired(IDisposable item) => item switch
