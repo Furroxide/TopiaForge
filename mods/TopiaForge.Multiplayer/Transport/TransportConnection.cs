@@ -248,6 +248,7 @@ namespace TopiaForge.Multiplayer.Transport
             sendKey = null;
             receiveKey = null;
             loss.Clear();
+            sendStream.Release();
             realtime.ClearQueued();
             voice.ClearQueued();
             if (CloseReason != TransportCloseReason.HandshakeFailed)

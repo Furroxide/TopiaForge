@@ -138,6 +138,7 @@ internal static class Program
             TransportDeliveryTests.SessionFramesArriveWholeAndInOrderThroughLoss();
             TransportDeliveryTests.FlowControlHoldsTheSenderUntilTheReaderConsumes();
             TransportDeliveryTests.TheProcessCapRefusesBytesItCannotHold();
+            TransportDeliveryTests.PeersFillingTheCapCannotStallTheRest();
             TransportDeliveryTests.DatagramChannelsDeliverOnlyNewerFrames();
             TransportDeliveryTests.ProbesCarryTailLossThemselves();
             TransportDeliveryTests.ABacklogPastItsCapClosesTheConnection();

@@ -90,11 +90,12 @@ namespace TopiaForge.Multiplayer.Transport
             }
 
             // The process-wide cap refuses bytes it cannot hold; the sender retransmits them later.
-            if (!endpoint.CanBuffer(receiveStream.NewBytes(offset, data))) return false;
+            if (!endpoint.CanBuffer(this, receiveStream.NewBytes(offset, data))) return false;
             var before = receiveStream.BufferedBytes;
             var result = receiveStream.Accept(offset, data);
             endpoint.OnReassemblyChanged(this, receiveStream.BufferedBytes - before);
             if (result == StreamAcceptResult.FrameTooLarge) throw new ProtocolException("A session frame exceeded the largest frame.");
+            if (result == StreamAcceptResult.MalformedLength) throw new ProtocolException("A session frame length was not a minimal varint.");
             return true;
         }
 

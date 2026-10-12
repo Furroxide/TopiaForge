@@ -124,9 +124,16 @@ internal static class TransportComponentTests
         That(receive.Accept(1_500, new byte[10]) == StreamAcceptResult.FlowControlViolation, "bytes past the window are a violation");
         That(new SessionReceiveStream(1_000, 400).Accept(0, new byte[] { 0x91, 0x03 }) == StreamAcceptResult.FrameTooLarge,
             "a frame longer than the largest frame is refused");
+        That(new SessionReceiveStream(1_000, 400).Accept(0, new byte[] { 0x80, 0x00 }) == StreamAcceptResult.MalformedLength &&
+             new SessionReceiveStream(1_000, 400).Accept(0, new byte[] { 0x80, 0x80, 0x80, 0x80, 0x80, 0x01 }) == StreamAcceptResult.MalformedLength,
+            "a length must be a minimal varint of at most five bytes");
         var duplicate = new SessionReceiveStream(1_000, 400);
         duplicate.Accept(0, bytes.Take(100).ToArray());
         That(duplicate.NewBytes(50, new byte[100]) == 50 && duplicate.NewBytes(0, new byte[100]) == 0, "only bytes past the delivered end are new");
+        That(duplicate.BufferedBytes == 100, "a frame's announced length reserves nothing ahead of its bytes (" + duplicate.BufferedBytes + ")");
+        var growth = duplicate.NewBytes(100, bytes.Skip(100).Take(50).ToArray());
+        duplicate.Accept(100, bytes.Skip(100).Take(50).ToArray());
+        That(duplicate.BufferedBytes == 150 && growth == 50, "so what admission is told is what the stream then holds");
     }
 
     internal static void PacerHoldsTheBurstThenTheSustainedRate()

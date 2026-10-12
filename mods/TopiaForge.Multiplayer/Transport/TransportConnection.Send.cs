@@ -177,6 +177,9 @@ namespace TopiaForge.Multiplayer.Transport
             pingPending = false;
             windowPending = false;
             loss.Clear();
+
+            // Nothing more of the stream will ever go out, so its buffers go now rather than when the link is dropped.
+            sendStream.Release();
             realtime.ClearQueued();
             voice.ClearQueued();
         }

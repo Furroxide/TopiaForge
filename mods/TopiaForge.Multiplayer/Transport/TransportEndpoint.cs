@@ -252,7 +252,14 @@ namespace TopiaForge.Multiplayer.Transport
         internal void Report(TransportDiagnosticKind kind, long connectionNumber, string message) =>
             Options.Diagnostics?.Report(kind, connectionNumber, message);
 
-        internal bool CanBuffer(long bytes) => ReassemblyBytes + bytes <= Options.ProcessReassemblyBytes;
+        /// <summary>
+        /// Gets whether <paramref name="connection"/> may buffer <paramref name="bytes"/> more: while the endpoint stays
+        /// under its cap, or while the connection holds less than an equal share of the cap. Peers that fill the cap
+        /// therefore cannot stall the others, and the endpoint never holds more than twice the cap.
+        /// </summary>
+        internal bool CanBuffer(TransportConnection connection, long bytes) =>
+            ReassemblyBytes + bytes <= Options.ProcessReassemblyBytes ||
+            connection.BufferedBytes + bytes <= Options.ProcessReassemblyBytes / Math.Max(1, ConnectionCount);
 
         internal void OnReassemblyChanged(TransportConnection connection, long delta)
         {
