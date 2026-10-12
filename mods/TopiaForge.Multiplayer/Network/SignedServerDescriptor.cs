@@ -17,20 +17,28 @@ namespace TopiaForge.Multiplayer.Network
 
         private static readonly byte[] Context = Encoding.ASCII.GetBytes("TopiaForge server descriptor v1\n");
 
+        private readonly byte[] signature;
+        private readonly byte[] bytes;
+
+        /// <summary>Takes ownership of <paramref name="signature"/> and <paramref name="bytes"/>; callers pass fresh arrays.</summary>
         private SignedServerDescriptor(ServerDescriptor descriptor, byte[] signature, byte[] bytes)
         {
             Descriptor = descriptor;
-            Signature = signature;
-            Bytes = bytes;
+            this.signature = signature;
+            this.bytes = bytes;
             Sha256 = WireText.ToHex(WireText.Sha256(bytes));
         }
 
         internal ServerDescriptor Descriptor { get; }
 
-        internal byte[] Signature { get; }
+        /// <summary>Gets a copy of the signature.</summary>
+        internal byte[] Signature => (byte[])signature.Clone();
 
-        /// <summary>Gets the exact canonical bytes that are served and pinned.</summary>
-        internal byte[] Bytes { get; }
+        /// <summary>Gets a copy of the exact canonical bytes that are served and pinned.</summary>
+        internal byte[] Bytes => (byte[])bytes.Clone();
+
+        /// <summary>Gets the length of <see cref="Bytes"/> without copying them.</summary>
+        internal int Length => bytes.Length;
 
         /// <summary>Gets the lowercase hexadecimal SHA-256 of <see cref="Bytes"/>, which a join plan pins.</summary>
         internal string Sha256 { get; }

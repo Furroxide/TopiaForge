@@ -74,6 +74,14 @@
       "host": "::1",
       "port": 27250,
       "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/::1/27250"
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/host.3com/27250",
+      "kind": "direct",
+      "serverId": "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+      "host": "host.3com",
+      "port": 27250,
+      "canonical": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/host.3com/27250"
     }
   ],
   "invalid": [
@@ -139,7 +147,11 @@
     },
     {
       "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/999.1.1.1/27250",
-      "about": "Not an address, and digits cannot end a name."
+      "about": "Not an address, and a name of digits and dots only is refused."
+    },
+    {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/1.2.3/27250",
+      "about": "Digits and dots never make a name, however many parts."
     },
     {
       "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/192.168.001.20/27250",

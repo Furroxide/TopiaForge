@@ -256,6 +256,8 @@ links_valid = [
      "host": "play.example.org", "port": 27250, "canonical": "topiaforge://join/direct/" + SERVER + "/play.example.org/27250"},
     {"input": "topiaforge://join/direct/" + SERVER + "/::1/27250", "kind": "direct", "serverId": SERVER,
      "host": "::1", "port": 27250, "canonical": "topiaforge://join/direct/" + SERVER + "/::1/27250"},
+    {"input": "topiaforge://join/direct/" + SERVER + "/host.3com/27250", "kind": "direct", "serverId": SERVER,
+     "host": "host.3com", "port": 27250, "canonical": "topiaforge://join/direct/" + SERVER + "/host.3com/27250"},
 ]
 links_invalid = [
     {"input": "topiaforge://join/ABCDE12345?x=1", "about": "No query strings."},
@@ -273,7 +275,8 @@ links_invalid = [
     {"input": "topiaforge://join/direct/" + SERVER + "/192.168.1.20/65536", "about": "Port above 65535."},
     {"input": "topiaforge://join/direct/" + SERVER + "/192.168.1.20/080", "about": "Ports have no leading zero."},
     {"input": "topiaforge://join/direct/" + SERVER + "/192.168.1.20", "about": "A direct link needs a port."},
-    {"input": "topiaforge://join/direct/" + SERVER + "/999.1.1.1/27250", "about": "Not an address, and digits cannot end a name."},
+    {"input": "topiaforge://join/direct/" + SERVER + "/999.1.1.1/27250", "about": "Not an address, and a name of digits and dots only is refused."},
+    {"input": "topiaforge://join/direct/" + SERVER + "/1.2.3/27250", "about": "Digits and dots never make a name, however many parts."},
     {"input": "topiaforge://join/direct/" + SERVER + "/192.168.001.20/27250", "about": "IPv4 parts have no leading zero."},
     {"input": "topiaforge://join/direct/" + SERVER + "/[::1]/27250", "about": "IPv6 is written without brackets."},
     {"input": "topiaforge://join/direct/" + SERVER + "/bad_host.example/27250", "about": "Host names are letters, digits and hyphens."},

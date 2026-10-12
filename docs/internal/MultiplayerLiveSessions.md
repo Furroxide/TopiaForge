@@ -101,7 +101,8 @@ A host describes its session in a descriptor and signs it. A joining player chec
 - **Hosts.** A host is one of three things:
   - an IPv4 address in dotted decimal;
   - an IPv6 address in RFC 5952 form, without brackets since it fills a whole path segment;
-  - a lowercase DNS name.
+  - a lowercase DNS name of letters, digits and hyphens, where labels may start with a digit (RFC 1123) but a name of
+    digits and dots only is refused, since it would read as a malformed address.
   An IPv4-mapped IPv6 address becomes the IPv4 address it maps.
 - **Invite codes** are 10 characters of Crockford base32, 50 random bits. Reading them is forgiving: case, hyphens
   and spaces are ignored, O reads as 0, and I and L read as 1. The canonical code is upper case without separators,

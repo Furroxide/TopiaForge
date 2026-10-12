@@ -17,6 +17,8 @@ namespace TopiaForge.Multiplayer.Network
         private readonly byte[] transportPrivateKey;
         private readonly byte[] signingSeed;
         private readonly byte[] hostSecret;
+        private readonly byte[] transportPublicKey;
+        private readonly byte[] signingPublicKey;
         private bool disposed;
 
         internal LocalIdentity(byte[] transportPrivateKey, byte[] signingSeed, byte[] hostSecret, long createdAt)
@@ -29,18 +31,20 @@ namespace TopiaForge.Multiplayer.Network
             this.signingSeed = (byte[])signingSeed.Clone();
             this.hostSecret = (byte[])hostSecret.Clone();
             CreatedAt = createdAt;
-            TransportPublicKey = X25519.DerivePublicKey(this.transportPrivateKey);
-            SigningPublicKey = Ed25519.DerivePublicKey(this.signingSeed);
-            ServerId = ServerDescriptor.ServerIdOf(SigningPublicKey);
-            Fingerprint = WireText.ToHex(TransportPublicKey);
+            transportPublicKey = X25519.DerivePublicKey(this.transportPrivateKey);
+            signingPublicKey = Ed25519.DerivePublicKey(this.signingSeed);
+            ServerId = ServerDescriptor.ServerIdOf(signingPublicKey);
+            Fingerprint = WireText.ToHex(transportPublicKey);
         }
 
         /// <summary>Gets the creation time in Unix seconds.</summary>
         internal long CreatedAt { get; }
 
-        internal byte[] TransportPublicKey { get; }
+        /// <summary>Gets a copy of the X25519 public key; the fingerprint is derived from the original.</summary>
+        internal byte[] TransportPublicKey => (byte[])transportPublicKey.Clone();
 
-        internal byte[] SigningPublicKey { get; }
+        /// <summary>Gets a copy of the Ed25519 public key; the server id is derived from the original.</summary>
+        internal byte[] SigningPublicKey => (byte[])signingPublicKey.Clone();
 
         /// <summary>Gets the server id this install hosts under: the SHA-256 of its signing key, in hexadecimal.</summary>
         internal string ServerId { get; }
