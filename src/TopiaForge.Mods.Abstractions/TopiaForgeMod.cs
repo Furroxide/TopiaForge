@@ -28,7 +28,13 @@ namespace TopiaForge.Mods
         {
         }
 
-        internal void Load(IModContext value)
+        internal void Load(IModContext value) => Load(value, null);
+
+        /// <summary>
+        /// Attaches the context, lets the loader finish wiring that needs it (such as binding a generated multiplayer
+        /// contract whose session hooks may read <see cref="Context"/>), then runs <see cref="OnLoad"/>.
+        /// </summary>
+        internal void Load(IModContext value, Action<IModContext>? attached)
         {
             if (value == null)
             {
@@ -41,6 +47,7 @@ namespace TopiaForge.Mods
             }
 
             context = value;
+            attached?.Invoke(value);
             OnLoad();
         }
 

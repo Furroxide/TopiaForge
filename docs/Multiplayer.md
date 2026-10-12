@@ -66,10 +66,7 @@ public partial class ScoreMod : TopiaForgeMod
 
     protected override void OnLoad()
     {
-        var binding = BindMultiplayer(Context.RequireMultiplayer());
-        if (!binding.TryGetValue(out var lease))
-            throw new InvalidOperationException(binding.ErrorMessage);
-        Context.Lifetime.Track(lease);
+        // The generated contract is already bound; there is nothing to wire up here.
     }
 
     [MultiplayerCommand("add-score", Prediction = PredictionMode.Owner)]
@@ -95,6 +92,19 @@ public partial class ScoreMod : TopiaForgeMod
 }
 ```
 
+TopiaForge binds the generated contract after it attaches `Context` and before `OnLoad` runs, so a contract needs no
+binding code. A mod that still calls `BindMultiplayer` for the same session gets a harmless success; mods compiled
+before automatic binding keep binding themselves.
+
+To run code once per session, implement `partial void OnMultiplayerSessionStarted(MultiplayerSessionSnapshot
+snapshot)`, `OnMultiplayerSessionEnded(MultiplayerSessionSnapshot snapshot)`, or both. Started runs on the first
+`Ready` snapshot of each session. Ended runs with the last snapshot seen for it when it ends or another session
+replaces it. Both run on every peer, so check `snapshot.HasWorldAuthority` before spawning canonical objects. Contracts
+without either hook carry no session tracking at all.
+
+Each presentation event also gets `Emit...To` and `Publish...To`, which take a `PresentationTarget` such as
+`PresentationTarget.Only(player)` or `PresentationTarget.AllExcept(player)`.
+
 Ordinary commands receive the transport-authenticated `SenderId`; they must validate authorization against canonical
 session state. Only replicated-object handlers receive `ReplicatedObjectCommandContext`, whose `TargetObjectId` and
 `SenderOwnsTarget` are computed by the provider for the exact canonical object being mutated.
@@ -102,7 +112,11 @@ session state. Only replicated-object handlers receive `ReplicatedObjectCommandC
 Unsupported native or polymorphic payloads, recursive graphs, unbounded strings/arrays, invalid handler signatures,
 duplicate IDs, and generated proxy-name collisions fail compilation. Owner-predicted command and object handlers also
 fail compilation when they touch process-local context/services, mutate arbitrary fields, hide work behind author
-helpers/getters/constructors, or use random/clock APIs. Refresh the checked-in contract lock after changing a contract:
+helpers/getters/constructors, or use random/clock APIs; `command.CreateRandom()` is the prediction-safe source of
+random numbers. A warning flags a handler without prediction that drives local UI, input, player, audio, or Unity
+state, because only the host would see it. Each code is explained in the
+[diagnostics reference](Diagnostics.md#multiplayer-contract-diagnostics). Refresh the checked-in contract lock after
+changing a contract:
 
 ```sh
 topiaforge mod sync multiplayer

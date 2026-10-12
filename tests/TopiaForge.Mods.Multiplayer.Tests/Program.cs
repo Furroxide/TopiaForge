@@ -14,6 +14,7 @@ internal static class Program
             SdkContractCompletionTests.RigCommandsSharePredictionInputsAndTargetEvents();
             SdkContractCompletionTests.RigTicksRunOnlyWithWorldAuthority();
             SdkContractCompletionTests.InterimProvidersRegisterContractsAndExposePlayers();
+            GeneratedLockStabilityTests.SampleLocksMatchGeneratedDescriptors();
             MultiplayerRigTests.RolesExposeCorrectSides();
             MultiplayerRigTests.ServerAndTwoClientsConverge();
             MultiplayerRigTests.RejectedPredictionRollsBack();
