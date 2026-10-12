@@ -19,7 +19,10 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
             }
         }
 
-        /// <summary>Expands a pseudorandom key into <paramref name="length"/> bytes bound to <paramref name="info"/>.</summary>
+        /// <summary>
+        /// Expands a pseudorandom key into <paramref name="length"/> bytes bound to <paramref name="info"/>. Each
+        /// intermediate block is output key material, so it is zeroed once copied out.
+        /// </summary>
         internal static byte[] Expand(byte[] pseudorandomKey, byte[] info, int length)
         {
             if (pseudorandomKey == null) throw new ArgumentNullException(nameof(pseudorandomKey));
@@ -36,13 +39,16 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
                     Buffer.BlockCopy(block, 0, input, 0, block.Length);
                     Buffer.BlockCopy(info, 0, input, block.Length, info.Length);
                     input[input.Length - 1] = (byte)counter;
+                    Array.Clear(block, 0, block.Length);
                     block = hmac.ComputeHash(input);
+                    Array.Clear(input, 0, input.Length);
                     var take = Math.Min(HashSize, length - produced);
                     Buffer.BlockCopy(block, 0, output, produced, take);
                     produced += take;
                 }
             }
 
+            Array.Clear(block, 0, block.Length);
             return output;
         }
 
@@ -54,9 +60,11 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
             if (first == null) throw new ArgumentNullException(nameof(first));
             if (second == null) throw new ArgumentNullException(nameof(second));
             if (first.Length != HashSize || second.Length != HashSize) throw new ArgumentException("Each output is 32 bytes.");
-            var material = Expand(Extract(chainingKey, inputKeyMaterial), Array.Empty<byte>(), 2 * HashSize);
+            var pseudorandomKey = Extract(chainingKey, inputKeyMaterial);
+            var material = Expand(pseudorandomKey, Array.Empty<byte>(), 2 * HashSize);
             Buffer.BlockCopy(material, 0, first, 0, HashSize);
             Buffer.BlockCopy(material, HashSize, second, 0, HashSize);
+            Array.Clear(pseudorandomKey, 0, pseudorandomKey.Length);
             Array.Clear(material, 0, material.Length);
         }
     }

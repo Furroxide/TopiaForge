@@ -385,5 +385,15 @@ namespace TopiaForge.Multiplayer.ThirdParty.BouncyCastle.Crypto.Macs
 
             h0 = h1 = h2 = h3 = h4 = 0;
         }
+
+        // TopiaForge: zeroes the one-time key and the accumulator once the owning cipher is done.
+        internal void Wipe()
+        {
+            Reset();
+            r0 = r1 = r2 = r3 = r4 = 0;
+            s1 = s2 = s3 = s4 = 0;
+            k0 = k1 = k2 = k3 = 0;
+            Array.Clear(currentBlock, 0, currentBlock.Length);
+        }
     }
 }

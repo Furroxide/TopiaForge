@@ -295,13 +295,14 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
             public void Dispose()
             {
                 Array.Clear(chainingKey, 0, chainingKey.Length);
+                cipher.Dispose();
                 sha256.Dispose();
             }
         }
     }
 
-    /// <summary>The transport cipher states a completed handshake yields for one side.</summary>
-    internal sealed class TransportKeys
+    /// <summary>The transport cipher states a completed handshake yields for one side. Disposing it zeroes both keys.</summary>
+    internal sealed class TransportKeys : IDisposable
     {
         internal TransportKeys(CipherState send, CipherState receive)
         {
@@ -312,5 +313,11 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
         internal CipherState Send { get; }
 
         internal CipherState Receive { get; }
+
+        public void Dispose()
+        {
+            Send.Dispose();
+            Receive.Dispose();
+        }
     }
 }

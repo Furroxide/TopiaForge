@@ -45,17 +45,22 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
             }
             else
             {
-                // Bits for the counters about to enter the window still hold counters a full window older.
-                for (var next = highest + 1; next <= counter; next++)
+                // Bits for the counters about to enter the window still hold counters a full window older. The walk
+                // stops on the counter itself rather than stepping past it, which at the top of the range would wrap.
+                var next = highest + 1;
+                while (true)
                 {
                     if (next % 64 == 0 && counter - next >= 63)
                     {
                         bitmap[WordOf(next)] = 0;
-                        next += 63;
+                        if (counter - next == 63) break;
+                        next += 64;
                         continue;
                     }
 
                     bitmap[WordOf(next)] &= ~BitOf(next);
+                    if (next == counter) break;
+                    next++;
                 }
             }
 

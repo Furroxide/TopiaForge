@@ -780,6 +780,21 @@ namespace TopiaForge.Multiplayer.ThirdParty.BouncyCastle.Crypto.Modes
         /// <summary>Reset the cipher to its initial state (ready for a new message with the same key but DIFFERENT nonce).</summary>
         public virtual void Reset() => Reset(clearMac: true, resetCipher: true);
 
+        // TopiaForge: zeroes every copy of the key this instance holds, with the cipher and MAC state derived from it.
+        // The instance needs a key again before its next use.
+        internal void Wipe()
+        {
+            Array.Clear(m_key, 0, m_key.Length);
+            Array.Clear(m_buf, 0, m_buf.Length);
+            Array.Clear(m_mac, 0, m_mac.Length);
+            Array.Clear(m_chacha20.engineState, 0, m_chacha20.engineState.Length);
+            Array.Clear(m_chacha20.x, 0, m_chacha20.x.Length);
+            Array.Clear(m_chacha20.keyStream, 0, m_chacha20.keyStream.Length);
+            (m_poly1305 as Poly1305)?.Wipe();
+            m_bufPos = 0;
+            m_state = State.Uninitialized;
+        }
+
         private void CheckAad()
         {
             switch (m_state)

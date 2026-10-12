@@ -61,8 +61,24 @@ lists every file with its upstream blob hash.
   updated only after the datagram authenticates, so a forgery never moves it. Counters older than the window, and
   repeats, are dropped.
 - **Nonce limits.** The nonce `2^64 − 1` is reserved. Nothing is sealed with it, and `Rekey` derives the next key from
-  it as Noise specifies, keeping the implicit nonce running.
+  it as Noise specifies, keeping the implicit nonce running. The replay window still accepts that last counter
+  correctly; its walk stops on the counter rather than stepping past the top of the range.
 - **Thread affinity.** A cipher state is not thread-safe. WS2f's network thread owns both directions of a connection.
+
+## Key hygiene
+
+Secret material is zeroed when its owner is done with it. Managed memory makes that best effort, since the collector
+may have copied an array before it was cleared, but it is consistent:
+
+- Buffers this code allocates for secrets are cleared once used: Diffie-Hellman results, HKDF's extracted key and
+  output blocks, chaining keys, and the outputs of `Split` and `Rekey`.
+- `ChaCha20Poly1305` holds three copies of its key: its own, the vendored cipher's, and the cipher's engine state.
+  Disposing it zeroes all three, with the keystream and the Poly1305 one-time key derived from them. The vendored
+  `KeyParameter`, `Poly1305` and `ChaCha20Poly1305` each gain an internal `Wipe` for this.
+- A `CipherState` zeroes the key it replaces on `InitializeKey` or `Rekey`, and its key when disposed. A disposed
+  state refuses all work rather than falling back to the keyless pass-through Noise defines.
+- Disposing a `NoiseHandshakeXX` zeroes its static and ephemeral keys, chaining key and handshake cipher state. The
+  `TransportKeys` it splits off belong to the caller, who disposes them when the connection ends.
 
 ## Verification
 
@@ -85,4 +101,5 @@ handshake hash and transport ciphertexts:
 - A fixed-key transcript from an independent Noise implementation written over OpenSSL primitives.
 
 The same tests cover tampering, prologue mismatch, turn order, low-order keys, cipher-state rules, rekeying and the
-replay window.
+replay window, including the top of its counter range. They also read every key copy back after disposal and require
+zeros.

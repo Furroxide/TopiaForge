@@ -5,8 +5,10 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
     /// <summary>
     /// A Noise CipherState for ChaCha20-Poly1305: a key and a 64-bit nonce. Ordered messages use the implicit nonce,
     /// which advances only on success; datagrams carry an explicit nonce that a <see cref="ReplayWindow"/> polices.
+    /// Replacing the key or disposing the state zeroes the key it held, and a disposed state refuses all work rather
+    /// than falling back to the keyless pass-through.
     /// </summary>
-    internal sealed class CipherState
+    internal sealed class CipherState : IDisposable
     {
         /// <summary>Gets the nonce Noise reserves for <see cref="Rekey"/>; no message is ever sealed with it.</summary>
         internal const ulong ReservedNonce = ulong.MaxValue;
@@ -15,22 +17,38 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
 
         private readonly byte[] nonceBytes = new byte[ChaCha20Poly1305.NonceSize];
         private ChaCha20Poly1305? cipher;
+        private bool disposed;
 
         internal bool HasKey => cipher != null;
 
         /// <summary>Gets the implicit nonce the next ordered message uses.</summary>
         internal ulong Nonce { get; private set; }
 
-        /// <summary>Sets the key, or clears it when <paramref name="key"/> is null, and restarts the nonce at zero.</summary>
+        /// <summary>
+        /// Sets the key, or clears it when <paramref name="key"/> is null, and restarts the nonce at zero. The previous
+        /// key is zeroed.
+        /// </summary>
         internal void InitializeKey(byte[]? key)
         {
+            ThrowIfDisposed();
+            cipher?.Dispose();
             cipher = key == null ? null : new ChaCha20Poly1305(key);
             Nonce = 0;
+        }
+
+        /// <summary>Zeroes the key. The state can do no more work.</summary>
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            cipher?.Dispose();
+            cipher = null;
         }
 
         /// <summary>Encrypts with the implicit nonce. Without a key the plaintext passes through, as Noise specifies.</summary>
         internal byte[] EncryptWithAd(byte[] associatedData, byte[] plaintext)
         {
+            ThrowIfDisposed();
             if (plaintext == null) throw new ArgumentNullException(nameof(plaintext));
             if (cipher == null) return (byte[])plaintext.Clone();
             var ciphertext = new byte[plaintext.Length + TagSize];
@@ -42,6 +60,7 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
         /// <summary>Decrypts with the implicit nonce, which advances only when the message authenticates.</summary>
         internal bool TryDecryptWithAd(byte[] associatedData, byte[] ciphertext, out byte[] plaintext)
         {
+            ThrowIfDisposed();
             if (ciphertext == null) throw new ArgumentNullException(nameof(ciphertext));
             plaintext = Array.Empty<byte>();
             if (cipher == null)
@@ -104,8 +123,16 @@ namespace TopiaForge.Multiplayer.Transport.Crypto
             Array.Clear(sealedZeros, 0, sealedZeros.Length);
         }
 
-        private ChaCha20Poly1305 RequireKey() =>
-            cipher ?? throw new InvalidOperationException("The cipher state has no key yet.");
+        private ChaCha20Poly1305 RequireKey()
+        {
+            ThrowIfDisposed();
+            return cipher ?? throw new InvalidOperationException("The cipher state has no key yet.");
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (disposed) throw new ObjectDisposedException(nameof(CipherState));
+        }
 
         /// <summary>Writes the Noise ChaChaPoly nonce: four zero bytes, then the counter in little-endian order.</summary>
         private void EncodeNonce(ulong nonce)

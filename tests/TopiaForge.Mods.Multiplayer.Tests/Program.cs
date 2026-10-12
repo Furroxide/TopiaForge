@@ -111,6 +111,7 @@ internal static class Program
             NoiseHandshakeTests.NoiseXXRejectsTamperingAndMismatches();
             NoiseHandshakeTests.CipherStateFollowsTheNoiseRules();
             NoiseHandshakeTests.ReplayWindowAcceptsEachCounterOnce();
+            NoiseHandshakeTests.KeysAreWipedWhenTheirOwnerIsDone();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

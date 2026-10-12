@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Reflection;
 using System.Text;
 using Aead = provider::TopiaForge.Multiplayer.Transport.Crypto.ChaCha20Poly1305;
 using CipherState = provider::TopiaForge.Multiplayer.Transport.Crypto.CipherState;
@@ -218,6 +219,15 @@ internal static class NoiseHandshakeTests
         Assert(window.Accept(1_000_000) && window.Accept(999_999) && !window.Accept(1_000_000) && window.Highest == 1_000_000,
             "a large jump forgets everything older");
 
+        // Advancing onto the last counter, across whole words or by single steps, must stop there rather than wrap.
+        var top = new ReplayWindow();
+        Assert(top.Accept(ulong.MaxValue - 70) && top.Accept(ulong.MaxValue) && top.Highest == ulong.MaxValue, "the window reaches the last counter");
+        Assert(!top.Accept(ulong.MaxValue) && !top.Accept(ulong.MaxValue - 70) && top.Accept(ulong.MaxValue - 1),
+            "and still accepts each counter once");
+        var stepped = new ReplayWindow();
+        Assert(stepped.Accept(ulong.MaxValue - 2) && stepped.Accept(ulong.MaxValue - 1) && stepped.Accept(ulong.MaxValue) && !stepped.Accept(ulong.MaxValue - 1),
+            "single steps reach it too");
+
         // Every counter of a shuffled run is accepted exactly once, and its replay is refused.
         var shuffled = new ReplayWindow();
         var random = new Random(7);
@@ -232,6 +242,38 @@ internal static class NoiseHandshakeTests
         {
             Assert(shuffled.Accept(counter) && !shuffled.Accept(counter), "counter " + counter + " is accepted once");
         }
+    }
+
+    internal static void KeysAreWipedWhenTheirOwnerIsDone()
+    {
+        var state = new CipherState();
+        state.InitializeKey(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray());
+        state.Seal(1, Array.Empty<byte>(), new byte[] { 1, 2, 3 }, 0, 3, new byte[3 + CipherState.TagSize], 0);
+        var replaced = CipherOf(state);
+        state.Rekey();
+        Assert(KeyCopiesAreZero(replaced), "a rekey zeroes every copy of the key it replaces");
+        var current = CipherOf(state);
+        Assert(!KeyCopiesAreZero(current), "while the new key stays live");
+        state.Dispose();
+        Assert(KeyCopiesAreZero(current) && !state.HasKey, "disposing the state zeroes its key");
+        AssertThrows<ObjectDisposedException>(() => state.EncryptWithAd(Array.Empty<byte>(), new byte[1]),
+            "a disposed state never falls back to passing data through");
+        AssertThrows<ObjectDisposedException>(
+            () => current.Seal(new byte[Aead.NonceSize], Array.Empty<byte>(), new byte[1], 0, 1, new byte[1 + Aead.TagSize], 0),
+            "a wiped cipher refuses work");
+
+        using var initiator = new NoiseHandshake(true, X25519.GeneratePrivateKey(), Prologue);
+        using var responder = new NoiseHandshake(false, X25519.GeneratePrivateKey(), Prologue);
+        var writers = new[] { initiator, responder, initiator };
+        var readers = new[] { responder, initiator, responder };
+        for (var index = 0; index < 3; index++) readers[index].TryReadMessage(writers[index].WriteMessage(Array.Empty<byte>()), out _);
+        var handshakeCipher = CipherOf((CipherState)Field(Field(initiator, "symmetric"), "cipher"));
+        var keys = initiator.Split();
+        var sendCipher = CipherOf(keys.Send);
+        initiator.Dispose();
+        Assert(KeyCopiesAreZero(handshakeCipher) && !KeyCopiesAreZero(sendCipher), "disposing a handshake zeroes its own key, not the ones it split off");
+        keys.Dispose();
+        Assert(KeyCopiesAreZero(sendCipher), "the caller zeroes the transport keys by disposing them");
     }
 
     /// <summary>Runs a handshake with fresh keys, letting <paramref name="alter"/> change message n (1-3) in flight.</summary>
@@ -261,6 +303,31 @@ internal static class NoiseHandshakeTests
     }
 
     private static byte[] Hex(string value) => Convert.FromHexString(value);
+
+    private static Aead CipherOf(CipherState state) => (Aead)Field(state, "cipher");
+
+    /// <summary>Checks every copy of a key: the wrapper's, the vendored cipher's, and the engine state derived from it.</summary>
+    private static bool KeyCopiesAreZero(Aead aead)
+    {
+        var mode = Field(aead, "cipher");
+        var engine = Field(mode, "m_chacha20");
+        return ((byte[])Field(Field(aead, "key"), "m_key")).All(value => value == 0) &&
+            ((byte[])Field(mode, "m_key")).All(value => value == 0) &&
+            ((uint[])Field(engine, "engineState")).All(value => value == 0) &&
+            ((byte[])Field(engine, "keyStream")).All(value => value == 0);
+    }
+
+    /// <summary>Reads a field by name, searching base types too; the key copies live in private and vendored fields.</summary>
+    private static object Field(object owner, string name)
+    {
+        for (var type = owner.GetType(); type != null; type = type.BaseType)
+        {
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null) return field.GetValue(owner) ?? throw new InvalidOperationException("Field " + name + " is null.");
+        }
+
+        throw new InvalidOperationException("No field " + name + " on " + owner.GetType().Name + ".");
+    }
 
     private static void AssertHex(byte[] actual, string expected, string what) =>
         Assert(Convert.ToHexString(actual).Equals(expected, StringComparison.OrdinalIgnoreCase),
