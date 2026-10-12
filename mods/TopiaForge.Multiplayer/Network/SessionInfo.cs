@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Multiplayer.Transport.Packets;
 
 namespace TopiaForge.Multiplayer.Network
 {
@@ -11,7 +12,7 @@ namespace TopiaForge.Multiplayer.Network
     internal sealed class SessionInfo
     {
         internal const string Schema = "topiaforge.session-info/1";
-        internal const int MaximumBytes = 1188;
+        internal const int MaximumBytes = InfoPackets.MaximumInfoBytes;
 
         internal SessionInfo(
             string serverId,
