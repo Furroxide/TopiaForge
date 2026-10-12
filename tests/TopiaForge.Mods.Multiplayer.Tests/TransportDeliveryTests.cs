@@ -65,8 +65,8 @@ internal static class TransportDeliveryTests
         var frames = Enumerable.Range(0, 20).Select(index => Pattern(16 * 1024, index)).ToList();
         foreach (var frame in frames) client.Send(ProviderChannel.Session, frame, 0, frame.Length);
         pair.Network.RunFor(20_000_000);
-        That(host.BufferedBytes > 48 * 1024 && host.BufferedBytes <= (64 + 16) * 1024,
-            "an unread receiver holds its window and at most one frame being assembled (" + host.BufferedBytes + ")");
+        That(host.BufferedBytes > 48 * 1024 && host.BufferedBytes <= 64 * 1024,
+            "an unread receiver holds no more than its window (" + host.BufferedBytes + ")");
         That(pair.Host.ReassemblyBytes == host.BufferedBytes, "the endpoint counts what its connections hold");
         That(client.State == TransportConnectionState.Established && !client.IsStalled, "a blocked sender keeps the connection alive");
 
@@ -117,8 +117,8 @@ internal static class TransportDeliveryTests
             peak = Math.Max(peak, pair.Host.ReassemblyBytes);
             return false;
         }, 10_000_000);
-        That(peak <= ((64 + 16) * 1024) + ProtectedPacket.MaximumFramesBytes && firstAtHost.BufferedBytes + secondAtHost!.BufferedBytes < 3 * 2 * 16 * 1024,
-            "the endpoint stops buffering at its cap, allowing one frame being assembled (" + peak + ")");
+        That(peak <= (2 * 64 * 1024) + ProtectedPacket.MaximumFramesBytes && secondAtHost != null,
+            "the endpoint holds at most twice its cap, the second half only in equal shares (" + peak + ")");
         var firstFrames = new List<byte[]>();
         var secondFrames = new List<byte[]>();
         That(pair.Network.RunUntil(() =>
@@ -128,6 +128,60 @@ internal static class TransportDeliveryTests
             return firstFrames.Count == 3 && secondFrames.Count == 3;
         }, 60_000_000), "refused bytes come again once there is room");
         That(firstFrames.Concat(secondFrames).Zip(frames.Concat(frames)).All(match => match.First.SequenceEqual(match.Second)), "intact");
+    }
+
+    internal static void PeersFillingTheCapCannotStallTheRest()
+    {
+        var network = new VirtualDatagramNetwork(18);
+        var hostOptions = new TransportOptions { Random = new SeededTransportRandom(180), ProcessReassemblyBytes = 64 * 1024 };
+        SmallFrames(hostOptions);
+        var host = new TransportEndpoint(TransportPair.Key(18, 1), hostOptions, network.Now);
+        var hostNode = network.AddEndpoint("host", host);
+
+        // Four authenticated peers each announce a 16 KiB frame and send all but its last three bytes: 16 KiB each with
+        // the length, filling the cap exactly while no frame can complete.
+        var announced = new byte[] { 0x80, 0x80, 0x01 };
+        foreach (var hog in Enumerable.Range(0, 4).Select(index => new RawTransportPeer(network, "hog" + index, 180 + index)))
+        {
+            hog.Connect(hostNode, 64 * 1024);
+            That(network.RunUntil(() => host.TryAccept(out _), 1_000_000), "a hog connects");
+            var stream = announced.Concat(new byte[(16 * 1024) - announced.Length]).ToArray();
+            for (var offset = 0; offset < stream.Length; offset += 1_000)
+            {
+                var piece = stream.Skip(offset).Take(1_000).ToArray();
+                var at = (ulong)offset;
+                hog.Send(hostNode, writer =>
+                {
+                    FrameWriter.WriteStreamHeader(writer, at, piece.Length);
+                    writer.WriteBytes(piece, 0, piece.Length);
+                });
+            }
+        }
+
+        network.RunFor(200_000);
+        That(host.ReassemblyBytes == 64 * 1024, "the hogs hold the whole cap (" + host.ReassemblyBytes + ")");
+
+        var clientOptions = new TransportOptions { Random = new SeededTransportRandom(189) };
+        SmallFrames(clientOptions);
+        var clientEndpoint = new TransportEndpoint(TransportPair.Key(18, 2), clientOptions, network.Now);
+        network.AddEndpoint("client", clientEndpoint);
+        var client = clientEndpoint.Connect(VirtualDatagramNetwork.PathTo(hostNode), network.Now);
+        TransportConnection? atHost = null;
+        That(network.RunUntil(() => client.State == TransportConnectionState.Established && (atHost != null || host.TryAccept(out atHost)), 2_000_000),
+            "a fair client connects");
+        var frames = Enumerable.Range(0, 3).Select(index => Pattern(8 * 1024, index)).ToList();
+        foreach (var frame in frames) client.Send(ProviderChannel.Session, frame, 0, frame.Length);
+        var received = new List<byte[]>();
+        long peak = 0;
+        // Well inside the hogs' idle timeout, so their connections and the cap they hold stay put throughout.
+        That(network.RunUntil(() =>
+        {
+            peak = Math.Max(peak, host.ReassemblyBytes);
+            Drain(atHost!, received);
+            return received.Count == frames.Count;
+        }, 5_000_000) && host.ConnectionCount == 5, "its frames still arrive: a connection below its equal share is always admitted");
+        That(received.Zip(frames).All(match => match.First.SequenceEqual(match.Second)) && peak <= 2 * 64 * 1024,
+            "intact, with the endpoint under twice its cap (" + peak + ")");
     }
 
     internal static void DatagramChannelsDeliverOnlyNewerFrames()
@@ -221,5 +275,8 @@ internal static class TransportDeliveryTests
         That(host.CloseReason == TransportCloseReason.Peer && host.PeerCloseCode == CloseCode.Overloaded && client.CloseReason == TransportCloseReason.Overloaded,
             "both sides know why");
         That(pair.ClientDiagnostics.Reports.Any(report => report.Message == "The session backlog passed its cap."), "the sender reports it");
+        var sendStream = TransportSecrets.Field(client, "sendStream");
+        That(((System.Collections.ICollection)TransportSecrets.Field(sendStream, "chunks")).Count == 0,
+            "and the closed connection lets go of the backlog it can never send");
     }
 }

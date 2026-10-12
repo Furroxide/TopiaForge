@@ -88,9 +88,9 @@ initiator's connection id, so the transcript authenticates the id the initiator 
 - **Cookies.** `CookieGuard` answers an Initiation with a stateless Retry when the endpoint is under load: when it
   already holds 64 half-open handshakes, or when recent Initiations exceed half the global rate. It can also be set
   to always demand a cookie.
-  - A cookie is the first 16 bytes of HMAC-SHA256 over the version, the path key, the initiator's connection id and a
-    two-minute time slot. It is keyed by a secret that rotates every two minutes; the previous secret stays valid
-    for one slot.
+  - A cookie is the first 16 bytes of HMAC-SHA256 over, in this order: the version byte, the two-minute time slot (8
+    bytes, little-endian), the initiator's connection id (8 bytes, little-endian) and the path key. It is keyed by a
+    secret that rotates every two minutes; the previous secret stays valid for one slot.
   - The Retry echoes the initiator's random connection id, so an off-path attacker cannot forge one. An initiator
     accepts at most one Retry per attempt.
 - **Capacity.** At most 256 half-open handshakes and a configured number of established connections, 64 by
@@ -155,13 +155,19 @@ The engine's three channels map onto two mechanisms.
   by its bytes. STREAM frames carry ranges of the stream, which is how a frame of up to the engine's 1,122,304-byte
   maximum spans datagrams.
   - **Flow control.** The receiver advertises with WINDOW the highest offset it accepts: its consumed offset plus
-    2 MiB. It allocates a frame's buffer when the frame's length arrives and counts that allocation, so a connection
-    holds at most its window plus one frame being assembled. A sender that passes the window ends the connection
-    with CLOSE (`FlowControl`). A receiver sends WINDOW once its reader has consumed a quarter of the window.
+    2 MiB. It keeps received bytes in 16 KiB chunks and copies a frame out only when the reader takes it, so it never
+    reserves memory ahead of the bytes themselves and holds at most its window. A sender that passes the window ends
+    the connection with CLOSE (`FlowControl`). A receiver sends WINDOW once its reader has consumed a quarter of the
+    window.
+  - **Frame lengths.** Each frame's length is checked as soon as it arrives. One longer than the largest frame, or
+    not a minimal varint of at most five bytes, is a protocol error.
   - **Process cap.** The endpoint refuses to buffer beyond 32 MiB across all connections. A packet whose stream bytes
-    would pass the cap goes unacknowledged, and the sender retransmits it once there is room.
+    would pass the cap goes unacknowledged, and the sender retransmits it once there is room. A connection holding
+    less than an equal share of the cap is always admitted, so peers that fill the cap cannot stall the others; the
+    endpoint therefore never holds more than twice the cap.
   - **Backlog.** The sender's backlog of unacknowledged stream is capped at 16 MiB. Exceeding it closes the connection
-    with CLOSE (`Overloaded`) rather than growing without bound.
+    with CLOSE (`Overloaded`) rather than growing without bound. Once a connection drains or closes, its send buffers
+    are released at once; only received frames stay readable.
   - Session frames may be queued during the handshake; they leave once the peer's window is known.
 - **Realtime and Voice (unreliable, sequenced).** Each frame is one DATAGRAM frame with a per-channel sequence. The
   receiver delivers only frames newer than the last one it delivered on that channel. A frame must fit one packet

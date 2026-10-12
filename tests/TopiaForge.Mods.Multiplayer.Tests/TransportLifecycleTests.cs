@@ -41,10 +41,14 @@ internal static class TransportLifecycleTests
         pair.Network.Partition(pair.ClientNode, pair.HostNode, false);
         That(pair.Network.RunUntil(() => !client.IsStalled && !host.IsStalled, 2_000_000), "traffic resumes when the path heals");
         pair.Network.Partition(pair.ClientNode, pair.HostNode, true);
+        client.Send(ProviderChannel.Session, Pattern(5_000, 9), 0, 5_000);
         pair.Network.RunFor(10_100_000);
         That(client.State == TransportConnectionState.Closed && client.CloseReason == TransportCloseReason.IdleTimeout &&
              host.CloseReason == TransportCloseReason.IdleTimeout && link.State == ProviderLinkState.Closed,
             "ten seconds of silence ends the connection on both sides");
+        var sendStream = TransportSecrets.Field(client, "sendStream");
+        That(((System.Collections.ICollection)TransportSecrets.Field(sendStream, "chunks")).Count == 0,
+            "a connection that timed out lets go of the frame it never delivered");
         That(pair.ClientDiagnostics.Reports.Last() == (TransportDiagnosticKind.Closed, client.Number, "The connection timed out."),
             "diagnostics name the connection by number");
         That(pair.Client.ConnectionCount == 0 && pair.Host.ConnectionCount == 0, "both endpoints forget it");

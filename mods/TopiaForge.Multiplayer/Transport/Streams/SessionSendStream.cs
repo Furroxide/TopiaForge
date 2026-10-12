@@ -66,6 +66,21 @@ namespace TopiaForge.Multiplayer.Transport.Streams
             if (maximumOffset > PeerMaximumOffset) PeerMaximumOffset = maximumOffset;
         }
 
+        /// <summary>
+        /// Drops every buffered byte for good, as when the connection has ended and can never send them. The stream
+        /// then has nothing to send and nothing owed.
+        /// </summary>
+        internal void Release()
+        {
+            chunks.Clear();
+            spare.Clear();
+            retransmit.Clear();
+            acknowledged.Clear();
+            AcknowledgedFloor = WriteOffset;
+            NextOffset = WriteOffset;
+            chunkBase = WriteOffset;
+        }
+
         /// <summary>Picks the next range to send, lost bytes first, at most <paramref name="maximumLength"/> long.</summary>
         internal bool TryTake(int maximumLength, out StreamRange range)
         {

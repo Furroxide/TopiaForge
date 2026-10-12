@@ -11,27 +11,33 @@ namespace TopiaForge.Multiplayer.Transport.Streams
         FlowControlViolation = 1,
 
         /// <summary>A frame length exceeds the largest frame the engine sends.</summary>
-        FrameTooLarge = 2
+        FrameTooLarge = 2,
+
+        /// <summary>A frame length is not a minimal varint of at most five bytes.</summary>
+        MalformedLength = 3
     }
 
     /// <summary>
-    /// The receiving half of the session stream. It puts ranges back in order, cuts the stream into engine frames, and
-    /// advertises a window of the bytes consumed so far plus 2 MiB, so undelivered and unread bytes never exceed it.
+    /// The receiving half of the session stream. Bytes are kept as they arrive: in-order bytes in chunks, out-of-order
+    /// ranges until the gap before them fills. Each frame's length is checked as soon as it is in, but a frame's bytes
+    /// are copied out only when the reader takes it, and nothing is reserved ahead of the bytes themselves. The memory
+    /// held is therefore exactly what <see cref="BufferedBytes"/> reports, within a chunk at each end, and the window
+    /// bounds it: consumed offset plus 2 MiB.
     /// </summary>
     internal sealed class SessionReceiveStream
     {
+        private const int ChunkSize = 16 * 1024;
+        private const int MaximumLengthBytes = 5;
+
         private readonly List<Segment> pending = new List<Segment>();
-        private readonly Queue<byte[]> frames = new Queue<byte[]>();
-        private readonly Queue<int> footprints = new Queue<int>();
+        private readonly List<byte[]> chunks = new List<byte[]>();
+        private readonly Queue<FrameSpan> frames = new Queue<FrameSpan>();
         private readonly int window;
         private readonly int maximumFrameBytes;
+        private ulong chunkBase;
         private ulong consumed;
+        private ulong nextFrame;
         private long pendingBytes;
-        private ulong lengthValue;
-        private int lengthShift;
-        private int headerBytes;
-        private byte[]? body;
-        private int bodyFilled;
 
         internal SessionReceiveStream(int window, int maximumFrameBytes)
         {
@@ -48,13 +54,16 @@ namespace TopiaForge.Multiplayer.Transport.Streams
 
         internal int FrameCount => frames.Count;
 
-        /// <summary>Gets the bytes this stream holds: out of order, partly parsed, or parsed but unread.</summary>
-        internal long BufferedBytes => pendingBytes + (long)(Delivered - consumed) + (body == null ? 0 : body.Length - bodyFilled);
+        /// <summary>Gets the bytes this stream holds: out of order, or in order and not yet read.</summary>
+        internal long BufferedBytes => pendingBytes + (long)(Delivered - consumed);
 
         /// <summary>Gets whether enough was consumed that a larger window is worth advertising.</summary>
         internal bool IsWindowUpdateDue => consumed + (ulong)window - AdvertisedMaximum >= (ulong)(window / 4);
 
-        /// <summary>Returns the bytes <paramref name="data"/> would add to the buffer, so the endpoint can refuse them.</summary>
+        /// <summary>
+        /// Returns the most <paramref name="data"/> can add to <see cref="BufferedBytes"/>: its bytes past the delivered
+        /// end. Bytes already held out of order may make the true growth smaller, never larger.
+        /// </summary>
         internal long NewBytes(ulong offset, byte[] data)
         {
             var end = offset + (ulong)data.Length;
@@ -68,14 +77,15 @@ namespace TopiaForge.Multiplayer.Transport.Streams
             if (end <= Delivered || data.Length == 0) return StreamAcceptResult.Accepted;
             var start = Math.Max(offset, Delivered);
             var skip = (int)(start - offset);
-            if (start == Delivered)
+            if (start != Delivered)
             {
-                if (!Feed(data, skip, data.Length - skip)) return StreamAcceptResult.FrameTooLarge;
-                return DrainPending();
+                Store(start, data, skip);
+                return StreamAcceptResult.Accepted;
             }
 
-            Store(start, data, skip);
-            return StreamAcceptResult.Accepted;
+            Append(data, skip, data.Length - skip);
+            DrainPending();
+            return ParseFrames();
         }
 
         internal bool TryDequeue(out byte[] frame)
@@ -86,8 +96,16 @@ namespace TopiaForge.Multiplayer.Transport.Streams
                 return false;
             }
 
-            frame = frames.Dequeue();
-            consumed += (ulong)footprints.Dequeue();
+            var span = frames.Dequeue();
+            frame = new byte[span.Length];
+            CopyOut(span.BodyStart, frame);
+            consumed = span.BodyStart + (ulong)span.Length;
+            while (chunks.Count > 0 && consumed >= chunkBase + ChunkSize)
+            {
+                chunks.RemoveAt(0);
+                chunkBase += ChunkSize;
+            }
+
             return true;
         }
 
@@ -98,20 +116,46 @@ namespace TopiaForge.Multiplayer.Transport.Streams
             return AdvertisedMaximum;
         }
 
-        private StreamAcceptResult DrainPending()
+        /// <summary>Records every frame whose length and bytes have both arrived, checking each length as it lands.</summary>
+        private StreamAcceptResult ParseFrames()
+        {
+            while (nextFrame < Delivered)
+            {
+                ulong length = 0;
+                var lengthBytes = 0;
+                while (true)
+                {
+                    if (lengthBytes == MaximumLengthBytes) return StreamAcceptResult.MalformedLength;
+                    var position = nextFrame + (ulong)lengthBytes;
+                    if (position >= Delivered) return StreamAcceptResult.Accepted;
+                    var next = ByteAt(position);
+                    if (lengthBytes > 0 && next == 0) return StreamAcceptResult.MalformedLength;
+                    length |= (ulong)(next & 0x7F) << (7 * lengthBytes);
+                    lengthBytes++;
+                    if ((next & 0x80) == 0) break;
+                }
+
+                if (length > (ulong)maximumFrameBytes) return StreamAcceptResult.FrameTooLarge;
+                var bodyStart = nextFrame + (ulong)lengthBytes;
+                if (bodyStart + length > Delivered) return StreamAcceptResult.Accepted;
+                frames.Enqueue(new FrameSpan(bodyStart, (int)length));
+                nextFrame = bodyStart + length;
+            }
+
+            return StreamAcceptResult.Accepted;
+        }
+
+        private void DrainPending()
         {
             while (pending.Count > 0 && pending[0].Offset <= Delivered)
             {
                 var segment = pending[0];
                 pending.RemoveAt(0);
                 pendingBytes -= segment.Data.Length;
-                var end = segment.Offset + (ulong)segment.Data.Length;
-                if (end <= Delivered) continue;
+                if (segment.End <= Delivered) continue;
                 var skip = (int)(Delivered - segment.Offset);
-                if (!Feed(segment.Data, skip, segment.Data.Length - skip)) return StreamAcceptResult.FrameTooLarge;
+                Append(segment.Data, skip, segment.Data.Length - skip);
             }
-
-            return StreamAcceptResult.Accepted;
         }
 
         /// <summary>Keeps an out-of-order range, storing only the bytes no kept range already covers.</summary>
@@ -140,48 +184,40 @@ namespace TopiaForge.Multiplayer.Transport.Streams
             }
         }
 
-        /// <summary>Parses in-order bytes into frames: a varint length, then that many bytes.</summary>
-        private bool Feed(byte[] data, int offset, int count)
+        private void Append(byte[] data, int offset, int count)
         {
-            var position = offset;
-            var end = offset + count;
-            while (position < end)
+            while (count > 0)
             {
-                if (body == null)
-                {
-                    var next = data[position++];
-                    headerBytes++;
-                    if (lengthShift > 28) return false;
-                    lengthValue |= (ulong)(next & 0x7F) << lengthShift;
-                    lengthShift += 7;
-                    if ((next & 0x80) != 0) continue;
-                    if (lengthValue > (ulong)maximumFrameBytes) return false;
-                    body = new byte[(int)lengthValue];
-                    bodyFilled = 0;
-                    if (body.Length == 0) CompleteFrame();
-                    continue;
-                }
-
-                var take = Math.Min(end - position, body.Length - bodyFilled);
-                Buffer.BlockCopy(data, position, body, bodyFilled, take);
-                bodyFilled += take;
-                position += take;
-                if (bodyFilled == body.Length) CompleteFrame();
+                var relative = Delivered - chunkBase;
+                var index = (int)(relative / ChunkSize);
+                if (index == chunks.Count) chunks.Add(new byte[ChunkSize]);
+                var within = (int)(relative % ChunkSize);
+                var take = Math.Min(count, ChunkSize - within);
+                Buffer.BlockCopy(data, offset, chunks[index], within, take);
+                offset += take;
+                count -= take;
+                Delivered += (ulong)take;
             }
-
-            Delivered += (ulong)count;
-            return true;
         }
 
-        private void CompleteFrame()
+        private byte ByteAt(ulong position)
         {
-            frames.Enqueue(body!);
-            footprints.Enqueue(headerBytes + body!.Length);
-            body = null;
-            bodyFilled = 0;
-            lengthValue = 0;
-            lengthShift = 0;
-            headerBytes = 0;
+            var relative = position - chunkBase;
+            return chunks[(int)(relative / ChunkSize)][(int)(relative % ChunkSize)];
+        }
+
+        private void CopyOut(ulong position, byte[] destination)
+        {
+            var copied = 0;
+            while (copied < destination.Length)
+            {
+                var relative = position - chunkBase;
+                var within = (int)(relative % ChunkSize);
+                var take = Math.Min(destination.Length - copied, ChunkSize - within);
+                Buffer.BlockCopy(chunks[(int)(relative / ChunkSize)], within, destination, copied, take);
+                copied += take;
+                position += (ulong)take;
+            }
         }
 
         private readonly struct Segment
@@ -197,6 +233,19 @@ namespace TopiaForge.Multiplayer.Transport.Streams
             internal byte[] Data { get; }
 
             internal ulong End => Offset + (ulong)Data.Length;
+        }
+
+        private readonly struct FrameSpan
+        {
+            internal FrameSpan(ulong bodyStart, int length)
+            {
+                BodyStart = bodyStart;
+                Length = length;
+            }
+
+            internal ulong BodyStart { get; }
+
+            internal int Length { get; }
         }
     }
 }
