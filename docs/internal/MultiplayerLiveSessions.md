@@ -12,7 +12,8 @@ WS2f lands in steps:
    launcher and the control plane share, with fixtures all three replay.
 2. **The network runtime** (sections 11 to 13): the network thread, the UDP socket, and the links the session engine
    sees.
-3. **Hosting and joining**, which follow: LAN discovery, the descriptor endpoint, and the host and join flows.
+3. **Services** (sections 14 to 16): the descriptor endpoint, its client, and LAN discovery.
+4. **Hosting and joining**, which follow: the host and join flows.
 
 ## 1. Identity
 
@@ -252,3 +253,56 @@ measured (`MultiplayerMonoSpike.md`, section 1):
 Paths come from `UdpPaths`. A key is a type byte, the 16-byte IPv6 form of the address and the port: 19 bytes that
 only this layer and the transport see. Private, link-local, unique-local and loopback addresses make LAN paths, which
 relay-only still allows; every other address, carrier-grade NAT included, makes a direct path.
+
+## 14. Services on the network thread
+
+Work that belongs beside the stack runs on the network thread as an `INetworkService`: once per turn, after waiting
+datagrams are read and before the stack is polled.
+
+- **Attaching.** Services are attached and detached through the thread and disposed on it, and stopping the thread
+  disposes every one.
+- **Info replies.** Each reply the stack receives is offered to the services first, so the LAN browser consumes the
+  replies to its own queries. Any reply no service claims goes to the main thread as an event.
+- **Timers.** A service may name its next timer. None may make the thread spin: TCP readiness is not part of the
+  thread's wait, so a service with open TCP connections relies on the 2 ms turn.
+
+## 15. The descriptor endpoint
+
+A host serves its signed descriptor over TCP on the same port number as its game socket. The launcher's Dart client
+speaks the same protocol.
+
+Every line ends in a single newline (`\n`).
+
+| Request (one per connection) | Answer |
+| --- | --- |
+| `TFD1 descriptor` | `TFD1 200 <length>`, then the signed descriptor's exact bytes |
+| `TFD1 package <sha256>` | In developer mode, when the host has that archive: `TFD1 200 <length>` and the archive. Otherwise `TFD1 404`. |
+| Anything else | `TFD1 400` |
+
+- **Request rules.** Requests are printable ASCII ending in a newline, at most 128 bytes, and must arrive within five
+  seconds of connecting.
+- **Statuses.** `TFD1 404` means the host has no descriptor yet, or no such package. `TFD1 429` means the address
+  passed ten requests a second. `TFD1 503` means eight connections are already open.
+- **Writing.** Responses are written 64 KiB at a time, at most four chunks a connection per turn, so a fast reader
+  never delays the datagrams. A transfer gets two minutes. Once the body is sent, the endpoint shuts down its side, so
+  the reader sees the end.
+- **Relay-only hosts** serve LAN addresses only; any other connection is closed unanswered.
+- **The client** (`DescriptorClient`) connects with a deadline, bounds the response to 256 KiB, and verifies the
+  descriptor before returning it, against the server id it expects when it has one. Its failures name a reason:
+  unreachable, timed out, refused or invalid. They never name an address.
+
+## 16. LAN discovery
+
+- **`LanAnnouncer`** sends the host's beacon every two seconds from its own IPv4 socket, so the game socket never
+  needs broadcast rights. It goes to the limited broadcast address and to each up interface's directed broadcast,
+  refreshed every 30 seconds.
+- **`LanBrowser`** listens on UDP 27251 with address reuse. For each beacon it queries the host's game port, again
+  after two seconds without info, and lists the session once the host's info names the server the beacon did.
+  - A beacon that names another server at the same address never borrows that reply.
+  - A host on another transport version is listed as incompatible.
+  - A session silent for six seconds leaves the list.
+  - At most 64 sessions are listed.
+  - The main thread reads a snapshot that is replaced on every change. Each entry keeps its path inside the network
+    layer, for the join flow.
+- **Relay-only browsers** still browse the LAN, since LAN paths are allowed; a beacon from any other address is
+  listed but never queried.
