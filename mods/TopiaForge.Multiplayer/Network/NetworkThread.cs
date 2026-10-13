@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using TopiaForge.Multiplayer.Transport;
 
@@ -68,6 +69,7 @@ namespace TopiaForge.Multiplayer.Network
         private readonly ConcurrentQueue<Action<NetworkStack, long>> commands = new ConcurrentQueue<Action<NetworkStack, long>>();
         private readonly ConcurrentQueue<NetworkEvent> events = new ConcurrentQueue<NetworkEvent>();
         private readonly byte[] buffer = new byte[TransportOptions.MaximumDatagramBytes];
+        private readonly List<INetworkService> services = new List<INetworkService>();
         private readonly Thread thread;
         private long stopDeadline = long.MaxValue;
         private int stopRequested;
@@ -112,6 +114,23 @@ namespace TopiaForge.Multiplayer.Network
 
         internal bool TryTakeEvent(out NetworkEvent networkEvent) => events.TryDequeue(out networkEvent!);
 
+        /// <summary>Runs <paramref name="service"/> on the network thread from its next turn until it is detached.</summary>
+        internal void Attach(INetworkService service)
+        {
+            if (service == null) throw new ArgumentNullException(nameof(service));
+            Post((_, _) => services.Add(service));
+        }
+
+        /// <summary>Stops running <paramref name="service"/> and disposes it, on the network thread.</summary>
+        internal void Detach(INetworkService service)
+        {
+            if (service == null) throw new ArgumentNullException(nameof(service));
+            Post((_, _) =>
+            {
+                if (services.Remove(service)) service.Dispose();
+            });
+        }
+
         /// <summary>
         /// Closes every link gracefully and stops once they have gone or <paramref name="gracefulMicros"/> passes, then
         /// disposes the stack, which wipes the transport's keys, and the socket. Blocks until the thread has ended.
@@ -127,7 +146,11 @@ namespace TopiaForge.Multiplayer.Network
 
             if (Interlocked.CompareExchange(ref started, 2, 0) == 0)
             {
-                // Never started: nothing runs the loop, so release its resources here, and Start now refuses.
+                // Never started: nothing runs the loop, so release its resources here, and Start now refuses. Queued
+                // commands run first, so services attached before the start are disposed too.
+                while (commands.TryDequeue(out var command)) command(stack, clock());
+                foreach (var service in services) service.Dispose();
+                services.Clear();
                 stack.Dispose();
                 socket.Dispose();
                 return;
@@ -163,12 +186,16 @@ namespace TopiaForge.Multiplayer.Network
                         break;
                     }
 
-                    var wait = Math.Min(stack.NextTimeoutMicros() - clock(), MaximumWaitMicros);
+                    var next = stack.NextTimeoutMicros();
+                    foreach (var service in services) next = Math.Min(next, service.NextTimeoutMicros());
+                    var wait = Math.Min(next - clock(), MaximumWaitMicros);
                     if (wait > 0) socket.WaitReadable(wait);
                 }
             }
             finally
             {
+                foreach (var service in services) service.Dispose();
+                services.Clear();
                 stack.Dispose();
                 socket.Dispose();
                 events.Enqueue(NetworkEvent.Ended());
@@ -183,6 +210,7 @@ namespace TopiaForge.Multiplayer.Network
                 stack.Receive(path!, buffer, 0, length, now);
             }
 
+            foreach (var service in services) service.Turn(stack, now);
             stack.Poll(now);
             while (stack.TryDequeueDatagram(out var datagram))
             {
@@ -197,7 +225,12 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             while (stack.TryAccept(out var link)) events.Enqueue(NetworkEvent.Accepted(link));
-            while (stack.Endpoint.TryReceiveInfo(out var reply)) events.Enqueue(NetworkEvent.Received(reply));
+            while (stack.Endpoint.TryReceiveInfo(out var reply))
+            {
+                var claimed = false;
+                foreach (var service in services) claimed = claimed || service.TryClaim(reply, now);
+                if (!claimed) events.Enqueue(NetworkEvent.Received(reply));
+            }
         }
     }
 }

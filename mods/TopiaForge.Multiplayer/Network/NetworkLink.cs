@@ -59,8 +59,8 @@ namespace TopiaForge.Multiplayer.Network
 
         public EngineLinkState State => (EngineLinkState)Volatile.Read(ref state);
 
-        /// <summary>Gets the transport handshake hash, which password proofs bind to.</summary>
-        internal byte[] ChannelBinding => (byte[])channelBinding.Clone();
+        /// <summary>Gets a copy of the transport handshake hash, which password proofs bind to.</summary>
+        public byte[] ChannelBinding => (byte[])channelBinding.Clone();
 
         /// <summary>Gets whether the main thread queued more than the link carries, which closed it.</summary>
         internal bool Overloaded => Volatile.Read(ref overloaded) != 0;

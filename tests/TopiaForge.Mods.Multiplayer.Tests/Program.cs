@@ -206,6 +206,9 @@ internal static class Program
             NetworkSocketTests.TheUdpDriverCarriesDatagramsAndShrugsOffNoise();
             NetworkSocketTests.EnginesJoinOverRealSocketsQuickly();
             NetworkSocketTests.StoppingHonoursItsGracePeriod();
+            NetworkServiceTests.TheDescriptorEndpointServesOnlyWhatItShould();
+            NetworkServiceTests.LanBrowsersFindAnnouncedHosts();
+            NetworkServiceTests.ServicesStopWithTheirThread();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
