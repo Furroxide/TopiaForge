@@ -182,9 +182,11 @@ launcher, and TypeScript in the control plane.
 | `links/` | Valid links with their fields and canonical forms, invalid links (Unicode look-alikes included), and invite code normalization |
 | `lan/` | Beacon bytes, session info, and invalid forms of each |
 | `secrets/` | PBKDF2-HMAC-SHA256 vectors from RFC 7914, password proofs (including composed and decomposed Unicode), and player keys |
+| `control-plane/` | HTTP exchanges and a signaling transcript for the control plane's clients ([ControlPlaneApi.md](ControlPlaneApi.md), section 11) |
 
 An independent Python and OpenSSL implementation generated them, from fixed seeds, so they repeat exactly. Ed25519 is
-deterministic, so signing a valid case's descriptor with its key must reproduce the served bytes.
+deterministic, so signing a valid case's descriptor with its key must reproduce the served bytes. The `control-plane/`
+files are the exception: the service's own tests record them, with a fixed clock and seeded randomness.
 
 ## 10. Tests
 
