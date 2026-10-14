@@ -76,9 +76,11 @@ namespace TopiaForge.Multiplayer.Network
         internal const int MinimumPlayers = 2;
         internal const int MaximumPlayers = 16;
 
+        // A pre-release identifier is digits, then a letter or hyphen, then anything: one way to match each string, so the
+        // pattern runs in linear time. An identifier pattern that let any part take letters backtracked exponentially.
         private static readonly Regex SemanticVersion = new Regex(
             @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)" +
-            @"(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?" +
+            @"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?" +
             @"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z",
             RegexOptions.CultureInvariant);
 
