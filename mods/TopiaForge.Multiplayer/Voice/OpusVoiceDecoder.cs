@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Multiplayer.Engine;
 using TopiaForge.Multiplayer.ThirdParty.Concentus.Structs;
 
 namespace TopiaForge.Multiplayer.Voice
@@ -9,7 +10,7 @@ namespace TopiaForge.Multiplayer.Voice
     /// network, so a packet that fails <see cref="OpusToc"/> or that the codec rejects is concealed instead, and never
     /// throws. It allocates nothing itself. One thread owns it.
     /// </summary>
-    internal sealed class OpusVoiceDecoder
+    internal sealed class OpusVoiceDecoder : IVoiceDecoder
     {
         private readonly OpusDecoder decoder;
 
@@ -25,7 +26,7 @@ namespace TopiaForge.Multiplayer.Voice
         /// Decodes <paramref name="packet"/> into <paramref name="frame"/>. Returns false, with concealment in the frame,
         /// when the packet is not a valid voice packet.
         /// </summary>
-        internal bool Decode(ReadOnlySpan<byte> packet, Span<short> frame)
+        public bool Decode(ReadOnlySpan<byte> packet, Span<short> frame)
         {
             OpusVoiceCodec.RequireFrame(frame.Length, nameof(frame));
             if (OpusToc.IsVoicePacket(packet) && TryDecode(packet, frame, recover: false)) return true;
@@ -34,7 +35,7 @@ namespace TopiaForge.Multiplayer.Voice
         }
 
         /// <summary>Fills <paramref name="frame"/> with packet-loss concealment for a frame that never arrived.</summary>
-        internal void Conceal(Span<short> frame)
+        public void Conceal(Span<short> frame)
         {
             OpusVoiceCodec.RequireFrame(frame.Length, nameof(frame));
             ConcealFrame(frame);
@@ -45,7 +46,7 @@ namespace TopiaForge.Multiplayer.Voice
         /// to concealment where it carries none. The caller then decodes <paramref name="nextPacket"/> itself, as usual.
         /// Returns false, with concealment in the frame, when the next packet is not a valid voice packet.
         /// </summary>
-        internal bool Recover(ReadOnlySpan<byte> nextPacket, Span<short> frame)
+        public bool Recover(ReadOnlySpan<byte> nextPacket, Span<short> frame)
         {
             OpusVoiceCodec.RequireFrame(frame.Length, nameof(frame));
             if (OpusToc.IsVoicePacket(nextPacket) && TryDecode(nextPacket, frame, recover: true)) return true;
@@ -54,7 +55,7 @@ namespace TopiaForge.Multiplayer.Voice
         }
 
         /// <summary>Forgets the stream so far, so the next packet decodes as the first of a new one.</summary>
-        internal void Reset() => decoder.ResetState();
+        public void Reset() => decoder.ResetState();
 
         private void ConcealFrame(Span<short> frame)
         {
