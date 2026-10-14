@@ -115,6 +115,9 @@ foreach ($version in @(
 )) {
     Add-AdmissionCase -Name "unsigned rejects version '$version'" -Version $version -Message "0.x prerelease"
 }
+# Hyphen-only identifiers ending in an empty one must be refused at once: a
+# pattern that can split each identifier at any hyphen tries every split.
+Add-AdmissionCase -Name "unsigned refuses a hostile prerelease quickly" -Version ("0.1.0-" + ("----." * 24)) -Message "0.x prerelease"
 foreach ($version in @(
     "0.0.0-0", "0.1.0-rc.1+build.01", "0.1.0-01a",
     "0.1.0-rc-01", "0.1.0--", "0.1.0-0.0+0",
