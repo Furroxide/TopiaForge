@@ -20,6 +20,27 @@ internal sealed class NetworkConditions
 }
 
 /// <summary>
+/// Anything else that takes and yields datagrams on the virtual clock, such as a NAT-traversing peer or a fake TURN
+/// server. It names the source each datagram leaves from, or null for its own address, and is told where each arrived.
+/// </summary>
+internal interface IVirtualAttachment
+{
+    void Receive(TransportPath source, TransportPath destination, byte[] datagram, long now);
+
+    void Poll(long now);
+
+    long NextTimeoutMicros();
+
+    bool TryDequeue(out TransportPath? source, out TransportPath destination, out byte[] datagram);
+}
+
+/// <summary>Decides where an attachment's datagram goes, through whatever NATs lie between: the receiver and what it sees, or null when lost.</summary>
+internal interface IVirtualRouter
+{
+    (VirtualNode To, TransportPath Source, TransportPath Destination)? Route(VirtualNode from, TransportPath? source, TransportPath destination, long now);
+}
+
+/// <summary>
 /// One attachment point: a transport endpoint, a network stack around one, or a raw inbox a test reads and writes by hand. A node is reachable
 /// three ways, as in the field: directly, through a relay, and on the LAN. A datagram sent to one of its addresses
 /// arrives as if from the sender's address of the same kind, the way a relay shows each side only its channel.
@@ -35,13 +56,14 @@ internal sealed class VirtualNode
 
     /// <param name="index">The node's address: two bytes, so a long run never hands two nodes the same one.</param>
     /// <param name="portOffset">Moves the node's ports, so several nodes can share one address as one machine's sockets do.</param>
-    internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null, int portOffset = 0)
+    internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null, int portOffset = 0, IVirtualAttachment? attachment = null)
     {
         if (index < 1 || index > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(index));
         if (portOffset < 0 || portOffset > 0x8000) throw new ArgumentOutOfRangeException(nameof(portOffset));
         Name = name;
         Stack = stack;
         Endpoint = stack?.Endpoint ?? endpoint;
+        Attachment = attachment;
         this.index = index;
         this.portOffset = portOffset;
     }
@@ -51,6 +73,9 @@ internal sealed class VirtualNode
 
     /// <summary>Gets how far the node's ports sit from the usual ones; nodes sharing an address differ here.</summary>
     internal int PortOffset => portOffset;
+
+    /// <summary>Gets the attachment the node runs, whose datagrams the network's router delivers.</summary>
+    internal IVirtualAttachment? Attachment { get; }
 
     internal string Name { get; }
 
@@ -133,6 +158,12 @@ internal sealed class VirtualDatagramNetwork
     internal long Now { get; private set; }
 
     internal NetworkConditions Conditions { get; } = new();
+
+    /// <summary>Gets or sets the router attachments' datagrams take; without one they go nowhere.</summary>
+    internal IVirtualRouter? Router { get; set; }
+
+    /// <summary>Gets or sets the largest datagram the network carries: 1,200 bytes, or more where TURN framing rides on top.</summary>
+    internal int MaximumDatagramBytes { get; set; } = TransportOptions.MaximumDatagramBytes;
 
     /// <summary>Gets or sets a filter that loses the datagrams it returns true for, on top of the random loss.</summary>
     internal Func<VirtualNode, VirtualNode, byte[], bool>? Drop { get; set; }
@@ -217,6 +248,14 @@ internal sealed class VirtualDatagramNetwork
     {
         if (node.Removed || retiring.Exists(entry => ReferenceEquals(entry.Node, node))) return;
         retiring.Add((node, Math.Max(atMicros, Now)));
+    }
+
+    /// <summary>Adds an attachment. Nodes are polled in the order added, so one that feeds others, like signaling, goes first.</summary>
+    internal VirtualNode AddAttachment(string name, IVirtualAttachment attachment)
+    {
+        var node = new VirtualNode(name, ++nodeCount, null, null, attachment: attachment);
+        nodes.Add(node);
+        return node;
     }
 
     /// <summary>Gets the path a node uses to reach <paramref name="target"/>: its address, as the I/O layer would key it.</summary>
@@ -318,13 +357,21 @@ internal sealed class VirtualDatagramNetwork
             }
 
             Delivered++;
-            if (to.Stack != null) to.Stack.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
+            if (to.Attachment != null) to.Attachment.Receive(datagram.Source, datagram.Destination!, datagram.Bytes, Now);
+            else if (to.Stack != null) to.Stack.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
             else if (to.Endpoint != null) to.Endpoint.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
             else to.Inbox.Enqueue((datagram.From, datagram.Bytes));
         }
 
         foreach (var node in nodes)
         {
+            if (node.Attachment != null)
+            {
+                node.Attachment.Poll(Now);
+                while (node.Attachment.TryDequeue(out var source, out var destination, out var datagram)) Dispatch(node, source, destination, datagram);
+                continue;
+            }
+
             if (node.Endpoint == null) continue;
             if (node.Stack != null) node.Stack.Poll(Now);
             else node.Endpoint.Poll(Now);
@@ -340,6 +387,21 @@ internal sealed class VirtualDatagramNetwork
                 else Schedule(node, target, kind, bytes);
             }
         }
+    }
+
+    /// <summary>Routes an attachment's datagram: the router decides the receiver and what it sees, or loses it.</summary>
+    private void Dispatch(VirtualNode from, TransportPath? source, TransportPath destination, byte[] bytes)
+    {
+        ObservePath?.Invoke(from, destination, bytes);
+        var route = Router?.Route(from, source, destination, Now);
+        Observe?.Invoke(from, route?.To, bytes);
+        if (route == null)
+        {
+            Lost++;
+            return;
+        }
+
+        Schedule(from, route.Value.To, route.Value.Source, route.Value.Destination, bytes);
     }
 
     private static bool TryDequeue(VirtualNode node, out OutgoingDatagram datagram) =>
@@ -378,24 +440,26 @@ internal sealed class VirtualDatagramNetwork
         foreach (var (_, at) in retiring) next = Math.Min(next, at);
         foreach (var node in nodes)
         {
-            if (node.Stack != null) next = Math.Min(next, node.Stack.NextTimeoutMicros());
+            if (node.Attachment != null) next = Math.Min(next, node.Attachment.NextTimeoutMicros());
+            else if (node.Stack != null) next = Math.Min(next, node.Stack.NextTimeoutMicros());
             else if (node.Endpoint != null) next = Math.Min(next, node.Endpoint.NextTimeoutMicros());
         }
 
         return next;
     }
 
-    private void Schedule(VirtualNode from, VirtualNode to, TransportPathKind kind, byte[] bytes)
+    /// <summary>The receiver sees the sender's address of the same kind, as it stands when the datagram leaves.</summary>
+    private void Schedule(VirtualNode from, VirtualNode to, TransportPathKind kind, byte[] bytes) =>
+        Schedule(from, to, new TransportPath(from.AddressOf(kind), kind), null, bytes);
+
+    private void Schedule(VirtualNode from, VirtualNode to, TransportPath source, TransportPath? destination, byte[] bytes)
     {
-        if (bytes.Length > TransportOptions.MaximumDatagramBytes) throw new InvalidOperationException("A datagram exceeded 1,200 bytes.");
+        if (bytes.Length > MaximumDatagramBytes) throw new InvalidOperationException("A datagram exceeded " + MaximumDatagramBytes + " bytes.");
         Sent++;
         transcript.AppendData(BitConverter.GetBytes(Now));
-        transcript.AppendData(new[] { from.Address[3], to.Address[3], (byte)kind });
+        transcript.AppendData(new[] { from.Address[3], to.Address[3], (byte)source.Kind });
         transcript.AppendData(BitConverter.GetBytes(bytes.Length));
         transcript.AppendData(bytes);
-
-        // The receiver sees the sender's address of the same kind, as it stands when the datagram leaves.
-        var source = new TransportPath(from.AddressOf(kind), kind);
         var lost = random.NextDouble() < Conditions.LossRate;
         var copies = random.NextDouble() < Conditions.DuplicateRate ? 2 : 1;
         if (lost || to.Removed || partitions.Contains((from, to)) || (Drop?.Invoke(from, to, bytes) ?? false))
@@ -408,7 +472,7 @@ internal sealed class VirtualDatagramNetwork
         for (var copy = 0; copy < copies; copy++)
         {
             var jitter = Conditions.JitterMicros > 0 ? random.NextInt64(0, Conditions.JitterMicros + 1) : 0;
-            Insert(new InFlight(Now + Math.Max(1, Conditions.LatencyMicros) + jitter, ++ordinal, from, to, source, bytes));
+            Insert(new InFlight(Now + Math.Max(1, Conditions.LatencyMicros) + jitter, ++ordinal, from, to, source, destination, bytes));
         }
     }
 
@@ -419,5 +483,5 @@ internal sealed class VirtualDatagramNetwork
         inFlight.Insert(index, datagram);
     }
 
-    private sealed record InFlight(long DeliverAt, long Ordinal, VirtualNode From, VirtualNode To, TransportPath Source, byte[] Bytes);
+    private sealed record InFlight(long DeliverAt, long Ordinal, VirtualNode From, VirtualNode To, TransportPath Source, TransportPath? Destination, byte[] Bytes);
 }
