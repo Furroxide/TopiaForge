@@ -19,7 +19,6 @@ import {
   type CandidatePolicy,
   type SignalRole,
 } from "../shared/signaling";
-import { JOIN_TICKET_TTL_SECONDS } from "../shared/tokens";
 
 export const PEER_SOCKET_SECONDS = 15 * 60;
 /** A room has a place for every joiner a full session holds (maxPlayers - 1), and three more for reconnects. */
@@ -90,8 +89,12 @@ export interface RoomContext {
   /** Whether the session is live; a lapsed session's sockets close on their next frame. */
   readonly sessionLive: boolean;
   readonly policy: CandidatePolicy;
-  /** Keeps a peer the host said goodbye to out of the room until `until`. */
-  readonly exclude: (peer: string, until: number) => void;
+  /**
+   * Keeps a peer the host said goodbye to out of the room until its ticket expires: the expiry a socket the room still
+   * lists for it carries, or, with null, the one its admission recorded. A peer id the room never admitted stays
+   * unrecorded.
+   */
+  readonly exclude: (peer: string, listedExpiry: number | null) => void;
 }
 
 export function stateOf(socket: WebSocket): SocketState | null {
@@ -227,10 +230,10 @@ export async function onFrame(room: RoomContext, socket: WebSocket, frame: strin
   }
   socket.serializeAttachment(counted);
 
-  // The host's goodbye keeps that ticket out of the room for the rest of the session, whether or not the peer is still
-  // connected: a peer whose socket has already closed cannot come back with the same ticket either.
+  // The host's goodbye keeps that ticket out of the room for as long as it could open it, whether or not the peer is
+  // still connected: a peer whose socket has already closed cannot come back with the same ticket either.
   const farewell = state.role === "host" && message.type === "bye";
-  if (farewell) room.exclude(message.peer!, exclusionEnd(room, message.peer!));
+  if (farewell) room.exclude(message.peer!, listedTicketExpiry(room.ctx, message.peer!));
   const target = state.role === "peer" ? hostSocket(room.ctx) : peerSocket(room.ctx, message.peer!);
   if (target === null) {
     // A goodbye has done what it asks without being delivered; any other frame for a missing counterpart is refused.
@@ -250,16 +253,13 @@ export async function onFrame(room: RoomContext, socket: WebSocket, frame: strin
   close(target, CLOSE.normal, "bye");
 }
 
-/**
- * Until when a host's goodbye keeps `peer` out: its ticket's expiry, which every socket the room still lists for it
- * carries, or, once none is left, the longest a ticket can live from now.
- */
-function exclusionEnd(room: RoomContext, peer: string): number {
-  for (const socket of room.ctx.getWebSockets(`peer:${peer}`)) {
+/** The ticket expiry that every socket the room still lists for `peer` carries; null once none is left. */
+function listedTicketExpiry(ctx: DurableObjectState, peer: string): number | null {
+  for (const socket of ctx.getWebSockets(`peer:${peer}`)) {
     const expiresAt = stateOf(socket)?.ticketExpiresAt;
     if (expiresAt !== null && expiresAt !== undefined) return expiresAt;
   }
-  return room.now + JOIN_TICKET_TTL_SECONDS;
+  return null;
 }
 
 /** Tells the other side that a socket went away. */

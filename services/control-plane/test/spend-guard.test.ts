@@ -65,13 +65,14 @@ const spendState = async () => (await admin("GET", "/v1/admin/state")).json["spe
 /** The spend guard is one instance for every test; an alarm left from an earlier test's day would mask this test's. */
 const runStaleAlarm = async () => void (await runDurableObjectAlarm(spendGuard()));
 
-/** Starts a joiner's mint and holds it at the provider until `release` is called. */
-async function heldMint(serverId: string, ip: string): Promise<{ readonly response: Promise<ApiResult>; readonly release: () => void }> {
-  const joiner = await ticket(serverId);
+/** Starts a joiner's mint, with a fresh ticket unless one is given, and holds it at the provider until `release`. */
+async function heldMint(serverId: string, ip: string, joiner?: string): Promise<{ readonly response: Promise<ApiResult>; readonly release: () => void }> {
+  const credential = joiner ?? (await ticket(serverId));
   let open: () => void = () => undefined;
   scenario.relay.gate = new Promise((resolve) => (open = resolve));
-  const response = mint(serverId, joiner, ip);
-  await scenario.relay.mintsArrived(1);
+  const arrivals = scenario.relay.generateBodies.length + 1;
+  const response = mint(serverId, credential, ip);
+  await scenario.relay.mintsArrived(arrivals);
   return {
     response,
     release: () => {
@@ -228,6 +229,27 @@ describe("relay credentials", () => {
     await admin("PUT", "/v1/admin/features", { relay: true });
     held.release();
     await expectWithdrawn(held.response);
+  });
+
+  it("are refused, and revoked unseen, when a measurement blocks their ticket while the provider is answering", async () => {
+    const session = await host("overuse-in-flight", 2);
+    const greedy = await ticket(session.serverId);
+    expect((await mint(session.serverId, greedy, "10.7.1.1")).status).toBe(201);
+    scenario.relay.egressBytes = 3 * JOINER_RESERVATION;
+    scenario.relay.byUsername.set("test-user-1", 2 * JOINER_RESERVATION + 1);
+    const held = await heldMint(session.serverId, "10.7.1.2", greedy);
+    // The measurement revokes the credential relaying past its plan and blocks its ticket, which the next mint meets.
+    expect((await admin("POST", "/v1/admin/spend/measure")).status).toBe(200);
+    expect(scenario.relay.revoked).toEqual(["test-user-1"]);
+    expect((await mint(session.serverId, greedy, "10.7.1.3")).json["error"]).toMatchObject({ code: "ticket-limit" });
+    held.release();
+    const answer = await held.response;
+    expect(answer.status).toBe(403);
+    expect(answer.json["error"]).toMatchObject({ code: "ticket-limit" });
+    expect(answer.text).not.toContain("test-credential-2");
+    expect(scenario.relay.revoked).toEqual(["test-user-1", "test-user-2"]);
+    // Only the credential that was handed out stays charged, and nothing is left live.
+    expect(await spendState()).toMatchObject({ mints: 1, reservedBytes: JOINER_RESERVATION, activeCredentials: 0, pendingRevocations: 0 });
   });
 
   it("are refused when relay is off and for a session that has ended", async () => {

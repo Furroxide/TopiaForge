@@ -1,12 +1,13 @@
 /**
  * The signaling room's places and its host sockets: how many sockets a room takes and from where, how a host's
- * goodbye keeps a ticket out whether or not its socket is still open, and how a registration replaces the sockets
- * opened under the one before it.
+ * goodbye keeps a ticket out whether or not its socket is still open, what the room remembers to do that and for how
+ * long, and how a registration replaces the sockets opened under the one before it.
  */
-import { runInDurableObject } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Registration } from "../src/objects/host-session";
+import { MAXIMUM_ADMITTED_PEERS, MAXIMUM_EXCLUDED_PEERS, type HostStore } from "../src/objects/host-store";
 import type { JsonObject } from "../src/shared/canonical-json";
 import { verifySignedDescriptor } from "../src/shared/descriptor";
 import { summarize } from "../src/shared/listing";
@@ -70,6 +71,38 @@ async function outlastPeerSockets(serverId: string, token: string): Promise<void
     expect((await call("POST", `/v1/hosts/${serverId}/heartbeat`, { ip: scenario.ip, token, body: { players: 1 } })).status).toBe(200);
   }
 }
+
+const seconds = (): number => Math.floor(scenario.clock.now() / 1000);
+const sessionOf = (serverId: string) => env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(serverId));
+/** A peer id in the room's format, numbered so that no ticket carries it. */
+const peerId = (index: number): string => index.toString(16).padStart(16, "0");
+const storeOf = (instance: unknown): HostStore => (instance as { readonly store: HostStore }).store;
+
+/** The peer ids a host session remembers, each with when its entry ends: those its room admitted, and those kept out. */
+async function rememberedPeers(serverId: string): Promise<{ readonly admitted: Record<string, number>; readonly excluded: Record<string, number> }> {
+  return runInDurableObject(sessionOf(serverId), (_, state) => {
+    const read = (table: string): Record<string, number> =>
+      Object.fromEntries(state.storage.sql.exec<{ peer: string; until: number }>(`SELECT peer, until FROM ${table}`).toArray().map((row) => [row.peer, row.until]));
+    return { admitted: read("admitted_peer"), excluded: read("excluded_peer") };
+  });
+}
+
+/**
+ * Sends a host's frames no faster than the room allows, forty in any ten seconds, keeping the session live with a
+ * heartbeat before each window. Each window ends with a punch for a peer that is not there: its `unknown-peer` answer
+ * shows that every frame before it was handled.
+ */
+async function sendPaced(client: SignalClient, serverId: string, token: string, frames: readonly JsonObject[]): Promise<void> {
+  for (let start = 0; start < frames.length; start += 39) {
+    scenario.clock.advance(10);
+    expect((await call("POST", `/v1/hosts/${serverId}/heartbeat`, { ip: scenario.ip, token, body: { players: 1 } })).status).toBe(200);
+    for (const frame of frames.slice(start, start + 39)) client.send(frame);
+    client.send({ type: "punch", peer: "f".repeat(16), delayMs: 0 });
+    expect(await client.next()).toEqual({ type: "error", code: "unknown-peer" });
+  }
+}
+
+const farewells = (peers: readonly string[]): JsonObject[] => peers.map((peer) => ({ type: "bye", peer, reason: "cancelled" }));
 
 describe("a signaling room's places", () => {
   it("never let one /24 or /56 take more than its share", async () => {
@@ -184,6 +217,139 @@ describe("a signaling room's places", () => {
     for (const ticket of [leavingTicket, floodingTicket]) expect((await openSignal(host.serverId, ticket, PEER_IP)).status).toBe(401);
     await outlastPeerSockets(host.serverId, token);
     for (const ticket of [leavingTicket, floodingTicket]) expect((await openSignal(host.serverId, ticket, PEER_IP)).status).toBe(401);
+  });
+});
+
+describe("a host's goodbyes", () => {
+  it("are kept only for peers the room admitted, so made-up peer ids cannot push real ones out", async () => {
+    const host = await identity(`made-up-farewells-${scenario.day}`);
+    const { token } = await register(host, scenario.ip);
+    const hostClient = await track(connect(host.serverId, token, scenario.ip));
+    await hostClient.next();
+    // Two joiners the host says goodbye to while they are connected. The first one's ticket expires first.
+    const kicked: { readonly ticket: string; readonly ip: string }[] = [];
+    for (const ip of ["198.51.100.40", "192.0.2.40"]) {
+      const ticket = await ticketFor(host.serverId, ip);
+      const peer = await track(connect(host.serverId, ticket, ip));
+      const id = (await peer.next())["peer"] as string;
+      await nextOf(hostClient, "joined");
+      hostClient.send({ type: "bye", peer: id, reason: "cancelled" });
+      expect((await peer.closed()).code).toBe(1000);
+      expect(await nextOf(hostClient, "left")).toEqual({ type: "left", peer: id });
+      kicked.push({ ticket, ip });
+      scenario.clock.advance(1);
+    }
+    // Goodbyes for ids the room never admitted, as many as would fill the list beside the two real ones, then one of
+    // them again, as a host retrying would send it.
+    const madeUp = Array.from({ length: MAXIMUM_EXCLUDED_PEERS - 2 }, (_, index) => peerId(index));
+    await sendPaced(hostClient, host.serverId, token, farewells([...madeUp, madeUp[0]!]));
+    expect((await openSignal(host.serverId, kicked[0]!.ticket, kicked[0]!.ip)).status).toBe(401);
+    // Two more made-up ids leave both real goodbyes in place.
+    await sendPaced(hostClient, host.serverId, token, farewells([peerId(MAXIMUM_EXCLUDED_PEERS - 2), peerId(MAXIMUM_EXCLUDED_PEERS - 1)]));
+    for (const { ticket, ip } of kicked) expect((await openSignal(host.serverId, ticket, ip)).status).toBe(401);
+    expect(Object.keys((await rememberedPeers(host.serverId)).excluded)).toHaveLength(2);
+  });
+
+  it("make room on a full list only for a new peer, pushing out the one whose ticket expires first", async () => {
+    const host = await identity(`farewell-cap-${scenario.day}`);
+    await register(host, scenario.ip);
+    const now = seconds();
+    const outcome = await runInDurableObject(sessionOf(host.serverId), (instance) => {
+      const store = storeOf(instance);
+      // Admitted peers whose tickets expire a second apart, the first soonest, and goodbyes to all but the last.
+      for (let index = 0; index <= MAXIMUM_EXCLUDED_PEERS; index++) store.admitPeer(peerId(index), now + 3600 + index);
+      for (let index = 0; index < MAXIMUM_EXCLUDED_PEERS; index++) store.excludePeer(peerId(index), now, null);
+      // A host repeating every goodbye on the full list pushes none of them out.
+      for (let index = 0; index < MAXIMUM_EXCLUDED_PEERS; index++) store.excludePeer(peerId(index), now, null);
+      const afterRepeats = Array.from({ length: MAXIMUM_EXCLUDED_PEERS }, (_, index) => store.isExcluded(peerId(index), now));
+      // A goodbye to one more peer pushes out the goodbye whose ticket expires first, and only that one.
+      store.excludePeer(peerId(MAXIMUM_EXCLUDED_PEERS), now, null);
+      const afterNew = Array.from({ length: MAXIMUM_EXCLUDED_PEERS + 1 }, (_, index) => store.isExcluded(peerId(index), now));
+      return { afterRepeats, afterNew };
+    });
+    expect(outcome.afterRepeats.every(Boolean)).toBe(true);
+    expect(outcome.afterNew).toEqual([false, ...Array<boolean>(MAXIMUM_EXCLUDED_PEERS).fill(true)]);
+  });
+
+  it("keep a peer whose socket is gone out until its ticket expires, and are remembered no longer", async () => {
+    const host = await identity(`farewell-expiry-${scenario.day}`);
+    const { token } = await register(host, scenario.ip);
+    const hostClient = await track(connect(host.serverId, token, scenario.ip));
+    await hostClient.next();
+    const issued = await call("POST", "/v1/join-tickets", { ip: PEER_IP, body: { serverId: host.serverId, invite: null, relayOnly: false } });
+    const ticket = issued.json["ticket"] as string;
+    const expiresAt = issued.json["expiresAt"] as number;
+    const peer = await track(connect(host.serverId, ticket, PEER_IP));
+    const id = (await peer.next())["peer"] as string;
+    await nextOf(hostClient, "joined");
+    peer.close();
+    expect(await nextOf(hostClient, "left")).toEqual({ type: "left", peer: id });
+    // A minute later the host says goodbye to it, and to an id the room never admitted, which changes nothing and is
+    // not answered: the host's next frame answers the one after them.
+    for (let beat = 0; beat < 2; beat++) {
+      scenario.clock.advance(30);
+      expect((await call("POST", `/v1/hosts/${host.serverId}/heartbeat`, { ip: scenario.ip, token, body: { players: 1 } })).status).toBe(200);
+    }
+    hostClient.send({ type: "bye", peer: id, reason: "done" });
+    hostClient.send({ type: "bye", peer: "f".repeat(16), reason: "done" });
+    hostClient.send("not a frame");
+    expect(await hostClient.next()).toEqual({ type: "error", code: "invalid-message" });
+    expect((await openSignal(host.serverId, ticket, PEER_IP)).status).toBe(401);
+    // Both the admission and the goodbye end exactly when the ticket does, not six hours after the goodbye.
+    expect(await rememberedPeers(host.serverId)).toEqual({ admitted: { [id]: expiresAt }, excluded: { [id]: expiresAt } });
+    await runInDurableObject(sessionOf(host.serverId), (instance) => storeOf(instance).purgeExpired(expiresAt));
+    expect(await rememberedPeers(host.serverId)).toEqual({ admitted: {}, excluded: {} });
+  });
+
+  it("are forgotten, with every admission, once the session ends", async () => {
+    const host = await identity(`farewell-end-${scenario.day}`);
+    const { token } = await register(host, scenario.ip);
+    const hostClient = await track(connect(host.serverId, token, scenario.ip));
+    await hostClient.next();
+    const peer = await track(connect(host.serverId, await ticketFor(host.serverId, PEER_IP), PEER_IP));
+    const id = (await peer.next())["peer"] as string;
+    await nextOf(hostClient, "joined");
+    hostClient.send({ type: "bye", peer: id, reason: "done" });
+    expect((await peer.closed()).code).toBe(1000);
+    const remembered = await rememberedPeers(host.serverId);
+    expect([Object.keys(remembered.admitted), Object.keys(remembered.excluded)]).toEqual([[id], [id]]);
+    expect((await call("DELETE", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token })).status).toBe(204);
+    // The registration's spent challenge outlives the session by up to two minutes; the next alarm then wipes it all.
+    scenario.clock.advance(121);
+    expect(await runDurableObjectAlarm(sessionOf(host.serverId))).toBe(true);
+    const tables = await runInDurableObject(sessionOf(host.serverId), (_, state) =>
+      state.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'").toArray(),
+    );
+    expect(tables).toEqual([]);
+  });
+
+  it("rest on a capped list of admissions, yet still keep out a connected peer whose admission made way", async () => {
+    const host = await identity(`admission-cap-${scenario.day}`);
+    await register(host, scenario.ip);
+    const now = seconds();
+    const outcome = await runInDurableObject(sessionOf(host.serverId), (instance, state) => {
+      const store = storeOf(instance);
+      const admitted = (): string[] => state.storage.sql.exec<{ peer: string }>("SELECT peer FROM admitted_peer ORDER BY until").toArray().map((row) => row.peer);
+      for (let index = 0; index < MAXIMUM_ADMITTED_PEERS; index++) store.admitPeer(peerId(index), now + 3600 + index);
+      // The same ticket admitted again, as a reconnect does, pushes nothing out.
+      store.admitPeer(peerId(0), now + 3600);
+      const afterRepeat = admitted();
+      store.admitPeer(peerId(MAXIMUM_ADMITTED_PEERS), now + 3600 + MAXIMUM_ADMITTED_PEERS);
+      const afterNew = admitted();
+      return {
+        afterRepeat: [afterRepeat.length, afterRepeat[0]],
+        afterNew: [afterNew.length, afterNew[0], afterNew.at(-1)],
+        // Without its admission, a goodbye keeps the peer out only while the room still lists a socket for it.
+        gone: store.excludePeer(peerId(0), now, null),
+        connected: store.excludePeer(peerId(0), now, now + 3600),
+      };
+    });
+    expect(outcome).toEqual({
+      afterRepeat: [MAXIMUM_ADMITTED_PEERS, peerId(0)],
+      afterNew: [MAXIMUM_ADMITTED_PEERS, peerId(1), peerId(MAXIMUM_ADMITTED_PEERS)],
+      gone: false,
+      connected: true,
+    });
   });
 });
 

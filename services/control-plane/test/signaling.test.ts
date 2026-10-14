@@ -20,7 +20,7 @@ const PEER_IP = "198.51.100.77";
 const ICE = { ufrag: "abcd1234", pwd: "0123456789abcdefABCDEF" };
 const HOST_CANDIDATE = { kind: "host", address: "192.168.1.20", port: 27250, priority: 2130706431 };
 const SRFLX_CANDIDATE = { kind: "srflx", address: "198.51.100.77", port: 40000, priority: 1694498815 };
-// Relay addresses come from the relay provider's ranges (RELAY_ADDRESS_RANGES in wrangler.toml).
+// Relay candidates use addresses inside the shipped relay address ranges (RELAY_ADDRESS_RANGES in wrangler.toml).
 const RELAY_CANDIDATE = { kind: "relay", address: "141.101.90.10", port: 50000, priority: 16777215 };
 
 interface Room {
@@ -101,7 +101,7 @@ describe("signaling between a host and a joining peer", () => {
     expect(await host.next()).toEqual({ type: "offer", peer: peerId, ice: ICE, candidates: [RELAY_CANDIDATE] });
   });
 
-  it("forwards from a relay-only side only addresses inside the relay provider's ranges", async () => {
+  it("forwards from a relay-only side only addresses inside the relay address ranges", async () => {
     // A peer connected over IPv6 labels an unrelated address and a neighbour in its own /64 as relays.
     const { host, peer, peerId } = await room({ peerRelayOnly: true, peerIp: "2001:db8:1:2::10" });
     const outside = [
@@ -116,7 +116,7 @@ describe("signaling between a host and a joining peer", () => {
   });
 
   it("withholds a relay-only side's own IPv4 address and IPv6 /64, even inside the relay ranges", async () => {
-    // A side that reaches the service through the relay provider's own network has an observed address in its ranges.
+    // A side that reaches the service through the relay provider's own network may have an observed address in them.
     const v4 = await room({ peerRelayOnly: true, peerIp: "162.158.10.20" });
     const sameAddress = { kind: "relay", address: "162.158.10.20", port: 3478, priority: 2 };
     const neighbour = { kind: "relay", address: "162.158.10.21", port: 3478, priority: 1 };

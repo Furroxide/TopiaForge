@@ -1,12 +1,18 @@
 /**
  * The host session's durable state, in its own SQLite database: the session (the signed descriptor, a hash of the
  * session token, its random epoch, and what the listing shows), the invites it issued, the challenge nonces it
- * accepted, an operator's hold, small per-session operation budgets, and the peer ids the host said goodbye to. No
- * address is ever stored here, and signaling frames live only in memory.
+ * accepted, an operator's hold, small per-session operation budgets, the peer ids the room admitted, and those the
+ * host said goodbye to. No address is ever stored here, and signaling frames live only in memory.
  */
 import type { DescriptorSummary } from "../shared/listing";
 
-const MAXIMUM_EXCLUDED_PEERS = 1024;
+/** The most goodbyes the room remembers at once. */
+export const MAXIMUM_EXCLUDED_PEERS = 1024;
+/** The most admitted peer ids the room remembers at once. */
+export const MAXIMUM_ADMITTED_PEERS = 4096;
+
+/** The two capped lists of peer ids, each entry kept until its ticket expires. */
+type PeerList = "admitted_peer" | "excluded_peer";
 
 export interface SessionRow {
   readonly serverId: string;
@@ -68,6 +74,7 @@ export class HostStore {
     this.sql.exec("CREATE TABLE IF NOT EXISTS used_challenge (nonce TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS hold (id INTEGER PRIMARY KEY CHECK (id = 1), until INTEGER NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS budget (name TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS admitted_peer (peer TEXT PRIMARY KEY, until INTEGER NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS excluded_peer (peer TEXT PRIMARY KEY, until INTEGER NOT NULL)");
     this.ready = true;
   }
@@ -139,6 +146,7 @@ export class HostStore {
     this.sql.exec("DELETE FROM session");
     this.sql.exec("DELETE FROM invite");
     this.sql.exec("DELETE FROM budget");
+    this.sql.exec("DELETE FROM admitted_peer");
     this.sql.exec("DELETE FROM excluded_peer");
   }
 
@@ -173,20 +181,51 @@ export class HostStore {
     this.sql.exec("DELETE FROM invite WHERE expires_at <= ?", now);
     this.sql.exec("DELETE FROM used_challenge WHERE expires_at <= ?", now);
     this.sql.exec("DELETE FROM hold WHERE until <= ?", now);
+    this.sql.exec("DELETE FROM admitted_peer WHERE until <= ?", now);
     this.sql.exec("DELETE FROM excluded_peer WHERE until <= ?", now);
   }
 
   /**
-   * Keeps a peer id the host said goodbye to out of the room until `until`, by when its ticket has expired and can open
-   * nothing more. The list is capped: when it is full, the entry that would expire first makes way.
+   * Remembers a peer id the room admitted until its ticket expires, so that a goodbye from the host can keep it out
+   * even after its socket has closed. At most MAXIMUM_ADMITTED_PEERS are kept (see `listPeer`).
    */
-  excludePeer(peer: string, until: number): void {
+  admitPeer(peer: string, ticketExpiresAt: number): void {
     this.ensure();
-    const count = this.sql.exec<{ total: number }>("SELECT COUNT(*) AS total FROM excluded_peer").one().total;
-    if (count >= MAXIMUM_EXCLUDED_PEERS) {
-      this.sql.exec("DELETE FROM excluded_peer WHERE peer = (SELECT peer FROM excluded_peer ORDER BY until LIMIT 1)");
+    this.listPeer("admitted_peer", MAXIMUM_ADMITTED_PEERS, peer, ticketExpiresAt);
+  }
+
+  /**
+   * Keeps a peer the host said goodbye to out of the room until its ticket expires, by when the ticket can open nothing
+   * more. The expiry is the one `listedExpiry` gives, which a socket the room still lists for the peer carries, or else
+   * the one its admission recorded. A goodbye for a peer id the room never admitted, or whose ticket has expired,
+   * records nothing, so made-up ids cannot crowd out real goodbyes. At most MAXIMUM_EXCLUDED_PEERS are kept (see
+   * `listPeer`). True when the goodbye was recorded.
+   */
+  excludePeer(peer: string, now: number, listedExpiry: number | null): boolean {
+    this.ensure();
+    const until = listedExpiry ?? this.admittedUntil(peer, now);
+    if (until === null || until <= now) return false;
+    this.listPeer("excluded_peer", MAXIMUM_EXCLUDED_PEERS, peer, until);
+    return true;
+  }
+
+  /** When the ticket of a peer the room admitted expires, while it has not yet; null for any other peer id. */
+  private admittedUntil(peer: string, now: number): number | null {
+    const row = this.sql.exec<{ until: number }>("SELECT until FROM admitted_peer WHERE peer = ? AND until > ?", peer, now).toArray()[0];
+    return row?.until ?? null;
+  }
+
+  /**
+   * Adds a peer id to a capped list, or moves an entry already on it to the later of the two expiries. Only a new
+   * entry can find the list full, and then the entry that expires first makes way: repeating a goodbye or an
+   * admission never pushes another entry out.
+   */
+  private listPeer(list: PeerList, cap: number, peer: string, until: number): void {
+    const listed = this.sql.exec(`SELECT 1 FROM ${list} WHERE peer = ?`, peer).toArray().length > 0;
+    if (!listed && this.sql.exec<{ total: number }>(`SELECT COUNT(*) AS total FROM ${list}`).one().total >= cap) {
+      this.sql.exec(`DELETE FROM ${list} WHERE peer = (SELECT peer FROM ${list} ORDER BY until, peer LIMIT 1)`);
     }
-    this.sql.exec("INSERT INTO excluded_peer (peer, until) VALUES (?, ?) ON CONFLICT (peer) DO UPDATE SET until = MAX(until, excluded.until)", peer, until);
+    this.sql.exec(`INSERT INTO ${list} (peer, until) VALUES (?, ?) ON CONFLICT (peer) DO UPDATE SET until = MAX(until, excluded.until)`, peer, until);
   }
 
   isExcluded(peer: string, now: number): boolean {
@@ -251,7 +290,7 @@ export class HostStore {
     const row = this.sql
       .exec<{ total: number }>(
         `SELECT (SELECT COUNT(*) FROM session) + (SELECT COUNT(*) FROM used_challenge) + (SELECT COUNT(*) FROM hold)
-           + (SELECT COUNT(*) FROM invite) + (SELECT COUNT(*) FROM excluded_peer) AS total`,
+           + (SELECT COUNT(*) FROM invite) + (SELECT COUNT(*) FROM admitted_peer) + (SELECT COUNT(*) FROM excluded_peer) AS total`,
       )
       .one();
     return row.total === 0;

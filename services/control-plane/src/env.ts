@@ -34,8 +34,8 @@ export interface Env {
   readonly TURN_TICKET_CAP_GB?: string;
 
   /**
-   * The relay provider's address ranges, as CIDR blocks separated by single spaces. A relay-only side's candidates
-   * must lie inside them, and relay is unavailable until they parse.
+   * The ranges the relay provider allocates relay addresses from, as the operator lists them: CIDR blocks separated by
+   * single spaces. A relay-only side's candidates must lie inside them, and relay is unavailable until they parse.
    */
   readonly RELAY_ADDRESS_RANGES?: string;
 
