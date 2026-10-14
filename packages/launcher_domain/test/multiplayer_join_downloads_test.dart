@@ -149,4 +149,49 @@ void main() {
     );
     expect(installing.downloadRequest, isNull);
   });
+
+  test('a host the rules forbid at download time ends the join', () {
+    // The rules tell the data layer to report directNotAllowed when a local
+    // name resolves to no local address, or a LAN listing's sender is off
+    // the local network. The join must end rather than wait in downloading.
+    final localName = JoinLinkTarget(
+      SessionLink.direct(
+        serverId: hostAServerId,
+        host: 'printer.local',
+        port: 27250,
+      ),
+    );
+    final lanListing = JoinListingTarget(
+      serverId: hostAServerId,
+      source: ServerListingSource.lan,
+    );
+    for (final target in [localName, lanListing]) {
+      final state = checking(startJoin(target));
+      final downloading = [
+        JoinPlanReady(planFor(state)),
+        const JoinConsentGiven(hostServedAcknowledged: true),
+      ].fold(state, JoinSession.reduce);
+      expect(downloading.stage, JoinStage.downloading, reason: '$target');
+      final request = downloading.downloadRequest!;
+      expect(request.hostDownloads, isNotEmpty);
+      expect(
+        request.contactableAddresses(const [
+          [203, 0, 113, 5],
+        ]),
+        isEmpty,
+      );
+      final ended = JoinSession.reduce(
+        downloading,
+        JoinFailed(
+          JoinFailureCode.directNotAllowed,
+          detail: 'The host is no longer on the local network.',
+        ),
+      );
+      expect(ended.stage, JoinStage.ended, reason: '$target');
+      final failure = ended.outcome!.failure!;
+      expect(failure.code, JoinFailureCode.directNotAllowed);
+      expect(failure.stage, JoinStage.downloading);
+      expect(ended.downloadRequest, isNull);
+    }
+  });
 }

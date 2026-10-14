@@ -140,7 +140,8 @@ final class JoinFailed extends JoinEvent {
        servedServerId = null;
 
   /// A typed address served [servedServerId], another server than the one
-  /// the known-hosts record or the join expected.
+  /// the known-hosts record or the join expected. Only the join of a
+  /// [JoinAddressTarget] acts on it: every other target names its server.
   JoinFailed.identityChanged({
     required String this.servedServerId,
     this.detail = '',

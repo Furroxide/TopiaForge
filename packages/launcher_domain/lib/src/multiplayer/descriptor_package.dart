@@ -116,10 +116,16 @@ final class DescriptorPackage {
   static bool isModId(String? id) => id != null && _modIdPattern.hasMatch(id);
 }
 
+// A pre-release identifier that is not a number is written as the SemVer
+// 2.0.0 pattern writes it: digits, then the first letter or hyphen, then
+// anything. Written as "anything, a letter or hyphen, anything" it accepts
+// the same identifiers, but each can then be split at any of its letters or
+// hyphens, and a backtracking matcher tries every split of every identifier
+// before it refuses a version.
 final _descriptorSemanticVersionPattern = RegExp(
   r'^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
-  r'(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
-  r'(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?'
+  r'(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+  r'(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?'
   r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$',
 );
 
@@ -128,9 +134,9 @@ final _gameBuildPattern = RegExp(r'^[0-9A-Za-z._-]{1,16}$');
 /// The longest semantic version a descriptor or session info carries.
 const _maximumVersionLength = 64;
 
-// Dart's `$` matches only at the very end of the input. .NET's also matches
-// before a final line feed, so these patterns are stricter than a literal
-// port of the game's would be: "1.0.0\n" is not a version here.
+// Dart's `$` matches only at the very end of the input, as the game's `\z`
+// does, so "1.0.0\n" is not a version. Longer text is refused before the
+// pattern runs.
 bool _isSemanticVersion(String? value) =>
     value != null &&
     value.length <= _maximumVersionLength &&
