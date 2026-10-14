@@ -191,8 +191,13 @@ host muted them. The host sends it at most once per flush, when it changed: afte
 participant's record goes, after a server mute, and when an automatic mute starts or ends. A client keeps relayed
 frames only from speakers in its roster, and never frames carrying its own index (`UnknownSpeaker`).
 
-The speaker record belongs to the participant, not the connection. A rejoin resets only the stream position, so the
-new connection's sequences are accepted, while mutes and strike history stay.
+A rejoin within the participant record's 30-second grace keeps the speaker; it resets only the stream position, so
+the new connection's sequences are accepted. Moderation outlives the record: the server mute, an automatic mute, and
+the strike and mute history live in a table keyed by the player's authenticated identity for the whole session, and a
+player admitted again later gets them back with a new speaker index. The table holds 1,024 players by default
+(`VoiceOptions.ModerationCapacity`); when it is full, the absent player seen longest ago is forgotten first, preferring
+one with nothing on record, and players still present are never forgotten. Leaving the session for another role clears
+it.
 
 ### 2.4 The relay policy
 
@@ -201,8 +206,8 @@ new connection's sequences are accepted, while mutes and strike history stay.
 | Check | Limit | Outcome |
 | --- | --- | --- |
 | Muted, by hand or automatically | None | Dropped on arrival, with no strike and no rate spent |
-| Datagram rate | 30 a second, sliding window | `RateLimited`, strike |
-| Bitrate, counting whole datagrams | 40 kbit/s; the token bucket holds one second | `RateLimited`, strike |
+| Datagram rate | 30 a second; the token bucket holds one second | `RateLimited`; a strike only when sustained |
+| Bitrate, counting whole datagrams | 40 kbit/s; the token bucket holds one second | `RateLimited`; a strike only when sustained |
 | Format | Section 2.2 | `Malformed`, strike |
 | Frame size | 160 bytes | `Oversized`, strike |
 | Codec header | `IVoiceCodec.IsValidPacket`: for Opus, the TOC check of section 1.4 | `InvalidPacket`, strike |
@@ -212,13 +217,21 @@ new connection's sequences are accepted, while mutes and strike history stay.
 A datagram that passes is stamped and relayed to every other ready connection, except listeners who muted the speaker,
 and handed to the host's own player.
 
+**Rate is judged kindly.** The host reads datagrams when its main thread pumps, so a stall on the host, or on the path,
+delivers a backlog all at once. The buckets absorb a second of it and drop the rest without a strike, and fresh speech
+passes again as they refill. Only sustained excess is abuse: every datagram also draws on a bucket that refills at twice
+the rate and holds five seconds of that, and only a rate-limited datagram that finds it empty too earns a strike. A
+flood at four times the rate starts striking after five seconds; an honest talker behind a host stall of up to twelve
+seconds never does. A first design that struck every datagram over a sliding one-second window muted honest talkers
+after a 1.2-second host stall and removed them after three.
+
 **Escalation.** Twenty strikes within 10 seconds mute the speaker automatically for 30 seconds, and the host reports
 `EngineDiagnosticKind.VoiceAbuse`, naming the participant and nothing else. The third automatic mute within 10 minutes
 removes the speaker from the session (`Kicked`). `SetServerMute` mutes by hand until the host unmutes; unmuting also
 ends an automatic mute, and the roster tells everyone.
 
-The plan does not set these thresholds. They are chosen so that a flood is muted within a second, while a bad link's
-occasional damaged frame never is. Honest traffic earns no strikes: it sends 25 datagrams a second against 30, and
+The plan does not set these thresholds. They are chosen so that a sustained flood is muted within seconds, while a bad
+link's occasional damaged frame never is. Honest traffic earns no strikes: it sends 25 datagrams a second against 30, and
 about 26 kbit/s at 24 kbit/s of codec data against 40, with a second of burst for VBR peaks. A client also holds itself
 to the same limits, so when frames bunch up after a stall it drops what would break them rather than sending it.
 `VoiceOptions` holds every value.
@@ -228,6 +241,10 @@ to the same limits, so when frames bunch up after a stall it drops what would br
 `SetListenerMutes(participants, muteAll)` records whom the local player does not want to hear. A client sends the set
 reliably (`VoiceMutes`, `0x31`) when it changes and after every join, so the host stops relaying those speakers to it.
 A host applies its own player's set locally. The set holds at most 256 ids.
+
+Participant ids name players within one session only, so the set stays with its session: a reconnect to the same
+session sends it again, and leaving the session for another role clears it. Muting `p2` on one host never silences a
+different `p2` on the next, and never tells the next host whom the player had muted.
 
 ### 2.6 The engine API
 
@@ -248,13 +265,12 @@ since it is too late to play. A frame's payload points into the datagram the lin
 headless host delivers nothing.
 
 Losing the link clears the roster, the queue and any held frame. Leaving a session for another role clears them too,
-and lets the talker's timestamps start again.
+with the listener mutes and, on a host, the moderation table, and lets the talker's timestamps start again.
 
 ### 2.7 The jitter buffer
 
-`VoiceJitterBuffer` turns one speaker's frames, which arrive late, early, twice, out of order or not at all, into
-exactly one frame per `Pull`; the playback clock pulls every 20 ms. A buffer belongs to one thread and allocates
-nothing once running.
+`VoiceJitterBuffer` turns one speaker's frames, which arrive early, late or not at all, into exactly one frame per
+`Pull`; the playback clock pulls every 20 ms. A buffer belongs to one thread and allocates nothing once running.
 
 - **Target delay.** A frame's transit is its arrival time minus its place in the stream. Over the last 128 frames, the
   spread between the fastest transit and the 95th percentile is the jitter, and the target is that plus one frame,
@@ -267,8 +283,11 @@ nothing once running.
   otherwise. After three concealed frames, two more fade to silence and the spurt ends.
 - **Intentional gaps.** A gap plays as silence, not concealment, when the sequences on either side of it are
   consecutive or a silence frame came before it.
-- **Order.** A frame that arrives after its turn is late and dropped, and so is a duplicate. A frame from a restarted
-  stream, numbered far behind the old one, resets the buffer and the decoder.
+- **Order.** The voice channel is sequenced, so one speaker's frames arrive in order, each at most once. A frame that
+  arrives after its turn is late and dropped. A frame numbered at or below one already received can only come from a
+  new stream, after a reconnect or a restart, and resets the buffer, its estimates and the decoder, however short the
+  old stream was. An earlier rule waited for numbers 32 behind, so a restart after a stream of under 33 frames lost its
+  first frames as late.
 - **Drift.** A frame's slack is how many frames ahead of its turn it arrives. The 5th percentile of the last 64 slacks
   steers drift control. At zero a concealed frame is inserted, so playout waits longer; at three a frame is dropped,
   decoded and discarded so the codec state stays continuous. A correction waits for 32 fresh arrivals and half a
@@ -280,10 +299,12 @@ noise. A first design that steered by the fill level oscillated at high jitter.
 ### 2.8 The rig
 
 `VirtualEngineTransport` now models both of the real transport's channel contracts (`MultiplayerSessionEngine.md`,
-"The rig on the engine"). Realtime and Voice are unreliable and sequenced: they share the link's rate with the session
-stream but never wait behind it, and a path that is down loses their datagrams rather than holding them. The transport
-counts datagrams lost and dropped as stale, and bytes and frames per channel. Every existing rig test passes unchanged,
-since none sent datagrams before.
+"The rig on the engine"). Realtime and Voice are unreliable and sequenced, and a path that is down loses their
+datagrams rather than holding them. Datagrams serialize in a lane of their own, as the real transport writes queued
+datagrams first in every packet, but their bytes still count against the link, so later session frames wait for them.
+A link's reader gets waiting datagrams before session frames, and a link holds at most 128 datagrams for it, dropping
+the oldest, as the real connection does. The transport counts datagrams lost, dropped as stale and overflowed, and bytes
+and frames per channel. Every existing rig test passes unchanged, since none sent datagrams before.
 
 ### 2.9 Tests
 
@@ -292,17 +313,21 @@ These run in the multiplayer test project, and every one is deterministic:
 - `VoicePacketTests`: one- and two-frame round trips, every malformed datagram refused whole, and the roster and mute
   messages;
 - `VoiceJitterBufferTests`: the target against jitter and its clamps, a second spurt playing cleanly once the target has
-  adapted, FEC then concealment then fade, 1% clock drift each way corrected without concealment, reordered, duplicated
-  and late frames, pauses and talk spurts, restarts, and no allocation in steady playback;
-- `VoiceRelayPolicyTests`: each limit and check, stale and backwards streams, escalation to a mute and to removal,
-  server mutes, and part 1's TOC check run through the seam;
+  adapted, FEC then concealment then fade, 1% clock drift each way corrected without concealment, late frames and old
+  numbers starting a new stream, pauses and talk spurts, restarts, and no allocation in steady playback;
+- `VoiceRelayPolicyTests`: each limit and check, a backlog absorbed while only sustained excess strikes, stale and
+  backwards streams, escalation to a mute and to removal, server mutes, and part 1's TOC check run through the seam;
 - `VoiceSessionTests`, over the rig: speakers stamped by the host, a forged speaker refused, a client refusing frames
   its roster does not explain, a flood muted then removed, server and listener mutes across a reconnect, an engine
   without voice options staying silent, a restarted client heard from its first frame, and voice across role changes;
 - `VoiceBudgetTests`: four players talking at once for five seconds; voice beside 8 KiB session messages with a quarter
   of all frames lost, arriving within 70 ms while the session stream waits for retries; pairing; a stalled talker paced
   rather than struck; and the bounded queue;
-- `VirtualVoiceChannelTests`: the rig's datagram channels.
+- `VoiceModerationTests`, over the rig: host stalls of 2 s and twice 1.1 s striking nobody, a server mute and the
+  ladder to removal outliving the grace period, the moderation table's bound, listener mutes staying in their session,
+  and a short stream that restarts playing from its first frame;
+- `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, and the link's datagram-first,
+  bounded reads.
 
 ### 2.10 The budget
 

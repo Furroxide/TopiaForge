@@ -25,8 +25,9 @@ namespace TopiaForge.Multiplayer.Engine
     /// reliable and ordered: per-direction FIFO delivery, loss turned into a retry delay that also holds later frames,
     /// duplicates discarded by sequence. Realtime and Voice are unreliable and sequenced, one datagram per frame: loss
     /// is final, a datagram older than one already delivered on its channel is dropped, and nothing on them waits behind
-    /// Session frames. Every channel shares the link's rate, and in-flight frames are dropped when a link is severed.
-    /// The test rig drives it; the bytes are the engine's own.
+    /// Session frames. Datagrams serialize in a lane of their own, as the real transport writes queued datagrams first
+    /// in every packet, but their bytes still count against the link, so later Session frames wait for them. In-flight
+    /// frames are dropped when a link is severed. The test rig drives it; the bytes are the engine's own.
     /// </summary>
     internal sealed class VirtualEngineTransport
     {
@@ -190,9 +191,10 @@ namespace TopiaForge.Multiplayer.Engine
             frameOrdinal++;
             var baseDelay = (ulong)Math.Max(1, conditions.LatencyTicks);
             if (Hits(conditions.ReorderEvery)) baseDelay++;
-            var start = Math.Max(Now, direction.BusyUntilTick);
+            var start = Math.Max(Now, direction.DatagramBusyUntilTick);
             var serialization = SerializationTicks(bytes.Length);
-            direction.BusyUntilTick = start + serialization;
+            direction.DatagramBusyUntilTick = start + serialization;
+            direction.BusyUntilTick = Math.Max(direction.BusyUntilTick, Now) + serialization;
             direction.CountSent(channel, bytes.Length);
             if (Hits(conditions.DropEvery))
             {
@@ -399,7 +401,11 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal int HoldBudget { get; set; }
         internal int DropBudget { get; set; }
+        /// <summary>Gets or sets when the link is free for the next Session frame; datagram bytes push it back too.</summary>
         internal ulong BusyUntilTick { get; set; }
+
+        /// <summary>Gets or sets when the datagram lane is free; it never waits for Session frames.</summary>
+        internal ulong DatagramBusyUntilTick { get; set; }
         internal byte[]? LastFrame { get; set; }
         internal ulong LastSequence { get; set; }
         internal EngineChannel LastChannel { get; set; }
@@ -453,7 +459,11 @@ namespace TopiaForge.Multiplayer.Engine
     internal sealed class VirtualLinkEnd : IEngineLink
     {
         private readonly VirtualEngineTransport transport;
-        private readonly Queue<KeyValuePair<EngineChannel, byte[]>> inbox = new Queue<KeyValuePair<EngineChannel, byte[]>>();
+        /// <summary>The datagrams a link holds for its reader, as the real transport's connection does; more drop the oldest.</summary>
+        internal const int MaximumInboundDatagrams = 128;
+
+        private readonly Queue<KeyValuePair<EngineChannel, byte[]>> datagrams = new Queue<KeyValuePair<EngineChannel, byte[]>>();
+        private readonly Queue<byte[]> sessionFrames = new Queue<byte[]>();
 
         private readonly byte[] channelBinding;
 
@@ -476,7 +486,10 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal VirtualLinkEnd? Peer { get; set; }
 
-        internal int PendingFrames => inbox.Count;
+        internal int PendingFrames => datagrams.Count + sessionFrames.Count;
+
+        /// <summary>Gets the datagrams dropped because the reader left more than the link holds waiting.</summary>
+        internal long DatagramsOverflowed { get; private set; }
 
         public void Send(EngineChannel channel, ArraySegment<byte> frame)
         {
@@ -486,13 +499,21 @@ namespace TopiaForge.Multiplayer.Engine
             transport.Send(this, channel, copy);
         }
 
+        /// <summary>Dequeues the next frame: waiting datagrams first, then session frames in order, as the real transport does.</summary>
         public bool TryReceive(out EngineChannel channel, out byte[] frame)
         {
-            if (inbox.Count > 0)
+            if (datagrams.Count > 0)
             {
-                var next = inbox.Dequeue();
+                var next = datagrams.Dequeue();
                 channel = next.Key;
                 frame = next.Value;
+                return true;
+            }
+
+            if (sessionFrames.Count > 0)
+            {
+                channel = EngineChannel.Session;
+                frame = sessionFrames.Dequeue();
                 return true;
             }
 
@@ -503,6 +524,21 @@ namespace TopiaForge.Multiplayer.Engine
 
         public void Close() => transport.Close(this);
 
-        internal void Deliver(EngineChannel channel, byte[] frame) => inbox.Enqueue(new KeyValuePair<EngineChannel, byte[]>(channel, frame));
+        internal void Deliver(EngineChannel channel, byte[] frame)
+        {
+            if (channel == EngineChannel.Session)
+            {
+                sessionFrames.Enqueue(frame);
+                return;
+            }
+
+            if (datagrams.Count == MaximumInboundDatagrams)
+            {
+                datagrams.Dequeue();
+                DatagramsOverflowed++;
+            }
+
+            datagrams.Enqueue(new KeyValuePair<EngineChannel, byte[]>(channel, frame));
+        }
     }
 }

@@ -143,7 +143,7 @@ namespace TopiaForge.Multiplayer.Engine
                 participantRecords.Add(new ParticipantRecord(hostParticipant.Value, null, hostDisplayName, isHost: true)
                 {
                     IsConnected = true,
-                    Voice = CreateVoiceSpeaker()
+                    Voice = CreateVoiceSpeaker(null)
                 });
                 MarkVoiceRosterDirty();
                 localParticipantId = hostParticipant;
@@ -398,7 +398,7 @@ namespace TopiaForge.Multiplayer.Engine
                 return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The session is full.");
             }
 
-            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false) { Voice = CreateVoiceSpeaker() };
+            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false) { Voice = CreateVoiceSpeaker(identity) };
             participantRecords.Add(record);
             return null;
         }

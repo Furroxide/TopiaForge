@@ -43,6 +43,7 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly long[] voiceDropped = new long[(int)VoiceDropReason.InboxOverflow + 1];
         private readonly HashSet<string> localVoiceMutes = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<ulong, VoiceRosterEntry> voiceRoster = new Dictionary<ulong, VoiceRosterEntry>();
+        private readonly Dictionary<string, VoiceModeration> voiceModeration = new Dictionary<string, VoiceModeration>(StringComparer.Ordinal);
         private VoiceRelayPolicy? voicePolicy;
         private VoiceSpeaker? voicePace;
         private VoiceInbox? voiceInbox;
@@ -206,7 +207,65 @@ namespace TopiaForge.Multiplayer.Engine
             voiceFrameMicros = Math.Max(1, (long)voice.Codec.FrameSamples * 1_000_000 / voice.Codec.SampleRate);
         }
 
-        private VoiceSpeaker? CreateVoiceSpeaker() => options.Voice == null ? null : new VoiceSpeaker(++nextSpeakerIndex, options.Voice);
+        /// <summary>Gets how many players' moderation the host remembers; see <see cref="VoiceOptions.ModerationCapacity"/>.</summary>
+        internal int VoiceModerationCount => voiceModeration.Count;
+
+        /// <summary>
+        /// Creates the voice state of a participant record: a new speaker index, and the moderation the session keeps for
+        /// <paramref name="identity"/>, or a fresh one for the host's own player, who has none.
+        /// </summary>
+        private VoiceSpeaker? CreateVoiceSpeaker(string? identity)
+        {
+            var voice = options.Voice;
+            if (voice == null) return null;
+            return new VoiceSpeaker(++nextSpeakerIndex, voice, identity == null ? null : ModerationFor(identity, voice));
+        }
+
+        private VoiceModeration ModerationFor(string identity, VoiceOptions voice)
+        {
+            if (!voiceModeration.TryGetValue(identity, out var moderation))
+            {
+                if (voiceModeration.Count >= voice.ModerationCapacity) ForgetOneModeration();
+                moderation = new VoiceModeration(voice);
+                voiceModeration[identity] = moderation;
+            }
+
+            moderation.LastSeenMicros = nowMicros;
+            return moderation;
+        }
+
+        /// <summary>The table is full: forget the absent player seen longest ago, preferring one with nothing to remember.</summary>
+        private void ForgetOneModeration()
+        {
+            var present = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var record in participantRecords)
+            {
+                if (record.Identity != null) present.Add(record.Identity);
+            }
+
+            string? quiet = null;
+            string? oldest = null;
+            var quietSeen = long.MaxValue;
+            var oldestSeen = long.MaxValue;
+            foreach (var entry in voiceModeration)
+            {
+                if (present.Contains(entry.Key)) continue;
+                if (!entry.Value.HasHistory(nowMicros) && entry.Value.LastSeenMicros < quietSeen)
+                {
+                    quiet = entry.Key;
+                    quietSeen = entry.Value.LastSeenMicros;
+                }
+
+                if (entry.Value.LastSeenMicros < oldestSeen)
+                {
+                    oldest = entry.Key;
+                    oldestSeen = entry.Value.LastSeenMicros;
+                }
+            }
+
+            var forgotten = quiet ?? oldest;
+            if (forgotten != null) voiceModeration.Remove(forgotten);
+        }
 
         private void MarkVoiceRosterDirty()
         {
@@ -469,11 +528,18 @@ namespace TopiaForge.Multiplayer.Engine
             voiceInbox?.Clear();
         }
 
-        /// <summary>Forgets the voice of a session the process leaves for another role: what it held, heard and expected.</summary>
+        /// <summary>
+        /// Forgets the voice of a session the process leaves for another role: what it held, heard and expected, the
+        /// moderation it kept as a host, and whom its player muted, because participant ids name nobody in the next
+        /// session. A reconnect to the same session keeps the mutes.
+        /// </summary>
         private void RetireVoice()
         {
             ResetClientVoice();
             if (options.Voice != null) voicePace = new VoiceSpeaker(1, options.Voice);
+            voiceModeration.Clear();
+            localVoiceMutes.Clear();
+            localVoiceMuteAll = false;
             voiceRosterDirty = false;
             voiceSequence = 0;
             lastVoiceTimestamp = 0;

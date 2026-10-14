@@ -52,6 +52,9 @@ internal sealed class VoiceSessionHarness : IDisposable
     internal ulong Tick { get; private set; }
     internal long NowMicros => clock.StepStartMicros(Tick);
 
+    /// <summary>Gets the engines whose main thread is stalled: the network still delivers to them, but they never pump.</summary>
+    internal HashSet<SessionEngine> Stalled { get; } = new();
+
     /// <summary>Adds a client that joins the host, and waits until it is ready.</summary>
     internal (SessionEngine Engine, VirtualLinkEnd Link) AddClient(string identity)
     {
@@ -118,8 +121,38 @@ internal sealed class VoiceSessionHarness : IDisposable
         Network.Now = Tick;
         foreach (var engine in engines.ToArray())
         {
-            if (!engine.IsEnded) engine.Pump(NowMicros);
+            if (!engine.IsEnded && !Stalled.Contains(engine)) engine.Pump(NowMicros);
         }
+    }
+
+    /// <summary>Connects <paramref name="engine"/> to <paramref name="host"/>, a host other than the rig's own.</summary>
+    internal VirtualLinkEnd ConnectTo(SessionEngine host, SessionEngine engine, string identity)
+    {
+        var pair = Network.Connect(identity);
+        host.Accept(pair.HostEnd);
+        engine.Connect(pair.ClientEnd, identity);
+        return pair.ClientEnd;
+    }
+
+    /// <summary>
+    /// Floods the host from a modified client's <paramref name="link"/>, <paramref name="perTick"/> uplink datagrams a
+    /// tick, until the host mutes it automatically. Returns the ticks that took, or -1 if it never did.
+    /// </summary>
+    internal int FloodUntilMuted(VirtualLinkEnd link, ref ulong next, int perTick = 4, int maximumTicks = 600)
+    {
+        var mutes = Host.GetVoiceStatistics().AutoMutes;
+        for (var tick = 1; tick <= maximumTicks; tick++)
+        {
+            for (var index = 0; index < perTick; index++, next++)
+            {
+                link.Send(EngineChannel.Voice, new ArraySegment<byte>(VoiceSessionTests.Datagram(Codec, 0, next + 1, next, 1)));
+            }
+
+            Advance();
+            if (Host.GetVoiceStatistics().AutoMutes > mutes) return tick;
+        }
+
+        return -1;
     }
 
     public void Dispose()

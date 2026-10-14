@@ -17,8 +17,10 @@ namespace TopiaForge.Multiplayer.Engine
         internal IVoiceCodec Codec { get; }
 
         /// <summary>
-        /// Gets or sets how many voice datagrams a speaker may send a second. Two 20 ms frames per datagram make 25 a
-        /// second, so the default leaves 20% headroom for datagrams that bunch up behind a hitch.
+        /// Gets or sets how many voice datagrams a speaker may send a second, the refill of a token bucket that holds one
+        /// second of burst. Two 20 ms frames per datagram make 25 a second, so the default leaves 20% headroom, and the
+        /// burst absorbs a second's backlog after a stall. Datagrams over it are dropped; they strike only when a speaker
+        /// keeps up twice this rate for five seconds.
         /// </summary>
         internal int MaximumPacketsPerSecond { get; set; } = 30;
 
@@ -44,6 +46,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets how many received frames wait for the provider before the oldest is dropped.</summary>
         internal int InboxCapacity { get; set; } = 256;
 
+        /// <summary>
+        /// Gets or sets how many players' moderation a host remembers in one session. Beyond it, the absent player seen
+        /// longest ago is forgotten first, preferring one with no mute or history; players still present are never forgotten.
+        /// </summary>
+        internal int ModerationCapacity { get; set; } = 1_024;
+
         internal void Validate()
         {
             if (MaximumPacketsPerSecond < 1) throw new ArgumentOutOfRangeException(nameof(MaximumPacketsPerSecond));
@@ -59,6 +67,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (MutesBeforeKick < 1) throw new ArgumentOutOfRangeException(nameof(MutesBeforeKick));
             if (MuteWindowMicros < 1) throw new ArgumentOutOfRangeException(nameof(MuteWindowMicros));
             if (InboxCapacity < 1 || InboxCapacity > 65_536) throw new ArgumentOutOfRangeException(nameof(InboxCapacity));
+            if (ModerationCapacity < 1) throw new ArgumentOutOfRangeException(nameof(ModerationCapacity));
             if (Codec.FrameSamples < 1 || Codec.SampleRate < 1) throw new ArgumentException("The voice codec reports no frame format.", nameof(Codec));
         }
     }

@@ -55,17 +55,20 @@ internal static class VoiceJitterBufferTests
     internal static void ASecondSpurtPlaysCleanlyOnceTheTargetHasAdapted()
     {
         // A first spurt with up to 70 ms of jitter teaches the estimator; the second, with the same jitter, starts at
-        // the adapted target and loses nothing.
+        // the adapted target and loses nothing. The path is sequenced, so a frame never overtakes the one before it.
         var stream = new Stream();
         var state = 5u;
         var sent = new List<(ulong Ts, long Arrival, VoiceFrameFlags Flags)>();
+        var previous = 0L;
         foreach (var (from, to) in new[] { (0UL, 150UL), (300UL, 450UL) })
         {
             for (var ts = from; ts < to; ts++)
             {
-                sent.Add((ts, ((long)ts * Frame) + (long)(Next(ref state) % 70_001), ts == to - 1 ? VoiceFrameFlags.EndOfTalk : VoiceFrameFlags.None));
+                previous = Math.Max(previous, ((long)ts * Frame) + (long)(Next(ref state) % 70_001));
+                sent.Add((ts, previous, ts == to - 1 ? VoiceFrameFlags.EndOfTalk : VoiceFrameFlags.None));
             }
         }
+
         var results = stream.Play(sent, pulls: 520);
         var second = results.Where(result => result.Pull >= 300).ToList();
         Assert(stream.Buffer.TargetFrames >= 4, "the target adapted to the jitter (" + stream.Buffer.TargetFrames + " frames)");
@@ -131,25 +134,27 @@ internal static class VoiceJitterBufferTests
         }
     }
 
-    internal static void ReorderedDuplicatedAndLateFramesAreHandled()
+    internal static void LateFramesAreDroppedAndOldNumbersStartAgain()
     {
+        // The channel is sequenced, so frames come in order; one can still arrive after its turn has passed.
         var stream = new Stream();
-        stream.Push(0, 0);
-        Assert(stream.Pull().Kind == VoicePlayout.Silence, "the first pulls fill the buffer");
-        stream.Push(1, Frame);
-        Assert(stream.Pull().Kind == VoicePlayout.Silence, "to its 60 ms start");
-        stream.Push(3, 2 * Frame);
-        Assert(stream.Pull().Id == 1, "frame 0 plays while frame 2 is still on its way");
-        stream.Push(2, (2 * Frame) + 5_000);
-        Assert(stream.Pull().Id == 2, "then frame 1");
-        Assert(stream.Pull() is { Kind: VoicePlayout.Decoded, Id: 3 }, "frame 2, arriving after frame 3, still plays in its place");
-        Assert(stream.Pull() is { Kind: VoicePlayout.Decoded, Id: 4 }, "then frame 3");
+        for (ulong ts = 0; ts < 3; ts++) stream.Push(ts, (long)ts * Frame);
+        Assert(stream.Pull().Id == 1 && stream.Pull().Id == 2 && stream.Pull().Id == 3, "three frames fill the buffer and play");
+        Assert(stream.Pull().Kind == VoicePlayout.Concealed, "frame 3 is missing when its turn comes");
+        stream.Push(3, 4 * Frame);
+        Assert(stream.Buffer.Statistics.Late == 1 && stream.Buffer.Statistics.Restarts == 0, "frame 3, arriving after its turn, is late and dropped");
         stream.Push(4, 4 * Frame);
-        stream.Push(4, (4 * Frame) + 1_000);
-        Assert(stream.Buffer.Statistics.Duplicates == 1, "a duplicate is dropped");
-        stream.Push(1, 5 * Frame);
-        Assert(stream.Buffer.Statistics.Late == 1, "a frame that already played is late");
-        Assert(stream.Pull() is { Kind: VoicePlayout.Decoded, Id: 5 }, "and playback carries on");
+        Assert(stream.Pull() is { Kind: VoicePlayout.Decoded, Id: 5 }, "and playback carries on with frame 4");
+
+        // A number at or below one already received can only start a new stream, however short the old one was.
+        var decoder = stream.Decoder;
+        stream.Push(0, 5 * Frame, sequence: 2);
+        Assert(stream.Buffer.Statistics.Restarts == 1 && decoder.Resets == 1 && stream.Buffer.Statistics.Late == 1,
+            "an old number restarts the buffer and the decoder instead of counting as late");
+        stream.Push(1, 6 * Frame, sequence: 3);
+        stream.Push(2, 7 * Frame, sequence: 4);
+        Assert(Enumerable.Range(0, 3).Select(_ => stream.Pull()).Select(result => result.Id).SequenceEqual(new short[] { 1, 2, 3 }),
+            "and the new stream plays from its first frame");
     }
 
     internal static void PausesAndTalkSpurtsPlayAsSilence()
