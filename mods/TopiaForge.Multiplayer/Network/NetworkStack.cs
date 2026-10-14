@@ -100,11 +100,19 @@ namespace TopiaForge.Multiplayer.Network
 
         internal void Release(OutgoingDatagram datagram) => Endpoint.Release(datagram);
 
-        /// <summary>Starts a connection to <paramref name="path"/>, pinned to <paramref name="expectedKey"/> when one is known.</summary>
+        /// <summary>
+        /// Starts a connection to <paramref name="path"/>, pinned to <paramref name="expectedKey"/> when one is known.
+        /// Every attempt completes: one the stack cannot start fails at once rather than throwing.
+        /// </summary>
         internal void Connect(ConnectAttempt attempt, TransportPath path, byte[]? expectedKey, long now)
         {
             if (attempt == null) throw new ArgumentNullException(nameof(attempt));
-            ThrowIfDisposed();
+            if (disposed)
+            {
+                attempt.Fail(TransportCloseReason.Local);
+                return;
+            }
+
             TransportConnection connection;
             try
             {
@@ -114,6 +122,12 @@ namespace TopiaForge.Multiplayer.Network
             {
                 // Relay-only refuses a direct path before anything is sent.
                 attempt.Fail(TransportCloseReason.Local);
+                return;
+            }
+            catch (InvalidOperationException)
+            {
+                // The endpoint already holds as many connections as it may.
+                attempt.Fail(TransportCloseReason.Overloaded);
                 return;
             }
 
@@ -133,10 +147,14 @@ namespace TopiaForge.Multiplayer.Network
             return false;
         }
 
-        /// <summary>Closes every link gracefully; <see cref="Poll"/> keeps running until they have gone.</summary>
+        /// <summary>
+        /// Closes every link gracefully, the way the main thread would, so frames the engine queued before the close (the
+        /// message that ends a player's session, say) still go out first; <see cref="Poll"/> keeps running until the
+        /// links have gone. Attempts still in their handshake are abandoned.
+        /// </summary>
         internal void CloseAll()
         {
-            foreach (var pair in pairs) pair.Connection.Close();
+            foreach (var pair in pairs) pair.Link.Close();
             foreach (var attempt in pending) attempt.Connection.Abort();
         }
 
@@ -204,9 +222,10 @@ namespace TopiaForge.Multiplayer.Network
                 if (closeRequested && connection.State == TransportConnectionState.Established) connection.Close();
 
                 // Session frames leave the transport only while the main thread has room, so the peer's flow control,
-                // not this process's memory, absorbs a stall. Once the connection is ending nothing more can arrive, so
-                // the rest moves at once and the engine reads every frame before it sees the link close.
-                var ending = connection.State != TransportConnectionState.Established;
+                // not this process's memory, absorbs a stall; a closing connection still takes the peer's data, so it is
+                // held back too. Once the connection drains nothing more can arrive, so the rest moves at once, and the
+                // link reports the close only after the engine has read it all.
+                var ending = connection.State == TransportConnectionState.Draining || connection.State == TransportConnectionState.Closed;
                 while ((ending || link.HasInboundRoom) && connection.TryReceive(out var kind, out var received))
                 {
                     if (kind == EngineChannel.Session) link.DeliverSession(received);
@@ -224,11 +243,6 @@ namespace TopiaForge.Multiplayer.Network
                     pairs.RemoveAt(index);
                 }
             }
-        }
-
-        private void ThrowIfDisposed()
-        {
-            if (disposed) throw new ObjectDisposedException(nameof(NetworkStack));
         }
 
         private readonly struct Pair

@@ -200,6 +200,10 @@ internal static class Program
             NetworkStackTests.AMainThreadThatQueuesTooMuchClosesItsLink();
             NetworkStackTests.ClosingDeliversWhatWasSentThenReportsClosed();
             NetworkStackTests.AClosedLinkStillYieldsMoreThanItsBudget();
+            NetworkStackTests.ALinkReportsClosedOnlyAfterItsLastFrameIsRead();
+            NetworkStackTests.EmptyFramesStillFillTheInboundBudget();
+            NetworkStackTests.ClosingEveryLinkStillSendsTheLastFrames();
+            NetworkStackTests.AClosingLinkKeepsItsBudget();
             NetworkStackTests.AttemptsFailOnTheWrongKeyOrAForbiddenPath();
             NetworkStackTests.DisposingTheStackClosesEveryLink();
             NetworkSocketTests.UdpPathsKeepAddressesInsideTheNetworkLayer();
@@ -208,6 +212,7 @@ internal static class Program
             NetworkSocketTests.StoppingHonoursItsGracePeriod();
             NetworkServiceTests.TheDescriptorEndpointServesOnlyWhatItShould();
             NetworkServiceTests.LanBrowsersFindAnnouncedHosts();
+            NetworkServiceTests.AMovedServerIsHeardAfresh();
             NetworkServiceTests.ServicesStopWithTheirThread();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;

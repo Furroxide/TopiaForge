@@ -70,7 +70,11 @@ namespace TopiaForge.Multiplayer.Network
         private readonly ConcurrentQueue<NetworkEvent> events = new ConcurrentQueue<NetworkEvent>();
         private readonly byte[] buffer = new byte[TransportOptions.MaximumDatagramBytes];
         private readonly List<INetworkService> services = new List<INetworkService>();
+        private readonly object gate = new object();
+        private readonly HashSet<INetworkService> owned = new HashSet<INetworkService>();
+        private readonly HashSet<ConnectAttempt> unstarted = new HashSet<ConnectAttempt>();
         private readonly Thread thread;
+        private bool closing;
         private long stopDeadline = long.MaxValue;
         private int stopRequested;
         private int started;
@@ -102,23 +106,52 @@ namespace TopiaForge.Multiplayer.Network
             commands.Enqueue(command);
         }
 
-        /// <summary>Starts a connection; the attempt fills in from the network thread.</summary>
+        /// <summary>
+        /// Starts a connection; the attempt fills in from the network thread. Every attempt completes: one made once the
+        /// thread is stopping, or still queued when it stops, fails.
+        /// </summary>
         internal ConnectAttempt Connect(TransportPath path, byte[]? expectedKey)
         {
             if (path == null) throw new ArgumentNullException(nameof(path));
             var attempt = new ConnectAttempt();
             var key = expectedKey == null ? null : (byte[])expectedKey.Clone();
-            Post((network, now) => network.Connect(attempt, path, key, now));
+            lock (gate)
+            {
+                if (!closing)
+                {
+                    unstarted.Add(attempt);
+                    Post((network, now) =>
+                    {
+                        if (Claim(attempt)) network.Connect(attempt, path, key, now);
+                    });
+                    return attempt;
+                }
+            }
+
+            attempt.Fail(TransportCloseReason.Local);
             return attempt;
         }
 
         internal bool TryTakeEvent(out NetworkEvent networkEvent) => events.TryDequeue(out networkEvent!);
 
-        /// <summary>Runs <paramref name="service"/> on the network thread from its next turn until it is detached.</summary>
+        /// <summary>
+        /// Runs <paramref name="service"/> on the network thread from its next turn until it is detached. The thread owns
+        /// it from this call: stopping disposes it even if it never ran, and a thread already stopping disposes it now.
+        /// </summary>
         internal void Attach(INetworkService service)
         {
             if (service == null) throw new ArgumentNullException(nameof(service));
-            Post((_, _) => services.Add(service));
+            lock (gate)
+            {
+                if (!closing)
+                {
+                    owned.Add(service);
+                    Post((_, _) => services.Add(service));
+                    return;
+                }
+            }
+
+            service.Dispose();
         }
 
         /// <summary>Stops running <paramref name="service"/> and disposes it, on the network thread.</summary>
@@ -127,35 +160,39 @@ namespace TopiaForge.Multiplayer.Network
             if (service == null) throw new ArgumentNullException(nameof(service));
             Post((_, _) =>
             {
-                if (services.Remove(service)) service.Dispose();
+                services.Remove(service);
+                bool wasOwned;
+                lock (gate) wasOwned = owned.Remove(service);
+                if (wasOwned) service.Dispose();
             });
         }
 
         /// <summary>
         /// Closes every link gracefully and stops once they have gone or <paramref name="gracefulMicros"/> passes, then
-        /// disposes the stack, which wipes the transport's keys, and the socket. Blocks until the thread has ended.
+        /// disposes the services, the stack, which wipes the transport's keys, and the socket. Nothing new is attached or
+        /// connected from this call on. Blocks until the thread has ended.
         /// </summary>
         internal void Stop(long gracefulMicros)
         {
             if (Interlocked.Exchange(ref stopRequested, 1) == 0)
             {
+                lock (gate) closing = true;
+
                 // The deadline is set here, not by a command, so the loop ends on time even if its queue never drains.
                 Interlocked.Exchange(ref stopDeadline, clock() + Math.Max(0, gracefulMicros));
                 Post((network, _) => network.CloseAll());
             }
 
-            if (Interlocked.CompareExchange(ref started, 2, 0) == 0)
+            var previous = Interlocked.CompareExchange(ref started, 2, 0);
+            if (previous == 0)
             {
-                // Never started: nothing runs the loop, so release its resources here, and Start now refuses. Queued
-                // commands run first, so services attached before the start are disposed too.
-                while (commands.TryDequeue(out var command)) command(stack, clock());
-                foreach (var service in services) service.Dispose();
-                services.Clear();
-                stack.Dispose();
-                socket.Dispose();
+                // Never started: nothing runs the loop, so its resources are released here, and Start now refuses.
+                ReleaseResources();
                 return;
             }
 
+            // A thread stopped before it started has nothing to wait for, however often it is stopped again.
+            if (previous == 2) return;
             if (Thread.CurrentThread != thread) thread.Join();
         }
 
@@ -194,12 +231,41 @@ namespace TopiaForge.Multiplayer.Network
             }
             finally
             {
-                foreach (var service in services) service.Dispose();
-                services.Clear();
-                stack.Dispose();
-                socket.Dispose();
+                ReleaseResources();
                 events.Enqueue(NetworkEvent.Ended());
             }
+        }
+
+        /// <summary>Takes an attempt's command off the books; false once shutdown has failed the attempt instead.</summary>
+        private bool Claim(ConnectAttempt attempt)
+        {
+            lock (gate) return unstarted.Remove(attempt);
+        }
+
+        /// <summary>
+        /// Releases what the thread owns without running anything still queued: every service, running or waiting to,
+        /// every attempt whose command never ran, then the stack and the socket. Attaching or connecting is refused from now.
+        /// </summary>
+        private void ReleaseResources()
+        {
+            INetworkService[] remaining;
+            ConnectAttempt[] abandoned;
+            lock (gate)
+            {
+                closing = true;
+                remaining = new INetworkService[owned.Count];
+                owned.CopyTo(remaining);
+                owned.Clear();
+                abandoned = new ConnectAttempt[unstarted.Count];
+                unstarted.CopyTo(abandoned);
+                unstarted.Clear();
+            }
+
+            services.Clear();
+            foreach (var service in remaining) service.Dispose();
+            foreach (var attempt in abandoned) attempt.Fail(TransportCloseReason.Local);
+            stack.Dispose();
+            socket.Dispose();
         }
 
         private void Turn(long now)
@@ -207,7 +273,8 @@ namespace TopiaForge.Multiplayer.Network
             for (var count = 0; count < MaximumCommandsPerTurn && commands.TryDequeue(out var command); count++) command(stack, now);
             for (var count = 0; count < MaximumDatagramsPerTurn && socket.TryReceive(buffer, out var length, out var path); count++)
             {
-                stack.Receive(path!, buffer, 0, length, now);
+                // A datagram the socket dropped still counts against the turn, so a flood of them cannot starve the timers.
+                if (path != null) stack.Receive(path, buffer, 0, length, now);
             }
 
             foreach (var service in services) service.Turn(stack, now);

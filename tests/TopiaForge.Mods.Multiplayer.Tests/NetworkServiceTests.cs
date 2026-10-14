@@ -21,8 +21,16 @@ internal static class NetworkServiceTests
             NetworkFixtures.Hex(fixture.GetProperty("keys")[0].Text("signingSeed")));
         var package = Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("package bytes ", 30_000)));
         var packageSha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(package)).ToLowerInvariant();
+        var brokenSha = new string('b', 64);
+        var lockedSha = new string('c', 64);
         using var host = StartThread(122);
-        var endpoint = new DescriptorEndpoint(0, sha => sha == packageSha ? new MemoryStream(package, false) : null, requestTimeoutMicros: 300_000);
+        var endpoint = new DescriptorEndpoint(0, sha => sha switch
+        {
+            _ when sha == packageSha => new MemoryStream(package, false),
+            _ when sha == brokenSha => new BrokenArchive(),
+            _ when sha == lockedSha => throw new IOException("The archive is locked."),
+            _ => null,
+        }, requestTimeoutMicros: 300_000);
         host.Attach(endpoint);
         var port = endpoint.LocalPort;
 
@@ -46,6 +54,19 @@ internal static class NetworkServiceTests
         That(Raw(port, "HELLO\n", out _) == "TFD1 400", "a malformed request is refused");
         That(Raw(port, "TFD1 descriptor\u0001\n", out _) == "TFD1 400", "a request with a control character is refused");
         That(Raw(port, new string('x', 200), out _) == "TFD1 400", "a request past 128 bytes is refused");
+
+        // An archive that fails belongs to its own request: the transfer is cut short, or the archive is not found,
+        // and the network thread never faults.
+        That(Raw(port, "TFD1 package " + brokenSha + "\n", out var cut) == "TFD1 200 " + BrokenArchive.Size && cut.Length < BrokenArchive.Size,
+            "an archive that fails mid-read cuts its transfer short (" + cut.Length + " bytes)");
+        That(Raw(port, "TFD1 package " + lockedSha + "\n", out _) == "TFD1 404", "an archive that cannot be opened is not found");
+        var faults = new List<string>();
+        while (host.TryTakeEvent(out var happened))
+        {
+            if (happened.Kind == NetworkEventKind.Fault) faults.Add(happened.Fault!);
+        }
+
+        That(faults.Count == 0, "and neither faults the network thread (" + string.Join(", ", faults) + ")");
         Thread.Sleep(1_100);
 
         // Ten requests a second per address; the rest are told to wait.
@@ -101,6 +122,36 @@ internal static class NetworkServiceTests
         That(WaitFor(() => browser.Servers.Count == 0, 4_000), "silent hosts leave the list");
     }
 
+    internal static void AMovedServerIsHeardAfresh()
+    {
+        var info = new SessionInfo(new string('a', 64), new string('b', 64), "LAN Party", "2545", "0.2.0", "1.0.0", "Open Sandbox", null, 2, 8, false, true);
+        var stranger = new SessionInfo(new string('d', 64), new string('b', 64), "Elsewhere", "2545", "0.2.0", "1.0.0", "Open Sandbox", null, 1, 8, false, true);
+        using var first = StartThread(128);
+        first.Post((stack, _) => stack.Endpoint.SetInfo(info.Encode()));
+        using var second = StartThread(129);
+        second.Post((stack, _) => stack.Endpoint.SetInfo(stranger.Encode()));
+        using var browserThread = StartThread(130);
+        var browser = new LanBrowser(0, expiryMicros: 30_000_000);
+        browserThread.Attach(browser);
+        var targets = new[] { new IPEndPoint(IPAddress.Loopback, browser.LocalPort) };
+        var before = new LanAnnouncer(new LanBeacon(info.ServerId, first.LocalPort), targets);
+        first.Attach(before);
+        That(WaitFor(() => browser.Servers.Any(server => server.Info != null), 3_000), "the browser learns the server's info at its first socket");
+
+        // The server's beacon now names another game socket, whose host answers for a different server: what the old
+        // socket said must not follow the beacon there.
+        first.Detach(before);
+        var after = new LanAnnouncer(new LanBeacon(info.ServerId, second.LocalPort), targets);
+        second.Attach(after);
+        That(WaitFor(() => browser.Servers.SingleOrDefault() is { } server && UdpPaths.TryGetEndPoint(server.Path, out var at) && at.Port == second.LocalPort, 3_000),
+            "the browser follows the beacon to the new socket");
+        Thread.Sleep(300);
+        var moved = browser.Servers.Single();
+        That(moved.Info == null && moved.RoundTripMicros == 0 && !moved.Incompatible,
+            "and waits for that socket to answer for the same server, which it never does");
+        second.Detach(after);
+    }
+
     internal static void ServicesStopWithTheirThread()
     {
         var thread = StartThread(126);
@@ -116,8 +167,34 @@ internal static class NetworkServiceTests
         var orphan = new DescriptorEndpoint(0);
         unstarted.Attach(orphan);
         var orphanPort = orphan.LocalPort;
+        var queued = new RecordingService();
+        unstarted.Attach(queued);
+        var unsent = unstarted.Connect(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, 9)), null);
         unstarted.Stop(0);
         That(!CanConnect(orphanPort), "a service attached to a thread that never ran is disposed with it");
+        That(queued.Disposed && queued.Turns == 0 && unsent.State == ConnectAttemptState.Failed,
+            "without running, and a connection it never started fails");
+
+        // A service still queued behind more commands than one turn runs when the deadline passes is the thread's to
+        // dispose, though it never ran; once the thread is stopping, nothing new is taken on.
+        var busy = StartThread(131);
+        using var release = new ManualResetEventSlim();
+        busy.Post((_, _) => release.Wait());
+        for (var index = 0; index < 300; index++) busy.Post((_, _) => { });
+        var waiting = new RecordingService();
+        busy.Attach(waiting);
+        var releaser = Task.Run(() =>
+        {
+            Thread.Sleep(50);
+            release.Set();
+        });
+        busy.Stop(0);
+        releaser.Wait();
+        That(waiting.Disposed && waiting.Turns == 0, "a service still queued when the thread stops is disposed without running");
+        var late = new RecordingService();
+        busy.Attach(late);
+        That(late.Disposed && busy.Connect(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, 9)), null).State == ConnectAttemptState.Failed,
+            "a service attached to a stopped thread is disposed at once, and a connection fails at once");
     }
 
     private static NetworkThread StartThread(int seed)
@@ -212,5 +289,61 @@ internal static class NetworkServiceTests
         }
 
         return condition();
+    }
+
+    /// <summary>A service that only records whether it ran and whether it was disposed.</summary>
+    private sealed class RecordingService : INetworkService
+    {
+        internal int Turns { get; private set; }
+
+        internal bool Disposed { get; private set; }
+
+        public void Turn(NetworkStack stack, long now) => Turns++;
+
+        public bool TryClaim(TransportInfoReply reply, long now) => false;
+
+        public long NextTimeoutMicros() => long.MaxValue;
+
+        public void Dispose() => Disposed = true;
+    }
+
+    /// <summary>A package archive that reads once and then fails, as a file on a failing disk would.</summary>
+    private sealed class BrokenArchive : Stream
+    {
+        internal const int Size = 300_000;
+        private int position;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => true;
+
+        public override bool CanWrite => false;
+
+        public override long Length => Size;
+
+        public override long Position
+        {
+            get => position;
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (position > 0) throw new IOException("The disk failed.");
+            var read = Math.Min(count, 70_000);
+            Array.Clear(buffer, offset, read);
+            position += read;
+            return read;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

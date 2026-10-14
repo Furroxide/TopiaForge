@@ -7,14 +7,15 @@ namespace TopiaForge.Multiplayer.Network
 {
     /// <summary>
     /// Maps UDP endpoints to the transport's opaque paths and back. A path key is a type byte (1, UDP), the 16-byte
-    /// IPv6 form of the address (IPv4 is mapped) and the port, big-endian: 19 bytes that only this layer and the
-    /// transport ever see. Private, link-local and loopback addresses make LAN paths, which relay-only still allows;
-    /// every other address makes a direct path.
+    /// IPv6 form of the address (IPv4 is mapped), the port and the IPv6 scope id, both big-endian: 23 bytes that only
+    /// this layer and the transport ever see. The scope keeps a link-local address on the interface it was heard on.
+    /// Private, link-local and loopback addresses make LAN paths, which relay-only still allows; every other address
+    /// makes a direct path.
     /// </summary>
     internal static class UdpPaths
     {
         internal const byte UdpKeyType = 1;
-        internal const int KeySize = 19;
+        internal const int KeySize = 23;
 
         internal static TransportPath For(IPEndPoint endpoint)
         {
@@ -26,10 +27,15 @@ namespace TopiaForge.Multiplayer.Network
             Buffer.BlockCopy(address.GetAddressBytes(), 0, key, 1, 16);
             key[17] = (byte)(endpoint.Port >> 8);
             key[18] = (byte)endpoint.Port;
+            var scope = (uint)address.ScopeId;
+            key[19] = (byte)(scope >> 24);
+            key[20] = (byte)(scope >> 16);
+            key[21] = (byte)(scope >> 8);
+            key[22] = (byte)scope;
             return new TransportPath(key, Classify(address));
         }
 
-        /// <summary>Recovers the endpoint a UDP path names; false for any other kind of path.</summary>
+        /// <summary>Recovers the endpoint a UDP path names, scope and all; false for any other kind of path.</summary>
         internal static bool TryGetEndPoint(TransportPath path, out IPEndPoint endpoint)
         {
             endpoint = null!;
@@ -38,7 +44,8 @@ namespace TopiaForge.Multiplayer.Network
             if (key.Length != KeySize || key[0] != UdpKeyType) return false;
             var address = new byte[16];
             Buffer.BlockCopy(key, 1, address, 0, 16);
-            endpoint = new IPEndPoint(new IPAddress(address), (key[17] << 8) | key[18]);
+            var scope = ((uint)key[19] << 24) | ((uint)key[20] << 16) | ((uint)key[21] << 8) | key[22];
+            endpoint = new IPEndPoint(new IPAddress(address, scope), (key[17] << 8) | key[18]);
             return true;
         }
 

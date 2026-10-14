@@ -257,6 +257,15 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             var moved = !entry.Path.Equals(path);
+            if (moved)
+            {
+                // What the old path answered says nothing about the new one: the entry waits for a reply from there
+                // that names the same server.
+                entry.Info = null;
+                entry.Incompatible = false;
+                entry.RoundTripMicros = 0;
+            }
+
             entry.Path = path;
             entry.LastSeenMicros = now;
             nextExpiry = Math.Min(nextExpiry, now + expiryMicros);
