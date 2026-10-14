@@ -59,6 +59,18 @@ namespace TopiaForge.Mods.UnityUi
             ApplyTheme(Theme);
         }
 
+        /// <summary>
+        /// Shows the badge text exactly as given: rich-text tags and escape sequences are not
+        /// interpreted, so player-supplied text cannot restyle the badge or the row around it.
+        /// </summary>
+        public TopiaForgeBadge PlainText()
+        {
+            label.richText = false;
+            label.parseCtrlCharacters = false;
+            FitWidth();
+            return this;
+        }
+
         /// <summary>Dirty-checked text + tone update.</summary>
         public void Set(string text, TopiaForgeTone value)
         {

@@ -19,6 +19,10 @@ namespace TopiaForge.Mods.UnityUi
         Grip,
         /// <summary>Selects the warning option.</summary>
         Warning,
+        /// <summary>Selects the microphone option (voice and talk indicators).</summary>
+        Microphone,
+        /// <summary>Selects the struck-through microphone option (muted voice).</summary>
+        MicrophoneOff,
     }
 
     /// <summary>
@@ -81,6 +85,19 @@ namespace TopiaForge.Mods.UnityUi
             new Segment(0.08f, 0.14f, 0.50f, 0.88f),
         };
 
+        private static readonly Segment MicrophoneBody = new Segment(0.50f, 0.52f, 0.50f, 0.72f);
+
+        private static readonly Segment[] MicrophoneStand =
+        {
+            new Segment(0.50f, 0.33f, 0.50f, 0.20f),
+            new Segment(0.36f, 0.18f, 0.64f, 0.18f),
+        };
+
+        private static readonly Segment[] MicrophoneSlash =
+        {
+            new Segment(0.18f, 0.86f, 0.82f, 0.14f),
+        };
+
         /// <summary>Coverage in [0, 1] for a pixel center in a size×size icon tile.</summary>
         public static float Coverage(TopiaForgeIcon icon, float px, float py, int size)
         {
@@ -129,9 +146,28 @@ namespace TopiaForge.Mods.UnityUi
                         return Math.Max(triangle, Math.Max(bang, dot));
                     }
 
+                case TopiaForgeIcon.Microphone:
+                    return Microphone(x, y, stroke);
+
+                case TopiaForgeIcon.MicrophoneOff:
+                    {
+                        // The slash cuts a gap through the microphone so it reads at small sizes.
+                        var slash = Strokes(MicrophoneSlash, x, y, stroke);
+                        var gap = Strokes(MicrophoneSlash, x, y, stroke * 1.8f);
+                        return Math.Max(Microphone(x, y, stroke) * (1f - gap), slash);
+                    }
+
                 default:
                     return 0f;
             }
+        }
+
+        private static float Microphone(float x, float y, float stroke)
+        {
+            var body = Clamp01((stroke - (DistanceToSegment(x, y, MicrophoneBody) - 0.10f)) / stroke);
+            var holder = y <= 0.58f ? RingDisc(x, y, 0.50f, 0.58f, 0.25f, stroke) : 0f;
+            var stand = Strokes(MicrophoneStand, x, y, stroke);
+            return Math.Max(body, Math.Max(holder, stand));
         }
 
         private static float Strokes(Segment[] segments, float x, float y, float strokeRadius)

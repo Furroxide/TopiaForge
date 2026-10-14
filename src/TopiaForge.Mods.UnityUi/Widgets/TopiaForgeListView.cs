@@ -65,6 +65,9 @@ namespace TopiaForge.Mods.UnityUi
             this.Flex(1f, 1f);
         }
 
+        /// <summary>Raised once for each pooled row the view creates; the table view attaches its cells here.</summary>
+        internal Action<TopiaForgeListRow>? RowCreated { get; set; }
+
         /// <summary>Gets selected index.</summary>
         public int SelectedIndex => selectedIndex;
 
@@ -96,6 +99,16 @@ namespace TopiaForge.Mods.UnityUi
 
             content.sizeDelta = new Vector2(0f, TopiaForgeVirtualListMath.ContentHeight(items.Count, rowHeight, Spacing));
             Refresh(force: true);
+        }
+
+        /// <summary>
+        /// Rebinds the data set and the selected index together without scrolling, for views whose
+        /// order changes under a stable selection (a re-sorted table).
+        /// </summary>
+        internal void SetItems(IReadOnlyList<T> next, int selection)
+        {
+            selectedIndex = next != null && selection >= 0 && selection < next.Count ? selection : -1;
+            SetItems(next!);
         }
 
         /// <summary>Selects an index programmatically, scrolls it into view, and notifies.</summary>
@@ -226,6 +239,7 @@ namespace TopiaForge.Mods.UnityUi
                 });
                 pool.Add(row);
                 poolBinding.Add(-1);
+                TopiaForgeCallbacks.Invoke(RowCreated, row, "List row created");
             }
         }
 

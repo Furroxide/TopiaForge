@@ -445,9 +445,11 @@ namespace TopiaForge.ModManager.Tests
                 GameCompatActivationTests.Run();
                 GameVersionLabelReaderTests.Run();
                 UiKitCoreTests.Run();
+                UiKitMultiplayerCoreTests.Run();
                 TopiaForgeStateFileTests.Run(root);
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
+                UiKitMultiplayerConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;

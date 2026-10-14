@@ -231,6 +231,48 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeGraphCanvas(this, graph);
         }
 
+        /// <summary>Creates and adds a sortable, virtualized table with the given columns.</summary>
+        public TopiaForgeTableView<T> TableView<T>(System.Collections.Generic.IReadOnlyList<TopiaForgeTableColumn<T>> columns, float rowHeight = TopiaForgeTokens.ListRowHeight)
+        {
+            return new TopiaForgeTableView<T>(this, columns, rowHeight);
+        }
+
+        /// <summary>Creates and adds a connection-quality glyph (0-4 bars or unknown).</summary>
+        public TopiaForgeSignalBars SignalBars()
+        {
+            return new TopiaForgeSignalBars(this);
+        }
+
+        /// <summary>Creates and adds a horizontal phase stepper.</summary>
+        public TopiaForgePhaseStepper PhaseStepper(params string[] labels)
+        {
+            return new TopiaForgePhaseStepper(this, labels, verticalRail: false);
+        }
+
+        /// <summary>Creates and adds a vertical phase stepper.</summary>
+        public TopiaForgePhaseStepper VerticalPhaseStepper(params string[] labels)
+        {
+            return new TopiaForgePhaseStepper(this, labels, verticalRail: true);
+        }
+
+        /// <summary>Creates and adds a bounded chat log that fades while closed.</summary>
+        public TopiaForgeChatLog ChatLog(int capacity = TopiaForgeChatLogModel.DefaultCapacity, int maxLineChars = TopiaForgeChatLogModel.DefaultMaxLineChars)
+        {
+            return new TopiaForgeChatLog(this, capacity, maxLineChars);
+        }
+
+        /// <summary>Creates and adds a talking glyph (idle, talking, muted, muted by host, mic busy, no mic).</summary>
+        public TopiaForgeTalkIndicator TalkIndicator(float size = 20f)
+        {
+            return new TopiaForgeTalkIndicator(this, size);
+        }
+
+        /// <summary>Creates and adds a microphone input level meter.</summary>
+        public TopiaForgeLevelMeter LevelMeter()
+        {
+            return new TopiaForgeLevelMeter(this);
+        }
+
         internal TopiaForgeContainer CreateChild(string name)
         {
             var go = new GameObject(name, typeof(RectTransform));
