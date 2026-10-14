@@ -284,6 +284,7 @@ links_invalid = [
     {"input": "topiaforge://join/direct/" + SERVER + "/1.2.3/27250", "about": "Digits and dots never make a name, however many parts."},
     {"input": "topiaforge://join/direct/" + SERVER + "/192.168.001.20/27250", "about": "IPv4 parts have no leading zero."},
     {"input": "topiaforge://join/direct/" + SERVER + "/[::1]/27250", "about": "IPv6 is written without brackets."},
+    {"input": "topiaforge://join/direct/" + SERVER + "/::ffff:1.2.3.04/27250", "about": "The IPv4 part of an IPv6 address has no leading zeros either."},
     {"input": "topiaforge://join/direct/" + SERVER + "/bad_host.example/27250", "about": "Host names are letters, digits and hyphens."},
     {"input": "topiaforge://join/direct/" + SERVER + "/-bad.example/27250", "about": "Labels do not start with a hyphen."},
     {"input": "topiaforge://join/direct/" + SERVER + "/example.com./27250", "about": "No trailing dot."},

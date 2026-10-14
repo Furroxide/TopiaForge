@@ -274,7 +274,8 @@ namespace TopiaForge.Multiplayer.Network
                 case "public": return ServerVisibility.Public;
                 case "invite": return ServerVisibility.Invite;
                 case "lan": return ServerVisibility.Lan;
-                default: throw new FormatException("Unknown visibility '" + text + "'.");
+                // The host's text is never repeated back: a refusal names the rule, not what was sent.
+                default: throw new FormatException("The visibility is not public, invite or lan.");
             }
         }
 
@@ -285,7 +286,7 @@ namespace TopiaForge.Multiplayer.Network
                 case "session-required": return DescriptorPackageRole.SessionRequired;
                 case "session-optional": return DescriptorPackageRole.SessionOptional;
                 case "implicit": return DescriptorPackageRole.Implicit;
-                default: throw new FormatException("Unknown package role '" + text + "'.");
+                default: throw new FormatException("A package role is not session-required, session-optional or implicit.");
             }
         }
 
