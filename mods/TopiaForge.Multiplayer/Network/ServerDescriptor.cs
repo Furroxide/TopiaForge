@@ -33,7 +33,8 @@ namespace TopiaForge.Multiplayer.Network
     /// <summary>One package the host runs, pinned to its exact archive.</summary>
     internal sealed class DescriptorPackage
     {
-        private static readonly Regex ModId = new Regex("^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$", RegexOptions.CultureInvariant);
+        // Every pattern ends in \z: .NET's $ also matches before a final newline, so "a.mod\n" would pass.
+        private static readonly Regex ModId = new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}\z", RegexOptions.CultureInvariant);
 
         internal DescriptorPackage(string id, string version, string sha256, DescriptorPackageRole role)
         {
@@ -78,10 +79,10 @@ namespace TopiaForge.Multiplayer.Network
         private static readonly Regex SemanticVersion = new Regex(
             @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)" +
             @"(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?" +
-            @"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$",
+            @"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z",
             RegexOptions.CultureInvariant);
 
-        private static readonly Regex GameBuildText = new Regex("^[0-9A-Za-z._-]{1,16}$", RegexOptions.CultureInvariant);
+        private static readonly Regex GameBuildText = new Regex(@"^[0-9A-Za-z._-]{1,16}\z", RegexOptions.CultureInvariant);
 
         private readonly byte[] signingKey;
         private readonly byte[] transportKey;
