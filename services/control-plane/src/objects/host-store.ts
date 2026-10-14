@@ -177,7 +177,7 @@ export class HostStore {
   }
 
   /**
-   * Keeps a peer id the host said goodbye to out of the room until `until`, when its ticket expires and can open
+   * Keeps a peer id the host said goodbye to out of the room until `until`, by when its ticket has expired and can open
    * nothing more. The list is capped: when it is full, the entry that would expire first makes way.
    */
   excludePeer(peer: string, until: number): void {

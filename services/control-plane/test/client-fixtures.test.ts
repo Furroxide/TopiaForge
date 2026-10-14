@@ -151,7 +151,7 @@ describe("the client fixtures", () => {
         { kind: "host", address: "192.168.1.20", port: 27250, priority: 2130706431 },
         { kind: "srflx", address: PEER, port: 40000, priority: 1694498815 },
         { kind: "relay", address: "141.101.90.10", port: 50000, priority: 16777215 },
-        // Labelled a relay, but outside the relay provider's ranges: withheld like the others.
+        // Labelled a relay, but outside the deployment's relay address ranges: withheld like the others.
         { kind: "relay", address: "203.0.113.50", port: 50000, priority: 16777214 },
       ],
     });
@@ -177,7 +177,7 @@ describe("the client fixtures", () => {
     const document = {
       schema: 1,
       about:
-        "A signaling transcript (docs/internal/ControlPlaneApi.md, Signaling), recorded by services/control-plane/test/client-fixtures.test.ts. The joining peer chose relay-only, so the service forwards only its relay candidates inside the relay provider's address ranges, and withholds its host, server-reflexive and mislabelled candidates. Frames are exact canonical JSON text; a client must send its frames byte for byte and parse every frame it receives.",
+        "A signaling transcript (docs/internal/ControlPlaneApi.md, Signaling), recorded by services/control-plane/test/client-fixtures.test.ts. The joining peer chose relay-only, so the service forwards only its relay candidates inside the deployment's relay address ranges (RELAY_ADDRESS_RANGES), and withholds its host, server-reflexive and mislabelled candidates. Frames are exact canonical JSON text; a client must send its frames byte for byte and parse every frame it receives.",
       relayOnly: { host: false, peer: true },
       transcript,
     };

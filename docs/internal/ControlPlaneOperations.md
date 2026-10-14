@@ -122,7 +122,9 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 
 ## 3. First deploy
 
-1. Merge the service to `dev`.
+1. Merge the service to `dev`. Before the first dispatch, check `RELAY_ADDRESS_RANGES` against Cloudflare's current
+   Realtime TURN documentation and published ranges, and correct it by pull request (section 4.1). The shipped value
+   has never been checked.
 2. In Actions, run **Control plane** with `control-plane-staging` on `dev`. Approve the deployment when GitHub asks.
    The job deploys the Worker and applies migration `v1`, which creates the five Durable Object classes, then
    smoke-tests `GET /v1/status`.
@@ -164,25 +166,39 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 
 ### 4.1 Relay address ranges
 
-`RELAY_ADDRESS_RANGES` lists the addresses Cloudflare Realtime TURN allocates relay addresses from, as CIDR blocks
-separated by single spaces. A relay-only side's signaling candidates are forwarded only when they lie inside it
+`RELAY_ADDRESS_RANGES` is meant to list the ranges Cloudflare Realtime TURN allocates relay addresses from, as CIDR
+blocks separated by single spaces. A relay-only side's signaling candidates are forwarded only when they lie inside it
 (ControlPlaneApi.md, section 8.3). That makes the list a privacy control: a block too wide lets more through, and a
 missing block breaks relay-only joins.
 
-It holds Cloudflare's published address list, IPv4 then IPv6, from https://www.cloudflare.com/ips/. Check it against
-that page every quarter and whenever Cloudflare announces a change of its addresses:
+**The shipped value is unchecked.** It is Cloudflare's published CDN address list, IPv4 then IPv6, as written down from
+memory when the service was built. Nobody has compared it with https://www.cloudflare.com/ips/, and nobody has
+confirmed that Realtime TURN allocates relay addresses from those ranges at all. It is also far wider than relay needs:
+it spans every address Cloudflare publishes for its network, so a candidate anywhere inside it passes as a relay
+address.
 
-1. Copy both published lists, IPv4 first, joined by single spaces.
-2. Replace the value in all three places in `wrangler.toml`: the top level, `env.staging` and `env.production`.
-3. Run `npm test` in `services/control-plane`. The configuration tests refuse a list that does not parse in full, and
-   one that differs between environments.
-4. Merge by pull request, and deploy as above.
+Before deploying, check the list against Cloudflare's current Realtime TURN documentation and its published ranges.
+Check it again every quarter, and whenever Cloudflare announces a change of its addresses:
+
+1. Find the ranges Realtime TURN allocates relay addresses from in Cloudflare's current documentation, and compare
+   them with the published lists. If the documentation names no ranges of its own, fall back to the published lists
+   at https://www.cloudflare.com/ips/, checked entry by entry, knowing that they are wider than relay needs.
+2. Write the narrowest list that covers every relay range, IPv4 blocks first, joined by single spaces.
+3. Replace the value in all three places in `wrangler.toml`: the top level, `env.staging` and `env.production`.
+4. Run `npm test` in `services/control-plane`. The configuration tests refuse a list that does not parse in full, and
+   one that differs between environments. They also pin the shipped list's size and a few addresses inside it, and
+   the signaling tests and the recorded client fixtures use relay addresses in 141.101.64.0/18, 162.158.0.0/15 and
+   2a06:98c0::/29. If the new list leaves those out, move the tests to addresses inside it and regenerate the fixtures
+   (ControlPlaneApi.md, section 11).
+5. Merge by pull request, and deploy as above.
 
 A list that does not parse leaves relay unavailable rather than unchecked: `GET /v1/status` reports `features.relay`
 `false`, and admin state reports `providerConfigured` `false`.
 
-The relay join with "hide my IP" in the first staging session (section 3, step 5) confirms the list. If that joiner
-receives a `candidates-withheld` notice for its relay candidates, Cloudflare's relay addresses lie outside the list.
+The relay join with "hide my IP" in the first staging session (section 3, step 5) catches a missing block: if that
+joiner receives a `candidates-withheld` notice for its relay candidates, Cloudflare's relay addresses lie outside the
+list. It cannot catch a list that is too wide. A wider list passes the same join without any sign, so only the check
+against Cloudflare's documentation keeps the list narrow.
 
 ## 5. Rotating secrets
 
@@ -306,7 +322,7 @@ Logpush or saved tail output for these Workers, because their request metadata i
 | A session's invites | `HostSession`, `InviteShard` | Until expiry (at most seven days) or the session's end |
 | Used challenge nonces | `HostSession` | Two minutes |
 | Operator holds | `HostSession` | Up to 30 days, as set |
-| Peer ids the host said goodbye to, derived from random ticket ids | `HostSession` | Until that peer's ticket expires (at most six hours) or the session ends |
+| Peer ids the host said goodbye to, derived from random ticket ids | `HostSession` | Until that peer's ticket expires, or, for a peer already gone at the goodbye, six hours after it; at most six hours, and never past the session's end |
 | Public listings | `DirectoryShard` | Until the session's expiry |
 | Rate-limit counts, keyed by prefix hash and hour | `RateLimiter`, `SpendGuard` | At most two hours |
 | Relay accounting per ticket (random ticket id or token hash) | `SpendGuard` | A day past the ticket's expiry |

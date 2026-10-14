@@ -19,6 +19,7 @@ import {
   type CandidatePolicy,
   type SignalRole,
 } from "../shared/signaling";
+import { JOIN_TICKET_TTL_SECONDS } from "../shared/tokens";
 
 export const PEER_SOCKET_SECONDS = 15 * 60;
 /** A room has a place for every joiner a full session holds (maxPlayers - 1), and three more for reconnects. */
@@ -226,9 +227,14 @@ export async function onFrame(room: RoomContext, socket: WebSocket, frame: strin
   }
   socket.serializeAttachment(counted);
 
+  // The host's goodbye keeps that ticket out of the room for the rest of the session, whether or not the peer is still
+  // connected: a peer whose socket has already closed cannot come back with the same ticket either.
+  const farewell = state.role === "host" && message.type === "bye";
+  if (farewell) room.exclude(message.peer!, exclusionEnd(room, message.peer!));
   const target = state.role === "peer" ? hostSocket(room.ctx) : peerSocket(room.ctx, message.peer!);
   if (target === null) {
-    send(socket, { type: "error", code: state.role === "peer" ? "host-offline" : "unknown-peer" });
+    // A goodbye has done what it asks without being delivered; any other frame for a missing counterpart is refused.
+    if (!farewell) send(socket, { type: "error", code: state.role === "peer" ? "host-offline" : "unknown-peer" });
     return;
   }
   const offered = candidatesOf(message);
@@ -241,9 +247,19 @@ export async function onFrame(room: RoomContext, socket: WebSocket, frame: strin
   }
   if (message.type !== "bye") return;
   if (state.role === "peer") return close(socket, CLOSE.normal, "bye");
-  // The host's goodbye keeps that ticket out of the room for the rest of the session.
-  room.exclude(message.peer!, stateOf(target)?.ticketExpiresAt ?? room.now + PEER_SOCKET_SECONDS);
   close(target, CLOSE.normal, "bye");
+}
+
+/**
+ * Until when a host's goodbye keeps `peer` out: its ticket's expiry, which every socket the room still lists for it
+ * carries, or, once none is left, the longest a ticket can live from now.
+ */
+function exclusionEnd(room: RoomContext, peer: string): number {
+  for (const socket of room.ctx.getWebSockets(`peer:${peer}`)) {
+    const expiresAt = stateOf(socket)?.ticketExpiresAt;
+    if (expiresAt !== null && expiresAt !== undefined) return expiresAt;
+  }
+  return room.now + JOIN_TICKET_TTL_SECONDS;
 }
 
 /** Tells the other side that a socket went away. */

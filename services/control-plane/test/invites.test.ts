@@ -58,8 +58,17 @@ describe("invites", () => {
     const host = await identity("withdraw-by-body");
     const { token, response } = await register(host, scenario.ip);
     const code = (response.json["invite"] as Record<string, string>)["code"]!;
-    // The old route, with the code as a path segment, no longer exists.
-    expect((await call("DELETE", `/v1/hosts/${host.serverId}/invites/${code}`, { ip: scenario.ip, token })).status).toBe(404);
+    // The old route took the code as a path segment. No route matches such a path, for any method: it answers exactly as
+    // an unknown path does, never 405. The code in it is one this session never issued, so no live code enters a URL.
+    const unissued = "ZZZZZ00000";
+    expect(unissued).not.toBe(code);
+    const unknownPath = await call("GET", "/v1/no-such-path", { ip: scenario.ip });
+    for (const method of ["DELETE", "GET", "POST", "PUT"]) {
+      const old = await call(method, `/v1/hosts/${host.serverId}/invites/${unissued}`, { ip: scenario.ip, token });
+      expect(old.status, method).toBe(404);
+      expect(old.headers.get("allow"), method).toBeNull();
+      expect(old.text, method).toBe(unknownPath.text);
+    }
     expect((await resolve(code)).status).toBe(200);
     for (const route of ROUTES) expect(route.pattern.source, "no route takes an invite code").not.toContain("0-9A-Z");
     expect((await call("POST", `/v1/hosts/${host.serverId}/invites/revoke`, { ip: scenario.ip, token, body: { code, extra: true } })).status).toBe(400);

@@ -221,6 +221,15 @@ describe("relay credentials", () => {
     await expectWithdrawn(held.response);
   });
 
+  it("are refused, and revoked unseen, even when relay is turned back on before the provider answers", async () => {
+    const session = await host("in-flight-toggle", 2);
+    const held = await heldMint(session.serverId, "10.8.4.1");
+    await admin("PUT", "/v1/admin/features", { relay: false });
+    await admin("PUT", "/v1/admin/features", { relay: true });
+    held.release();
+    await expectWithdrawn(held.response);
+  });
+
   it("are refused when relay is off and for a session that has ended", async () => {
     const session = await host("gone", 2);
     const joiner = await ticket(session.serverId);

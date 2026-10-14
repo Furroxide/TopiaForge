@@ -41,8 +41,13 @@ const PACKAGE_MEMBERS = ["id", "version", "sha256", "role"] as const;
 
 const MOD_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/;
 const GAME_BUILD = /^[0-9A-Za-z._-]{1,16}$/;
+/**
+ * SemVer 2.0.0. An alphanumeric pre-release identifier is read as its leading digits, its first non-digit, then the
+ * rest, so every identifier matches exactly one way. Spelled as "anything, a non-digit, anything", a run of hyphens or
+ * letters could split at any point, and a version of dot-separated runs would backtrack exponentially.
+ */
 const SEMANTIC_VERSION =
-  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 export type Visibility = "public" | "invite" | "lan";
 export type PackageRole = "session-required" | "session-optional" | "implicit";

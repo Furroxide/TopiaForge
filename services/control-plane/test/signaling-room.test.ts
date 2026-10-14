@@ -1,6 +1,7 @@
 /**
  * The signaling room's places and its host sockets: how many sockets a room takes and from where, how a host's
- * goodbye keeps a ticket out, and how a registration replaces the sockets opened under the one before it.
+ * goodbye keeps a ticket out whether or not its socket is still open, and how a registration replaces the sockets
+ * opened under the one before it.
  */
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -59,6 +60,14 @@ async function nextOf(client: SignalClient, type: string, skipping: readonly str
     const frame = await client.next();
     if (frame["type"] === type) return frame;
     expect(skipping).toContain(frame["type"]);
+  }
+}
+
+/** Moves time past the fifteen minutes a peer socket lives, keeping the session live with heartbeats. */
+async function outlastPeerSockets(serverId: string, token: string): Promise<void> {
+  for (let beat = 0; beat < 32; beat++) {
+    scenario.clock.advance(30);
+    expect((await call("POST", `/v1/hosts/${serverId}/heartbeat`, { ip: scenario.ip, token, body: { players: 1 } })).status).toBe(200);
   }
 }
 
@@ -139,10 +148,42 @@ describe("a signaling room's places", () => {
     expect((await peer.closed()).code).toBe(1000);
     const again = await openSignal(host.serverId, ticket, PEER_IP);
     expect(again.status).toBe(401);
+    // It stays out while its ticket could still open the room, long past the fifteen minutes a peer socket lives.
+    await outlastPeerSockets(host.serverId, token);
+    expect((await openSignal(host.serverId, ticket, PEER_IP)).status).toBe(401);
     // Only that ticket is kept out: the same player with a new ticket comes back under a new peer id.
     const fresh = await join(host.serverId, PEER_IP);
     expect(fresh.status).toBe(101);
     expect((await fresh.client!.next())["peer"]).not.toBe(peerId);
+  });
+
+  it("keep out a peer the host says goodbye to after its socket closed, however it closed", async () => {
+    const host = await identity(`late-farewell-${scenario.day}`);
+    const { token } = await register(host, scenario.ip);
+    const hostClient = await track(connect(host.serverId, token, scenario.ip));
+    await hostClient.next();
+    // One joiner closes its own socket; the service closes the other's for sending frames too fast.
+    const leavingTicket = await ticketFor(host.serverId, PEER_IP);
+    const leaving = await track(connect(host.serverId, leavingTicket, PEER_IP));
+    const leavingId = (await leaving.next())["peer"] as string;
+    await nextOf(hostClient, "joined");
+    leaving.close();
+    expect(await nextOf(hostClient, "left")).toEqual({ type: "left", peer: leavingId });
+    const floodingTicket = await ticketFor(host.serverId, PEER_IP);
+    const flooding = await track(connect(host.serverId, floodingTicket, PEER_IP));
+    const floodingId = (await flooding.next())["peer"] as string;
+    await nextOf(hostClient, "joined");
+    for (let index = 0; index < 41; index++) flooding.send({ type: "punch", delayMs: index });
+    expect((await flooding.closed()).code).toBe(4408);
+    expect(await nextOf(hostClient, "left", ["punch"])).toEqual({ type: "left", peer: floodingId });
+    // Neither goodbye has a socket to reach, and neither is an error: the host's next frame answers the frame after them.
+    hostClient.send({ type: "bye", peer: leavingId, reason: "cancelled" });
+    hostClient.send({ type: "bye", peer: floodingId, reason: "failed" });
+    hostClient.send("not a frame");
+    expect(await hostClient.next()).toEqual({ type: "error", code: "invalid-message" });
+    for (const ticket of [leavingTicket, floodingTicket]) expect((await openSignal(host.serverId, ticket, PEER_IP)).status).toBe(401);
+    await outlastPeerSockets(host.serverId, token);
+    for (const ticket of [leavingTicket, floodingTicket]) expect((await openSignal(host.serverId, ticket, PEER_IP)).status).toBe(401);
   });
 });
 

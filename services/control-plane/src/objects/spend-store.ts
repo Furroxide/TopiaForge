@@ -206,6 +206,14 @@ export class SpendStore {
     this.sql.exec("UPDATE credential SET revoke = 1 WHERE expires_at > ? AND revoke = 0", now);
   }
 
+  /**
+   * Marks every credential still being minted, and only those: its mint sees the mark once the provider answers and
+   * revokes the credential instead of handing it out, whatever the flags say by then.
+   */
+  markMintsInFlight(): void {
+    this.sql.exec("UPDATE credential SET revoke = 1 WHERE username LIKE 'pending:%' AND revoke = 0");
+  }
+
   markForRevocation(username: string): void {
     this.sql.exec("UPDATE credential SET revoke = 1 WHERE username = ? AND revoke = 0", username);
   }

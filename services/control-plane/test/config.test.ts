@@ -73,7 +73,7 @@ describe("wrangler.toml", () => {
     expect(production).toContain('ENVIRONMENT = "production"');
   });
 
-  it("ships Cloudflare's published address ranges as the relay ranges, which parse in full", () => {
+  it("ships relay ranges that parse in full and admit the relay addresses the tests use", () => {
     const shipped = /^RELAY_ADDRESS_RANGES = "([^"]*)"$/m.exec(wranglerToml)?.[1];
     const config = readConfig(env({ RELAY_ADDRESS_RANGES: shipped! }));
     expect(config.relayRanges).toHaveLength(shipped!.split(" ").length);
