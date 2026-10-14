@@ -33,6 +33,7 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly HashSet<VirtualDirection> blocked = new HashSet<VirtualDirection>();
         private ulong frameOrdinal;
         private ulong scheduleOrdinal;
+        private int linkOrdinal;
 
         internal VirtualEngineTransport(VirtualLinkConditions conditions)
         {
@@ -64,8 +65,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Creates a connected pair: the host's end (whose peer is <paramref name="clientIdentity"/>) and the client's end.</summary>
         internal VirtualLinkPair Connect(string clientIdentity, string hostIdentity = "host")
         {
-            var hostEnd = new VirtualLinkEnd(this, clientIdentity);
-            var clientEnd = new VirtualLinkEnd(this, hostIdentity);
+            // Both ends share one binding, different for every link, as a real handshake hash would be.
+            var binding = new byte[32];
+            var ordinal = ++linkOrdinal;
+            for (var index = 0; index < binding.Length; index++) binding[index] = (byte)((ordinal * 131) + (index * 29) + (ordinal >> (index % 8)));
+            var hostEnd = new VirtualLinkEnd(this, clientIdentity, binding);
+            var clientEnd = new VirtualLinkEnd(this, hostIdentity, binding);
             hostEnd.Outbound = new VirtualDirection(clientEnd);
             clientEnd.Outbound = new VirtualDirection(hostEnd);
             hostEnd.Peer = clientEnd;
@@ -338,15 +343,20 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly VirtualEngineTransport transport;
         private readonly Queue<KeyValuePair<EngineChannel, byte[]>> inbox = new Queue<KeyValuePair<EngineChannel, byte[]>>();
 
-        internal VirtualLinkEnd(VirtualEngineTransport transport, string peerIdentity)
+        private readonly byte[] channelBinding;
+
+        internal VirtualLinkEnd(VirtualEngineTransport transport, string peerIdentity, byte[] channelBinding)
         {
             this.transport = transport;
             PeerIdentity = peerIdentity;
+            this.channelBinding = (byte[])channelBinding.Clone();
         }
 
         public string PeerIdentity { get; }
 
         public MultiplayerPlayerKey PlayerKey => default;
+
+        public byte[] ChannelBinding => (byte[])channelBinding.Clone();
 
         public EngineLinkState State { get; internal set; } = EngineLinkState.Open;
 

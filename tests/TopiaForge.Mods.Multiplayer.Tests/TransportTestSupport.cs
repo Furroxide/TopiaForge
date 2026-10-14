@@ -286,6 +286,8 @@ internal sealed class TransportEngineLink : ProviderLink
 
     public MultiplayerPlayerKey PlayerKey => default;
 
+    public byte[] ChannelBinding => connection.HandshakeHash;
+
     public ProviderLinkState State => connection.State != TransportConnectionState.Established
         ? ProviderLinkState.Closed
         : connection.IsStalled ? ProviderLinkState.Stalled : ProviderLinkState.Open;
