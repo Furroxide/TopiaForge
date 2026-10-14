@@ -263,10 +263,14 @@ namespace TopiaForge.Multiplayer.Engine
     /// Breaking a limit is struck only when it is sustained. Each limit has a second bucket that refills at twice the
     /// limit and holds five seconds of that: 300 datagrams at 60 a second, and 50,000 bytes at 10,000 a second, by
     /// default. Every datagram draws on both, relayed or not, and a datagram over a limit strikes only when that limit's
-    /// sustained bucket is empty too. So a flood of r datagrams a second is first struck after 300 / (r - 60) seconds, a
-    /// flood of b bytes a second after 50,000 / (b - 10,000), and a flood under twice a limit is dropped down to the
-    /// limit but never struck. An honest talker's backlog never empties either: a link holds at most 128 datagrams, and
-    /// 128 of the largest datagrams the format allows come to under 50,000 bytes.
+    /// sustained bucket is empty too. So a flood is first struck once the sustained bucket of the limit that drops it is
+    /// spent: a flood of r datagrams a second that the datagram rate drops after 300 / (r - 60) seconds, and a flood of b
+    /// bytes a second that the bitrate drops after 50,000 / (b - 10,000). When the datagram rate drops enough of a flood
+    /// first, the bitrate's own bucket never empties and nothing strikes for bitrate. A flood under twice a limit is
+    /// dropped down to the limit but never struck; one only just past twice a limit strikes too seldom to be muted; one
+    /// well past it is struck, muted and removed. Either way no more than the limits is relayed. An honest talker's
+    /// backlog never empties either sustained bucket: a link holds at most 128 datagrams, and 128 of the largest
+    /// datagrams the format allows come to under 50,000 bytes.
     /// </para>
     /// </remarks>
     internal sealed class VoiceRelayPolicy

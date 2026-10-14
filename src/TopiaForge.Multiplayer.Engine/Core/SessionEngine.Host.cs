@@ -338,6 +338,8 @@ namespace TopiaForge.Multiplayer.Engine
                 EndConnection(record.Connection, MultiplayerSessionEndReason.Replaced, "The same player joined from another connection.");
             }
 
+            // The client keeps its listener mutes only when this host kept its record: the ids it muted name the same people.
+            var recordKept = record != null;
             var connected = 0;
             foreach (var candidate in participantRecords)
             {
@@ -376,6 +378,7 @@ namespace TopiaForge.Multiplayer.Engine
                 Tick = tick,
                 StepRateHz = Clock.RateHz,
                 NextSequence = record.LastSequence + 1,
+                RecordKept = recordKept,
                 Report = decision.Report
             }));
             connection.Enqueue(CaptureSnapshot());

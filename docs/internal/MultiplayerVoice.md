@@ -239,15 +239,23 @@ backlog all at once. The buckets absorb a second of it and drop the rest without
 as they refill; a dropped datagram spends neither bucket. Only sustained excess is abuse. Each limit has a second bucket
 that refills at twice the limit and holds five seconds of that: 300 datagrams refilled at 60 a second, and 50,000 bytes
 refilled at 10,000 a second. Every datagram draws on both, relayed or not, and a datagram over a limit strikes only
-when that limit's own sustained bucket is empty too. So:
+when that limit's own sustained bucket is empty too:
 
-- a flood of r datagrams a second is first struck after 300 / (r - 60) seconds, and a flood of b bytes a second after
-  50,000 / (b - 10,000) seconds;
-- from then on, datagrams past twice the limit strike, and twenty strikes within 10 seconds mute;
-- a flood at or under twice a limit is dropped down to the limit and never struck, and one only just past twice the
-  limit strikes too seldom to be muted. Either way the host relays no more than the limit.
+- a flood is first struck once the sustained bucket of the limit that drops its datagrams is spent: after
+  300 / (r - 60) seconds for r datagrams a second that the datagram rate drops, and after 50,000 / (b - 10,000) seconds
+  for b bytes a second that the bitrate drops. The byte formula holds only when the bitrate is what drops them. When the
+  datagram rate drops enough of a flood first, the bitrate's one-second bucket never empties, and the flood never
+  strikes for bitrate at all;
+- from then on, a datagram over a limit strikes whenever that limit's sustained bucket is empty, and twenty strikes
+  within 10 seconds mute.
 
-Measured over the policy, with datagrams arriving evenly:
+So floods well past twice a limit are struck, muted and then removed. Floods only just past twice a limit are
+rate-limited and never muted: they strike too seldom, or not at all. A flood at or under twice a limit is dropped down
+to the limit and never struck. Either way the host relays no more than the limits, so a flood that is never muted gets
+no more relayed than the limits allow any talker.
+
+Measured over the policy, with datagrams arriving evenly. The four 334-byte rows run for ten minutes, with sequences of
+three bytes:
 
 | Flood | First strike | Muted |
 | --- | --- | --- |
@@ -257,6 +265,10 @@ Measured over the policy, with datagrams arriving evenly:
 | Small datagrams, 120 a second | After 5.0 s | After 5.3 s |
 | Small datagrams, 240 a second | After 1.7 s | After 1.8 s |
 | 332-byte datagrams, 25 a second (66 kbit/s) | Never | Never |
+| 334-byte datagrams, 31 a second (82 kbit/s) | After 140 s | Never: at most 7 strikes in any 10 s |
+| 334-byte datagrams, 33 a second (88 kbit/s) | After 49 s | Never: at most 18 strikes in any 10 s |
+| 334-byte datagrams, 34 a second (90 kbit/s) | After 37 s | After 47 s |
+| 334- and 30-byte datagrams in turn, 60 a second (87 kbit/s) | Never: the datagram rate drops half, and the rest stay within the bitrate | Never |
 | 332-byte datagrams, 50 a second (133 kbit/s) | After 7.6 s | After 9.5 s |
 | 332-byte datagrams, 59 a second (157 kbit/s) | After 5.2 s | After 6.6 s |
 | 332-byte datagrams, 60 a second (159 kbit/s), over the rig | After 5.1 s | After 6.4 s |
@@ -286,14 +298,30 @@ to the same limits, so when frames bunch up after a stall it drops what would br
 
 `SetListenerMutes(participants, muteAll)` records whom the local player does not want to hear. A client sends the set
 reliably (`VoiceMutes`, `0x31`) when it changes and after every join, so the host stops relaying those speakers to it.
-A host applies its own player's set locally. The set holds at most 256 ids.
+A host applies its own player's set locally. The set holds at most 256 ids, and `GetListenerMutes` reads it back.
 
-Participant ids name players within one session only, so the set stays with its session: a reconnect to the same
-session sends it again, and both leaving the session for another role and a reconnect that finds another session, as
-after the host restarted, clear it, mute-all included. Muting `p2` on one host never silences a different `p2` on the
-next, and never tells the next host whom the player had muted. An earlier version cleared the set only on a role
-change, so a reconnect to a restarted host sent it the old set. A player's lasting wish, such as muting everyone, is
-the voice service's to apply again in the new session.
+Mutes follow the people. A participant id names a player only while the host that assigned it keeps that player's
+record, so the set lasts exactly as long as the host keeps the record of the player who made it:
+
+- **Kept.** An in-place replacement (`ReplaceSession`) keeps every record, and a reconnect within the 30-second grace
+  finds the record it left. The ids still name the same people, so the set stays, whether the client stayed connected
+  through the replacement or reconnected into the new session afterwards.
+- **Forgotten.** A join that finds a host which did not keep the record, because it is another host, restarted, or let
+  the record expire, forgets the set, mute-all included. `JoinAccepted` says whether the host kept the record. The set
+  also remembers the host it was made with, by the host's authenticated identity, so another host's kept record does
+  not count: a traveller who returns within the grace to a host it visited, after muting players elsewhere, leaves
+  those mutes behind.
+- **Made while joining.** A set made while the engine awaits a join names nobody yet and applies to the session the join
+  finds, whichever that is, just as it does after a role change. It should hold only wishes that name nobody, such as
+  muting everyone.
+- **Role changes** forget the set.
+
+So muting `p2` on one host never silences a different `p2` on the next, and never tells the next host whom the player
+had muted. Two earlier versions went by the session. The first cleared the set only on a role change, so a reconnect to
+a restarted host sent it the old set. The second forgot the set whenever a join named another session id: a client
+whose link was down while the host replaced its session in place came back without its mutes, though one that stayed
+connected kept them, and a set made between moving the link and the `JoinAccepted` was dropped when the join found
+another session, though the same call after a role change was kept.
 
 ### 2.6 The engine API
 
@@ -306,6 +334,7 @@ on its own thread and trades frames with the main thread through queues.
 | `TryReceiveVoiceFrame(out frame)` | Dequeues the oldest received frame: speaker, stream generation, sequence, timestamp, flags, payload and arrival time. |
 | `SetServerMute(participant, muted)` | Mutes or unmutes a participant for everyone. Host only. |
 | `SetListenerMutes(participants, muteAll)` | Section 2.5. |
+| `GetListenerMutes(into)` | Copies the listener mute set, as section 2.5 kept or forgot it, and returns mute-all. A voice service reads it rather than keeping a copy that could disagree. |
 | `IsServerMuted(participant)` | Answers from the host's records, or from a client's roster. |
 | `GetVoiceStatistics()` | Counts frames submitted, datagrams sent and relayed, frames delivered, drops by reason, strikes, automatic mutes and removals. |
 
@@ -359,8 +388,30 @@ a tick to a link with no rate at all. An earlier version rounded every frame up 
 lane carried more than 60 frames a second, and three talkers relayed to one listener over links a million bytes a
 second, under 1% used, fell 1.4 s behind in five seconds, with the session stream 76 ticks behind them. A link's reader
 gets waiting datagrams before session frames, and a link holds at most 128 datagrams for it, dropping the oldest, as
-the real connection does. The transport counts datagrams lost, dropped as stale and overflowed, and bytes and frames
-per channel. Every existing rig test passes unchanged, since none sent datagrams before.
+the real connection does. The transport counts datagrams lost, dropped as stale, overflowed and shed, and bytes and
+frames per channel. Every existing rig test passes unchanged, since none sent datagrams before.
+
+**Congestion.** A datagram the link cannot carry in time is shed, never queued, and counted (`DatagramsShed`):
+
+- one whose lane is already more than three ticks behind now, 50 ms at the rig's 60 ticks a second
+  (`VirtualEngineTransport.DatagramBacklogTicks`);
+- while the session lane is more than three ticks behind, one past its channel's share of the link: a bucket three ticks
+  deep, refilled at the real transport's class caps, 96 of every 256 bytes for Voice and 64 for Realtime, so session
+  keeps the rest.
+
+The real transport behaves the same way: a connection drops the datagrams its queue cannot hold, and the class caps
+leave the session class at least 96 of each connection's 256 kbit/s, so voice is what goes first. Three ticks is longer
+than the 40 ms between one talker's datagrams, so a link fast enough for its talkers clears a datagram from each before
+the next arrives, and voice within the rate is never shed. A shed datagram never reaches the wire: it costs the link
+nothing, takes no sequence, and counts as neither sent nor lost. The rig's bound is shorter than the real 64-datagram
+queue, which at the voice class rates holds half a second to two seconds of voice; section 2.11 has the consequence.
+
+An earlier version never lost a datagram to congestion. Three talkers of 80-byte frames sent one listener about
+12,800 bytes a second over links of 8,000: every frame arrived, the worst 6.2 s late, and with a 100-byte session
+message ten times a second beside them the session lane fell 442 ticks behind in ten seconds. Now 342 of the 750
+relayed datagrams are shed, the worst frame arrives 183 ms after it was spoken, against 133 ms for one talker on the same
+link, and no session message waits more than 8 ticks. The bound alone would not have done it: without the share, voice
+still filled the link and the session lane fell 79 ticks behind.
 
 ### 2.9 Tests
 
@@ -374,23 +425,53 @@ These run in the multiplayer test project, and every one is deterministic:
   steady playback;
 - `VoiceRelayPolicyTests`: each limit and check, a backlog absorbed while only sustained excess strikes, the first
   strike and the mute of datagram and bitrate floods at the times in section 2.4, and floods at or under twice a limit
-  never struck, honest talkers through host stalls of up to 6 s, stale and backwards streams, escalation to a mute and
-  to removal, server mutes, and part 1's TOC check run through the seam;
+  never struck, floods just past twice the bitrate struck when the byte formula says but never muted, with the edge at
+  34 datagrams a second, and a flood the datagram rate cuts down never struck for bitrate, honest talkers through host
+  stalls of up to 6 s, stale and backwards streams, escalation to a mute and to removal, server mutes, and part 1's TOC
+  check run through the seam;
 - `VoiceSessionTests`, over the rig: speakers stamped by the host, a forged speaker refused, a client refusing frames
   its roster does not explain, a flood muted then removed, server and listener mutes across a reconnect, an engine
   without voice options staying silent, a restarted client heard from its first frame, and voice across role changes;
 - `VoiceBudgetTests`: four players talking at once for five seconds; voice beside 8 KiB session messages with a quarter
   of all frames lost, arriving within 70 ms while the session stream waits for retries; three talkers on links a
   million bytes a second, within a tick a hop of links with no rate; pairing; a stalled talker paced rather than
-  struck; and the bounded queue;
+  struck; the bounded queue; three talkers over links of 8,000 bytes a second shed while session messages keep their
+  pace; and voice within the rate, or within its share beside large session messages, never shed;
 - `VoiceModerationTests`, over the rig: host stalls of 0.5, 1.2, 3 and 6 s and repeated ones striking nobody, a bitrate
   flood struck and muted, a server mute and the ladder to removal outliving the grace period, the moderation table's
   bound and what it forgets first, listener mutes staying in their session after a role change or a reconnect to
   another session, and a short stream that restarts playing from its first frame;
 - `VoiceRestartTests`, over the rig: a restarted talker heard from the datagram that travels with its acknowledgement,
   and a restart noticed by host and client alike when the path loses its first datagram;
+- `VoiceMuteTests`, over the rig: `JoinAccepted`'s vector, which says whether the host kept the record; mutes that
+  survive an in-place replacement however the client resynchronizes; mutes forgotten when the record expired, and when
+  a host other than the one they were made with kept it; and a set made while joining applied to the session the join
+  finds, with or without a role change first;
 - `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, link time kept in fractions
-  of a tick, and the link's datagram-first, bounded reads.
+  of a tick, the link's datagram-first, bounded reads, and datagrams shed when their lane is more than three ticks
+  behind, or past their share while the session lane is.
+
+### 2.11 Later work
+
+The voice service in the provider, the next slice, must:
+
+- make the Opus types implement the seam and set `EngineOptions.Voice`;
+- drain `TryReceiveVoiceFrame` on the main thread and hand the frames, with their engine-clock arrival times and stream
+  generations, to the voice worker, which pushes them into one `VoiceJitterBuffer` per speaker and pulls every 20 ms;
+- drop every jitter buffer when the session id changes. Stream generations come from one counter in each host process,
+  so a new host process, after a move to another host or a restart, numbers its streams from 1 again, and a buffer kept
+  from before could take a new stream for the old one;
+- map `IsDiscontinuous` to the `Discontinuous` flag, set `EndOfTalk` when push-to-talk or voice activity ends, and drop
+  capture frames that are stale after a stall;
+- read the listener mutes back with `GetListenerMutes` after each join rather than keep a copy, and apply a lasting
+  wish such as muting everyone again only where the engine forgets it: after a role change, or while awaiting a join,
+  where a set applies to the session the join finds;
+- settle the bitrate (section 2.10).
+
+The transport's voice queue holds up to 64 datagrams for the class share. Under a sustained overload that is half a
+second to two seconds of voice at the class rates (12 KiB/s down, 4 KiB/s up, depending on the frame size), past the
+jitter buffer's 200 ms ceiling, so the frames that do arrive would be too late to play. Shedding queued voice by age, as
+the rig's bound does, would keep it fresh.
 
 ### 2.10 The budget
 

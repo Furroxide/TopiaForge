@@ -6,8 +6,8 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// What the host's voice moderation must not get wrong over time: a stalled host strikes nobody, a bitrate flood is
 /// struck like any other, moderation outlives a participant record's grace period, a full table forgets whoever was seen
-/// longest ago, a listener's mutes stay in the session they were made in, and a short stream that restarts plays from
-/// its first frame.
+/// longest ago, a listener's mutes stay behind when the player leaves for another role or a host that does not know
+/// them, and a short stream that restarts plays from its first frame.
 /// </summary>
 internal static class VoiceModerationTests
 {

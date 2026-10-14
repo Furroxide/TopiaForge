@@ -125,10 +125,13 @@ internal sealed class VoiceSessionHarness : IDisposable
         }
     }
 
-    /// <summary>Connects <paramref name="engine"/> to <paramref name="host"/>, a host other than the rig's own.</summary>
-    internal VirtualLinkEnd ConnectTo(SessionEngine host, SessionEngine engine, string identity)
+    /// <summary>
+    /// Connects <paramref name="engine"/> to <paramref name="host"/>, a host other than the rig's own. The client knows
+    /// that host as <paramref name="hostIdentity"/>; the rig's own host is "host".
+    /// </summary>
+    internal VirtualLinkEnd ConnectTo(SessionEngine host, SessionEngine engine, string identity, string hostIdentity = "host")
     {
-        var pair = Network.Connect(identity);
+        var pair = Network.Connect(identity, hostIdentity);
         host.Accept(pair.HostEnd);
         engine.Connect(pair.ClientEnd, identity);
         return pair.ClientEnd;

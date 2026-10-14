@@ -21,15 +21,18 @@ namespace TopiaForge.Multiplayer.Engine
         /// second of burst. Two 20 ms frames per datagram make 25 a second, so the default leaves 20% headroom, and the
         /// burst absorbs a second's backlog after a stall. Datagrams over it are dropped. They strike only once a speaker
         /// has sent more than twice this rate for long enough to spend a five-second allowance at twice the rate: 300
-        /// datagrams by default, so a flood of r a second is first struck after 300 / (r - 60) seconds.
+        /// datagrams by default, so a flood of r a second that this limit drops is first struck after 300 / (r - 60)
+        /// seconds. See docs/internal/MultiplayerVoice.md, section 2.4, for which floods go on to be muted.
         /// </summary>
         internal int MaximumPacketsPerSecond { get; set; } = 30;
 
         /// <summary>
         /// Gets or sets a speaker's voice bitrate, counting whole datagrams; a token bucket holds one second. Datagrams over
         /// it are dropped, and strike only once a speaker has sent more than twice it for long enough to spend a five-second
-        /// allowance at twice the bitrate: 50,000 bytes by default, so a flood of b bytes a second is first struck after
-        /// 50,000 / (b - 10,000) seconds.
+        /// allowance at twice the bitrate: 50,000 bytes by default. So a flood of b bytes a second is first struck after
+        /// 50,000 / (b - 10,000) seconds, but only when this limit is what drops its datagrams: when the datagram limit
+        /// drops enough of them first, this bucket never empties and they strike for neither. Floods only just past twice
+        /// the bitrate strike too seldom to be muted; section 2.4 of docs/internal/MultiplayerVoice.md has the measures.
         /// </summary>
         internal int MaximumBitsPerSecond { get; set; } = 40_000;
 
