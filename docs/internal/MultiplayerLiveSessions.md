@@ -86,7 +86,8 @@ A host describes its session in a descriptor and signs it. A joining player chec
   - its server id and package digest match;
   - its signature verifies under its own signing key;
   - and, when the caller expects a particular server, its server id is that one.
-  Version 1 refuses unknown members; a later version changes the schema string.
+  Version 1 refuses unknown members; a later version changes the schema string. Each text rule covers the whole
+  value, so a trailing newline fails it. .NET's `$` would let one through, so the C# patterns end in `\z`.
 - **Pins.** The descriptor's hash, the SHA-256 of the exact served bytes, and the package digest are what a join plan
   pins.
 - **Trust chain.** A link, a listing or a LAN beacon names a server id. Only a descriptor that verifies against that
@@ -112,6 +113,8 @@ A host describes its session in a descriptor and signs it. A joining player chec
 - **Invite codes** are 10 characters of Crockford base32, 50 random bits. Reading them is forgiving: case, hyphens
   and spaces are ignored, O reads as 0, and I and L read as 1. The canonical code is upper case without separators,
   and people see it as `XXXXX-XXXXX`.
+- **Case folding is ASCII only**, in invite codes and host names alike. Unicode folding would accept look-alikes: the
+  long s (U+017F) uppercases to S, and the Kelvin sign (U+212A) lowercases to k. Both are refused.
 - **Privacy.** A direct link carries the host's address, so it exists only in the network layer and the launcher.
   It never reaches mods, snapshots, logs or diagnostics. A link never joins on its own: it opens the consent flow.
 
@@ -173,8 +176,8 @@ launcher, and TypeScript in the control plane.
 
 | Folder | Cases |
 | --- | --- |
-| `descriptor/` | Two keys; valid descriptors that each runtime must sign to the exact served bytes; 30 tampered documents each runtime must refuse |
-| `links/` | Valid links with their fields and canonical forms, invalid links, and invite code normalization |
+| `descriptor/` | Two keys; valid descriptors that each runtime must sign to the exact served bytes; 33 tampered documents each runtime must refuse, trailing newlines included |
+| `links/` | Valid links with their fields and canonical forms, invalid links (Unicode look-alikes included), and invite code normalization |
 | `lan/` | Beacon bytes, session info, and invalid forms of each |
 | `secrets/` | PBKDF2-HMAC-SHA256 vectors from RFC 7914, password proofs (including composed and decomposed Unicode), and player keys |
 

@@ -33,7 +33,8 @@ namespace TopiaForge.Multiplayer.Network
     /// <summary>One package the host runs, pinned to its exact archive.</summary>
     internal sealed class DescriptorPackage
     {
-        private static readonly Regex ModId = new Regex("^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$", RegexOptions.CultureInvariant);
+        // Every pattern ends in \z: .NET's $ also matches before a final newline, so "a.mod\n" would pass.
+        private static readonly Regex ModId = new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}\z", RegexOptions.CultureInvariant);
 
         internal DescriptorPackage(string id, string version, string sha256, DescriptorPackageRole role)
         {
@@ -78,10 +79,10 @@ namespace TopiaForge.Multiplayer.Network
         private static readonly Regex SemanticVersion = new Regex(
             @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)" +
             @"(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?" +
-            @"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$",
+            @"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z",
             RegexOptions.CultureInvariant);
 
-        private static readonly Regex GameBuildText = new Regex("^[0-9A-Za-z._-]{1,16}$", RegexOptions.CultureInvariant);
+        private static readonly Regex GameBuildText = new Regex(@"^[0-9A-Za-z._-]{1,16}\z", RegexOptions.CultureInvariant);
 
         private readonly byte[] signingKey;
         private readonly byte[] transportKey;
@@ -273,7 +274,8 @@ namespace TopiaForge.Multiplayer.Network
                 case "public": return ServerVisibility.Public;
                 case "invite": return ServerVisibility.Invite;
                 case "lan": return ServerVisibility.Lan;
-                default: throw new FormatException("Unknown visibility '" + text + "'.");
+                // The host's text is never repeated back: a refusal names the rule, not what was sent.
+                default: throw new FormatException("The visibility is not public, invite or lan.");
             }
         }
 
@@ -284,7 +286,7 @@ namespace TopiaForge.Multiplayer.Network
                 case "session-required": return DescriptorPackageRole.SessionRequired;
                 case "session-optional": return DescriptorPackageRole.SessionOptional;
                 case "implicit": return DescriptorPackageRole.Implicit;
-                default: throw new FormatException("Unknown package role '" + text + "'.");
+                default: throw new FormatException("A package role is not session-required, session-optional or implicit.");
             }
         }
 
