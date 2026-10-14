@@ -12,11 +12,11 @@ part of '../multiplayer.dart';
 ///   - an IP literal is contacted only when [NetworkHost.pathKindOf] calls it
 ///     [NetworkPathKind.lan]. [JoinSession.start] refuses any other;
 ///   - a DNS name is looked up only when [NetworkHost.isLocalName] allows it
-///     (`localhost` or a `.local` name), since looking up any other name
-///     reaches DNS servers its author chose. [JoinSession.start] refuses any
-///     other before a lookup. Of what a local name resolves to, only
-///     [contactableAddresses] are contacted; if none is left, report
-///     [JoinFailureCode.directNotAllowed];
+///     (`localhost`, or a name ending in `.localhost` or `.local`), since
+///     looking up any other name reaches DNS servers its author chose.
+///     [JoinSession.start] refuses any other before a lookup. Of what a local
+///     name resolves to, only [contactableAddresses] are contacted; if none
+///     is left, report [JoinFailureCode.directNotAllowed];
 ///   - a LAN listing's host is contacted only when
 ///     [NetworkHost.pathKindOfAddress] puts the beacon's sender on the local
 ///     network; otherwise report [JoinFailureCode.directNotAllowed];
@@ -104,6 +104,9 @@ final class JoinDescriptorRequest extends JoinContactRules {
 ///   descriptor endpoint, with `TFD1 package <sha256>`, under exactly the
 ///   rules the descriptor fetch had. Each archive must match its SHA-256 and
 ///   hold a manifest with the claimed id and version.
+/// - When those rules now forbid reaching the host, because a local name
+///   resolves to no local address or a LAN listing's sender is off the local
+///   network, report [JoinFailureCode.directNotAllowed]; the join ends.
 final class JoinDownloadRequest extends JoinContactRules {
   JoinDownloadRequest._({
     required super.target,

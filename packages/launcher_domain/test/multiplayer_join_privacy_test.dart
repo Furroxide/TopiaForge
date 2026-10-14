@@ -143,6 +143,10 @@ void main() {
         'fd00::7',
         'localhost',
         'printer.local',
+        // RFC 6761 keeps .localhost names on this machine, as the game does.
+        'foo.localhost',
+        'Foo.LocalHost',
+        'a.b.localhost',
       ]) {
         final state = startJoin(direct(host));
         expect(state.stage, JoinStage.fetchingDescriptor, reason: host);
@@ -152,6 +156,8 @@ void main() {
         expect(request.expectedServerId, hostAServerId);
         expect(request.target, same(state.target));
         expect(request.toString(), isNot(contains(host)));
+        final typed = startJoin(JoinAddressTarget(host: host, port: 27250));
+        expect(typed.stage, JoinStage.fetchingDescriptor, reason: host);
       }
     });
 
@@ -162,6 +168,7 @@ void main() {
         'local',
         'local.example',
         'localhost.example',
+        'xlocalhost',
       ]) {
         for (final target in [
           direct(host),
@@ -180,6 +187,8 @@ void main() {
         }
       }
       expect(NetworkHost.isLocalName('Printer.LOCAL'), isTrue);
+      expect(NetworkHost.isLocalName('Foo.LocalHost'), isTrue);
+      expect(NetworkHost.isLocalName('xlocalhost'), isFalse);
       expect(NetworkHost.isLocalName('127.0.0.1'), isFalse);
     });
 

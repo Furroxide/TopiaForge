@@ -60,16 +60,20 @@ abstract final class NetworkHost {
     return null;
   }
 
-  /// Whether [host] is a name the local network answers itself: `localhost`,
-  /// or a multicast DNS name ending in `.local`. Looking up any other name
-  /// asks DNS servers its author chose, which can learn the player's resolver
-  /// or subnet, so relay-only joins look up no other name. False for an IP
-  /// literal. Throws [ArgumentError] when [host] is not a host, without
-  /// repeating it.
+  /// Whether [host] is a name that resolves without asking anyone beyond
+  /// this machine and the local network, by the game's rule: `localhost`,
+  /// names ending in `.localhost`, which RFC 6761 keeps on this machine, and
+  /// multicast DNS names ending in `.local`. Letter case does not matter.
+  /// Looking up any other name asks DNS servers its author chose, which can
+  /// learn the player's resolver or subnet, so relay-only joins look up no
+  /// other name. False for an IP literal. Throws [ArgumentError] when [host]
+  /// is not a host, without repeating it.
   static bool isLocalName(String host) {
     if (pathKindOf(host) != null) return false;
     final name = tryNormalize(host)!;
-    return name == 'localhost' || name.endsWith('.local');
+    return name == 'localhost' ||
+        name.endsWith('.localhost') ||
+        name.endsWith('.local');
   }
 
   /// Classifies a raw IPv4 (4 bytes) or IPv6 (16 bytes) address as the game's

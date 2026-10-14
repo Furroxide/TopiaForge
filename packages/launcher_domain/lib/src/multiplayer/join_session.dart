@@ -9,13 +9,16 @@ part of '../multiplayer.dart';
 ///   ([JoinContactRules]). Targets the control plane resolves start
 ///   resolving; a direct link, a typed address and a LAN listing start
 ///   fetching the descriptor. Under relay-only, a target whose host is an IP
-///   literal beyond the local network, or a name other than `localhost` and
-///   `.local` names, ends at once, before anything is contacted or looked
-///   up. A plan that would download from a host whose location is unknown
-///   ends the join while checking.
-/// - A typed address whose server is already known, because the join
-///   learned it or the player trusted it, ends as an identity change if
-///   another server answers.
+///   literal beyond the local network, or a name other than `localhost`,
+///   `.localhost` and `.local` names, ends at once, before anything is
+///   contacted or looked up. A plan that would download from a host whose
+///   location is unknown ends the join while checking, and a download that
+///   finds the host off the local network ends it while downloading.
+/// - Only a typed address can change identity, since only it learns its
+///   server. Once that server is known, because the join learned it or the
+///   player trusted it, another server answering ends the join as an
+///   identity change. Every other target names its server, so another one
+///   is an invalid descriptor and a reported identity change is ignored.
 /// - Each step advances only on its own completion event; any event a step
 ///   cannot use, including a failure it cannot produce, leaves the state as
 ///   it is. Stale events from abandoned work are therefore harmless.
@@ -32,7 +35,8 @@ part of '../multiplayer.dart';
 abstract final class JoinSession {
   /// The failures each step can produce through [JoinFailed]. Cancellation
   /// and game exits have their own events: see [cancellableStages],
-  /// [deferredCancelStages] and [gameExitStages].
+  /// [deferredCancelStages] and [gameExitStages]. Only the join of a
+  /// [JoinAddressTarget] can produce [JoinFailureCode.identityChanged].
   static const failuresByStage = <JoinStage, Set<JoinFailureCode>>{
     JoinStage.resolving: {
       JoinFailureCode.invalidLink,
@@ -63,6 +67,7 @@ abstract final class JoinSession {
       JoinFailureCode.downloadFailed,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
+      JoinFailureCode.directNotAllowed,
     },
     JoinStage.installing: {JoinFailureCode.installFailed},
     JoinStage.preparingProfile: {JoinFailureCode.profileSaveFailed},
@@ -247,6 +252,13 @@ abstract final class JoinSession {
 
   static JoinSessionState _fail(JoinSessionState state, JoinFailed event) {
     if (!failuresByStage[state.stage]!.contains(event.code)) return state;
+    // Only a typed address can change identity: a target that names its
+    // server treats another one as an invalid descriptor ([_verified]), and
+    // [start] refuses to trust a server for it.
+    if (event.code == JoinFailureCode.identityChanged &&
+        state.target is! JoinAddressTarget) {
+      return state;
+    }
     if (event.code == JoinFailureCode.admissionChanged &&
         state.replans < maximumReplans) {
       return state._copy(

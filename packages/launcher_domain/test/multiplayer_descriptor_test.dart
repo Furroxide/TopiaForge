@@ -302,6 +302,54 @@ void main() {
       }
     });
 
+    test('pre-release identifiers split one way, so hostile versions are '
+        'refused at once', () {
+      for (final version in [
+        '1.0.0-alpha',
+        '1.0.0-0.3.7',
+        '1.0.0-x.7.z.92',
+        '1.0.0-x-y-z.--',
+        '1.0.0--',
+        '1.0.0-00a.1-',
+        '1.0.0-alpha+001',
+        '1.0.0+21AF26D3----117B344092BD',
+      ]) {
+        expect(
+          ServerDescriptorV1.isSemanticVersion(version),
+          isTrue,
+          reason: version,
+        );
+      }
+      for (final version in [
+        '1.0.0-00',
+        '1.0.0-a..b',
+        '1.0.0-a.',
+        '1.0.0-a_b',
+      ]) {
+        expect(
+          ServerDescriptorV1.isSemanticVersion(version),
+          isFalse,
+          reason: version,
+        );
+      }
+      // Were an identifier of hyphens splittable at each hyphen, a
+      // backtracking matcher would try every split of every identifier
+      // before refusing these: 0.6 seconds for the second one alone.
+      final hostile = [
+        '0.0.0-0.${'--.' * 18}-.',
+        '0.0.0-0.${'----.' * 11}.',
+        // Beyond 64 characters, refused before the pattern runs.
+        '0.0.0-0.${'--.' * 19}',
+        '0.0.0-0.${'--.' * 100000}',
+      ];
+      expect(hostile.take(2).map((version) => version.length), [64, 64]);
+      final watch = Stopwatch()..start();
+      for (final version in hostile) {
+        expect(ServerDescriptorV1.isSemanticVersion(version), isFalse);
+      }
+      expect(watch.elapsedMilliseconds, lessThan(100));
+    });
+
     test('512 packages fit within 256 KiB and 513 do not', () async {
       final most = [
         for (var index = 0; index < ServerDescriptorV1.maximumPackages; index++)

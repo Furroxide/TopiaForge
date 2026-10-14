@@ -145,6 +145,46 @@ void main() {
       );
     });
 
+    test('ignores a reported identity change for targets that name their '
+        'server', () {
+      // Their joins call another server an invalid descriptor, and trusting
+      // one would throw, so an identity change cannot end them.
+      final named = <JoinTarget>[
+        JoinLinkTarget(
+          SessionLink.direct(
+            serverId: hostAServerId,
+            host: '192.168.1.20',
+            port: 27250,
+          ),
+        ),
+        JoinListingTarget(
+          serverId: hostAServerId,
+          source: ServerListingSource.lan,
+        ),
+        JoinLinkTarget(SessionLink.server(hostAServerId)),
+        JoinLinkTarget(SessionLink.invite('ABCDE12345')),
+      ];
+      for (final other in named) {
+        var state = startJoin(other);
+        if (state.stage == JoinStage.resolving) {
+          state = JoinSession.reduce(state, JoinTargetResolved(hostAServerId));
+        }
+        expect(state.stage, JoinStage.fetchingDescriptor, reason: '$other');
+        expect(
+          JoinSession.reduce(
+            state,
+            JoinFailed.identityChanged(servedServerId: otherServer),
+          ),
+          same(state),
+          reason: '$other',
+        );
+        expect(
+          () => startJoin(other, trustedServerId: otherServer),
+          throwsArgumentError,
+        );
+      }
+    });
+
     test('trusting a changed identity accepts that server and no other', () {
       // The player saw the failure and chose to trust the server it named.
       final trusted = startJoin(target, trustedServerId: otherServer);

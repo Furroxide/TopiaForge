@@ -25,7 +25,8 @@ void main() {
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       // Relay-only refuses a host beyond the local network; a typed address
-      // that serves another server than before is an identity change.
+      // that serves another server than before is an identity change. Only
+      // a typed address learns its server, so only its join can produce one.
       JoinFailureCode.directNotAllowed,
       JoinFailureCode.identityChanged,
     },
@@ -43,6 +44,8 @@ void main() {
       JoinFailureCode.downloadFailed,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
+      // A host download the contact rules forbid once names are resolved.
+      JoinFailureCode.directNotAllowed,
     },
     JoinStage.installing: {JoinFailureCode.installFailed},
     JoinStage.preparingProfile: {JoinFailureCode.profileSaveFailed},
@@ -156,9 +159,12 @@ void main() {
         'failed:${code.name}': () => failed(code),
   };
 
-  /// A state at [stage], reached by the happy path.
-  JoinSessionState at(JoinStage stage) {
-    var state = startJoin(JoinLinkTarget(SessionLink.server(hostAServerId)));
+  /// A state at [stage], reached by the happy path of a server link, or of
+  /// [target] when it is given.
+  JoinSessionState at(JoinStage stage, [JoinTarget? target]) {
+    var state = startJoin(
+      target ?? JoinLinkTarget(SessionLink.server(hostAServerId)),
+    );
     for (final name in [
       'resolved',
       'descriptorVerified',
@@ -235,6 +241,18 @@ void main() {
           } else if (name == 'gameExited' && stage == JoinStage.inSession) {
             expect(after.stage, JoinStage.ended);
             expect(after.outcome!.sessionEnd, JoinSessionEndReason.gameExited);
+          } else if (code == JoinFailureCode.identityChanged &&
+              failures[stage]!.contains(code)) {
+            // The server link names its server; a typed address does not.
+            expect(after, same(before), reason: 'the link names its server');
+            final typed = at(
+              stage,
+              JoinAddressTarget(host: '192.168.1.20', port: 27250),
+            );
+            final changed = JoinSession.reduce(typed, make());
+            expect(changed.stage, JoinStage.ended);
+            expect(changed.outcome!.failure!.code, code);
+            expect(changed.outcome!.failure!.stage, stage);
           } else if (code != null && failures[stage]!.contains(code)) {
             if (code == JoinFailureCode.admissionChanged) {
               expect(after.stage, JoinStage.fetchingDescriptor);
