@@ -177,6 +177,9 @@ namespace TopiaForge.Multiplayer.Network
                     if (!hex && character != ':' && character != '.') return false;
                 }
 
+                // An embedded IPv4 part follows the IPv4 rules, leading zeros refused: .NET would read 1.2.3.04 as 1.2.3.4.
+                var tail = host.Substring(host.LastIndexOf(':') + 1);
+                if (tail.IndexOf('.') >= 0 && !IsDottedQuad(tail)) return false;
                 if (!IPAddress.TryParse(host, out var v6) || v6.AddressFamily != AddressFamily.InterNetworkV6) return false;
                 normalized = FormatIPv6(v6.GetAddressBytes());
                 return true;

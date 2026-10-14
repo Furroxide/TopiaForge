@@ -162,6 +162,10 @@
       "about": "IPv6 is written without brackets."
     },
     {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/::ffff:1.2.3.04/27250",
+      "about": "The IPv4 part of an IPv6 address has no leading zeros either."
+    },
+    {
       "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/bad_host.example/27250",
       "about": "Host names are letters, digits and hyphens."
     },
