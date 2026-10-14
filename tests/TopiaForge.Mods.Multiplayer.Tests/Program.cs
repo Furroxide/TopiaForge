@@ -214,6 +214,21 @@ internal static class Program
             NetworkServiceTests.LanBrowsersFindAnnouncedHosts();
             NetworkServiceTests.AMovedServerIsHeardAfresh();
             NetworkServiceTests.ServicesStopWithTheirThread();
+            LiveSessionTests.APlayerJoinsAHostAndLeaves();
+            LiveSessionTests.PasswordsAreProvedNeverSent();
+            LiveSessionTests.HostsKickBanAndStop();
+            LiveSessionTests.JoinsCheckBuildContentCapacityAndPrivacy();
+            LiveSessionTests.ALostLinkReconnectsWithinTheGrace();
+            LiveSessionTests.HostingRecoversSavesInOrderAndBrowsesPrivately();
+            LivePolicyTests.JoinContentRoundTripsAndRefusesMalformedBytes();
+            LivePolicyTests.AdmissionReportsAreCanonicalAndBounded();
+            LivePolicyTests.BanListsPersistAndStayBounded();
+            LivePolicyTests.TheHostChecksBansCapacityPasswordThenContent();
+            LivePolicyTests.KnownHostsKeepNoAddressAndMergeInOrder();
+            NetworkPrivacyTests.OnlyTheNetworkLayerNamesSockets();
+            NetworkPrivacyTests.WhatModsSeeHasNoAddress();
+            NetworkPrivacyTests.TheNetworkLayerReportsReasonsNotAddresses();
+            NetworkPrivacyTests.ARelayOnlyResolveContactsOnlyTheLan();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

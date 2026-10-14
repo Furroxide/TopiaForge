@@ -13,7 +13,8 @@ WS2f lands in steps:
 2. **The network runtime** (sections 11 to 13): the network thread, the UDP socket, and the links the session engine
    sees.
 3. **Services** (sections 14 to 16): the descriptor endpoint, its client, and LAN discovery.
-4. **Hosting and joining**, which follow: the host and join flows.
+4. **Hosting and joining** (sections 17 to 22): the host and join flows, admission, persistence and the developer
+   switch that drives them until the in-game interface exists.
 
 ## 1. Identity
 
@@ -204,6 +205,14 @@ unreachable port, and two session engines joining across two network threads, a 
 in under five seconds. `NetworkServiceTests` covers the descriptor endpoint's answers, limits and failing archives, LAN
 browsing (a moved server included), and services and connections the thread still owns when it stops.
 
+`LiveSessionTests` runs whole providers on the virtual network, with real cryptography, transport, engine and flows:
+joining and leaving, passwords (proved, never sent, and limited), kicking, banning and stopping, every check before
+connecting, reconnecting within the grace period, and the coordinator's recovery and saving. `LivePolicyTests` covers
+join content, admission reports, the ban list, the order the host's policy checks in, and the known-hosts record.
+`NetworkPrivacyTests` checks that only the network layer names socket types, that no SDK member is shaped like an
+address, that faults and failures name reasons rather than addresses, and that a relay-only resolve contacts nothing
+beyond the local network.
+
 ## 11. The network thread
 
 - **Ownership.** One thread owns a socket, a `NetworkStack` (the transport endpoint plus the links over its
@@ -327,5 +336,125 @@ Every line ends in a single newline (`\n`).
   - At most 64 sessions are listed.
   - The main thread reads a snapshot that is replaced on every change. Each entry keeps its path inside the network
     layer, for the join flow.
-- **Relay-only browsers** still browse the LAN, since LAN paths are allowed; a beacon from any other address is
-  listed but never queried.
+- **Browsing is always relay-only.** LAN paths are allowed, so LAN hosts are queried as usual. A beacon from any
+  other address is listed but never queried, so browsing never shows that host this player's address.
+
+## 17. Live sessions
+
+`LiveSessions` is the provider's one place for live play: at most one host or one join at a time, LAN browsing, and
+the identity, bans and known hosts they share.
+
+- **Threads.** Everything runs on the main thread through `Pump`, before the engine's own pump. Slow work runs on
+  background tasks and lands at a later pump: loading the identity, bans and known hosts, and deriving a password key.
+- **Roles.** Hosting opens the solo session to others; it needs a solo session and no join under way. Joining needs
+  no host and the identity loaded (`PrepareAsync`). A joined session that ends returns the process to solo play
+  through the engine's `AfterClientSessionEnds` hook (`MultiplayerSessionEngine.md`, "Role changes"), with a fresh
+  solo session id.
+- **Failures** are a `LiveFailure` and a sentence for the player. Neither ever names an address. A host that cannot
+  start reports why (`PortInUse`, `IdentityUnavailable`, …) and may simply be started again.
+
+## 18. Hosting
+
+`LiveHost` turns the running solo session into a listen host. The engine keeps the same session throughout: hosting
+adds links to it, and stopping closes them while the host plays on.
+
+1. **Binding.** The game socket binds UDP 27250, or any free port when that is taken and the settings allow it. The
+   descriptor endpoint then binds TCP on the same port number; if that number is taken, the pair is tried again, four
+   times at most.
+2. **Relay-only.** Unless the host allowed direct play, its transport is relay-only and its descriptor endpoint serves
+   only LAN addresses, so nobody beyond the local network learns its address. Until the relay exists (WS7) such a
+   host is reachable on the LAN only.
+3. **Serving.** The host signs its descriptor (packages from the runtime, `hostServesPackages` false) and serves it.
+   It sets the engine's capacity and join policy, and keeps its session info current as players come and go. A host
+   with LAN or public visibility also announces itself on the LAN; an invite-only host does not.
+4. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
+   (section 19) and ends their session.
+5. **Stopping** ends every player's session with `HostEnded`, gives the closing messages 250 ms to leave, and stops
+   the network. The host plays on alone in the same session.
+
+## 19. Admission
+
+A host admits players through `HostPolicy`, which checks, in order:
+
+1. **Bans.** A banned transport key is refused first. Rotating the key escapes a ban, as the player-facing docs say.
+2. **The engine's own checks:** the protocol's major version, capacity, and every shared contract's schema.
+3. **The join content's form.** A player's join request carries version 1, a flag byte, a 32-byte password proof when
+   the flag says so, and the runtime's content bytes (at most 64 KiB) with a minimal varint length. Anything else is
+   a protocol refusal.
+4. **The password.** A protected session needs a proof bound to this link's handshake (section 6), so a proof made
+   for another link is wrong here. Five wrong proofs from one identity within a minute refuse even the right one for
+   the rest of that minute. The transport's per-source handshake limit bounds how fast new identities can try.
+5. **Content.** The runtime's content admission decides last.
+
+Every refusal carries an admission report, canonical JSON the joining player's interface reads:
+
+```json
+{"code":"content","problems":["Zombies 0.2.0 is missing."],"schema":"topiaforge.admission-report/1"}
+```
+
+The codes are `other`, `full`, `protocol`, `password-required`, `password-wrong`, `too-many-attempts`, `banned` and
+`content`. Problems are display text, 64 at most, and a report never names an address.
+
+## 20. Joining
+
+`LiveJoin` takes one join from target to session, on the main thread. Nothing leaves solo play until the link to the
+host is up, so any failure before that leaves the player's own session untouched.
+
+| Phase | What happens |
+| --- | --- |
+| Resolving | The target becomes a path and a verified descriptor, off the main thread. A LAN target comes from the browser. A typed address is looked up, IPv4 first, and trusted on first use (section 8). |
+| Checking | The game build, the protocol's major version, the path against the player's privacy choice, and the content must all agree. |
+| AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
+| PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |
+| Connecting | The transport connects with the descriptor's transport key pinned. Once the link is up, the engine switches to the host's session and sends the join with a proof bound to this link. |
+| Synchronizing, InSession | The engine joins and plays. |
+| Reconnecting | A link lost in session is retried every two seconds for 30 seconds, each time with a new proof for the new link. The host keeps the player's place for its grace period, so the player comes back as the same participant. |
+| Ended | The join failed or the session ended; the process is in solo play again. |
+
+- **Relay-only is honoured before anything is sent.** Unless the player allowed direct play for this session, the
+  resolver contacts only addresses on the local network, not even fetching a descriptor from anywhere else, and a
+  host beyond it fails as `DirectNotAllowed`. The join checks the resolved path again before connecting.
+- **How it ends** is told to the player: kicked, banned, the host ended it, a protocol mismatch, refused with the
+  host's admission report, or the connection lost after the reconnect window. The password key is wiped when the
+  join ends.
+
+## 21. Persistence
+
+Each provider keeps its live-session files in its own data folder, read on the first use and saved as they change:
+
+| File | Holds |
+| --- | --- |
+| `multiplayer/identity.json` | The identity (section 1) |
+| `multiplayer/bans.json` | `topiaforge.bans/1`: each banned transport key with a display name and the time, at most 1,024, the oldest giving way |
+| `multiplayer/known-hosts.json` | `topiaforge.known-hosts/1`: the hashes of typed addresses and the server each served (section 8), at most 256 |
+
+- **Damage.** A file that does not read as its schema yields an empty record, and the next save replaces it. Entries
+  that do not read are skipped and the rest kept.
+- **Order.** Each file's saves run one after another, so a slow save can never land after, and overwrite, a newer
+  one.
+- **Merging.** Known hosts read from disk are merged in as older than those this process recorded, in their own order,
+  so the cap drops the oldest first.
+
+## 22. The developer switch, and what comes later
+
+The in-game interface for hosting and joining arrives with WS5. Until then a developer switch drives live sessions,
+and it is off by default:
+
+| Variable | Effect |
+| --- | --- |
+| `TOPIAFORGE_LIVE_MULTIPLAYER=1` | Turns live sessions on |
+| `TOPIAFORGE_MULTIPLAYER_HOST=<name>` | Opens this session on the LAN under that name |
+| `TOPIAFORGE_MULTIPLAYER_PORT=<port>` | The port to host on, 27250 by default |
+| `TOPIAFORGE_MULTIPLAYER_JOIN=<host>:<port>` | Joins that host |
+| `TOPIAFORGE_MULTIPLAYER_NAME=<name>` | The display name to join as |
+
+Progress is logged by phase and reason, never by address. The switch never allows direct play, so a joining player
+reaches LAN addresses only.
+
+These choices differ from the plan:
+
+- **Resume tokens** are replaced by identity-keyed resume. The host's engine already recognises a returning transport
+  key within its grace period, and that key is proved by the handshake, so a token would add nothing.
+- **Content** goes through `ILiveSessionContent`. Until WS3 supplies the runtime's content descriptors,
+  `ProviderOnlyContent` stands in: no packages, nothing presented, everyone admitted, always ready.
+- **Driving it.** The developer switch stands in for the interface until WS5.

@@ -24,6 +24,23 @@ namespace TopiaForge.Multiplayer.Engine
         internal string DisplayName { get; }
     }
 
+    /// <summary>How a client's session ended: the reason, the host's message, and its admission report when it refused the join.</summary>
+    internal sealed class ClientSessionEnd
+    {
+        internal ClientSessionEnd(MultiplayerSessionEndReason reason, string message, byte[]? report)
+        {
+            Reason = reason;
+            Message = message ?? string.Empty;
+            Report = report == null ? Array.Empty<byte>() : (byte[])report.Clone();
+        }
+
+        internal MultiplayerSessionEndReason Reason { get; }
+        internal string Message { get; }
+
+        /// <summary>Gets the host's opaque admission report, empty unless the host refused the join.</summary>
+        internal byte[] Report { get; }
+    }
+
     /// <summary>
     /// Role changes. One engine serves a process for its whole life, so the registrations, facades and subscriptions mods
     /// hold stay valid when the process joins another host or comes back to solo play. To the mods, each change looks
@@ -93,16 +110,29 @@ namespace TopiaForge.Multiplayer.Engine
         /// Ends a client's session. When the options name a solo session to return to, the process goes back to solo
         /// play instead of ending, so mods see one more replacement rather than an ended session.
         /// </summary>
-        private void FinishClientSession(MultiplayerSessionEndReason reason, string message)
+        private void FinishClientSession(ClientSessionEnd end)
         {
-            var solo = options.AfterClientSessionEnds?.Invoke(reason, message);
+            var solo = options.AfterClientSessionEnds?.Invoke(end);
             if (solo != null)
             {
                 BecomeSolo(solo);
                 return;
             }
 
-            EnterEnded(reason);
+            EnterEnded(end.Reason);
+        }
+
+        /// <summary>Gets the authenticated identity a host knows a participant by, or null for the host's own player.</summary>
+        internal string? ParticipantIdentityOf(ParticipantId participant)
+        {
+            RequireOwnerThread();
+            if (Role != EngineRole.Host) return null;
+            foreach (var record in participantRecords)
+            {
+                if (record.Id.Equals(participant)) return record.Identity;
+            }
+
+            return null;
         }
 
         private void BecomeSolo(SoloSessionStart start)

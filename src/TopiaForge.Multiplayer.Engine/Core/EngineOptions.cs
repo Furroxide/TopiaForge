@@ -54,10 +54,10 @@ namespace TopiaForge.Multiplayer.Engine
         internal IJoinPolicy? JoinPolicy { get; set; }
 
         /// <summary>
-        /// Gets or sets what a client does when its session ends: given the reason and message, return the solo session to
-        /// go back to, or null to end as before. It runs inside the engine and must not call back into it.
+        /// Gets or sets what a client does when its session ends: given how it ended, return the solo session to go back
+        /// to, or null to end as before. It runs inside the engine and must not call back into it.
         /// </summary>
-        internal Func<MultiplayerSessionEndReason, string, SoloSessionStart?>? AfterClientSessionEnds { get; set; }
+        internal Func<ClientSessionEnd, SoloSessionStart?>? AfterClientSessionEnds { get; set; }
 
         /// <summary>
         /// Gets or sets how a host names the participant behind an authenticated link identity. Null assigns
