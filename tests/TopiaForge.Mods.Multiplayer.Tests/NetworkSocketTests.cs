@@ -42,6 +42,15 @@ internal static class NetworkSocketTests
 
         That(v4.ToString() == "Lan path" && !UdpPaths.TryGetEndPoint(new TransportPath(new byte[] { 2, 1, 2, 3 }, TransportPathKind.Relayed), out _),
             "a path prints no address, and a relay path is not a UDP endpoint");
+
+        // A link-local address means nothing without its interface: two scopes are two paths, each restored as heard.
+        var seven = UdpPaths.For(new IPEndPoint(IPAddress.Parse("fe80::1%7"), 27250));
+        var eight = UdpPaths.For(new IPEndPoint(IPAddress.Parse("fe80::1%8"), 27250));
+        That(!seven.Equals(eight) && seven.Kind == TransportPathKind.Lan && UdpPaths.TryGetEndPoint(seven, out var scoped) &&
+             scoped.Address.Equals(IPAddress.Parse("fe80::1%7")) && scoped.Address.ScopeId == 7 && scoped.Port == 27250,
+            "a scoped address keeps its scope through its path");
+        That(UdpPaths.TryGetEndPoint(UdpPaths.For(new IPEndPoint(IPAddress.Parse("2001:db8::1"), 1)), out var global) && global.Address.ScopeId == 0,
+            "and an unscoped one stays unscoped");
     }
 
     internal static void TheUdpDriverCarriesDatagramsAndShrugsOffNoise()
@@ -60,15 +69,18 @@ internal static class NetworkSocketTests
             That(Receive(first, buffer, out count, out _) && count == 1 && buffer[0] == 9, "a reply on that path reaches the sender");
         }
 
-        // A datagram larger than any transport datagram is read and dropped, and the next one still arrives.
+        // A datagram larger than any transport datagram is read and dropped: the read that consumed it yields no path,
+        // so the network thread counts it against its turn. The next one still arrives.
         using (var raw = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
         {
             raw.SendTo(new byte[1_500], new IPEndPoint(IPAddress.Loopback, second.LocalPort));
             raw.SendTo(new byte[] { 5 }, new IPEndPoint(IPAddress.Loopback, second.LocalPort));
         }
 
+        That(Read(second, buffer, out _, out var droppedPath) && droppedPath == null && second.Dropped == 1,
+            "an oversized datagram is consumed by one read that yields no path");
         That(Receive(second, buffer, out var afterCount, out _) && afterCount == 1 && buffer[0] == 5 && second.Dropped == 1,
-            "an oversized datagram is dropped and the next one arrives");
+            "and the next one arrives");
 
         // A datagram to a closed port draws an ICMP unreachable; it must not break the next receive.
         int closedPort;
@@ -184,11 +196,27 @@ internal static class NetworkSocketTests
         var unused = new NetworkThread("TopiaForge test unused", new UdpSocketDriver(0), new NetworkStack(new TransportEndpoint(TransportPair.Key(121, 3), new TransportOptions(), Clock())), Clock);
         unused.Stop(0);
         Throws<InvalidOperationException>(() => unused.Start(), "a thread stopped before it started cannot start");
+        unused.Stop(0);
+        unused.Dispose();
+        That(unused.HasStopped, "and stopping or disposing it again has nothing to wait for");
     }
 
+    /// <summary>Waits for a datagram that arrived intact, passing over any the driver dropped.</summary>
     private static bool Receive(UdpSocketDriver driver, byte[] buffer, out int count, out TransportPath? path)
     {
         var deadline = Environment.TickCount64 + 2_000;
+        while (Read(driver, buffer, out count, out path, deadline))
+        {
+            if (path != null) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Waits for the driver to consume something, kept or dropped.</summary>
+    private static bool Read(UdpSocketDriver driver, byte[] buffer, out int count, out TransportPath? path, long deadline = 0)
+    {
+        if (deadline == 0) deadline = Environment.TickCount64 + 2_000;
         while (Environment.TickCount64 < deadline)
         {
             if (driver.TryReceive(buffer, out count, out path)) return true;

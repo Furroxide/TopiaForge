@@ -180,9 +180,22 @@ namespace TopiaForge.Multiplayer.Network
             const string PackagePrefix = "TFD1 package ";
             if (line.StartsWith(PackagePrefix, StringComparison.Ordinal) && WireText.IsHex(line.Substring(PackagePrefix.Length), 32))
             {
-                var stream = packages?.Invoke(line.Substring(PackagePrefix.Length));
+                Stream? stream = null;
+                long length = 0;
+                try
+                {
+                    stream = packages?.Invoke(line.Substring(PackagePrefix.Length));
+                    if (stream != null) length = stream.Length;
+                }
+                catch (Exception exception) when (IsArchiveFailure(exception))
+                {
+                    // An archive that cannot be opened is as good as missing, for this request alone.
+                    stream?.Dispose();
+                    stream = null;
+                }
+
                 if (stream == null) client.Respond("TFD1 404\n", null);
-                else client.Respond("TFD1 200 " + stream.Length.ToString(CultureInfo.InvariantCulture) + "\n", stream);
+                else client.Respond("TFD1 200 " + length.ToString(CultureInfo.InvariantCulture) + "\n", stream);
                 return;
             }
 
@@ -212,9 +225,18 @@ namespace TopiaForge.Multiplayer.Network
             {
                 return false;
             }
+            catch (Exception exception) when (IsArchiveFailure(exception))
+            {
+                // An archive that fails mid-read ends this one transfer: its reader sees a short body and gives up.
+                return false;
+            }
 
             return !client.Responding || !client.Complete;
         }
+
+        /// <summary>Whether reading a package archive failed in a way that belongs to one request, not to the thread.</summary>
+        private static bool IsArchiveFailure(Exception exception) =>
+            exception is IOException || exception is UnauthorizedAccessException || exception is NotSupportedException || exception is ObjectDisposedException;
 
         private bool Admit(string source, long now)
         {

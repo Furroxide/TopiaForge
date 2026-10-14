@@ -47,7 +47,10 @@ namespace TopiaForge.Multiplayer.Engine
         /// </summary>
         byte[] ChannelBinding { get; }
 
-        /// <summary>Gets the current path state.</summary>
+        /// <summary>
+        /// Gets the current path state. The engine drains a link and then checks this, so a link fed from another thread
+        /// reports <see cref="EngineLinkState.Closed"/> only once every session frame delivered before the close is read.
+        /// </summary>
         EngineLinkState State { get; }
 
         /// <summary>Queues one frame. The link copies the bytes before returning.</summary>

@@ -14,7 +14,11 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Blocks until a datagram is waiting or <paramref name="timeoutMicros"/> passes.</summary>
         bool WaitReadable(long timeoutMicros);
 
-        /// <summary>Reads one waiting datagram, if any. Oversized datagrams are dropped.</summary>
+        /// <summary>
+        /// Reads at most one waiting datagram; false when none is waiting. A datagram the socket had to drop, oversized
+        /// or failed, is consumed with a null <paramref name="path"/>, so every call does bounded work and the caller
+        /// counts it against its turn.
+        /// </summary>
         bool TryReceive(byte[] buffer, out int count, out TransportPath? path);
 
         /// <summary>Sends a datagram on <paramref name="path"/>; a path this socket cannot reach is dropped.</summary>
@@ -90,30 +94,28 @@ namespace TopiaForge.Multiplayer.Network
             count = 0;
             path = null;
             if (disposed || buffer == null) return false;
-            while (true)
+            try
             {
-                try
+                // Every datagram lands in scratch space first. Windows reports the whole queue as available, and Linux
+                // truncates silently, so only a full read can tell an oversized datagram from a legal one.
+                remote = new IPEndPoint(IPAddress.IPv6Any, 0);
+                var received = socket.ReceiveFrom(scratch, 0, scratch.Length, SocketFlags.None, ref remote);
+                if (received > buffer.Length)
                 {
-                    // Every datagram lands in scratch space first. Windows reports the whole queue as available, and
-                    // Linux truncates silently, so only a full read can tell an oversized datagram from a legal one.
-                    remote = new IPEndPoint(IPAddress.IPv6Any, 0);
-                    var received = socket.ReceiveFrom(scratch, 0, scratch.Length, SocketFlags.None, ref remote);
-                    if (received > buffer.Length)
-                    {
-                        Dropped++;
-                        continue;
-                    }
-
-                    Buffer.BlockCopy(scratch, 0, buffer, 0, received);
-                    count = received;
-                    path = UdpPaths.For((IPEndPoint)remote);
+                    Dropped++;
                     return true;
                 }
-                catch (SocketException exception) when (IsTransient(exception.SocketErrorCode))
-                {
-                    if (exception.SocketErrorCode == SocketError.WouldBlock) return false;
-                    Dropped++;
-                }
+
+                Buffer.BlockCopy(scratch, 0, buffer, 0, received);
+                count = received;
+                path = UdpPaths.For((IPEndPoint)remote);
+                return true;
+            }
+            catch (SocketException exception) when (IsTransient(exception.SocketErrorCode))
+            {
+                if (exception.SocketErrorCode == SocketError.WouldBlock) return false;
+                Dropped++;
+                return true;
             }
         }
 

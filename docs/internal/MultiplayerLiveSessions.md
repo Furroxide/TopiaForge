@@ -192,27 +192,35 @@ deterministic, so signing a valid case's descriptor with its key must reproduce 
 - the known-hosts record and its cap.
 
 `NetworkStackTests` runs links over the virtual network: frames both ways with player keys and a shared handshake
-hash, a stalled reader holding a fast sender to its budget and window, an overloaded link closing, graceful closes
-that deliver everything (more than the budget included), refused attempts, and disposal. `NetworkSocketTests` uses real
-sockets on the loopback interface: path classification, the driver over IPv4 and IPv6, an oversized datagram, an
+hash, a stalled reader holding a fast sender to its budget and window (empty frames and closing links included), an
+overloaded link closing, graceful closes that deliver everything (more than the budget included, and frames queued just
+before the stack closes every link), a close that a link reports only after its last frame is read (under a real race
+too), refused attempts and a full endpoint, and disposal. `NetworkSocketTests` uses real sockets on the loopback
+interface: path classification and scoped addresses, the driver over IPv4 and IPv6, an oversized datagram, an
 unreachable port, and two session engines joining across two network threads, a command round trip and a leave, all
-in under five seconds.
+in under five seconds. `NetworkServiceTests` covers the descriptor endpoint's answers, limits and failing archives, LAN
+browsing (a moved server included), and services and connections the thread still owns when it stops.
 
 ## 11. The network thread
 
 - **Ownership.** One thread owns a socket, a `NetworkStack` (the transport endpoint plus the links over its
   connections), the transport's cryptography and its timers. Live connections therefore keep their keepalives and
   retransmissions going while the main thread stalls, as it does through a scene load.
-- **The loop.** Each turn runs the queued commands, reads up to 1,024 waiting datagrams, polls the stack, sends what it
-  yields, and reports accepted links and info replies. The thread then sleeps until its next timer or a datagram, and
-  at most 2 ms, so frames the main thread queues go out within that.
+- **The loop.** Each turn runs up to 256 queued commands, reads up to 1,024 waiting datagrams (a dropped one counts),
+  polls the stack, sends what it yields, and reports accepted links and info replies. The thread then sleeps until its
+  next timer or a datagram, and at most 2 ms, so frames the main thread queues go out within that.
 - **Talking to it.** The main thread posts commands, takes events and reads each link's own queues; nothing else is
   shared.
 - **Faults.** A failed turn is reported by exception type only, never its message, because socket messages can name
   addresses. The loop carries on, and after 64 failures in a row it stops and closes every link.
 - **Stopping.** `Stop` closes every link gracefully and waits up to a grace period for them to finish, then disposes
-  the stack, which wipes the transport's keys, and the socket. The deadline is fixed when `Stop` is called, not by a
-  queued command, so the thread ends on time even if its queue never drains.
+  the services, the stack, which wipes the transport's keys, and the socket. The deadline is fixed when `Stop` is
+  called, not by a queued command, so the thread ends on time even if its queue never drains.
+- **Ownership on the way out.** The thread owns a service from the moment it is attached and a connection from the
+  moment it is asked for, so stopping disposes services that never ran and fails attempts whose command never ran,
+  without running anything still queued. From `Stop` on, nothing new is taken on: a service attached then is disposed
+  at once, and a connection fails at once. A thread stopped before it started releases everything immediately, and
+  stopping or disposing it again is harmless.
 - **Testing.** `NetworkStack` is sans-I/O like the transport, so the deterministic virtual network drives exactly the
   code the thread runs.
 
@@ -223,19 +231,24 @@ never by address. Both directions are bounded queues between the two threads.
 
 | Direction | Bound |
 | --- | --- |
-| Session frames in | The network thread moves frames out of the transport only while the main thread has less than 2 MiB waiting. A stalled main thread therefore holds the sender back through the transport's own flow control, instead of growing memory. |
+| Session frames in | The network thread moves frames out of the transport only while the main thread has less than 2 MiB waiting, counting 64 bytes a frame on top of its bytes so even empty frames fill it. A stalled main thread therefore holds the sender back through the transport's own flow control, instead of growing memory. |
 | Realtime and voice in | The newest 128 frames; older ones are dropped, as the transport drops stale datagrams. |
 | Out | The main thread may queue up to 32 MiB. Past that the link closes, since the transport's 16 MiB backlog cap would refuse it anyway. |
 
 - **Closing.** The network thread reads a link's close request before draining its outbound queue, so a graceful close
-  delivers everything the engine sent before asking. Once a connection is ending nothing more can arrive, so its
-  remaining frames move to the link regardless of the budget, and the engine reads every one before it sees the link
-  close.
+  delivers everything the engine sent before asking. Stopping closes every link the same way, so the message that ends
+  a player's session still goes out.
+- **Draining.** A closing connection still takes the peer's data, so the budget holds until the connection drains.
+  Then nothing more can arrive, and its remaining frames move to the link regardless of the budget.
+- **Reporting the close.** The engine drains a link and then checks its state, and the network thread can deliver a
+  last frame and close the link between the two. A link therefore reports `Closed` only once the engine has read every
+  session frame delivered before the close.
 - **What a link carries.** On a host, the player key derived for the peer (section 7). On both sides, the transport
   handshake hash, which password proofs bind to.
-- **Connecting.** An outbound connection is a `ConnectAttempt` the main thread polls. It becomes established with its
-  link, or fails with the transport's reason: a key that does not match the pin, a timeout, or relay-only refusing a
-  direct path before anything is sent.
+- **Connecting.** An outbound connection is a `ConnectAttempt` the main thread polls. Every attempt completes: it
+  becomes established with its link, or fails with the transport's reason. Reasons include a key that does not match
+  the pin, a timeout, relay-only refusing a direct path before anything is sent, and an endpoint already at its
+  connection limit, which fails as overloaded.
 
 ## 13. The UDP socket
 
@@ -249,18 +262,21 @@ measured (`MultiplayerMonoSpike.md`, section 1):
 - Every datagram is read whole into scratch space first, because Windows reports the whole queue as available and
   Linux truncates silently. One larger than a transport datagram is dropped.
 - Transient socket errors lose that one datagram, as any network may, and recovery resends what mattered.
+- Each read consumes at most one datagram. A dropped one yields no path, and the thread counts it against its turn,
+  so a flood of junk cannot starve the timers.
 
-Paths come from `UdpPaths`. A key is a type byte, the 16-byte IPv6 form of the address and the port: 19 bytes that
-only this layer and the transport see. Private, link-local, unique-local and loopback addresses make LAN paths, which
-relay-only still allows; every other address, carrier-grade NAT included, makes a direct path.
+Paths come from `UdpPaths`. A key is a type byte, the 16-byte IPv6 form of the address, the port and the IPv6 scope
+id: 23 bytes that only this layer and the transport see. The scope keeps a link-local address on the interface it was
+heard on. Private, link-local, unique-local and loopback addresses make LAN paths, which relay-only still allows; every
+other address, carrier-grade NAT included, makes a direct path.
 
 ## 14. Services on the network thread
 
 Work that belongs beside the stack runs on the network thread as an `INetworkService`: once per turn, after waiting
 datagrams are read and before the stack is polled.
 
-- **Attaching.** Services are attached and detached through the thread and disposed on it, and stopping the thread
-  disposes every one.
+- **Attaching.** Services are attached and detached through the thread and disposed on it. Stopping the thread
+  disposes every one, including any still waiting to start (section 11).
 - **Info replies.** Each reply the stack receives is offered to the services first, so the LAN browser consumes the
   replies to its own queries. Any reply no service claims goes to the main thread as an event.
 - **Timers.** A service may name its next timer. None may make the thread spin: TCP readiness is not part of the
@@ -286,6 +302,8 @@ Every line ends in a single newline (`\n`).
 - **Writing.** Responses are written 64 KiB at a time, at most four chunks a connection per turn, so a fast reader
   never delays the datagrams. A transfer gets two minutes. Once the body is sent, the endpoint shuts down its side, so
   the reader sees the end.
+- **Failing archives.** An archive that cannot be opened is answered `TFD1 404`. One that fails mid-read cuts only its
+  own transfer short, so the reader's length check fails. Neither faults the network thread.
 - **Relay-only hosts** serve LAN addresses only; any other connection is closed unanswered.
 - **The client** (`DescriptorClient`) connects with a deadline, bounds the response to 256 KiB, and verifies the
   descriptor before returning it, against the server id it expects when it has one. Its failures name a reason:
@@ -299,6 +317,8 @@ Every line ends in a single newline (`\n`).
 - **`LanBrowser`** listens on UDP 27251 with address reuse. For each beacon it queries the host's game port, again
   after two seconds without info, and lists the session once the host's info names the server the beacon did.
   - A beacon that names another server at the same address never borrows that reply.
+  - A beacon that moves a server to another socket drops what the old one answered, round trip included. The entry
+    waits for a reply from the new socket that names the same server.
   - A host on another transport version is listed as incompatible.
   - A session silent for six seconds leaves the list.
   - At most 64 sessions are listed.

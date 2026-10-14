@@ -12,17 +12,21 @@ namespace TopiaForge.Multiplayer.Network
     /// <list type="bullet">
     /// <item>The network thread moves session frames out of the transport only while the main thread has less than
     /// <see cref="InboundBudgetBytes"/> waiting, so a stalled main thread holds the sender back through the transport's
-    /// own flow control instead of growing memory.</item>
+    /// own flow control instead of growing memory. Each frame also costs <see cref="FrameOverheadBytes"/>, so even
+    /// empty frames fill the budget.</item>
     /// <item>Realtime and voice frames keep only the newest <see cref="MaximumInboundDatagrams"/>, as the transport
     /// does.</item>
     /// <item>The main thread may queue up to <see cref="OutboundLimitBytes"/>; past that the link closes, since the
     /// transport would refuse the backlog anyway.</item>
     /// </list>
+    /// The link reports <see cref="EngineLinkState.Closed"/> only once the main thread has taken every session frame
+    /// delivered before the close, so a reader that drains it and then checks its state never drops the last frames.
     /// A link names its peer by key and never by address.
     /// </summary>
     internal sealed class NetworkLink : IEngineLink
     {
         internal const long InboundBudgetBytes = 2 * 1024 * 1024;
+        internal const int FrameOverheadBytes = 64;
         internal const int MaximumInboundDatagrams = 128;
         internal const long OutboundLimitBytes = 32L * 1024 * 1024;
 
@@ -34,6 +38,7 @@ namespace TopiaForge.Multiplayer.Network
         private int inboundDatagramCount;
         private long outboundBytes;
         private int state;
+        private int closed;
         private int closeRequested;
         private int overloaded;
 
@@ -57,7 +62,16 @@ namespace TopiaForge.Multiplayer.Network
 
         public MultiplayerPlayerKey PlayerKey { get; }
 
-        public EngineLinkState State => (EngineLinkState)Volatile.Read(ref state);
+        public EngineLinkState State
+        {
+            get
+            {
+                // The close is read before the queue: every frame delivered before the close is then visible here, so
+                // an empty queue means the main thread has read them all.
+                if (Volatile.Read(ref closed) != 0 && inboundSession.IsEmpty) return EngineLinkState.Closed;
+                return (EngineLinkState)Volatile.Read(ref state);
+            }
+        }
 
         /// <summary>Gets a copy of the transport handshake hash, which password proofs bind to.</summary>
         public byte[] ChannelBinding => (byte[])channelBinding.Clone();
@@ -72,10 +86,13 @@ namespace TopiaForge.Multiplayer.Network
 
         internal bool CloseRequested => Volatile.Read(ref closeRequested) != 0;
 
+        /// <summary>Gets whether the network thread has closed the link, whether or not the main thread has read it all.</summary>
+        internal bool IsClosed => Volatile.Read(ref closed) != 0;
+
         public void Send(EngineChannel channel, ArraySegment<byte> frame)
         {
             if (frame.Array == null) throw new ArgumentNullException(nameof(frame));
-            if (State == EngineLinkState.Closed || CloseRequested) return;
+            if (IsClosed || CloseRequested) return;
             var copy = new byte[frame.Count];
             Buffer.BlockCopy(frame.Array, frame.Offset, copy, 0, frame.Count);
             if (Interlocked.Add(ref outboundBytes, copy.Length) > OutboundLimitBytes)
@@ -101,7 +118,7 @@ namespace TopiaForge.Multiplayer.Network
 
             if (inboundSession.TryDequeue(out var session))
             {
-                Interlocked.Add(ref inboundBytes, -session.Length);
+                Interlocked.Add(ref inboundBytes, -(session.Length + FrameOverheadBytes));
                 channel = EngineChannel.Session;
                 frame = session;
                 return true;
@@ -117,7 +134,7 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Network thread: hands a session frame to the main thread.</summary>
         internal void DeliverSession(byte[] frame)
         {
-            Interlocked.Add(ref inboundBytes, frame.Length);
+            Interlocked.Add(ref inboundBytes, frame.Length + FrameOverheadBytes);
             inboundSession.Enqueue(frame);
         }
 
@@ -147,12 +164,17 @@ namespace TopiaForge.Multiplayer.Network
             return false;
         }
 
-        /// <summary>Network thread: publishes the connection's state. Closed is final.</summary>
+        /// <summary>Network thread: publishes the connection's state. Closed is final and follows the last frame delivered.</summary>
         internal void Publish(EngineLinkState value)
         {
-            if (State == EngineLinkState.Closed) return;
-            Volatile.Write(ref state, (int)value);
-            if (value != EngineLinkState.Closed) return;
+            if (IsClosed) return;
+            if (value != EngineLinkState.Closed)
+            {
+                Volatile.Write(ref state, (int)value);
+                return;
+            }
+
+            Volatile.Write(ref closed, 1);
 
             // Nothing more will go out, so whatever the main thread queued is released at once.
             while (outbound.TryDequeue(out var dropped)) Interlocked.Add(ref outboundBytes, -dropped.Bytes.Length);

@@ -104,13 +104,120 @@ internal static class NetworkStackTests
         for (var index = 0; index < Frames; index++) client.Send(ProviderChannel.Session, new ArraySegment<byte>(Pattern(Size, index)));
         client.Close();
 
-        // The reader waits until the link reports closed: every frame must still be there, though they total well
-        // over its budget, because nothing more can arrive once the connection ends.
-        That(rig.Network.RunUntil(() => host.State == ProviderLinkState.Closed, 30_000_000), "the host sees the link close");
+        // The reader waits until the connection has ended: every frame must be there, though they total well over its
+        // budget, because nothing more can arrive. The link reports the close only once the reader has taken them.
+        That(rig.Network.RunUntil(() => host.IsClosed, 30_000_000), "the host's connection ends");
+        That(host.State == ProviderLinkState.Open, "while frames wait, the link does not yet report the close");
         var received = new List<byte[]>();
         while (host.TryReceive(out _, out var frame)) received.Add(frame);
         That(received.Count == Frames && received.Select((frame, index) => frame.SequenceEqual(Pattern(Size, index))).All(match => match),
-            "and then reads all " + Frames + " frames (" + received.Count + ")");
+            "the reader takes all " + Frames + " frames (" + received.Count + ")");
+        That(host.State == ProviderLinkState.Closed, "and then the link reports the close");
+    }
+
+    internal static void ALinkReportsClosedOnlyAfterItsLastFrameIsRead()
+    {
+        // The engine drains a link, then checks whether it closed. The network thread can deliver a last frame and close
+        // the link between those two steps, and the close must not hide that frame.
+        var link = NewLink();
+        That(!link.TryReceive(out _, out _), "the engine finds nothing waiting");
+        link.DeliverSession(new byte[] { 1 });
+        link.Publish(ProviderLinkState.Closed);
+        That(link.IsClosed && link.State == ProviderLinkState.Open, "a close behind an unread frame shows the link as it was");
+        That(link.TryReceive(out var channel, out var last) && channel == ProviderChannel.Session && last.SequenceEqual(new byte[] { 1 }),
+            "the next drain reads the last frame");
+        That(link.State == ProviderLinkState.Closed, "and only then does the link report the close");
+        link.Send(ProviderChannel.Session, new ArraySegment<byte>(new byte[] { 2 }));
+        That(!link.TryTakeOutbound(out _, out _), "nothing sent after the close is queued");
+
+        // The same holds when the two threads really race.
+        const int Frames = 400;
+        var shortfalls = new List<string>();
+        for (var round = 0; round < 100; round++)
+        {
+            var raced = NewLink();
+            var writer = new Thread(() =>
+            {
+                for (var index = 0; index < Frames; index++) raced.DeliverSession(BitConverter.GetBytes(index));
+                raced.Publish(ProviderLinkState.Closed);
+            });
+            writer.Start();
+            var read = 0;
+            while (true)
+            {
+                while (raced.TryReceive(out _, out _)) read++;
+                if (raced.State == ProviderLinkState.Closed) break;
+            }
+
+            writer.Join();
+            if (read != Frames) shortfalls.Add(read + " in round " + round);
+        }
+
+        That(shortfalls.Count == 0, "a reader that drains and then checks reads every frame (" + string.Join(", ", shortfalls) + ")");
+    }
+
+    internal static void EmptyFramesStillFillTheInboundBudget()
+    {
+        var link = NewLink();
+        var frames = 0;
+        while (link.HasInboundRoom && frames <= NetworkLink.InboundBudgetBytes)
+        {
+            link.DeliverSession(Array.Empty<byte>());
+            frames++;
+        }
+
+        That(frames == NetworkLink.InboundBudgetBytes / NetworkLink.FrameOverheadBytes, "empty frames fill the budget too (" + frames + ")");
+        That(link.TryReceive(out _, out var empty) && empty.Length == 0 && link.HasInboundRoom && link.InboundBytes == NetworkLink.InboundBudgetBytes - NetworkLink.FrameOverheadBytes,
+            "and reading one gives back exactly what it cost");
+    }
+
+    internal static void ClosingEveryLinkStillSendsTheLastFrames()
+    {
+        // A host that stops queues the frame that ends each player's session, then closes every link at once.
+        using var rig = new StackRig(118);
+        var (client, host) = rig.Connect();
+        host.Send(ProviderChannel.Session, new ArraySegment<byte>(Pattern(1_000, 9)));
+        rig.HostStack.CloseAll();
+        var received = new List<byte[]>();
+        That(rig.Network.RunUntil(() =>
+        {
+            while (client.TryReceive(out _, out var frame)) received.Add(frame);
+            return client.State == ProviderLinkState.Closed;
+        }, 20_000_000), "the client sees the host close");
+        That(received.Count == 1 && received[0].SequenceEqual(Pattern(1_000, 9)), "after the frame queued just before (" + received.Count + ")");
+    }
+
+    internal static void AClosingLinkKeepsItsBudget()
+    {
+        using var rig = new StackRig(119, fast: true);
+        var (client, host) = rig.Connect();
+        const int Frames = 128;
+        const int Size = 64 * 1024;
+
+        // Neither main thread reads. The host closes behind 8 MiB the client is not taking, so its close cannot finish,
+        // while the client keeps sending; the host must not take more than its budget meanwhile.
+        for (var index = 0; index < Frames; index++) client.Send(ProviderChannel.Session, new ArraySegment<byte>(Pattern(Size, index)));
+        rig.Network.RunFor(2_000_000);
+        for (var index = 0; index < Frames; index++) host.Send(ProviderChannel.Session, new ArraySegment<byte>(Pattern(Size, 1_000 + index)));
+        host.Close();
+        rig.Network.RunFor(6_000_000);
+        That(!host.IsClosed, "the host's close is still waiting for the client");
+        That(host.InboundBytes <= NetworkLink.InboundBudgetBytes + Size + NetworkLink.FrameOverheadBytes,
+            "a closing link still holds the sender back (" + host.InboundBytes + ")");
+
+        // Once the client reads, the close completes and delivers everything the host sent.
+        var received = new List<byte[]>();
+        That(rig.Network.RunUntil(() =>
+        {
+            while (client.TryReceive(out _, out var frame)) received.Add(frame);
+            while (host.TryReceive(out _, out _))
+            {
+            }
+
+            return client.State == ProviderLinkState.Closed && host.State == ProviderLinkState.Closed;
+        }, 60_000_000), "both ends see the link close");
+        That(received.Count == Frames && received.Select((frame, index) => frame.SequenceEqual(Pattern(Size, 1_000 + index))).All(match => match),
+            "after every frame the host sent before closing (" + received.Count + ")");
     }
 
     internal static void AttemptsFailOnTheWrongKeyOrAForbiddenPath()
@@ -131,6 +238,22 @@ internal static class NetworkStackTests
         var lan = new ConnectAttempt();
         hidden.ClientStack.Connect(lan, VirtualDatagramNetwork.PathTo(hidden.HostNode, TransportPathKind.Lan), null, hidden.Network.Now);
         That(hidden.Network.RunUntil(() => lan.State == ConnectAttemptState.Established, 5_000_000), "but still joins on the LAN");
+
+        // An endpoint at its connection limit, or a stack already disposed, fails the attempt instead of throwing.
+        var options = new TransportOptions { Random = new SeededTransportRandom(345), MaximumConnections = 1 };
+        var small = new NetworkStack(new TransportEndpoint(TransportPair.Key(115, 9), options, rig.Network.Now));
+        rig.Network.AddStack("small", small);
+        var first = new ConnectAttempt();
+        small.Connect(first, VirtualDatagramNetwork.PathTo(rig.HostNode), null, rig.Network.Now);
+        var second = new ConnectAttempt();
+        small.Connect(second, VirtualDatagramNetwork.PathTo(rig.HostNode), null, rig.Network.Now);
+        That(first.State == ConnectAttemptState.Pending && second.State == ConnectAttemptState.Failed && second.Failure == TransportCloseReason.Overloaded,
+            "an attempt past the connection limit fails as overloaded");
+        small.Dispose();
+        That(first.State == ConnectAttemptState.Failed, "disposing the stack fails the attempt in progress");
+        var late = new ConnectAttempt();
+        small.Connect(late, VirtualDatagramNetwork.PathTo(rig.HostNode), null, rig.Network.Now);
+        That(late.State == ConnectAttemptState.Failed && late.Failure == TransportCloseReason.Local, "and a disposed stack fails new attempts at once");
     }
 
     internal static void DisposingTheStackClosesEveryLink()
@@ -146,6 +269,16 @@ internal static class NetworkStackTests
     private static void Read(NetworkLink link, List<(ProviderChannel, byte[])> into)
     {
         while (link.TryReceive(out var channel, out var frame)) into.Add((channel, frame));
+    }
+
+    /// <summary>A link with no connection behind it, which a test feeds as the network thread would.</summary>
+    private static NetworkLink NewLink()
+    {
+        var key = new byte[32];
+        key[0] = 1;
+        var link = new NetworkLink(1, key, default, new byte[32]);
+        link.Publish(ProviderLinkState.Open);
+        return link;
     }
 
     /// <summary>A host stack with an identity and a client stack, on the deterministic network.</summary>
