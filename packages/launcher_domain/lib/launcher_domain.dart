@@ -13,3 +13,4 @@ export 'src/launch_resolution.dart';
 export 'src/manifest_migration.dart';
 export 'src/json_value_preservation.dart';
 export 'src/json_duplicate_properties.dart';
+export 'src/multiplayer.dart';
