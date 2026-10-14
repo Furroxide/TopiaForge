@@ -309,7 +309,7 @@ if ($windowsDistribution -ceq "unsigned") {
         throw "An unsigned Windows distribution must not also pin a signing certificate."
     }
     # Match the Dart SemVer reader, including metadata and numeric identifier rules.
-    $prereleaseIdentifier = '(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+    $prereleaseIdentifier = '(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
     $unsignedVersionPattern = '\A0\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-' +
         $prereleaseIdentifier + '(?:\.' + $prereleaseIdentifier + ')*' +
         '(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
