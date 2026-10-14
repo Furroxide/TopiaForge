@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.UiGallery
@@ -12,6 +13,7 @@ namespace TopiaForge.UiGallery
     internal sealed class GalleryWindow : IDisposable
     {
         private readonly UiHost ui;
+        private readonly ILocalPlayerService player;
         private readonly TopiaForgeWindow paperWindow;
         private readonly TopiaForgeWindow hudWindow;
         private readonly List<TopiaForgeToggle> highContrastControls = new List<TopiaForgeToggle>();
@@ -20,13 +22,23 @@ namespace TopiaForge.UiGallery
         private TopiaForgeWindow active;
         private bool disposed;
 
-        public GalleryWindow(UiHost host)
+        public GalleryWindow(UiHost host, ILocalPlayerService localPlayer)
         {
             ui = host;
+            player = localPlayer;
             paperWindow = Build(TopiaForgeScheme.Paper);
             hudWindow = Build(TopiaForgeScheme.Hud);
             active = paperWindow;
             ui.AccessibilityProfileChanged += SyncAccessibilityControls;
+        }
+
+        /// <summary>Drives the animated demos (synthetic voice, auto-walking stepper, orbiting tag).</summary>
+        public void Tick(float deltaTime)
+        {
+            if (!disposed)
+            {
+                Pages.MultiplayerPage.Tick(deltaTime);
+            }
         }
 
         public void Toggle()
@@ -53,6 +65,7 @@ namespace TopiaForge.UiGallery
             Pages.HudPage.Reset();
             Pages.OverlaysPage.Reset();
             Pages.ShopPage.Reset();
+            Pages.MultiplayerPage.Reset();
         }
 
         private TopiaForgeWindow Build(TopiaForgeScheme scheme)
@@ -60,7 +73,7 @@ namespace TopiaForge.UiGallery
             var window = ui.Window(
                 "gallery-" + scheme.ToString().ToLowerInvariant(),
                 "TOPIAFORGE GALLERY — " + scheme.ToString().ToUpperInvariant(),
-                width: 760f,
+                width: 860f,
                 height: 640f,
                 scheme: scheme);
 
@@ -82,7 +95,7 @@ namespace TopiaForge.UiGallery
             uiScaleControls.Add(controls.Slider(
                 "UI scale", 0.75f, 1.5f, ui.AccessibilityProfile.UiScale, SetUiScale));
 
-            var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION");
+            var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
             pageHost.Flex(1f, 1f);
 
@@ -96,10 +109,12 @@ namespace TopiaForge.UiGallery
                 Pages.OverlaysPage.Build,
                 Pages.HudPage.Build,
                 Pages.MotionPage.Build,
+                page => Pages.MultiplayerPage.Build(page, player),
             };
 
             void ShowPage(int index)
             {
+                Pages.MultiplayerPage.Detach(pageHost.Content);
                 ui.Clear(pageHost.Content);
                 pages[index](pageHost.Content);
                 pageHost.ScrollToTop();

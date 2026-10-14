@@ -35,6 +35,7 @@ namespace TopiaForge.UiGallery
 
             Context.Events.SubscribeUpdate(deltaTime =>
             {
+                gallery?.Tick(deltaTime);
                 if (toggleAction?.WasPressed != true || ui == null)
                 {
                     return;
@@ -42,7 +43,7 @@ namespace TopiaForge.UiGallery
 
                 if (gallery == null)
                 {
-                    gallery = new GalleryWindow(ui);
+                    gallery = new GalleryWindow(ui, Context.LocalPlayer);
                     galleryLifetime = Context.Lifetime.Track(gallery);
                 }
 
