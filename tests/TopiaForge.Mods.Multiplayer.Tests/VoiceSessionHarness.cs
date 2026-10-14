@@ -196,7 +196,7 @@ internal sealed class VoiceSessionHarness : IDisposable
         }
     }
 
-    internal readonly record struct Heard(string Speaker, ulong Sequence, ulong Timestamp, VoiceFrameFlags Flags, short Id, long ArrivalMicros, byte[] Payload);
+    internal readonly record struct Heard(string Speaker, ulong Stream, ulong Sequence, ulong Timestamp, VoiceFrameFlags Flags, short Id, long ArrivalMicros, byte[] Payload);
 
     /// <summary>Drains one engine's received frames after every tick.</summary>
     internal sealed class Listener
@@ -219,17 +219,20 @@ internal sealed class VoiceSessionHarness : IDisposable
             {
                 var payload = frame.Payload.ToArray();
                 var id = payload.Length > 2 ? BitConverter.ToInt16(payload, 1) : (short)0;
-                Frames.Add(new Heard(frame.Speaker.Value, frame.Sequence, frame.Timestamp, frame.Flags, id, frame.ArrivalMicros, payload));
+                Frames.Add(new Heard(frame.Speaker.Value, frame.Stream, frame.Sequence, frame.Timestamp, frame.Flags, id, frame.ArrivalMicros, payload));
             }
         }
 
         internal List<Heard> From(string speaker) => Frames.Where(frame => frame.Speaker == speaker).ToList();
 
+        /// <summary>Gets the jitter buffer the last <see cref="Play"/> used, to read its delay target afterwards.</summary>
+        internal VoiceJitterBuffer? LastBuffer { get; private set; }
+
         /// <summary>Plays one speaker's frames through a jitter buffer with a pull every 20 ms from their first arrival.</summary>
         internal (List<VoicePlayout> Kinds, List<short> Decoded, VoiceJitterStatistics Statistics) Play(string speaker, int extraPulls = 20)
         {
             var frames = From(speaker);
-            var buffer = new VoiceJitterBuffer(harness.Codec);
+            var buffer = LastBuffer = new VoiceJitterBuffer(harness.Codec);
             var kinds = new List<VoicePlayout>();
             var decoded = new List<short>();
             if (frames.Count == 0) return (kinds, decoded, buffer.Statistics);
@@ -242,7 +245,7 @@ internal sealed class VoiceSessionHarness : IDisposable
                 while (next < frames.Count && frames[next].ArrivalMicros <= now)
                 {
                     var frame = frames[next++];
-                    buffer.Push(frame.Sequence, frame.Timestamp, frame.Flags, frame.Payload, frame.ArrivalMicros);
+                    buffer.Push(frame.Stream, frame.Sequence, frame.Timestamp, frame.Flags, frame.Payload, frame.ArrivalMicros);
                 }
 
                 var kind = buffer.Pull(output);

@@ -205,6 +205,16 @@ internal static class VoiceJitterBufferTests
         stream.Push(1, 62 * Frame, sequence: 2);
         var results = Enumerable.Range(0, 3).Select(_ => stream.Pull()).ToList();
         Assert(results.Any(result => result is { Kind: VoicePlayout.Decoded, Id: 1 }), "and plays the new stream");
+
+        // A new stream generation restarts the buffer even when its numbers carry on from the old stream's, as they do
+        // when the new stream's first datagram was lost: the host's stamp is what says the stream is new.
+        stream.Push(4, 90 * Frame, sequence: 5, generation: 2);
+        Assert(stream.Buffer.Statistics.Restarts == 2 && decoder.Resets == 2 && stream.Buffer.TargetDelayMicros == 60_000,
+            "a new generation restarts the buffer, the decoder and the delay estimate");
+        stream.Push(5, 91 * Frame, sequence: 6, generation: 2);
+        Assert(stream.Buffer.Statistics.Restarts == 2, "and the frames after it belong to the new stream");
+        results = Enumerable.Range(0, 3).Select(_ => stream.Pull()).ToList();
+        Assert(results.Any(result => result is { Kind: VoicePlayout.Decoded, Id: 5 }), "which plays from its first frame to arrive");
     }
 
     internal static void SteadyPlaybackAllocatesNothing()
@@ -215,14 +225,14 @@ internal static class VoiceJitterBufferTests
         var output = new short[960];
         for (var ts = 0; ts < 200; ts++)
         {
-            buffer.Push((ulong)ts + 1, (ulong)ts, VoiceFrameFlags.None, packets[ts], ts * Frame);
+            buffer.Push(1, (ulong)ts + 1, (ulong)ts, VoiceFrameFlags.None, packets[ts], ts * Frame);
             buffer.Pull(output);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var ts = 200; ts < 400; ts++)
         {
-            if (ts % 7 != 0) buffer.Push((ulong)ts + 1, (ulong)ts, VoiceFrameFlags.None, packets[ts], ts * Frame);
+            if (ts % 7 != 0) buffer.Push(1, (ulong)ts + 1, (ulong)ts, VoiceFrameFlags.None, packets[ts], ts * Frame);
             buffer.Pull(output);
         }
 
@@ -260,8 +270,8 @@ internal static class VoiceJitterBufferTests
 
         internal FakeVoiceCodec.Decoder Decoder { get; }
 
-        internal void Push(ulong ts, long arrival, ulong? sequence = null, VoiceFrameFlags flags = VoiceFrameFlags.None) =>
-            Buffer.Push(sequence ?? ts + 1, ts, flags, codec.Packet((short)(ts + 1), (short)ts), arrival);
+        internal void Push(ulong ts, long arrival, ulong? sequence = null, VoiceFrameFlags flags = VoiceFrameFlags.None, ulong generation = 1) =>
+            Buffer.Push(generation, sequence ?? ts + 1, ts, flags, codec.Packet((short)(ts + 1), (short)ts), arrival);
 
         internal Playout Pull()
         {

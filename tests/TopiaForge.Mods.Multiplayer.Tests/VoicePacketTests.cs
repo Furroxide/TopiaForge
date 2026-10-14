@@ -10,9 +10,9 @@ internal static class VoicePacketTests
         var buffer = new byte[VoicePacket.MaximumBytes(160)];
         var first = new byte[] { 1, 2, 3 };
         var second = new byte[] { 4, 5, 6, 7 };
-        var length = VoicePacket.Write(buffer, 0, 300, 7_000, VoiceFrameFlags.Discontinuous, first, VoiceFrameFlags.EndOfTalk, second);
+        var length = VoicePacket.WriteUplink(buffer, 300, 7_000, VoiceFrameFlags.Discontinuous, first, VoiceFrameFlags.EndOfTalk, second);
         Assert(VoicePacket.TryReadUplink(buffer.AsSpan(0, length), 160, out var uplink), "an uplink datagram of two frames reads back");
-        Assert(uplink.Count == 2 && uplink.First.Speaker == 0, "it holds two frames and no speaker");
+        Assert(uplink.Count == 2 && uplink.First.Speaker == 0 && uplink.First.Stream == 0, "it holds two frames, and no speaker or stream");
         Assert(uplink.First.Sequence == 300 && uplink.First.Timestamp == 7_000 && uplink.First.Flags == VoiceFrameFlags.Discontinuous,
             "the first frame keeps its position and flags");
         Assert(uplink.Second.Sequence == 301 && uplink.Second.Timestamp == 7_001 && uplink.Second.Flags == VoiceFrameFlags.EndOfTalk,
@@ -21,12 +21,23 @@ internal static class VoicePacketTests
                buffer.AsSpan(uplink.Second.PayloadOffset, uplink.Second.PayloadLength).SequenceEqual(second), "both payloads read back");
         Assert(!VoicePacket.TryReadRelayed(buffer.AsSpan(0, length), 160, out _), "an uplink datagram is not a relayed one");
 
-        length = VoicePacket.Write(buffer, 9, 1, 0, VoiceFrameFlags.None, first, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        length = VoicePacket.WriteRelayed(buffer, 9, 4, 1, 0, VoiceFrameFlags.None, first, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
         Assert(VoicePacket.TryReadRelayed(buffer.AsSpan(0, length), 160, out var relayed), "a relayed datagram of one frame reads back");
-        Assert(relayed.Count == 1 && relayed.First.Speaker == 9 && relayed.First.Sequence == 1 && relayed.First.Timestamp == 0,
-            "it carries the host's speaker stamp");
+        Assert(relayed.Count == 1 && relayed.First.Speaker == 9 && relayed.First.Stream == 4 && relayed.First.Sequence == 1 && relayed.First.Timestamp == 0,
+            "it carries the host's speaker and stream stamps");
         Assert(!VoicePacket.TryReadUplink(buffer.AsSpan(0, length), 160, out _), "a relayed datagram is not an uplink one");
-        Assert(length == 1 + 1 + 1 + 1 + 1 + 1 + 1 + first.Length, "a small relayed frame costs seven bytes of header");
+        Assert(buffer.AsSpan(0, length).SequenceEqual(new byte[] { 2, 9, 4, 1, 0, 1, 0, 3, 1, 2, 3 }), "byte for byte: kind, speaker, stream, sequence, timestamp, count, then the frame");
+        Assert(length == 8 + first.Length, "so a small relayed frame costs eight bytes of header");
+
+        // Both frames of a relayed pair carry its stamps, and a stream generation may be any number at all. The widest
+        // datagram there can be, every number ten bytes long and two frames of 160 bytes, fits the bound.
+        var widest = new byte[160];
+        length = VoicePacket.WriteRelayed(buffer, ulong.MaxValue, ulong.MaxValue, ulong.MaxValue - 2, ulong.MaxValue - 2, VoiceFrameFlags.None, widest,
+            VoiceFrameFlags.EndOfTalk, widest);
+        Assert(length == 368 && length <= VoicePacket.MaximumBytes(160), "the widest relayed datagram fits the bound (" + length + " bytes)");
+        Assert(VoicePacket.TryReadRelayed(buffer.AsSpan(0, length), 160, out relayed) && relayed.Count == 2 && relayed.Second.Speaker == ulong.MaxValue &&
+               relayed.Second.Stream == ulong.MaxValue && relayed.Second.Sequence == ulong.MaxValue - 1 && relayed.Second.Flags == VoiceFrameFlags.EndOfTalk,
+            "and reads back, the second frame with the pair's stamps");
     }
 
     internal static void MalformedDatagramsAreRefusedWhole()
@@ -56,7 +67,10 @@ internal static class VoicePacketTests
         }
 
         Assert(!VoicePacket.TryReadUplink(Uplink(5, 10, new byte[161]), 160, out _), "a frame above the size limit is refused");
-        Assert(!VoicePacket.TryReadRelayed(new byte[] { 2, 0, 5, 10, 1, 0, 1, 0xAA }, 160, out _), "speaker index zero is refused");
+        Assert(VoicePacket.TryReadRelayed(new byte[] { 2, 9, 1, 5, 10, 1, 0, 1, 0xAA }, 160, out _), "the relayed reference datagram is valid");
+        Assert(!VoicePacket.TryReadRelayed(new byte[] { 2, 0, 1, 5, 10, 1, 0, 1, 0xAA }, 160, out _), "speaker index zero is refused");
+        Assert(!VoicePacket.TryReadRelayed(new byte[] { 2, 9, 0x81, 0x00, 5, 10, 1, 0, 1, 0xAA }, 160, out _), "a non-minimal stream generation is refused");
+        Assert(!VoicePacket.TryReadRelayed(new byte[] { 2, 9 }, 160, out _), "a relayed datagram without its stream generation is refused");
 
         // Whatever arrives, parsing returns an answer and never throws.
         var state = 77u;
@@ -105,7 +119,7 @@ internal static class VoicePacketTests
     internal static byte[] Uplink(ulong sequence, ulong timestamp, byte[] payload)
     {
         var buffer = new byte[VoicePacket.MaximumBytes(payload.Length + 1)];
-        var length = VoicePacket.Write(buffer, 0, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
         return buffer.AsSpan(0, length).ToArray();
     }
 

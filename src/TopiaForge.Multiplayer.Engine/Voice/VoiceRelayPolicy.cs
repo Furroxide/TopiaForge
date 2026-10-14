@@ -69,7 +69,10 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets whether the roster announced an automatic mute whose end it has yet to announce.</summary>
         internal bool AutoMuteAnnounced { get; set; }
 
-        /// <summary>Gets or sets when the player was last admitted, for choosing what a full table forgets first.</summary>
+        /// <summary>
+        /// Gets or sets when the player was last seen in the session: admitted, departing, or their record expiring. A full
+        /// table forgets the absent player seen longest ago first.
+        /// </summary>
         internal long LastSeenMicros { get; set; }
 
         internal bool IsMuted(long nowMicros) => ServerMuted || nowMicros < AutoMutedUntilMicros;
@@ -125,6 +128,14 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Refills for the time since the last call, then takes <paramref name="amount"/> tokens if they are there.</summary>
         internal bool TryTake(long amount, long nowMicros)
         {
+            if (!CanTake(amount, nowMicros)) return false;
+            Take(amount);
+            return true;
+        }
+
+        /// <summary>Refills for the time since the last call and says whether <paramref name="amount"/> tokens are there, taking none.</summary>
+        internal bool CanTake(long amount, long nowMicros)
+        {
             if (refilledAtMicros != long.MinValue)
             {
                 var elapsed = Math.Min(MaximumRefillMicros, Math.Max(0, nowMicros - refilledAtMicros));
@@ -132,17 +143,17 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             refilledAtMicros = nowMicros;
-            var cost = amount * 1_000_000;
-            if (Tokens < cost) return false;
-            Tokens -= cost;
-            return true;
+            return Tokens >= amount * 1_000_000;
         }
+
+        /// <summary>Takes <paramref name="amount"/> tokens that <see cref="CanTake"/> has just found.</summary>
+        internal void Take(long amount) => Tokens -= amount * 1_000_000;
     }
 
     /// <summary>
     /// The host's view of one participant's voice: the index it stamps on relayed frames, the stream so far and the rate
-    /// limits, with the player's <see cref="VoiceModeration"/>. A rejoin within the grace period keeps it all; a later one
-    /// gets a new speaker with the same moderation.
+    /// limits, with the player's <see cref="VoiceModeration"/>. A rejoin within the grace period keeps it all but the
+    /// stream; a later one gets a new speaker with the same moderation.
     /// </summary>
     internal sealed class VoiceSpeaker
     {
@@ -152,15 +163,23 @@ namespace TopiaForge.Multiplayer.Engine
             if (options == null) throw new ArgumentNullException(nameof(options));
             Index = index;
             Moderation = moderation ?? new VoiceModeration(options);
+            var bytesPerSecond = options.MaximumBitsPerSecond / 8;
             Packets = new VoiceTokenBucket(options.MaximumPacketsPerSecond, VoiceRelayPolicy.BurstMicros);
-            Bytes = new VoiceTokenBucket(options.MaximumBitsPerSecond / 8, VoiceRelayPolicy.BurstMicros);
-            Sustained = new VoiceTokenBucket(
+            Bytes = new VoiceTokenBucket(bytesPerSecond, VoiceRelayPolicy.BurstMicros);
+            SustainedPackets = new VoiceTokenBucket(
                 (long)options.MaximumPacketsPerSecond * VoiceRelayPolicy.SustainedFactor,
                 VoiceRelayPolicy.SustainedWindowMicros);
+            SustainedBytes = new VoiceTokenBucket((long)bytesPerSecond * VoiceRelayPolicy.SustainedFactor, VoiceRelayPolicy.SustainedWindowMicros);
         }
 
         /// <summary>Gets the speaker index relayed frames carry. A host never reuses one, so late frames cannot change owner.</summary>
         internal ulong Index { get; }
+
+        /// <summary>
+        /// Gets the generation of the speaker's stream that relayed frames carry. The host gives every new stream one it
+        /// has never used for anyone, so a listener tells a restarted stream from the old one whatever its numbers.
+        /// </summary>
+        internal ulong Stream { get; private set; }
 
         internal VoiceModeration Moderation { get; }
 
@@ -192,19 +211,32 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets the bitrate, in bytes: one second's worth of burst, refilled at the limit.</summary>
         internal VoiceTokenBucket Bytes { get; }
 
-        /// <summary>Gets the sustained rate: twice the limit, five seconds deep. Only a speaker who drains it earns strikes for rate.</summary>
-        internal VoiceTokenBucket Sustained { get; }
+        /// <summary>
+        /// Gets the sustained datagram rate: twice the limit, five seconds deep. Only a speaker who empties it earns strikes
+        /// for breaking the datagram rate.
+        /// </summary>
+        internal VoiceTokenBucket SustainedPackets { get; }
+
+        /// <summary>
+        /// Gets the sustained bitrate, in bytes: twice the limit, five seconds deep. Only a speaker who empties it earns
+        /// strikes for breaking the bitrate.
+        /// </summary>
+        internal VoiceTokenBucket SustainedBytes { get; }
 
         internal bool IsMuted(long nowMicros) => Moderation.IsMuted(nowMicros);
 
         internal bool IsAutoMuted(long nowMicros) => Moderation.IsAutoMuted(nowMicros);
 
-        /// <summary>Forgets the stream so far: a new connection starts its sequences again.</summary>
-        internal void ResetStream()
+        /// <summary>
+        /// Starts a new stream, generation <paramref name="stream"/>: a new connection numbers its frames from the start
+        /// again, and listeners learn of it from the generation even when its first datagram is lost.
+        /// </summary>
+        internal void ResetStream(ulong stream)
         {
             HasStream = false;
             LastSequence = 0;
             LastTimestamp = 0;
+            Stream = stream;
         }
 
         internal bool AddStrike(long nowMicros, long windowMicros) => Moderation.AddStrike(nowMicros, windowMicros);
@@ -221,21 +253,31 @@ namespace TopiaForge.Multiplayer.Engine
     /// longer window remove them.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The rate limits are token buckets holding one second of burst, judged when the host's pump reads the datagram. A
     /// stall on the host, or on the path, delivers a backlog all at once; the bucket absorbs a second of it and drops the
-    /// rest without a strike, and fresh speech passes again as the bucket refills. Rate is struck only when it is
-    /// sustained: every datagram also draws on a bucket that refills at twice the rate and holds five seconds of it, and
-    /// only a rate-limited datagram that finds that bucket empty too earns a strike.
+    /// rest without a strike, and fresh speech passes again as the bucket refills. A datagram over a limit spends none of
+    /// either bucket.
+    /// </para>
+    /// <para>
+    /// Breaking a limit is struck only when it is sustained. Each limit has a second bucket that refills at twice the
+    /// limit and holds five seconds of that: 300 datagrams at 60 a second, and 50,000 bytes at 10,000 a second, by
+    /// default. Every datagram draws on both, relayed or not, and a datagram over a limit strikes only when that limit's
+    /// sustained bucket is empty too. So a flood of r datagrams a second is first struck after 300 / (r - 60) seconds, a
+    /// flood of b bytes a second after 50,000 / (b - 10,000), and a flood under twice a limit is dropped down to the
+    /// limit but never struck. An honest talker's backlog never empties either: a link holds at most 128 datagrams, and
+    /// 128 of the largest datagrams the format allows come to under 50,000 bytes.
+    /// </para>
     /// </remarks>
     internal sealed class VoiceRelayPolicy
     {
         /// <summary>The burst the rate and bitrate buckets hold: one second.</summary>
         internal const long BurstMicros = 1_000_000;
 
-        /// <summary>How many times the datagram rate a speaker must keep up before rate-limited datagrams strike.</summary>
+        /// <summary>How many times its limit a speaker must keep up before datagrams over that limit strike.</summary>
         internal const int SustainedFactor = 2;
 
-        /// <summary>How long a speaker must keep it up: five seconds.</summary>
+        /// <summary>How long the sustained buckets hold at that rate: five seconds.</summary>
         internal const long SustainedWindowMicros = 5_000_000;
 
         private readonly VoiceOptions options;
@@ -248,11 +290,18 @@ namespace TopiaForge.Multiplayer.Engine
         internal VoiceAdmission Admit(VoiceSpeaker speaker, ReadOnlySpan<byte> datagram, long nowMicros)
         {
             if (speaker.IsMuted(nowMicros)) return Dropped(VoiceDropReason.ServerMuted);
-            var sustainable = speaker.Sustained.TryTake(1, nowMicros);
-            if (!speaker.Packets.TryTake(1, nowMicros) || !speaker.Bytes.TryTake(datagram.Length, nowMicros))
+            var packetsSustained = speaker.SustainedPackets.TryTake(1, nowMicros);
+            var bytesSustained = speaker.SustainedBytes.TryTake(datagram.Length, nowMicros);
+            var packetsOver = !speaker.Packets.CanTake(1, nowMicros);
+            var bytesOver = !speaker.Bytes.CanTake(datagram.Length, nowMicros);
+            if (packetsOver || bytesOver)
             {
-                return sustainable ? Dropped(VoiceDropReason.RateLimited) : Strike(speaker, VoiceDropReason.RateLimited, nowMicros);
+                var sustained = (packetsOver && !packetsSustained) || (bytesOver && !bytesSustained);
+                return sustained ? Strike(speaker, VoiceDropReason.RateLimited, nowMicros) : Dropped(VoiceDropReason.RateLimited);
             }
+
+            speaker.Packets.Take(1);
+            speaker.Bytes.Take(datagram.Length);
 
             // Frames are read at any size, so an oversized one is told apart from a malformed datagram.
             if (!VoicePacket.TryReadUplink(datagram, int.MaxValue, out var packet)) return Strike(speaker, VoiceDropReason.Malformed, nowMicros);
@@ -279,8 +328,16 @@ namespace TopiaForge.Multiplayer.Engine
         /// Spends one datagram's share of the datagram rate and the bitrate for a client pacing its own talker, exactly as
         /// the host will judge it on arrival. False means the datagram would break a limit and must not be sent.
         /// </summary>
-        internal bool TrySpend(VoiceSpeaker pace, int datagramBytes, long nowMicros) =>
-            pace.Packets.TryTake(1, nowMicros) && pace.Bytes.TryTake(datagramBytes, nowMicros);
+        internal bool TrySpend(VoiceSpeaker pace, int datagramBytes, long nowMicros)
+        {
+            // Both are refilled before either is judged, and a datagram that breaks either spends neither, as on the host.
+            var packets = pace.Packets.CanTake(1, nowMicros);
+            var bytes = pace.Bytes.CanTake(datagramBytes, nowMicros);
+            if (!packets || !bytes) return false;
+            pace.Packets.Take(1);
+            pace.Bytes.Take(datagramBytes);
+            return true;
+        }
 
         private VoiceAdmission Strike(VoiceSpeaker speaker, VoiceDropReason reason, long nowMicros)
         {

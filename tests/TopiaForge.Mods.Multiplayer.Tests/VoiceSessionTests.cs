@@ -115,13 +115,14 @@ internal static class VoiceSessionTests
 
         var notRelayed = codec.Packet(42);
         var uplinkFormat = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
-        var length = VoicePacket.Write(uplinkFormat, 0, 9, 9, VoiceFrameFlags.None, notRelayed, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        var length = VoicePacket.WriteUplink(uplinkFormat, 9, 9, VoiceFrameFlags.None, notRelayed, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
         pair.HostEnd.Send(EngineChannel.Voice, new ArraySegment<byte>(uplinkFormat, 0, length));
         Pump();
         Pump();
         var heard = new List<VoiceFrame>();
         while (client.TryReceiveVoiceFrame(out var frame)) heard.Add(frame);
         Assert(heard.Count == 1 && heard[0].Speaker.Value == "friend", "only the frame from a speaker in the roster is kept");
+        Assert(heard[0].Stream == RelayedStream, "with the stream generation the host stamped");
         var statistics = client.GetVoiceStatistics();
         Assert(statistics.Dropped(VoiceDropReason.UnknownSpeaker) == 2, "an unknown index and the client's own index are refused");
         Assert(statistics.Dropped(VoiceDropReason.Malformed) == 1, "an unstamped frame from the host is malformed");
@@ -349,10 +350,16 @@ internal static class VoiceSessionTests
             SessionMessages.WriteCommit(frame, body, 0, 0);
         });
 
+    /// <summary>The stream generation <see cref="Datagram"/> stamps on the relayed datagrams it builds.</summary>
+    internal const ulong RelayedStream = 3;
+
+    /// <summary>Builds a one-frame datagram: an uplink one for speaker zero, otherwise one relayed from that speaker.</summary>
     internal static byte[] Datagram(FakeVoiceCodec codec, ulong speaker, ulong sequence, ulong timestamp, short id)
     {
         var buffer = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
-        var length = VoicePacket.Write(buffer, speaker, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        var length = speaker == 0
+            ? VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty)
+            : VoicePacket.WriteRelayed(buffer, speaker, RelayedStream, sequence, timestamp, VoiceFrameFlags.None, codec.Packet(id), VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
         return buffer.AsSpan(0, length).ToArray();
     }
 

@@ -26,11 +26,16 @@ namespace TopiaForge.Multiplayer.Engine
     /// duplicates discarded by sequence. Realtime and Voice are unreliable and sequenced, one datagram per frame: loss
     /// is final, a datagram older than one already delivered on its channel is dropped, and nothing on them waits behind
     /// Session frames. Datagrams serialize in a lane of their own, as the real transport writes queued datagrams first
-    /// in every packet, but their bytes still count against the link, so later Session frames wait for them. In-flight
-    /// frames are dropped when a link is severed. The test rig drives it; the bytes are the engine's own.
+    /// in every packet, but their bytes still count against the link, so later Session frames wait for them. Time on the
+    /// link is kept in millionths of a tick and rounded up only to the tick a frame is delivered in, so a small frame
+    /// costs its bytes, never a whole tick. In-flight frames are dropped when a link is severed. The test rig drives it;
+    /// the bytes are the engine's own.
     /// </summary>
     internal sealed class VirtualEngineTransport
     {
+        /// <summary>The fractions of a tick in which a direction's busy times are kept.</summary>
+        internal const ulong SubTicksPerTick = 1_000_000;
+
         private readonly VirtualLinkConditions conditions;
         private readonly List<ScheduledFrame> inFlight = new List<ScheduledFrame>();
         private readonly List<ScheduledFrame> due = new List<ScheduledFrame>();
@@ -191,10 +196,11 @@ namespace TopiaForge.Multiplayer.Engine
             frameOrdinal++;
             var baseDelay = (ulong)Math.Max(1, conditions.LatencyTicks);
             if (Hits(conditions.ReorderEvery)) baseDelay++;
-            var start = Math.Max(Now, direction.DatagramBusyUntilTick);
-            var serialization = SerializationTicks(bytes.Length);
-            direction.DatagramBusyUntilTick = start + serialization;
-            direction.BusyUntilTick = Math.Max(direction.BusyUntilTick, Now) + serialization;
+            var now = Now * SubTicksPerTick;
+            var serialization = SerializationSubTicks(bytes.Length);
+            var sent = Math.Max(now, direction.DatagramBusyUntil) + serialization;
+            direction.DatagramBusyUntil = sent;
+            direction.SessionBusyUntil = Math.Max(direction.SessionBusyUntil, now) + serialization;
             direction.CountSent(channel, bytes.Length);
             if (Hits(conditions.DropEvery))
             {
@@ -202,7 +208,7 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
-            var deliverAt = start + serialization + baseDelay;
+            var deliverAt = CeilingTick(sent) + baseDelay;
             inFlight.Add(new ScheduledFrame(deliverAt, ++scheduleOrdinal, direction, sequence, channel, bytes, false));
             if (Hits(conditions.DuplicateEvery))
             {
@@ -262,10 +268,9 @@ namespace TopiaForge.Multiplayer.Engine
             frameOrdinal++;
             var baseDelay = (ulong)Math.Max(1, conditions.LatencyTicks);
             if (Hits(conditions.ReorderEvery)) baseDelay++;
-            var start = Math.Max(Now, direction.BusyUntilTick);
-            var serialization = SerializationTicks(bytes.Length);
-            direction.BusyUntilTick = start + serialization;
-            var arrival = start + serialization + baseDelay + (Hits(conditions.DropEvery) ? (ulong)conditions.RetryDelayTicks : 0);
+            var sent = Math.Max(Now * SubTicksPerTick, direction.SessionBusyUntil) + SerializationSubTicks(bytes.Length);
+            direction.SessionBusyUntil = sent;
+            var arrival = CeilingTick(sent) + baseDelay + (Hits(conditions.DropEvery) ? (ulong)conditions.RetryDelayTicks : 0);
             var deliverAt = Math.Max(arrival, direction.LastDeliverAt);
             direction.LastDeliverAt = deliverAt;
             direction.CountSent(channel, bytes.Length);
@@ -320,11 +325,21 @@ namespace TopiaForge.Multiplayer.Engine
             return false;
         }
 
-        private ulong SerializationTicks(int byteCount)
+        /// <summary>Gets the first tick by which <paramref name="subTicks"/> of link time have passed.</summary>
+        internal static ulong CeilingTick(ulong subTicks) => (subTicks / SubTicksPerTick) + (subTicks % SubTicksPerTick == 0 ? 0UL : 1UL);
+
+        /// <summary>
+        /// Gets how long <paramref name="byteCount"/> bytes take on the link, in millionths of a tick, rounded up: exact for
+        /// any rate that divides evenly, and otherwise within a millionth of a tick for each frame.
+        /// </summary>
+        private ulong SerializationSubTicks(int byteCount)
         {
-            if (conditions.BandwidthBytesPerSecond <= 0 || byteCount == 0) return 0;
-            var scaled = (long)byteCount * conditions.TicksPerSecond;
-            return (ulong)((scaled + conditions.BandwidthBytesPerSecond - 1) / conditions.BandwidthBytesPerSecond);
+            if (conditions.BandwidthBytesPerSecond <= 0 || conditions.TicksPerSecond <= 0 || byteCount <= 0) return 0;
+            var scaled = (ulong)byteCount * (ulong)conditions.TicksPerSecond;
+            var rate = (ulong)conditions.BandwidthBytesPerSecond;
+            var whole = scaled / rate;
+            var rest = scaled % rate;
+            return checked((whole * SubTicksPerTick) + (((rest * SubTicksPerTick) + rate - 1) / rate));
         }
 
         private sealed class ScheduledFrame
@@ -401,11 +416,18 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal int HoldBudget { get; set; }
         internal int DropBudget { get; set; }
-        /// <summary>Gets or sets when the link is free for the next Session frame; datagram bytes push it back too.</summary>
-        internal ulong BusyUntilTick { get; set; }
 
-        /// <summary>Gets or sets when the datagram lane is free; it never waits for Session frames.</summary>
-        internal ulong DatagramBusyUntilTick { get; set; }
+        /// <summary>
+        /// Gets or sets when the link is free for the next Session frame, in millionths of a tick
+        /// (<see cref="VirtualEngineTransport.SubTicksPerTick"/>); datagram bytes push it back too.
+        /// </summary>
+        internal ulong SessionBusyUntil { get; set; }
+
+        /// <summary>Gets or sets when the datagram lane is free, in millionths of a tick; it never waits for Session frames.</summary>
+        internal ulong DatagramBusyUntil { get; set; }
+
+        /// <summary>Gets the first tick at which the link is free for the next Session frame.</summary>
+        internal ulong BusyUntilTick => VirtualEngineTransport.CeilingTick(SessionBusyUntil);
         internal byte[]? LastFrame { get; set; }
         internal ulong LastSequence { get; set; }
         internal EngineChannel LastChannel { get; set; }

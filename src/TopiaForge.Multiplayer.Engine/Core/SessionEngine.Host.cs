@@ -363,8 +363,8 @@ namespace TopiaForge.Multiplayer.Engine
             connection.Participant = record;
             connection.Phase = HostConnectionPhase.Accepted;
             connection.AcknowledgedSequence = record.LastSequence;
-            // A new connection starts its voice sequences again, and needs the roster.
-            record.Voice?.ResetStream();
+            // A new connection starts a new voice stream, numbered from the start again, and needs the roster.
+            StartVoiceStream(record.Voice);
             MarkVoiceRosterDirty();
             connection.Enqueue(new JoinAcceptedItem(new JoinAcceptedMessage
             {
@@ -413,6 +413,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             if (evicted == null) return false;
+            NoteVoiceSeen(evicted);
             participantRecords.Remove(evicted);
             MarkParticipantsChanged();
             MarkVoiceRosterDirty();
@@ -555,6 +556,7 @@ namespace TopiaForge.Multiplayer.Engine
             record.Connection = null;
             record.IsConnected = false;
             record.DepartedAtMicros = nowMicros;
+            NoteVoiceSeen(record);
             ReleaseOwnership(record.Id);
             MarkParticipantsChanged();
         }
@@ -594,6 +596,7 @@ namespace TopiaForge.Multiplayer.Engine
                 var record = participantRecords[index];
                 if (record.IsConnected || record.Identity == null) continue;
                 if (nowMicros - record.DepartedAtMicros < options.ParticipantGraceMicros) continue;
+                NoteVoiceSeen(record);
                 participantRecords.RemoveAt(index);
                 removed = true;
             }

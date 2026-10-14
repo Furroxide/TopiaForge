@@ -18,9 +18,10 @@ namespace TopiaForge.Multiplayer.Engine
     /// <summary>One frame's place in its speaker's stream and where its codec packet sits in the datagram.</summary>
     internal readonly struct VoiceFrameHeader
     {
-        internal VoiceFrameHeader(ulong speaker, ulong sequence, ulong timestamp, VoiceFrameFlags flags, int payloadOffset, int payloadLength)
+        internal VoiceFrameHeader(ulong speaker, ulong stream, ulong sequence, ulong timestamp, VoiceFrameFlags flags, int payloadOffset, int payloadLength)
         {
             Speaker = speaker;
+            Stream = stream;
             Sequence = sequence;
             Timestamp = timestamp;
             Flags = flags;
@@ -30,6 +31,12 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>Gets the host-assigned speaker index of a relayed frame, or zero on an uplink frame.</summary>
         internal ulong Speaker { get; }
+
+        /// <summary>
+        /// Gets the generation of the speaker's stream on a relayed frame, or zero on an uplink frame. The host gives each
+        /// new stream one of its own, so a change means the talker started again, whatever the sequence numbers say.
+        /// </summary>
+        internal ulong Stream { get; }
 
         /// <summary>Gets the frame's sequence: frames sent, from 1, so a gap means loss.</summary>
         internal ulong Sequence { get; }
@@ -47,12 +54,13 @@ namespace TopiaForge.Multiplayer.Engine
     /// 20 ms frames per datagram make 25 datagrams a second, within the plan's 30, and halve what the transport's
     /// per-datagram overhead costs against its 32 kbit/s client voice class. A talker sends uplink datagrams to the host, which
     /// carry no speaker: the host knows the sender from the connection. The host relays them with the speaker index it
-    /// assigned, so no client can speak as someone else.
+    /// assigned, so no client can speak as someone else, and with the generation of the speaker's stream, so a listener
+    /// notices a restart even when the new stream's first datagram never arrives.
     /// </summary>
     /// <remarks>
     /// <code>
     /// uplink:  01, sequence, timestamp, count, then count times: flags, length, payload
-    /// relayed: 02, speaker, sequence, timestamp, count, then count times: flags, length, payload
+    /// relayed: 02, speaker, stream, sequence, timestamp, count, then count times: flags, length, payload
     /// </code>
     /// Numbers are minimal LEB128 varints; the sequence and timestamp are the first frame's, and the second frame's are one
     /// more. Parsing never throws: a datagram that breaks any rule is refused whole.
@@ -76,17 +84,16 @@ namespace TopiaForge.Multiplayer.Engine
         internal VoiceFrameHeader Second { get; }
 
         /// <summary>Gets the most bytes a datagram of two <paramref name="maximumPayload"/>-byte frames can take.</summary>
-        internal static int MaximumBytes(int maximumPayload) => 1 + (3 * 10) + 1 + (MaximumFrames * (1 + 5 + maximumPayload));
+        internal static int MaximumBytes(int maximumPayload) => 1 + (4 * 10) + 1 + (MaximumFrames * (1 + 5 + maximumPayload));
 
         internal VoiceFrameHeader this[int index] => index == 0 ? First : Second;
 
         /// <summary>
-        /// Writes a datagram of one frame, or two when <paramref name="secondPayload"/> is not empty, and returns its length.
-        /// A relayed datagram (<paramref name="speaker"/> above zero) leads with the speaker index.
+        /// Writes a talker's uplink datagram of one frame, or two when <paramref name="secondPayload"/> is not empty, and
+        /// returns its length.
         /// </summary>
-        internal static int Write(
+        internal static int WriteUplink(
             Span<byte> destination,
-            ulong speaker,
             ulong sequence,
             ulong timestamp,
             VoiceFrameFlags firstFlags,
@@ -95,8 +102,43 @@ namespace TopiaForge.Multiplayer.Engine
             ReadOnlySpan<byte> secondPayload)
         {
             var position = 0;
-            destination[position++] = speaker == 0 ? UplinkKind : RelayedKind;
-            if (speaker != 0) WriteVarUInt(destination, ref position, speaker);
+            destination[position++] = UplinkKind;
+            return WriteFrames(destination, position, sequence, timestamp, firstFlags, firstPayload, secondFlags, secondPayload);
+        }
+
+        /// <summary>
+        /// Writes a host's relayed datagram, stamped with the <paramref name="speaker"/> index and the generation of their
+        /// <paramref name="stream"/>, and returns its length.
+        /// </summary>
+        internal static int WriteRelayed(
+            Span<byte> destination,
+            ulong speaker,
+            ulong stream,
+            ulong sequence,
+            ulong timestamp,
+            VoiceFrameFlags firstFlags,
+            ReadOnlySpan<byte> firstPayload,
+            VoiceFrameFlags secondFlags,
+            ReadOnlySpan<byte> secondPayload)
+        {
+            if (speaker == 0) throw new ArgumentOutOfRangeException(nameof(speaker), "Speaker index zero is never assigned.");
+            var position = 0;
+            destination[position++] = RelayedKind;
+            WriteVarUInt(destination, ref position, speaker);
+            WriteVarUInt(destination, ref position, stream);
+            return WriteFrames(destination, position, sequence, timestamp, firstFlags, firstPayload, secondFlags, secondPayload);
+        }
+
+        private static int WriteFrames(
+            Span<byte> destination,
+            int position,
+            ulong sequence,
+            ulong timestamp,
+            VoiceFrameFlags firstFlags,
+            ReadOnlySpan<byte> firstPayload,
+            VoiceFrameFlags secondFlags,
+            ReadOnlySpan<byte> secondPayload)
+        {
             WriteVarUInt(destination, ref position, sequence);
             WriteVarUInt(destination, ref position, timestamp);
             destination[position++] = secondPayload.IsEmpty ? (byte)1 : (byte)2;
@@ -119,19 +161,21 @@ namespace TopiaForge.Multiplayer.Engine
             var position = 0;
             if (datagram.Length < 1 || datagram[position++] != kind) return false;
             ulong speaker = 0;
+            ulong stream = 0;
             if (kind == RelayedKind && (!TryReadVarUInt(datagram, ref position, out speaker) || speaker == 0)) return false;
+            if (kind == RelayedKind && !TryReadVarUInt(datagram, ref position, out stream)) return false;
             if (!TryReadVarUInt(datagram, ref position, out var sequence) || sequence == 0 || sequence == ulong.MaxValue) return false;
             if (!TryReadVarUInt(datagram, ref position, out var timestamp) || timestamp == ulong.MaxValue) return false;
             if (position >= datagram.Length) return false;
             var count = datagram[position++];
             if (count < 1 || count > MaximumFrames) return false;
             if (!TryReadFrame(datagram, ref position, maximumPayload, out var flags, out var offset, out var length)) return false;
-            var first = new VoiceFrameHeader(speaker, sequence, timestamp, flags, offset, length);
+            var first = new VoiceFrameHeader(speaker, stream, sequence, timestamp, flags, offset, length);
             var second = default(VoiceFrameHeader);
             if (count == 2)
             {
                 if (!TryReadFrame(datagram, ref position, maximumPayload, out flags, out offset, out length)) return false;
-                second = new VoiceFrameHeader(speaker, sequence + 1, timestamp + 1, flags, offset, length);
+                second = new VoiceFrameHeader(speaker, stream, sequence + 1, timestamp + 1, flags, offset, length);
             }
 
             if (position != datagram.Length) return false;

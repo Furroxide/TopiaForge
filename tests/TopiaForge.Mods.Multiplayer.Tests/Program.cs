@@ -280,6 +280,15 @@ internal static class Program
             VirtualVoiceChannelTests.APathThatIsDownLosesDatagramsButHoldsTheStream();
             VirtualVoiceChannelTests.DatagramsHaveALaneOfTheirOwnButShareTheRate();
             VirtualVoiceChannelTests.TheLinkReadsDatagramsFirstAndHoldsAHundredAndTwentyEight();
+            VirtualVoiceChannelTests.SmallFramesCostTheirBytesNotWholeTicks();
+            VoiceBudgetTests.VoiceKeepsItsPaceOnARateLimitedLink();
+            VoiceRelayPolicyTests.FloodsStrikeOnlyPastTwiceTheirLimit();
+            VoiceRelayPolicyTests.HonestTalkersAreNeverStruckAfterAStall();
+            VoiceModerationTests.ABitrateFloodIsStruckAndMuted();
+            VoiceModerationTests.ListenerMutesStayBehindWhenTheLinkMovesToAnotherSession();
+            VoiceModerationTests.AFullTableForgetsWhoeverWasSeenLongestAgo();
+            VoiceRestartTests.ARestartIsHeardFromTheDatagramBesideItsAcknowledgement();
+            VoiceRestartTests.ARestartIsNoticedWhenItsFirstDatagramIsLost();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

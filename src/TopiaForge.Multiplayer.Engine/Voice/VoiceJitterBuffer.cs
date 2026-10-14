@@ -36,10 +36,11 @@ namespace TopiaForge.Multiplayer.Engine
     /// maximum delay ends the spurt, as an end-of-talk frame does, so the next one fills to the target again.
     /// </para>
     /// <para>
-    /// The voice channel is sequenced, so one speaker's frames arrive in order, each at most once. A frame numbered at or
-    /// below one already received therefore comes from a new stream, after a reconnect or a restart, and resets the
-    /// buffer, its estimates and the decoder, however short the old stream was. A frame that arrives after its turn has
-    /// passed is late and dropped.
+    /// A frame of another stream generation than the frames before it comes from a new stream, after a rejoin or a
+    /// restart, and resets the buffer, its estimates and the decoder. The host stamps the generation, so this holds even
+    /// when the new stream's first frames are lost. The voice channel is sequenced, so one speaker's frames arrive in
+    /// order, each at most once, and a frame numbered at or below one already received starts a new stream too. A frame
+    /// that arrives after its turn has passed is late and dropped.
     /// </para>
     /// <para>
     /// Clock drift and changing network delay change how early frames arrive. <see cref="VoiceSlackWindow"/> watches the
@@ -78,6 +79,7 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly int maximumFrames;
         private Phase phase;
         private bool hasStream;
+        private ulong stream;
         private ulong playout;
         private ulong newest;
         private ulong lastSequence;
@@ -127,10 +129,13 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool IsActive => phase != Phase.Idle;
 
         internal void Push(VoiceFrame frame) =>
-            Push(frame.Sequence, frame.Timestamp, frame.Flags, frame.Payload.AsSpan(), frame.ArrivalMicros);
+            Push(frame.Stream, frame.Sequence, frame.Timestamp, frame.Flags, frame.Payload.AsSpan(), frame.ArrivalMicros);
 
-        /// <summary>Accepts one received frame. The payload is copied, so the caller may reuse its buffer.</summary>
-        internal void Push(ulong sequence, ulong timestamp, VoiceFrameFlags flags, ReadOnlySpan<byte> payload, long arrivalMicros)
+        /// <summary>
+        /// Accepts one received frame of stream generation <paramref name="generation"/>. The payload is copied, so the
+        /// caller may reuse its buffer.
+        /// </summary>
+        internal void Push(ulong generation, ulong sequence, ulong timestamp, VoiceFrameFlags flags, ReadOnlySpan<byte> payload, long arrivalMicros)
         {
             Statistics.Received++;
             if (payload.Length < 1 || payload.Length > maximumPacketBytes || sequence == 0)
@@ -139,15 +144,16 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
-            if (hasStream && (sequence <= highestSequence || timestamp + Slots < lastPlayed))
+            if (hasStream && (generation != stream || sequence <= highestSequence || timestamp + Slots < lastPlayed))
             {
-                // The talker started a new stream, after a reconnect or a restart. A sequenced channel delivers one
-                // speaker's frames in order, so a number at or below one already seen can only come from a new stream,
-                // however short the old one was.
+                // The talker started a new stream, after a rejoin or a restart. The host says so with a new generation,
+                // even when the new stream's first frames were lost. A sequenced channel delivers one speaker's frames in
+                // order, so a number at or below one already seen can only come from a new stream too.
                 Statistics.Restarts++;
                 Reset();
             }
 
+            stream = generation;
             delay.Observe(arrivalMicros, timestamp);
             if (phase == Phase.Idle)
             {

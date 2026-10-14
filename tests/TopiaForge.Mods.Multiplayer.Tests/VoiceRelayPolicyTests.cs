@@ -7,8 +7,9 @@ using OpusVoiceCodec = provider::TopiaForge.Multiplayer.Voice.OpusVoiceCodec;
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
-/// The host's relay policy on its own, against explicit times: each limit, stale and backwards frames, the escalation
-/// from strikes to an automatic mute to removal, and the provider's Opus header check through the codec seam.
+/// The host's relay policy on its own, against explicit times: each limit, when sustained floods strike and honest
+/// backlogs never do, stale and backwards frames, the escalation from strikes to an automatic mute to removal, and the
+/// provider's Opus header check through the codec seam.
 /// </summary>
 internal static class VoiceRelayPolicyTests
 {
@@ -70,8 +71,9 @@ internal static class VoiceRelayPolicyTests
         Expect(policy.Admit(speaker, Datagram(codec, 2, 1), 6_000), VoiceDropReason.Stale, struck: false, "an older datagram");
         Expect(policy.Admit(speaker, Datagram(codec, 4, 2), 7_000), VoiceDropReason.Malformed, struck: true, "a timestamp that does not advance");
         Assert(policy.Admit(speaker, Datagram(codec, 5, 3), 8_000).Verdict == VoiceVerdict.Relay, "the stream carries on");
-        speaker.ResetStream();
-        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 9_000).Verdict == VoiceVerdict.Relay, "a new connection starts its sequence again");
+        speaker.ResetStream(2);
+        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 9_000).Verdict == VoiceVerdict.Relay && speaker.Stream == 2,
+            "a new connection starts its sequence again, in a new stream generation");
     }
 
     internal static void ABacklogIsAbsorbedAndOnlySustainedExcessStrikes()
@@ -113,6 +115,94 @@ internal static class VoiceRelayPolicyTests
         Assert(firstStrike > 0 && firstStrike * Second / 120 >= 4_900_000 && firstStrike * Second / 120 < 5_500_000,
             "a flood at 120 a second strikes only once it has lasted five seconds (" + (firstStrike * 1_000 / 120) + " ms)");
         Assert(verdicts[^1].Verdict == VoiceVerdict.AutoMute, "and the strikes then mute the speaker");
+    }
+
+    internal static void FloodsStrikeOnlyPastTwiceTheirLimit()
+    {
+        // Each limit keeps a sustained allowance of twice the limit, five seconds deep: 300 datagrams refilled at 60 a
+        // second, and 50,000 bytes refilled at 10,000 a second. A datagram over a limit strikes only once that limit's own
+        // allowance is spent, so a flood of r datagrams a second is first struck after 300 / (r - 60) seconds, and a flood
+        // of b bytes a second after 50,000 / (b - 10,000). Below twice a limit a flood is only cut down to the limit.
+        var tiny = new FakeVoiceCodec(20);
+        var big = new FakeVoiceCodec(160);
+        var cases = new (string What, int PerSecond, FakeVoiceCodec Codec, bool Pair, long FirstStrikeFrom, long FirstStrikeTo, long MutedBy)[]
+        {
+            ("small datagrams at 60 a second, twice the datagram rate", 60, tiny, false, 0, 0, 0),
+            ("small datagrams at 90 a second", 90, tiny, false, 9_900_000, 10_100_000, 10_700_000),
+            ("small datagrams at 120 a second", 120, tiny, false, 4_900_000, 5_100_000, 5_400_000),
+            ("332-byte datagrams at 25 a second, 66 kbit/s", 25, big, true, 0, 0, 0),
+            ("332-byte datagrams at 50 a second, 133 kbit/s", 50, big, true, 7_500_000, 7_700_000, 9_600_000),
+            ("332-byte datagrams at 59 a second, 157 kbit/s", 59, big, true, 5_100_000, 5_300_000, 6_700_000),
+        };
+        foreach (var (what, perSecond, codec, pair, strikeFrom, strikeTo, mutedBy) in cases)
+        {
+            var options = new VoiceOptions(codec);
+            options.Validate();
+            var policy = new VoiceRelayPolicy(options);
+            var speaker = new VoiceSpeaker(1, options);
+            long firstStrike = -1;
+            long muted = -1;
+            long relayedBytes = 0;
+            var dropped = 0;
+            for (var index = 0; index < perSecond * 120 && muted < 0; index++)
+            {
+                var now = index * Second / perSecond;
+                var datagram = Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair);
+                var admission = policy.Admit(speaker, datagram, now);
+                if (admission.Struck && firstStrike < 0) firstStrike = now;
+                if (admission.Verdict == VoiceVerdict.AutoMute) muted = now;
+                if (admission.Verdict == VoiceVerdict.Relay) relayedBytes += datagram.Length;
+                else dropped++;
+            }
+
+            if (strikeFrom == 0)
+            {
+                Assert(firstStrike < 0 && dropped > 0, what + " is cut down to the limit, never struck (first strike at " + firstStrike + ")");
+                Assert(relayedBytes <= 121 * options.MaximumBitsPerSecond / 8, what + ": what passes stays within the bitrate");
+                continue;
+            }
+
+            Assert(firstStrike >= strikeFrom && firstStrike <= strikeTo,
+                what + " is first struck between " + (strikeFrom / 1_000) + " and " + (strikeTo / 1_000) + " ms (" + (firstStrike / 1_000) + " ms)");
+            Assert(muted > 0 && muted <= mutedBy, what + " is muted within " + (mutedBy / 1_000) + " ms (" + (muted / 1_000) + " ms)");
+        }
+    }
+
+    internal static void HonestTalkersAreNeverStruckAfterAStall()
+    {
+        // An honest talker at the edge of the limits: 25 datagrams a second of two 80-byte frames, about 34 kbit/s. The host
+        // stalls for 0.5, 1.2, 3 and 6 seconds, then three times for 1.1 seconds two seconds apart, and each time reads the
+        // whole backlog at once. Nothing strikes, and fresh speech after each stall passes in full.
+        var (policy, speaker, codec) = Create(new FakeVoiceCodec(80));
+        ulong next = 0;
+        long now = 0;
+        var relayed = 0;
+        void Admit(long at)
+        {
+            next += 2;
+            var admission = policy.Admit(speaker, Datagram(codec, next - 1, next - 2, pair: true), at);
+            Assert(!admission.Struck, "datagram " + (next / 2) + " earns no strike");
+            if (admission.Verdict == VoiceVerdict.Relay) relayed++;
+        }
+
+        void Talk(long micros)
+        {
+            for (var end = now + micros; now < end; now += 40_000) Admit(now);
+        }
+
+        Talk(5 * Second);
+        foreach (var (stall, after) in new[] { (Second / 2, 5 * Second), (1_200_000L, 5 * Second), (3 * Second, 5 * Second), (6 * Second, 5 * Second),
+                     (1_100_000L, 2 * Second), (1_100_000L, 2 * Second), (1_100_000L, 5 * Second) })
+        {
+            // What the talker sent during the stall arrives when it ends; the next datagram comes 40 ms later.
+            var backlog = stall / 40_000;
+            now += stall;
+            for (var index = 0; index < backlog; index++) Admit(now);
+            now += 40_000;
+            var before = relayed;
+            Talk(after);
+            Assert(relayed - before == after / 40_000, "after a " + (stall / 1_000) + " ms stall, fresh speech passes in full");
+        }
     }
 
     internal static void StrikesMuteThenRemoveTheSpeaker()
@@ -206,14 +296,14 @@ internal static class VoiceRelayPolicyTests
         var first = codec.Packet((short)(timestamp + 1), (short)timestamp);
         var second = pair ? codec.Packet((short)(timestamp + 2), (short)(timestamp + 1)) : Array.Empty<byte>();
         var buffer = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
-        var length = VoicePacket.Write(buffer, 0, sequence, timestamp, VoiceFrameFlags.None, first, VoiceFrameFlags.None, second);
+        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, first, VoiceFrameFlags.None, second);
         return buffer.AsSpan(0, length).ToArray();
     }
 
     private static byte[] Raw(ulong sequence, ulong timestamp, byte[] payload)
     {
         var buffer = new byte[VoicePacket.MaximumBytes(payload.Length)];
-        var length = VoicePacket.Write(buffer, 0, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
         return buffer.AsSpan(0, length).ToArray();
     }
 
