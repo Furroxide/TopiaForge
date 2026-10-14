@@ -20,6 +20,15 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Creates a LAN browser listening on <paramref name="discoveryPort"/>, or null where the network has no LAN.</summary>
         LanBrowser? CreateBrowser(int discoveryPort);
+
+        /// <summary>Names the host a path from this network reaches, without its port, or null where sources cannot be told apart.</summary>
+        string? SourceOf(TransportPath path);
+
+        /// <summary>
+        /// Names the network a path from this network comes from, as password limits count it: an IPv4 address or an
+        /// IPv6 /64, never the port. Null where it cannot be told, as through a relay. Only the network layer reads it.
+        /// </summary>
+        byte[]? NetworkOf(TransportPath path);
     }
 
     /// <summary>The game's networks: a <see cref="NetworkThread"/> over a <see cref="UdpSocketDriver"/>, with TCP and LAN services.</summary>
@@ -44,6 +53,10 @@ namespace TopiaForge.Multiplayer.Network
         public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => new LanAnnouncer(beacon);
 
         public LanBrowser? CreateBrowser(int discoveryPort) => new LanBrowser(discoveryPort);
+
+        public string? SourceOf(TransportPath path) => UdpPaths.SourceOf(path);
+
+        public byte[]? NetworkOf(TransportPath path) => UdpPaths.NetworkOf(path);
     }
 
     /// <summary>
@@ -66,6 +79,7 @@ namespace TopiaForge.Multiplayer.Network
         private readonly ILiveSessionContent content;
         private readonly Func<long> clock;
         private readonly Func<long> unixSeconds;
+        private readonly Func<TransportOptions> transportOptions;
         private INetworkControl? network;
         private DescriptorEndpoint? descriptorEndpoint;
         private int lastPlayers = -1;
@@ -79,7 +93,8 @@ namespace TopiaForge.Multiplayer.Network
             ILiveSessionContent content,
             Func<long> clock,
             Func<long> unixSeconds,
-            byte[]? passwordKey)
+            byte[]? passwordKey,
+            Func<TransportOptions>? transportOptions = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -87,6 +102,7 @@ namespace TopiaForge.Multiplayer.Network
             this.content = content ?? throw new ArgumentNullException(nameof(content));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
+            this.transportOptions = transportOptions ?? (() => new TransportOptions());
             Bans = bans ?? throw new ArgumentNullException(nameof(bans));
             Policy = new HostPolicy(bans, passwordKey, content, clock);
         }
@@ -188,12 +204,11 @@ namespace TopiaForge.Multiplayer.Network
 
         private bool TryBind(INetworkFactory factory, int port)
         {
-            var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), new TransportOptions
-            {
-                RelayOnly = !settings.AllowDirect,
-                MaximumConnections = Math.Max(4, settings.MaxPlayers * 2)
-            }, clock());
-            var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)), MaximumLinksPerSource);
+            var options = transportOptions();
+            options.RelayOnly = !settings.AllowDirect;
+            options.MaximumConnections = Math.Max(4, settings.MaxPlayers * 2);
+            var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), options, clock());
+            var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)), MaximumLinksPerSource, factory.SourceOf, factory.NetworkOf);
             INetworkControl started;
             try
             {

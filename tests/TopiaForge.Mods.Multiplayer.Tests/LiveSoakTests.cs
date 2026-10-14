@@ -383,9 +383,39 @@ internal static class LiveSoakTests
                 That(Roster(client) == Roster(rig.Host), client.Name + " sees the host's players: " + Roster(client) + " vs " + Roster(rig.Host));
             }
 
+            VerifyPresentation();
             Audit();
             rig.Quiet = false;
         }
+
+        /// <summary>
+        /// While every peer is settled and connected, the host emits a few flashes nobody else does, and each must reach
+        /// every connected peer exactly once: a flash lost to a connected peer, or delivered to it twice, fails here.
+        /// </summary>
+        private void VerifyPresentation()
+        {
+            // Only once the host has every joined connection marked Ready does a flash reach all of them; a client can
+            // report Ready a round trip before its ReadyAck reaches the host, and a flash sent in that gap would miss it.
+            var settleBy = rig.Network.Now + 30_000_000;
+            while (rig.Network.Now < settleBy && (rig.Host.Engine.ConnectionsAwaitingReady > 0 || rig.Host.Engine.HasPendingWork)) rig.Frame();
+
+            var pings = new List<(int Peer, int Nonce)>();
+            for (var count = 0; count < 3; count++) pings.Add(rig.Host.Workload.Ping());
+            var deadline = rig.Network.Now + 30_000_000;
+            while (rig.Network.Now < deadline && (rig.Host.Engine.HasPendingWork || !AllGot(pings))) rig.Frame();
+            foreach (var peer in Connected())
+            {
+                foreach (var ping in pings)
+                {
+                    That(peer.Workload.GotFlash(ping.Peer, ping.Nonce), peer.Name + " got the checkpoint flash " + ping.Nonce + " while connected");
+                }
+            }
+        }
+
+        private bool AllGot(List<(int Peer, int Nonce)> pings) => Connected().All(peer => pings.All(ping => peer.Workload.GotFlash(ping.Peer, ping.Nonce)));
+
+        /// <summary>The peers a flash must reach: the host, and every client still in the session.</summary>
+        private IEnumerable<SoakPeer> Connected() => rig.Peers.Where(peer => peer == rig.Host || peer.InSession);
 
         private bool Settled(bool allPlayers)
         {
@@ -414,6 +444,7 @@ internal static class LiveSoakTests
             foreach (var peer in rig.Peers)
             {
                 That(peer.Workload.Ledger.Violations.Count == 0, "nothing ran twice on " + peer.Name + ": " + string.Join("; ", peer.Workload.Ledger.Violations));
+                That(peer.Workload.FlashViolations.Count == 0, "no presentation event reached " + peer.Name + " twice: " + string.Join("; ", peer.Workload.FlashViolations));
                 foreach (var submission in peer.Submissions)
                 {
                     That(submission.Task.IsCompleted, peer.Name + "'s submission " + submission.Nonce + " has its answer");

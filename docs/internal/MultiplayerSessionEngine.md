@@ -163,9 +163,10 @@ with that result, because the host executed it; the rest complete as `Cancelled`
 - **Unregistered ids:** a client keeps canonical values for states and object types it has not registered and adopts
   them when it registers. Unregistering a state keeps its canonical value the same way, so registering it again
   restores it.
-- **A value that does not decode** with the client's codec ends the session as a protocol mismatch. When that happens
-  partway through a snapshot or an adoption, the rest of it is dropped too, so nothing of the host's lands in the solo
-  session the provider returns to.
+- **A value that does not decode** with the client's codec ends the session as a protocol mismatch, whether it arrives
+  in a delta or a snapshot or is the canonical value a late registration adopts — a state no less than an object, which
+  behaved differently before. When that happens partway through a snapshot or an adoption, the rest of it is dropped
+  too, so nothing of the host's lands in the solo session the provider returns to.
 
 ## Participants and connections
 

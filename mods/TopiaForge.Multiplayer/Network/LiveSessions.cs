@@ -33,6 +33,7 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<long> clock;
         private readonly Func<long> unixSeconds;
         private readonly string providerModId;
+        private readonly Func<Transport.TransportOptions> transportOptions;
 
         /// <summary>How long closing waits for the last saves to land.</summary>
         private const int SaveFlushMilliseconds = 1_000;
@@ -59,7 +60,8 @@ namespace TopiaForge.Multiplayer.Network
             Func<long> clock,
             Func<long> unixSeconds,
             string providerModId,
-            IJoinTargetResolver? resolver = null)
+            IJoinTargetResolver? resolver = null,
+            Func<Transport.TransportOptions>? transportOptions = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.files = files ?? throw new ArgumentNullException(nameof(files));
@@ -68,6 +70,7 @@ namespace TopiaForge.Multiplayer.Network
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
+            this.transportOptions = transportOptions ?? (() => new Transport.TransportOptions());
             KnownHosts = new KnownHosts();
             this.resolver = resolver ?? new NetworkTargetResolver(() => browser, KnownHosts, MarkKnownHostsChanged, unixSeconds);
             endHook = OnClientSessionEnded;
@@ -124,7 +127,7 @@ namespace TopiaForge.Multiplayer.Network
             if (Join != null && Join.Phase != JoinPhase.Ended) throw new InvalidOperationException("A join is already in progress.");
             if (identity == null) throw new InvalidOperationException("The identity is not ready yet; call PrepareAsync first.");
             Join?.Dispose();
-            Join = new LiveJoin(engine, identity, target, settings, resolver, content, factory, clock, NextSolo);
+            Join = new LiveJoin(engine, identity, target, settings, resolver, content, factory, clock, NextSolo, transportOptions);
             return Join;
         }
 
@@ -139,6 +142,22 @@ namespace TopiaForge.Multiplayer.Network
         internal bool IsReady => identity != null;
 
         /// <summary>
+        /// Gets the work running on other threads that lands at a later pump: the identity load, a password key being
+        /// derived, the join's resolve and proof, and, with <paramref name="saves"/>, files still being saved. A test rig
+        /// waits for it in real time, so it lands at the same point of a run however slow the machine is.
+        /// </summary>
+        internal List<Task> PendingBackgroundWork(bool saves)
+        {
+            var work = new List<Task>();
+            if (identity == null && loading != null && !loading.IsCompleted) work.Add(loading);
+            if (hostKey != null && !hostKey.IsCompleted) work.Add(hostKey);
+            Join?.AddPendingBackgroundWork(work);
+            if (saves && !bansWrite.IsCompleted) work.Add(bansWrite);
+            if (saves && !knownHostsWrite.IsCompleted) work.Add(knownHostsWrite);
+            return work;
+        }
+
+        /// <summary>
         /// Starts listening for LAN sessions, on its own socket and network. Browsing is always relay-only: LAN hosts are
         /// still asked for their info, but a beacon from any other address is never answered with this player's own.
         /// </summary>
@@ -146,7 +165,10 @@ namespace TopiaForge.Multiplayer.Network
         {
             ThrowIfDisposed();
             if (browserNetwork != null) return;
-            var endpoint = new Transport.TransportEndpoint(X25519.GeneratePrivateKey(), new Transport.TransportOptions { RelayOnly = true, AcceptsInbound = false }, clock());
+            var options = transportOptions();
+            options.RelayOnly = true;
+            options.AcceptsInbound = false;
+            var endpoint = new Transport.TransportEndpoint(X25519.GeneratePrivateKey(), options, clock());
             browserNetwork = factory.Start(0, new NetworkStack(endpoint));
             browser = factory.CreateBrowser(discoveryPort);
             if (browser != null) browserNetwork.Attach(browser);
@@ -291,7 +313,7 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
-            var host = new LiveHost(engine, identity!, bans!, settings, content, clock, unixSeconds, keyTask.Result);
+            var host = new LiveHost(engine, identity!, bans!, settings, content, clock, unixSeconds, keyTask.Result, transportOptions);
 
             // The host's policy keeps its own copy of the key, so the derived one is wiped at once.
             if (keyTask.Result != null) Array.Clear(keyTask.Result, 0, keyTask.Result.Length);

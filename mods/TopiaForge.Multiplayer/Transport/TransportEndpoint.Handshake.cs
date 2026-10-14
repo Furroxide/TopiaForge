@@ -115,25 +115,28 @@ namespace TopiaForge.Multiplayer.Transport
 
             UnregisterIfClosed(connection);
         }
+    }
 
-        /// <summary>An initiator as the responder knows it: the path it came from and the connection id it chose.</summary>
-        private readonly struct InitiationKey : IEquatable<InitiationKey>
+    /// <summary>
+    /// An initiator as the responder knows it: the path its Initiation came from and the connection id it chose. The
+    /// connection keeps the key it was registered under, because it may move to another path before it closes.
+    /// </summary>
+    internal readonly struct InitiationKey : IEquatable<InitiationKey>
+    {
+        internal InitiationKey(TransportPath path, ulong connectionId)
         {
-            internal InitiationKey(TransportPath path, ulong connectionId)
-            {
-                Path = path;
-                ConnectionId = connectionId;
-            }
-
-            internal TransportPath Path { get; }
-
-            internal ulong ConnectionId { get; }
-
-            public bool Equals(InitiationKey other) => ConnectionId == other.ConnectionId && Path.Equals(other.Path);
-
-            public override bool Equals(object? obj) => obj is InitiationKey other && Equals(other);
-
-            public override int GetHashCode() => unchecked((Path.GetHashCode() * 397) ^ ConnectionId.GetHashCode());
+            Path = path;
+            ConnectionId = connectionId;
         }
+
+        internal TransportPath Path { get; }
+
+        internal ulong ConnectionId { get; }
+
+        public bool Equals(InitiationKey other) => ConnectionId == other.ConnectionId && Path.Equals(other.Path);
+
+        public override bool Equals(object? obj) => obj is InitiationKey other && Equals(other);
+
+        public override int GetHashCode() => unchecked((Path.GetHashCode() * 397) ^ ConnectionId.GetHashCode());
     }
 }

@@ -13,7 +13,8 @@ namespace TopiaForge.Multiplayer.Engine
             JoinRequestMessage request,
             IReadOnlyList<ContractEntry> hostContracts,
             int connectedParticipants,
-            int maximumParticipants)
+            int maximumParticipants,
+            bool returning = false)
         {
             Link = link;
             PeerIdentity = peerIdentity;
@@ -21,6 +22,7 @@ namespace TopiaForge.Multiplayer.Engine
             HostContracts = hostContracts;
             ConnectedParticipants = connectedParticipants;
             MaximumParticipants = maximumParticipants;
+            Returning = returning;
         }
 
         /// <summary>
@@ -34,6 +36,13 @@ namespace TopiaForge.Multiplayer.Engine
         internal IReadOnlyList<ContractEntry> HostContracts { get; }
         internal int ConnectedParticipants { get; }
         internal int MaximumParticipants { get; }
+
+        /// <summary>
+        /// Gets whether the identity already holds a participant record: it was admitted earlier and is connected or
+        /// within its grace period, as a player coming back over a new link is. A policy may spare such a player limits
+        /// meant for strangers.
+        /// </summary>
+        internal bool Returning { get; }
     }
 
     internal readonly struct JoinDecision

@@ -73,16 +73,21 @@ internal static class LiveSessionTests
         That(!sent.Any(bytes => Contains(bytes, password)), "the password never crossed the network in the clear");
         second.Leave();
 
-        // Five wrong proofs from one identity within a minute stop the sixth before it is even checked; one is already spent.
-        for (var attempt = 1; attempt < HostPolicy.AttemptsPerMinute; attempt++)
+        // Five wrong proofs from one identity within a minute stop the sixth before it is even checked. The guest proved
+        // the password and still holds its place, so a stranger guesses.
+        var stranger = rig.AddClient("stranger");
+        Register(stranger);
+        for (var attempt = 1; attempt <= HostPolicy.AttemptsPerMinute; attempt++)
         {
-            var wrong = rig.Join(guest, new JoinSettings("Guest") { Password = "guess " + attempt });
+            var wrong = rig.Join(stranger, new JoinSettings("Stranger") { Password = "guess " + attempt });
             That(rig.Run(() => wrong.Phase == JoinPhase.Ended) && wrong.RejectionCode == AdmissionCode.PasswordWrong, "wrong guess " + attempt);
         }
 
-        var limited = rig.Join(guest, new JoinSettings("Guest") { Password = "open sesame" });
+        var limited = rig.Join(stranger, new JoinSettings("Stranger") { Password = "open sesame" });
         That(rig.Run(() => limited.Phase == JoinPhase.Ended) && limited.RejectionCode == AdmissionCode.TooManyAttempts,
             "after five wrong guesses even the right password waits out the minute (" + limited.RejectionCode + ")");
+        var back = rig.Join(guest, new JoinSettings("Guest") { Password = "open sesame" });
+        That(rig.Run(() => back.Phase == JoinPhase.InSession), "while the player who knows it comes back as before (" + back.Failure + ")");
     }
 
     internal static void HostsKickBanAndStop()

@@ -86,14 +86,14 @@ internal static class LiveFormatFuzzTests
                 8));
             var readable = JoinContent.TryDecode(body, out var sentProof, out var sentContent);
             var proved = !locked || (sentProof != null && PasswordProof.Verify(passwordKey, link.ChannelBinding, sentProof));
-            var expected = readable && proved && content.Admit(sentContent) == null;
+            var admitted = readable && proved ? content.Admit(sentContent) : null;
+            var expected = admitted != null && admitted.IsAdmitted;
             That(decision.Accepted == expected, "the host admits exactly what the rules admit (" + decision.Message + "): " + Convert.ToHexString(body));
+            if (decision.Accepted) continue;
 
-            // The test's content stand-in refuses without a report of its own; every other refusal is the policy's.
-            if (!decision.Accepted && !(readable && proved && content.Admit(sentContent) != null))
-            {
-                That(AdmissionReport.TryDecode(decision.Report, out _, out _), "and every refusal of the policy's own carries a readable report");
-            }
+            // Every refusal carries a readable report, a content refusal included, and that one names its problems.
+            That(AdmissionReport.TryDecode(decision.Report, out var code, out var problems), "and every refusal carries a readable report: " + Convert.ToHexString(body));
+            if (admitted != null) That(code == admitted.Code && problems.SequenceEqual(admitted.Problems), "a content refusal reports the content's code and problems");
         }
     }
 

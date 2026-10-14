@@ -482,7 +482,8 @@ namespace TopiaForge.Multiplayer.Engine
             unboundStates.Remove(record.Key);
             if (!record.CanDecode(staged.Bytes))
             {
-                ReportCodecFailure("replicated state '" + record.Key + "'", "The canonical value does not match the local codec.");
+                // The host's value cannot be shown, so the session ends, as it does for an object adopted the same way.
+                FailContract("replicated state '" + record.Key + "'");
                 return;
             }
 

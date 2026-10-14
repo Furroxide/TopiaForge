@@ -64,6 +64,27 @@ namespace TopiaForge.Multiplayer.Network
             return WireText.ToHex(source);
         }
 
+        /// <summary>
+        /// Names the network a UDP path comes from, as a host's password limits count it: the IPv4 address, or the /64
+        /// of an IPv6 address with its scope, and never the port, so one machine cannot pass for many by changing ports or
+        /// the addresses its /64 gives it. A leading family byte keeps the two kinds apart. The bytes never leave the
+        /// network layer, which hashes them before anything else sees them. Null for any other kind of path.
+        /// </summary>
+        internal static byte[]? NetworkOf(TransportPath path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var key = path.KeyBytes;
+            if (key.Length != KeySize || key[0] != UdpKeyType) return null;
+            var mapped = key[11] == 0xFF && key[12] == 0xFF;
+            for (var index = 1; mapped && index <= 10; index++) mapped = key[index] == 0;
+            if (mapped) return new byte[] { 4, key[13], key[14], key[15], key[16] };
+            var network = new byte[1 + 8 + 4];
+            network[0] = 6;
+            Buffer.BlockCopy(key, 1, network, 1, 8);
+            Buffer.BlockCopy(key, 19, network, 9, 4);
+            return network;
+        }
+
         /// <summary>Whether <paramref name="address"/> is on the local network: private, link-local, unique local or loopback.</summary>
         internal static TransportPathKind Classify(IPAddress address)
         {

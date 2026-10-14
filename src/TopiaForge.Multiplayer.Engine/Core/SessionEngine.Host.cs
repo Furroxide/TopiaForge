@@ -110,6 +110,25 @@ namespace TopiaForge.Multiplayer.Engine
             return true;
         }
 
+        /// <summary>
+        /// Gets how many joined connections have not yet acknowledged the session snapshot, so they do not yet receive
+        /// presentation events. A soak waits for this to reach zero before it checks that an event reaches everyone.
+        /// </summary>
+        internal int ConnectionsAwaitingReady
+        {
+            get
+            {
+                RequireOwnerThread();
+                var count = 0;
+                foreach (var connection in connections)
+                {
+                    if (connection.Phase == HostConnectionPhase.Accepted) count++;
+                }
+
+                return count;
+            }
+        }
+
         internal bool IsConnectedParticipant(ParticipantId id)
         {
             if (Role == EngineRole.Client) return FindClientParticipant(id)?.IsConnected ?? false;
@@ -347,7 +366,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             var decision = (options.JoinPolicy ?? DefaultJoinPolicy.Instance).Evaluate(
-                new JoinRequestContext(connection.Link, identity, request, RegisteredContracts(), connected, options.MaximumParticipants));
+                new JoinRequestContext(connection.Link, identity, request, RegisteredContracts(), connected, options.MaximumParticipants, returning: record != null));
             if (decision.Accepted && record == null) decision = AdmitNewParticipant(identity, request.DisplayName, out record) ?? decision;
             if (!decision.Accepted || record == null)
             {
