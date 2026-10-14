@@ -174,6 +174,7 @@ internal static class Program
             NetworkDescriptorTests.CanonicalJsonAcceptsOnlyOneSpelling();
             NetworkDescriptorTests.EncodingsHaveOneSpellingPerValue();
             NetworkDescriptorTests.DescriptorMembersMustAgree();
+            NetworkDescriptorTests.VersionsAreCheckedInLinearTime();
             NetworkDescriptorTests.SignedDescriptorsMatchTheSharedFixtures();
             NetworkDescriptorTests.DescriptorsRefuseWhatTheyCannotRepresent();
             NetworkDescriptorTests.SignedValuesCannotBeChangedFromOutside();

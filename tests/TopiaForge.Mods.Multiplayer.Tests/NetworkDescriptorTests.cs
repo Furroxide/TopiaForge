@@ -180,6 +180,26 @@ internal static class NetworkDescriptorTests
         That(!WireText.IsHex(Convert.ToHexString(bytes), 32) && !WireText.IsHex(WireText.ToHex(bytes)[..^2], 32), "uppercase or short hex is refused");
     }
 
+    internal static void VersionsAreCheckedInLinearTime()
+    {
+        // Pre-release identifiers made only of hyphens once sent the pattern into exponential backtracking: at the
+        // 64-character bound one check took tens of milliseconds, and a descriptor holds 514 versions.
+        var pathological = "0.0.0-0." + string.Concat(Enumerable.Repeat("--.", 18)) + "!";
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        for (var index = 0; index < 514; index++) That(!ServerDescriptor.IsSemanticVersion(pathological), "a malformed version is refused");
+        That(watch.ElapsedMilliseconds < 2_000, "a descriptor's worth of hostile versions is checked quickly (" + watch.ElapsedMilliseconds + " ms)");
+
+        foreach (var valid in new[] { "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-0.3.7", "1.0.0-x.7.z.92", "1.0.0-x-y-z.--", "1.0.0-1a", "1.0.0-a1+b.2", "1.0.0--" })
+        {
+            That(ServerDescriptor.IsSemanticVersion(valid), valid + " is a semantic version");
+        }
+
+        foreach (var invalid in new[] { "1.0.0-01", "1.0.0-", "1.0.0-a..b", "1.0.0+", "01.0.0", "1.0.0-a_b" })
+        {
+            That(!ServerDescriptor.IsSemanticVersion(invalid), invalid + " is not");
+        }
+    }
+
     internal static void DescriptorMembersMustAgree()
     {
         var fixture = NetworkFixtures.Load("descriptor/cases.json");
