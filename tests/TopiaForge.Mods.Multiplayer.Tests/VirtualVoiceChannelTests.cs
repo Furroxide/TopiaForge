@@ -4,8 +4,9 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// The rig's virtual transport now models both channel contracts of the real one. Session stays reliable and ordered;
-/// Realtime and Voice are unreliable and sequenced: loss is final, older datagrams are dropped, and nothing waits behind
-/// the session stream. The bytes are markers here, so delivery order is visible.
+/// Realtime and Voice are unreliable and sequenced: loss is final, older datagrams are dropped, nothing waits behind the
+/// session stream, and a datagram the link cannot carry in time is shed. The bytes are markers here, so delivery order
+/// is visible.
 /// </summary>
 internal static class VirtualVoiceChannelTests
 {
@@ -114,14 +115,15 @@ internal static class VirtualVoiceChannelTests
             "bytes are counted per channel");
         Assert(direction.BytesSent == 1_001 && direction.BytesDelivered == 1_001, "and together");
 
-        // Datagram bytes still count against the link: a session frame sent after ten 100-byte datagrams waits for them.
+        // Datagram bytes still count against the link: a session frame sent after four 100-byte datagrams, as many as the
+        // lane takes at once at this rate, waits for them.
         network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 6_000 });
         pair = network.Connect("client");
-        for (var index = 0; index < 10; index++) pair.ClientEnd.Send(EngineChannel.Voice, new ArraySegment<byte>(Enumerable.Repeat((byte)index, 100).ToArray()));
+        for (var index = 0; index < 4; index++) pair.ClientEnd.Send(EngineChannel.Voice, new ArraySegment<byte>(Enumerable.Repeat((byte)index, 100).ToArray()));
         pair.ClientEnd.Send(EngineChannel.Session, Marker(1));
         heard = Deliver(network, pair, 20);
-        Assert(heard.Single(item => item.Channel == EngineChannel.Session).Tick >= 11, "the session frame waits for the datagrams' bytes");
-        Assert(heard.Count(item => item.Channel == EngineChannel.Voice) == 10, "and every datagram arrives");
+        Assert(heard.Single(item => item.Channel == EngineChannel.Session).Tick >= 6, "the session frame waits for the datagrams' bytes");
+        Assert(heard.Count(item => item.Channel == EngineChannel.Voice) == 4, "and every datagram arrives");
 
         // At 32 KiB/s, a 256 KiB session frame takes eight seconds; voice sent behind it still arrives within two ticks.
         network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 32 * 1_024 });
@@ -184,6 +186,52 @@ internal static class VirtualVoiceChannelTests
             while (pair.HostEnd.TryReceive(out _, out _)) received++;
             Assert(received == 100 * (int)tick, "by tick " + (tick + 1) + " everything sent two ticks before has arrived (" + received + ")");
         }
+    }
+
+    internal static void ADatagramTheLinkCannotCarryInTimeIsShed()
+    {
+        // 6,000 bytes a second is 100 bytes a tick. Ten 100-byte datagrams sent at once would take ten ticks: those whose
+        // lane is already more than three ticks behind are shed, cost the link nothing, and never arrive.
+        var network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 6_000 });
+        var pair = network.Connect("client");
+        for (var index = 0; index < 10; index++) pair.ClientEnd.Send(EngineChannel.Voice, Filled(index, 100));
+        pair.ClientEnd.Send(EngineChannel.Session, Marker(99));
+        var heard = Deliver(network, pair, 15);
+        Assert(heard.Where(item => item.Channel == EngineChannel.Voice).Select(item => (item.Marker, item.Tick))
+                .SequenceEqual(new[] { (0, 2UL), (1, 3UL), (2, 4UL), (3, 5UL) }),
+            "the four datagrams the lane holds within three ticks arrive, one a tick");
+        Assert(heard.Single(item => item.Channel == EngineChannel.Session).Tick == 6,
+            "and the session frame waits only for them (tick " + heard.Single(item => item.Channel == EngineChannel.Session).Tick + ")");
+        var direction = pair.ClientEnd.Outbound!;
+        Assert(direction.DatagramsShed[(int)EngineChannel.Voice] == 6 && network.ShedDatagrams == 6, "the other six are counted as shed");
+        Assert(direction.ChannelFramesSent[(int)EngineChannel.Voice] == 4 && direction.ChannelBytesSent[(int)EngineChannel.Voice] == 400 &&
+               direction.DatagramsLost[(int)EngineChannel.Voice] == 0,
+            "and as neither sent nor lost: they never reached the wire");
+
+        // A 1,000-byte session frame puts the session lane ten ticks behind. Meanwhile a 100-byte voice datagram each tick
+        // is held to voice's share of the link, three eighths, after a burst of three ticks; a Realtime datagram has a
+        // share of its own. Once the session lane is within three ticks again, voice has the link to itself.
+        network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 6_000 });
+        pair = network.Connect("client");
+        heard = new List<(EngineChannel Channel, int Marker, ulong Tick)>();
+        pair.ClientEnd.Send(EngineChannel.Session, Filled(99, 1_000));
+        for (var index = 0; index < 10; index++)
+        {
+            pair.ClientEnd.Send(EngineChannel.Voice, Filled(10 + index, 100));
+            if (index == 4) pair.ClientEnd.Send(EngineChannel.Realtime, Filled(30, 100));
+            heard.AddRange(Deliver(network, pair, 1));
+        }
+
+        heard.AddRange(Deliver(network, pair, 5));
+        for (var index = 0; index < 3; index++) pair.ClientEnd.Send(EngineChannel.Voice, Filled(40 + index, 100));
+        heard.AddRange(Deliver(network, pair, 10));
+        Assert(heard.Where(item => item.Channel == EngineChannel.Voice).Select(item => item.Marker).SequenceEqual(new[] { 10, 11, 12, 13, 16, 18, 40, 41, 42 }),
+            "voice keeps its share while the session lane is behind, then all of the link (" +
+            string.Join(", ", heard.Where(item => item.Channel == EngineChannel.Voice).Select(item => item.Marker)) + ")");
+        Assert(heard.Any(item => item.Channel == EngineChannel.Realtime && item.Marker == 30), "the Realtime datagram is carried on its own share");
+        Assert(heard.Single(item => item.Channel == EngineChannel.Session).Tick == 11, "and the session frame keeps its ten ticks");
+        Assert(pair.ClientEnd.Outbound!.DatagramsShed[(int)EngineChannel.Voice] == 4 && pair.ClientEnd.Outbound!.DatagramsShed[(int)EngineChannel.Realtime] == 0,
+            "the four voice datagrams over the share are shed");
     }
 
     private static List<(EngineChannel Channel, int Marker, ulong Tick)> Deliver(VirtualEngineTransport network, VirtualLinkPair pair, int ticks)

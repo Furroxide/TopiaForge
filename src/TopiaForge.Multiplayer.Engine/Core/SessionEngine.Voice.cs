@@ -41,7 +41,6 @@ namespace TopiaForge.Multiplayer.Engine
     {
         private const string VoiceKickMessage = "The host removed this player for abusing voice chat.";
         private readonly long[] voiceDropped = new long[(int)VoiceDropReason.InboxOverflow + 1];
-        private readonly HashSet<string> localVoiceMutes = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<ulong, VoiceRosterEntry> voiceRoster = new Dictionary<ulong, VoiceRosterEntry>();
         private readonly Dictionary<string, VoiceModeration> voiceModeration = new Dictionary<string, VoiceModeration>(StringComparer.Ordinal);
         private VoiceRelayPolicy? voicePolicy;
@@ -53,7 +52,6 @@ namespace TopiaForge.Multiplayer.Engine
         private ulong nextSpeakerIndex;
         private ulong nextVoiceStream;
         private bool voiceRosterDirty;
-        private bool localVoiceMuteAll;
         private ulong voiceSequence;
         private ulong lastVoiceTimestamp;
         private bool hasVoiceTimestamp;
@@ -146,27 +144,6 @@ namespace TopiaForge.Multiplayer.Engine
             MarkVoiceRosterDirty();
             EndOperation();
             return true;
-        }
-
-        /// <summary>
-        /// Sets whom the local player does not want to hear. A client also sends the set to its host, reliably, so muted
-        /// speakers are never relayed to it; <paramref name="muteAll"/> stops all relayed voice.
-        /// </summary>
-        internal void SetListenerMutes(IReadOnlyCollection<ParticipantId> muted, bool muteAll = false)
-        {
-            if (muted == null) throw new ArgumentNullException(nameof(muted));
-            RequireOwnerThread();
-            if (muted.Count > ProtocolLimits.MaximumParticipants) throw new ArgumentException("Too many participants to mute.", nameof(muted));
-            localVoiceMutes.Clear();
-            foreach (var participant in muted)
-            {
-                if (!participant.IsValid) throw new ArgumentException("A muted participant id is invalid.", nameof(muted));
-                localVoiceMutes.Add(participant.Value);
-            }
-
-            localVoiceMuteAll = muteAll;
-            if (options.Voice != null && channel != null && channel.Phase != ClientPhase.AwaitingJoin) channel.VoiceMutesPending = true;
-            EndOperation();
         }
 
         /// <summary>Gets whether the host has muted <paramref name="participant"/>, by hand or automatically.</summary>
@@ -499,14 +476,6 @@ namespace TopiaForge.Multiplayer.Engine
             }
         }
 
-        /// <summary>Applies a client's listener mute set: the host stops relaying those speakers to it.</summary>
-        private static void ApplyVoiceMutes(HostConnection connection, ProtocolReader body)
-        {
-            VoiceMessages.ReadMutes(body, out var muteAll, out var muted);
-            connection.VoiceMuteAll = muteAll;
-            connection.VoiceMutes = muted;
-        }
-
         private void ApplyVoiceRoster(ProtocolReader body)
         {
             var entries = VoiceMessages.ReadRoster(body);
@@ -556,26 +525,16 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         /// <summary>
-        /// Forgets whom the local player muted. Participant ids name players within one session only, so a mute set made in
-        /// one session names nobody in another, and must never tell its host whom the player muted before.
-        /// </summary>
-        private void ForgetListenerMutes()
-        {
-            localVoiceMutes.Clear();
-            localVoiceMuteAll = false;
-        }
-
-        /// <summary>
         /// Forgets the voice of a session the process leaves for another role: what it held, heard and expected, the
-        /// moderation it kept as a host, and whom its player muted. A reconnect to the same session keeps the mutes; one
-        /// that finds another session forgets them too.
+        /// moderation it kept as a host, and whom its player muted. A join decides for itself whether the mutes stay; see
+        /// <see cref="AdoptListenerMutes"/>.
         /// </summary>
         private void RetireVoice()
         {
             ResetClientVoice();
             if (options.Voice != null) voicePace = new VoiceSpeaker(1, options.Voice);
             voiceModeration.Clear();
-            ForgetListenerMutes();
+            RetireListenerMutes();
             voiceRosterDirty = false;
             voiceSequence = 0;
             lastVoiceTimestamp = 0;

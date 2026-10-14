@@ -291,10 +291,98 @@ internal static class VoiceRelayPolicyTests
         }
     }
 
-    internal static byte[] Datagram(FakeVoiceCodec codec, ulong sequence, ulong timestamp, bool pair = false)
+    internal static void FloodsJustPastTwiceALimitAreRateLimitedWithoutStrikesEnoughToMute()
     {
-        var first = codec.Packet((short)(timestamp + 1), (short)timestamp);
-        var second = pair ? codec.Packet((short)(timestamp + 2), (short)(timestamp + 1)) : Array.Empty<byte>();
+        // Floods only just past twice a limit are cut down to the limits and never muted, because they strike too seldom.
+        // Each runs for ten minutes with datagrams evenly spaced; sequences start at 16,384, so every datagram keeps the
+        // same size: two 160-byte frames make 334 bytes, one 20-byte frame 30.
+        var big = new FakeVoiceCodec(160);
+        var small = new FakeVoiceCodec(20);
+        foreach (var perSecond in new[] { 31, 32, 33 })
+        {
+            // The bitrate limit is what drops these, so the byte formula gives the first strike: 50,000 / (b - 10,000) s.
+            var run = Flood(perSecond, _ => (big, true));
+            var predicted = 50_000 * Second / ((334 * perSecond) - 10_000);
+            Assert(Math.Abs(run.FirstStrikeMicros - predicted) <= Second,
+                "334-byte datagrams at " + perSecond + " a second are first struck when the formula says, " + (predicted / 1_000) + " ms (" + run.Describe + ")");
+            Assert(run.Mutes == 0 && run.WorstWindow < 20, "but never twenty times in 10 s, so never muted (" + run.Describe + ")");
+            Assert(run.RelayedBytes <= (600 + 1) * 5_000, "and what passes stays within the bitrate (" + run.Describe + ")");
+        }
+
+        // One more a second is past the edge: twenty strikes fall within 10 s, and the speaker is muted.
+        var past = Flood(34, _ => (big, true));
+        Assert(past.Mutes > 0 && past.FirstMuteMicros <= 50 * Second, "334-byte datagrams at 34 a second are muted within 50 s (" + past.Describe + ")");
+
+        // Large and small datagrams in turn, 60 a second: the datagram limit drops every other one before the bitrate is
+        // reached, so the bitrate allowance is never spent and nothing strikes, though the flood is about 87 kbit/s and
+        // the byte formula would put a first strike at 54 s.
+        var mixed = Flood(60, index => index % 2 == 0 ? (big, true) : (small, false));
+        Assert(mixed.Strikes == 0 && mixed.Mutes == 0, "alternating 334- and 30-byte datagrams at 60 a second are never struck (" + mixed.Describe + ")");
+        Assert(mixed.RelayedBytes <= (600 + 1) * 5_000 && mixed.Relayed <= (600 + 1) * 30, "and what passes stays within both limits (" + mixed.Describe + ")");
+
+        static FloodRun Flood(int perSecond, Func<int, (FakeVoiceCodec Codec, bool Pair)> shape)
+        {
+            var options = new VoiceOptions(new FakeVoiceCodec(160));
+            options.Validate();
+            var policy = new VoiceRelayPolicy(options);
+            var speaker = new VoiceSpeaker(1, options);
+            var strikeTimes = new List<long>();
+            var run = new FloodRun { FirstStrikeMicros = -1 };
+            for (var index = 0; index < perSecond * 600; index++)
+            {
+                var now = index * Second / perSecond;
+                var (codec, pair) = shape(index);
+                var datagram = Datagram(codec, 16_384 + (ulong)(2 * index), 16_384 + (ulong)(2 * index), pair, fixedIds: true);
+                run.OfferedBytes += datagram.Length;
+                var admission = policy.Admit(speaker, datagram, now);
+                if (admission.Struck)
+                {
+                    strikeTimes.Add(now);
+                    if (run.FirstStrikeMicros < 0) run.FirstStrikeMicros = now;
+                }
+
+                if (admission.Verdict is VoiceVerdict.AutoMute or VoiceVerdict.Kick)
+                {
+                    if (run.Mutes++ == 0) run.FirstMuteMicros = now;
+                }
+                if (admission.Verdict != VoiceVerdict.Relay) continue;
+                run.Relayed++;
+                run.RelayedBytes += datagram.Length;
+            }
+
+            run.Strikes = strikeTimes.Count;
+            for (int first = 0, last = 0; last < strikeTimes.Count; last++)
+            {
+                while (strikeTimes[last] - strikeTimes[first] >= 10 * Second) first++;
+                run.WorstWindow = Math.Max(run.WorstWindow, last - first + 1);
+            }
+
+            return run;
+        }
+    }
+
+    private sealed class FloodRun
+    {
+        internal long OfferedBytes { get; set; }
+        internal long FirstStrikeMicros { get; set; }
+        internal long FirstMuteMicros { get; set; } = -1;
+        internal int Strikes { get; set; }
+        internal int WorstWindow { get; set; }
+        internal int Mutes { get; set; }
+        internal long Relayed { get; set; }
+        internal long RelayedBytes { get; set; }
+
+        internal string Describe =>
+            (OfferedBytes * 8 / 600 / 1_000) + " kbit/s offered, first strike " + (FirstStrikeMicros < 0 ? "never" : (FirstStrikeMicros / 1_000) + " ms") + ", " +
+            Strikes + " strikes, at most " + WorstWindow + " in 10 s, " + Mutes + " mutes" +
+            (FirstMuteMicros < 0 ? string.Empty : ", the first at " + (FirstMuteMicros / 1_000) + " ms") + ", " + Relayed + " relayed, " + RelayedBytes + " bytes";
+    }
+
+    internal static byte[] Datagram(FakeVoiceCodec codec, ulong sequence, ulong timestamp, bool pair = false, bool fixedIds = false)
+    {
+        // Fixed ids keep long floods away from id 0, the one-byte silence packet that a wrapped timestamp would produce.
+        var first = fixedIds ? codec.Packet(1, 1) : codec.Packet((short)(timestamp + 1), (short)timestamp);
+        var second = !pair ? Array.Empty<byte>() : fixedIds ? codec.Packet(2, 1) : codec.Packet((short)(timestamp + 2), (short)(timestamp + 1));
         var buffer = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
         var length = VoicePacket.WriteUplink(buffer, sequence, timestamp, VoiceFrameFlags.None, first, VoiceFrameFlags.None, second);
         return buffer.AsSpan(0, length).ToArray();

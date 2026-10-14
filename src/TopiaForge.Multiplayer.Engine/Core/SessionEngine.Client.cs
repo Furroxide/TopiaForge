@@ -212,12 +212,11 @@ namespace TopiaForge.Multiplayer.Engine
             var newSession = new MultiplayerSessionId(message.SessionId);
             if (joinedBefore && (!newSession.Equals(sessionId) || message.Epoch != epoch))
             {
-                // A reconnect that finds another session, as after the host restarted, keeps no listener mutes: they name
-                // the old session's players, and the new host must not learn them.
-                if (!newSession.Equals(sessionId)) ForgetListenerMutes();
                 ResetLocalSession(newSession, new SessionSeed(message.Seed), message.Epoch, "The multiplayer session was replaced.");
             }
 
+            // Listener mutes follow the people, not the session id: see AdoptListenerMutes.
+            AdoptListenerMutes(current.Link.PeerIdentity, message.RecordKept);
             sessionId = newSession;
             seed = new SessionSeed(message.Seed);
             epoch = message.Epoch;

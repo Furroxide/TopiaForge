@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using TopiaForge.Mods;
 
 namespace TopiaForge.Multiplayer.Engine
 {
@@ -26,15 +25,35 @@ namespace TopiaForge.Multiplayer.Engine
     /// duplicates discarded by sequence. Realtime and Voice are unreliable and sequenced, one datagram per frame: loss
     /// is final, a datagram older than one already delivered on its channel is dropped, and nothing on them waits behind
     /// Session frames. Datagrams serialize in a lane of their own, as the real transport writes queued datagrams first
-    /// in every packet, but their bytes still count against the link, so later Session frames wait for them. Time on the
-    /// link is kept in millionths of a tick and rounded up only to the tick a frame is delivered in, so a small frame
-    /// costs its bytes, never a whole tick. In-flight frames are dropped when a link is severed. The test rig drives it;
-    /// the bytes are the engine's own.
+    /// in every packet, but their bytes still count against the link, so later Session frames wait for them. A datagram
+    /// the link cannot carry in time is shed rather than queued, as the real transport drops datagrams first: see
+    /// <see cref="DatagramBacklogTicks"/>. Time on the link is kept in millionths of a tick and rounded up only to the
+    /// tick a frame is delivered in, so a small frame costs its bytes, never a whole tick. In-flight frames are dropped
+    /// when a link is severed. The test rig drives it; the bytes are the engine's own.
     /// </summary>
     internal sealed class VirtualEngineTransport
     {
         /// <summary>The fractions of a tick in which a direction's busy times are kept.</summary>
         internal const ulong SubTicksPerTick = 1_000_000;
+
+        /// <summary>
+        /// How far behind now a lane may already be for a datagram to join it: three ticks, 50 ms at 60 ticks a second.
+        /// A datagram whose lane is further behind is shed and counted, as the real connection drops the datagrams its
+        /// queue cannot hold. While the Session lane is further behind than this, each datagram channel may also take
+        /// only its share of the link (<see cref="VoiceShareOf256"/>, <see cref="RealtimeShareOf256"/>), so Session
+        /// keeps the rest. 50 ms is longer than the 40 ms between one talker's datagrams, so a link fast enough for all
+        /// its talkers clears a burst of one datagram from each before the next arrives.
+        /// </summary>
+        internal const ulong DatagramBacklogTicks = 3;
+
+        /// <summary>
+        /// Voice's share of a link whose Session lane is behind, in 256ths: the real transport caps Voice at 96 of each
+        /// connection's 256 kbit/s.
+        /// </summary>
+        internal const ulong VoiceShareOf256 = 96;
+
+        /// <summary>Realtime's share of a link whose Session lane is behind, in 256ths: the real transport's 64 of 256 kbit/s.</summary>
+        internal const ulong RealtimeShareOf256 = 64;
 
         private readonly VirtualLinkConditions conditions;
         private readonly List<ScheduledFrame> inFlight = new List<ScheduledFrame>();
@@ -51,6 +70,9 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>Gets or sets the current tick; frames sent now are scheduled relative to it.</summary>
         internal ulong Now { get; set; }
+
+        /// <summary>Gets how many datagrams every link together has shed; each direction counts its own per channel.</summary>
+        internal long ShedDatagrams { get; private set; }
 
         /// <summary>
         /// Gets whether a frame that will still be delivered without outside help is in flight. Frames held until a
@@ -187,17 +209,25 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>
         /// Sends one unreliable, sequenced datagram. It shares the link's rate with the session channel but never waits
-        /// behind it. A lost datagram stays lost, a delayed one may arrive after a newer one and be dropped, and a
+        /// behind it. One the link cannot carry in time is shed: it never reaches the wire, costs the link nothing and
+        /// takes no sequence. A lost datagram stays lost, a delayed one may arrive after a newer one and be dropped, and a
         /// duplicate arrives a tick later and is dropped by its sequence.
         /// </summary>
         private void SendDatagram(VirtualDirection direction, EngineChannel channel, byte[] bytes)
         {
+            var now = Now * SubTicksPerTick;
+            var serialization = SerializationSubTicks(bytes.Length);
+            if (!CanCarry(direction, channel, now, serialization))
+            {
+                direction.DatagramsShed[(int)channel]++;
+                ShedDatagrams++;
+                return;
+            }
+
             var sequence = ++direction.DatagramSent[(int)channel];
             frameOrdinal++;
             var baseDelay = (ulong)Math.Max(1, conditions.LatencyTicks);
             if (Hits(conditions.ReorderEvery)) baseDelay++;
-            var now = Now * SubTicksPerTick;
-            var serialization = SerializationSubTicks(bytes.Length);
             var sent = Math.Max(now, direction.DatagramBusyUntil) + serialization;
             direction.DatagramBusyUntil = sent;
             direction.SessionBusyUntil = Math.Max(direction.SessionBusyUntil, now) + serialization;
@@ -214,6 +244,33 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 inFlight.Add(new ScheduledFrame(deliverAt + 1, ++scheduleOrdinal, direction, sequence, channel, (byte[])bytes.Clone(), false));
             }
+        }
+
+        /// <summary>
+        /// Decides whether the link carries a datagram of <paramref name="serialization"/> sub-ticks. Its lane must not be
+        /// more than <see cref="DatagramBacklogTicks"/> behind now. While the Session lane is that far behind, the channel
+        /// must also have its share left: a bucket as deep as the bound, refilled at the channel's share of the link. A link
+        /// with no rate carries everything.
+        /// </summary>
+        private static bool CanCarry(VirtualDirection direction, EngineChannel channel, ulong now, ulong serialization)
+        {
+            if (serialization == 0) return true;
+            const ulong Bound = DatagramBacklogTicks * SubTicksPerTick;
+            if (direction.DatagramBusyUntil > now + Bound) return false;
+            var index = (int)channel;
+            var share = channel == EngineChannel.Voice ? VoiceShareOf256 : RealtimeShareOf256;
+            if (now > direction.ShareRefilledAt[index])
+            {
+                // A bound's worth of time at the full rate refills any bucket, so longer gaps cannot overflow.
+                var elapsed = Math.Min(now - direction.ShareRefilledAt[index], Bound * 256);
+                direction.ShareTokens[index] = Math.Min(Bound, direction.ShareTokens[index] + (elapsed * share / 256));
+                direction.ShareRefilledAt[index] = now;
+            }
+
+            if (direction.SessionBusyUntil <= now + Bound) return true;
+            if (direction.ShareTokens[index] < serialization) return false;
+            direction.ShareTokens[index] -= serialization;
+            return true;
         }
 
         /// <summary>Holds the next <paramref name="frames"/> frames on a direction, and everything behind them, until released.</summary>
@@ -375,192 +432,6 @@ namespace TopiaForge.Multiplayer.Engine
 
             internal bool HeldByTest { get; set; }
             internal bool LostForever { get; set; }
-        }
-    }
-
-    internal readonly struct VirtualLinkPair
-    {
-        internal VirtualLinkPair(VirtualLinkEnd hostEnd, VirtualLinkEnd clientEnd)
-        {
-            HostEnd = hostEnd;
-            ClientEnd = clientEnd;
-        }
-
-        internal VirtualLinkEnd HostEnd { get; }
-        internal VirtualLinkEnd ClientEnd { get; }
-    }
-
-    /// <summary>One direction of a virtual link: its send sequence, FIFO schedule and delivery cursor.</summary>
-    internal sealed class VirtualDirection
-    {
-        internal VirtualDirection(VirtualLinkEnd receiver)
-        {
-            Receiver = receiver;
-        }
-
-        internal VirtualLinkEnd Receiver { get; }
-        internal ulong SentSequence { get; set; }
-        internal ulong DeliveredSequence { get; set; }
-        internal ulong LastDeliverAt { get; set; }
-        internal bool Severed { get; set; }
-        internal bool Closing { get; set; }
-
-        /// <summary>Gets or sets whether due frames are held back, as on an interrupted path.</summary>
-        internal bool Held { get; set; }
-
-        /// <summary>Gets or sets the tick before which due frames are held, as during a partition.</summary>
-        internal ulong HeldUntilTick { get; set; }
-
-        /// <summary>Gets or sets whether a test is holding frames on this direction until it releases them.</summary>
-        internal bool HoldsFrames { get; set; }
-
-        internal int HoldBudget { get; set; }
-        internal int DropBudget { get; set; }
-
-        /// <summary>
-        /// Gets or sets when the link is free for the next Session frame, in millionths of a tick
-        /// (<see cref="VirtualEngineTransport.SubTicksPerTick"/>); datagram bytes push it back too.
-        /// </summary>
-        internal ulong SessionBusyUntil { get; set; }
-
-        /// <summary>Gets or sets when the datagram lane is free, in millionths of a tick; it never waits for Session frames.</summary>
-        internal ulong DatagramBusyUntil { get; set; }
-
-        /// <summary>Gets the first tick at which the link is free for the next Session frame.</summary>
-        internal ulong BusyUntilTick => VirtualEngineTransport.CeilingTick(SessionBusyUntil);
-        internal byte[]? LastFrame { get; set; }
-        internal ulong LastSequence { get; set; }
-        internal EngineChannel LastChannel { get; set; }
-        /// <summary>Gets the bytes sent on every channel together.</summary>
-        internal long BytesSent { get; set; }
-
-        internal long FramesSent { get; set; }
-
-        /// <summary>Gets the bytes delivered on every channel together, not counting dropped copies.</summary>
-        internal long BytesDelivered { get; set; }
-
-        internal long FramesDelivered { get; set; }
-
-        /// <summary>Gets each datagram channel's last sequence sent, indexed by <see cref="EngineChannel"/>.</summary>
-        internal ulong[] DatagramSent { get; } = new ulong[ChannelCount];
-
-        /// <summary>Gets each datagram channel's newest sequence delivered; anything older is dropped.</summary>
-        internal ulong[] DatagramDelivered { get; } = new ulong[ChannelCount];
-
-        /// <summary>Gets each datagram channel's datagrams lost, on the wire or to a path that was down.</summary>
-        internal long[] DatagramsLost { get; } = new long[ChannelCount];
-
-        /// <summary>Gets each datagram channel's datagrams dropped for arriving behind a newer one, duplicates included.</summary>
-        internal long[] DatagramsStale { get; } = new long[ChannelCount];
-
-        internal long[] ChannelBytesSent { get; } = new long[ChannelCount];
-        internal long[] ChannelFramesSent { get; } = new long[ChannelCount];
-        internal long[] ChannelBytesDelivered { get; } = new long[ChannelCount];
-        internal long[] ChannelFramesDelivered { get; } = new long[ChannelCount];
-
-        private const int ChannelCount = 3;
-
-        internal void CountSent(EngineChannel channel, int bytes)
-        {
-            BytesSent += bytes;
-            FramesSent++;
-            ChannelBytesSent[(int)channel] += bytes;
-            ChannelFramesSent[(int)channel]++;
-        }
-
-        internal void CountDelivered(EngineChannel channel, int bytes)
-        {
-            BytesDelivered += bytes;
-            FramesDelivered++;
-            ChannelBytesDelivered[(int)channel] += bytes;
-            ChannelFramesDelivered[(int)channel]++;
-        }
-    }
-
-    /// <summary>One end of a virtual link, as an engine sees it.</summary>
-    internal sealed class VirtualLinkEnd : IEngineLink
-    {
-        private readonly VirtualEngineTransport transport;
-        /// <summary>The datagrams a link holds for its reader, as the real transport's connection does; more drop the oldest.</summary>
-        internal const int MaximumInboundDatagrams = 128;
-
-        private readonly Queue<KeyValuePair<EngineChannel, byte[]>> datagrams = new Queue<KeyValuePair<EngineChannel, byte[]>>();
-        private readonly Queue<byte[]> sessionFrames = new Queue<byte[]>();
-
-        private readonly byte[] channelBinding;
-
-        internal VirtualLinkEnd(VirtualEngineTransport transport, string peerIdentity, byte[] channelBinding)
-        {
-            this.transport = transport;
-            PeerIdentity = peerIdentity;
-            this.channelBinding = (byte[])channelBinding.Clone();
-        }
-
-        public string PeerIdentity { get; }
-
-        public MultiplayerPlayerKey PlayerKey => default;
-
-        public byte[] ChannelBinding => (byte[])channelBinding.Clone();
-
-        public EngineLinkState State { get; internal set; } = EngineLinkState.Open;
-
-        internal VirtualDirection? Outbound { get; set; }
-
-        internal VirtualLinkEnd? Peer { get; set; }
-
-        internal int PendingFrames => datagrams.Count + sessionFrames.Count;
-
-        /// <summary>Gets the datagrams dropped because the reader left more than the link holds waiting.</summary>
-        internal long DatagramsOverflowed { get; private set; }
-
-        public void Send(EngineChannel channel, ArraySegment<byte> frame)
-        {
-            if (State == EngineLinkState.Closed) return;
-            var copy = new byte[frame.Count];
-            Buffer.BlockCopy(frame.Array!, frame.Offset, copy, 0, frame.Count);
-            transport.Send(this, channel, copy);
-        }
-
-        /// <summary>Dequeues the next frame: waiting datagrams first, then session frames in order, as the real transport does.</summary>
-        public bool TryReceive(out EngineChannel channel, out byte[] frame)
-        {
-            if (datagrams.Count > 0)
-            {
-                var next = datagrams.Dequeue();
-                channel = next.Key;
-                frame = next.Value;
-                return true;
-            }
-
-            if (sessionFrames.Count > 0)
-            {
-                channel = EngineChannel.Session;
-                frame = sessionFrames.Dequeue();
-                return true;
-            }
-
-            channel = EngineChannel.Session;
-            frame = Array.Empty<byte>();
-            return false;
-        }
-
-        public void Close() => transport.Close(this);
-
-        internal void Deliver(EngineChannel channel, byte[] frame)
-        {
-            if (channel == EngineChannel.Session)
-            {
-                sessionFrames.Enqueue(frame);
-                return;
-            }
-
-            if (datagrams.Count == MaximumInboundDatagrams)
-            {
-                datagrams.Dequeue();
-                DatagramsOverflowed++;
-            }
-
-            datagrams.Enqueue(new KeyValuePair<EngineChannel, byte[]>(channel, frame));
         }
     }
 }

@@ -5,7 +5,8 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// What voice costs on the wire and what it shares with the session stream: a four-speaker session against the
-/// transport's class budgets, voice under session load, frame pairing, and the bounded receive queue.
+/// transport's class budgets, voice under session load, frame pairing, the bounded receive queue, and voice the link
+/// cannot carry shed while the session stream keeps its pace.
 /// </summary>
 internal static class VoiceBudgetTests
 {
@@ -206,6 +207,95 @@ internal static class VoiceBudgetTests
         Assert(limited <= free + 33_334,
             "voice on the rate-limited link is within a tick a hop of a free one (" + (limited / 1_000) + " ms against " + (free / 1_000) + " ms)");
         Assert(backlog <= 1, "and after five seconds the listener's session stream is not waiting behind voice (" + backlog + " ticks)");
+    }
+
+    internal static void AVoiceOverloadIsShedAndTheSessionLaneKeepsItsPace()
+    {
+        // Three talkers of 80-byte frames send one listener about 12,800 bytes a second over links of 8,000: more voice
+        // than the link carries. The host also sends the listener a 100-byte session message ten times a second, as
+        // snapshots would. The rig sheds the voice its link cannot carry in time, as the real transport drops voice
+        // first, so the voice that arrives is fresh and the session lane keeps its pace. Before, every frame arrived but
+        // the worst 6.2 s late, and the session lane and its messages fell 440 ticks behind in ten seconds.
+        const ulong Bound = VirtualEngineTransport.DatagramBacklogTicks;
+        var alone = Run(1);
+        var overloaded = Run(3);
+        var measured = " (worst frame " + (overloaded.WorstVoice / 1_000) + " ms against " + (alone.WorstVoice / 1_000) + " ms for one talker, session lane " +
+                       overloaded.Backlog + " ticks behind, worst session message " + overloaded.WorstSession + " ticks, " + overloaded.Heard + " of 1,500 frames heard, " +
+                       overloaded.Shed + " datagrams shed)";
+        Assert(alone.Shed == 0 && alone.Heard == 500 && alone.UplinkShed == 0, "one talker fits the link, and nothing of it is shed");
+        Assert(overloaded.Shed > 0 && overloaded.Heard + (2 * overloaded.Shed) == 1_500,
+            "three do not: the listener hears every frame but those of the datagrams its link shed, two to each" + measured);
+        Assert(overloaded.UplinkShed == 0, "each talker's own uplink, within the rate, sheds nothing");
+        Assert(overloaded.WorstVoice <= alone.WorstVoice + ((long)(Bound + 2) * 16_667),
+            "what arrives is at most the bound and a datagram later than one talker's voice on the same link" + measured);
+        Assert(overloaded.WorstSession <= (2 * Bound) + 3 && overloaded.Backlog <= (2 * Bound) + 3,
+            "every session message arrives within nine ticks, and the lane ends as close: it keeps its pace" + measured);
+
+        (long WorstVoice, ulong Backlog, ulong WorstSession, int Heard, long Shed, long UplinkShed) Run(int talkerCount)
+        {
+            using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 8_000 }, packetBytes: 80);
+            var talkers = new[] { "a", "b", "c" }.Take(talkerCount).Select(name => rig.AddClient(name)).ToList();
+            var (listener, link) = rig.AddClient("d");
+            var ears = rig.Listen(listener);
+            var hostEnd = link.Peer!;
+            var downlink = hostEnd.Outbound!;
+            var message = IgnorableMessage(100);
+            var start = rig.NowMicros;
+            for (var index = 0; index < talkers.Count; index++) rig.Talk(talkers[index].Engine, (short)(1000 * (index + 1)), 500);
+            var worstSession = 0UL;
+            for (var tick = 0; tick < 10 * 60; tick++)
+            {
+                if (tick % 6 == 0)
+                {
+                    hostEnd.Send(EngineChannel.Session, new ArraySegment<byte>(message));
+                    worstSession = Math.Max(worstSession, downlink.LastDeliverAt - rig.Tick);
+                }
+
+                rig.Advance();
+            }
+
+            var backlog = downlink.BusyUntilTick > rig.Tick ? downlink.BusyUntilTick - rig.Tick : 0;
+            rig.Flush();
+            var worstVoice = ears.Frames.Max(frame => frame.ArrivalMicros - (start + ((long)frame.Timestamp * VoiceSessionHarness.FrameMicros)));
+            var uplinkShed = talkers.Sum(talker => talker.Link.Outbound!.DatagramsShed[(int)EngineChannel.Voice]);
+            return (worstVoice, backlog, worstSession, ears.Frames.Count, downlink.DatagramsShed[(int)EngineChannel.Voice], uplinkShed);
+        }
+    }
+
+    internal static void VoiceWithinTheRateIsNeverShed()
+    {
+        // The same three talkers over links of 16,000 bytes a second, which carry them: the listener hears every frame.
+        using (var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 16_000 }, packetBytes: 80))
+        {
+            var talkers = new[] { "a", "b", "c" }.Select(name => rig.AddClient(name).Engine).ToList();
+            var (listener, _) = rig.AddClient("d");
+            var ears = rig.Listen(listener);
+            for (var index = 0; index < talkers.Count; index++) rig.Talk(talkers[index], (short)(1000 * (index + 1)), 500);
+            rig.Advance(10 * 60);
+            rig.Flush();
+            Assert(ears.Frames.Count == 1_500, "a link with room for the voice carries all of it (" + ears.Frames.Count + " of 1,500 frames)");
+            Assert(rig.Network.ShedDatagrams == 0, "and sheds none of it, on any link");
+        }
+
+        // One talker, while the host sends the listener an 8 KiB session message every second, which takes the link half a
+        // second each. Voice stays within its share of the link meanwhile, so none of it is shed either.
+        using (var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 16_000 }, packetBytes: 80))
+        {
+            var talker = rig.AddClient("a").Engine;
+            var (listener, link) = rig.AddClient("d");
+            var ears = rig.Listen(listener);
+            var message = IgnorableMessage(8 * 1_024);
+            rig.Talk(talker, 1000, 500);
+            for (var tick = 0; tick < 10 * 60; tick++)
+            {
+                if (tick % 60 == 0) link.Peer!.Send(EngineChannel.Session, new ArraySegment<byte>(message));
+                rig.Advance();
+            }
+
+            rig.Flush();
+            Assert(ears.Frames.Count == 500, "voice beside large session messages arrives in full (" + ears.Frames.Count + " of 500 frames)");
+            Assert(rig.Network.ShedDatagrams == 0, "none of it shed while the session lane was behind");
+        }
     }
 
     /// <summary>One session frame holding a single ignorable message of <paramref name="bytes"/> bytes.</summary>

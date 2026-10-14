@@ -289,6 +289,15 @@ internal static class Program
             VoiceModerationTests.AFullTableForgetsWhoeverWasSeenLongestAgo();
             VoiceRestartTests.ARestartIsHeardFromTheDatagramBesideItsAcknowledgement();
             VoiceRestartTests.ARestartIsNoticedWhenItsFirstDatagramIsLost();
+            VoiceMuteTests.JoinAcceptedSaysWhetherTheHostKeptTheRecord();
+            VoiceMuteTests.MutesSurviveAnInPlaceReplacementHoweverTheClientResynchronizes();
+            VoiceMuteTests.MutesStayBehindWhenTheRecordExpired();
+            VoiceMuteTests.MutesMadeWithOneHostNeverReachAnother();
+            VoiceMuteTests.AMuteSetMadeWhileJoiningAppliesToTheSessionTheJoinFinds();
+            VirtualVoiceChannelTests.ADatagramTheLinkCannotCarryInTimeIsShed();
+            VoiceBudgetTests.AVoiceOverloadIsShedAndTheSessionLaneKeepsItsPace();
+            VoiceBudgetTests.VoiceWithinTheRateIsNeverShed();
+            VoiceRelayPolicyTests.FloodsJustPastTwiceALimitAreRateLimitedWithoutStrikesEnoughToMute();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
