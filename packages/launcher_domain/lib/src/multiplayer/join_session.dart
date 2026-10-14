@@ -87,6 +87,7 @@ abstract final class JoinSession {
       JoinFailureCode.protocolMismatch,
       JoinFailureCode.admissionChanged,
       JoinFailureCode.disconnected,
+      JoinFailureCode.directNotAllowed,
     },
     JoinStage.synchronizing: {
       JoinFailureCode.snapshotFailed,

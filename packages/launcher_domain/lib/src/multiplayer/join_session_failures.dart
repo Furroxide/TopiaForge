@@ -32,7 +32,9 @@ enum JoinFailureCode {
   descriptorInvalid,
 
   /// Reaching the host would show it the player's address, and the player
-  /// did not allow a direct path for this session.
+  /// did not allow a direct path for this session. The launcher reports it
+  /// before any contact; the game reports it while connecting, when it
+  /// resolves the target again and the network has changed since.
   directNotAllowed,
 
   /// A typed address served a different server than it did before: its
