@@ -321,7 +321,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             var decision = (options.JoinPolicy ?? DefaultJoinPolicy.Instance).Evaluate(
-                new JoinRequestContext(identity, request, RegisteredContracts(), connected, options.MaximumParticipants));
+                new JoinRequestContext(connection.Link, identity, request, RegisteredContracts(), connected, options.MaximumParticipants));
             if (decision.Accepted && record == null) decision = AdmitNewParticipant(identity, request.DisplayName, out record) ?? decision;
             if (!decision.Accepted || record == null)
             {
