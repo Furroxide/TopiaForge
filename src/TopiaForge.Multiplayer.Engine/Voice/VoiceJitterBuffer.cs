@@ -22,8 +22,8 @@ namespace TopiaForge.Multiplayer.Engine
     }
 
     /// <summary>
-    /// Turns one speaker's voice frames, which arrive late, early, twice, out of order or not at all, into exactly one frame
-    /// of audio per <see cref="Pull"/>, which the playback clock calls once per frame. It belongs to one thread.
+    /// Turns one speaker's voice frames, which arrive early, late or not at all, into exactly one frame of audio per
+    /// <see cref="Pull"/>, which the playback clock calls once per frame. It belongs to one thread.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -34,6 +34,12 @@ namespace TopiaForge.Multiplayer.Engine
     /// fade to silence and the spurt ends. A gap the talker made on purpose plays as silence: the unbroken sequence
     /// numbers across it reveal it, and so does a silence (discontinuous) frame before it. A pause longer than the
     /// maximum delay ends the spurt, as an end-of-talk frame does, so the next one fills to the target again.
+    /// </para>
+    /// <para>
+    /// The voice channel is sequenced, so one speaker's frames arrive in order, each at most once. A frame numbered at or
+    /// below one already received therefore comes from a new stream, after a reconnect or a restart, and resets the
+    /// buffer, its estimates and the decoder, however short the old stream was. A frame that arrives after its turn has
+    /// passed is late and dropped.
     /// </para>
     /// <para>
     /// Clock drift and changing network delay change how early frames arrive. <see cref="VoiceSlackWindow"/> watches the
@@ -133,10 +139,11 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
-            if (hasStream && (sequence + Slots < highestSequence || timestamp + Slots < lastPlayed))
+            if (hasStream && (sequence <= highestSequence || timestamp + Slots < lastPlayed))
             {
-                // The talker started a new stream, after a reconnect or a restart: its numbers no longer fit the old one.
-                // A sequenced channel never delivers a frame that far behind one it already delivered.
+                // The talker started a new stream, after a reconnect or a restart. A sequenced channel delivers one
+                // speaker's frames in order, so a number at or below one already seen can only come from a new stream,
+                // however short the old one was.
                 Statistics.Restarts++;
                 Reset();
             }

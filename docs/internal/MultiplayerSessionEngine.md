@@ -234,7 +234,10 @@ with the production channel contracts:
 - **Realtime and Voice:** one datagram per frame; loss is final; a datagram older than one already delivered on its
   channel is dropped, duplicates included; nothing waits behind session frames; a path that is down loses datagrams
   rather than holding them.
-- **Every channel** shares the link's rate, and a closed link drops what was in flight.
+- **Every channel** shares the link's rate: datagrams serialize in their own lane, as the real transport writes them
+  first in every packet, but their bytes push later session frames back. A closed link drops what was in flight.
+- **Reading:** a link returns waiting datagrams before session frames and holds at most 128 of them, dropping the
+  oldest, as the real connection does.
 
 `Advance()` pumps every engine at the current tick — the end-of-tick flush — then moves the tick, delivers due frames,
 and pumps again. `Flush()` advances until no frame is in flight and no engine has unsent or undelivered work.

@@ -247,12 +247,13 @@ internal static class Program
             VoiceJitterBufferTests.ASecondSpurtPlaysCleanlyOnceTheTargetHasAdapted();
             VoiceJitterBufferTests.MissingFramesUseFecThenConcealmentThenFade();
             VoiceJitterBufferTests.DriftIsCorrectedByDroppingOrInsertingFrames();
-            VoiceJitterBufferTests.ReorderedDuplicatedAndLateFramesAreHandled();
+            VoiceJitterBufferTests.LateFramesAreDroppedAndOldNumbersStartAgain();
             VoiceJitterBufferTests.PausesAndTalkSpurtsPlayAsSilence();
             VoiceJitterBufferTests.ANewStreamRestartsTheBuffer();
             VoiceJitterBufferTests.SteadyPlaybackAllocatesNothing();
             VoiceRelayPolicyTests.AStreamWithinTheLimitsIsRelayed();
             VoiceRelayPolicyTests.EachLimitStrikes();
+            VoiceRelayPolicyTests.ABacklogIsAbsorbedAndOnlySustainedExcessStrikes();
             VoiceRelayPolicyTests.StrikesMuteThenRemoveTheSpeaker();
             VoiceRelayPolicyTests.AServerMuteDropsOnArrivalWithoutStrikes();
             VoiceRelayPolicyTests.OpusHeadersAreCheckedBeforeRelay();
@@ -264,6 +265,11 @@ internal static class Program
             VoiceSessionTests.AnEngineWithoutVoiceSendsNothingForIt();
             VoiceSessionTests.ARestartedClientIsHeardAtOnce();
             VoiceSessionTests.VoiceStartsAfreshAcrossRoleChanges();
+            VoiceModerationTests.HostStallsStrikeNobody();
+            VoiceModerationTests.ModerationOutlivesTheGracePeriod();
+            VoiceModerationTests.TheModerationTableIsBounded();
+            VoiceModerationTests.ListenerMutesStayWithTheirSession();
+            VoiceModerationTests.AShortStreamRestartsCleanly();
             VoiceBudgetTests.FourSpeakersFitTheirBudget();
             VoiceBudgetTests.VoiceIsNeverHeldBehindTheSessionStream();
             VoiceBudgetTests.FramesShareDatagramsInPairs();
@@ -272,7 +278,8 @@ internal static class Program
             VirtualVoiceChannelTests.VoiceLossIsFinalAndNeverWaitsForTheSessionStream();
             VirtualVoiceChannelTests.OlderAndDuplicateDatagramsAreDropped();
             VirtualVoiceChannelTests.APathThatIsDownLosesDatagramsButHoldsTheStream();
-            VirtualVoiceChannelTests.EveryChannelSharesTheLinkRate();
+            VirtualVoiceChannelTests.DatagramsHaveALaneOfTheirOwnButShareTheRate();
+            VirtualVoiceChannelTests.TheLinkReadsDatagramsFirstAndHoldsAHundredAndTwentyEight();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

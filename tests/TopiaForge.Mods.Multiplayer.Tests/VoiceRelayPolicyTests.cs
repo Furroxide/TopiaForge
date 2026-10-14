@@ -29,7 +29,7 @@ internal static class VoiceRelayPolicyTests
 
     internal static void EachLimitStrikes()
     {
-        // Frame rate: the 31st datagram within a second is one too many.
+        // Frame rate: the bucket holds a second of burst, thirty datagrams; the 31st at once is dropped, not struck.
         var (policy, speaker, codec) = Create();
         for (var index = 0; index < 30; index++)
         {
@@ -37,7 +37,7 @@ internal static class VoiceRelayPolicyTests
                 "thirty datagrams in a burst pass");
         }
 
-        Expect(policy.Admit(speaker, Datagram(codec, 31, 30), 31_000), VoiceDropReason.RateLimited, struck: true, "the 31st within a second");
+        Expect(policy.Admit(speaker, Datagram(codec, 31, 30), 31_000), VoiceDropReason.RateLimited, struck: false, "the 31st at once");
         Assert(policy.Admit(speaker, Datagram(codec, 32, 31), Second + 1_000).Verdict == VoiceVerdict.Relay, "a second later the rate is free again");
 
         // Bitrate: datagrams of two 160-byte frames at 25 a second are about 66 kbit/s, past the 40 kbit/s bucket.
@@ -72,6 +72,47 @@ internal static class VoiceRelayPolicyTests
         Assert(policy.Admit(speaker, Datagram(codec, 5, 3), 8_000).Verdict == VoiceVerdict.Relay, "the stream carries on");
         speaker.ResetStream();
         Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 9_000).Verdict == VoiceVerdict.Relay, "a new connection starts its sequence again");
+    }
+
+    internal static void ABacklogIsAbsorbedAndOnlySustainedExcessStrikes()
+    {
+        // An honest talker, 25 datagrams a second, behind a host that stalls for two seconds: the backlog arrives at
+        // once. A second of it passes, the rest is dropped without strikes, and fresh speech passes as the bucket refills.
+        var (policy, speaker, codec) = Create();
+        ulong next = 0;
+        var relayed = 0;
+        var dropped = 0;
+        VoiceAdmission Admit(long micros)
+        {
+            next += 2;
+            var admission = policy.Admit(speaker, Datagram(codec, next - 1, next - 2, pair: true), micros);
+            if (admission.Verdict == VoiceVerdict.Relay) relayed++;
+            else dropped++;
+            Assert(!admission.Struck, "datagram " + (next / 2) + " earns no strike");
+            return admission;
+        }
+
+        for (var index = 0; index < 50; index++) Admit(index * 40_000);
+        Assert(relayed == 50, "two seconds of steady speech pass");
+        for (var index = 0; index < 50; index++) Admit(4 * Second);
+        Assert(relayed == 80 && dropped == 20, "after a two-second stall, a second of the backlog passes and the rest is dropped");
+        for (var index = 1; index <= 50; index++) Admit((4 * Second) + (index * 40_000));
+        Assert(relayed == 130, "fresh speech after the stall all passes");
+
+        // Every datagram draws on a second bucket that refills at twice the rate and holds five seconds of that. A flood
+        // at four times the rate empties it in five seconds; only then do rate-limited datagrams strike, and soon mute.
+        (policy, speaker, codec) = Create();
+        var verdicts = new List<VoiceAdmission>();
+        for (var index = 0; index < 1_200; index++)
+        {
+            verdicts.Add(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * Second / 120));
+            if (verdicts[^1].Verdict == VoiceVerdict.AutoMute) break;
+        }
+
+        var firstStrike = verdicts.FindIndex(admission => admission.Struck);
+        Assert(firstStrike > 0 && firstStrike * Second / 120 >= 4_900_000 && firstStrike * Second / 120 < 5_500_000,
+            "a flood at 120 a second strikes only once it has lasted five seconds (" + (firstStrike * 1_000 / 120) + " ms)");
+        Assert(verdicts[^1].Verdict == VoiceVerdict.AutoMute, "and the strikes then mute the speaker");
     }
 
     internal static void StrikesMuteThenRemoveTheSpeaker()

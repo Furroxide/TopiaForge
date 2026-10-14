@@ -39,11 +39,12 @@ namespace TopiaForge.Multiplayer.Engine
     }
 
     /// <summary>
-    /// The host's view of one speaker: the index it stamps on relayed frames, mutes, the stream so far, rate limits and
-    /// strike history. It belongs to the participant, not the connection, so reconnecting escapes neither a mute nor
-    /// the record of earlier abuse.
+    /// The host's moderation of one authenticated player for the whole session: a server mute, an automatic mute, and
+    /// the strike and mute history behind them. The host keeps it by identity rather than on the participant record,
+    /// so it outlives the record's 30-second grace: a player who leaves and rejoins later is still muted, and still on
+    /// the same rung of the ladder from strikes to removal.
     /// </summary>
-    internal sealed class VoiceSpeaker
+    internal sealed class VoiceModeration
     {
         private readonly long[] strikes;
         private readonly long[] mutes;
@@ -52,21 +53,14 @@ namespace TopiaForge.Multiplayer.Engine
         private int muteCount;
         private int muteNext;
 
-        internal VoiceSpeaker(ulong index, VoiceOptions options)
+        internal VoiceModeration(VoiceOptions options)
         {
-            if (index == 0) throw new ArgumentOutOfRangeException(nameof(index));
-            Index = index;
-            Packets = new SlidingWindowRateLimiter(options.MaximumPacketsPerSecond, 1_000_000);
-            ByteCapacity = (long)options.MaximumBitsPerSecond / 8 * 1_000_000;
-            ByteTokens = ByteCapacity;
+            if (options == null) throw new ArgumentNullException(nameof(options));
             strikes = new long[options.StrikesBeforeMute];
             mutes = new long[options.MutesBeforeKick];
         }
 
-        /// <summary>Gets the speaker index relayed frames carry. A host never reuses one, so late frames cannot change owner.</summary>
-        internal ulong Index { get; }
-
-        /// <summary>Gets or sets whether the host muted this speaker by hand.</summary>
+        /// <summary>Gets or sets whether the host muted this player by hand.</summary>
         internal bool ServerMuted { get; set; }
 
         /// <summary>Gets or sets when an automatic mute ends, in engine microseconds.</summary>
@@ -75,33 +69,20 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets whether the roster announced an automatic mute whose end it has yet to announce.</summary>
         internal bool AutoMuteAnnounced { get; set; }
 
-        internal bool HasStream { get; set; }
-        internal ulong LastSequence { get; set; }
-        internal ulong LastTimestamp { get; set; }
-        internal SlidingWindowRateLimiter Packets { get; }
-
-        /// <summary>Gets or sets the byte bucket, in millionths of a byte, so refills stay exact at any rate.</summary>
-        internal long ByteTokens { get; set; }
-
-        internal long ByteCapacity { get; }
-        internal long ByteRefilledAtMicros { get; set; } = long.MinValue;
+        /// <summary>Gets or sets when the player was last admitted, for choosing what a full table forgets first.</summary>
+        internal long LastSeenMicros { get; set; }
 
         internal bool IsMuted(long nowMicros) => ServerMuted || nowMicros < AutoMutedUntilMicros;
 
         internal bool IsAutoMuted(long nowMicros) => nowMicros < AutoMutedUntilMicros;
 
-        /// <summary>Forgets the stream so far: a new connection starts its sequences again.</summary>
-        internal void ResetStream()
-        {
-            HasStream = false;
-            LastSequence = 0;
-            LastTimestamp = 0;
-        }
+        /// <summary>Gets whether there is anything to remember: a mute, or strikes or mutes on the record.</summary>
+        internal bool HasHistory(long nowMicros) => IsMuted(nowMicros) || strikeCount > 0 || muteCount > 0;
 
         /// <summary>Records a strike and reports whether enough have fallen within the window to mute.</summary>
         internal bool AddStrike(long nowMicros, long windowMicros) => Record(strikes, ref strikeCount, ref strikeNext, nowMicros, windowMicros);
 
-        /// <summary>Records an automatic mute and reports whether enough have fallen within the window to remove the speaker.</summary>
+        /// <summary>Records an automatic mute and reports whether enough have fallen within the window to remove the player.</summary>
         internal bool AddMute(long nowMicros, long windowMicros) => Record(mutes, ref muteCount, ref muteNext, nowMicros, windowMicros);
 
         internal void ClearStrikes()
@@ -120,30 +101,157 @@ namespace TopiaForge.Multiplayer.Engine
         }
     }
 
-    /// <summary>
-    /// The host's rules for voice datagrams from clients: mutes first, then per-speaker datagram-rate and bitrate limits,
-    /// the voice format, each frame's packet size and the codec's header check, and the stream order. Each violation is a
-    /// strike; enough strikes within a window mute the speaker for a while, and enough mutes within a longer window
-    /// remove them.
-    /// </summary>
-    internal sealed class VoiceRelayPolicy
+    /// <summary>A token bucket counted in millionths of a token, so refills stay exact at any rate.</summary>
+    internal sealed class VoiceTokenBucket
     {
         private const long MaximumRefillMicros = 10_000_000;
+        private readonly long ratePerSecond;
+        private long refilledAtMicros = long.MinValue;
+
+        /// <summary>Creates a full bucket that refills at <paramref name="ratePerSecond"/> and holds <paramref name="burstMicros"/> of it.</summary>
+        internal VoiceTokenBucket(long ratePerSecond, long burstMicros)
+        {
+            if (ratePerSecond < 1) throw new ArgumentOutOfRangeException(nameof(ratePerSecond));
+            if (burstMicros < 1) throw new ArgumentOutOfRangeException(nameof(burstMicros));
+            this.ratePerSecond = ratePerSecond;
+            Capacity = ratePerSecond * burstMicros;
+            Tokens = Capacity;
+        }
+
+        internal long Capacity { get; }
+
+        internal long Tokens { get; private set; }
+
+        /// <summary>Refills for the time since the last call, then takes <paramref name="amount"/> tokens if they are there.</summary>
+        internal bool TryTake(long amount, long nowMicros)
+        {
+            if (refilledAtMicros != long.MinValue)
+            {
+                var elapsed = Math.Min(MaximumRefillMicros, Math.Max(0, nowMicros - refilledAtMicros));
+                Tokens = Math.Min(Capacity, Tokens + (elapsed * ratePerSecond));
+            }
+
+            refilledAtMicros = nowMicros;
+            var cost = amount * 1_000_000;
+            if (Tokens < cost) return false;
+            Tokens -= cost;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The host's view of one participant's voice: the index it stamps on relayed frames, the stream so far and the rate
+    /// limits, with the player's <see cref="VoiceModeration"/>. A rejoin within the grace period keeps it all; a later one
+    /// gets a new speaker with the same moderation.
+    /// </summary>
+    internal sealed class VoiceSpeaker
+    {
+        internal VoiceSpeaker(ulong index, VoiceOptions options, VoiceModeration? moderation = null)
+        {
+            if (index == 0) throw new ArgumentOutOfRangeException(nameof(index));
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            Index = index;
+            Moderation = moderation ?? new VoiceModeration(options);
+            Packets = new VoiceTokenBucket(options.MaximumPacketsPerSecond, VoiceRelayPolicy.BurstMicros);
+            Bytes = new VoiceTokenBucket(options.MaximumBitsPerSecond / 8, VoiceRelayPolicy.BurstMicros);
+            Sustained = new VoiceTokenBucket(
+                (long)options.MaximumPacketsPerSecond * VoiceRelayPolicy.SustainedFactor,
+                VoiceRelayPolicy.SustainedWindowMicros);
+        }
+
+        /// <summary>Gets the speaker index relayed frames carry. A host never reuses one, so late frames cannot change owner.</summary>
+        internal ulong Index { get; }
+
+        internal VoiceModeration Moderation { get; }
+
+        internal bool ServerMuted
+        {
+            get => Moderation.ServerMuted;
+            set => Moderation.ServerMuted = value;
+        }
+
+        internal long AutoMutedUntilMicros
+        {
+            get => Moderation.AutoMutedUntilMicros;
+            set => Moderation.AutoMutedUntilMicros = value;
+        }
+
+        internal bool AutoMuteAnnounced
+        {
+            get => Moderation.AutoMuteAnnounced;
+            set => Moderation.AutoMuteAnnounced = value;
+        }
+
+        internal bool HasStream { get; set; }
+        internal ulong LastSequence { get; set; }
+        internal ulong LastTimestamp { get; set; }
+
+        /// <summary>Gets the datagram rate: one second's worth of burst, refilled at the limit.</summary>
+        internal VoiceTokenBucket Packets { get; }
+
+        /// <summary>Gets the bitrate, in bytes: one second's worth of burst, refilled at the limit.</summary>
+        internal VoiceTokenBucket Bytes { get; }
+
+        /// <summary>Gets the sustained rate: twice the limit, five seconds deep. Only a speaker who drains it earns strikes for rate.</summary>
+        internal VoiceTokenBucket Sustained { get; }
+
+        internal bool IsMuted(long nowMicros) => Moderation.IsMuted(nowMicros);
+
+        internal bool IsAutoMuted(long nowMicros) => Moderation.IsAutoMuted(nowMicros);
+
+        /// <summary>Forgets the stream so far: a new connection starts its sequences again.</summary>
+        internal void ResetStream()
+        {
+            HasStream = false;
+            LastSequence = 0;
+            LastTimestamp = 0;
+        }
+
+        internal bool AddStrike(long nowMicros, long windowMicros) => Moderation.AddStrike(nowMicros, windowMicros);
+
+        internal bool AddMute(long nowMicros, long windowMicros) => Moderation.AddMute(nowMicros, windowMicros);
+
+        internal void ClearStrikes() => Moderation.ClearStrikes();
+    }
+
+    /// <summary>
+    /// The host's rules for voice datagrams from clients: mutes first, then per-speaker datagram-rate and bitrate limits,
+    /// the voice format, each frame's packet size and the codec's header check, and the stream order. Each violation of
+    /// the format is a strike; enough strikes within a window mute the speaker for a while, and enough mutes within a
+    /// longer window remove them.
+    /// </summary>
+    /// <remarks>
+    /// The rate limits are token buckets holding one second of burst, judged when the host's pump reads the datagram. A
+    /// stall on the host, or on the path, delivers a backlog all at once; the bucket absorbs a second of it and drops the
+    /// rest without a strike, and fresh speech passes again as the bucket refills. Rate is struck only when it is
+    /// sustained: every datagram also draws on a bucket that refills at twice the rate and holds five seconds of it, and
+    /// only a rate-limited datagram that finds that bucket empty too earns a strike.
+    /// </remarks>
+    internal sealed class VoiceRelayPolicy
+    {
+        /// <summary>The burst the rate and bitrate buckets hold: one second.</summary>
+        internal const long BurstMicros = 1_000_000;
+
+        /// <summary>How many times the datagram rate a speaker must keep up before rate-limited datagrams strike.</summary>
+        internal const int SustainedFactor = 2;
+
+        /// <summary>How long a speaker must keep it up: five seconds.</summary>
+        internal const long SustainedWindowMicros = 5_000_000;
+
         private readonly VoiceOptions options;
-        private readonly long bytesPerSecond;
 
         internal VoiceRelayPolicy(VoiceOptions options)
         {
             this.options = options ?? throw new ArgumentNullException(nameof(options));
-            bytesPerSecond = options.MaximumBitsPerSecond / 8;
         }
 
         internal VoiceAdmission Admit(VoiceSpeaker speaker, ReadOnlySpan<byte> datagram, long nowMicros)
         {
             if (speaker.IsMuted(nowMicros)) return Dropped(VoiceDropReason.ServerMuted);
-            if (!speaker.Packets.TryAcquire(nowMicros) || !TryConsumeBytes(speaker, datagram.Length, nowMicros))
+            var sustainable = speaker.Sustained.TryTake(1, nowMicros);
+            if (!speaker.Packets.TryTake(1, nowMicros) || !speaker.Bytes.TryTake(datagram.Length, nowMicros))
             {
-                return Strike(speaker, VoiceDropReason.RateLimited, nowMicros);
+                return sustainable ? Dropped(VoiceDropReason.RateLimited) : Strike(speaker, VoiceDropReason.RateLimited, nowMicros);
             }
 
             // Frames are read at any size, so an oversized one is told apart from a malformed datagram.
@@ -172,22 +280,7 @@ namespace TopiaForge.Multiplayer.Engine
         /// the host will judge it on arrival. False means the datagram would break a limit and must not be sent.
         /// </summary>
         internal bool TrySpend(VoiceSpeaker pace, int datagramBytes, long nowMicros) =>
-            pace.Packets.TryAcquire(nowMicros) && TryConsumeBytes(pace, datagramBytes, nowMicros);
-
-        private bool TryConsumeBytes(VoiceSpeaker speaker, int frameBytes, long nowMicros)
-        {
-            if (speaker.ByteRefilledAtMicros != long.MinValue)
-            {
-                var elapsed = Math.Min(MaximumRefillMicros, Math.Max(0, nowMicros - speaker.ByteRefilledAtMicros));
-                speaker.ByteTokens = Math.Min(speaker.ByteCapacity, speaker.ByteTokens + (elapsed * bytesPerSecond));
-            }
-
-            speaker.ByteRefilledAtMicros = nowMicros;
-            var cost = (long)frameBytes * 1_000_000;
-            if (speaker.ByteTokens < cost) return false;
-            speaker.ByteTokens -= cost;
-            return true;
-        }
+            pace.Packets.TryTake(1, nowMicros) && pace.Bytes.TryTake(datagramBytes, nowMicros);
 
         private VoiceAdmission Strike(VoiceSpeaker speaker, VoiceDropReason reason, long nowMicros)
         {

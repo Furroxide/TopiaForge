@@ -137,19 +137,16 @@ internal static class VoiceSessionTests
         var aId = new ParticipantId("a");
         ulong next = 0;
 
-        // A modified client sends a hundred datagrams within one pump, where thirty a second are allowed. An unmodified
-        // engine paces itself and cannot do this.
-        void Flood()
-        {
-            for (var index = 0; index < 100; index++, next++) aLink.Send(EngineChannel.Voice, new ArraySegment<byte>(Datagram(rig.Codec, 0, next + 1, next, 1)));
-        }
-
-        Flood();
+        // A modified client floods at 240 datagrams a second, where 30 are allowed; an unmodified engine paces itself and
+        // cannot. The excess is dropped at once, but strikes only once the flood has outlasted the sustained allowance.
+        var ticks = rig.FloodUntilMuted(aLink, ref next);
         rig.Flush();
         var statistics = rig.Host.GetVoiceStatistics();
-        Assert(statistics.Relayed == 30 && statistics.Dropped(VoiceDropReason.RateLimited) == 20, "thirty datagrams pass, then twenty strike");
-        Assert(statistics.AutoMutes == 1 && statistics.Dropped(VoiceDropReason.ServerMuted) == 50, "the 20th strike mutes a, and the rest is dropped on arrival");
-        Assert(bEars.From("a").Count == 30, "b heard the 30 datagrams that passed");
+        Assert(ticks >= 90 && ticks <= 130, "a sustained flood mutes a after about 1.7 seconds (" + ticks + " ticks)");
+        Assert(statistics.AutoMutes == 1 && statistics.Strikes == 20 && statistics.Dropped(VoiceDropReason.RateLimited) > 200,
+            "the excess was dropped, and only its last twenty datagrams struck");
+        Assert(statistics.Relayed >= 75 && statistics.Relayed <= 90, "a second of burst and then thirty a second were relayed (" + statistics.Relayed + ")");
+        Assert(bEars.From("a").Count == statistics.Relayed, "b heard exactly what was relayed");
         Assert(b.IsServerMuted(aId) && a.IsServerMuted(aId) && rig.Host.IsServerMuted(aId), "everyone learns that a is muted");
         Assert(a.SubmitVoiceFrame(0, VoiceFrameFlags.None, rig.Codec.Packet(1)) == VoiceSubmitResult.ServerMuted,
             "a muted client stops sending");
@@ -159,12 +156,12 @@ internal static class VoiceSessionTests
         rig.Flush();
         Assert(!b.IsServerMuted(aId) && !a.IsServerMuted(aId), "after thirty seconds the mute ends, and the roster says so");
 
-        Flood();
+        Assert(rig.FloodUntilMuted(aLink, ref next) > 0, "a second flood mutes a again");
         rig.Flush();
-        Assert(rig.Host.GetVoiceStatistics().AutoMutes == 2 && !a.IsEnded, "a second flood mutes a again");
+        Assert(rig.Host.GetVoiceStatistics().AutoMutes == 2 && !a.IsEnded, "a stays after a second automatic mute");
         rig.Advance(31 * 60);
         rig.Flush();
-        Flood();
+        rig.FloodUntilMuted(aLink, ref next);
         rig.Flush();
         statistics = rig.Host.GetVoiceStatistics();
         Assert(statistics.Kicks == 1 && a.IsEnded && a.Snapshot.EndReason == MultiplayerSessionEndReason.Kicked,
