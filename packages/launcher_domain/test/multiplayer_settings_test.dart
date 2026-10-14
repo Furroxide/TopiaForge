@@ -49,7 +49,7 @@ void main() {
       final fresh = MultiplayerSettings();
       expect(
         fresh.privacyForSession(allowDirect: false),
-        MultiplayerAddressPrivacy.relayOnly,
+        same(SessionPrivacy.relayOnly),
       );
       expect(
         () => fresh.privacyForSession(allowDirect: true),
@@ -57,10 +57,10 @@ void main() {
       );
       final informed = fresh.acknowledgePrivacyDisclosure();
       expect(informed.needsPrivacyDisclosure, isFalse);
-      expect(
-        informed.privacyForSession(allowDirect: true),
-        MultiplayerAddressPrivacy.direct,
-      );
+      final direct = informed.privacyForSession(allowDirect: true);
+      expect(direct.addressPrivacy, MultiplayerAddressPrivacy.direct);
+      expect(direct.allowsDirect, isTrue);
+      expect(SessionPrivacy.relayOnly.allowsDirect, isFalse);
       expect(
         informed.defaultPrivacy,
         MultiplayerAddressPrivacy.relayOnly,
@@ -80,7 +80,7 @@ void main() {
       });
       expect(settings.defaultPrivacy, MultiplayerAddressPrivacy.relayOnly);
       expect(
-        settings.privacyForSession(allowDirect: false),
+        settings.privacyForSession(allowDirect: false).addressPrivacy,
         MultiplayerAddressPrivacy.relayOnly,
       );
     });

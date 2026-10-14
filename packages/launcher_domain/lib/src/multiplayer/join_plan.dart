@@ -69,6 +69,10 @@ enum JoinBlockerCode {
   /// A required package has no trusted, compatible copy for this install.
   contentUnavailable,
 
+  /// Only the host serves a package, and the session may not contact the
+  /// host directly ([JoinSessionState.mayContactHost]).
+  directNotAllowed,
+
   /// The admission planner refuses the session for another reason.
   admissionBlocked,
 }

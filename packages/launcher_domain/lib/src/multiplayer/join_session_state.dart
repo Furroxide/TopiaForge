@@ -21,7 +21,6 @@ final class JoinSessionState {
     required this.stage,
     required this.target,
     required this.privacy,
-    required this.trustChangedIdentity,
     this.serverId,
     this.descriptor,
     this.plan,
@@ -36,14 +35,13 @@ final class JoinSessionState {
   final JoinTarget target;
 
   /// The privacy the player chose for this session before it started. It
-  /// governs every contact, from fetching the descriptor onwards.
+  /// governs every contact the join makes: [descriptorRequest] and
+  /// [downloadRequest] carry it to the data layer as [JoinContactRules].
   final MultiplayerAddressPrivacy privacy;
 
-  /// Whether the player chose to trust a typed address whose server changed.
-  final bool trustChangedIdentity;
-
-  /// The server: named by the target, found by resolving, or, for a typed
-  /// address, learned from its first descriptor.
+  /// The server: named by the target, found by resolving, trusted by the
+  /// player after an identity change, or, for a typed address, learned from
+  /// its first descriptor.
   final String? serverId;
 
   /// The verified descriptor, from checking onwards.
@@ -70,15 +68,36 @@ final class JoinSessionState {
 
   bool get isEnded => stage == JoinStage.ended;
 
+  /// Whether the join may contact the host itself rather than only the
+  /// control plane: always with direct paths allowed, and under relay-only
+  /// only when the host is on the local network. That holds for every
+  /// direct link, typed address or LAN listing that got past [JoinSession.start]
+  /// and the [JoinContactRules]; the host of an invite, server link or
+  /// Internet listing could be anywhere.
+  bool get mayContactHost =>
+      privacy == MultiplayerAddressPrivacy.direct ||
+      !target.resolvesThroughService;
+
   /// What to fetch, and whom the fetch may contact, while fetching the
   /// descriptor; null in every other stage.
   JoinDescriptorRequest? get descriptorRequest =>
       stage == JoinStage.fetchingDescriptor
       ? JoinDescriptorRequest._(
           target: target,
-          expectedServerId: serverId,
           privacy: privacy,
-          trustChangedIdentity: trustChangedIdentity,
+          expectedServerId: serverId,
+        )
+      : null;
+
+  /// What to download, and whom the downloads may contact, while
+  /// downloading; null in every other stage.
+  JoinDownloadRequest? get downloadRequest => stage == JoinStage.downloading
+      ? JoinDownloadRequest._(
+          target: target,
+          privacy: privacy,
+          serverId: serverId!,
+          registryDownloads: plan!.installActions,
+          hostDownloads: plan!.hostServedPackages,
         )
       : null;
 
@@ -96,7 +115,6 @@ final class JoinSessionState {
     stage: stage ?? this.stage,
     target: target,
     privacy: privacy,
-    trustChangedIdentity: trustChangedIdentity,
     serverId: identical(serverId, _keep) ? this.serverId : serverId as String?,
     descriptor: identical(descriptor, _keep)
         ? this.descriptor
@@ -126,6 +144,7 @@ final class JoinSessionState {
     List<JoinPlanBlocker> blockers = const [],
     bool? rollbackComplete,
     JoinGameOwnership? gameOwnership,
+    String? servedServerId,
   }) => _ended(
     JoinOutcome.failed(
       JoinFailure._(
@@ -135,6 +154,7 @@ final class JoinSessionState {
         blockers: blockers,
         rollbackComplete: rollbackComplete,
         gameOwnership: gameOwnership,
+        servedServerId: servedServerId,
       ),
     ),
   );

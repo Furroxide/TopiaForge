@@ -60,6 +60,18 @@ abstract final class NetworkHost {
     return null;
   }
 
+  /// Whether [host] is a name the local network answers itself: `localhost`,
+  /// or a multicast DNS name ending in `.local`. Looking up any other name
+  /// asks DNS servers its author chose, which can learn the player's resolver
+  /// or subnet, so relay-only joins look up no other name. False for an IP
+  /// literal. Throws [ArgumentError] when [host] is not a host, without
+  /// repeating it.
+  static bool isLocalName(String host) {
+    if (pathKindOf(host) != null) return false;
+    final name = tryNormalize(host)!;
+    return name == 'localhost' || name.endsWith('.local');
+  }
+
   /// Classifies a raw IPv4 (4 bytes) or IPv6 (16 bytes) address as the game's
   /// `UdpPaths.Classify` does: 10/8, 127/8, 172.16/12, 192.168/16 and
   /// 169.254/16, and `::1`, fe80::/10 and fc00::/7, are on the local network.

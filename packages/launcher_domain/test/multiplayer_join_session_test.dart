@@ -24,11 +24,13 @@ void main() {
       server: server,
       resolutions: {sha: availableOf(sandbox)},
       environment: testEnvironment,
+      mayContactHost: true,
     );
     installedPlan = planner.plan(
       server: server,
       resolutions: {sha: installedOf(sandbox)},
       environment: testEnvironment,
+      mayContactHost: true,
     );
     final changed = await verifiedForTest(
       testDescriptor(
@@ -44,6 +46,7 @@ void main() {
         ),
       },
       environment: testEnvironment,
+      mayContactHost: true,
     );
     hostServedServer = await verifiedForTest(
       testDescriptor(
@@ -57,6 +60,7 @@ void main() {
         testSha('example.local'): JoinPackageResolution.hostOffered(),
       },
       environment: environmentWith(developerMode: true),
+      mayContactHost: true,
     );
   });
 
@@ -201,6 +205,7 @@ void main() {
         server: server,
         resolutions: const {},
         environment: environmentWith(gameBuild: '2478'),
+        mayContactHost: true,
       );
       final state = run(startJoin(target), [
         JoinTargetResolved(hostAServerId),
@@ -224,6 +229,7 @@ void main() {
           server: server,
           resolutions: const {},
           environment: testEnvironment,
+          mayContactHost: true,
         ),
       };
       final solo = await verifiedForTest(
@@ -237,6 +243,7 @@ void main() {
           ),
         },
         environment: testEnvironment,
+        mayContactHost: true,
       );
       final newer = await verifiedForTest(
         testDescriptor(protocolVersion: '2.0.0', runtimeVersion: '0.3.0'),
@@ -245,6 +252,7 @@ void main() {
         server: newer,
         resolutions: const {},
         environment: testEnvironment,
+        mayContactHost: true,
       );
       final older = await verifiedForTest(
         testDescriptor(protocolVersion: '0.9.0', runtimeVersion: '0.1.0'),
@@ -253,6 +261,7 @@ void main() {
         server: older,
         resolutions: const {},
         environment: testEnvironment,
+        mayContactHost: true,
       );
       cases.forEach((code, plan) {
         final state = run(
@@ -284,7 +293,12 @@ void main() {
     });
 
     test('host-served packages need the developer-mode acknowledgement', () {
-      final waiting = run(startJoin(target), [
+      // A server link's host can be reached only on a direct path.
+      final direct = startJoin(
+        target,
+        privacy: MultiplayerAddressPrivacy.direct,
+      );
+      final waiting = run(direct, [
         JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(hostServedServer),
         JoinPlanReady(hostServedPlan),

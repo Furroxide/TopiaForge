@@ -37,20 +37,18 @@ final class DescriptorPackage {
     required this.role,
   }) {
     if (!isModId(id)) {
-      throw ArgumentError.value(id, 'id', 'A package id is a manifest mod id.');
+      throw ArgumentError('A package id is a manifest mod id.', 'id');
     }
     if (!_isSemanticVersion(version)) {
-      throw ArgumentError.value(
-        version,
-        'version',
+      throw ArgumentError(
         'A package version is a semantic version.',
+        'version',
       );
     }
     if (!WireText.isHex(sha256, 32)) {
-      throw ArgumentError.value(
-        sha256,
-        'sha256',
+      throw ArgumentError(
         'A package digest is 64 lowercase hexadecimal characters.',
+        'sha256',
       );
     }
   }

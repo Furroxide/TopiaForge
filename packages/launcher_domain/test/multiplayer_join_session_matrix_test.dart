@@ -35,6 +35,8 @@ void main() {
       JoinFailureCode.contentUnavailable,
       JoinFailureCode.admissionBlocked,
       JoinFailureCode.standaloneOnServer,
+      // A plan that needs the host when the host may not be contacted.
+      JoinFailureCode.directNotAllowed,
     },
     JoinStage.awaitingConsent: {},
     JoinStage.downloading: {
@@ -115,6 +117,7 @@ void main() {
         ),
       },
       environment: testEnvironment,
+      mayContactHost: true,
     );
   });
 
@@ -124,6 +127,9 @@ void main() {
     ),
     JoinFailureCode.gameRunning => const JoinFailed.gameRunning(
       ownership: JoinGameOwnership.owned,
+    ),
+    JoinFailureCode.identityChanged => JoinFailed.identityChanged(
+      servedServerId: 'b' * 64,
     ),
     _ => JoinFailed(code),
   };

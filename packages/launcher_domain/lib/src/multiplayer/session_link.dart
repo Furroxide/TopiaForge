@@ -160,10 +160,9 @@ final class SessionLink {
 
   static void _requireServerId(String serverId) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(
-        serverId,
-        'serverId',
+      throw ArgumentError(
         'A server id is 64 lowercase hexadecimal characters.',
+        'serverId',
       );
     }
   }

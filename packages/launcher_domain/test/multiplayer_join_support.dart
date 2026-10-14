@@ -140,6 +140,7 @@ Future<JoinPlan> planJoin(
   String runtimeVersion = '0.2.0',
   String protocolVersion = '1.0.0',
   bool voice = true,
+  bool mayContactHost = true,
 }) async {
   final descriptor = testDescriptor(
     packages: [for (final (package, _) in packages) package],
@@ -155,18 +156,24 @@ Future<JoinPlan> planJoin(
       for (final (package, resolution) in packages) package.sha256: ?resolution,
     },
     environment: environment ?? testEnvironment,
+    mayContactHost: mayContactHost,
   );
 }
 
-/// Starts a join of [target], relay-only unless [privacy] says otherwise.
+/// Starts a join of [target], relay-only unless [privacy] says otherwise. A
+/// direct join goes through the settings, as the launcher's must.
 JoinSessionState startJoin(
   JoinTarget target, {
   MultiplayerAddressPrivacy privacy = MultiplayerAddressPrivacy.relayOnly,
-  bool trustChangedIdentity = false,
+  String? trustedServerId,
 }) => JoinSession.start(
   target,
-  privacy: privacy,
-  trustChangedIdentity: trustChangedIdentity,
+  privacy: privacy == MultiplayerAddressPrivacy.direct
+      ? MultiplayerSettings().acknowledgePrivacyDisclosure().privacyForSession(
+          allowDirect: true,
+        )
+      : SessionPrivacy.relayOnly,
+  trustedServerId: trustedServerId,
 );
 
 JoinPlanPackage packageIn(JoinPlan plan, String id) =>

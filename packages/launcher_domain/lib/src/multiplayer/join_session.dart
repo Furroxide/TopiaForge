@@ -5,12 +5,17 @@ part of '../multiplayer.dart';
 /// launching, connecting, synchronizing, the session, and the end.
 ///
 /// - The player chooses the session's privacy before the join starts
-///   ([start]), so it governs the very first contact. Targets the control
-///   plane resolves start resolving; a direct link, a typed address and a
-///   LAN listing start fetching the descriptor, under the limits
-///   [JoinSessionState.descriptorRequest] spells out. Under relay-only, a
-///   target whose host is an IP literal beyond the local network ends at
-///   once, before anything is contacted.
+///   ([start]), so it governs the very first contact and every one after
+///   ([JoinContactRules]). Targets the control plane resolves start
+///   resolving; a direct link, a typed address and a LAN listing start
+///   fetching the descriptor. Under relay-only, a target whose host is an IP
+///   literal beyond the local network, or a name other than `localhost` and
+///   `.local` names, ends at once, before anything is contacted or looked
+///   up. A plan that would download from a host whose location is unknown
+///   ends the join while checking.
+/// - A typed address whose server is already known, because the join
+///   learned it or the player trusted it, ends as an identity change if
+///   another server answers.
 /// - Each step advances only on its own completion event; any event a step
 ///   cannot use, including a failure it cannot produce, leaves the state as
 ///   it is. Stale events from abandoned work are therefore harmless.
@@ -51,6 +56,7 @@ abstract final class JoinSession {
       JoinFailureCode.contentUnavailable,
       JoinFailureCode.admissionBlocked,
       JoinFailureCode.standaloneOnServer,
+      JoinFailureCode.directNotAllowed,
     },
     JoinStage.awaitingConsent: {},
     JoinStage.downloading: {
@@ -114,31 +120,50 @@ abstract final class JoinSession {
   static const maximumReplans = 1;
 
   /// A new join of [target] under the [privacy] the player chose for this
-  /// session, typically `MultiplayerSettings.privacyForSession`. Set
-  /// [trustChangedIdentity] only when the player chose to trust a typed
-  /// address whose server changed.
+  /// session. A direct [SessionPrivacy] only comes from
+  /// `MultiplayerSettings.privacyForSession`, after the disclosure.
+  ///
+  /// [trustedServerId] is for a [JoinAddressTarget] only: the server the
+  /// player chose to trust after an identity change
+  /// ([JoinFailure.servedServerId]). The join then accepts that server and
+  /// no other.
   static JoinSessionState start(
     JoinTarget target, {
-    required MultiplayerAddressPrivacy privacy,
-    bool trustChangedIdentity = false,
+    required SessionPrivacy privacy,
+    String? trustedServerId,
   }) {
+    if (trustedServerId != null &&
+        (target is! JoinAddressTarget ||
+            !WireText.isHex(trustedServerId, 32))) {
+      throw ArgumentError(
+        'Only a typed address trusts a server, named by its server id.',
+        'trustedServerId',
+      );
+    }
     final resolving = target.resolvesThroughService;
     final state = JoinSessionState._(
       stage: resolving ? JoinStage.resolving : JoinStage.fetchingDescriptor,
       target: target,
-      privacy: privacy,
-      trustChangedIdentity: trustChangedIdentity,
-      serverId: resolving ? null : target.pinnedServerId,
+      privacy: privacy.addressPrivacy,
+      serverId: resolving ? null : trustedServerId ?? target.pinnedServerId,
     );
     final host = target.directHost;
-    if (privacy == MultiplayerAddressPrivacy.relayOnly &&
-        host != null &&
-        NetworkHost.pathKindOf(host) == NetworkPathKind.direct) {
+    if (privacy.allowsDirect || host == null) return state;
+    final kind = NetworkHost.pathKindOf(host);
+    if (kind == NetworkPathKind.direct) {
       return state._failed(
         JoinFailureCode.directNotAllowed,
         detail:
             'Joining this host directly would show it your address. Allow a '
             'direct path for this session to continue.',
+      );
+    }
+    if (kind == null && !NetworkHost.isLocalName(host)) {
+      return state._failed(
+        JoinFailureCode.directNotAllowed,
+        detail:
+            'Looking up this name would reach servers its author chose. Allow '
+            'a direct path for this session to use it.',
       );
     }
     return state;
@@ -236,6 +261,7 @@ abstract final class JoinSession {
       detail: event.detail,
       rollbackComplete: event.rollbackComplete,
       gameOwnership: event.gameOwnership,
+      servedServerId: event.servedServerId,
     );
   }
 
@@ -252,17 +278,31 @@ abstract final class JoinSession {
 
   /// A typed address learns its server from the first descriptor; every
   /// other target, and a typed address after that, must get the server it
-  /// already names.
+  /// already names. Another server at a typed address is an identity
+  /// change, which the player may choose to trust; anywhere else it is an
+  /// invalid descriptor.
   static JoinSessionState _verified(
     JoinSessionState state,
     VerifiedServerDescriptor descriptor,
   ) {
     final expected = state.serverId;
-    final learns = state.target is JoinAddressTarget && expected == null;
-    if (!learns && descriptor.serverId != expected) {
+    final address = state.target is JoinAddressTarget;
+    if (expected != null && descriptor.serverId != expected) {
+      return address
+          ? state._failed(
+              JoinFailureCode.identityChanged,
+              detail: 'This address now serves a different server.',
+              servedServerId: descriptor.serverId,
+            )
+          : state._failed(
+              JoinFailureCode.descriptorInvalid,
+              detail: 'The descriptor belongs to another server.',
+            );
+    }
+    if (expected == null && !address) {
       return state._failed(
         JoinFailureCode.descriptorInvalid,
-        detail: 'The descriptor belongs to another server.',
+        detail: 'No server was expected for this descriptor.',
       );
     }
     return state._copy(
@@ -282,6 +322,16 @@ abstract final class JoinSession {
         _failureOf(plan.blockers.first.code),
         detail: plan.blockers.first.message,
         blockers: plan.blockers,
+      );
+    }
+    // Host-served archives come from the host itself, so a plan made as if
+    // the host could be contacted cannot pass when it cannot.
+    if (plan.hasUnverifiedPackages && !state.mayContactHost) {
+      return state._failed(
+        JoinFailureCode.directNotAllowed,
+        detail:
+            'Only the host serves some packages, and reaching it directly '
+            'would show it your address.',
       );
     }
     final planned = state._copy(plan: plan);
@@ -321,6 +371,7 @@ abstract final class JoinSession {
     JoinBlockerCode.runtimeOutdated => JoinFailureCode.runtimeOutdated,
     JoinBlockerCode.standaloneOnServer => JoinFailureCode.standaloneOnServer,
     JoinBlockerCode.contentUnavailable => JoinFailureCode.contentUnavailable,
+    JoinBlockerCode.directNotAllowed => JoinFailureCode.directNotAllowed,
     JoinBlockerCode.admissionBlocked => JoinFailureCode.admissionBlocked,
   };
 }

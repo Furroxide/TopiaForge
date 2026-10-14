@@ -17,6 +17,26 @@ enum MultiplayerAddressPrivacy {
   final String wireName;
 }
 
+/// The privacy a player chose for one session, as a join takes it
+/// ([JoinSession.start]). Relay-only is always available as [relayOnly]. A
+/// direct path can only come from [MultiplayerSettings.privacyForSession],
+/// which refuses it until the player has acknowledged the disclosure, so no
+/// join can start direct without it.
+final class SessionPrivacy {
+  const SessionPrivacy._(this.addressPrivacy);
+
+  static const relayOnly = SessionPrivacy._(
+    MultiplayerAddressPrivacy.relayOnly,
+  );
+
+  final MultiplayerAddressPrivacy addressPrivacy;
+
+  bool get allowsDirect => addressPrivacy == MultiplayerAddressPrivacy.direct;
+
+  @override
+  String toString() => addressPrivacy.wireName;
+}
+
 /// The player's multiplayer preferences, as the launcher keeps them.
 ///
 /// Defaults follow the live-multiplayer plan: relay-only privacy, UPnP off,
@@ -38,11 +58,10 @@ final class MultiplayerSettings {
   }) : favorites = favorites ?? ServerFavorites(),
        history = history ?? ServerHistory() {
     if (!isValidDisplayName(displayName)) {
-      throw ArgumentError.value(
-        displayName,
-        'displayName',
+      throw ArgumentError(
         'A display name is $minimumDisplayNameLength to '
             '$maximumDisplayNameLength printable characters.',
+        'displayName',
       );
     }
     if (acknowledgedPrivacyDisclosure < 0 || voiceConsent < 0) {
@@ -112,15 +131,15 @@ final class MultiplayerSettings {
 
   /// The privacy for one session. A direct path needs the player's explicit
   /// choice for this session and an acknowledged disclosure; the choice is
-  /// never stored.
-  MultiplayerAddressPrivacy privacyForSession({required bool allowDirect}) {
-    if (!allowDirect) return MultiplayerAddressPrivacy.relayOnly;
+  /// never stored. This is the only way to get a direct [SessionPrivacy].
+  SessionPrivacy privacyForSession({required bool allowDirect}) {
+    if (!allowDirect) return SessionPrivacy.relayOnly;
     if (needsPrivacyDisclosure) {
       throw StateError(
         'The address disclosure must be acknowledged before a direct session.',
       );
     }
-    return MultiplayerAddressPrivacy.direct;
+    return const SessionPrivacy._(MultiplayerAddressPrivacy.direct);
   }
 
   MultiplayerSettings withDisplayName(String name) => _copy(displayName: name);

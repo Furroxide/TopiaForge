@@ -139,10 +139,20 @@ final class ServerDescriptorAccepted extends ServerDescriptorVerification {
 
 /// A descriptor that must not be trusted. [message] names no address.
 final class ServerDescriptorRefused extends ServerDescriptorVerification {
-  const ServerDescriptorRefused(this.refusal, this.message);
+  const ServerDescriptorRefused(
+    this.refusal,
+    this.message, {
+    this.servedServerId,
+  });
 
   final ServerDescriptorRefusal refusal;
   final String message;
+
+  /// For [ServerDescriptorRefusal.otherServer]: the server the descriptor
+  /// names. Its signature was not checked, so it proves nothing yet. A typed
+  /// address reports it as an identity change, and only a join that then
+  /// trusts it can verify it.
+  final String? servedServerId;
 }
 
 /// A descriptor whose signature verified under its own signing key and, when
@@ -200,9 +210,10 @@ final class ServerDescriptorVerifier {
     }
     if (expectedServerId != null &&
         envelope.descriptor.serverId != expectedServerId) {
-      return const ServerDescriptorRefused(
+      return ServerDescriptorRefused(
         ServerDescriptorRefusal.otherServer,
         'The descriptor belongs to another server.',
+        servedServerId: envelope.descriptor.serverId,
       );
     }
     final bool valid;

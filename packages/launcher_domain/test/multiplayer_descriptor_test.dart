@@ -114,6 +114,11 @@ void main() {
             : ServerDescriptorRefusal.malformed;
         expect(refused.refusal, expected, reason: '$id: ${item['about']}');
         expect(
+          refused.servedServerId,
+          id == 'other-server-expected' ? keys['host-a']!['serverId'] : null,
+          reason: '$id: only another server names the server it is',
+        );
+        expect(
           signatures.asked,
           hasLength(signatureCases.contains(id) ? 1 : 0),
           reason: '$id: only a well-formed descriptor reaches the signature',

@@ -27,29 +27,27 @@ final class SessionInfo {
       ('descriptorSha256', descriptorSha256),
     ]) {
       if (!WireText.isHex(value, 32)) {
-        throw ArgumentError.value(
-          value,
-          field,
+        throw ArgumentError(
           'Must be 64 lowercase hexadecimal characters.',
+          field,
         );
       }
     }
     if (!WireText.isDisplayText(name, ServerDescriptorV1.maximumNameLength)) {
-      throw ArgumentError.value(
-        name,
-        'name',
+      throw ArgumentError(
         'A server name is 1 to 48 printable characters.',
+        'name',
       );
     }
     if (!ServerDescriptorV1.isGameBuild(gameBuild)) {
-      throw ArgumentError.value(gameBuild, 'gameBuild', 'Not a game build.');
+      throw ArgumentError('Not a game build.', 'gameBuild');
     }
     for (final (field, value) in [
       ('runtimeVersion', runtimeVersion),
       ('protocolVersion', protocolVersion),
     ]) {
       if (!ServerDescriptorV1.isSemanticVersion(value)) {
-        throw ArgumentError.value(value, field, 'Not a semantic version.');
+        throw ArgumentError('Not a semantic version.', field);
       }
     }
     for (final (field, value) in [('gamemode', gamemode), ('world', world)]) {
@@ -58,10 +56,9 @@ final class SessionInfo {
             value,
             ServerDescriptorV1.maximumTargetNameLength,
           )) {
-        throw ArgumentError.value(
-          value,
-          field,
+        throw ArgumentError(
           'A $field name is 1 to 48 printable characters.',
+          field,
         );
       }
     }
