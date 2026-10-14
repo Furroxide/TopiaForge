@@ -40,6 +40,13 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets the per-host player key the transport derived for the remote peer, or the default value.</summary>
         MultiplayerPlayerKey PlayerKey { get; }
 
+        /// <summary>
+        /// Gets a value both ends of this link share and nobody else knows: the secure transport's handshake hash, or a
+        /// value the rig's virtual transport invents per link. A proof bound to it cannot be replayed on another link.
+        /// The array is a copy.
+        /// </summary>
+        byte[] ChannelBinding { get; }
+
         /// <summary>Gets the current path state.</summary>
         EngineLinkState State { get; }
 

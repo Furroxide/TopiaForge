@@ -17,7 +17,7 @@ namespace TopiaForge.Multiplayer.Engine
 
         private readonly EngineOptions options;
         private readonly int ownerThreadId;
-        private readonly long originMicros;
+        private long originMicros;
         private readonly TransactionScope scope = new TransactionScope();
         private readonly ConcurrentQueue<Action> inbox = new ConcurrentQueue<Action>();
         private readonly List<Action<MultiplayerSessionSnapshot>> sessionSubscribers = new List<Action<MultiplayerSessionSnapshot>>();
@@ -75,7 +75,8 @@ namespace TopiaForge.Multiplayer.Engine
             Clock = new FixedStepClock(options.StepRateHz);
         }
 
-        internal EngineRole Role { get; }
+        /// <summary>Gets the engine's role; a process moves between solo hosting and joining, see <c>SessionEngine.Roles.cs</c>.</summary>
+        internal EngineRole Role { get; private set; }
 
         internal MultiplayerProcessKind ProcessKind { get; }
 
