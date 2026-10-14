@@ -21,9 +21,12 @@ namespace TopiaForge.Multiplayer.Engine
     }
 
     /// <summary>
-    /// A deterministic, tick-driven model of the session channel contract the real transport provides: per-direction
-    /// FIFO delivery, loss turned into a retry delay that also holds later frames, duplicates discarded by sequence,
-    /// and in-flight frames dropped when a link is severed. The test rig drives it; the bytes are the engine's own.
+    /// A deterministic, tick-driven model of the channel contracts the real transport provides. The Session channel is
+    /// reliable and ordered: per-direction FIFO delivery, loss turned into a retry delay that also holds later frames,
+    /// duplicates discarded by sequence. Realtime and Voice are unreliable and sequenced, one datagram per frame: loss
+    /// is final, a datagram older than one already delivered on its channel is dropped, and nothing on them waits behind
+    /// Session frames. Every channel shares the link's rate, and in-flight frames are dropped when a link is severed.
+    /// The test rig drives it; the bytes are the engine's own.
     /// </summary>
     internal sealed class VirtualEngineTransport
     {
@@ -54,7 +57,9 @@ namespace TopiaForge.Multiplayer.Engine
                 foreach (var frame in inFlight)
                 {
                     var direction = frame.Direction;
-                    if (direction.Severed || direction.Held || IsBehindTestHold(frame)) continue;
+                    if (direction.Severed) continue;
+                    if (frame.IsDatagram) return true;
+                    if (direction.Held || IsBehindTestHold(frame)) continue;
                     if (frame.IsCloseMarker || frame.LostForever || frame.Sequence > direction.DeliveredSequence) return true;
                 }
 
@@ -96,7 +101,7 @@ namespace TopiaForge.Multiplayer.Engine
             due.Clear();
             foreach (var frame in inFlight)
             {
-                if (frame.DeliverAt <= tick && !frame.Direction.Held) due.Add(frame);
+                if (frame.DeliverAt <= tick && (frame.IsDatagram || !frame.Direction.Held)) due.Add(frame);
             }
 
             if (due.Count == 0) return;
@@ -112,6 +117,13 @@ namespace TopiaForge.Multiplayer.Engine
                 if (direction.Severed)
                 {
                     inFlight.Remove(frame);
+                    continue;
+                }
+
+                if (frame.IsDatagram)
+                {
+                    inFlight.Remove(frame);
+                    DeliverDatagram(frame, tick);
                     continue;
                 }
 
@@ -139,9 +151,60 @@ namespace TopiaForge.Multiplayer.Engine
                 if (frame.Sequence <= direction.DeliveredSequence) continue;
                 direction.DeliveredSequence = frame.Sequence;
                 if (direction.Receiver.State == EngineLinkState.Closed) continue;
-                direction.BytesDelivered += frame.Bytes.Length;
-                direction.FramesDelivered++;
+                direction.CountDelivered(frame.Channel, frame.Bytes.Length);
                 direction.Receiver.Deliver(frame.Channel, frame.Bytes);
+            }
+        }
+
+        /// <summary>Delivers one datagram, or loses it: on a path that is down, or behind a newer one on its channel.</summary>
+        private static void DeliverDatagram(ScheduledFrame frame, ulong tick)
+        {
+            var direction = frame.Direction;
+            var channel = (int)frame.Channel;
+            if (direction.Held || tick < direction.HeldUntilTick)
+            {
+                direction.DatagramsLost[channel]++;
+                return;
+            }
+
+            if (frame.Sequence <= direction.DatagramDelivered[channel])
+            {
+                direction.DatagramsStale[channel]++;
+                return;
+            }
+
+            direction.DatagramDelivered[channel] = frame.Sequence;
+            if (direction.Receiver.State == EngineLinkState.Closed) return;
+            direction.CountDelivered(frame.Channel, frame.Bytes.Length);
+            direction.Receiver.Deliver(frame.Channel, frame.Bytes);
+        }
+
+        /// <summary>
+        /// Sends one unreliable, sequenced datagram. It shares the link's rate with the session channel but never waits
+        /// behind it. A lost datagram stays lost, a delayed one may arrive after a newer one and be dropped, and a
+        /// duplicate arrives a tick later and is dropped by its sequence.
+        /// </summary>
+        private void SendDatagram(VirtualDirection direction, EngineChannel channel, byte[] bytes)
+        {
+            var sequence = ++direction.DatagramSent[(int)channel];
+            frameOrdinal++;
+            var baseDelay = (ulong)Math.Max(1, conditions.LatencyTicks);
+            if (Hits(conditions.ReorderEvery)) baseDelay++;
+            var start = Math.Max(Now, direction.BusyUntilTick);
+            var serialization = SerializationTicks(bytes.Length);
+            direction.BusyUntilTick = start + serialization;
+            direction.CountSent(channel, bytes.Length);
+            if (Hits(conditions.DropEvery))
+            {
+                direction.DatagramsLost[(int)channel]++;
+                return;
+            }
+
+            var deliverAt = start + serialization + baseDelay;
+            inFlight.Add(new ScheduledFrame(deliverAt, ++scheduleOrdinal, direction, sequence, channel, bytes, false));
+            if (Hits(conditions.DuplicateEvery))
+            {
+                inFlight.Add(new ScheduledFrame(deliverAt + 1, ++scheduleOrdinal, direction, sequence, channel, (byte[])bytes.Clone(), false));
             }
         }
 
@@ -187,6 +250,12 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var direction = from.Outbound!;
             if (direction.Severed || direction.Closing) return;
+            if (channel != EngineChannel.Session)
+            {
+                SendDatagram(direction, channel, bytes);
+                return;
+            }
+
             var sequence = ++direction.SentSequence;
             frameOrdinal++;
             var baseDelay = (ulong)Math.Max(1, conditions.LatencyTicks);
@@ -197,8 +266,7 @@ namespace TopiaForge.Multiplayer.Engine
             var arrival = start + serialization + baseDelay + (Hits(conditions.DropEvery) ? (ulong)conditions.RetryDelayTicks : 0);
             var deliverAt = Math.Max(arrival, direction.LastDeliverAt);
             direction.LastDeliverAt = deliverAt;
-            direction.BytesSent += bytes.Length;
-            direction.FramesSent++;
+            direction.CountSent(channel, bytes.Length);
             direction.LastFrame = bytes;
             direction.LastSequence = sequence;
             direction.LastChannel = channel;
@@ -284,6 +352,10 @@ namespace TopiaForge.Multiplayer.Engine
             internal EngineChannel Channel { get; }
             internal byte[] Bytes { get; }
             internal bool IsCloseMarker { get; }
+
+            /// <summary>Gets whether the frame travels on an unreliable, sequenced channel.</summary>
+            internal bool IsDatagram => Channel != EngineChannel.Session && !IsCloseMarker;
+
             internal bool HeldByTest { get; set; }
             internal bool LostForever { get; set; }
         }
@@ -331,10 +403,50 @@ namespace TopiaForge.Multiplayer.Engine
         internal byte[]? LastFrame { get; set; }
         internal ulong LastSequence { get; set; }
         internal EngineChannel LastChannel { get; set; }
+        /// <summary>Gets the bytes sent on every channel together.</summary>
         internal long BytesSent { get; set; }
+
         internal long FramesSent { get; set; }
+
+        /// <summary>Gets the bytes delivered on every channel together, not counting dropped copies.</summary>
         internal long BytesDelivered { get; set; }
+
         internal long FramesDelivered { get; set; }
+
+        /// <summary>Gets each datagram channel's last sequence sent, indexed by <see cref="EngineChannel"/>.</summary>
+        internal ulong[] DatagramSent { get; } = new ulong[ChannelCount];
+
+        /// <summary>Gets each datagram channel's newest sequence delivered; anything older is dropped.</summary>
+        internal ulong[] DatagramDelivered { get; } = new ulong[ChannelCount];
+
+        /// <summary>Gets each datagram channel's datagrams lost, on the wire or to a path that was down.</summary>
+        internal long[] DatagramsLost { get; } = new long[ChannelCount];
+
+        /// <summary>Gets each datagram channel's datagrams dropped for arriving behind a newer one, duplicates included.</summary>
+        internal long[] DatagramsStale { get; } = new long[ChannelCount];
+
+        internal long[] ChannelBytesSent { get; } = new long[ChannelCount];
+        internal long[] ChannelFramesSent { get; } = new long[ChannelCount];
+        internal long[] ChannelBytesDelivered { get; } = new long[ChannelCount];
+        internal long[] ChannelFramesDelivered { get; } = new long[ChannelCount];
+
+        private const int ChannelCount = 3;
+
+        internal void CountSent(EngineChannel channel, int bytes)
+        {
+            BytesSent += bytes;
+            FramesSent++;
+            ChannelBytesSent[(int)channel] += bytes;
+            ChannelFramesSent[(int)channel]++;
+        }
+
+        internal void CountDelivered(EngineChannel channel, int bytes)
+        {
+            BytesDelivered += bytes;
+            FramesDelivered++;
+            ChannelBytesDelivered[(int)channel] += bytes;
+            ChannelFramesDelivered[(int)channel]++;
+        }
     }
 
     /// <summary>One end of a virtual link, as an engine sees it.</summary>
