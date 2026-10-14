@@ -1,0 +1,238 @@
+/**
+ * SpendGuard: the one place relay credentials are minted, and the home of the feature flags and the kill switch.
+ * There is a single instance, so every counter here is authoritative: a Durable Object runs one request's synchronous
+ * code at a time, and every check and reservation below happens before the first await.
+ *
+ * Each mint reserves the credential's planned relay volume (TTL x peers x the per-connection budget) against:
+ * - the ticket: at most TURN_TICKET_MAX_MINTS credentials and TURN_TICKET_CAP_GB reserved;
+ * - the caller's address prefix: TURN_IP_MINTS_PER_MINUTE and TURN_IP_MINTS_PER_HOUR (sliding windows);
+ * - the day: today's measured egress plus every reservation not yet measured stays under TURN_DAILY_CAP_GB.
+ * A failed mint refunds all of it. The hourly measurement reads real egress: at the daily cap it trips the kill switch,
+ * after repeated failures to measure it trips it too, and a credential that relays well past its reservation is
+ * revoked and its ticket blocked. Tripping the switch revokes every live credential.
+ */
+import { DurableObject } from "cloudflare:workers";
+import { readConfig, type RelayProvider } from "../config";
+import type { Env } from "../env";
+import type { IceServer } from "../relay/turn-api";
+import { generateIceServers, revokeCredential } from "../relay/turn-api";
+import { readTurnUsage } from "../relay/usage-api";
+import { clock, entropy, nowSeconds } from "../shared/runtime";
+import { toHex } from "../shared/wire-text";
+import { SpendStore, type Features, type KillReason, type KillSwitch, type Measurement } from "./spend-store";
+import { evaluate, increment, type BucketKeys, type WindowRule } from "./windows";
+
+/** Analytics trail real usage; credentials that expired this long before a measurement count as measured. */
+export const MEASUREMENT_LATENCY_SECONDS = 15 * 60;
+const REVOCATIONS_PER_RUN = 50;
+const MAXIMUM_NOTE_LENGTH = 200;
+
+export interface Flags {
+  readonly features: Features;
+  readonly killSwitch: KillSwitch;
+}
+
+export interface MintRequest {
+  /** "join:<ticket id>" for a joiner, "host:<token hash prefix>" for a host. */
+  readonly ticket: string;
+  readonly ticketExpiresAt: number;
+  readonly peers: number;
+  readonly keys: BucketKeys;
+  /** The time the keys were derived for, in milliseconds. */
+  readonly at: number;
+}
+
+export type MintOutcome =
+  | { readonly ok: true; readonly iceServers: readonly IceServer[]; readonly expiresAt: number }
+  | { readonly ok: false; readonly error: "relay-unavailable" | "rate-limited" | "ticket-limit" | "upstream-failed"; readonly retryAfter?: number };
+
+export interface SpendReport {
+  readonly day: string;
+  readonly mints: number;
+  readonly reservedBytes: number;
+  readonly outstandingBytes: number;
+  readonly measurement: Measurement;
+  readonly activeCredentials: number;
+  readonly pendingRevocations: number;
+  readonly dailyCapBytes: number | null;
+  readonly ticketCapBytes: number | null;
+  readonly configured: { readonly provider: boolean; readonly analytics: boolean };
+}
+
+export function utcDay(seconds: number): string {
+  return new Date(seconds * 1000).toISOString().slice(0, 10);
+}
+
+export class SpendGuard extends DurableObject<Env> {
+  private readonly store: SpendStore;
+  private alarmAt: number | null = null;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.store = new SpendStore(ctx.storage.sql);
+  }
+
+  flags(): Flags {
+    return { features: this.store.features(), killSwitch: this.store.killSwitch() };
+  }
+
+  setFeatures(changes: Partial<Features>): Flags {
+    this.store.setFeatures({ ...this.store.features(), ...changes });
+    return this.flags();
+  }
+
+  async setKillSwitch(engaged: boolean, note: string | null): Promise<Flags> {
+    if (engaged) await this.engage("manual", note);
+    else this.store.setKillSwitch({ engaged: false, reason: null, since: null, note: null });
+    return this.flags();
+  }
+
+  async mint(request: MintRequest): Promise<MintOutcome> {
+    const config = readConfig(this.env);
+    const provider = config.provider;
+    const limits = config.limits;
+    const now = Math.floor(request.at / 1000);
+    this.store.purge(nowSeconds());
+    const flags = this.flags();
+    if (provider === null || !flags.features.relay || flags.killSwitch.engaged) return { ok: false, error: "relay-unavailable" };
+
+    const account = this.store.ticket(request.ticket);
+    const reservation = limits.credentialTtlSeconds * request.peers * limits.reserveBytesPerPeerSecond;
+    if (account.blocked || request.ticketExpiresAt <= now || account.mints >= limits.ticketMaxMints) return { ok: false, error: "ticket-limit" };
+    if (account.reservedBytes + reservation > provider.ticketCapBytes) return { ok: false, error: "ticket-limit" };
+    const rules: WindowRule[] = [
+      { window: "minute", limit: limits.ipMintsPerMinute },
+      { window: "hour", limit: limits.ipMintsPerHour },
+    ];
+    const verdict = evaluate(this.ctx.storage.sql, "mint", request.keys, rules, 1, request.at);
+    if (!verdict.allowed) return { ok: false, error: "rate-limited", retryAfter: verdict.retryAfterSeconds };
+    if (this.committedBytes(now) + reservation > provider.dailyCapBytes) return { ok: false, error: "relay-unavailable" };
+
+    // Reserve everything before the first await, so concurrent mints see each other.
+    const provisional = `pending:${toHex(entropy.bytes(16))}`;
+    const forgetAt = Math.max(request.ticketExpiresAt, now + limits.credentialTtlSeconds) + 24 * 60 * 60;
+    increment(this.ctx.storage.sql, "mint", request.keys, rules, 1, request.at);
+    this.store.chargeTicket(request.ticket, 1, reservation, forgetAt);
+    this.store.chargeDay(utcDay(now), 1, reservation, now);
+    this.store.addCredential(provisional, request.ticket, reservation, now + limits.credentialTtlSeconds);
+
+    try {
+      const minted = await generateIceServers(provider, limits.credentialTtlSeconds);
+      const expiresAt = nowSeconds() + limits.credentialTtlSeconds;
+      this.store.confirmCredential(provisional, minted.username, expiresAt);
+      await this.scheduleAlarm();
+      return { ok: true, iceServers: minted.iceServers, expiresAt };
+    } catch {
+      increment(this.ctx.storage.sql, "mint", request.keys, rules, -1, request.at);
+      this.store.chargeTicket(request.ticket, -1, -reservation, forgetAt);
+      this.store.chargeDay(utcDay(now), -1, -reservation, now);
+      this.store.removeCredential(provisional);
+      return { ok: false, error: "upstream-failed" };
+    }
+  }
+
+  /** The hourly measurement, also run on demand by an admin. */
+  async measure(): Promise<SpendReport> {
+    const config = readConfig(this.env);
+    const now = nowSeconds();
+    this.store.purge(now);
+    const provider = config.provider;
+    if (provider !== null) {
+      const previous = this.store.measurement();
+      try {
+        if (config.analytics === null) throw new Error("analytics not configured");
+        const day = utcDay(now);
+        const usage = await readTurnUsage(config.analytics, provider.keyId, day);
+        this.store.setMeasurement({ day, egressBytes: usage.egressBytes, measuredAt: now, failures: 0, lastFailureAt: previous.lastFailureAt });
+        for (const [username, bytes] of usage.byUsername) {
+          const credential = this.store.credential(username);
+          if (credential !== null && bytes > credential.reservedBytes * config.limits.overuseFactor) {
+            this.store.markForRevocation(username);
+            this.store.blockTicket(credential.ticket);
+          }
+        }
+        if (usage.egressBytes >= provider.dailyCapBytes) await this.engage("spend-cap", null);
+      } catch {
+        const failures = previous.failures + 1;
+        this.store.setMeasurement({ ...previous, failures, lastFailureAt: now });
+        const limit = config.limits.measurementFailureLimit;
+        if (limit > 0 && failures >= limit) await this.engage("measurement-failed", null);
+      }
+      await this.revokePending(provider);
+    }
+    await this.scheduleAlarm();
+    return this.report();
+  }
+
+  report(): SpendReport {
+    const config = readConfig(this.env);
+    const now = nowSeconds();
+    const totals = this.store.dayTotals(utcDay(now));
+    return {
+      day: totals.day,
+      mints: totals.mints,
+      reservedBytes: totals.reservedBytes,
+      outstandingBytes: this.committedBytes(now) - this.measuredToday(now),
+      measurement: this.store.measurement(),
+      activeCredentials: this.store.activeCredentials(now),
+      pendingRevocations: this.store.pendingRevocations(now, 1000).length,
+      dailyCapBytes: config.provider?.dailyCapBytes ?? null,
+      ticketCapBytes: config.provider?.ticketCapBytes ?? null,
+      configured: { provider: config.provider !== null, analytics: config.analytics !== null },
+    };
+  }
+
+  override async alarm(): Promise<void> {
+    this.alarmAt = null;
+    this.store.purge(nowSeconds());
+    const provider = readConfig(this.env).provider;
+    if (provider !== null) await this.revokePending(provider);
+    await this.scheduleAlarm();
+  }
+
+  /** Today's measured egress plus every reservation the latest measurement cannot have seen yet. */
+  private committedBytes(now: number): number {
+    const measurement = this.store.measurement();
+    const today = utcDay(now);
+    const measuredToday = this.measuredToday(now);
+    const startOfDay = Date.parse(`${today}T00:00:00Z`) / 1000;
+    const seenUntil = measurement.day === today && measurement.measuredAt !== null ? measurement.measuredAt : startOfDay;
+    return measuredToday + this.store.outstandingBytes(seenUntil - MEASUREMENT_LATENCY_SECONDS);
+  }
+
+  private measuredToday(now: number): number {
+    const measurement = this.store.measurement();
+    return measurement.day === utcDay(now) ? measurement.egressBytes : 0;
+  }
+
+  private async engage(reason: KillReason, note: string | null): Promise<void> {
+    const now = nowSeconds();
+    const current = this.store.killSwitch();
+    if (!current.engaged) {
+      const trimmed = note === null ? null : note.slice(0, MAXIMUM_NOTE_LENGTH);
+      this.store.setKillSwitch({ engaged: true, reason, since: now, note: trimmed });
+    }
+    this.store.revokeAllLive(now);
+    const provider = readConfig(this.env).provider;
+    if (provider !== null) await this.revokePending(provider);
+    await this.scheduleAlarm();
+  }
+
+  private async revokePending(provider: RelayProvider): Promise<void> {
+    for (const username of this.store.pendingRevocations(nowSeconds(), REVOCATIONS_PER_RUN)) {
+      if (await revokeCredential(provider, username)) this.store.markRevoked(username);
+    }
+  }
+
+  private async scheduleAlarm(): Promise<void> {
+    const now = nowSeconds();
+    const due = this.store.nextDue();
+    const retry = this.store.pendingRevocations(now, 1).length > 0 ? now + 60 : null;
+    const next = [due, retry].filter((value): value is number => value !== null);
+    if (next.length === 0) return;
+    const at = Math.max(Math.min(...next) * 1000, clock.now());
+    if (this.alarmAt !== null && this.alarmAt <= at) return;
+    this.alarmAt = at;
+    await this.ctx.storage.setAlarm(at);
+  }
+}

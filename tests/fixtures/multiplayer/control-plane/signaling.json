@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "about": "A signaling transcript (docs/internal/ControlPlaneApi.md, Signaling), recorded by services/control-plane/test/client-fixtures.test.ts. The joining peer chose relay-only, so the service withholds its host and server-reflexive candidates. Frames are exact canonical JSON text; a client must send its frames byte for byte and parse every frame it receives.",
+  "relayOnly": {
+    "host": false,
+    "peer": true
+  },
+  "transcript": [
+    {
+      "step": 1,
+      "from": "service",
+      "to": "host",
+      "frame": "{\"peers\":[],\"role\":\"host\",\"type\":\"welcome\"}"
+    },
+    {
+      "step": 2,
+      "from": "service",
+      "to": "peer",
+      "frame": "{\"hostOnline\":true,\"hostRelayOnly\":false,\"peer\":\"74aea50c644d302f\",\"role\":\"peer\",\"type\":\"welcome\"}"
+    },
+    {
+      "step": 3,
+      "from": "service",
+      "to": "host",
+      "frame": "{\"peer\":\"74aea50c644d302f\",\"relayOnly\":true,\"type\":\"joined\"}"
+    },
+    {
+      "step": 4,
+      "from": "peer",
+      "to": "service",
+      "frame": "{\"candidates\":[{\"address\":\"192.168.1.20\",\"kind\":\"host\",\"port\":27250,\"priority\":2130706431},{\"address\":\"198.51.100.77\",\"kind\":\"srflx\",\"port\":40000,\"priority\":1694498815},{\"address\":\"203.0.113.50\",\"kind\":\"relay\",\"port\":50000,\"priority\":16777215}],\"ice\":{\"pwd\":\"0123456789abcdefABCDEF\",\"ufrag\":\"abcd1234\"},\"type\":\"offer\"}"
+    },
+    {
+      "step": 5,
+      "from": "service",
+      "to": "peer",
+      "frame": "{\"code\":\"candidates-withheld\",\"type\":\"notice\",\"withheld\":2}"
+    },
+    {
+      "step": 6,
+      "from": "service",
+      "to": "host",
+      "frame": "{\"candidates\":[{\"address\":\"203.0.113.50\",\"kind\":\"relay\",\"port\":50000,\"priority\":16777215}],\"ice\":{\"pwd\":\"0123456789abcdefABCDEF\",\"ufrag\":\"abcd1234\"},\"peer\":\"74aea50c644d302f\",\"type\":\"offer\"}"
+    },
+    {
+      "step": 7,
+      "from": "host",
+      "to": "service",
+      "frame": "{\"candidates\":[{\"address\":\"203.0.113.9\",\"kind\":\"srflx\",\"port\":27250,\"priority\":1694498815}],\"ice\":{\"pwd\":\"ZYXWVUTSRQPONMLKJIHGFE\",\"ufrag\":\"wxyz5678\"},\"peer\":\"74aea50c644d302f\",\"type\":\"answer\"}"
+    },
+    {
+      "step": 8,
+      "from": "service",
+      "to": "peer",
+      "frame": "{\"candidates\":[{\"address\":\"203.0.113.9\",\"kind\":\"srflx\",\"port\":27250,\"priority\":1694498815}],\"ice\":{\"pwd\":\"ZYXWVUTSRQPONMLKJIHGFE\",\"ufrag\":\"wxyz5678\"},\"type\":\"answer\"}"
+    },
+    {
+      "step": 9,
+      "from": "peer",
+      "to": "service",
+      "frame": "{\"candidate\":{\"address\":\"203.0.113.51\",\"kind\":\"relay\",\"port\":50001,\"priority\":16777214},\"type\":\"candidate\"}"
+    },
+    {
+      "step": 10,
+      "from": "service",
+      "to": "host",
+      "frame": "{\"candidate\":{\"address\":\"203.0.113.51\",\"kind\":\"relay\",\"port\":50001,\"priority\":16777214},\"peer\":\"74aea50c644d302f\",\"type\":\"candidate\"}"
+    },
+    {
+      "step": 11,
+      "from": "host",
+      "to": "service",
+      "frame": "{\"delayMs\":250,\"peer\":\"74aea50c644d302f\",\"type\":\"punch\"}"
+    },
+    {
+      "step": 12,
+      "from": "service",
+      "to": "peer",
+      "frame": "{\"delayMs\":250,\"type\":\"punch\"}"
+    },
+    {
+      "step": 13,
+      "from": "peer",
+      "to": "service",
+      "frame": "{\"reason\":\"done\",\"type\":\"bye\"}"
+    },
+    {
+      "step": 14,
+      "from": "service",
+      "to": "host",
+      "frame": "{\"peer\":\"74aea50c644d302f\",\"reason\":\"done\",\"type\":\"bye\"}"
+    },
+    {
+      "step": 15,
+      "from": "service",
+      "to": "host",
+      "frame": "{\"peer\":\"74aea50c644d302f\",\"type\":\"left\"}"
+    }
+  ]
+}
