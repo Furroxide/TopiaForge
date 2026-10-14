@@ -43,18 +43,21 @@ final class LanBeacon {
   }
 
   /// Reads a beacon, or returns null for anything of another size, type or
-  /// version, or with port zero.
+  /// version, with port zero, or holding a value that is not a byte. It
+  /// never throws: a datagram is hostile input.
   static LanBeacon? tryDecode(List<int> datagram) {
     if (datagram.length != size ||
+        datagram.any((value) => value < 0 || value > 0xFF) ||
         datagram[0] != packetType ||
         datagram[1] != version) {
       return null;
     }
     final port = datagram[34] | (datagram[35] << 8);
     if (port == 0) return null;
-    final serverId = datagram.sublist(2, 34);
-    if (serverId.any((value) => value < 0 || value > 0xFF)) return null;
-    return LanBeacon(serverId: WireText.toHex(serverId), gamePort: port);
+    return LanBeacon(
+      serverId: WireText.toHex(datagram.sublist(2, 34)),
+      gamePort: port,
+    );
   }
 
   @override

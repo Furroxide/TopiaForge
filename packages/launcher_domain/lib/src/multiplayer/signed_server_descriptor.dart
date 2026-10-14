@@ -177,6 +177,9 @@ final class ServerDescriptorVerifier {
   /// every member is valid, the server id and package digest agree, the
   /// signature verifies under the signing key inside, and, when
   /// [expectedServerId] is given, that key's hash is [expectedServerId].
+  ///
+  /// Served bytes are hostile input, so nothing they or the signature check
+  /// do can make this throw or accept: every failure is a refusal.
   Future<ServerDescriptorVerification> verify(
     List<int> bytes, {
     String? expectedServerId,
@@ -189,6 +192,11 @@ final class ServerDescriptorVerifier {
         ServerDescriptorRefusal.malformed,
         error.message,
       );
+    } on Object {
+      return const ServerDescriptorRefused(
+        ServerDescriptorRefusal.malformed,
+        'The descriptor could not be read.',
+      );
     }
     if (expectedServerId != null &&
         envelope.descriptor.serverId != expectedServerId) {
@@ -200,7 +208,7 @@ final class ServerDescriptorVerifier {
     final bool valid;
     try {
       valid = await _signatures.verifySignature(envelope);
-    } on Exception {
+    } on Object {
       return const ServerDescriptorRefused(
         ServerDescriptorRefusal.badSignature,
         'The descriptor signature could not be checked.',

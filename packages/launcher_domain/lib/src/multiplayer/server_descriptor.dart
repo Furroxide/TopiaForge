@@ -228,7 +228,7 @@ final class ServerDescriptorV1 {
       _requireString(value, 'visibility'),
     );
     if (visibility == null) {
-      throw FormatException("Unknown visibility '${value['visibility']}'.");
+      throw const FormatException('Visibility is public, invite or lan.');
     }
     final packages = _readPackages(value['packages']);
     final ServerDescriptorV1 descriptor;

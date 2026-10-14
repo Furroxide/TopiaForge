@@ -1,39 +1,5 @@
 part of '../multiplayer.dart';
 
-/// What the player asked to join.
-sealed class JoinTarget {
-  const JoinTarget();
-
-  /// The server the target names before anything is resolved: a server or
-  /// direct link's server id, or a listing's. Null for an invite.
-  String? get pinnedServerId;
-}
-
-/// A `topiaforge://join/…` link. A direct link holds an address.
-final class JoinLinkTarget extends JoinTarget {
-  const JoinLinkTarget(this.link);
-
-  final SessionLink link;
-
-  @override
-  String? get pinnedServerId => link.serverId;
-}
-
-/// A row the player picked in the server browser.
-final class JoinListingTarget extends JoinTarget {
-  JoinListingTarget({required this.serverId, required this.source}) {
-    if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
-    }
-  }
-
-  final String serverId;
-  final ServerListingSource source;
-
-  @override
-  String get pinnedServerId => serverId;
-}
-
 /// Something that happened while joining. [JoinSession.reduce] applies it.
 sealed class JoinEvent {
   const JoinEvent();
@@ -50,7 +16,9 @@ final class JoinTargetResolved extends JoinEvent {
   final String serverId;
 }
 
-/// The server's descriptor was fetched and verified.
+/// The server's descriptor was fetched and verified as
+/// [JoinSessionState.descriptorRequest] asked. For a typed address it
+/// names the server the join is with from then on.
 final class JoinDescriptorVerified extends JoinEvent {
   const JoinDescriptorVerified(this.descriptor);
 
@@ -64,15 +32,10 @@ final class JoinPlanReady extends JoinEvent {
   final JoinPlan plan;
 }
 
-/// The player accepted the consent sheet.
+/// The player accepted the consent sheet. The session's privacy was chosen
+/// before the join started ([JoinSession.start]) and does not change here.
 final class JoinConsentGiven extends JoinEvent {
-  const JoinConsentGiven({
-    required this.privacy,
-    this.hostServedAcknowledged = false,
-  });
-
-  /// The privacy the player chose for this session.
-  final MultiplayerAddressPrivacy privacy;
+  const JoinConsentGiven({this.hostServedAcknowledged = false});
 
   /// Whether the player ticked the developer-mode host-served box. A plan
   /// with host-served packages needs it.
@@ -129,20 +92,29 @@ final class JoinCancelRequested extends JoinEvent {
   const JoinCancelRequested();
 }
 
-/// The current step failed. Cancellation is [JoinCancelRequested], and the
-/// failures that carry detail have their own constructors.
+/// The game process the join launched has exited. Before the session began
+/// that ends the join as [JoinFailureCode.gameExited]; during the session it
+/// ends the session as [JoinSessionEndReason.gameExited].
+final class JoinGameExited extends JoinEvent {
+  const JoinGameExited();
+}
+
+/// The current step failed. Cancellation is [JoinCancelRequested], a game
+/// exit is [JoinGameExited], and the failures that carry detail have their
+/// own constructors.
 final class JoinFailed extends JoinEvent {
   JoinFailed(this.code, {this.detail = ''})
     : rollbackComplete = null,
       gameOwnership = null {
     if (code == JoinFailureCode.cancelled ||
+        code == JoinFailureCode.gameExited ||
         code == JoinFailureCode.installFailed ||
         code == JoinFailureCode.gameRunning) {
       throw ArgumentError.value(
         code,
         'code',
-        'Use JoinCancelRequested, JoinFailed.installFailed or '
-            'JoinFailed.gameRunning.',
+        'Use JoinCancelRequested, JoinGameExited, JoinFailed.installFailed '
+            'or JoinFailed.gameRunning.',
       );
     }
   }

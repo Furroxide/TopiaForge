@@ -60,13 +60,16 @@ abstract final class CanonicalJson {
   /// returning unmodifiable maps and lists. Throws [CanonicalJsonException]
   /// for anything else: malformed UTF-8, a byte-order mark, white space,
   /// unsorted or repeated keys, fractions, out-of-range integers, needless
-  /// escapes, unpaired surrogates, nesting past [maximumDepth], or trailing
-  /// content.
+  /// escapes, unpaired surrogates, nesting past [maximumDepth], trailing
+  /// content, or a value in [bytes] that is not a byte.
   static Object? decode(List<int> bytes, {required int maximumBytes}) {
     if (bytes.isEmpty || bytes.length > maximumBytes) {
       throw CanonicalJsonException(
         'The document is empty or larger than $maximumBytes bytes.',
       );
+    }
+    if (bytes.any((value) => value < 0 || value > 0xFF)) {
+      throw const CanonicalJsonException('The document is not bytes.');
     }
     if (bytes.length >= 3 &&
         bytes[0] == 0xEF &&
@@ -108,8 +111,8 @@ abstract final class CanonicalJson {
         buffer.write(value ? 'true' : 'false');
       case int():
         if (value > maximumSafeInteger || value < -maximumSafeInteger) {
-          throw CanonicalJsonException(
-            'The integer $value is outside the exactly representable range.',
+          throw const CanonicalJsonException(
+            'An integer is outside the exactly representable range.',
           );
         }
         buffer.write(value);
@@ -126,8 +129,8 @@ abstract final class CanonicalJson {
         final keys = <String>[];
         for (final key in value.keys) {
           if (key is! String || !isKey(key)) {
-            throw CanonicalJsonException(
-              'The key $key is not 1 to 64 ASCII letters and digits.',
+            throw const CanonicalJsonException(
+              'A key is not 1 to 64 ASCII letters and digits.',
             );
           }
           keys.add(key);

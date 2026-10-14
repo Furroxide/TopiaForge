@@ -13,8 +13,9 @@ enum JoinPackageDisposition {
   /// separately.
   downloadFromHost,
 
-  /// Not enabled: an optional package without a usable copy, or a package
-  /// that runs only on the host.
+  /// Not enabled: a package whose trusted manifest makes it optional and
+  /// that is not installed at the exact archive, or one that runs only on
+  /// the host. A package without a trusted manifest is never skipped.
   skip,
 
   /// Blocks the join; see the plan's blockers.

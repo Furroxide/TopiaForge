@@ -64,14 +64,14 @@ void main() {
       events.fold(state, JoinSession.reduce);
 
   JoinSessionState toConsent([JoinTarget? from]) =>
-      run(JoinSession.start(from ?? target), [
+      run(startJoin(from ?? target), [
         JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(server),
         JoinPlanReady(downloadPlan),
       ]);
 
   JoinSessionState toConnecting() => run(toConsent(), const [
-    JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
+    JoinConsentGiven(),
     JoinDownloadsCompleted(),
     JoinInstallCompleted(),
     JoinProfilePrepared(),
@@ -85,12 +85,16 @@ void main() {
 
   group('the join flow', () {
     test('walks every step into the session and out', () {
-      var state = JoinSession.start(target);
+      var state = startJoin(target, privacy: MultiplayerAddressPrivacy.direct);
       expect(state.stage, JoinStage.resolving);
       expect(state.serverId, isNull);
+      expect(state.privacy, MultiplayerAddressPrivacy.direct);
+      expect(state.descriptorRequest, isNull);
       state = JoinSession.reduce(state, JoinTargetResolved(hostAServerId));
       expect(state.stage, JoinStage.fetchingDescriptor);
       expect(state.serverId, hostAServerId);
+      expect(state.descriptorRequest!.expectedServerId, hostAServerId);
+      expect(state.descriptorRequest!.allowsDirect, isTrue);
       state = JoinSession.reduce(state, JoinDescriptorVerified(server));
       expect(state.stage, JoinStage.checking);
       expect(state.descriptor, same(server));
@@ -98,10 +102,7 @@ void main() {
       expect(state.stage, JoinStage.awaitingConsent);
       expect(state.plan, same(downloadPlan));
       expect(state.consentKey, isNull);
-      state = JoinSession.reduce(
-        state,
-        const JoinConsentGiven(privacy: MultiplayerAddressPrivacy.direct),
-      );
+      state = JoinSession.reduce(state, const JoinConsentGiven());
       expect(state.stage, JoinStage.downloading);
       expect(state.consentKey, downloadPlan.consentKey);
       expect(state.privacy, MultiplayerAddressPrivacy.direct);
@@ -133,11 +134,11 @@ void main() {
     });
 
     test('skips downloading when every package is installed', () {
-      final state = run(JoinSession.start(target), [
+      final state = run(startJoin(target), [
         JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(server),
         JoinPlanReady(installedPlan),
-        const JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
+        const JoinConsentGiven(),
       ]);
       expect(state.stage, JoinStage.preparingProfile);
       expect(state.progress, isNull);
@@ -158,7 +159,7 @@ void main() {
       final invite = JoinLinkTarget(SessionLink.invite('ABCDE-12345'));
       expect(invite.pinnedServerId, isNull);
       final state = JoinSession.reduce(
-        JoinSession.start(invite),
+        startJoin(invite),
         JoinTargetResolved('b' * 64),
       );
       expect(state.stage, JoinStage.fetchingDescriptor);
@@ -170,14 +171,11 @@ void main() {
         target,
         JoinListingTarget(
           serverId: hostAServerId,
-          source: ServerListingSource.lan,
+          source: ServerListingSource.internet,
         ),
       ]) {
         final failure = failureOf(
-          JoinSession.reduce(
-            JoinSession.start(pinned),
-            JoinTargetResolved('b' * 64),
-          ),
+          JoinSession.reduce(startJoin(pinned), JoinTargetResolved('b' * 64)),
         );
         expect(failure.code, JoinFailureCode.invalidLink);
         expect(failure.stage, JoinStage.resolving);
@@ -187,7 +185,7 @@ void main() {
     test('a descriptor for another server is invalid', () {
       // The invite resolved to server b, but host A's descriptor arrived.
       final invite = JoinLinkTarget(SessionLink.invite('ABCDE12345'));
-      final state = run(JoinSession.start(invite), [
+      final state = run(startJoin(invite), [
         JoinTargetResolved('b' * 64),
         JoinDescriptorVerified(server),
       ]);
@@ -204,7 +202,7 @@ void main() {
         resolutions: const {},
         environment: environmentWith(gameBuild: '2478'),
       );
-      final state = run(JoinSession.start(target), [
+      final state = run(startJoin(target), [
         JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(server),
         JoinPlanReady(blocked),
@@ -258,7 +256,7 @@ void main() {
       );
       cases.forEach((code, plan) {
         final state = run(
-          JoinSession.start(
+          startJoin(
             JoinListingTarget(
               serverId: hostAServerId,
               source: ServerListingSource.internet,
@@ -275,7 +273,7 @@ void main() {
     });
 
     test('a plan for an older descriptor is stale and ignored', () async {
-      final checking = run(JoinSession.start(target), [
+      final checking = run(startJoin(target), [
         JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(server),
       ]);
@@ -286,22 +284,17 @@ void main() {
     });
 
     test('host-served packages need the developer-mode acknowledgement', () {
-      final waiting = run(JoinSession.start(target), [
+      final waiting = run(startJoin(target), [
         JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(hostServedServer),
         JoinPlanReady(hostServedPlan),
       ]);
       expect(waiting.stage, JoinStage.awaitingConsent);
-      const plain = JoinConsentGiven(
-        privacy: MultiplayerAddressPrivacy.relayOnly,
-      );
+      const plain = JoinConsentGiven();
       expect(JoinSession.reduce(waiting, plain), same(waiting));
       final consented = JoinSession.reduce(
         waiting,
-        const JoinConsentGiven(
-          privacy: MultiplayerAddressPrivacy.relayOnly,
-          hostServedAcknowledged: true,
-        ),
+        const JoinConsentGiven(hostServedAcknowledged: true),
       );
       expect(consented.stage, JoinStage.downloading);
     });
@@ -347,10 +340,7 @@ void main() {
         JoinPlanReady(changedPlan),
       ]);
       expect(state.stage, JoinStage.awaitingConsent);
-      state = JoinSession.reduce(
-        state,
-        const JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
-      );
+      state = JoinSession.reduce(state, const JoinConsentGiven());
       expect(state.stage, JoinStage.downloading);
       expect(state.consentKey, changedPlan.consentKey);
     });
@@ -359,11 +349,9 @@ void main() {
   group('cancellation', () {
     test('stops at once where the work can be abandoned', () {
       for (final state in [
-        JoinSession.start(target),
+        startJoin(target),
         toConsent(),
-        run(toConsent(), const [
-          JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
-        ]),
+        run(toConsent(), const [JoinConsentGiven()]),
         toConnecting(),
       ]) {
         final ended = JoinSession.reduce(state, const JoinCancelRequested());
@@ -375,7 +363,7 @@ void main() {
 
     test('waits for installing, the profile and the launch to finish', () {
       final installing = run(toConsent(), const [
-        JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
+        JoinConsentGiven(),
         JoinDownloadsCompleted(),
       ]);
       final steps = <JoinSessionState, JoinEvent>{
@@ -402,10 +390,7 @@ void main() {
 
     test('a step that fails after a cancel request reports its failure', () {
       final held = JoinSession.reduce(
-        run(toConsent(), const [
-          JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
-          JoinDownloadsCompleted(),
-        ]),
+        run(toConsent(), const [JoinConsentGiven(), JoinDownloadsCompleted()]),
         const JoinCancelRequested(),
       );
       final failure = failureOf(
@@ -422,7 +407,7 @@ void main() {
   group('failure details', () {
     test('are carried into the outcome', () {
       final launching = run(toConsent(), const [
-        JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
+        JoinConsentGiven(),
         JoinDownloadsCompleted(),
         JoinInstallCompleted(),
         JoinProfilePrepared(),
@@ -448,7 +433,7 @@ void main() {
       final rolledBack = failureOf(
         JoinSession.reduce(
           run(toConsent(), const [
-            JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
+            JoinConsentGiven(),
             JoinDownloadsCompleted(),
           ]),
           const JoinFailed.installFailed(rollbackComplete: true),

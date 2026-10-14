@@ -87,7 +87,7 @@ void main() {
       expect(action.sourceName, 'TopiaForge Mod Registry');
     });
 
-    test('optional session packages are used only when installed', () async {
+    test('trusted optional packages are used only when installed', () async {
       final kept = testManifest(
         'example.kept',
         mode: 'session',
@@ -105,20 +105,16 @@ void main() {
       final result = await planJoin([
         (optional('example.kept'), installedOf(kept)),
         (optional('example.offered'), availableOf(offered)),
-        (optional('example.unknown'), null),
       ]);
       expect(result.isJoinable, isTrue);
       expect(
         packageIn(result, 'example.kept').disposition,
         JoinPackageDisposition.useInstalled,
       );
-      for (final id in ['example.offered', 'example.unknown']) {
-        expect(
-          packageIn(result, id).disposition,
-          JoinPackageDisposition.skip,
-          reason: id,
-        );
-      }
+      expect(
+        packageIn(result, 'example.offered').disposition,
+        JoinPackageDisposition.skip,
+      );
       expect(result.needsDownloads, isFalse);
       expect(result.capabilities, ['hud']);
       expect(result.derivedProfile.enabledMods, {'example.kept'});
@@ -126,6 +122,29 @@ void main() {
         result.admission.inactiveSessionReasons.map((item) => item.modId),
         ['example.offered'],
       );
+    });
+
+    test('no trusted manifest blocks whatever role the host claims', () async {
+      for (final role in DescriptorPackageRole.values) {
+        final result = await planJoin([
+          (testPackage('example.hostonly', role: role), null),
+        ]);
+        expect(result.isJoinable, isFalse, reason: role.wireName);
+        expect(ServerReadiness.of(result), ServerReadiness.blocked);
+        final blocker = result.blockers.single;
+        expect(blocker.code, JoinBlockerCode.contentUnavailable);
+        expect(blocker.modId, 'example.hostonly');
+        expect(
+          packageIn(result, 'example.hostonly').disposition,
+          JoinPackageDisposition.blocked,
+        );
+        expect(result.derivedProfile.enabledMods, isEmpty);
+        expect(
+          blocker.message.contains('optional'),
+          role == DescriptorPackageRole.sessionOptional,
+          reason: 'the claim shapes only the message',
+        );
+      }
     });
 
     test('a required package without a trusted copy blocks, per mod', () async {

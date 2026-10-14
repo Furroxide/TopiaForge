@@ -32,14 +32,14 @@ final class SessionLink {
     this.port,
   });
 
-  /// A link to the invite [code], read forgivingly ([InviteCode]).
+  /// A link to the invite [code], read forgivingly ([InviteCode]). A refused
+  /// code is not repeated in the error, since typed input may be an address.
   factory SessionLink.invite(String code) {
     final normalized = InviteCode.tryNormalize(code);
     if (normalized == null) {
-      throw ArgumentError.value(
-        code,
-        'code',
+      throw ArgumentError(
         'An invite code is 10 Crockford base32 characters.',
+        'code',
       );
     }
     return SessionLink._(SessionLinkKind.invite, inviteCode: normalized);
@@ -51,7 +51,8 @@ final class SessionLink {
     return SessionLink._(SessionLinkKind.server, serverId: serverId);
   }
 
-  /// A direct link to [host] and [port], pinned by [serverId].
+  /// A direct link to [host] and [port], pinned by [serverId]. A refused host
+  /// is not repeated in the error, so logging it writes no address.
   factory SessionLink.direct({
     required String serverId,
     required String host,
@@ -60,11 +61,7 @@ final class SessionLink {
     _requireServerId(serverId);
     final normalizedHost = NetworkHost.tryNormalize(host);
     if (normalizedHost == null) {
-      throw ArgumentError.value(
-        host,
-        'host',
-        'A host is a DNS name or an IP address.',
-      );
+      throw ArgumentError('A host is a DNS name or an IP address.', 'host');
     }
     if (port < 1 || port > 65535) {
       throw RangeError.range(port, 1, 65535, 'port');

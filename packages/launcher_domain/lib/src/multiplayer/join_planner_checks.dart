@@ -124,15 +124,19 @@ List<JoinPlanBlocker> _admissionBlockers(
   );
 }
 
+/// Why a package without a trusted manifest blocks the join. The role the
+/// host claims only changes the wording: a claim of optional cannot be
+/// checked without the manifest, so it does not let the package be left out.
 String _unavailableMessage(
   JoinPackageResolution resolution,
   JoinEnvironment environment,
   ServerDescriptorV1 descriptor,
+  DescriptorPackageRole claimed,
 ) {
   final source = resolution.sourceName.isEmpty
       ? 'a source'
       : resolution.sourceName;
-  return switch (resolution.availability) {
+  final reason = switch (resolution.availability) {
     JoinPackageAvailability.inDisabledSource =>
       'Only the disabled source $source offers it. Enable it to join.',
     JoinPackageAvailability.hashMismatch =>
@@ -146,6 +150,10 @@ String _unavailableMessage(
       'The server does not serve its packages.',
     _ => 'None of your enabled sources offer it.',
   };
+  return claimed == DescriptorPackageRole.sessionOptional
+      ? '$reason The server calls it optional, but only its manifest could '
+            'show that.'
+      : reason;
 }
 
 /// Notes where the host's claimed role disagrees with the trusted manifest.

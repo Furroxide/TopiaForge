@@ -41,6 +41,21 @@ void main() {
       expect(LanBeacon.tryDecode(const []), isNull);
     });
 
+    test('returns null rather than throwing for values beyond a byte', () {
+      final valid = hexBytes(
+        asObjects(beacons['valid']).first['hex']! as String,
+      );
+      for (final (index, value) in [
+        (35, 0x1FF),
+        (34, 300),
+        (2, 256),
+        (9, -1),
+      ]) {
+        final datagram = List<int>.of(valid)..[index] = value;
+        expect(LanBeacon.tryDecode(datagram), isNull, reason: '$index=$value');
+      }
+    });
+
     test('uses the shared ports and timing', () {
       expect(LanBeacon.discoveryPort, 27251);
       expect(LanBeacon.defaultGamePort, 27250);

@@ -39,20 +39,25 @@ void main() {
         hostServesPackages: true,
       );
       expect(result.isJoinable, isTrue);
-      expect(
-        packageIn(result, 'example.local').disposition,
-        JoinPackageDisposition.downloadFromHost,
-      );
-      expect(
-        packageIn(result, 'example.extra').disposition,
-        JoinPackageDisposition.skip,
-      );
+      // An unverifiable claim of optional changes nothing: both come from
+      // the host and both need the acknowledgement.
+      for (final id in ['example.local', 'example.extra']) {
+        expect(
+          packageIn(result, id).disposition,
+          JoinPackageDisposition.downloadFromHost,
+          reason: id,
+        );
+      }
       expect(result.hasUnverifiedPackages, isTrue);
       expect(result.needsDownloads, isTrue);
       expect(result.installActions, isEmpty);
-      expect(result.hostServedPackages.single.id, 'example.local');
+      expect(result.hostServedPackages.map((item) => item.id), [
+        'example.extra',
+        'example.local',
+      ]);
       expect(result.capabilities, isEmpty);
       expect(result.derivedProfile.selectedVersions, {
+        'example.extra': '1.0.0',
         'example.local': '1.0.0',
       });
     });

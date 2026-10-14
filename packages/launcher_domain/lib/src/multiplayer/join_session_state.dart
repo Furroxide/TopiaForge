@@ -20,11 +20,12 @@ final class JoinSessionState {
   const JoinSessionState._({
     required this.stage,
     required this.target,
+    required this.privacy,
+    required this.trustChangedIdentity,
     this.serverId,
     this.descriptor,
     this.plan,
     this.consentKey,
-    this.privacy,
     this.progress,
     this.replans = 0,
     this.cancelRequested = false,
@@ -34,7 +35,15 @@ final class JoinSessionState {
   final JoinStage stage;
   final JoinTarget target;
 
-  /// The server, once resolving found it.
+  /// The privacy the player chose for this session before it started. It
+  /// governs every contact, from fetching the descriptor onwards.
+  final MultiplayerAddressPrivacy privacy;
+
+  /// Whether the player chose to trust a typed address whose server changed.
+  final bool trustChangedIdentity;
+
+  /// The server: named by the target, found by resolving, or, for a typed
+  /// address, learned from its first descriptor.
   final String? serverId;
 
   /// The verified descriptor, from checking onwards.
@@ -45,9 +54,6 @@ final class JoinSessionState {
 
   /// The [JoinPlan.consentKey] the player consented to.
   final String? consentKey;
-
-  /// The privacy the player chose for this session at consent.
-  final MultiplayerAddressPrivacy? privacy;
 
   /// Download progress while downloading.
   final JoinTransferProgress? progress;
@@ -64,13 +70,24 @@ final class JoinSessionState {
 
   bool get isEnded => stage == JoinStage.ended;
 
+  /// What to fetch, and whom the fetch may contact, while fetching the
+  /// descriptor; null in every other stage.
+  JoinDescriptorRequest? get descriptorRequest =>
+      stage == JoinStage.fetchingDescriptor
+      ? JoinDescriptorRequest._(
+          target: target,
+          expectedServerId: serverId,
+          privacy: privacy,
+          trustChangedIdentity: trustChangedIdentity,
+        )
+      : null;
+
   JoinSessionState _copy({
     JoinStage? stage,
     Object? serverId = _keep,
     Object? descriptor = _keep,
     Object? plan = _keep,
     Object? consentKey = _keep,
-    Object? privacy = _keep,
     Object? progress = _keep,
     int? replans,
     bool? cancelRequested,
@@ -78,6 +95,8 @@ final class JoinSessionState {
   }) => JoinSessionState._(
     stage: stage ?? this.stage,
     target: target,
+    privacy: privacy,
+    trustChangedIdentity: trustChangedIdentity,
     serverId: identical(serverId, _keep) ? this.serverId : serverId as String?,
     descriptor: identical(descriptor, _keep)
         ? this.descriptor
@@ -86,9 +105,6 @@ final class JoinSessionState {
     consentKey: identical(consentKey, _keep)
         ? this.consentKey
         : consentKey as String?,
-    privacy: identical(privacy, _keep)
-        ? this.privacy
-        : privacy as MultiplayerAddressPrivacy?,
     progress: identical(progress, _keep)
         ? this.progress
         : progress as JoinTransferProgress?,

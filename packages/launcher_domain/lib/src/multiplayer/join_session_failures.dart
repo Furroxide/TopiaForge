@@ -30,6 +30,14 @@ enum JoinFailureCode {
 
   /// The descriptor was malformed, for another server, or badly signed.
   descriptorInvalid,
+
+  /// Reaching the host would show it the player's address, and the player
+  /// did not allow a direct path for this session.
+  directNotAllowed,
+
+  /// A typed address served a different server than it did before: its
+  /// identity changed, or something is impersonating it.
+  identityChanged,
   gameBuildMismatch,
   runtimeOutdated,
 
@@ -57,6 +65,9 @@ enum JoinFailureCode {
   gameRunning,
   launchBlocked,
   startFailed,
+
+  /// The game process exited before the session began; see [JoinGameExited].
+  gameExited,
   timeout,
   natTraversalFailed,
   relayUnavailable,
@@ -84,7 +95,8 @@ enum JoinGameOwnership {
 }
 
 /// Why a session that began has ended, mirroring the game's
-/// `MultiplayerSessionEndReason`.
+/// `MultiplayerSessionEndReason`, plus [gameExited], which only the launcher
+/// can see.
 enum JoinSessionEndReason {
   left,
   hostEnded,
@@ -95,6 +107,9 @@ enum JoinSessionEndReason {
   admissionRejected,
   protocolMismatch,
   transportFailed,
+
+  /// The game process exited.
+  gameExited,
 }
 
 /// A join that stopped at [stage] for [code]. [detail] is for people and
