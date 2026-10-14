@@ -9,12 +9,19 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// </summary>
     /// <remarks>
     /// <list type="bullet">
-    /// <item>A grab of a server-owned body is granted to the first request that names the current epoch.</item>
+    /// <item>A grab of a server-owned body is granted to the first request that names the current epoch and comes from
+    /// an avatar within the hold range of the body.</item>
     /// <item>A held body is denied to everyone else; a body in its owner's release window can be taken (a steal).</item>
-    /// <item>The owner streams samples; the host checks the speed budget and, while held, the hold range.</item>
-    /// <item>A throw opens the release window; the owner then hands back position and velocities.</item>
-    /// <item>A silent or disconnected owner, or one that fails validation, loses the body to the host.</item>
+    /// <item>A new owner must send its first sample within a short deadline. The host checks every sample's speed
+    /// budget and, while the body is held, the hold range.</item>
+    /// <item>A throw from within the hold range opens the release window; the owner then hands back position and
+    /// velocities.</item>
+    /// <item>An owner that goes quiet (no first sample, silence or no hand-back), disconnects or fails validation loses
+    /// the body to the host. One that went quiet is refused the body for a cooldown, so another player can take it.</item>
     /// </list>
+    /// Participants are slots that the runtime reuses once their participant leaves, so it must call
+    /// <see cref="Disconnect"/> for a leaver on every machine before the slot goes to someone else. Otherwise the
+    /// newcomer inherits the leaver's body or cooldown.
     /// </remarks>
     internal sealed class OwnershipStateMachine
     {
@@ -46,27 +53,52 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>The distance the owner may still move the body, in grid units.</summary>
         public long DistanceCreditUnits => credit;
 
+        /// <summary>Whether the current owner has not yet sent an accepted sample since its grant.</summary>
+        public bool AwaitingFirstSample { get; private set; }
+
+        /// <summary>When the current grant lapses if no first sample has arrived.</summary>
+        public long FirstSampleDeadlineMicros { get; private set; }
+
+        /// <summary>The participant slot that last lost the body by going quiet, or zero.</summary>
+        public int YieldingParticipant { get; private set; }
+
+        /// <summary>Until when <see cref="YieldingParticipant"/> is refused the body.</summary>
+        public long YieldUntilMicros { get; private set; }
+
         /// <summary>A participant asks to simulate the body.</summary>
         /// <param name="participant">The requester's participant slot.</param>
         /// <param name="observedEpoch">The epoch the requester last heard.</param>
-        /// <param name="currentPosition">Where the host has the body now: the baseline for the new owner's samples.</param>
+        /// <param name="bodyPosition">Where the host has the body now: the baseline for the new owner's samples.</param>
+        /// <param name="requesterPosition">Where the host has the requester's avatar, for the hold-range check.</param>
         /// <param name="nowMicros">The host's session time.</param>
-        public OwnershipOutcome Request(int participant, uint observedEpoch, NetQuantizedPosition currentPosition, long nowMicros)
+        public OwnershipOutcome Request(
+            int participant,
+            uint observedEpoch,
+            NetQuantizedPosition bodyPosition,
+            NetQuantizedPosition requesterPosition,
+            long nowMicros)
         {
             RequireParticipant(participant);
             RequireTime(nowMicros);
             switch (State)
             {
                 case OwnershipState.Server:
-                    return observedEpoch == Epoch
-                        ? Grant(participant, currentPosition, nowMicros)
-                        : Report(OwnershipResult.StaleEpoch);
+                    if (observedEpoch != Epoch) return Report(OwnershipResult.StaleEpoch);
+                    if (!IsInHoldRange(bodyPosition, requesterPosition)) return Report(OwnershipResult.OutOfRange);
+                    if (IsYielding(participant, nowMicros)) return Report(OwnershipResult.Yielding);
+                    return Grant(participant, bodyPosition, nowMicros);
                 case OwnershipState.Owned:
                     if (Owner.Participant != participant) return Report(OwnershipResult.Denied);
                     return Report(observedEpoch == Epoch ? OwnershipResult.AlreadyOwned : OwnershipResult.StaleEpoch);
                 default:
                     if (observedEpoch != Epoch) return Report(OwnershipResult.StaleEpoch);
-                    if (Owner.Participant != participant) return Grant(participant, currentPosition, nowMicros);
+                    if (!IsInHoldRange(bodyPosition, requesterPosition)) return Report(OwnershipResult.OutOfRange);
+                    if (Owner.Participant != participant)
+                    {
+                        return IsYielding(participant, nowMicros)
+                            ? Report(OwnershipResult.Yielding)
+                            : Grant(participant, bodyPosition, nowMicros);
+                    }
 
                     // The thrower caught its own throw: the release window closes and nothing changes hands.
                     State = OwnershipState.Owned;
@@ -88,23 +120,35 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             RequireTime(nowMicros);
             var refusal = CheckSender(participant, epoch);
             if (refusal.HasValue) return Report(refusal.Value);
-            if (!IsWithinHoldRange(position, holderPosition) || !Spend(position, nowMicros))
+            var held = State == OwnershipState.Owned;
+            if ((held && !IsInHoldRange(position, holderPosition)) || !Spend(position, nowMicros))
             {
                 return Reclaim(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected);
             }
 
+            AwaitingFirstSample = false;
             LastStreamMicros = Math.Max(LastStreamMicros, nowMicros);
             return Report(OwnershipResult.Accepted);
         }
 
-        /// <summary>The owner threw the body: it keeps simulating until the release window closes.</summary>
-        public OwnershipOutcome BeginRelease(int participant, uint epoch, long nowMicros)
+        /// <summary>
+        /// The owner threw or dropped the body: it keeps simulating until the release window closes. A throw must start
+        /// within the hold range, so the body's last validated position is checked against the holder's avatar; a body
+        /// out of range is reclaimed. A repeated throw inside the window changes nothing.
+        /// </summary>
+        /// <param name="holderPosition">Where the host has the owner's avatar, for the hold-range check.</param>
+        public OwnershipOutcome BeginRelease(int participant, uint epoch, NetQuantizedPosition holderPosition, long nowMicros)
         {
             RequireParticipant(participant);
             RequireTime(nowMicros);
             var refusal = CheckSender(participant, epoch);
             if (refusal.HasValue) return Report(refusal.Value);
             if (State == OwnershipState.ReleaseWindow) return Report(OwnershipResult.Releasing);
+            if (!IsInHoldRange(LastValidatedPosition, holderPosition))
+            {
+                return Reclaim(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected);
+            }
+
             State = OwnershipState.ReleaseWindow;
             ReleaseDeadlineMicros = nowMicros + policy.ReleaseWindowMicros;
             LastStreamMicros = Math.Max(LastStreamMicros, nowMicros);
@@ -128,7 +172,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             accepted = default;
             var refusal = CheckSender(participant, epoch);
             if (refusal.HasValue) return Report(refusal.Value);
-            if (!IsWithinHoldRange(handback.Position, holderPosition) || !Spend(handback.Position, nowMicros))
+            var held = State == OwnershipState.Owned;
+            if ((held && !IsInHoldRange(handback.Position, holderPosition)) || !Spend(handback.Position, nowMicros))
             {
                 return Reclaim(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected);
             }
@@ -141,9 +186,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return Report(OwnershipResult.HandedBack, OwnershipReclaimReason.None, true);
         }
 
+        /// <summary>
+        /// A participant left. Its body goes back to the server at once, and its cooldown is forgotten, so whoever
+        /// gets the slot next starts clean.
+        /// </summary>
         public OwnershipOutcome Disconnect(int participant)
         {
             RequireParticipant(participant);
+            if (YieldingParticipant == participant) ClearYield();
             if (State == OwnershipState.Server || Owner.Participant != participant) return Report(OwnershipResult.NoChange);
             return Reclaim(OwnershipReclaimReason.Disconnected, OwnershipResult.Reclaimed);
         }
@@ -155,23 +205,35 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return Reclaim(OwnershipReclaimReason.Host, OwnershipResult.Reclaimed);
         }
 
-        /// <summary>Reclaims from an owner that has been silent, or that never handed back after its window.</summary>
+        /// <summary>
+        /// Reclaims from an owner that sent no first sample in time, that has been silent, or that never handed back
+        /// after its window. Each of those makes the owner yield the body to other players for the cooldown.
+        /// </summary>
         public OwnershipOutcome Poll(long nowMicros)
         {
             RequireTime(nowMicros);
             if (State == OwnershipState.Server) return Report(OwnershipResult.NoChange);
+            if (AwaitingFirstSample && nowMicros > FirstSampleDeadlineMicros)
+            {
+                return Lapse(OwnershipReclaimReason.NoFirstSample, nowMicros);
+            }
+
             if (State == OwnershipState.ReleaseWindow && nowMicros - ReleaseDeadlineMicros > policy.SilenceTimeoutMicros)
             {
-                return Reclaim(OwnershipReclaimReason.HandbackTimeout, OwnershipResult.Reclaimed);
+                return Lapse(OwnershipReclaimReason.HandbackTimeout, nowMicros);
             }
 
             if (nowMicros - LastStreamMicros > policy.SilenceTimeoutMicros)
             {
-                return Reclaim(OwnershipReclaimReason.Silence, OwnershipResult.Reclaimed);
+                return Lapse(OwnershipReclaimReason.Silence, nowMicros);
             }
 
             return Report(OwnershipResult.NoChange);
         }
+
+        /// <summary>Whether a participant is refused the body for now because it recently went quiet holding it.</summary>
+        public bool IsYielding(int participant, long nowMicros) =>
+            participant == YieldingParticipant && participant != 0 && nowMicros < YieldUntilMicros;
 
         private OwnershipOutcome Grant(int participant, NetQuantizedPosition position, long nowMicros)
         {
@@ -182,6 +244,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             LastStreamMicros = nowMicros;
             lastValidatedMicros = nowMicros;
             credit = policy.BurstCreditUnits;
+            AwaitingFirstSample = true;
+            FirstSampleDeadlineMicros = nowMicros + policy.FirstSampleTimeoutMicros;
+            if (YieldingParticipant == participant) ClearYield();
             return Report(OwnershipResult.Granted, OwnershipReclaimReason.None, true);
         }
 
@@ -192,9 +257,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return null;
         }
 
-        private bool IsWithinHoldRange(NetQuantizedPosition position, NetQuantizedPosition holderPosition) =>
-            State != OwnershipState.Owned ||
-            position.DistanceSquaredTo(holderPosition) <= policy.MaximumHoldRangeSquaredUnits;
+        private bool IsInHoldRange(NetQuantizedPosition body, NetQuantizedPosition avatar) =>
+            body.DistanceSquaredTo(avatar) <= policy.MaximumHoldRangeSquaredUnits;
 
         /// <summary>Accrues distance credit for the elapsed time, then spends the displacement if it is covered.</summary>
         private bool Spend(NetQuantizedPosition position, long nowMicros)
@@ -213,6 +277,20 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return true;
         }
 
+        /// <summary>Reclaims from an owner that went quiet, which then yields the body for the cooldown.</summary>
+        private OwnershipOutcome Lapse(OwnershipReclaimReason reason, long nowMicros)
+        {
+            var participant = Owner.Participant;
+            var outcome = Reclaim(reason, OwnershipResult.Reclaimed);
+            if (policy.YieldCooldownMicros > 0)
+            {
+                YieldingParticipant = participant;
+                YieldUntilMicros = nowMicros + policy.YieldCooldownMicros;
+            }
+
+            return outcome;
+        }
+
         private OwnershipOutcome Reclaim(OwnershipReclaimReason reason, OwnershipResult result)
         {
             ChangeToServer();
@@ -225,6 +303,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             Owner = NetOwner.Server;
             State = OwnershipState.Server;
             credit = 0;
+            AwaitingFirstSample = false;
+        }
+
+        private void ClearYield()
+        {
+            YieldingParticipant = 0;
+            YieldUntilMicros = 0;
         }
 
         private OwnershipOutcome Report(

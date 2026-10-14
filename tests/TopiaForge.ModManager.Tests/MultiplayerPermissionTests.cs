@@ -158,6 +158,12 @@ namespace TopiaForge.ModManager.Tests
             for (var index = 0; index < 1000; index++) limiter.Evaluate(Remote, false, NetRequestKind.Destroy, NetTargetRelation.OtherPlayer, 0, 1);
             Equal(NetPermission.RateLimited, limiter.Evaluate(Remote, false, NetRequestKind.Destroy, NetTargetRelation.Self, 0, 1), "a sustained flood stays throttled");
             Equal(NetPermission.Allowed, limiter.Evaluate(Remote, false, NetRequestKind.Destroy, NetTargetRelation.Self, 0, 250_001), "one token later");
+
+            // Buckets belong to the slot, so a leaver's must be forgotten before a newcomer takes the slot.
+            for (var index = 0; index < 8; index++) limiter.Evaluate(Remote, false, NetRequestKind.Destroy, NetTargetRelation.OtherPlayer, 0, 300_000);
+            Equal(NetPermission.RateLimited, limiter.Evaluate(Remote, false, NetRequestKind.Destroy, NetTargetRelation.Self, 0, 300_000), "the leaver's spent bucket");
+            True(limiter.Forget(Remote) && !limiter.Forget(Remote), "forgetting a slot once");
+            Equal(NetPermission.Allowed, limiter.Evaluate(Remote, false, NetRequestKind.Destroy, NetTargetRelation.Self, 0, 300_000), "a newcomer in the slot starts full");
         }
     }
 }

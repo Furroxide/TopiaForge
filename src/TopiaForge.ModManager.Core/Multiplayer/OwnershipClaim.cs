@@ -10,6 +10,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     {
         private readonly OwnershipPolicy policy;
         private readonly NetOwner self;
+        private bool catchPending;
+        private long catchReleaseDeadlineMicros;
 
         public OwnershipClaim(int localParticipant, OwnershipPolicy? policy = null, uint knownEpoch = 0)
         {
@@ -39,7 +41,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// The local player grabs. Returns true when a request must be sent, naming <paramref name="requestEpoch"/>.
-        /// Grabbing one's own throw during its release window takes it back under the epoch it is already owned by.
+        /// Grabbing one's own throw during its release window takes it back under the epoch it is already owned by;
+        /// if the host refuses that catch, the throw carries on with its original deadline.
         /// </summary>
         public bool Grab(out uint requestEpoch)
         {
@@ -52,6 +55,12 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                     return true;
                 case OwnershipState.ReleaseWindow:
                     requestEpoch = StreamEpoch;
+                    if (!catchPending)
+                    {
+                        catchPending = true;
+                        catchReleaseDeadlineMicros = ReleaseDeadlineMicros;
+                    }
+
                     State = GrantPending ? OwnershipState.Requested : OwnershipState.Owned;
                     return true;
                 default:
@@ -91,19 +100,32 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             Epoch = epoch;
             KnownOwner = self;
             GrantPending = false;
+            catchPending = false;
             if (State == OwnershipState.Requested) State = OwnershipState.Owned;
         }
 
         /// <summary>
-        /// The host refused a request: another participant holds the body, or the request named an old epoch. The
-        /// optimistic grab rolls back. A refusal that still names this client as owner changes nothing.
+        /// The host refused a request: another participant holds the body, the requester is out of range or yielding,
+        /// or the request named an old epoch. The optimistic grab rolls back. A refusal that still names this client as
+        /// owner keeps the body; if it answers a catch of this client's own throw, the release window resumes with
+        /// its original deadline, as it did on the host.
         /// </summary>
         public void OnRefused(uint epoch, NetOwner owner)
         {
             Epoch = epoch;
             KnownOwner = owner;
             GrantPending = false;
-            if (!owner.Equals(self)) State = OwnershipState.Server;
+            if (!owner.Equals(self))
+            {
+                State = OwnershipState.Server;
+            }
+            else if (catchPending)
+            {
+                State = OwnershipState.ReleaseWindow;
+                ReleaseDeadlineMicros = catchReleaseDeadlineMicros;
+            }
+
+            catchPending = false;
         }
 
         /// <summary>
@@ -118,11 +140,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             {
                 if (!GrantPending) return;
                 GrantPending = false;
+                catchPending = false;
                 if (State == OwnershipState.Requested) State = OwnershipState.Owned;
                 return;
             }
 
             GrantPending = false;
+            catchPending = false;
             State = OwnershipState.Server;
         }
     }

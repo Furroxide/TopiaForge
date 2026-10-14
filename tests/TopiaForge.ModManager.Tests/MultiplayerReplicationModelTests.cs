@@ -12,11 +12,13 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerRelevancyTests.Run();
             MultiplayerSchedulerTests.Run();
             MultiplayerOwnershipTests.Run();
+            MultiplayerOwnershipLimitsTests.Run();
             MultiplayerSceneKeyTests.Run();
             MultiplayerSpawnSlotTests.Run();
             MultiplayerPermissionTests.Run();
             MultiplayerPresentationTests.Run();
             MultiplayerReplicationGoldenTests.Run();
+            MultiplayerMotionGoldenTests.Run();
         }
     }
 }

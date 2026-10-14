@@ -51,7 +51,15 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         HandedBack = 9,
 
         /// <summary>The host took the body back.</summary>
-        Reclaimed = 10
+        Reclaimed = 10,
+
+        /// <summary>The requester's avatar is farther from the body than the hold range.</summary>
+        OutOfRange = 11,
+
+        /// <summary>
+        /// The requester recently lost this body by going quiet, so other players go first until its cooldown ends.
+        /// </summary>
+        Yielding = 12
     }
 
     internal enum OwnershipReclaimReason
@@ -66,11 +74,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         Disconnected = 3,
 
-        /// <summary>A sample or hand-back moved too fast, or held the body out of range.</summary>
+        /// <summary>A sample or hand-back moved too fast, or a sample, hand-back or throw held the body out of range.</summary>
         ValidationFailed = 4,
 
         /// <summary>The host took the body for its own reasons, such as a despawn.</summary>
-        Host = 5
+        Host = 5,
+
+        /// <summary>A new owner sent no first sample before the first-sample deadline.</summary>
+        NoFirstSample = 6
     }
 
     /// <summary>The answer to one ownership event: what happened, and the state that resulted.</summary>
@@ -142,6 +153,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public const int DefaultMaximumHoldRangeMeters = 100;
         public const int DefaultToleranceUnits = 256;
         public const int DefaultMaximumAngularSpeedRadiansPerSecond = 64;
+        public const long DefaultFirstSampleTimeoutMicros = 250_000;
+        public const long DefaultYieldCooldownMicros = 1_000_000;
 
         public OwnershipPolicy(
             long releaseWindowMicros = DefaultReleaseWindowMicros,
@@ -150,7 +163,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             long speedBurstMicros = DefaultSpeedBurstMicros,
             int maximumHoldRangeMeters = DefaultMaximumHoldRangeMeters,
             int toleranceUnits = DefaultToleranceUnits,
-            int maximumAngularSpeedRadiansPerSecond = DefaultMaximumAngularSpeedRadiansPerSecond)
+            int maximumAngularSpeedRadiansPerSecond = DefaultMaximumAngularSpeedRadiansPerSecond,
+            long firstSampleTimeoutMicros = DefaultFirstSampleTimeoutMicros,
+            long yieldCooldownMicros = DefaultYieldCooldownMicros)
         {
             Require(releaseWindowMicros, 1, 60_000_000, nameof(releaseWindowMicros));
             Require(silenceTimeoutMicros, 1, 60_000_000, nameof(silenceTimeoutMicros));
@@ -159,6 +174,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             Require(maximumHoldRangeMeters, 1, 4_096, nameof(maximumHoldRangeMeters));
             Require(toleranceUnits, 0, 64 * NetQuantization.PositionUnitsPerMeter, nameof(toleranceUnits));
             Require(maximumAngularSpeedRadiansPerSecond, 1, 1_000, nameof(maximumAngularSpeedRadiansPerSecond));
+            Require(firstSampleTimeoutMicros, 1, 60_000_000, nameof(firstSampleTimeoutMicros));
+            Require(yieldCooldownMicros, 0, 60_000_000, nameof(yieldCooldownMicros));
             ReleaseWindowMicros = releaseWindowMicros;
             SilenceTimeoutMicros = silenceTimeoutMicros;
             MaximumSpeedMetersPerSecond = maximumSpeedMetersPerSecond;
@@ -166,6 +183,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             MaximumHoldRangeMeters = maximumHoldRangeMeters;
             ToleranceUnits = toleranceUnits;
             MaximumAngularSpeedRadiansPerSecond = maximumAngularSpeedRadiansPerSecond;
+            FirstSampleTimeoutMicros = firstSampleTimeoutMicros;
+            YieldCooldownMicros = yieldCooldownMicros;
             SpeedUnitsPerSecond = (long)maximumSpeedMetersPerSecond * NetQuantization.PositionUnitsPerMeter;
             BurstCreditUnits = SpeedUnitsPerSecond * speedBurstMicros / 1_000_000 + toleranceUnits;
             var rangeUnits = (long)maximumHoldRangeMeters * NetQuantization.PositionUnitsPerMeter + toleranceUnits;
@@ -180,11 +199,27 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>How long an owner may send nothing before the host reclaims the body.</summary>
         public long SilenceTimeoutMicros { get; }
 
+        /// <summary>
+        /// How long a new owner has to send its first sample. A client streams from the moment it grabs, so a grant
+        /// that hears nothing this long is abandoned, and the body goes back to the server well before the silence
+        /// timeout. A value above the silence timeout has no effect, because silence reclaims first.
+        /// </summary>
+        public long FirstSampleTimeoutMicros { get; }
+
+        /// <summary>
+        /// How long a participant that lost the body by going quiet (no first sample, silence or no hand-back) is
+        /// refused it, so another player's request wins first. Zero turns yielding off.
+        /// </summary>
+        public long YieldCooldownMicros { get; }
+
         public int MaximumSpeedMetersPerSecond { get; }
 
         public long SpeedBurstMicros { get; }
 
-        /// <summary>The farthest a held body may be from its holder; the release window has no range limit.</summary>
+        /// <summary>
+        /// The farthest a body may be from the participant's avatar when it is granted, held or thrown. During the
+        /// release window a thrown body has no range limit; the speed budget still applies.
+        /// </summary>
         public int MaximumHoldRangeMeters { get; }
 
         /// <summary>Slack, in grid units, for quantization and timing noise.</summary>

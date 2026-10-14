@@ -16,6 +16,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         public uint Value { get; }
 
+        /// <summary>Reads an id from peer input without throwing; zero is refused.</summary>
+        public static bool TryCreate(uint value, out NetworkEntityId id)
+        {
+            id = value == 0 ? default : new NetworkEntityId(value);
+            return value != 0;
+        }
+
         public bool IsValid => Value != 0;
 
         public int CompareTo(NetworkEntityId other) => Value.CompareTo(other.Value);
@@ -34,6 +41,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// Participants are the runtime's dense slots, numbered from one. Who simulates a body is a separate question,
     /// answered by <see cref="OwnershipStateMachine"/>.
     /// </summary>
+    /// <remarks>
+    /// A slot is reused once its participant leaves, so every per-slot structure must be cleared first: remove or
+    /// reassign the leaver's entities (<see cref="NetworkEntityTable.CollectOwnedBy"/>), call
+    /// <see cref="OwnershipStateMachine.Disconnect"/> on every body's machine, which also forgets the leaver's
+    /// cooldown, and <see cref="PlayerRequestLimiter.Forget"/> on the limiter. Otherwise a newcomer given the slot
+    /// inherits what the leaver held.
+    /// </remarks>
     internal readonly struct NetOwner : IEquatable<NetOwner>
     {
         private NetOwner(int participant)
@@ -52,6 +66,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         {
             if (participant < 1) throw new ArgumentOutOfRangeException(nameof(participant));
             return new NetOwner(participant);
+        }
+
+        /// <summary>Reads an owner from peer input without throwing: slot zero is the server, negatives are refused.</summary>
+        public static bool TryFromSlot(int slot, out NetOwner owner)
+        {
+            owner = slot > 0 ? new NetOwner(slot) : Server;
+            return slot >= 0;
         }
 
         public bool Equals(NetOwner other) => Participant == other.Participant;
@@ -82,6 +103,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public long Sequence { get; }
 
         public bool IsSpecified => ModId != null;
+
+        /// <summary>Reads an origin from peer input without throwing; an empty mod id or a sequence below one is refused.</summary>
+        public static bool TryCreate(string? modId, long sequence, out NetSpawnOrigin origin)
+        {
+            var valid = !string.IsNullOrEmpty(modId) && sequence >= 1;
+            origin = valid ? new NetSpawnOrigin(modId!, sequence) : default;
+            return valid;
+        }
 
         public bool Equals(NetSpawnOrigin other) =>
             string.Equals(ModId, other.ModId, StringComparison.Ordinal) && Sequence == other.Sequence;
@@ -126,14 +155,26 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         Tombstoned = 2,
 
         /// <summary>Another live entity already has this spawn origin.</summary>
-        DuplicateOrigin = 3
+        DuplicateOrigin = 3,
+
+        /// <summary>The host sent id zero, which is reserved.</summary>
+        InvalidId = 4,
+
+        /// <summary>The host sent a kind that is not a lowercase token.</summary>
+        InvalidKind = 5
     }
 
     /// <summary>
     /// Live network entities with their kind, lifetime owner and spawn origin, plus a bounded set of removed ids. The
-    /// host allocates ids, increasing and never reused; clients mirror the ids the host sends. Iteration helpers return
-    /// ids in ascending order, so callers see the same order on every peer.
+    /// host allocates ids, increasing and never reused; clients mirror the ids the host sends. Mirrored ids never move
+    /// the allocation counter, so a host's announcement cannot exhaust or steer this process's own ids later; allocation
+    /// only skips an id that is live or tombstoned here. Peer input is refused with a result, never an exception.
+    /// Iteration helpers return ids in ascending order, so callers see the same order on every peer.
     /// </summary>
+    /// <remarks>
+    /// Lifetime owners are participant slots, which the runtime reuses. Before a leaver's slot goes to someone else,
+    /// the runtime must remove or reassign the entities <see cref="CollectOwnedBy"/> reports for it.
+    /// </remarks>
     internal sealed class NetworkEntityTable
     {
         public const int DefaultTombstoneCapacity = 8192;
@@ -144,13 +185,19 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private readonly HashSet<uint> tombstones = new HashSet<uint>();
         private readonly Queue<uint> tombstoneOrder = new Queue<uint>();
         private readonly int tombstoneCapacity;
-        private uint nextId = 1;
+        private uint nextId;
         private bool exhausted;
 
-        public NetworkEntityTable(int tombstoneCapacity = DefaultTombstoneCapacity)
+        /// <param name="tombstoneCapacity">How many removed ids to remember.</param>
+        /// <param name="firstAllocatedId">
+        /// The first id <see cref="Allocate"/> hands out; one unless a test starts near the end of the id space.
+        /// </param>
+        public NetworkEntityTable(int tombstoneCapacity = DefaultTombstoneCapacity, uint firstAllocatedId = 1)
         {
             if (tombstoneCapacity < 1) throw new ArgumentOutOfRangeException(nameof(tombstoneCapacity));
+            if (firstAllocatedId == 0) throw new ArgumentOutOfRangeException(nameof(firstAllocatedId));
             this.tombstoneCapacity = tombstoneCapacity;
+            nextId = firstAllocatedId;
         }
 
         public int Count => live.Count;
@@ -185,29 +232,28 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 throw new InvalidOperationException("Spawn origin " + origin + " is already live.");
             }
 
-            if (exhausted) throw new InvalidOperationException("Network entity ids are exhausted.");
-            var id = new NetworkEntityId(nextId);
-            if (nextId == uint.MaxValue) exhausted = true;
-            else nextId++;
-            Insert(new NetworkEntityEntry(id, kind, owner, origin));
-            return id;
+            while (true)
+            {
+                if (exhausted) throw new InvalidOperationException("Network entity ids are exhausted.");
+                var candidate = nextId;
+                if (nextId == uint.MaxValue) exhausted = true;
+                else nextId++;
+                if (live.ContainsKey(candidate) || tombstones.Contains(candidate)) continue;
+                var id = new NetworkEntityId(candidate);
+                Insert(new NetworkEntityEntry(id, kind, owner, origin));
+                return id;
+            }
         }
 
-        /// <summary>Client: mirrors an entity the host announced.</summary>
-        public NetworkEntityAddResult TryAdd(NetworkEntityId id, string kind, NetOwner owner, NetSpawnOrigin origin = default)
+        /// <summary>Client: mirrors an entity the host announced. Bad input is refused with a result.</summary>
+        public NetworkEntityAddResult TryAdd(NetworkEntityId id, string? kind, NetOwner owner, NetSpawnOrigin origin = default)
         {
-            if (!id.IsValid) throw new ArgumentException("A valid id is required.", nameof(id));
-            RequireKind(kind);
+            if (!id.IsValid) return NetworkEntityAddResult.InvalidId;
+            if (!IsValidKind(kind)) return NetworkEntityAddResult.InvalidKind;
             if (tombstones.Contains(id.Value)) return NetworkEntityAddResult.Tombstoned;
             if (live.ContainsKey(id.Value)) return NetworkEntityAddResult.AlreadyLive;
             if (origin.IsSpecified && origins.ContainsKey(origin)) return NetworkEntityAddResult.DuplicateOrigin;
-            Insert(new NetworkEntityEntry(id, kind, owner, origin));
-            if (id.Value >= nextId && !exhausted)
-            {
-                if (id.Value == uint.MaxValue) exhausted = true;
-                else nextId = id.Value + 1;
-            }
-
+            Insert(new NetworkEntityEntry(id, kind!, owner, origin));
             return NetworkEntityAddResult.Added;
         }
 
@@ -258,7 +304,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return count;
         }
 
-        /// <summary>Appends, in ascending order, the ids whose lifetime the owner holds.</summary>
+        /// <summary>
+        /// Appends, in ascending order, the ids whose lifetime the owner holds. When a participant leaves, remove or
+        /// reassign these before its slot is reused.
+        /// </summary>
         public void CollectOwnedBy(NetOwner owner, List<NetworkEntityId> into)
         {
             if (into == null) throw new ArgumentNullException(nameof(into));
@@ -280,7 +329,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             into.Sort(start, into.Count - start, null);
         }
 
-        /// <summary>Ends the session's entities and tombstones. Allocation keeps counting, so ids never repeat.</summary>
+        /// <summary>
+        /// Ends the session's entities and tombstones. This process's own allocation keeps counting, so the ids it
+        /// hands out never repeat; ids mirrored from a host never affected it.
+        /// </summary>
         public void Clear()
         {
             live.Clear();

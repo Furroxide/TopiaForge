@@ -88,6 +88,11 @@ namespace TopiaForge.ModManager.Tests
         private static void RoundingIsExactAndPortable()
         {
             Equal(0.0, NetQuantization.RoundHalfAwayFromZero(0.49999999999999994), "just below a half rounds down");
+            Equal(0.0, NetQuantization.RoundHalfAwayFromZero(-0.49999999999999994), "just above minus a half rounds to zero");
+            Equal(-1.0, NetQuantization.RoundHalfAwayFromZero(-0.5000000000000001), "just below minus a half");
+            Equal(-1.0, NetQuantization.RoundHalfAwayFromZero(-0.9999999999999999), "just above minus one");
+            Equal(-1.0, NetQuantization.RoundHalfAwayFromZero(-1.4999999999999998), "just above minus one and a half");
+            Equal(-4503599627370496.0, NetQuantization.RoundHalfAwayFromZero(-4503599627370495.5), "a half below -2^52");
             Equal(1.0, NetQuantization.RoundHalfAwayFromZero(0.5), "a half rounds up");
             Equal(-1.0, NetQuantization.RoundHalfAwayFromZero(-0.5), "a negative half rounds away");
             Equal(3.0, NetQuantization.RoundHalfAwayFromZero(2.5), "2.5");

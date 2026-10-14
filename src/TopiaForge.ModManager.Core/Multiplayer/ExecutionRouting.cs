@@ -146,13 +146,19 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return SharedRoute(realm, profile.Context, playerIntent);
         }
 
-        /// <summary>Chronos freeze, slow or step: allowed from the gamemode server only once online.</summary>
-        public static TimeControlRoute TimeControl(NetRealm realm, ModExecutionContext context)
+        /// <summary>
+        /// Chronos freeze, slow or step. Offline, every context controls time. Online, only a gamemode server on the
+        /// host does, and never a client-local mod's: its change would reach every peer, and client-local mods are never
+        /// networked. A profile that does not run in the realm is not authoritative either.
+        /// </summary>
+        public static TimeControlRoute TimeControl(NetRealm realm, ModNetProfile profile)
         {
             NetRealms.Require(realm);
-            if (!ModExecutionContexts.IsDefined(context)) throw new ArgumentOutOfRangeException(nameof(context));
+            if (!profile.RunsOn(realm)) return TimeControlRoute.NotAuthoritative;
             if (realm == NetRealm.Offline) return TimeControlRoute.Apply;
-            return realm == NetRealm.ListenHost && context == ModExecutionContext.GamemodeServer
+            return realm == NetRealm.ListenHost &&
+                   profile.Context == ModExecutionContext.GamemodeServer &&
+                   profile.NetworkClass != ModNetworkClass.ClientLocal
                 ? TimeControlRoute.Apply
                 : TimeControlRoute.NotAuthoritative;
         }

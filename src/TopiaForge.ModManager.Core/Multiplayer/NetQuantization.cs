@@ -311,16 +311,19 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         }
 
         /// <summary>
-        /// Rounds half away from zero exactly. Math.Round is avoided because older runtimes misround values just
-        /// below one half.
+        /// Rounds a finite value half away from zero, exactly. The integer part comes from truncation toward zero, and
+        /// the fraction is the value minus it, which is exact for every double (Sterbenz), unlike the value minus its
+        /// floor for negatives such as -0.49999999999999994. A fraction of at least one half in size rounds away from
+        /// zero. Truncation keeps the sign, so a zero result keeps the input's. Math.Round is avoided because older
+        /// runtimes misround values just below one half.
         /// </summary>
         public static double RoundHalfAwayFromZero(double value)
         {
-            var floor = Math.Floor(value);
-            var fraction = value - floor;
-            if (fraction > 0.5) return floor + 1.0;
-            if (fraction < 0.5) return floor;
-            return value > 0.0 ? floor + 1.0 : floor;
+            var whole = Math.Truncate(value);
+            var fraction = value - whole;
+            if (fraction >= 0.5) return whole + 1.0;
+            if (fraction <= -0.5) return whole - 1.0;
+            return whole;
         }
 
         internal static void RequireRange(int value, int minimum, int maximum, string parameterName)

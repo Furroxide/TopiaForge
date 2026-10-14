@@ -161,6 +161,7 @@ namespace TopiaForge.ModManager.Tests
         private static void RealmTransitionInvariantsHoldForEveryInput()
         {
             var checkedCases = 0;
+            var standaloneOverBusy = 0;
             foreach (var from in Realms)
             {
                 foreach (var to in Realms)
@@ -170,30 +171,62 @@ namespace TopiaForge.ModManager.Tests
                         foreach (var standalone in new[] { false, true })
                         {
                             var transition = NetRealms.EvaluateTransition(from, to, phase, standalone);
+                            var name = from + " to " + to + " during " + phase + (standalone ? " with a standalone mod" : string.Empty);
+                            var busy = phase != SessionPhase.Idle && phase != SessionPhase.Running;
                             checkedCases++;
+                            if (!transition.IsAllowed) Equal(NetRealmTransitionEffect.None, transition.Effect, name + ": refusals have no effect");
                             if (from == to)
                             {
-                                Equal(NetRealmTransitionVerdict.Unchanged, transition.Verdict, "same realm is unchanged");
+                                Equal(NetRealmTransitionVerdict.Unchanged, transition.Verdict, name + ": same realm is unchanged");
                                 continue;
                             }
 
                             if (to == NetRealm.Offline)
                             {
-                                Equal(NetRealmTransitionEffect.EndOnlineSession, transition.Effect, "leaving is never refused");
+                                Equal(Allowed(NetRealmTransitionEffect.EndOnlineSession), transition, name + ": leaving is never refused");
                                 continue;
                             }
 
-                            if (standalone) True(!transition.IsAllowed, "a standalone mod never goes online");
-                            if (from != NetRealm.Offline) True(!transition.IsAllowed, "online realms never switch directly");
-                            if (phase != SessionPhase.Idle && phase != SessionPhase.Running) True(!transition.IsAllowed, "busy phases never go online");
-                            if (to == NetRealm.Client && phase != SessionPhase.Idle) True(!transition.IsAllowed, "join only from idle");
-                            if (!transition.IsAllowed) Equal(NetRealmTransitionEffect.None, transition.Effect, "refusals have no effect");
+                            // The refusals in precedence order: an online realm must leave first, whatever else holds;
+                            // then a standalone mod is named before a busy phase, so the player hears the lasting reason.
+                            if (from != NetRealm.Offline)
+                            {
+                                Equal(Refused(NetRealmTransitionVerdict.RequiresLeave), transition, name + ": online realms never switch directly");
+                                continue;
+                            }
+
+                            if (standalone)
+                            {
+                                Equal(Refused(NetRealmTransitionVerdict.StandaloneRefused), transition, name + ": a standalone mod never goes online");
+                                if (busy) standaloneOverBusy++;
+                                continue;
+                            }
+
+                            if (busy)
+                            {
+                                Equal(Refused(NetRealmTransitionVerdict.Busy), transition, name + ": busy phases never go online");
+                                continue;
+                            }
+
+                            var expected = to == NetRealm.ListenHost
+                                ? Allowed(phase == SessionPhase.Idle ? NetRealmTransitionEffect.StartAsHost : NetRealmTransitionEffect.PromoteInPlace)
+                                : phase == SessionPhase.Idle
+                                    ? Allowed(NetRealmTransitionEffect.ReplaceLocalSession)
+                                    : Refused(NetRealmTransitionVerdict.RequiresLeave);
+                            Equal(expected, transition, name);
                         }
                     }
                 }
             }
 
             Equal(108, checkedCases, "every realm, phase and standalone combination");
+            Equal(8, standaloneOverBusy, "a standalone mod outranks each busy phase, hosting or joining");
+
+            static NetRealmTransition Allowed(NetRealmTransitionEffect effect) =>
+                new NetRealmTransition(NetRealmTransitionVerdict.Allowed, effect);
+
+            static NetRealmTransition Refused(NetRealmTransitionVerdict verdict) =>
+                new NetRealmTransition(verdict, NetRealmTransitionEffect.None);
         }
 
         private static void IntentSourcesAreClassified()
@@ -274,13 +307,31 @@ namespace TopiaForge.ModManager.Tests
 
         private static void TimePauseAndLocalPlayerRules()
         {
-            foreach (var context in Contexts)
+            // A client-local mod's gamemode server on the host used to control everyone's time.
+            var localGamemode = new ModNetProfile(ModNetworkClass.ClientLocal, ModExecutionContext.GamemodeServer);
+            Equal(TimeControlRoute.NotAuthoritative, ExecutionRouting.TimeControl(NetRealm.ListenHost, localGamemode), "a client-local gamemode on the host");
+            Equal(TimeControlRoute.Apply, ExecutionRouting.TimeControl(NetRealm.Offline, localGamemode), "keeps Chronos in single player");
+            var serverGamemode = new ModNetProfile(ModNetworkClass.ServerOnly, ModExecutionContext.GamemodeServer);
+            Equal(TimeControlRoute.Apply, ExecutionRouting.TimeControl(NetRealm.ListenHost, serverGamemode), "a server-only gamemode on the host");
+
+            var checkedCases = 0;
+            foreach (var networkClass in Classes)
             {
-                Equal(TimeControlRoute.Apply, ExecutionRouting.TimeControl(NetRealm.Offline, context), "single player keeps Chronos");
-                Equal(TimeControlRoute.NotAuthoritative, ExecutionRouting.TimeControl(NetRealm.Client, context), "clients follow the scale");
-                var expected = context == ModExecutionContext.GamemodeServer ? TimeControlRoute.Apply : TimeControlRoute.NotAuthoritative;
-                Equal(expected, ExecutionRouting.TimeControl(NetRealm.ListenHost, context), "host time control from " + context);
+                foreach (var context in Contexts)
+                {
+                    var profile = new ModNetProfile(networkClass, context);
+                    checkedCases++;
+                    Equal(TimeControlRoute.Apply, ExecutionRouting.TimeControl(NetRealm.Offline, profile), profile + ": single player keeps Chronos");
+                    Equal(TimeControlRoute.NotAuthoritative, ExecutionRouting.TimeControl(NetRealm.Client, profile), profile + ": clients follow the scale");
+                    var networked = networkClass == ModNetworkClass.Shared || networkClass == ModNetworkClass.ServerOnly;
+                    var expected = context == ModExecutionContext.GamemodeServer && networked
+                        ? TimeControlRoute.Apply
+                        : TimeControlRoute.NotAuthoritative;
+                    Equal(expected, ExecutionRouting.TimeControl(NetRealm.ListenHost, profile), profile + ": host time control");
+                }
             }
+
+            Equal(16, checkedCases, "every class and context in every realm");
 
             Equal(NativePauseRoute.FreezesWorld, ExecutionRouting.NativePause(NetRealm.Offline), "single player pause");
             Equal(NativePauseRoute.LocalMenuOnly, ExecutionRouting.NativePause(NetRealm.ListenHost), "the host never freezes the world");

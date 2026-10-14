@@ -12,6 +12,8 @@ namespace TopiaForge.ModManager.Tests
         {
             AllocatesIncreasingIds();
             MirrorsHostIdsAndRefusesResurrection();
+            MirroredIdsNeverMoveAllocation();
+            RefusesBadPeerInputWithoutThrowing();
             TracksOwnersAndOrigins();
             BoundsTombstones();
             ValidatesKindsAndIdentities();
@@ -46,7 +48,58 @@ namespace TopiaForge.ModManager.Tests
             True(client.IsTombstoned(id) && !client.Contains(id), "tombstoned");
             Equal(NetworkEntityAddResult.Tombstoned, client.TryAdd(id, "asset", NetOwner.Server), "a stale spawn cannot resurrect it");
             Equal(NetworkEntityAddResult.Added, client.TryAdd(new NetworkEntityId(7), "asset", NetOwner.Server), "older ids arrive late");
-            Equal(41u, client.Allocate("asset", NetOwner.Server).Value, "allocation stays past mirrored ids");
+            Equal(2, client.Count + client.TombstoneCount, "one live and one tombstoned");
+        }
+
+        private static void MirroredIdsNeverMoveAllocation()
+        {
+            // One announcement of the last id, then a session change, used to exhaust allocation for the rest of the
+            // process, so this player could never host.
+            var table = new NetworkEntityTable();
+            Equal(NetworkEntityAddResult.Added, table.TryAdd(new NetworkEntityId(uint.MaxValue), "asset", NetOwner.Server), "a host announces the last id");
+            Equal(1u, table.Allocate("asset", NetOwner.Server).Value, "allocation does not jump to the host's ids");
+            table.Clear();
+            Equal(2u, table.Allocate("asset", NetOwner.Server).Value, "and hosting after the session change still works");
+
+            var steered = new NetworkEntityTable();
+            steered.TryAdd(new NetworkEntityId(1_000_000), "asset", NetOwner.Server);
+            steered.Clear();
+            Equal(1u, steered.Allocate("asset", NetOwner.Server).Value, "a host cannot steer this process's ids either");
+
+            // A table used both ways still never hands out an id it holds: live and tombstoned ids are skipped.
+            var mixed = new NetworkEntityTable();
+            mixed.TryAdd(new NetworkEntityId(1), "asset", NetOwner.Server);
+            mixed.TryAdd(new NetworkEntityId(2), "asset", NetOwner.Server);
+            mixed.Remove(new NetworkEntityId(2));
+            mixed.TryAdd(new NetworkEntityId(4), "asset", NetOwner.Server);
+            Equal(3u, mixed.Allocate("asset", NetOwner.Server).Value, "skips a live and a tombstoned id");
+            Equal(5u, mixed.Allocate("asset", NetOwner.Server).Value, "and the next live one");
+            True(mixed.Contains(new NetworkEntityId(1)) && mixed.Contains(new NetworkEntityId(4)), "the mirrored entities are untouched");
+        }
+
+        private static void RefusesBadPeerInputWithoutThrowing()
+        {
+            var table = new NetworkEntityTable();
+            Equal(NetworkEntityAddResult.InvalidId, table.TryAdd(default, "asset", NetOwner.Server), "id zero from a host");
+            Equal(NetworkEntityAddResult.InvalidKind, table.TryAdd(new NetworkEntityId(1), "", NetOwner.Server), "an empty kind");
+            Equal(NetworkEntityAddResult.InvalidKind, table.TryAdd(new NetworkEntityId(1), null, NetOwner.Server), "a missing kind");
+            Equal(NetworkEntityAddResult.InvalidKind, table.TryAdd(new NetworkEntityId(1), "Unknown Kind", NetOwner.Server), "a malformed kind");
+            Equal(NetworkEntityAddResult.InvalidKind, table.TryAdd(new NetworkEntityId(1), new string('a', 65), NetOwner.Server), "a kind that is too long");
+            Equal(NetworkEntityAddResult.InvalidId, table.TryAdd(default, null, NetOwner.Server), "the id is checked first");
+            True(table.Count == 0 && table.TombstoneCount == 0, "nothing was added");
+            Equal(NetworkEntityAddResult.Added, table.TryAdd(new NetworkEntityId(1), "asset", NetOwner.Server), "the same id with a good kind");
+
+            True(!NetworkEntityId.TryCreate(0, out var none) && !none.IsValid, "reading id zero from the wire");
+            True(NetworkEntityId.TryCreate(uint.MaxValue, out var last) && last.Value == uint.MaxValue, "reading the last id");
+
+            // The other announced fields read without throwing too.
+            True(NetOwner.TryFromSlot(0, out var server) && server.IsServer, "slot zero is the server");
+            True(NetOwner.TryFromSlot(5, out var player) && player.Equals(NetOwner.ForParticipant(5)), "a participant slot");
+            True(!NetOwner.TryFromSlot(-1, out var refused) && refused.IsServer, "a negative slot");
+            True(NetSpawnOrigin.TryCreate("io.github.example.sandbox", 3, out var origin) && origin.Equals(new NetSpawnOrigin("io.github.example.sandbox", 3)), "an origin");
+            True(!NetSpawnOrigin.TryCreate("", 3, out var unnamed) && !unnamed.IsSpecified, "an origin with no mod id");
+            True(!NetSpawnOrigin.TryCreate(null, 3, out _), "an origin with a missing mod id");
+            True(!NetSpawnOrigin.TryCreate("io.github.example.sandbox", 0, out _), "an origin with sequence zero");
         }
 
         private static void TracksOwnersAndOrigins()
@@ -101,10 +154,9 @@ namespace TopiaForge.ModManager.Tests
 
             True(!NetworkEntityTable.IsValidKind(null), "null kind");
             var table = new NetworkEntityTable();
-            Throws<ArgumentException>(() => table.Allocate("Bad Kind", NetOwner.Server), "allocate validates kinds");
-            Throws<ArgumentException>(() => table.TryAdd(new NetworkEntityId(1), "", NetOwner.Server), "mirror validates kinds");
-            Throws<ArgumentException>(() => table.TryAdd(default, "asset", NetOwner.Server), "id zero is reserved");
+            Throws<ArgumentException>(() => table.Allocate("Bad Kind", NetOwner.Server), "the host's own spawns must name a valid kind");
             Throws<ArgumentOutOfRangeException>(() => new NetworkEntityId(0), "id zero");
+            Throws<ArgumentOutOfRangeException>(() => new NetworkEntityTable(firstAllocatedId: 0), "allocation cannot start at zero");
             Throws<ArgumentOutOfRangeException>(() => NetOwner.ForParticipant(0), "participant zero is the server");
             Throws<ArgumentException>(() => new NetSpawnOrigin("", 1), "origin mod id");
             Throws<ArgumentOutOfRangeException>(() => new NetSpawnOrigin("mod", 0), "origin sequence");
@@ -120,10 +172,17 @@ namespace TopiaForge.ModManager.Tests
             True(!table.IsTombstoned(id) && table.Count == 0, "a new session forgets entities and tombstones");
             Equal(2u, table.Allocate("asset", NetOwner.Server).Value, "ids keep counting across sessions");
 
-            var nearlyFull = new NetworkEntityTable();
-            nearlyFull.TryAdd(new NetworkEntityId(uint.MaxValue - 1), "asset", NetOwner.Server);
+            var nearlyFull = new NetworkEntityTable(firstAllocatedId: uint.MaxValue - 1);
+            Equal(uint.MaxValue - 1, nearlyFull.Allocate("asset", NetOwner.Server).Value, "the second-last id");
             Equal(uint.MaxValue, nearlyFull.Allocate("asset", NetOwner.Server).Value, "the last id");
             Throws<InvalidOperationException>(() => nearlyFull.Allocate("asset", NetOwner.Server), "ids never wrap to zero");
+            nearlyFull.Clear();
+            Throws<InvalidOperationException>(() => nearlyFull.Allocate("asset", NetOwner.Server), "this process's own ids stay used up");
+
+            var blocked = new NetworkEntityTable(firstAllocatedId: uint.MaxValue);
+            blocked.TryAdd(new NetworkEntityId(uint.MaxValue), "asset", NetOwner.Server);
+            Throws<InvalidOperationException>(() => blocked.Allocate("asset", NetOwner.Server), "skipping the last id leaves none");
+            True(blocked.Count == 1, "the failed allocation adds nothing");
         }
     }
 }

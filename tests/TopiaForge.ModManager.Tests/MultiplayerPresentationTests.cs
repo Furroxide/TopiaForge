@@ -26,46 +26,71 @@ namespace TopiaForge.ModManager.Tests
 
         private static void RoutesFollowThePlanTable()
         {
-            Equal(PresentationRoute.MirrorToEveryone, Route(PresentationKind.HudSurface), "HUD surfaces are mirrored");
-            Equal(PresentationRoute.BroadcastToEveryone, Route(PresentationKind.Toast), "toasts are broadcast");
-            Equal(PresentationRoute.BroadcastToEveryone, Route(PresentationKind.AudioCue), "audio cues are broadcast");
-            Equal(PresentationRoute.HostOnly, Route(PresentationKind.Window), "windows stay with the host");
-            Equal(PresentationRoute.HostOnly, Route(PresentationKind.Tool), "tools stay with the host");
-            Equal(PresentationRoute.HostOnly, Route(PresentationKind.Modal), "modals stay with the host");
+            var gamemode = new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer);
+            Equal(PresentationRoute.MirrorToEveryone, Route(gamemode, PresentationKind.HudSurface), "HUD surfaces are mirrored");
+            Equal(PresentationRoute.BroadcastToEveryone, Route(gamemode, PresentationKind.Toast), "toasts are broadcast");
+            Equal(PresentationRoute.BroadcastToEveryone, Route(gamemode, PresentationKind.AudioCue), "audio cues are broadcast");
+            Equal(PresentationRoute.HostOnly, Route(gamemode, PresentationKind.Window), "windows stay with the host");
+            Equal(PresentationRoute.HostOnly, Route(gamemode, PresentationKind.Tool), "tools stay with the host");
+            Equal(PresentationRoute.HostOnly, Route(gamemode, PresentationKind.Modal), "modals stay with the host");
+
+            // A client-local mod's gamemode server on the host used to mirror its HUD and broadcast its toasts.
+            var localGamemode = new ModNetProfile(ModNetworkClass.ClientLocal, ModExecutionContext.GamemodeServer);
+            Equal(PresentationRoute.Local, Route(localGamemode, PresentationKind.HudSurface), "a client-local HUD stays local");
+            Equal(PresentationRoute.Local, Route(localGamemode, PresentationKind.Toast), "a client-local toast stays local");
+            var serverGamemode = new ModNetProfile(ModNetworkClass.ServerOnly, ModExecutionContext.GamemodeServer);
+            Equal(PresentationRoute.MirrorToEveryone, Route(serverGamemode, PresentationKind.HudSurface), "a server-only gamemode's HUD is mirrored");
 
             var checkedCases = 0;
             foreach (var realm in new[] { NetRealm.Offline, NetRealm.ListenHost, NetRealm.Client })
             {
-                for (var context = ModExecutionContext.Process; context <= ModExecutionContext.Participant; context++)
+                for (var networkClass = ModNetworkClass.Shared; networkClass <= ModNetworkClass.Standalone; networkClass++)
                 {
-                    foreach (var kind in Kinds)
+                    for (var context = ModExecutionContext.Process; context <= ModExecutionContext.Participant; context++)
                     {
-                        checkedCases++;
-                        if (realm == NetRealm.ListenHost && context == ModExecutionContext.GamemodeServer) continue;
-                        Equal(PresentationRoute.Local, PresentationRoutingPolicy.Route(realm, context, kind), "every other context renders locally");
+                        var profile = new ModNetProfile(networkClass, context);
+                        foreach (var kind in Kinds)
+                        {
+                            checkedCases++;
+                            var route = PresentationRoutingPolicy.Route(realm, profile, kind);
+                            var networked = networkClass == ModNetworkClass.Shared || networkClass == ModNetworkClass.ServerOnly;
+                            if (realm == NetRealm.ListenHost && context == ModExecutionContext.GamemodeServer && networked)
+                            {
+                                Equal(Route(gamemode, kind), route, profile + " routes like any host gamemode");
+                                continue;
+                            }
+
+                            Equal(PresentationRoute.Local, route, profile + " on " + realm + " renders locally");
+                        }
                     }
                 }
             }
 
-            Equal(72, checkedCases, "every realm, context and kind");
-            Throws<ArgumentOutOfRangeException>(() => PresentationRoutingPolicy.Route(NetRealm.Offline, ModExecutionContext.Process, (PresentationKind)6), "undefined kind");
+            Equal(288, checkedCases, "every realm, class, context and kind");
+            Throws<ArgumentOutOfRangeException>(() => PresentationRoutingPolicy.Route(NetRealm.Offline, gamemode, (PresentationKind)6), "undefined kind");
 
-            static PresentationRoute Route(PresentationKind kind) =>
-                PresentationRoutingPolicy.Route(NetRealm.ListenHost, ModExecutionContext.GamemodeServer, kind);
+            static PresentationRoute Route(ModNetProfile profile, PresentationKind kind) =>
+                PresentationRoutingPolicy.Route(NetRealm.ListenHost, profile, kind);
         }
 
         private static void TargetedCallsReachOnePlayer()
         {
+            var shared = new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer);
+            var local = new ModNetProfile(ModNetworkClass.ClientLocal, ModExecutionContext.GamemodeServer);
+            var serverOnly = new ModNetProfile(ModNetworkClass.ServerOnly, ModExecutionContext.Participant);
             foreach (var kind in Kinds)
             {
                 foreach (var realm in new[] { NetRealm.Offline, NetRealm.ListenHost, NetRealm.Client })
                 {
-                    Equal(PresentationRoute.Local, PresentationRoutingPolicy.RouteTargeted(realm, true, kind), "the local player renders locally");
+                    Equal(PresentationRoute.Local, PresentationRoutingPolicy.RouteTargeted(realm, shared, true, kind), "the local player renders locally");
+                    Equal(PresentationRoute.Local, PresentationRoutingPolicy.RouteTargeted(realm, local, true, kind), "including from a client-local mod");
                 }
 
-                Equal(PresentationRoute.TargetPlayer, PresentationRoutingPolicy.RouteTargeted(NetRealm.ListenHost, false, kind), "the host targets a player");
-                Equal(PresentationRoute.Refused, PresentationRoutingPolicy.RouteTargeted(NetRealm.Client, false, kind), "a client cannot drive another player's UI");
-                Equal(PresentationRoute.Refused, PresentationRoutingPolicy.RouteTargeted(NetRealm.Offline, false, kind), "single player has nobody else");
+                Equal(PresentationRoute.TargetPlayer, PresentationRoutingPolicy.RouteTargeted(NetRealm.ListenHost, shared, false, kind), "the host targets a player");
+                Equal(PresentationRoute.TargetPlayer, PresentationRoutingPolicy.RouteTargeted(NetRealm.ListenHost, serverOnly, false, kind), "so does a server-only mod");
+                Equal(PresentationRoute.Refused, PresentationRoutingPolicy.RouteTargeted(NetRealm.ListenHost, local, false, kind), "a client-local mod never reaches another player");
+                Equal(PresentationRoute.Refused, PresentationRoutingPolicy.RouteTargeted(NetRealm.Client, shared, false, kind), "a client cannot drive another player's UI");
+                Equal(PresentationRoute.Refused, PresentationRoutingPolicy.RouteTargeted(NetRealm.Offline, shared, false, kind), "single player has nobody else");
             }
 
             True(PresentationRoutingPolicy.IsInteractive(PresentationKind.Window), "windows stay interactive remotely");
