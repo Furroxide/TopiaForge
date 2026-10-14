@@ -14,7 +14,7 @@ namespace TopiaForge.ModManager.Core
         private static readonly HashSet<string> KnownCapabilities = new HashSet<string>(StringComparer.Ordinal)
         {
             "asset-bundles", "filesystem", "filesystem-watch", "harmony-patch", "hud", "input",
-            "navigation", "network", "microphone", "particles", "physics", "physics-settings",
+            "navigation", "network", "microphone", "particles", "peer-network", "physics", "physics-settings",
             "player-control", "player-token", "prompt-overrides", "quality-settings", "remote-ai",
             "render-settings", "robot-spawning", "scene-management", "speech-to-text", "time",
             "ugc-livesync", "unsafe-native", "world-service"
