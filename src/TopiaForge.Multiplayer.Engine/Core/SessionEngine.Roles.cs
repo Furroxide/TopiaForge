@@ -102,8 +102,9 @@ namespace TopiaForge.Multiplayer.Engine
             if (ended) throw new ObjectDisposedException(nameof(SessionEngine));
             if (Role != EngineRole.Host) throw new InvalidOperationException("Only a host has client connections.");
             foreach (var connection in connections.ToArray()) EndConnection(connection, reason, message);
-            foreach (var record in participantRecords) NoteVoiceSeen(record);
-            if (participantRecords.RemoveAll(record => record.Identity != null) > 0) MarkParticipantsChanged();
+            var departed = participantRecords.FindAll(record => record.Identity != null);
+            foreach (var record in departed) ForgetParticipant(record);
+            if (departed.Count > 0) MarkParticipantsChanged();
             EndOperation();
         }
 

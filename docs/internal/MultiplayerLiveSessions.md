@@ -221,6 +221,26 @@ that cannot open or give up, a host that never answers, a changed identity, and 
 address, that faults and failures name reasons rather than addresses, and that a relay-only resolve contacts nothing
 beyond the local network.
 
+`LiveSoakTests` plays a host and four players for 30 virtual minutes on the virtual network, whole providers with real
+cryptography, transport, engine and flows. Commands, inputs, ticks, spawns and ownership changes run throughout;
+players join, leave, are kicked and banned, lose their links for a blip, a stall, a reconnect and for good; NATs rebind,
+frames stall, the host replaces its session, and the network moves between LAN, Wi-Fi, Internet and congested
+conditions with loss, delay, jitter and duplication. Every five minutes the workload holds still and every player in
+the session must match the host value for value, every submission must have its one answer, and the host's ledger must
+show each command run once. Every growing table, in the engines, the endpoints and the links, is held to a ceiling all
+along; no endpoint may report a timer already due; nothing may throw or report a fault. Identities and every
+endpoint's randomness come from the seed, so a seed repeats every byte, and the run takes a few seconds, so every pass
+runs it twice and compares. The harness's `--soak` flag adds eight more seeds and a four-hour run.
+
+The fuzzers feed seeded hostile input to every format and boundary this layer reads: canonical JSON (checked against
+an independent JSON reader), signed descriptors, links, invite codes and hosts, LAN beacons and session info, join
+content, admission reports, the host's admission decision, the descriptor endpoint's request line however its bytes
+arrive, session frames into host and client engines through their links, and the transport's datagrams, mutated from
+every kind it sends, as well as authenticated packets of garbage frames. Each property is the same: nothing throws past
+its boundary, whatever is accepted has exactly one spelling or follows the rules an independent reading gives, and
+nothing grows without bound. The default run makes about 240,000 inputs in under a second; the `--fuzz` flag makes
+twenty times as many. `HardeningRegressionTests` pins what they found. None of them opens a socket.
+
 ## 11. The network thread
 
 - **Ownership.** One thread owns a socket, a `NetworkStack` (the transport endpoint plus the links over its
@@ -393,9 +413,9 @@ A host admits players through `HostPolicy`, which checks, in order:
 1. **Bans.** A banned transport key is refused first. Rotating the key escapes a ban, as the player-facing docs say.
 2. **The engine's own checks:** the protocol's major version, capacity, and every shared contract's schema.
 3. **The join content's form.** A player's join request carries version 1, a flag byte, a 32-byte password proof when
-   the flag says so, and the runtime's content bytes with a minimal varint length. The engine bounds the whole field
-   at 64 KiB, so the content is bounded at that less the largest header (37 bytes). Anything else is a protocol
-   refusal.
+   the flag says so, and the runtime's content bytes with a minimal varint length, read in full so that no length
+   passes under a second spelling. The engine bounds the whole field at 64 KiB, so the content is bounded at that less
+   the largest header (37 bytes). Anything else is a protocol refusal.
 4. **The password.** A protected session needs a proof bound to this link's handshake (section 6), so a proof made
    for another link is wrong here. Five wrong proofs from one identity within a minute refuse even the right one for
    the rest of that minute. The transport's per-source handshake limit bounds how fast new identities can try.

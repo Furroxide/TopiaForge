@@ -416,11 +416,24 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             if (evicted == null) return false;
-            NoteVoiceSeen(evicted);
-            participantRecords.Remove(evicted);
+            ForgetParticipant(evicted);
             MarkParticipantsChanged();
             MarkVoiceRosterDirty();
             return true;
+        }
+
+        /// <summary>
+        /// Removes a participant's record, with the rate limiters it left on commands and objects. Nothing can submit
+        /// under its id until a new record takes it, and a new record starts its limits afresh, so the old limiters would
+        /// otherwise grow with every player who ever came and went.
+        /// </summary>
+        private void ForgetParticipant(ParticipantRecord record)
+        {
+            // The voice moderation table forgets whoever was seen longest ago, so a record that goes counts as seen now.
+            NoteVoiceSeen(record);
+            participantRecords.Remove(record);
+            foreach (var binding in commands.Values) binding.ForgetSender(record.Id);
+            foreach (var item in objectList) item.ForgetSender(record.Id);
         }
 
         private ParticipantId? AllocateParticipantId(string identity)
@@ -599,8 +612,7 @@ namespace TopiaForge.Multiplayer.Engine
                 var record = participantRecords[index];
                 if (record.IsConnected || record.Identity == null) continue;
                 if (nowMicros - record.DepartedAtMicros < options.ParticipantGraceMicros) continue;
-                NoteVoiceSeen(record);
-                participantRecords.RemoveAt(index);
+                ForgetParticipant(record);
                 removed = true;
             }
 

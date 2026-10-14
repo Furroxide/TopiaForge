@@ -85,6 +85,30 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets how many inbound links were closed because their source already held its share.</summary>
         internal long RefusedForSource { get; private set; }
+        /// <summary>Gets the outbound attempts still in their handshake and the accepted links not yet taken.</summary>
+        internal int PendingCount => pending.Count + accepted.Count;
+
+        /// <summary>Gets the session bytes every link holds for the main thread to read.</summary>
+        internal long InboundBytes
+        {
+            get
+            {
+                long total = 0;
+                foreach (var pair in pairs) total += pair.Link.InboundBytes;
+                return total;
+            }
+        }
+
+        /// <summary>Gets the bytes the main thread queued on every link that this side has not taken yet.</summary>
+        internal long OutboundBytes
+        {
+            get
+            {
+                long total = 0;
+                foreach (var pair in pairs) total += pair.Link.OutboundBytes;
+                return total;
+            }
+        }
 
         /// <summary>Takes one datagram. Once the stack is disposed, datagrams are ignored rather than refused.</summary>
         internal void Receive(TransportPath path, byte[] datagram, int offset, int count, long now)
