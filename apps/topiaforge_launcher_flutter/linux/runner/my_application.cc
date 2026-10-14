@@ -5,14 +5,144 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <cstring>
+
 #include "flutter/generated_plugin_registrant.h"
+
+// The channel Dart uses for single instance and session links
+// (lib/src/launcher_instance_channel.dart).
+static const char kInstanceChannel[] =
+    "io.github.furroxide.topiaforge.launcher/instance";
+
+// A session link is at most 512 characters. The margin lets a slightly longer
+// one through, so that Dart reports it as too long itself.
+static const size_t kMaximumLinkLength = 512 + 64;
+
+// The options the update helper starts a freshly installed launcher with
+// (lib/src/update_health_handshake.dart).
+static const char kUpdateHealthNonce[] = "--topiaforge-update-health-nonce";
+static const char kUpdateHealthFile[] = "--topiaforge-update-health-file";
 
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  GtkWindow* window;
+  FlMethodChannel* instance_channel;
+  gboolean dart_ready;
+  // The newest link, or refusal, held until Dart listens.
+  gchar* held_method;
+  gchar* held_value;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+// Whether |text| starts with the topiaforge: scheme, in ASCII case only. It
+// stops at the first character that differs, so it never reads past the end
+// of a shorter text.
+static gboolean has_session_link_scheme(const gchar* text) {
+  static const char scheme[] = "topiaforge:";
+  for (size_t index = 0; scheme[index] != '\0'; index++) {
+    char unit = text[index];
+    if (unit >= 'A' && unit <= 'Z') {
+      unit = static_cast<char>(unit - 'A' + 'a');
+    }
+    if (unit != scheme[index]) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+static gboolean is_update_health_option(const gchar* argument) {
+  return g_strcmp0(argument, kUpdateHealthNonce) == 0 ||
+         g_strcmp0(argument, kUpdateHealthFile) == 0;
+}
+
+static gboolean is_update_health_start(gchar** arguments) {
+  for (gchar** argument = arguments; argument != nullptr && *argument != nullptr;
+       argument++) {
+    if (is_update_health_option(*argument)) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+// The session link on a command line, after the binary name: the last
+// argument with the topiaforge: scheme, apart from the update health options'
+// values. The same rule as sessionLinkArgument in Dart.
+static const gchar* session_link_argument(gchar** arguments) {
+  if (arguments == nullptr || arguments[0] == nullptr) {
+    return nullptr;
+  }
+  const gchar* link = nullptr;
+  for (gchar** argument = arguments + 1; *argument != nullptr; argument++) {
+    if (is_update_health_option(*argument)) {
+      if (argument[1] == nullptr) {
+        break;
+      }
+      argument++;
+      continue;
+    }
+    if (has_session_link_scheme(*argument)) {
+      link = *argument;
+    }
+  }
+  return link;
+}
+
+static void send_to_dart(MyApplication* self,
+                         const gchar* method,
+                         const gchar* value) {
+  if (!self->dart_ready || self->instance_channel == nullptr) {
+    // Until Dart listens, the newest link replaces the one held.
+    g_free(self->held_method);
+    g_free(self->held_value);
+    self->held_method = g_strdup(method);
+    self->held_value = g_strdup(value);
+    return;
+  }
+  g_autoptr(FlValue) argument = fl_value_new_string(value);
+  fl_method_channel_invoke_method(self->instance_channel, method, argument,
+                                  nullptr, nullptr, nullptr);
+}
+
+// Passes a link from a later start of the launcher to Dart. It is untrusted:
+// only its scheme is read before its length is checked, and it reaches Dart
+// as text and nothing else, never a shell.
+static void receive_link(MyApplication* self, const gchar* link) {
+  if (!has_session_link_scheme(link)) {
+    return;
+  }
+  if (strnlen(link, kMaximumLinkLength + 1) > kMaximumLinkLength) {
+    send_to_dart(self, "linkRefused", "tooLong");
+  } else if (!g_utf8_validate(link, -1, nullptr)) {
+    send_to_dart(self, "linkRefused", "invalid");
+  } else {
+    send_to_dart(self, "link", link);
+  }
+}
+
+static void instance_call_cb(FlMethodChannel* channel,
+                             FlMethodCall* method_call,
+                             gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  if (strcmp(fl_method_call_get_name(method_call), "ready") != 0) {
+    // D-Bus already keeps the launcher single, so Dart has nothing to claim
+    // or hand off here.
+    fl_method_call_respond_not_implemented(method_call, nullptr);
+    return;
+  }
+  self->dart_ready = TRUE;
+  if (self->held_method != nullptr) {
+    g_autofree gchar* method = self->held_method;
+    g_autofree gchar* value = self->held_value;
+    self->held_method = nullptr;
+    self->held_value = nullptr;
+    send_to_dart(self, method, value);
+  }
+  fl_method_call_respond_success(method_call, nullptr, nullptr);
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -22,8 +152,16 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  if (self->window != nullptr) {
+    // One window per launcher: activating again brings it forward.
+    gtk_window_present(self->window);
+    return;
+  }
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
+  self->window = window;
+  g_object_add_weak_pointer(G_OBJECT(window),
+                            reinterpret_cast<gpointer*>(&self->window));
 
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
@@ -75,28 +213,86 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  self->instance_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      kInstanceChannel, FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(
+      self->instance_channel, instance_call_cb, self, nullptr);
+
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
 
-// Implements GApplication::local_command_line.
+// Implements GApplication::command_line. The running launcher sees its own
+// command line first, then the command line of every later start, which D-Bus
+// hands to it; that later start exits with the status returned here.
+static int my_application_command_line(GApplication* application,
+                                       GApplicationCommandLine* command_line) {
+  MyApplication* self = MY_APPLICATION(application);
+  g_auto(GStrv) arguments =
+      g_application_command_line_get_arguments(command_line, nullptr);
+  if (!g_application_command_line_get_is_remote(command_line)) {
+    // This process's own start: the arguments after the binary name go to
+    // Dart's main().
+    g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+    if (arguments != nullptr && arguments[0] != nullptr) {
+      self->dart_entrypoint_arguments = g_strdupv(arguments + 1);
+    }
+    g_application_activate(application);
+    return 0;
+  }
+  // A later start: it hands over its link, if it has one, and this window
+  // comes forward.
+  const gchar* link = session_link_argument(arguments);
+  if (link != nullptr) {
+    receive_link(self, link);
+  }
+  if (self->window != nullptr) {
+    gtk_window_present(self->window);
+  }
+  return 0;
+}
+
+// Whether a process owns |name| on |bus|. When the bus cannot say, the answer
+// is yes: running beside a launcher is safe, handing over to one is not.
+static gboolean bus_name_has_owner(GDBusConnection* bus, const gchar* name) {
+  g_autoptr(GError) error = nullptr;
+  g_autoptr(GVariant) reply = g_dbus_connection_call_sync(
+      bus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+      "org.freedesktop.DBus", "NameHasOwner", g_variant_new("(s)", name),
+      G_VARIANT_TYPE("(b)"), G_DBUS_CALL_FLAGS_NONE, 1000, nullptr, &error);
+  if (reply == nullptr) {
+    return TRUE;
+  }
+  gboolean owned = FALSE;
+  g_variant_get(reply, "(b)", &owned);
+  return owned;
+}
+
+// Implements GApplication::local_command_line. It only decides how this
+// process registers; GApplication then negotiates over D-Bus as usual, and
+// either runs the command line here or hands it to the running launcher.
 static gboolean my_application_local_command_line(GApplication* application,
                                                   gchar*** arguments,
                                                   int* exit_status) {
-  MyApplication* self = MY_APPLICATION(application);
-  // Strip out the first argument as it is the binary name.
-  self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
-
   g_autoptr(GError) error = nullptr;
-  if (!g_application_register(application, nullptr, &error)) {
-    g_warning("Failed to register: %s", error->message);
-    *exit_status = 1;
-    return TRUE;
+  g_autoptr(GDBusConnection) bus =
+      g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  // Without a session bus there is nothing to negotiate. An update health
+  // check must never hand over to another launcher and quit, because the
+  // update helper is waiting for it to report: when a launcher already owns
+  // the name, the check runs beside it. A start that takes the name between
+  // this check and registration is not covered; the update then rolls back.
+  if (bus == nullptr ||
+      (is_update_health_start(*arguments) &&
+       bus_name_has_owner(bus, g_application_get_application_id(application)))) {
+    g_application_set_flags(
+        application, static_cast<GApplicationFlags>(
+                         G_APPLICATION_NON_UNIQUE |
+                         G_APPLICATION_HANDLES_COMMAND_LINE));
   }
-
-  g_application_activate(application);
-  *exit_status = 0;
-
-  return TRUE;
+  return G_APPLICATION_CLASS(my_application_parent_class)
+      ->local_command_line(application, arguments, exit_status);
 }
 
 // Implements GApplication::startup.
@@ -120,12 +316,21 @@ static void my_application_shutdown(GApplication* application) {
 // Implements GObject::dispose.
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
+  if (self->window != nullptr) {
+    g_object_remove_weak_pointer(G_OBJECT(self->window),
+                                 reinterpret_cast<gpointer*>(&self->window));
+    self->window = nullptr;
+  }
+  g_clear_object(&self->instance_channel);
+  g_clear_pointer(&self->held_method, g_free);
+  g_clear_pointer(&self->held_value, g_free);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 
 static void my_application_class_init(MyApplicationClass* klass) {
   G_APPLICATION_CLASS(klass)->activate = my_application_activate;
+  G_APPLICATION_CLASS(klass)->command_line = my_application_command_line;
   G_APPLICATION_CLASS(klass)->local_command_line =
       my_application_local_command_line;
   G_APPLICATION_CLASS(klass)->startup = my_application_startup;
@@ -135,6 +340,25 @@ static void my_application_class_init(MyApplicationClass* klass) {
 
 static void my_application_init(MyApplication* self) {}
 
+// The application id names one launcher per data root. A launcher started
+// with its own TOPIAFORGE_DATA_ROOT gets an id of its own, so launchers with
+// different data roots never take each other's links. Inside a snap the id
+// stays the one its D-Bus slot declares.
+static gchar* application_id() {
+  const gchar* configured = g_getenv("TOPIAFORGE_DATA_ROOT");
+  if (configured == nullptr || g_getenv("SNAP") != nullptr) {
+    return g_strdup(APPLICATION_ID);
+  }
+  g_autofree gchar* root = g_strstrip(g_strdup(configured));
+  if (root[0] == '\0') {
+    return g_strdup(APPLICATION_ID);
+  }
+  g_autofree gchar* absolute = g_canonicalize_filename(root, nullptr);
+  g_autofree gchar* digest =
+      g_compute_checksum_for_string(G_CHECKSUM_SHA256, absolute, -1);
+  return g_strdup_printf("%s.r%.16s", APPLICATION_ID, digest);
+}
+
 MyApplication* my_application_new() {
   // Set the program name to the application ID, which helps various systems
   // like GTK and desktop environments map this running application to its
@@ -142,7 +366,9 @@ MyApplication* my_application_new() {
   // the application to be recognized beyond its binary name.
   g_set_prgname(APPLICATION_ID);
 
+  g_autofree gchar* id = application_id();
   return MY_APPLICATION(g_object_new(my_application_get_type(),
-                                     "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     "application-id", id, "flags",
+                                     G_APPLICATION_HANDLES_COMMAND_LINE,
+                                     nullptr));
 }

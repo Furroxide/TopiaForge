@@ -32,3 +32,5 @@ export 'src/tomato_cake_launcher_state.dart';
 export 'src/json_duplicate_properties.dart';
 export 'src/launch_storage_keys.dart';
 export 'src/multiplayer/descriptor_signature_verifier.dart';
+export 'src/data_root.dart';
+export 'src/session_links.dart';
