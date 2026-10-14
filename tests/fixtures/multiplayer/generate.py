@@ -222,6 +222,11 @@ invalid = [
              packageDigest=hashlib.sha256(canonical([dict(base["packages"][0], role="required")])).hexdigest()))),
     tampered("uppercase-package-digest", "Hexadecimal is lowercase.", signed_text(dict(base, packageDigest=base["packageDigest"].upper()))),
     tampered("bad-semver", "Versions are semantic versions.", signed_text(dict(base, runtimeVersion="0.2"))),
+    tampered("game-build-newline", "Patterns match the whole value: a trailing newline is not allowed.", signed_text(dict(base, gameBuild="2545\n"))),
+    tampered("semver-newline", "Patterns match the whole value: a trailing newline is not allowed.", signed_text(dict(base, protocolVersion="1.0.0\n"))),
+    tampered("package-id-newline", "Patterns match the whole value: a trailing newline is not allowed.",
+             signed_text(dict(base, packages=[dict(base["packages"][0], id=base["packages"][0]["id"] + "\n")],
+                              packageDigest=hashlib.sha256(canonical([dict(base["packages"][0], id=base["packages"][0]["id"] + "\n")])).hexdigest()))),
 ]
 
 write("descriptor/cases.json", {
@@ -282,6 +287,9 @@ links_invalid = [
     {"input": "topiaforge://join/direct/" + SERVER + "/bad_host.example/27250", "about": "Host names are letters, digits and hyphens."},
     {"input": "topiaforge://join/direct/" + SERVER + "/-bad.example/27250", "about": "Labels do not start with a hyphen."},
     {"input": "topiaforge://join/direct/" + SERVER + "/example.com./27250", "about": "No trailing dot."},
+    {"input": "topiaforge://join/direct/" + SERVER + "/Kexample.com/27250",
+     "about": "Host names are ASCII before any case folding: the Kelvin sign lowercases to k but is refused."},
+    {"input": "topiaforge://join/ſBCDE12345", "about": "Invite codes are ASCII before any case folding: the long s uppercases to S but is refused."},
     {"input": "topiaforge://join/ ABCDE12345", "about": "No spaces inside a link."},
     {"input": "topiaforge://join/" + "A" * 600, "about": "At most 512 characters."},
     {"input": "topiaforge://join/", "about": "Nothing to join."},
@@ -293,6 +301,8 @@ codes = [
     {"input": "ABCDEU2345", "canonical": None},
     {"input": "ABCD", "canonical": None},
     {"input": "ABCDE_12345", "canonical": None},
+    {"input": "ſBCDE12345", "canonical": None},
+    {"input": "ABCDE12345\n", "canonical": None},
 ]
 write("links/cases.json", {
     "schema": 1,

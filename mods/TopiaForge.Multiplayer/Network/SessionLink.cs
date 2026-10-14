@@ -24,7 +24,9 @@ namespace TopiaForge.Multiplayer.Network
             foreach (var raw in input)
             {
                 if (raw == '-' || raw == ' ') continue;
-                var character = char.ToUpperInvariant(raw);
+
+                // Only ASCII letters fold: char.ToUpperInvariant would turn the long s (U+017F) into S.
+                var character = raw >= 'a' && raw <= 'z' ? (char)(raw - ('a' - 'A')) : raw;
                 if (character == 'O') character = '0';
                 else if (character == 'I' || character == 'L') character = '1';
                 if (Alphabet.IndexOf(character) < 0 || builder.Length == Length) return false;
@@ -186,7 +188,9 @@ namespace TopiaForge.Multiplayer.Network
                 return true;
             }
 
-            var labels = host.ToLowerInvariant().Split('.');
+            // Only ASCII letters fold: ToLowerInvariant would turn the Kelvin sign (U+212A) into k.
+            var lowered = LowerAscii(host);
+            var labels = lowered.Split('.');
             foreach (var label in labels)
             {
                 if (label.Length == 0 || label.Length > 63 || label[0] == '-' || label[label.Length - 1] == '-') return false;
@@ -205,8 +209,19 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             if (numeric) return false;
-            normalized = host.ToLowerInvariant();
+            normalized = lowered;
             return true;
+        }
+
+        private static string LowerAscii(string value)
+        {
+            var characters = value.ToCharArray();
+            for (var index = 0; index < characters.Length; index++)
+            {
+                if (characters[index] >= 'A' && characters[index] <= 'Z') characters[index] = (char)(characters[index] + ('a' - 'A'));
+            }
+
+            return new string(characters);
         }
 
         /// <summary>Writes an IPv6 address as RFC 5952 recommends; an IPv4-mapped address becomes dotted decimal.</summary>

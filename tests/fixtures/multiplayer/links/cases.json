@@ -174,6 +174,14 @@
       "about": "No trailing dot."
     },
     {
+      "input": "topiaforge://join/direct/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/Kexample.com/27250",
+      "about": "Host names are ASCII before any case folding: the Kelvin sign lowercases to k but is refused."
+    },
+    {
+      "input": "topiaforge://join/ſBCDE12345",
+      "about": "Invite codes are ASCII before any case folding: the long s uppercases to S but is refused."
+    },
+    {
       "input": "topiaforge://join/ ABCDE12345",
       "about": "No spaces inside a link."
     },
@@ -212,6 +220,14 @@
     },
     {
       "input": "ABCDE_12345",
+      "canonical": null
+    },
+    {
+      "input": "ſBCDE12345",
+      "canonical": null
+    },
+    {
+      "input": "ABCDE12345\n",
       "canonical": null
     }
   ]
