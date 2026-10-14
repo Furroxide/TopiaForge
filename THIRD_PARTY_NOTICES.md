@@ -80,6 +80,24 @@ BouncyCastle in the game; Mono has no binding redirects to settle such a conflic
   lists every change, with each file's upstream blob hash.
 - License text: `mods/TopiaForge.Multiplayer/ThirdParty/BouncyCastle/LICENSE.md`
 
+The provider also compiles a subset of Concentus, a C# port of the Opus voice codec (libopus 1.1.2, fixed point) and
+of the Speex resampler, for voice chat. It ships the same way: as source under a renamed internal namespace.
+
+- Project: Concentus (lostromb/concentus)
+- Version: 2.2.2, whose NuGet package metadata names commit `6c2328dc19044601e33a9c11628b8d60e1f3011c`
+- Upstream: https://github.com/lostromb/concentus/tree/6c2328dc19044601e33a9c11628b8d60e1f3011c/CSharp/Concentus
+- License: BSD-3-Clause, in two texts: the Opus licence for the codec and the Speex licence for the resampler
+- Location: 122 files under `mods/TopiaForge.Multiplayer/ThirdParty/Concentus/`, mirroring `CSharp/Concentus/`.
+- Local changes:
+  - Every file has a renamed namespace, internal top-level types and LF line endings.
+  - Native-library interop, the multistream codec and other unneeded files are left out, with one unused import of
+    the interop namespace.
+  - Three files lose their `System.Numerics.Vector<T>` paths, which the game's Mono cannot load.
+  - Two files define `PARITY`, as upstream's project does for every build.
+  - One file fixes an upstream defect that made every discontinuous-transmission packet throw.
+- Full change list, and every copyright line the files carry: `mods/TopiaForge.Multiplayer/THIRD_PARTY_NOTICES.md`.
+- License text: `mods/TopiaForge.Multiplayer/ThirdParty/Concentus/LICENSE`
+
 ## First-party binary and generated assets
 
 These ship in the release archive, are not third-party redistribution, and are recorded here so the
