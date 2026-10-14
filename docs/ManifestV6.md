@@ -97,12 +97,14 @@ an empty constraint list is portable, not evidence of testing on every host.
 
 Capabilities disclose access and do not grant or sandbox authority. Recognized values
 are `asset-bundles`, `filesystem`, `filesystem-watch`, `harmony-patch`, `hud`, `input`,
-`navigation`, `network`, `microphone`, `particles`, `physics`, `physics-settings`,
+`navigation`, `network`, `microphone`, `particles`, `peer-network`, `physics`, `physics-settings`,
 `player-control`, `player-token`, `prompt-overrides`, `quality-settings`, `remote-ai`,
 `render-settings`, `robot-spawning`, `scene-management`, `speech-to-text`, `time`,
 `ugc-livesync`, `unsafe-native` and `world-service`. A recognized disclosure does not
 promise that a provider is available. `network` means arbitrary outbound networking;
-it is separate from the TopiaForge multiplayer transport.
+it is separate from the TopiaForge multiplayer transport. `peer-network` means the mod can show
+the player's network address to other players, as a direct multiplayer session does; only a mod
+that connects players to each other declares it.
 
 ## Add multiplayer support
 
