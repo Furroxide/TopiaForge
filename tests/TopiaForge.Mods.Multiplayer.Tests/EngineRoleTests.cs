@@ -172,6 +172,13 @@ internal static class EngineRoleTests
         harness.Flush();
         That(session.Snapshot.State == MultiplayerSessionState.Ready && seen != null && seen.PeerIdentity == "guest" && !ReferenceEquals(seen, clientEnd),
             "the policy sees the host's end of the link the request came over");
+        That(seen!.ChannelBinding.Length == 32 && seen.ChannelBinding.SequenceEqual(clientEnd.ChannelBinding),
+            "with the channel binding both ends share, so a proof the client binds to it can be checked");
+        var (_, _, otherEnd) = harness.AddClient("other");
+        That(!otherEnd.ChannelBinding.SequenceEqual(clientEnd.ChannelBinding), "and every link has its own");
+        var copy = clientEnd.ChannelBinding;
+        copy[0] ^= 0xFF;
+        That(clientEnd.ChannelBinding[0] != copy[0], "the binding is handed out as a copy");
     }
 
     private static SoloSessionStart Solo(string id) => new(new MultiplayerSessionId(id), new SessionSeed(1), new ParticipantId("solo"), "Solo");

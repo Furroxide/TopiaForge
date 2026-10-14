@@ -52,8 +52,10 @@ snapshot names the new session.
   ends as before.
 - **Limits.** None of the three runs inside a transaction. A host serving clients must close them before joining
   elsewhere.
-- **Join policies** see the link a request came over (`JoinRequestContext.Link`), so a provider's policy can check a
-  proof bound to that link's handshake.
+- **Join policies** see the link a request came over (`JoinRequestContext.Link`). Every link exposes a
+  `ChannelBinding` that both ends share and nobody else knows: the secure transport's handshake hash, or a value the
+  rig's virtual transport invents per link. A provider's policy checks proofs bound to it, such as a password proof,
+  without knowing the link's concrete type.
 
 ## Threading and settle points
 

@@ -23,7 +23,10 @@ namespace TopiaForge.Multiplayer.Engine
             MaximumParticipants = maximumParticipants;
         }
 
-        /// <summary>Gets the link the request came over, which a provider's policy may ask for its channel binding.</summary>
+        /// <summary>
+        /// Gets the link the request came over. A provider's policy checks proofs bound to its
+        /// <see cref="IEngineLink.ChannelBinding"/>, which both ends share and nobody else knows.
+        /// </summary>
         internal IEngineLink Link { get; }
 
         internal string PeerIdentity { get; }
