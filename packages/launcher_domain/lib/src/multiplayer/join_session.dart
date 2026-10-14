@@ -4,6 +4,13 @@ part of '../multiplayer.dart';
 /// checking, consent, downloading, installing, preparing the profile,
 /// launching, connecting, synchronizing, the session, and the end.
 ///
+/// - The player chooses the session's privacy before the join starts
+///   ([start]), so it governs the very first contact. Targets the control
+///   plane resolves start resolving; a direct link, a typed address and a
+///   LAN listing start fetching the descriptor, under the limits
+///   [JoinSessionState.descriptorRequest] spells out. Under relay-only, a
+///   target whose host is an IP literal beyond the local network ends at
+///   once, before anything is contacted.
 /// - Each step advances only on its own completion event; any event a step
 ///   cannot use, including a failure it cannot produce, leaves the state as
 ///   it is. Stale events from abandoned work are therefore harmless.
@@ -11,13 +18,16 @@ part of '../multiplayer.dart';
 ///   installing, preparing the profile or launching it is held until the
 ///   step finishes, and the join then ends as cancelled instead of moving on;
 ///   if the step fails instead, its failure is what the join reports.
+/// - A game that exits ends the join from launching onwards, and ends the
+///   session once it began.
 /// - When admission changes while connecting, the join fetches the
 ///   descriptor and plans once more on its own. Consent is asked again only
 ///   if the plan's [JoinPlan.consentKey] changed; a second change ends the
 ///   join.
 abstract final class JoinSession {
-  /// The failures each step can produce. Cancellation is separate: see
-  /// [cancellableStages] and [deferredCancelStages].
+  /// The failures each step can produce through [JoinFailed]. Cancellation
+  /// and game exits have their own events: see [cancellableStages],
+  /// [deferredCancelStages] and [gameExitStages].
   static const failuresByStage = <JoinStage, Set<JoinFailureCode>>{
     JoinStage.resolving: {
       JoinFailureCode.invalidLink,
@@ -32,6 +42,8 @@ abstract final class JoinSession {
       JoinFailureCode.descriptorInvalid,
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
+      JoinFailureCode.directNotAllowed,
+      JoinFailureCode.identityChanged,
     },
     JoinStage.checking: {
       JoinFailureCode.gameBuildMismatch,
@@ -63,6 +75,7 @@ abstract final class JoinSession {
       JoinFailureCode.kicked,
       JoinFailureCode.protocolMismatch,
       JoinFailureCode.admissionChanged,
+      JoinFailureCode.disconnected,
     },
     JoinStage.synchronizing: {
       JoinFailureCode.snapshotFailed,
@@ -90,12 +103,46 @@ abstract final class JoinSession {
     JoinStage.launching,
   };
 
+  /// Steps a [JoinGameExited] ends as [JoinFailureCode.gameExited].
+  static const gameExitStages = {
+    JoinStage.launching,
+    JoinStage.connecting,
+    JoinStage.synchronizing,
+  };
+
   /// The automatic re-plans a join may make when admission changes.
   static const maximumReplans = 1;
 
-  /// A new join of [target], resolving.
-  static JoinSessionState start(JoinTarget target) =>
-      JoinSessionState._(stage: JoinStage.resolving, target: target);
+  /// A new join of [target] under the [privacy] the player chose for this
+  /// session, typically `MultiplayerSettings.privacyForSession`. Set
+  /// [trustChangedIdentity] only when the player chose to trust a typed
+  /// address whose server changed.
+  static JoinSessionState start(
+    JoinTarget target, {
+    required MultiplayerAddressPrivacy privacy,
+    bool trustChangedIdentity = false,
+  }) {
+    final resolving = target.resolvesThroughService;
+    final state = JoinSessionState._(
+      stage: resolving ? JoinStage.resolving : JoinStage.fetchingDescriptor,
+      target: target,
+      privacy: privacy,
+      trustChangedIdentity: trustChangedIdentity,
+      serverId: resolving ? null : target.pinnedServerId,
+    );
+    final host = target.directHost;
+    if (privacy == MultiplayerAddressPrivacy.relayOnly &&
+        host != null &&
+        NetworkHost.pathKindOf(host) == NetworkPathKind.direct) {
+      return state._failed(
+        JoinFailureCode.directNotAllowed,
+        detail:
+            'Joining this host directly would show it your address. Allow a '
+            'direct path for this session to continue.',
+      );
+    }
+    return state;
+  }
 
   /// The state after [event].
   static JoinSessionState reduce(JoinSessionState state, JoinEvent event) {
@@ -104,6 +151,7 @@ abstract final class JoinSession {
     return switch (event) {
       JoinCancelRequested() => _cancel(state),
       JoinFailed() => _fail(state, event),
+      JoinGameExited() => _gameExited(state),
       JoinTargetResolved() when stage == JoinStage.resolving => _resolved(
         state,
         event.serverId,
@@ -160,6 +208,18 @@ abstract final class JoinSession {
     return state;
   }
 
+  static JoinSessionState _gameExited(JoinSessionState state) {
+    if (gameExitStages.contains(state.stage)) {
+      return state._failed(JoinFailureCode.gameExited);
+    }
+    if (state.stage == JoinStage.inSession) {
+      return state._ended(
+        const JoinOutcome.sessionEnded(JoinSessionEndReason.gameExited),
+      );
+    }
+    return state;
+  }
+
   static JoinSessionState _fail(JoinSessionState state, JoinFailed event) {
     if (!failuresByStage[state.stage]!.contains(event.code)) return state;
     if (event.code == JoinFailureCode.admissionChanged &&
@@ -190,17 +250,26 @@ abstract final class JoinSession {
     return state._copy(stage: JoinStage.fetchingDescriptor, serverId: serverId);
   }
 
+  /// A typed address learns its server from the first descriptor; every
+  /// other target, and a typed address after that, must get the server it
+  /// already names.
   static JoinSessionState _verified(
     JoinSessionState state,
     VerifiedServerDescriptor descriptor,
   ) {
-    if (descriptor.serverId != state.serverId) {
+    final expected = state.serverId;
+    final learns = state.target is JoinAddressTarget && expected == null;
+    if (!learns && descriptor.serverId != expected) {
       return state._failed(
         JoinFailureCode.descriptorInvalid,
         detail: 'The descriptor belongs to another server.',
       );
     }
-    return state._copy(stage: JoinStage.checking, descriptor: descriptor);
+    return state._copy(
+      stage: JoinStage.checking,
+      serverId: descriptor.serverId,
+      descriptor: descriptor,
+    );
   }
 
   static JoinSessionState _planned(JoinSessionState state, JoinPlan plan) {
@@ -230,9 +299,7 @@ abstract final class JoinSession {
     if (plan.hasUnverifiedPackages && !event.hostServedAcknowledged) {
       return state;
     }
-    return _afterConsent(
-      state._copy(consentKey: plan.consentKey, privacy: event.privacy),
-    );
+    return _afterConsent(state._copy(consentKey: plan.consentKey));
   }
 
   static JoinSessionState _afterConsent(JoinSessionState state) =>

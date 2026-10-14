@@ -82,7 +82,9 @@ final class DescriptorPackage {
     }
     final role = DescriptorPackageRole.tryParse(_requireString(value, 'role'));
     if (role == null) {
-      throw FormatException("Unknown package role '${value['role']}'.");
+      throw const FormatException(
+        'A package role is session-required, session-optional or implicit.',
+      );
     }
     try {
       return DescriptorPackage(

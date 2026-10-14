@@ -122,12 +122,52 @@ void main() {
     });
 
     test('a verifier that throws is a refusal, not an acceptance', () async {
+      for (final thrown in <Object>[
+        const FormatException('broken key'),
+        StateError('broken key'),
+        ArgumentError('broken key'),
+      ]) {
+        for (final synchronous in [false, true]) {
+          final result = await ServerDescriptorVerifier(
+            _ThrowingSignatures(thrown, synchronous: synchronous),
+          ).verify(textBytes(valid.first['signedBytes']! as String));
+          expect(
+            (result as ServerDescriptorRefused).refusal,
+            ServerDescriptorRefusal.badSignature,
+            reason: '${thrown.runtimeType}, synchronous: $synchronous',
+          );
+        }
+      }
+    });
+
+    test('refusals name the rule, never the host-chosen value', () async {
+      const rules = {
+        'bad-visibility': ('friends', 'Visibility is public, invite or lan.'),
+        'bad-role': (
+          '"required"',
+          'A package role is session-required, session-optional or implicit.',
+        ),
+      };
+      for (final item in invalid) {
+        final rule = rules[item['id']];
+        if (rule == null) continue;
+        final refused =
+            await const ServerDescriptorVerifier(
+                  AcceptAllSignatures(),
+                ).verify(textBytes(item['bytes']! as String))
+                as ServerDescriptorRefused;
+        expect(refused.message, rule.$2);
+        expect(refused.message, isNot(contains(rule.$1)));
+      }
+    });
+
+    test('input that is not bytes is refused, not thrown', () async {
       final result = await const ServerDescriptorVerifier(
-        _ThrowingSignatures(),
-      ).verify(textBytes(valid.first['signedBytes']! as String));
+        AcceptAllSignatures(),
+      ).verify(const [0x7B, 0x17D, 0x7D]);
       expect(
         (result as ServerDescriptorRefused).refusal,
-        ServerDescriptorRefusal.badSignature,
+        ServerDescriptorRefusal.malformed,
       );
     });
   });
@@ -371,9 +411,14 @@ void main() {
 }
 
 final class _ThrowingSignatures implements ServerDescriptorSignatureVerifier {
-  const _ThrowingSignatures();
+  const _ThrowingSignatures(this.thrown, {required this.synchronous});
+
+  final Object thrown;
+  final bool synchronous;
 
   @override
-  Future<bool> verifySignature(SignedServerDescriptorV1 envelope) =>
-      Future.error(const FormatException('broken key'));
+  Future<bool> verifySignature(SignedServerDescriptorV1 envelope) {
+    if (synchronous) throw thrown;
+    return Future.error(thrown);
+  }
 }

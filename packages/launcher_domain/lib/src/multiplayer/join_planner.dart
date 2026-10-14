@@ -5,17 +5,18 @@ part of '../multiplayer.dart';
 /// Every decision rests on trusted manifests: the player's own install
 /// receipts and registry sources, looked up by the exact SHA-256 the
 /// descriptor pins. The host's claimed roles never make a package required,
-/// optional or safe; they only decide whether an unavailable package can be
-/// left out, and a wrong claim then fails the join at admission, not before.
+/// optional or safe; they only shape what a refusal says.
 ///
+/// - A package without a trusted manifest blocks the join, whatever role the
+///   host claims, so a host-only package can never pass as optional. The one
+///   exception is developer mode: when the descriptor says the host serves
+///   packages, such a package is downloaded from the host and flagged for
+///   separate consent.
 /// - Implicitly shared and required session packages must be used at the
 ///   exact archive: installed, or downloaded from an enabled source.
-/// - Optional session packages are used only when already installed at the
-///   exact archive.
+/// - Packages whose trusted manifest makes them optional session packages
+///   are used only when already installed at the exact archive.
 /// - Client-local and server-only packages run on the host alone.
-/// - A package only the host offers blocks the join outside developer mode.
-///   In developer mode, when the descriptor says the host serves packages,
-///   it is downloaded from the host and flagged for separate consent.
 /// - Admission is predicted with the shared [MultiplayerAdmissionPlanner],
 ///   with the host as a listen server.
 final class JoinPlanner {
@@ -113,8 +114,7 @@ final class JoinPlanner {
     if (manifest == null) {
       if (resolution.availability == JoinPackageAvailability.hostOffered &&
           environment.developerMode &&
-          descriptor.hostServesPackages &&
-          package.role != DescriptorPackageRole.sessionOptional) {
+          descriptor.hostServesPackages) {
         return _Decision(
           decided(
             JoinPackageDisposition.downloadFromHost,
@@ -124,12 +124,13 @@ final class JoinPlanner {
           ),
         );
       }
-      final message = _unavailableMessage(resolution, environment, descriptor);
-      if (package.role == DescriptorPackageRole.sessionOptional) {
-        return _Decision(
-          decided(JoinPackageDisposition.skip, note: 'Optional. $message'),
-        );
-      }
+      // Only a trusted manifest can make a package optional.
+      final message = _unavailableMessage(
+        resolution,
+        environment,
+        descriptor,
+        package.role,
+      );
       blockers.add(
         JoinPlanBlocker(
           JoinBlockerCode.contentUnavailable,

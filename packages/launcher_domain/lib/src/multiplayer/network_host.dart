@@ -1,5 +1,17 @@
 part of '../multiplayer.dart';
 
+/// Whether contacting an address would reach beyond the local network, as
+/// the game's transport classifies its paths.
+enum NetworkPathKind {
+  /// Private, link-local, unique local or loopback: on the local network.
+  /// Relay-only privacy still allows it.
+  lan,
+
+  /// Anything else, carrier-grade NAT space (100.64.0.0/10) included. Only a
+  /// session whose player allowed direct paths may contact it.
+  direct,
+}
+
 /// The hosts a direct session link may name, in the one spelling every
 /// runtime writes: dotted-decimal IPv4, RFC 5952 IPv6 without brackets (it
 /// fills a whole path segment), or a lowercase DNS name.
@@ -28,6 +40,61 @@ abstract final class NetworkHost {
     }
     if (_isDottedQuad(host)) return host;
     return _tryNormalizeName(host);
+  }
+
+  /// Where contacting [host] would reach, when it is an IP literal; null for a
+  /// DNS name, which must be resolved and each address judged with
+  /// [pathKindOfAddress]. Throws [ArgumentError] when [host] is not a host,
+  /// without repeating it.
+  static NetworkPathKind? pathKindOf(String host) {
+    final normalized = tryNormalize(host);
+    if (normalized == null) {
+      throw ArgumentError('A host is a DNS name or an IP address.', 'host');
+    }
+    if (normalized.contains(':')) {
+      return pathKindOfAddress(_tryParseIPv6(normalized)!);
+    }
+    if (_isDottedQuad(normalized)) {
+      return pathKindOfAddress(normalized.split('.').map(int.parse).toList());
+    }
+    return null;
+  }
+
+  /// Classifies a raw IPv4 (4 bytes) or IPv6 (16 bytes) address as the game's
+  /// `UdpPaths.Classify` does: 10/8, 127/8, 172.16/12, 192.168/16 and
+  /// 169.254/16, and `::1`, fe80::/10 and fc00::/7, are on the local network.
+  /// An IPv4-mapped address is judged as the IPv4 address it maps.
+  static NetworkPathKind pathKindOfAddress(List<int> address) {
+    if ((address.length != 4 && address.length != 16) ||
+        address.any((value) => value < 0 || value > 0xFF)) {
+      throw ArgumentError('An address is 4 or 16 bytes.', 'address');
+    }
+    var bytes = address;
+    if (bytes.length == 16) {
+      var mapped = bytes[10] == 0xFF && bytes[11] == 0xFF;
+      for (var index = 0; mapped && index < 10; index++) {
+        mapped = bytes[index] == 0;
+      }
+      if (mapped) bytes = bytes.sublist(12);
+    }
+    if (bytes.length == 4) {
+      final local =
+          bytes[0] == 10 ||
+          bytes[0] == 127 ||
+          (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+          (bytes[0] == 192 && bytes[1] == 168) ||
+          (bytes[0] == 169 && bytes[1] == 254);
+      return local ? NetworkPathKind.lan : NetworkPathKind.direct;
+    }
+    var loopback = bytes[15] == 1;
+    for (var index = 0; loopback && index < 15; index++) {
+      loopback = bytes[index] == 0;
+    }
+    final linkLocal = bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80;
+    final uniqueLocal = (bytes[0] & 0xFE) == 0xFC;
+    return loopback || linkLocal || uniqueLocal
+        ? NetworkPathKind.lan
+        : NetworkPathKind.direct;
   }
 
   /// Writes a 16-byte IPv6 address as RFC 5952 recommends: lowercase, no

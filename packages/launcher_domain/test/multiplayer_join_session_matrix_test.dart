@@ -7,7 +7,8 @@ import 'multiplayer_join_support.dart';
 /// Every stage against every event: the reducer's whole transition table,
 /// checked against an independent copy of the plan's table (6.4).
 void main() {
-  // The plan's failures, stage by stage. Cancellation is checked separately.
+  // The plan's failures, stage by stage, as JoinFailed reports them.
+  // Cancellation and game exits have their own events, checked separately.
   const failures = <JoinStage, Set<JoinFailureCode>>{
     JoinStage.resolving: {
       JoinFailureCode.invalidLink,
@@ -23,6 +24,10 @@ void main() {
       // Invite and listing descriptors come from the control plane.
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
+      // Relay-only refuses a host beyond the local network; a typed address
+      // that serves another server than before is an identity change.
+      JoinFailureCode.directNotAllowed,
+      JoinFailureCode.identityChanged,
     },
     JoinStage.checking: {
       JoinFailureCode.gameBuildMismatch,
@@ -54,6 +59,7 @@ void main() {
       JoinFailureCode.kicked,
       JoinFailureCode.protocolMismatch,
       JoinFailureCode.admissionChanged,
+      JoinFailureCode.disconnected,
     },
     JoinStage.synchronizing: {
       JoinFailureCode.snapshotFailed,
@@ -89,6 +95,11 @@ void main() {
     JoinStage.preparingProfile,
     JoinStage.launching,
   };
+  const endedByGameExit = {
+    JoinStage.launching,
+    JoinStage.connecting,
+    JoinStage.synchronizing,
+  };
 
   late VerifiedServerDescriptor server;
   late JoinPlan plan;
@@ -121,8 +132,7 @@ void main() {
     'resolved': () => JoinTargetResolved(hostAServerId),
     'descriptorVerified': () => JoinDescriptorVerified(server),
     'planReady': () => JoinPlanReady(plan),
-    'consentGiven': () =>
-        const JoinConsentGiven(privacy: MultiplayerAddressPrivacy.relayOnly),
+    'consentGiven': () => const JoinConsentGiven(),
     'downloadProgressed': () =>
         JoinDownloadProgressed(bytesDone: 5, bytesTotal: 10),
     'downloadsCompleted': () => const JoinDownloadsCompleted(),
@@ -133,16 +143,16 @@ void main() {
     'synchronized': () => const JoinSynchronized(),
     'sessionEnded': () => const JoinSessionEnded(JoinSessionEndReason.left),
     'cancelRequested': () => const JoinCancelRequested(),
+    'gameExited': () => const JoinGameExited(),
     for (final code in JoinFailureCode.values)
-      if (code != JoinFailureCode.cancelled)
+      if (code != JoinFailureCode.cancelled &&
+          code != JoinFailureCode.gameExited)
         'failed:${code.name}': () => failed(code),
   };
 
   /// A state at [stage], reached by the happy path.
   JoinSessionState at(JoinStage stage) {
-    var state = JoinSession.start(
-      JoinLinkTarget(SessionLink.server(hostAServerId)),
-    );
+    var state = startJoin(JoinLinkTarget(SessionLink.server(hostAServerId)));
     for (final name in [
       'resolved',
       'descriptorVerified',
@@ -167,14 +177,18 @@ void main() {
     expect(JoinSession.failuresByStage, failures);
     expect(JoinSession.cancellableStages, cancelAtOnce);
     expect(JoinSession.deferredCancelStages, cancelAfterStep);
+    expect(JoinSession.gameExitStages, endedByGameExit);
     expect(JoinStage.values.toSet(), failures.keys.toSet());
   });
 
-  test('every failure but cancellation has a stage that produces it', () {
+  test('every failure but cancellation and game exits has a stage that '
+      'produces it', () {
     final produced = {for (final codes in failures.values) ...codes};
     expect(JoinFailureCode.values.toSet().difference(produced), {
       JoinFailureCode.cancelled,
+      JoinFailureCode.gameExited,
     });
+    expect(() => JoinFailed(JoinFailureCode.gameExited), throwsArgumentError);
   });
 
   for (final stage in JoinStage.values) {
@@ -208,6 +222,13 @@ void main() {
               cancelAfterStep.contains(stage)) {
             expect(after.stage, stage);
             expect(after.cancelRequested, isTrue);
+          } else if (name == 'gameExited' && endedByGameExit.contains(stage)) {
+            expect(after.stage, JoinStage.ended);
+            expect(after.outcome!.failure!.code, JoinFailureCode.gameExited);
+            expect(after.outcome!.failure!.stage, stage);
+          } else if (name == 'gameExited' && stage == JoinStage.inSession) {
+            expect(after.stage, JoinStage.ended);
+            expect(after.outcome!.sessionEnd, JoinSessionEndReason.gameExited);
           } else if (code != null && failures[stage]!.contains(code)) {
             if (code == JoinFailureCode.admissionChanged) {
               expect(after.stage, JoinStage.fetchingDescriptor);
@@ -224,4 +245,22 @@ void main() {
       }
     });
   }
+
+  test('a game that exits or a link that drops ends a join while '
+      'connecting', () {
+    final connecting = at(JoinStage.connecting);
+    final exited = JoinSession.reduce(connecting, const JoinGameExited());
+    expect(exited.outcome!.failure!.code, JoinFailureCode.gameExited);
+    final dropped = JoinSession.reduce(
+      connecting,
+      JoinFailed(JoinFailureCode.disconnected, detail: 'The link dropped.'),
+    );
+    expect(dropped.outcome!.failure!.code, JoinFailureCode.disconnected);
+    expect(dropped.outcome!.failure!.detail, 'The link dropped.');
+    // A launch failure is not a connecting failure: the game is already up.
+    expect(
+      JoinSession.reduce(connecting, JoinFailed(JoinFailureCode.startFailed)),
+      same(connecting),
+    );
+  });
 }

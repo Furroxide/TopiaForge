@@ -158,5 +158,16 @@ Future<JoinPlan> planJoin(
   );
 }
 
+/// Starts a join of [target], relay-only unless [privacy] says otherwise.
+JoinSessionState startJoin(
+  JoinTarget target, {
+  MultiplayerAddressPrivacy privacy = MultiplayerAddressPrivacy.relayOnly,
+  bool trustChangedIdentity = false,
+}) => JoinSession.start(
+  target,
+  privacy: privacy,
+  trustChangedIdentity: trustChangedIdentity,
+);
+
 JoinPlanPackage packageIn(JoinPlan plan, String id) =>
     plan.packages.singleWhere((item) => item.package.id == id);

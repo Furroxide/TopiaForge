@@ -175,6 +175,8 @@ void main() {
       expect(() => decode([0x22, 0xC0, 0xA2, 0x22]), refusal);
       expect(() => decode([0x22, 0xFF, 0x22]), refusal);
       expect(() => decode(const []), refusal);
+      expect(() => decode(const [0x22, 0x161, 0x22]), refusal);
+      expect(() => decode(const [0x30, -1]), refusal);
     });
 
     test('enforces the size bound before parsing', () {
