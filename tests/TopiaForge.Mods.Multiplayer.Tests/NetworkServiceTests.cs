@@ -30,18 +30,25 @@ internal static class NetworkServiceTests
             _ when sha == brokenSha => new BrokenArchive(),
             _ when sha == lockedSha => throw new IOException("The archive is locked."),
             _ => null,
-        }, requestTimeoutMicros: 300_000);
+        }, requestTimeoutMicros: 300_000, bindAddress: IPAddress.Loopback);
         host.Attach(endpoint);
         var port = endpoint.LocalPort;
 
         var none = Fetch(IPAddress.Loopback, port, null);
         That(none.Outcome == DescriptorFetchOutcome.Refused && none.Descriptor == null, "a host with no descriptor refuses");
         endpoint.SetDescriptor(signed);
-        foreach (var loopback in Socket.OSSupportsIPv6 ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback } : new[] { IPAddress.Loopback })
+        var fetched = Fetch(IPAddress.Loopback, port, signed.Descriptor.ServerId);
+        That(fetched.Outcome == DescriptorFetchOutcome.Fetched && fetched.Descriptor!.Sha256 == signed.Sha256,
+            "the signed descriptor arrives and verifies over IPv4: " + fetched.Detail);
+        if (Socket.OSSupportsIPv6)
         {
-            var fetched = Fetch(loopback, port, signed.Descriptor.ServerId);
-            That(fetched.Outcome == DescriptorFetchOutcome.Fetched && fetched.Descriptor!.Sha256 == signed.Sha256,
-                "the signed descriptor arrives and verifies over " + loopback.AddressFamily + ": " + fetched.Detail);
+            // A listener bound to one loopback address hears one family, so IPv6 gets its own endpoint.
+            var overIPv6 = new DescriptorEndpoint(0, bindAddress: IPAddress.IPv6Loopback);
+            host.Attach(overIPv6);
+            overIPv6.SetDescriptor(signed);
+            var fetchedOverIPv6 = Fetch(IPAddress.IPv6Loopback, overIPv6.LocalPort, signed.Descriptor.ServerId);
+            That(fetchedOverIPv6.Outcome == DescriptorFetchOutcome.Fetched && fetchedOverIPv6.Descriptor!.Sha256 == signed.Sha256,
+                "and over IPv6: " + fetchedOverIPv6.Detail);
         }
 
         var other = Fetch(IPAddress.Loopback, port, new string('0', 64));
@@ -84,7 +91,7 @@ internal static class NetworkServiceTests
         idle.ForEach(socket => socket.Dispose());
 
         using var plain = StartThread(123);
-        var noPackages = new DescriptorEndpoint(0);
+        var noPackages = new DescriptorEndpoint(0, bindAddress: IPAddress.Loopback);
         plain.Attach(noPackages);
         noPackages.SetDescriptor(signed);
         That(Raw(noPackages.LocalPort, "TFD1 package " + packageSha + "\n", out _) == "TFD1 404", "outside developer mode no package is served");
@@ -96,10 +103,10 @@ internal static class NetworkServiceTests
         using var host = StartThread(124);
         host.Post((stack, _) => stack.Endpoint.SetInfo(info.Encode()));
         using var browserThread = StartThread(125);
-        var browser = new LanBrowser(0, expiryMicros: 1_500_000);
+        var browser = new LanBrowser(0, expiryMicros: 1_500_000, bindAddress: IPAddress.Loopback);
         browserThread.Attach(browser);
         var targets = new[] { new IPEndPoint(IPAddress.Loopback, browser.LocalPort) };
-        var announcer = new LanAnnouncer(new LanBeacon(info.ServerId, host.LocalPort), targets);
+        var announcer = new LanAnnouncer(new LanBeacon(info.ServerId, host.LocalPort), targets, IPAddress.Loopback);
         host.Attach(announcer);
 
         That(WaitFor(() => browser.Servers.Any(server => server.Info != null), 3_000), "the browser hears the host and learns its info");
@@ -109,7 +116,7 @@ internal static class NetworkServiceTests
             "with the host's info, round trip, and a LAN path to its game port");
 
         // A beacon naming another server at the same game socket never borrows that server's info.
-        var impostor = new LanAnnouncer(new LanBeacon(new string('c', 64), host.LocalPort), targets);
+        var impostor = new LanAnnouncer(new LanBeacon(new string('c', 64), host.LocalPort), targets, IPAddress.Loopback);
         host.Attach(impostor);
         That(WaitFor(() => browser.Servers.Any(server => server.ServerId == new string('c', 64)), 3_000), "the second beacon is heard");
         Thread.Sleep(300);
@@ -131,17 +138,17 @@ internal static class NetworkServiceTests
         using var second = StartThread(129);
         second.Post((stack, _) => stack.Endpoint.SetInfo(stranger.Encode()));
         using var browserThread = StartThread(130);
-        var browser = new LanBrowser(0, expiryMicros: 30_000_000);
+        var browser = new LanBrowser(0, expiryMicros: 30_000_000, bindAddress: IPAddress.Loopback);
         browserThread.Attach(browser);
         var targets = new[] { new IPEndPoint(IPAddress.Loopback, browser.LocalPort) };
-        var before = new LanAnnouncer(new LanBeacon(info.ServerId, first.LocalPort), targets);
+        var before = new LanAnnouncer(new LanBeacon(info.ServerId, first.LocalPort), targets, IPAddress.Loopback);
         first.Attach(before);
         That(WaitFor(() => browser.Servers.Any(server => server.Info != null), 3_000), "the browser learns the server's info at its first socket");
 
         // The server's beacon now names another game socket, whose host answers for a different server: what the old
         // socket said must not follow the beacon there.
         first.Detach(before);
-        var after = new LanAnnouncer(new LanBeacon(info.ServerId, second.LocalPort), targets);
+        var after = new LanAnnouncer(new LanBeacon(info.ServerId, second.LocalPort), targets, IPAddress.Loopback);
         second.Attach(after);
         That(WaitFor(() => browser.Servers.SingleOrDefault() is { } server && UdpPaths.TryGetEndPoint(server.Path, out var at) && at.Port == second.LocalPort, 3_000),
             "the browser follows the beacon to the new socket");
@@ -155,16 +162,16 @@ internal static class NetworkServiceTests
     internal static void ServicesStopWithTheirThread()
     {
         var thread = StartThread(126);
-        var endpoint = new DescriptorEndpoint(0);
+        var endpoint = new DescriptorEndpoint(0, bindAddress: IPAddress.Loopback);
         thread.Attach(endpoint);
         Thread.Sleep(20);
         var port = endpoint.LocalPort;
         thread.Stop(0);
         That(!CanConnect(port), "stopping the thread closes its services' sockets");
 
-        var unstarted = new NetworkThread("TopiaForge test unstarted", new UdpSocketDriver(0),
+        var unstarted = new NetworkThread("TopiaForge test unstarted", new UdpSocketDriver(0, IPAddress.Loopback),
             new NetworkStack(new TransportEndpoint(TransportPair.Key(127, 1), new TransportOptions(), Clock())), Clock);
-        var orphan = new DescriptorEndpoint(0);
+        var orphan = new DescriptorEndpoint(0, bindAddress: IPAddress.Loopback);
         unstarted.Attach(orphan);
         var orphanPort = orphan.LocalPort;
         var queued = new RecordingService();
@@ -200,7 +207,7 @@ internal static class NetworkServiceTests
     private static NetworkThread StartThread(int seed)
     {
         var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(seed, 1), new TransportOptions(), Clock()));
-        var thread = new NetworkThread("TopiaForge test " + seed, new UdpSocketDriver(0), stack, Clock);
+        var thread = new NetworkThread("TopiaForge test " + seed, new UdpSocketDriver(0, IPAddress.Loopback), stack, Clock);
         thread.Start();
         return thread;
     }

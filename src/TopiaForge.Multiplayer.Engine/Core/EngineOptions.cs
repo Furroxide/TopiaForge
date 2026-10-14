@@ -38,6 +38,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the interval between clock probes to each client; zero disables periodic probes.</summary>
         internal long ClockSyncIntervalMicros { get; set; } = 2_000_000;
 
+        /// <summary>
+        /// Gets or sets how long a host keeps a link that has not asked to join. A peer that connects and says nothing
+        /// would otherwise hold a connection slot on keepalives alone.
+        /// </summary>
+        internal long JoinRequestTimeoutMicros { get; set; } = 10_000_000;
+
         /// <summary>Gets or sets the most participants a host admits, including its own player.</summary>
         internal int MaximumParticipants { get; set; } = 16;
 

@@ -17,6 +17,9 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Creates the host's LAN announcer, or null where the network has no LAN.</summary>
         LanAnnouncer? CreateAnnouncer(LanBeacon beacon);
+
+        /// <summary>Creates a LAN browser listening on <paramref name="discoveryPort"/>, or null where the network has no LAN.</summary>
+        LanBrowser? CreateBrowser(int discoveryPort);
     }
 
     /// <summary>The game's networks: a <see cref="NetworkThread"/> over a <see cref="UdpSocketDriver"/>, with TCP and LAN services.</summary>
@@ -39,6 +42,8 @@ namespace TopiaForge.Multiplayer.Network
         public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => new DescriptorEndpoint(port, relayOnly: relayOnly);
 
         public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => new LanAnnouncer(beacon);
+
+        public LanBrowser? CreateBrowser(int discoveryPort) => new LanBrowser(discoveryPort);
     }
 
     /// <summary>
@@ -51,6 +56,9 @@ namespace TopiaForge.Multiplayer.Network
     {
         private const int PortAttempts = 4;
         private const long StopGraceMicros = 250_000;
+
+        /// <summary>How many links one address may hold at once: a household of players behind one router.</summary>
+        internal const int MaximumLinksPerSource = 4;
 
         private readonly SessionEngine engine;
         private readonly LocalIdentity identity;
@@ -95,6 +103,9 @@ namespace TopiaForge.Multiplayer.Network
 
         internal bool IsRunning => network != null && !stopped;
 
+        /// <summary>Gets why the host stopped on its own, when its network failed; otherwise none.</summary>
+        internal LiveFailure Failure { get; private set; }
+
         /// <summary>
         /// Binds the network and starts serving. Returns <see cref="LiveFailure.PortInUse"/> when no port could be bound;
         /// the session is then untouched.
@@ -132,7 +143,17 @@ namespace TopiaForge.Multiplayer.Network
             if (network == null || stopped) return;
             while (network.TryTakeEvent(out var networkEvent))
             {
-                if (networkEvent.Kind == NetworkEventKind.LinkAccepted) engine.Accept(networkEvent.Link!);
+                if (networkEvent.Kind == NetworkEventKind.LinkAccepted)
+                {
+                    engine.Accept(networkEvent.Link!);
+                }
+                else if (networkEvent.Kind == NetworkEventKind.Stopped)
+                {
+                    // The network gave up after failing too often: every player's session ends and the host plays on.
+                    Failure = LiveFailure.NetworkStopped;
+                    Stop();
+                    return;
+                }
             }
 
             RefreshInfo(force: false);
@@ -159,6 +180,7 @@ namespace TopiaForge.Multiplayer.Network
             stopped = true;
             if (engine.Role == EngineRole.Host && !engine.IsEnded) engine.CloseConnections(MultiplayerSessionEndReason.HostEnded, "The host stopped hosting.");
             if (ReferenceEquals(engine.Options.JoinPolicy, Policy)) engine.Options.JoinPolicy = null;
+            Policy.Wipe();
             network?.Stop(StopGraceMicros);
         }
 
@@ -171,7 +193,7 @@ namespace TopiaForge.Multiplayer.Network
                 RelayOnly = !settings.AllowDirect,
                 MaximumConnections = Math.Max(4, settings.MaxPlayers * 2)
             }, clock());
-            var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)));
+            var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)), MaximumLinksPerSource);
             INetworkControl started;
             try
             {

@@ -76,7 +76,7 @@ internal static class NetworkPrivacyTests
             "a failed fetch names a reason, not the address (" + fetch.Detail + ")");
 
         var resolver = new NetworkTargetResolver(() => null, new KnownHosts(), () => { }, () => 0);
-        var missing = resolver.ResolveAsync(JoinTarget.Direct("no-such-host.invalid", 27250), true, false, CancellationToken.None).GetAwaiter().GetResult();
+        var missing = resolver.ResolveAsync(JoinTarget.Direct("no-such-host.invalid", 27250), true, null, CancellationToken.None).GetAwaiter().GetResult();
         That(missing.Failure != LiveFailure.None && !missing.Detail.Contains("no-such-host", StringComparison.OrdinalIgnoreCase),
             "an unknown host name is reported without the name (" + missing.Detail + ")");
     }
@@ -98,11 +98,19 @@ internal static class NetworkPrivacyTests
             lock (contacted) contacted.Add(endpoint);
             return Task.FromResult(new DescriptorFetch(DescriptorFetchOutcome.Fetched, serving, string.Empty));
         });
-        ResolvedTarget Resolve(string host, bool allowDirect, bool trust = false) =>
-            resolver.ResolveAsync(JoinTarget.Direct(host, 27250), allowDirect, trust, CancellationToken.None).GetAwaiter().GetResult();
+        ResolvedTarget Resolve(string host, bool allowDirect, string? trusted = null) =>
+            resolver.ResolveAsync(JoinTarget.Direct(host, 27250), allowDirect, trusted, CancellationToken.None).GetAwaiter().GetResult();
 
         That(Resolve("203.0.113.5", false).Failure == LiveFailure.DirectNotAllowed && contacted.Count == 0,
             "a relay-only player never contacts an address beyond the LAN, not even for its descriptor");
+
+        // A name is looked up by its own name servers, which would learn something of this player; a relay-only player
+        // resolves only names that stay on this machine or the local network.
+        foreach (var name in new[] { "play.example.org", "beacon.attacker.example", "xlocal", "local", "localhost.example" })
+        {
+            That(Resolve(name, false).Failure == LiveFailure.DirectNotAllowed && contacted.Count == 0, "a relay-only player does not look up " + name);
+        }
+
         var lan = Resolve("192.168.1.20", false);
         That(lan.Failure == LiveFailure.None && contacted.Count == 1 && lan.Path!.Kind == provider::TopiaForge.Multiplayer.Transport.TransportPathKind.Lan,
             "but still reaches one on the LAN");
@@ -112,11 +120,21 @@ internal static class NetworkPrivacyTests
 
         // Trust on first use: an address is remembered with the server it served, and another server there later is a
         // changed identity unless the player trusts it.
-        That(known.Check("203.0.113.5", 27250, first.Descriptor.ServerId) == KnownHostCheck.Match && saves == 2, "each new address is remembered and saved");
+        var savesBefore = saves;
+        That(known.Check("203.0.113.5", 27250, first.Descriptor.ServerId) == KnownHostCheck.Match && savesBefore >= 2, "each new address is remembered and saved");
         serving = second;
-        That(Resolve("203.0.113.5", true).Failure == LiveFailure.HostIdentityChanged, "another server at a remembered address is a changed identity");
-        That(Resolve("203.0.113.5", true, trust: true).Failure == LiveFailure.None && known.Check("203.0.113.5", 27250, second.Descriptor.ServerId) == KnownHostCheck.Match,
-            "unless the player trusts it, which replaces the record");
+        var changed = Resolve("203.0.113.5", true);
+        That(changed.Failure == LiveFailure.HostIdentityChanged && changed.ServedServerId == second.Descriptor.ServerId,
+            "another server at a remembered address is a changed identity, naming the server it serves now");
+        That(Resolve("203.0.113.5", true, trusted: first.Descriptor.ServerId).Failure == LiveFailure.HostIdentityChanged,
+            "trusting some other server does not let this one in");
+        That(Resolve("203.0.113.5", true, trusted: second.Descriptor.ServerId).Failure == LiveFailure.None &&
+             known.Check("203.0.113.5", 27250, second.Descriptor.ServerId) == KnownHostCheck.Match,
+            "only trusting exactly the server it serves now replaces the record");
+
+        // Names that stay on this machine are still looked up for a relay-only player.
+        var before = contacted.Count;
+        That(Resolve("localhost", false).Failure != LiveFailure.DirectNotAllowed && contacted.Count > before, "localhost resolves on this machine");
     }
 
     private static void Scan(string root, string file, List<string> offenders)

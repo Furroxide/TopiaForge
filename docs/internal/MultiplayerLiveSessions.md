@@ -164,7 +164,8 @@ keeps its own secret. Mods see it as `MultiplayerParticipant.PlayerKey`.
 ## 8. Trust on first use
 
 A hand-typed address carries no server id. The first descriptor fetched from it is recorded, and a later descriptor
-from another server is reported as a changed identity for the player to confirm.
+from another server is reported as a changed identity for the player to confirm. The report names the server the
+address serves now, and confirming trusts exactly that server there: any other server is refused again.
 
 - The record lives in `multiplayer/known-hosts.json`. Each entry maps the SHA-256 of the normalized `host:port` to
   the server id, so the file never holds an address or a name.
@@ -203,12 +204,17 @@ too), refused attempts and a full endpoint, and disposal. `NetworkSocketTests` u
 interface: path classification and scoped addresses, the driver over IPv4 and IPv6, an oversized datagram, an
 unreachable port, and two session engines joining across two network threads, a command round trip and a leave, all
 in under five seconds. `NetworkServiceTests` covers the descriptor endpoint's answers, limits and failing archives, LAN
-browsing (a moved server included), and services and connections the thread still owns when it stops.
+browsing (a moved server included), and services and connections the thread still owns when it stops. Every real
+socket in the tests binds a loopback address, because binding every address makes Windows ask to let the test program
+through its firewall; the socket classes take an optional bind address for this, and the game binds every address.
 
 `LiveSessionTests` runs whole providers on the virtual network, with real cryptography, transport, engine and flows:
 joining and leaving, passwords (proved, never sent, and limited), kicking, banning and stopping, every check before
 connecting, reconnecting within the grace period, and the coordinator's recovery and saving. `LivePolicyTests` covers
 join content, admission reports, the ban list, the order the host's policy checks in, and the known-hosts record.
+`LiveSessionFailureTests` covers links lost before the first Ready, silent and repeated connections, joining players
+and browsers refusing inbound links, the bounded event queue, saving while closing, unreadable side files, networks
+that cannot open or give up, a host that never answers, a changed identity, and wiping the password key.
 `NetworkPrivacyTests` checks that only the network layer names socket types, that no SDK member is shaped like an
 address, that faults and failures name reasons rather than addresses, and that a relay-only resolve contacts nothing
 beyond the local network.
@@ -222,7 +228,8 @@ beyond the local network.
   polls the stack, sends what it yields, and reports accepted links and info replies. The thread then sleeps until its
   next timer or a datagram, and at most 2 ms, so frames the main thread queues go out within that.
 - **Talking to it.** The main thread posts commands, takes events and reads each link's own queues; nothing else is
-  shared.
+  shared. At most 1,024 events wait. Past that, new ones are dropped and a link nobody would take is closed, so a
+  main thread that never reads cannot make the queue grow. The thread's end is always told.
 - **Faults.** A failed turn is reported by exception type only, never its message, because socket messages can name
   addresses. The loop carries on, and after 64 failures in a row it stops and closes every link.
 - **Stopping.** `Stop` closes every link gracefully and waits up to a grace period for them to finish, then disposes
@@ -364,13 +371,18 @@ adds links to it, and stopping closes them while the host plays on.
 2. **Relay-only.** Unless the host allowed direct play, its transport is relay-only and its descriptor endpoint serves
    only LAN addresses, so nobody beyond the local network learns its address. Until the relay exists (WS7) such a
    host is reachable on the LAN only.
-3. **Serving.** The host signs its descriptor (packages from the runtime, `hostServesPackages` false) and serves it.
+3. **Slots.** The transport holds twice as many connections as players, four at least. A link that has not asked to
+   join within 10 seconds is closed, so peers that connect and say nothing cannot keep players out on keepalives
+   alone. One address holds at most four links, enough for a household behind one router; paths whose source cannot
+   be told apart, such as a relay's, are not capped.
+4. **Serving.** The host signs its descriptor (packages from the runtime, `hostServesPackages` false) and serves it.
    It sets the engine's capacity and join policy, and keeps its session info current as players come and go. A host
    with LAN or public visibility also announces itself on the LAN; an invite-only host does not.
-4. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
+5. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
    (section 19) and ends their session.
-5. **Stopping** ends every player's session with `HostEnded`, gives the closing messages 250 ms to leave, and stops
-   the network. The host plays on alone in the same session.
+6. **Stopping** ends every player's session with `HostEnded`, gives the closing messages 250 ms to leave, and stops
+   the network, and the password key is wiped. The host plays on alone in the same session. A network that gives up
+   on its own (section 11) stops the host the same way, reported as `NetworkStopped`, and the player may host again.
 
 ## 19. Admission
 
@@ -379,8 +391,9 @@ A host admits players through `HostPolicy`, which checks, in order:
 1. **Bans.** A banned transport key is refused first. Rotating the key escapes a ban, as the player-facing docs say.
 2. **The engine's own checks:** the protocol's major version, capacity, and every shared contract's schema.
 3. **The join content's form.** A player's join request carries version 1, a flag byte, a 32-byte password proof when
-   the flag says so, and the runtime's content bytes (at most 64 KiB) with a minimal varint length. Anything else is
-   a protocol refusal.
+   the flag says so, and the runtime's content bytes with a minimal varint length. The engine bounds the whole field
+   at 64 KiB, so the content is bounded at that less the largest header (37 bytes). Anything else is a protocol
+   refusal.
 4. **The password.** A protected session needs a proof bound to this link's handshake (section 6), so a proof made
    for another link is wrong here. Five wrong proofs from one identity within a minute refuse even the right one for
    the rest of that minute. The transport's per-source handshake limit bounds how fast new identities can try.
@@ -393,7 +406,8 @@ Every refusal carries an admission report, canonical JSON the joining player's i
 ```
 
 The codes are `other`, `full`, `protocol`, `password-required`, `password-wrong`, `too-many-attempts`, `banned` and
-`content`. Problems are display text, 64 at most, and a report never names an address.
+`content`. Problems are display text, 64 at most. A report never names an address and never exceeds the reader's
+16 KiB bound: problems are kept in order while they fit.
 
 ## 20. Joining
 
@@ -407,16 +421,21 @@ host is up, so any failure before that leaves the player's own session untouched
 | AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
 | PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |
 | Connecting | The transport connects with the descriptor's transport key pinned. Once the link is up, the engine switches to the host's session and sends the join with a proof bound to this link. |
-| Synchronizing, InSession | The engine joins and plays. |
-| Reconnecting | A link lost in session is retried every two seconds for 30 seconds, each time with a new proof for the new link. The host keeps the player's place for its grace period, so the player comes back as the same participant. |
+| Synchronizing, InSession | The engine joins and plays. The host has two minutes to admit the player and send the session. A link lost before the first Ready ends the join, back in solo play. |
+| Reconnecting | A link lost in session is retried every two seconds for 30 seconds, each time with a new proof for the new link; a retry whose link drops before Ready keeps the same window. The host keeps the player's place for its grace period, so the player comes back as the same participant. |
 | Ended | The join failed or the session ended; the process is in solo play again. |
 
 - **Relay-only is honoured before anything is sent.** Unless the player allowed direct play for this session, the
   resolver contacts only addresses on the local network, not even fetching a descriptor from anywhere else, and a
-  host beyond it fails as `DirectNotAllowed`. The join checks the resolved path again before connecting.
+  host beyond it fails as `DirectNotAllowed`. It does not look names up either, because a name's own servers would
+  learn something of the player from the query; only `localhost` names and mDNS `.local` names resolve. The join
+  checks the resolved path again before connecting.
+- **Nobody connects to a joining player.** Its endpoint refuses every Initiation, so no one else can reach it or
+  learn its key, and it closes anything its network reports. LAN browsing works the same way.
 - **How it ends** is told to the player: kicked, banned, the host ended it, a protocol mismatch, refused with the
-  host's admission report, or the connection lost after the reconnect window. The password key is wiped when the
-  join ends.
+  host's admission report, a host that never answered (a timeout, never mistaken for a failed proof), a network that
+  could not open, or the connection lost after the reconnect window. The password key is wiped however the join
+  ends, a key still being derived included.
 
 ## 21. Persistence
 
@@ -425,13 +444,16 @@ Each provider keeps its live-session files in its own data folder, read on the f
 | File | Holds |
 | --- | --- |
 | `multiplayer/identity.json` | The identity (section 1) |
-| `multiplayer/bans.json` | `topiaforge.bans/1`: each banned transport key with a display name and the time, at most 1,024, the oldest giving way |
+| `multiplayer/bans.json` | `topiaforge.bans/1`: each banned transport key with a display name and the time, at most 1,024, the oldest giving way; read up to 512 KiB, which a full list of the longest names fits |
 | `multiplayer/known-hosts.json` | `topiaforge.known-hosts/1`: the hashes of typed addresses and the server each served (section 8), at most 256 |
 
 - **Damage.** A file that does not read as its schema yields an empty record, and the next save replaces it. Entries
-  that do not read are skipped and the rest kept.
+  that do not read are skipped and the rest kept. A ban or known-hosts file that cannot be read at all, locked or
+  failing, is treated the same way, so it never keeps the player out of live play.
 - **Order.** Each file's saves run one after another, so a slow save can never land after, and overwrite, a newer
-  one.
+  one. A ban starts saving at once.
+- **Closing.** Saves are never cancelled. Closing starts any save still due and waits up to a second for the saves to
+  land, so a ban made just before quitting survives.
 - **Merging.** Known hosts read from disk are merged in as older than those this process recorded, in their own order,
   so the cap drops the oldest first.
 

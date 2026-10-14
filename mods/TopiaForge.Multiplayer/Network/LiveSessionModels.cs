@@ -106,8 +106,21 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         internal bool AllowDirect { get; set; }
 
-        /// <summary>Gets or sets whether a host whose identity changed since the last visit is trusted anyway.</summary>
-        internal bool TrustChangedIdentity { get; set; }
+        /// <summary>
+        /// Gets or sets the one server the player accepted after a typed address served a different server than last
+        /// time (<see cref="LiveJoin.ChangedServerId"/>). Only that server is trusted there; any other is refused again.
+        /// </summary>
+        internal string? TrustedServerId
+        {
+            get => trustedServerId;
+            set
+            {
+                if (value != null && !WireText.IsHex(value, 32)) throw new ArgumentException("A server id is 64 lowercase hexadecimal characters.", nameof(value));
+                trustedServerId = value;
+            }
+        }
+
+        private string? trustedServerId;
     }
 
     internal enum JoinPhase
@@ -147,7 +160,10 @@ namespace TopiaForge.Multiplayer.Network
         NotFound = 18,
 
         /// <summary>This player's multiplayer identity could not be read or created.</summary>
-        IdentityUnavailable = 19
+        IdentityUnavailable = 19,
+
+        /// <summary>The host's network stopped after too many failures in a row, ending every player's session.</summary>
+        NetworkStopped = 20
     }
 
     /// <summary>What a content check found missing or different before a join, for the player to see.</summary>

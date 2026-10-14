@@ -16,7 +16,8 @@ namespace TopiaForge.Multiplayer.Network
         internal const string Schema = "topiaforge.bans/1";
         internal const string FilePath = "multiplayer/bans.json";
         internal const int MaximumEntries = 1024;
-        private const int MaximumBytes = 256 * 1024;
+        /// <summary>The file's read bound: 1,024 bans with the longest names fit with room to spare.</summary>
+        private const int MaximumBytes = 512 * 1024;
 
         private readonly List<Entry> entries = new List<Entry>();
         private readonly object gate = new object();
@@ -209,6 +210,12 @@ namespace TopiaForge.Multiplayer.Network
 
             attempts.Count++;
             return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The password is wrong.", AdmissionReport.Encode(AdmissionCode.PasswordWrong));
+        }
+
+        /// <summary>Wipes the password key once the host stops; a stopped host admits nobody.</summary>
+        internal void Wipe()
+        {
+            if (passwordKey != null) Array.Clear(passwordKey, 0, passwordKey.Length);
         }
 
         private sealed class Attempts

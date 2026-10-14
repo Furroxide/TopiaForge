@@ -10,12 +10,13 @@ namespace TopiaForge.Multiplayer.Network
     /// <summary>A join target resolved to a path and its host's verified descriptor, or the reason it could not be.</summary>
     internal sealed class ResolvedTarget
     {
-        private ResolvedTarget(LiveFailure failure, string detail, TransportPath? path, SignedServerDescriptor? descriptor)
+        private ResolvedTarget(LiveFailure failure, string detail, TransportPath? path, SignedServerDescriptor? descriptor, string? servedServerId)
         {
             Failure = failure;
             Detail = detail;
             Path = path;
             Descriptor = descriptor;
+            ServedServerId = servedServerId;
         }
 
         internal LiveFailure Failure { get; }
@@ -23,10 +24,16 @@ namespace TopiaForge.Multiplayer.Network
         internal TransportPath? Path { get; }
         internal SignedServerDescriptor? Descriptor { get; }
 
-        internal static ResolvedTarget Found(TransportPath path, SignedServerDescriptor descriptor) =>
-            new ResolvedTarget(LiveFailure.None, string.Empty, path ?? throw new ArgumentNullException(nameof(path)), descriptor ?? throw new ArgumentNullException(nameof(descriptor)));
+        /// <summary>Gets, for a changed identity, the server the address serves now: the one the player may choose to trust.</summary>
+        internal string? ServedServerId { get; }
 
-        internal static ResolvedTarget Failed(LiveFailure failure, string detail) => new ResolvedTarget(failure, detail, null, null);
+        internal static ResolvedTarget Found(TransportPath path, SignedServerDescriptor descriptor) =>
+            new ResolvedTarget(LiveFailure.None, string.Empty, path ?? throw new ArgumentNullException(nameof(path)), descriptor ?? throw new ArgumentNullException(nameof(descriptor)), null);
+
+        internal static ResolvedTarget Failed(LiveFailure failure, string detail) => new ResolvedTarget(failure, detail, null, null, null);
+
+        internal static ResolvedTarget IdentityChanged(string servedServerId) =>
+            new ResolvedTarget(LiveFailure.HostIdentityChanged, "This address served a different server last time.", null, null, servedServerId);
     }
 
     /// <summary>Finds where a target is and fetches what it says it is, off the main thread.</summary>
@@ -34,9 +41,11 @@ namespace TopiaForge.Multiplayer.Network
     {
         /// <summary>
         /// Resolves <paramref name="target"/>. Unless <paramref name="allowDirect"/>, nothing beyond the local network
-        /// is contacted: a host there fails with <see cref="LiveFailure.DirectNotAllowed"/> before anything is sent.
+        /// is contacted, a name server included: such a host fails with <see cref="LiveFailure.DirectNotAllowed"/>
+        /// before anything is sent. A typed address that served another server before is trusted only when the server
+        /// it serves now is <paramref name="trustedServerId"/>.
         /// </summary>
-        Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, bool trustChangedIdentity, CancellationToken cancellationToken);
+        Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken);
     }
 
     /// <summary>
@@ -51,6 +60,9 @@ namespace TopiaForge.Multiplayer.Network
     {
         internal const long ReconnectWindowMicros = 30_000_000;
         internal const long ReconnectIntervalMicros = 2_000_000;
+
+        /// <summary>How long the host may take to admit a player and send the session once the link is up.</summary>
+        internal const long SynchronizeTimeoutMicros = 120_000_000;
         private const long StopGraceMicros = 100_000;
 
         private readonly SessionEngine engine;
@@ -70,9 +82,12 @@ namespace TopiaForge.Multiplayer.Network
         private byte[]? passwordKey;
         private INetworkControl? network;
         private ConnectAttempt? attempt;
+        private NetworkLink? link;
         private long reconnectDeadline;
         private long nextAttemptAt;
+        private long synchronizeDeadline;
         private bool engineJoined;
+        private bool everReady;
 
         internal LiveJoin(
             SessionEngine engine,
@@ -95,7 +110,7 @@ namespace TopiaForge.Multiplayer.Network
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.soloStart = soloStart ?? throw new ArgumentNullException(nameof(soloStart));
             password = settings.Password;
-            resolving = resolver.ResolveAsync(target, settings.AllowDirect, settings.TrustChangedIdentity, cancellation.Token);
+            resolving = resolver.ResolveAsync(target, settings.AllowDirect, settings.TrustedServerId, cancellation.Token);
         }
 
         internal JoinPhase Phase { get; private set; } = JoinPhase.Resolving;
@@ -113,6 +128,27 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets the host's verified descriptor once resolved, for the interface to show.</summary>
         internal ServerDescriptor? Descriptor => resolved?.Descriptor?.Descriptor;
+
+        /// <summary>
+        /// Gets, when a typed address now serves a different server, that server's id. A new join that sets it as
+        /// <see cref="JoinSettings.TrustedServerId"/> trusts exactly that server there.
+        /// </summary>
+        internal string? ChangedServerId { get; private set; }
+
+        /// <summary>Gets whether a password key is still held, unwiped; tests check every way a join ends wipes it.</summary>
+        internal bool HoldsPasswordKey
+        {
+            get
+            {
+                if (passwordKey == null) return false;
+                foreach (var value in passwordKey)
+                {
+                    if (value != 0) return true;
+                }
+
+                return false;
+            }
+        }
 
         /// <summary>Gives the password the session asked for, when the join is waiting for it.</summary>
         internal void SupplyPassword(string value)
@@ -132,6 +168,8 @@ namespace TopiaForge.Multiplayer.Network
                 StopNetwork();
                 return;
             }
+
+            DrainEvents();
 
             switch (Phase)
             {
@@ -168,7 +206,9 @@ namespace TopiaForge.Multiplayer.Network
             RejectionCode = AdmissionReport.TryDecode(end.Report, out var code, out _) ? code : AdmissionCode.Other;
             Detail = end.Message;
             engineJoined = false;
+            link = null;
             Phase = JoinPhase.Ended;
+            WipePasswordKey();
         }
 
         /// <summary>Leaves: a joined session tells the host and returns to solo play; an unfinished join just stops.</summary>
@@ -182,6 +222,7 @@ namespace TopiaForge.Multiplayer.Network
         public void Dispose()
         {
             Leave();
+            WipePasswordKey();
             StopNetwork();
             cancellation.Dispose();
         }
@@ -199,6 +240,7 @@ namespace TopiaForge.Multiplayer.Network
             resolved = task.Result;
             if (resolved.Failure != LiveFailure.None)
             {
+                ChangedServerId = resolved.ServedServerId;
                 End(resolved.Failure, resolved.Detail);
                 return;
             }
@@ -266,8 +308,21 @@ namespace TopiaForge.Multiplayer.Network
         private void StartConnecting()
         {
             Phase = JoinPhase.Connecting;
-            var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), new TransportOptions { RelayOnly = !settings.AllowDirect }, clock());
-            network = factory.Start(0, new NetworkStack(endpoint));
+
+            // A joining player connects out and accepts nobody, so no one else can reach it or learn its key.
+            var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), new TransportOptions { RelayOnly = !settings.AllowDirect, AcceptsInbound = false }, clock());
+            var stack = new NetworkStack(endpoint);
+            try
+            {
+                network = factory.Start(0, stack);
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                stack.Dispose();
+                End(LiveFailure.Unreachable, "This game could not open a network connection.");
+                return;
+            }
+
             attempt = network.Connect(resolved!.Path!, resolved.Descriptor!.Descriptor.TransportKey);
         }
 
@@ -293,12 +348,23 @@ namespace TopiaForge.Multiplayer.Network
                     return;
                 }
 
-                End(failure == TransportCloseReason.HandshakeFailed ? LiveFailure.HandshakeFailed : LiveFailure.Unreachable,
-                    failure == TransportCloseReason.HandshakeFailed ? "The host did not prove the identity it announced." : "The host did not answer.");
+                switch (failure)
+                {
+                    case TransportCloseReason.HandshakeFailed:
+                        End(LiveFailure.HandshakeFailed, "The host did not prove the identity it announced.");
+                        break;
+                    case TransportCloseReason.HandshakeTimedOut:
+                        End(LiveFailure.TimedOut, "The host did not answer in time.");
+                        break;
+                    default:
+                        End(LiveFailure.Unreachable, "The host did not answer.");
+                        break;
+                }
+
                 return;
             }
 
-            var link = attempt.Link!;
+            link = attempt.Link!;
             attempt = null;
             var proof = passwordKey == null ? null : PasswordProof.Prove(passwordKey, link.ChannelBinding);
             var joinContent = JoinContent.Encode(proof, content.ClientContent());
@@ -311,25 +377,69 @@ namespace TopiaForge.Multiplayer.Network
 
             engine.Connect(link, settings.DisplayName, joinContent);
             Phase = JoinPhase.Synchronizing;
+            synchronizeDeadline = now + SynchronizeTimeoutMicros;
         }
 
         private void Watch()
         {
             if (!engineJoined) return;
-            var state = engine.Snapshot.State;
-            if (state == MultiplayerSessionState.Ready)
+            var now = clock();
+            if (engine.Snapshot.State == MultiplayerSessionState.Ready)
             {
                 Phase = JoinPhase.InSession;
+                everReady = true;
                 return;
             }
 
-            if (Phase == JoinPhase.InSession && state == MultiplayerSessionState.Connecting)
+            if (link != null && link.State == EngineLinkState.Closed)
             {
-                // The link went away under a joined session: try again until the host's grace period runs out.
+                // The link went away before or during the session. A player who was in the session tries again until the
+                // host's grace period runs out, keeping the window that started when the first link was lost; a first
+                // join that never got in ends, back in solo play.
+                link = null;
+                if (!everReady)
+                {
+                    End(LiveFailure.ConnectionLost, "The connection to the host was lost before the session started.");
+                    return;
+                }
+
+                if (Phase == JoinPhase.InSession) reconnectDeadline = now + ReconnectWindowMicros;
                 Phase = JoinPhase.Reconnecting;
-                reconnectDeadline = clock() + ReconnectWindowMicros;
-                nextAttemptAt = clock();
+                nextAttemptAt = now;
+                return;
             }
+
+            if (Phase == JoinPhase.Synchronizing && now >= synchronizeDeadline)
+            {
+                End(LiveFailure.TimedOut, "The host did not finish sending the session in time.");
+            }
+        }
+
+        /// <summary>
+        /// Takes whatever the join's network reports. It accepts no peers, so a link here is a stray, closed at once;
+        /// info replies and faults mean nothing to a join.
+        /// </summary>
+        private void DrainEvents()
+        {
+            var current = network;
+            if (current == null) return;
+            while (current.TryTakeEvent(out var networkEvent)) networkEvent.Link?.Close();
+        }
+
+        /// <summary>Wipes the password key, including one still being derived, which is wiped the moment it is done.</summary>
+        private void WipePasswordKey()
+        {
+            if (passwordKey != null) Array.Clear(passwordKey, 0, passwordKey.Length);
+            var pending = deriving;
+            deriving = null;
+            pending?.ContinueWith(
+                task =>
+                {
+                    if (task.Status == TaskStatus.RanToCompletion) Array.Clear(task.Result, 0, task.Result.Length);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
 
         private void End(LiveFailure failure, string detail)
@@ -345,7 +455,8 @@ namespace TopiaForge.Multiplayer.Network
                 engine.SwitchToSolo(soloStart());
             }
 
-            if (passwordKey != null) Array.Clear(passwordKey, 0, passwordKey.Length);
+            link = null;
+            WipePasswordKey();
             StopNetwork();
         }
 

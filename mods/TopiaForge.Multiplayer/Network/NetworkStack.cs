@@ -57,20 +57,34 @@ namespace TopiaForge.Multiplayer.Network
         private readonly List<PendingConnect> pending = new List<PendingConnect>();
         private readonly Queue<NetworkLink> accepted = new Queue<NetworkLink>();
         private readonly Func<byte[], MultiplayerPlayerKey>? playerKeys;
+        private readonly Func<TransportPath, string?> sourceOf;
+        private readonly int maximumLinksPerSource;
         private bool disposed;
 
         /// <param name="endpoint">The endpoint this stack owns from now on; disposing the stack disposes it.</param>
         /// <param name="playerKeys">Derives the player key for a peer's transport key; null on a client, which gives none.</param>
-        internal NetworkStack(TransportEndpoint endpoint, Func<byte[], MultiplayerPlayerKey>? playerKeys = null)
+        /// <param name="maximumLinksPerSource">How many inbound links one source may hold at once; a host keeps it small.</param>
+        /// <param name="sourceOf">Names the host a path reaches, or null where sources cannot be told apart; UDP addresses by default.</param>
+        internal NetworkStack(
+            TransportEndpoint endpoint,
+            Func<byte[], MultiplayerPlayerKey>? playerKeys = null,
+            int maximumLinksPerSource = int.MaxValue,
+            Func<TransportPath, string?>? sourceOf = null)
         {
+            if (maximumLinksPerSource < 1) throw new ArgumentOutOfRangeException(nameof(maximumLinksPerSource));
             Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
             this.playerKeys = playerKeys;
+            this.maximumLinksPerSource = maximumLinksPerSource;
+            this.sourceOf = sourceOf ?? UdpPaths.SourceOf;
         }
 
         internal TransportEndpoint Endpoint { get; }
 
         /// <summary>Gets how many links are open, or still closing.</summary>
         internal int LinkCount => pairs.Count;
+
+        /// <summary>Gets how many inbound links were closed because their source already held its share.</summary>
+        internal long RefusedForSource { get; private set; }
 
         /// <summary>Takes one datagram. Once the stack is disposed, datagrams are ignored rather than refused.</summary>
         internal void Receive(TransportPath path, byte[] datagram, int offset, int count, long now)
@@ -171,7 +185,31 @@ namespace TopiaForge.Multiplayer.Network
 
         private void AcceptConnections()
         {
-            while (Endpoint.TryAccept(out var connection)) accepted.Enqueue(Attach(connection));
+            while (Endpoint.TryAccept(out var connection))
+            {
+                // One address holds no more of a host's slots than a household of players needs, so a peer that opens
+                // many connections cannot lock everyone else out.
+                var source = sourceOf(connection.Path);
+                if (source != null && LinksFrom(source) >= maximumLinksPerSource)
+                {
+                    RefusedForSource++;
+                    connection.Close();
+                    continue;
+                }
+
+                accepted.Enqueue(Attach(connection, source));
+            }
+        }
+
+        private int LinksFrom(string source)
+        {
+            var count = 0;
+            foreach (var pair in pairs)
+            {
+                if (pair.Source == source) count++;
+            }
+
+            return count;
         }
 
         private void CompleteAttempts()
@@ -192,12 +230,12 @@ namespace TopiaForge.Multiplayer.Network
             }
         }
 
-        private NetworkLink Attach(TransportConnection connection)
+        private NetworkLink Attach(TransportConnection connection, string? source = null)
         {
             var remote = connection.RemoteStaticKey;
             var link = new NetworkLink(connection.Number, remote, playerKeys?.Invoke(remote) ?? default, connection.HandshakeHash);
             link.Publish(EngineLinkState.Open);
-            pairs.Add(new Pair(connection, link));
+            pairs.Add(new Pair(connection, link, source));
             return link;
         }
 
@@ -247,15 +285,19 @@ namespace TopiaForge.Multiplayer.Network
 
         private readonly struct Pair
         {
-            internal Pair(TransportConnection connection, NetworkLink link)
+            internal Pair(TransportConnection connection, NetworkLink link, string? source)
             {
                 Connection = connection;
                 Link = link;
+                Source = source;
             }
 
             internal TransportConnection Connection { get; }
 
             internal NetworkLink Link { get; }
+
+            /// <summary>Gets the source an inbound link came from, or null for an outbound link or an unknown source.</summary>
+            internal string? Source { get; }
         }
 
         private readonly struct PendingConnect
