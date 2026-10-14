@@ -44,11 +44,7 @@ abstract final class InviteCode {
   /// Formats a canonical code for people: two groups of five.
   static String display(String code) {
     if (!isCanonical(code)) {
-      throw ArgumentError.value(
-        code,
-        'code',
-        'A canonical invite code is required.',
-      );
+      throw ArgumentError('A canonical invite code is required.', 'code');
     }
     return '${code.substring(0, 5)}-${code.substring(5)}';
   }

@@ -109,48 +109,111 @@ void main() {
     final target = JoinAddressTarget(host: '192.168.1.20', port: 27250);
 
     test('learns the server from its first descriptor', () {
-      var state = startJoin(target, trustChangedIdentity: true);
+      var state = startJoin(target);
       expect(state.stage, JoinStage.fetchingDescriptor);
       expect(state.serverId, isNull);
-      final request = state.descriptorRequest!;
-      expect(request.expectedServerId, isNull);
-      expect(request.trustChangedIdentity, isTrue);
+      expect(state.descriptorRequest!.expectedServerId, isNull);
       state = JoinSession.reduce(state, JoinDescriptorVerified(server));
       expect(state.stage, JoinStage.checking);
       expect(state.serverId, hostAServerId);
     });
 
-    test('ends on a changed identity the data layer reports', () {
+    test('ends on a changed identity the data layer reports, naming the '
+        'server it served', () {
       final ended = JoinSession.reduce(
         startJoin(target),
-        JoinFailed(JoinFailureCode.identityChanged),
+        JoinFailed.identityChanged(servedServerId: otherServer),
       );
-      expect(ended.outcome!.failure!.code, JoinFailureCode.identityChanged);
-      expect(ended.outcome!.failure!.stage, JoinStage.fetchingDescriptor);
+      final failure = ended.outcome!.failure!;
+      expect(failure.code, JoinFailureCode.identityChanged);
+      expect(failure.stage, JoinStage.fetchingDescriptor);
+      expect(failure.servedServerId, otherServer);
+      expect(
+        () => JoinFailed(JoinFailureCode.identityChanged),
+        throwsArgumentError,
+        reason: 'an identity change always names the served server',
+      );
+      expect(
+        () => JoinFailed.identityChanged(servedServerId: '10.0.0.7'),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.toString(),
+            'text',
+            isNot(contains('10.0.0.7')),
+          ),
+        ),
+      );
     });
 
-    test('keeps the learned server through a re-plan', () async {
-      final plan = const JoinPlanner().plan(
-        server: server,
-        resolutions: const {},
-        environment: testEnvironment,
-      );
-      final replanned = [
-        JoinDescriptorVerified(server),
-        JoinPlanReady(plan),
-        const JoinConsentGiven(),
-        const JoinProfilePrepared(),
-        const JoinGameStarted(),
-        JoinFailed(JoinFailureCode.admissionChanged),
-      ].fold(startJoin(target), JoinSession.reduce);
-      expect(replanned.stage, JoinStage.fetchingDescriptor);
-      expect(replanned.descriptorRequest!.expectedServerId, hostAServerId);
-      final refused = JoinSession.reduce(
-        replanned,
+    test('trusting a changed identity accepts that server and no other', () {
+      // The player saw the failure and chose to trust the server it named.
+      final trusted = startJoin(target, trustedServerId: otherServer);
+      expect(trusted.serverId, otherServer);
+      expect(trusted.descriptorRequest!.expectedServerId, otherServer);
+      final accepted = JoinSession.reduce(
+        trusted,
         JoinDescriptorVerified(other),
       );
-      expect(refused.outcome!.failure!.code, JoinFailureCode.descriptorInvalid);
+      expect(accepted.stage, JoinStage.checking);
+      final impostor = JoinSession.reduce(
+        trusted,
+        JoinDescriptorVerified(server),
+      ).outcome!.failure!;
+      expect(impostor.code, JoinFailureCode.identityChanged);
+      expect(impostor.servedServerId, hostAServerId);
+      for (final (target, id) in [
+        (JoinLinkTarget(SessionLink.server(hostAServerId)), otherServer),
+        (target, 'not a server id'),
+      ]) {
+        expect(
+          () => startJoin(target, trustedServerId: id),
+          throwsArgumentError,
+        );
+      }
     });
+
+    test(
+      'reports another server after a re-plan as an identity change',
+      () async {
+        final plan = const JoinPlanner().plan(
+          server: server,
+          resolutions: const {},
+          environment: testEnvironment,
+          mayContactHost: true,
+        );
+        final replanned = [
+          JoinDescriptorVerified(server),
+          JoinPlanReady(plan),
+          const JoinConsentGiven(),
+          const JoinProfilePrepared(),
+          const JoinGameStarted(),
+          JoinFailed(JoinFailureCode.admissionChanged),
+        ].fold(startJoin(target), JoinSession.reduce);
+        expect(replanned.stage, JoinStage.fetchingDescriptor);
+        expect(replanned.descriptorRequest!.expectedServerId, hostAServerId);
+        final refused = JoinSession.reduce(
+          replanned,
+          JoinDescriptorVerified(other),
+        ).outcome!.failure!;
+        expect(refused.code, JoinFailureCode.identityChanged);
+        expect(refused.servedServerId, otherServer);
+        // A target that names its server reports the same as invalid.
+        final linked = JoinSession.reduce(
+          startJoin(
+            JoinLinkTarget(
+              SessionLink.direct(
+                serverId: hostAServerId,
+                host: '192.168.1.20',
+                port: 27250,
+              ),
+            ),
+          ),
+          JoinDescriptorVerified(other),
+        ).outcome!.failure!;
+        expect(linked.code, JoinFailureCode.descriptorInvalid);
+        expect(linked.servedServerId, isNull);
+      },
+    );
   });
 
   group('known hosts', () {

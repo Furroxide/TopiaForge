@@ -51,7 +51,7 @@ final class JoinLinkTarget extends JoinTarget {
 final class JoinListingTarget extends JoinTarget {
   JoinListingTarget({required this.serverId, required this.source}) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
+      throw ArgumentError('Not a server id.', 'serverId');
     }
   }
 

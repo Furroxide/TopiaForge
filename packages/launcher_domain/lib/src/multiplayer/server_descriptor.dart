@@ -63,31 +63,27 @@ final class ServerDescriptorV1 {
       );
     }
     if (!WireText.isDisplayText(name, maximumNameLength)) {
-      throw ArgumentError.value(
-        name,
-        'name',
+      throw ArgumentError(
         'A server name is 1 to 48 printable characters.',
+        'name',
       );
     }
     if (!isGameBuild(gameBuild)) {
-      throw ArgumentError.value(
-        gameBuild,
-        'gameBuild',
+      throw ArgumentError(
         'A game build is 1 to 16 letters, digits, dots, dashes or underscores.',
+        'gameBuild',
       );
     }
     if (!isSemanticVersion(runtimeVersion)) {
-      throw ArgumentError.value(
-        runtimeVersion,
-        'runtimeVersion',
+      throw ArgumentError(
         'The runtime version is a semantic version.',
+        'runtimeVersion',
       );
     }
     if (!isSemanticVersion(protocolVersion)) {
-      throw ArgumentError.value(
-        protocolVersion,
-        'protocolVersion',
+      throw ArgumentError(
         'The protocol version is a semantic version.',
+        'protocolVersion',
       );
     }
     if (maxPlayers < minimumPlayers || maxPlayers > maximumPlayers) {
@@ -101,10 +97,9 @@ final class ServerDescriptorV1 {
     for (final (field, value) in [('gamemode', gamemode), ('world', world)]) {
       if (value != null &&
           !WireText.isDisplayText(value, maximumTargetNameLength)) {
-        throw ArgumentError.value(
-          value,
-          field,
+        throw ArgumentError(
           'A $field name is 1 to 48 printable characters.',
+          field,
         );
       }
     }
@@ -294,7 +289,7 @@ final class ServerDescriptorV1 {
     for (var index = 0; index < keyBytes; index++) {
       final value = key[index];
       if (value < 0 || value > 0xFF) {
-        throw ArgumentError.value(value, name, 'Each value must be a byte.');
+        throw ArgumentError('Each value must be a byte.', name);
       }
       copy[index] = value;
     }
@@ -313,10 +308,9 @@ final class ServerDescriptorV1 {
     }
     for (var index = 1; index < packages.length; index++) {
       if (packages[index - 1].id.compareTo(packages[index].id) >= 0) {
-        throw ArgumentError.value(
-          packages[index].id,
-          'packages',
+        throw ArgumentError(
           'Packages are listed once each, in ordinal order of their ids.',
+          'packages',
         );
       }
     }

@@ -58,17 +58,13 @@ final class ServerListing {
     this.readiness = ServerReadiness.unknown,
   }) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
+      throw ArgumentError('Not a server id.', 'serverId');
     }
     if (descriptorSha256 != null && !WireText.isHex(descriptorSha256, 32)) {
-      throw ArgumentError.value(
-        descriptorSha256,
-        'descriptorSha256',
-        'Not a SHA-256 digest.',
-      );
+      throw ArgumentError('Not a SHA-256 digest.', 'descriptorSha256');
     }
     if (!WireText.isDisplayText(name, ServerDescriptorV1.maximumNameLength)) {
-      throw ArgumentError.value(name, 'name', 'Not a server name.');
+      throw ArgumentError('Not a server name.', 'name');
     }
     for (final (field, value) in [('gamemode', gamemode), ('world', world)]) {
       if (value != null &&
@@ -76,19 +72,15 @@ final class ServerListing {
             value,
             ServerDescriptorV1.maximumTargetNameLength,
           )) {
-        throw ArgumentError.value(value, field, 'Not a $field name.');
+        throw ArgumentError('Not a $field name.', field);
       }
     }
     if (gameBuild != null && !ServerDescriptorV1.isGameBuild(gameBuild)) {
-      throw ArgumentError.value(gameBuild, 'gameBuild', 'Not a game build.');
+      throw ArgumentError('Not a game build.', 'gameBuild');
     }
     if (runtimeVersion != null &&
         !ServerDescriptorV1.isSemanticVersion(runtimeVersion)) {
-      throw ArgumentError.value(
-        runtimeVersion,
-        'runtimeVersion',
-        'Not a semantic version.',
-      );
+      throw ArgumentError('Not a semantic version.', 'runtimeVersion');
     }
     if (maxPlayers < ServerDescriptorV1.minimumPlayers ||
         maxPlayers > ServerDescriptorV1.maximumPlayers) {

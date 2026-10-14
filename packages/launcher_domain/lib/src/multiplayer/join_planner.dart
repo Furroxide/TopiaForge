@@ -11,7 +11,8 @@ part of '../multiplayer.dart';
 ///   host claims, so a host-only package can never pass as optional. The one
 ///   exception is developer mode: when the descriptor says the host serves
 ///   packages, such a package is downloaded from the host and flagged for
-///   separate consent.
+///   separate consent, but only if the join may contact the host. Otherwise
+///   it blocks as [JoinBlockerCode.directNotAllowed].
 /// - Implicitly shared and required session packages must be used at the
 ///   exact archive: installed, or downloaded from an enabled source.
 /// - Packages whose trusted manifest makes them optional session packages
@@ -29,7 +30,7 @@ final class JoinPlanner {
   /// hexadecimal digits of the SHA-256 of the server id's ASCII text.
   static String derivedProfileId(String serverId) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
+      throw ArgumentError('Not a server id.', 'serverId');
     }
     return '$derivedProfilePrefix'
         '${PureSha256.hex(ascii.encode(serverId)).substring(0, 16)}';
@@ -40,11 +41,14 @@ final class JoinPlanner {
 
   /// Plans joining [server]. [resolutions] maps package SHA-256 values to
   /// what the launcher found for them; a package without an entry counts as
-  /// not in any source.
+  /// not in any source. [mayContactHost] is the join's
+  /// [JoinSessionState.mayContactHost]: without it, nothing can come from the
+  /// host itself.
   JoinPlan plan({
     required VerifiedServerDescriptor server,
     required Map<String, JoinPackageResolution> resolutions,
     required JoinEnvironment environment,
+    required bool mayContactHost,
   }) {
     final descriptor = server.descriptor;
     final blockers = <JoinPlanBlocker>[];
@@ -58,6 +62,7 @@ final class JoinPlanner {
               ),
           descriptor,
           environment,
+          mayContactHost,
           blockers,
         ),
     ];
@@ -96,6 +101,7 @@ final class JoinPlanner {
     JoinPackageResolution resolution,
     ServerDescriptorV1 descriptor,
     JoinEnvironment environment,
+    bool mayContactHost,
     List<JoinPlanBlocker> blockers,
   ) {
     JoinPlanPackage decided(
@@ -115,6 +121,22 @@ final class JoinPlanner {
       if (resolution.availability == JoinPackageAvailability.hostOffered &&
           environment.developerMode &&
           descriptor.hostServesPackages) {
+        if (!mayContactHost) {
+          const message =
+              'Only the host serves it, and reaching the host directly would '
+              'show it your address. Allow a direct path for this session, or '
+              'join on the local network.';
+          blockers.add(
+            JoinPlanBlocker(
+              JoinBlockerCode.directNotAllowed,
+              message,
+              modId: package.id,
+            ),
+          );
+          return _Decision(
+            decided(JoinPackageDisposition.blocked, note: message),
+          );
+        }
         return _Decision(
           decided(
             JoinPackageDisposition.downloadFromHost,

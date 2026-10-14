@@ -111,7 +111,7 @@ final class KnownHosts {
     DateTime seenAt,
   ) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
+      throw ArgumentError('Not a server id.', 'serverId');
     }
     final key = targetKey(target.host, target.port);
     final seconds = seenAt.millisecondsSinceEpoch ~/ 1000;

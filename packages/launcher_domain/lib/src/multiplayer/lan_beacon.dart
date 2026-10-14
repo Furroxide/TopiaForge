@@ -11,10 +11,9 @@ part of '../multiplayer.dart';
 final class LanBeacon {
   LanBeacon({required this.serverId, required this.gamePort}) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(
-        serverId,
-        'serverId',
+      throw ArgumentError(
         'A server id is 64 lowercase hexadecimal characters.',
+        'serverId',
       );
     }
     if (gamePort < 1 || gamePort > 65535) {

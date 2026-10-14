@@ -9,7 +9,7 @@ sealed class JoinEvent {
 final class JoinTargetResolved extends JoinEvent {
   JoinTargetResolved(this.serverId) {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
+      throw ArgumentError('Not a server id.', 'serverId');
     }
   }
 
@@ -105,16 +105,18 @@ final class JoinGameExited extends JoinEvent {
 final class JoinFailed extends JoinEvent {
   JoinFailed(this.code, {this.detail = ''})
     : rollbackComplete = null,
-      gameOwnership = null {
+      gameOwnership = null,
+      servedServerId = null {
     if (code == JoinFailureCode.cancelled ||
         code == JoinFailureCode.gameExited ||
         code == JoinFailureCode.installFailed ||
-        code == JoinFailureCode.gameRunning) {
+        code == JoinFailureCode.gameRunning ||
+        code == JoinFailureCode.identityChanged) {
       throw ArgumentError.value(
         code,
         'code',
-        'Use JoinCancelRequested, JoinGameExited, JoinFailed.installFailed '
-            'or JoinFailed.gameRunning.',
+        'Use JoinCancelRequested, JoinGameExited, JoinFailed.installFailed, '
+            'JoinFailed.gameRunning or JoinFailed.identityChanged.',
       );
     }
   }
@@ -125,7 +127,8 @@ final class JoinFailed extends JoinEvent {
     required bool this.rollbackComplete,
     this.detail = '',
   }) : code = JoinFailureCode.installFailed,
-       gameOwnership = null;
+       gameOwnership = null,
+       servedServerId = null;
 
   /// A game is already running.
   const JoinFailed.gameRunning({
@@ -133,10 +136,25 @@ final class JoinFailed extends JoinEvent {
     this.detail = '',
   }) : code = JoinFailureCode.gameRunning,
        rollbackComplete = null,
-       gameOwnership = ownership;
+       gameOwnership = ownership,
+       servedServerId = null;
+
+  /// A typed address served [servedServerId], another server than the one
+  /// the known-hosts record or the join expected.
+  JoinFailed.identityChanged({
+    required String this.servedServerId,
+    this.detail = '',
+  }) : code = JoinFailureCode.identityChanged,
+       rollbackComplete = null,
+       gameOwnership = null {
+    if (!WireText.isHex(servedServerId, 32)) {
+      throw ArgumentError('Not a server id.', 'servedServerId');
+    }
+  }
 
   final JoinFailureCode code;
   final String detail;
   final bool? rollbackComplete;
   final JoinGameOwnership? gameOwnership;
+  final String? servedServerId;
 }

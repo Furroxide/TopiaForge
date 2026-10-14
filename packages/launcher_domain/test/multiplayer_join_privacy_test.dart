@@ -84,7 +84,19 @@ void main() {
           port: 1,
         ),
         () => SessionLink.invite('192.0.2.7'),
+        () => SessionLink.server('192.0.2.7'),
+        () => SessionLink.direct(
+          serverId: '192.0.2.7',
+          host: 'example.org',
+          port: 1,
+        ),
+        () => InviteCode.display('192.0.2.7'),
         () => JoinAddressTarget(host: 'bad_host.192.0.2.7', port: 1),
+        () => JoinListingTarget(
+          serverId: '192.0.2.7',
+          source: ServerListingSource.lan,
+        ),
+        () => JoinTargetResolved('192.0.2.7'),
         () => KnownHosts.targetKey('bad_host.192.0.2.7', 1),
       ]) {
         try {
@@ -124,13 +136,13 @@ void main() {
       expect(state.descriptorRequest!.allowsDirect, isTrue);
     });
 
-    test('relay-only fetches from local hosts and leaves names to the '
-        'data layer', () {
+    test('relay-only fetches from local hosts and local names only', () {
       for (final host in [
         '192.168.1.20',
         '::1',
         'fd00::7',
-        'play.example.org',
+        'localhost',
+        'printer.local',
       ]) {
         final state = startJoin(direct(host));
         expect(state.stage, JoinStage.fetchingDescriptor, reason: host);
@@ -141,6 +153,34 @@ void main() {
         expect(request.target, same(state.target));
         expect(request.toString(), isNot(contains(host)));
       }
+    });
+
+    test('relay-only looks up no other name, before any lookup', () {
+      for (final host in [
+        'play.example.org',
+        'host.3com',
+        'local',
+        'local.example',
+        'localhost.example',
+      ]) {
+        for (final target in [
+          direct(host),
+          JoinAddressTarget(host: host, port: 27250),
+        ]) {
+          final state = startJoin(target);
+          final failure = state.outcome!.failure!;
+          expect(failure.code, JoinFailureCode.directNotAllowed, reason: host);
+          expect(failure.stage, JoinStage.fetchingDescriptor);
+          expect(failure.detail, isNot(contains(host)));
+          final open = startJoin(
+            target,
+            privacy: MultiplayerAddressPrivacy.direct,
+          );
+          expect(open.stage, JoinStage.fetchingDescriptor, reason: host);
+        }
+      }
+      expect(NetworkHost.isLocalName('Printer.LOCAL'), isTrue);
+      expect(NetworkHost.isLocalName('127.0.0.1'), isFalse);
     });
 
     test('only control-plane targets resolve first', () {
@@ -175,6 +215,7 @@ void main() {
         server: server,
         resolutions: const {},
         environment: testEnvironment,
+        mayContactHost: true,
       );
       var state = startJoin(direct('192.168.1.20'));
       state = JoinSession.reduce(state, JoinDescriptorVerified(server));
@@ -196,7 +237,7 @@ void main() {
   });
 
   group('resolved names', () {
-    final request = startJoin(direct('play.example.org')).descriptorRequest!;
+    final request = startJoin(direct('printer.local')).descriptorRequest!;
     final openRequest = startJoin(
       direct('play.example.org'),
       privacy: MultiplayerAddressPrivacy.direct,

@@ -12,10 +12,10 @@ final class ServerBookmark {
     required DateTime savedAt,
   }) : savedAt = savedAt.toUtc() {
     if (!WireText.isHex(serverId, 32)) {
-      throw ArgumentError.value(serverId, 'serverId', 'Not a server id.');
+      throw ArgumentError('Not a server id.', 'serverId');
     }
     if (!WireText.isDisplayText(name, ServerDescriptorV1.maximumNameLength)) {
-      throw ArgumentError.value(name, 'name', 'Not a server name.');
+      throw ArgumentError('Not a server name.', 'name');
     }
   }
 
@@ -131,11 +131,7 @@ void _requireBounded(List<ServerBookmark> entries, int maximum, String name) {
   final seen = <String>{};
   for (final entry in entries) {
     if (!seen.add(entry.serverId)) {
-      throw ArgumentError.value(
-        entry.serverId,
-        name,
-        'Each server appears once.',
-      );
+      throw ArgumentError('Each server appears once.', name);
     }
   }
 }

@@ -58,7 +58,7 @@ final class JoinPackageResolution {
     int? sizeBytes,
   }) {
     if (downloadUrl.trim().isEmpty) {
-      throw ArgumentError.value(downloadUrl, 'downloadUrl', 'Required.');
+      throw ArgumentError('Required.', 'downloadUrl');
     }
     _requireSize(sizeBytes);
     return JoinPackageResolution._(
@@ -143,7 +143,7 @@ final class JoinEnvironment {
       ('protocolVersion', protocolVersion),
     ]) {
       if (value.trim().isEmpty) {
-        throw ArgumentError.value(value, field, 'Required.');
+        throw ArgumentError('Required.', field);
       }
     }
   }

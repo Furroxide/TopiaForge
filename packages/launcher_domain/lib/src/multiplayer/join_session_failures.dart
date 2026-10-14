@@ -122,6 +122,7 @@ final class JoinFailure {
     List<JoinPlanBlocker> blockers = const [],
     this.rollbackComplete,
     this.gameOwnership,
+    this.servedServerId,
   }) : blockers = List.unmodifiable(blockers);
 
   final JoinFailureCode code;
@@ -139,6 +140,11 @@ final class JoinFailure {
 
   /// For [JoinFailureCode.gameRunning]: who owns the running game.
   final JoinGameOwnership? gameOwnership;
+
+  /// For [JoinFailureCode.identityChanged]: the server the typed address
+  /// served instead. Trusting it means starting again with it as the
+  /// `trustedServerId`, so only that server is accepted.
+  final String? servedServerId;
 }
 
 /// How a join ended: a failure before the session began, or the end of the
