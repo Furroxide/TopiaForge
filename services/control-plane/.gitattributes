@@ -1,0 +1,2 @@
+# Every text file in the service is LF on every platform, like the repository's other source formats.
+* text=auto eol=lf

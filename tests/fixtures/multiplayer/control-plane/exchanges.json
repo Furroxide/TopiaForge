@@ -1,0 +1,473 @@
+{
+  "schema": 1,
+  "about": "Control-plane HTTP exchanges (docs/internal/ControlPlaneApi.md), recorded by services/control-plane/test/client-fixtures.test.ts with a fixed clock, seeded randomness and a stand-in relay provider. Bodies are exact canonical JSON text. A client must build each request body byte for byte and parse each response; tokens, codes and challenges are only valid against the recording.",
+  "origin": "https://control-plane.example.invalid",
+  "host": {
+    "key": "host-a",
+    "descriptorCase": "public-sandbox",
+    "note": "Keys and the first descriptor come from tests/fixtures/multiplayer/descriptor."
+  },
+  "exchanges": [
+    {
+      "id": "status",
+      "about": "What clients may use right now.",
+      "at": 1969660800,
+      "request": {
+        "method": "GET",
+        "path": "/v1/status",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"api\":1,\"features\":{\"hosting\":true,\"invites\":true,\"relay\":true,\"signaling\":true},\"hosting\":{\"heartbeatSeconds\":30,\"listingTtlSeconds\":90},\"killSwitch\":false,\"relay\":{\"credentialTtlSeconds\":600},\"schema\":\"topiaforge.control-plane-status/1\"}"
+      }
+    },
+    {
+      "id": "host-challenge",
+      "about": "A host asks for a challenge for its signing key.",
+      "at": 1969660800,
+      "request": {
+        "method": "POST",
+        "path": "/v1/hosts/challenge",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"signingKey\":\"X_63eOUQF6uSrrIZ1DhX5w-ouzCDzlMBavIFLxvmABE\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"challenge\":\"AQAAAAB1ZqP4a8QNhigcvrIeP9PCvTJMOC23VpqoqEnDaEoiydNuPZA\",\"expiresAt\":1969660920}"
+      }
+    },
+    {
+      "id": "host-register",
+      "about": "The host proves its key over the whole registration and gets a session token and an invite.",
+      "at": 1969660800,
+      "request": {
+        "method": "POST",
+        "path": "/v1/hosts",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"challenge\":\"AQAAAAB1ZqP4a8QNhigcvrIeP9PCvTJMOC23VpqoqEnDaEoiydNuPZA\",\"descriptor\":\"{\\\"descriptor\\\":{\\\"gameBuild\\\":\\\"2545\\\",\\\"gamemode\\\":\\\"Open Sandbox\\\",\\\"hostServesPackages\\\":false,\\\"issuedAt\\\":1791849600,\\\"maxPlayers\\\":8,\\\"name\\\":\\\"Sam's Sandbox\\\",\\\"packageDigest\\\":\\\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\\\",\\\"packages\\\":[{\\\"id\\\":\\\"io.github.furroxide.topiaforge.multiplayer\\\",\\\"role\\\":\\\"session-required\\\",\\\"sha256\\\":\\\"72dc020c4e54080369b511a64ef02e60bd5cecd1fa3fc32c6960fd31b6aaa690\\\",\\\"version\\\":\\\"0.2.0\\\"},{\\\"id\\\":\\\"io.github.furroxide.topiaforge.sandbox\\\",\\\"role\\\":\\\"implicit\\\",\\\"sha256\\\":\\\"a288fc97c47339e71b545a162ed13dde2e02398cd6ca52a6d5f6b460bafa518f\\\",\\\"version\\\":\\\"0.2.0\\\"},{\\\"id\\\":\\\"io.github.furroxide.topiaforge.zombies\\\",\\\"role\\\":\\\"session-optional\\\",\\\"sha256\\\":\\\"abc28a8ee6ed7dafa9702c478879bb5eeb046a913798857f2902ce0131f17cdc\\\",\\\"version\\\":\\\"0.2.0-rc.1+build.7\\\"}],\\\"passwordRequired\\\":false,\\\"protocolVersion\\\":\\\"1.0.0\\\",\\\"runtimeVersion\\\":\\\"0.2.0\\\",\\\"schema\\\":\\\"topiaforge.server-descriptor/1\\\",\\\"serverId\\\":\\\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\\\",\\\"signingKey\\\":\\\"X_63eOUQF6uSrrIZ1DhX5w-ouzCDzlMBavIFLxvmABE\\\",\\\"transportKey\\\":\\\"RIcUrvBv2CmtHVUuyjEvJ7SN1V5vghS4UWaimHb8Y2s\\\",\\\"visibility\\\":\\\"public\\\",\\\"voice\\\":true,\\\"world\\\":\\\"Test City\\\"},\\\"signature\\\":\\\"vjahEkReZT-r_GA1YnKKpxy44JjcATeNGNJQFYyzPbM2_Cgdx3CqSwl4gd7NqSpelAoYW_zSwbx5JbCZgZZZAA\\\"}\",\"proof\":\"YMV2K-rQ74ukyZBSm5g9u7dZiGdpYVk4gNPKQlwIm_q4hE-2Y5s-CfkOn2VK5h7NBWG44xf0DBu98yzy4ninAQ\",\"relayOnly\":false}"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"expiresAt\":1969660890,\"heartbeatSeconds\":30,\"invite\":{\"code\":\"RJ9JMV1V09\",\"display\":\"RJ9JM-V1V09\",\"expiresAt\":1970265600,\"link\":\"topiaforge://join/RJ9JMV1V09\"},\"listed\":true,\"listingTtlSeconds\":90,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"sessionToken\":\"tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4\"}"
+      }
+    },
+    {
+      "id": "host-heartbeat-too-soon",
+      "about": "Heartbeats closer than five seconds apart are refused.",
+      "at": 1969660800,
+      "request": {
+        "method": "POST",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/heartbeat",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4",
+          "content-type": "application/json"
+        },
+        "body": "{\"players\":1}"
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "retry-after": "5",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"error\":{\"code\":\"rate-limited\",\"message\":\"Too many requests.\"}}"
+      }
+    },
+    {
+      "id": "host-heartbeat",
+      "about": "Every 30 seconds the host reports its player count and keeps its listing for 90 more.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/heartbeat",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4",
+          "content-type": "application/json"
+        },
+        "body": "{\"players\":2}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"expiresAt\":1969660920,\"heartbeatSeconds\":30,\"listed\":true}"
+      }
+    },
+    {
+      "id": "host-view",
+      "about": "The host's own view of its session.",
+      "at": 1969660830,
+      "request": {
+        "method": "GET",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4"
+        },
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"expiresAt\":1969660920,\"invites\":[{\"code\":\"RJ9JMV1V09\",\"display\":\"RJ9JM-V1V09\",\"expiresAt\":1970265600,\"link\":\"topiaforge://join/RJ9JMV1V09\"}],\"listed\":true,\"players\":2,\"relayOnly\":false,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"visibility\":\"public\"}"
+      }
+    },
+    {
+      "id": "invite-create",
+      "about": "The host creates another invite.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/invites",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4",
+          "content-type": "application/json"
+        },
+        "body": "{\"ttlSeconds\":3600}"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"invite\":{\"code\":\"MBFAG69CX4\",\"display\":\"MBFAG-69CX4\",\"expiresAt\":1969664430,\"link\":\"topiaforge://join/MBFAG69CX4\"}}"
+      }
+    },
+    {
+      "id": "servers-list",
+      "about": "The server browser's first page for one build and protocol major.",
+      "at": 1969660830,
+      "request": {
+        "method": "GET",
+        "path": "/v1/servers?build=2545&protocol=1&limit=10",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"next\":null,\"servers\":[{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"hostServesPackages\":false,\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"packageCount\":3,\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"passwordRequired\":false,\"players\":2,\"protocolVersion\":\"1.0.0\",\"relayOnly\":false,\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.server-listing/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"updatedAt\":1969660830,\"visibility\":\"public\",\"voice\":true,\"world\":\"Test City\"}]}"
+      }
+    },
+    {
+      "id": "server-detail",
+      "about": "A public server's listing and signed descriptor.",
+      "at": 1969660830,
+      "request": {
+        "method": "GET",
+        "path": "/v1/servers/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"descriptor\":\"{\\\"descriptor\\\":{\\\"gameBuild\\\":\\\"2545\\\",\\\"gamemode\\\":\\\"Open Sandbox\\\",\\\"hostServesPackages\\\":false,\\\"issuedAt\\\":1791849600,\\\"maxPlayers\\\":8,\\\"name\\\":\\\"Sam's Sandbox\\\",\\\"packageDigest\\\":\\\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\\\",\\\"packages\\\":[{\\\"id\\\":\\\"io.github.furroxide.topiaforge.multiplayer\\\",\\\"role\\\":\\\"session-required\\\",\\\"sha256\\\":\\\"72dc020c4e54080369b511a64ef02e60bd5cecd1fa3fc32c6960fd31b6aaa690\\\",\\\"version\\\":\\\"0.2.0\\\"},{\\\"id\\\":\\\"io.github.furroxide.topiaforge.sandbox\\\",\\\"role\\\":\\\"implicit\\\",\\\"sha256\\\":\\\"a288fc97c47339e71b545a162ed13dde2e02398cd6ca52a6d5f6b460bafa518f\\\",\\\"version\\\":\\\"0.2.0\\\"},{\\\"id\\\":\\\"io.github.furroxide.topiaforge.zombies\\\",\\\"role\\\":\\\"session-optional\\\",\\\"sha256\\\":\\\"abc28a8ee6ed7dafa9702c478879bb5eeb046a913798857f2902ce0131f17cdc\\\",\\\"version\\\":\\\"0.2.0-rc.1+build.7\\\"}],\\\"passwordRequired\\\":false,\\\"protocolVersion\\\":\\\"1.0.0\\\",\\\"runtimeVersion\\\":\\\"0.2.0\\\",\\\"schema\\\":\\\"topiaforge.server-descriptor/1\\\",\\\"serverId\\\":\\\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\\\",\\\"signingKey\\\":\\\"X_63eOUQF6uSrrIZ1DhX5w-ouzCDzlMBavIFLxvmABE\\\",\\\"transportKey\\\":\\\"RIcUrvBv2CmtHVUuyjEvJ7SN1V5vghS4UWaimHb8Y2s\\\",\\\"visibility\\\":\\\"public\\\",\\\"voice\\\":true,\\\"world\\\":\\\"Test City\\\"},\\\"signature\\\":\\\"vjahEkReZT-r_GA1YnKKpxy44JjcATeNGNJQFYyzPbM2_Cgdx3CqSwl4gd7NqSpelAoYW_zSwbx5JbCZgZZZAA\\\"}\",\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"listing\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"hostServesPackages\":false,\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"packageCount\":3,\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"passwordRequired\":false,\"players\":2,\"protocolVersion\":\"1.0.0\",\"relayOnly\":false,\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.server-listing/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"updatedAt\":1969660830,\"visibility\":\"public\",\"voice\":true,\"world\":\"Test City\"}}"
+      }
+    },
+    {
+      "id": "invite-resolve",
+      "about": "Invite codes read forgivingly: case, hyphens, O for 0 and I or L for 1.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/invites/resolve",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"code\":\"mbfag-69CX4\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"descriptor\":\"{\\\"descriptor\\\":{\\\"gameBuild\\\":\\\"2545\\\",\\\"gamemode\\\":\\\"Open Sandbox\\\",\\\"hostServesPackages\\\":false,\\\"issuedAt\\\":1791849600,\\\"maxPlayers\\\":8,\\\"name\\\":\\\"Sam's Sandbox\\\",\\\"packageDigest\\\":\\\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\\\",\\\"packages\\\":[{\\\"id\\\":\\\"io.github.furroxide.topiaforge.multiplayer\\\",\\\"role\\\":\\\"session-required\\\",\\\"sha256\\\":\\\"72dc020c4e54080369b511a64ef02e60bd5cecd1fa3fc32c6960fd31b6aaa690\\\",\\\"version\\\":\\\"0.2.0\\\"},{\\\"id\\\":\\\"io.github.furroxide.topiaforge.sandbox\\\",\\\"role\\\":\\\"implicit\\\",\\\"sha256\\\":\\\"a288fc97c47339e71b545a162ed13dde2e02398cd6ca52a6d5f6b460bafa518f\\\",\\\"version\\\":\\\"0.2.0\\\"},{\\\"id\\\":\\\"io.github.furroxide.topiaforge.zombies\\\",\\\"role\\\":\\\"session-optional\\\",\\\"sha256\\\":\\\"abc28a8ee6ed7dafa9702c478879bb5eeb046a913798857f2902ce0131f17cdc\\\",\\\"version\\\":\\\"0.2.0-rc.1+build.7\\\"}],\\\"passwordRequired\\\":false,\\\"protocolVersion\\\":\\\"1.0.0\\\",\\\"runtimeVersion\\\":\\\"0.2.0\\\",\\\"schema\\\":\\\"topiaforge.server-descriptor/1\\\",\\\"serverId\\\":\\\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\\\",\\\"signingKey\\\":\\\"X_63eOUQF6uSrrIZ1DhX5w-ouzCDzlMBavIFLxvmABE\\\",\\\"transportKey\\\":\\\"RIcUrvBv2CmtHVUuyjEvJ7SN1V5vghS4UWaimHb8Y2s\\\",\\\"visibility\\\":\\\"public\\\",\\\"voice\\\":true,\\\"world\\\":\\\"Test City\\\"},\\\"signature\\\":\\\"vjahEkReZT-r_GA1YnKKpxy44JjcATeNGNJQFYyzPbM2_Cgdx3CqSwl4gd7NqSpelAoYW_zSwbx5JbCZgZZZAA\\\"}\",\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"listing\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"gameBuild\":\"2545\",\"gamemode\":\"Open Sandbox\",\"hostServesPackages\":false,\"maxPlayers\":8,\"name\":\"Sam's Sandbox\",\"packageCount\":3,\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"passwordRequired\":false,\"players\":2,\"protocolVersion\":\"1.0.0\",\"relayOnly\":false,\"runtimeVersion\":\"0.2.0\",\"schema\":\"topiaforge.server-listing/1\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"updatedAt\":1969660830,\"visibility\":\"public\",\"voice\":true,\"world\":\"Test City\"},\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"}"
+      }
+    },
+    {
+      "id": "join-ticket",
+      "about": "A joining player asks for a ticket, choosing relay-only.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/join-tickets",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"invite\":null,\"relayOnly\":true,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"}"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"expiresAt\":1969682430,\"hostRelayOnly\":false,\"relayOnly\":true,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"ticket\":\"tfj1_AcXzkGAnHr0vItm_FVomv0WSdOMbeVFF_Z2GLcIG2YuziGvAF96YzyhgKxE4OSmevAAAAAB1Zvf-AdjOvGUvf4Nsw0rd-7-O95A\"}"
+      }
+    },
+    {
+      "id": "turn-credentials-joiner",
+      "about": "Relay credentials for the joiner, in the iceServers shape.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/turn/credentials",
+        "headers": {
+          "authorization": "Bearer tfj1_AcXzkGAnHr0vItm_FVomv0WSdOMbeVFF_Z2GLcIG2YuziGvAF96YzyhgKxE4OSmevAAAAAB1Zvf-AdjOvGUvf4Nsw0rd-7-O95A",
+          "content-type": "application/json"
+        },
+        "body": "{\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"}"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"expiresAt\":1969661430,\"iceServers\":[{\"urls\":[\"stun:stun.cloudflare.com:3478\",\"stun:stun.cloudflare.com:53\"]},{\"credential\":\"test-credential-1\",\"urls\":[\"turn:turn.cloudflare.com:3478?transport=udp\",\"turn:turn.cloudflare.com:3478?transport=tcp\",\"turns:turn.cloudflare.com:5349?transport=tcp\"],\"username\":\"test-user-1\"}],\"ttlSeconds\":600}"
+      }
+    },
+    {
+      "id": "turn-credentials-host",
+      "about": "Relay credentials for the host.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/turn/credentials",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4",
+          "content-type": "application/json"
+        },
+        "body": "{\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"}"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"expiresAt\":1969661430,\"iceServers\":[{\"urls\":[\"stun:stun.cloudflare.com:3478\",\"stun:stun.cloudflare.com:53\"]},{\"credential\":\"test-credential-2\",\"urls\":[\"turn:turn.cloudflare.com:3478?transport=udp\",\"turn:turn.cloudflare.com:3478?transport=tcp\",\"turns:turn.cloudflare.com:5349?transport=tcp\"],\"username\":\"test-user-2\"}],\"ttlSeconds\":600}"
+      }
+    },
+    {
+      "id": "host-descriptor",
+      "about": "The host publishes a newer signed descriptor.",
+      "at": 1969660830,
+      "request": {
+        "method": "PUT",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/descriptor",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4",
+          "content-type": "application/json"
+        },
+        "body": "{\"descriptor\":\"{\\\"descriptor\\\":{\\\"gameBuild\\\":\\\"2545\\\",\\\"gamemode\\\":\\\"Open Sandbox\\\",\\\"hostServesPackages\\\":false,\\\"issuedAt\\\":1791849660,\\\"maxPlayers\\\":8,\\\"name\\\":\\\"Sam's Sandbox\\\",\\\"packageDigest\\\":\\\"d206f0416a6d17605863a27d46aa0e8a3c61b79b3d6b548349c1cb2ff6562b18\\\",\\\"packages\\\":[{\\\"id\\\":\\\"io.github.furroxide.topiaforge.multiplayer\\\",\\\"role\\\":\\\"session-required\\\",\\\"sha256\\\":\\\"72dc020c4e54080369b511a64ef02e60bd5cecd1fa3fc32c6960fd31b6aaa690\\\",\\\"version\\\":\\\"0.2.0\\\"}],\\\"passwordRequired\\\":false,\\\"protocolVersion\\\":\\\"1.0.0\\\",\\\"runtimeVersion\\\":\\\"0.2.0\\\",\\\"schema\\\":\\\"topiaforge.server-descriptor/1\\\",\\\"serverId\\\":\\\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\\\",\\\"signingKey\\\":\\\"X_63eOUQF6uSrrIZ1DhX5w-ouzCDzlMBavIFLxvmABE\\\",\\\"transportKey\\\":\\\"RIcUrvBv2CmtHVUuyjEvJ7SN1V5vghS4UWaimHb8Y2s\\\",\\\"visibility\\\":\\\"public\\\",\\\"voice\\\":true,\\\"world\\\":\\\"Test City\\\"},\\\"signature\\\":\\\"qQsQbH1iakNfI4nVi9AGrNPXtjm4Jw9stxuehriCF5tnYJLQNdx6DawgYkO2hARgR-myni0b9JqT1YMRNHQMBQ\\\"}\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"descriptorSha256\":\"54cdd236e4b47c9050fb40708da67d3079db93a2a7c9b27f517bd9046b50707d\",\"expiresAt\":1969660920,\"listed\":true}"
+      }
+    },
+    {
+      "id": "invite-revoke",
+      "about": "The host revokes an invite.",
+      "at": 1969660830,
+      "request": {
+        "method": "DELETE",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/invites/MBFAG69CX4",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4"
+        },
+        "body": null
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff"
+        },
+        "body": null
+      }
+    },
+    {
+      "id": "invite-resolve-miss",
+      "about": "Every miss is the same 404.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/invites/resolve",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"code\":\"MBFAG69CX4\"}"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"error\":{\"code\":\"not-found\",\"message\":\"Not found.\"}}"
+      }
+    },
+    {
+      "id": "error-unauthorized",
+      "about": "A wrong or missing credential.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/heartbeat",
+        "headers": {
+          "authorization": "Bearer tfh1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "content-type": "application/json"
+        },
+        "body": "{\"players\":0}"
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"error\":{\"code\":\"unauthorized\",\"message\":\"Valid credentials are required.\"}}"
+      }
+    },
+    {
+      "id": "error-malformed",
+      "about": "A body that is not canonical JSON.",
+      "at": 1969660830,
+      "request": {
+        "method": "POST",
+        "path": "/v1/invites/resolve",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"code\": \"ABCDE12345\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"error\":{\"code\":\"invalid-request\",\"message\":\"The request is malformed.\"}}"
+      }
+    },
+    {
+      "id": "error-method",
+      "about": "A known path with the wrong method.",
+      "at": 1969660830,
+      "request": {
+        "method": "PUT",
+        "path": "/v1/status",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{}"
+      },
+      "response": {
+        "status": 405,
+        "headers": {
+          "allow": "GET",
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"error\":{\"code\":\"method-not-allowed\",\"message\":\"The method is not allowed here.\"}}"
+      }
+    },
+    {
+      "id": "error-unknown",
+      "about": "A path the API does not have.",
+      "at": 1969660830,
+      "request": {
+        "method": "GET",
+        "path": "/v1/servers/unknown",
+        "headers": {},
+        "body": null
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-type": "application/json; charset=utf-8",
+          "x-content-type-options": "nosniff"
+        },
+        "body": "{\"error\":{\"code\":\"not-found\",\"message\":\"Not found.\"}}"
+      }
+    },
+    {
+      "id": "host-end",
+      "about": "The host ends its session.",
+      "at": 1969660830,
+      "request": {
+        "method": "DELETE",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3",
+        "headers": {
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4"
+        },
+        "body": null
+      },
+      "response": {
+        "status": 204,
+        "headers": {
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff"
+        },
+        "body": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+# TopiaForge multiplayer control plane: the Internet server browser, invites, signaling and relay credentials.
+#
+# docs/internal/ControlPlaneOperations.md lists every resource, secret and figure the maintainer sets before the
+# first deploy. Nothing account-specific lives in this file: Wrangler reads CLOUDFLARE_ACCOUNT_ID and
+# CLOUDFLARE_API_TOKEN from the protected deploy environment, and the Worker's secrets are set out of band with
+# `wrangler secret put`. Durable Object bindings and vars do not inherit into environments, so each environment
+# repeats them; keep the three copies identical apart from ENVIRONMENT.
+
+name = "topiaforge-control-plane"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+workers_dev = true
+
+# Invocation logs would record request metadata the service promises never to keep. Leave them off.
+[observability]
+enabled = false
+
+# Hourly relay-spend measurement. Minute 7 gives the usage analytics time to settle.
+[triggers]
+crons = ["7 * * * *"]
+
+[[durable_objects.bindings]]
+name = "HOST_SESSIONS"
+class_name = "HostSession"
+
+[[durable_objects.bindings]]
+name = "DIRECTORY_SHARDS"
+class_name = "DirectoryShard"
+
+[[durable_objects.bindings]]
+name = "INVITE_SHARDS"
+class_name = "InviteShard"
+
+[[durable_objects.bindings]]
+name = "SPEND_GUARD"
+class_name = "SpendGuard"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HostSession", "DirectoryShard", "InviteShard", "SpendGuard", "RateLimiter"]
+
+[vars]
+ENVIRONMENT = "development"
+TURN_CREDENTIAL_TTL_SECONDS = "600"
+TURN_IP_MINTS_PER_HOUR = "20"
+TURN_IP_MINTS_PER_MINUTE = "5"
+TURN_TICKET_MAX_MINTS = "36"
+TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+FLAG_CACHE_SECONDS = "5"
+
+[env.staging]
+workers_dev = true
+
+[env.staging.observability]
+enabled = false
+
+[[env.staging.durable_objects.bindings]]
+name = "HOST_SESSIONS"
+class_name = "HostSession"
+
+[[env.staging.durable_objects.bindings]]
+name = "DIRECTORY_SHARDS"
+class_name = "DirectoryShard"
+
+[[env.staging.durable_objects.bindings]]
+name = "INVITE_SHARDS"
+class_name = "InviteShard"
+
+[[env.staging.durable_objects.bindings]]
+name = "SPEND_GUARD"
+class_name = "SpendGuard"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+TURN_CREDENTIAL_TTL_SECONDS = "600"
+TURN_IP_MINTS_PER_HOUR = "20"
+TURN_IP_MINTS_PER_MINUTE = "5"
+TURN_TICKET_MAX_MINTS = "36"
+TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+FLAG_CACHE_SECONDS = "5"
+
+[env.production]
+workers_dev = true
+
+[env.production.observability]
+enabled = false
+
+[[env.production.durable_objects.bindings]]
+name = "HOST_SESSIONS"
+class_name = "HostSession"
+
+[[env.production.durable_objects.bindings]]
+name = "DIRECTORY_SHARDS"
+class_name = "DirectoryShard"
+
+[[env.production.durable_objects.bindings]]
+name = "INVITE_SHARDS"
+class_name = "InviteShard"
+
+[[env.production.durable_objects.bindings]]
+name = "SPEND_GUARD"
+class_name = "SpendGuard"
+
+[[env.production.durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+TURN_CREDENTIAL_TTL_SECONDS = "600"
+TURN_IP_MINTS_PER_HOUR = "20"
+TURN_IP_MINTS_PER_MINUTE = "5"
+TURN_TICKET_MAX_MINTS = "36"
+TURN_MEASUREMENT_FAILURE_LIMIT = "3"
+FLAG_CACHE_SECONDS = "5"
