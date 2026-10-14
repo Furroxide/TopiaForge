@@ -1,0 +1,194 @@
+name: Control plane
+
+# The multiplayer control plane (services/control-plane). Pull requests and pushes that touch it are tested and
+# dry-run without secrets. Deployment runs only on a manual dispatch, only after a preflight proves the target is a
+# protected environment, and only with that environment's secrets after its reviewer approves.
+# docs/internal/ControlPlaneOperations.md is the runbook.
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+      - "release/**"
+    paths:
+      - "services/control-plane/**"
+      - "tests/fixtures/multiplayer/**"
+      - ".github/workflows/control-plane.yml"
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "services/control-plane/**"
+      - "tests/fixtures/multiplayer/**"
+      - ".github/workflows/control-plane.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected environment to deploy to
+        required: true
+        type: choice
+        options:
+          - control-plane-staging
+          - control-plane-production
+
+permissions:
+  contents: read
+
+# Never cancel a deployment in flight; tests for a superseded revision may stop early.
+concurrency:
+  group: control-plane-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  test:
+    name: Test and dry-run the control plane
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: services/control-plane
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: npm
+          cache-dependency-path: services/control-plane/package-lock.json
+
+      - name: Verify pinned runtime
+        run: test "$(node --version)" = v24.16.0
+
+      - name: Restore pinned packages
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Type-check and test
+        env:
+          CI: true
+        run: npm test
+
+      - name: Dry-run both deployments
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-staging" --env staging
+          npx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/control-plane-production" --env production
+
+  # Runs before any job names an environment, so a dispatch can never create an unprotected one.
+  preflight:
+    name: Require a protected deployment environment
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'Furroxide/TopiaForge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      wrangler_environment: ${{ steps.target.outputs.wrangler_environment }}
+    steps:
+      - name: Require a trusted source branch for the target
+        id: target
+        shell: bash
+        env:
+          TARGET: ${{ inputs.environment }}
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            control-plane-staging)
+              [[ "$SOURCE_REF" == refs/heads/dev || "$SOURCE_REF" == refs/heads/main ]]
+              echo "wrangler_environment=staging" >> "$GITHUB_OUTPUT"
+              ;;
+            control-plane-production)
+              test "$SOURCE_REF" = refs/heads/main
+              echo "wrangler_environment=production" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unknown deployment target."
+              exit 1
+              ;;
+          esac
+
+      - name: Require the environment to exist with a required reviewer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          environment=$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/$GITHUB_REPOSITORY/environments/$TARGET")
+          jq -e \
+            --arg name "$TARGET" \
+            '.name == $name and
+             .can_admins_bypass == false and
+             .deployment_branch_policy.custom_branch_policies == true and
+             ([.protection_rules[] | select(.type == "required_reviewers") | (.reviewers | length)] | any(. > 0))' \
+            <<<"$environment" >/dev/null
+
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    needs: [preflight, test]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment:
+      name: ${{ inputs.environment }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: services/control-plane
+    steps:
+      - name: Checkout the exact dispatched revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # No package cache in the job that holds deployment credentials.
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+
+      - name: Verify pinned runtime
+        run: test "$(node --version)" = v24.16.0
+
+      - name: Restore pinned packages
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Deploy the Worker and its Durable Object migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_ENVIRONMENT: ${{ needs.preflight.outputs.wrangler_environment }}
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          [[ "$WRANGLER_ENVIRONMENT" == staging || "$WRANGLER_ENVIRONMENT" == production ]]
+          npx wrangler deploy --env "$WRANGLER_ENVIRONMENT"
+
+      - name: Smoke-test the deployed status endpoint
+        env:
+          CONTROL_PLANE_ORIGIN: ${{ vars.CONTROL_PLANE_ORIGIN }}
+        run: |
+          set -euo pipefail
+          [[ "$CONTROL_PLANE_ORIGIN" =~ ^https://[a-z0-9.-]+$ ]]
+          status=$(curl --fail --silent --show-error \
+            --retry 6 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 10 --max-time 20 \
+            "$CONTROL_PLANE_ORIGIN/v1/status")
+          jq -e '.schema == "topiaforge.control-plane-status/1" and .api == 1' <<<"$status" >/dev/null

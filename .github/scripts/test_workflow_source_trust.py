@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import textwrap
 import unittest
 
@@ -123,6 +124,103 @@ class ExecutableSourceTests(unittest.TestCase):
                     timeout=10, check=False,
                 )
                 self.assertEqual(result.returncode == 0, passed, result.stderr)
+
+
+def workflow_jobs(source):
+    """Split a workflow into its top-level jobs, keyed by job id."""
+    jobs = source.split("\njobs:\n", 1)[1]
+    parts = re.split(r"(?m)^  ([a-z][a-z0-9-]*):\n", jobs)
+    return {parts[index]: parts[index + 1] for index in range(1, len(parts), 2)}
+
+
+def git_bash():
+    bash = shutil.which("bash")
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git is None:
+            return None
+        directory = Path(git).parent
+        bash = next((str(path) for path in (
+            directory / "bash.exe", directory.parent / "bin" / "bash.exe",
+        ) if path.is_file()), None)
+    return bash
+
+
+class ControlPlaneDeployTests(unittest.TestCase):
+    """The control-plane deployment is manual, preflighted and confined to one job."""
+
+    def setUp(self):
+        self.source = read_workflow("control-plane.yml")
+        self.jobs = workflow_jobs(self.source)
+
+    def test_deployment_runs_only_on_a_manual_dispatch(self):
+        triggers = self.source.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertIn("  workflow_dispatch:\n", triggers)
+        self.assertNotIn("pull_request_target", self.source)
+        self.assertNotIn("workflow_run", triggers)
+        self.assertIn("    if: github.event_name == 'workflow_dispatch'\n", self.jobs["deploy"])
+        self.assertIn("github.event_name == 'workflow_dispatch'", self.jobs["preflight"])
+        self.assertEqual(set(self.jobs), {"test", "preflight", "deploy"})
+
+    def test_only_the_deploy_job_names_an_environment_or_reads_secrets(self):
+        for name, body in self.jobs.items():
+            with self.subTest(job=name):
+                if name == "deploy":
+                    self.assertIn("    environment:\n      name: ${{ inputs.environment }}\n", body)
+                    self.assertIn("${{ secrets.CLOUDFLARE_API_TOKEN }}", body)
+                    continue
+                self.assertNotRegex(body, r"(?m)^    environment:")
+                self.assertNotIn("secrets.", body)
+
+    def test_every_deployment_waits_for_the_preflight_and_the_tests(self):
+        self.assertIn("    needs: [preflight, test]\n", self.jobs["deploy"])
+        preflight = self.jobs["preflight"]
+        self.assertIn("github.repository == 'Furroxide/TopiaForge'", preflight)
+        self.assertIn(".can_admins_bypass == false", preflight)
+        self.assertIn('select(.type == "required_reviewers")', preflight)
+        self.assertIn(".deployment_branch_policy.custom_branch_policies == true", preflight)
+        self.assertLess(self.source.index("  preflight:\n"), self.source.index("  deploy:\n"))
+
+    def test_deploy_uses_the_exact_dispatched_revision_and_no_cache(self):
+        steps = checkout_steps(self.jobs["deploy"])
+        self.assertEqual(len(steps), 1)
+        self.assertRegex(steps[0], r"(?m)^          ref: \$\{\{ github\.sha \}\}$")
+        for step in checkout_steps(self.source):
+            self.assertIn("persist-credentials: false", step)
+        self.assertNotIn("cache:", self.jobs["deploy"])
+        self.assertIn("npm ci --ignore-scripts", self.jobs["deploy"])
+
+    def test_targets_accept_only_their_source_branches(self):
+        preflight = self.jobs["preflight"]
+        step = preflight.split("      - name: Require a trusted source branch for the target\n", 1)[1]
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]).strip()
+        bash = git_bash()
+        self.assertIsNotNone(bash)
+        for target, ref, passed in [
+            ("control-plane-staging", "refs/heads/dev", True),
+            ("control-plane-staging", "refs/heads/main", True),
+            ("control-plane-staging", "refs/heads/feature", False),
+            ("control-plane-staging", "refs/tags/v1.0.0", False),
+            ("control-plane-production", "refs/heads/main", True),
+            ("control-plane-production", "refs/heads/dev", False),
+            ("control-plane-production", "refs/heads/main-copy", False),
+            ("control-plane-preview", "refs/heads/main", False),
+        ]:
+            with self.subTest(target=target, ref=ref), tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / "output"
+                output.write_text("", encoding="utf-8")
+                environment = {"TARGET": target, "SOURCE_REF": ref, "GITHUB_OUTPUT": str(output)}
+                if os.name == "nt":
+                    environment["SystemRoot"] = os.environ["SystemRoot"]
+                result = subprocess.run(
+                    [bash, "--noprofile", "--norc", "-c", script],
+                    env=environment, capture_output=True, text=True,
+                    timeout=10, check=False,
+                )
+                self.assertEqual(result.returncode == 0, passed, result.stderr)
+                if passed:
+                    expected = "staging" if target.endswith("staging") else "production"
+                    self.assertEqual(output.read_text(encoding="utf-8").strip(), f"wrangler_environment={expected}")
 
 
 if __name__ == "__main__":
