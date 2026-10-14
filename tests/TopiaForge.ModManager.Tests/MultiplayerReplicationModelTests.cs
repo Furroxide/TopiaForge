@@ -9,10 +9,12 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerQuantizationTests.Run();
             MultiplayerEntityTableTests.Run();
             MultiplayerInterpolationTests.Run();
+            MultiplayerInterpolationLagTests.Run();
             MultiplayerRelevancyTests.Run();
             MultiplayerSchedulerTests.Run();
             MultiplayerOwnershipTests.Run();
             MultiplayerOwnershipLimitsTests.Run();
+            MultiplayerOwnershipClaimTests.Run();
             MultiplayerSceneKeyTests.Run();
             MultiplayerSpawnSlotTests.Run();
             MultiplayerPermissionTests.Run();

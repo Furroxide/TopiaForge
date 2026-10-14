@@ -83,6 +83,7 @@ namespace TopiaForge.ModManager.Tests
                     Equal(expected[7]!.GetValue<int>(), host.YieldingParticipant, where + ": yielding participant");
                     Equal(expected[8]!.GetValue<long>(), host.YieldUntilMicros, where + ": yield deadline");
                     Equal(expected[9]!.GetValue<bool>(), host.AwaitingFirstSample, where + ": first sample owed");
+                    Equal(expected[10]!.GetValue<bool>(), host.Contested, where + ": hold contested");
                     if (step["accepted"] is JsonArray velocities)
                     {
                         Equal(VectorBits(velocities[0]!), VectorBits(accepted.LinearVelocity), where + ": accepted linear velocity");

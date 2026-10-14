@@ -7,7 +7,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// longest wait for the next sample (the observed interval, or the longest gap between buffered samples if that is
     /// longer) plus three times the observed jitter, clamped to 80-350 ms. The playback offset, the render time minus
     /// the local time, moves toward the offset estimate minus that delay by at most 10% of elapsed time, so playback
-    /// runs between 0.9 and 1.1 times real time. All bookkeeping is integer microseconds.
+    /// runs between 0.9 and 1.1 times real time. When the render lags the estimated sender clock by more than the cap it
+    /// catches up faster, at up to twice real time, and when it runs ahead of that clock it falls back faster, at down to
+    /// half real time. A full buffer keeps the samples the render is between, so the render clock never jumps to stay
+    /// inside it. All bookkeeping is integer microseconds.
     /// </summary>
     internal sealed class SnapshotInterpolationBuffer
     {
@@ -21,12 +24,25 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>The playback offset moves by at most this percentage of elapsed time: 0.9 to 1.1 times real time.</summary>
         public const int PlaybackSlewPercent = 10;
 
+        /// <summary>The fastest catch-up, when the render lags beyond the cap: twice real time.</summary>
+        public const int CatchUpSlewPercent = 100;
+
+        /// <summary>The fastest fall-back, when the render runs ahead of the estimated sender clock: half real time.</summary>
+        public const int FallBackSlewPercent = 50;
+
+        /// <summary>Each this many microseconds of lag beyond the cap, or of lead, add one percent to the slew.</summary>
+        public const long CorrectionMicrosPerPercent = 1_000;
+
         public const long DefaultNominalIntervalMicros = 100_000;
 
         /// <summary>Times must be below 2^53 microseconds (about 285 years), which keeps every sum exact.</summary>
         public const long MaximumTimeMicros = 1L << 53;
 
         private readonly NetTransformSample[] samples = new NetTransformSample[Capacity];
+
+        /// <summary>Whether the gap before each sample spans one that a full buffer dropped to keep the render's segment.</summary>
+        private readonly bool[] merged = new bool[Capacity];
+
         private readonly long nominalIntervalMicros;
         private int count;
         private bool started;
@@ -61,7 +77,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// The longest gap between successive buffered samples, or zero with fewer than two. An uneven cadence, such
-        /// as the scheduler's rotation or a lost sample, makes some gaps longer than the mean interval.
+        /// as the scheduler's rotation or a lost sample, makes some gaps longer than the mean interval. A gap left by a
+        /// sample the buffer dropped to keep the render's segment says nothing about the cadence and does not count.
         /// </summary>
         public long LargestGapMicros
         {
@@ -70,6 +87,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 var largest = 0L;
                 for (var index = 1; index < count; index++)
                 {
+                    if (merged[index]) continue;
                     largest = Math.Max(largest, samples[index].ServerTimeMicros - samples[index - 1].ServerTimeMicros);
                 }
 
@@ -110,6 +128,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public void Reset()
         {
             Array.Clear(samples, 0, Capacity);
+            Array.Clear(merged, 0, Capacity);
             count = 0;
             started = false;
             offsetScaled = 0;
@@ -164,9 +183,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// Evaluates the replica at <paramref name="localNowMicros"/>. The first frame after a reset renders at the
-        /// offset estimate minus the target delay; later frames move the playback offset toward that by at most 10% of
-        /// the elapsed time. The render time never moves backwards between resets, and with a full buffer it never
-        /// falls behind the oldest sample; either floor moves the playback offset with it.
+        /// offset estimate minus the target delay; later frames move the playback offset toward that by the slew
+        /// <see cref="SlewPercent"/> allows. The render time never moves backwards between resets: a local clock that
+        /// steps back holds it, and the playback offset follows.
         /// </summary>
         public bool TrySample(long localNowMicros, out InterpolatedTransform result)
         {
@@ -185,7 +204,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             }
             else if (localNowMicros > lastSampleLocal)
             {
-                var step = Math.Min(localNowMicros - lastSampleLocal, DiscontinuityMicros) * PlaybackSlewPercent / 100;
+                var step = Math.Min(localNowMicros - lastSampleLocal, DiscontinuityMicros) * SlewPercent() / 100;
                 playbackOffset = playbackOffset < target
                     ? Math.Min(target, playbackOffset + step)
                     : Math.Max(target, playbackOffset - step);
@@ -194,12 +213,29 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
             var render = localNowMicros + playbackOffset;
             if (hasRendered && render < lastRenderTime) render = lastRenderTime;
-            if (count == Capacity && render < samples[0].ServerTimeMicros) render = samples[0].ServerTimeMicros;
             playbackOffset = render - localNowMicros;
             hasRendered = true;
             lastRenderTime = render;
             result = Evaluate(render);
             return true;
+        }
+
+        /// <summary>
+        /// How fast the playback offset may move, as a percentage of elapsed time. Normally 10%. While the delay the
+        /// render is at exceeds the cap, one percent more per millisecond beyond it, up to 100% (twice real time); while
+        /// the render runs ahead of the estimated sender clock, one percent more per millisecond ahead, up to 50% (half
+        /// real time). The gain is proportional, so small excursions are corrected gently and large ones quickly.
+        /// </summary>
+        internal long SlewPercent()
+        {
+            var delay = OffsetMicros - playbackOffset;
+            if (delay > MaximumDelayMicros)
+            {
+                return Math.Min(CatchUpSlewPercent, PlaybackSlewPercent + (delay - MaximumDelayMicros) / CorrectionMicrosPerPercent);
+            }
+
+            if (delay < 0) return Math.Min(FallBackSlewPercent, PlaybackSlewPercent + -delay / CorrectionMicrosPerPercent);
+            return PlaybackSlewPercent;
         }
 
         internal static void RequireTime(long value, string parameterName)
@@ -210,6 +246,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private void Start(in NetTransformSample sample, long offset)
         {
             Array.Clear(samples, 0, Capacity);
+            Array.Clear(merged, 0, Capacity);
             samples[0] = sample;
             count = 1;
             started = true;
@@ -246,19 +283,38 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         {
             if (count == Capacity)
             {
-                Array.Copy(samples, 1, samples, 0, Capacity - 1);
+                var evicted = EvictionIndex();
+                Array.Copy(samples, evicted + 1, samples, evicted, count - evicted - 1);
+                Array.Copy(merged, evicted + 1, merged, evicted, count - evicted - 1);
                 count--;
+                merged[evicted] = evicted > 0;
+                merged[0] = false;
             }
 
             var position = count;
             while (position > 0 && samples[position - 1].ServerTimeMicros > sample.ServerTimeMicros)
             {
                 samples[position] = samples[position - 1];
+                merged[position] = merged[position - 1];
                 position--;
             }
 
             samples[position] = sample;
+            merged[position] = false;
             count++;
+        }
+
+        /// <summary>
+        /// Which sample a full buffer drops: the oldest, unless the render still shows it. A render holding the oldest
+        /// sample keeps it, and a render between the oldest two keeps both, so the oldest sample outside that segment
+        /// goes instead. Dropping a sample then never moves what is on screen, and the render never needs to jump
+        /// forward to stay inside the buffer.
+        /// </summary>
+        private int EvictionIndex()
+        {
+            if (!hasRendered) return 0;
+            if (lastRenderTime < samples[0].ServerTimeMicros) return 1;
+            return lastRenderTime < samples[1].ServerTimeMicros ? 2 : 0;
         }
 
         private InterpolatedTransform Evaluate(long render)

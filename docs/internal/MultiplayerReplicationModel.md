@@ -1,6 +1,6 @@
 # Multiplayer replication model — design record
 
-Status: Implementing (WS3.1, WS3.4, WS3.5 and WS3.12 of the live-multiplayer plan) · Date: 2026-10-14 · Owner: multiplayer
+Status: Implementing (WS3.1, WS3.4, WS3.5 and WS3.12 of the live-multiplayer plan) · Date: 2026-10-15 · Owner: multiplayer
 
 This records the Unity-free rules and data structures that automatic replication is built on: realms and network
 classes, the execution model's routing tables, the entity table, transform quantization, snapshot interpolation,
@@ -198,7 +198,7 @@ then, if set, velocity x, y, z (11 bits each, stored as `units + 1024`). That is
 | --- | --- |
 | Capacity | 8 samples |
 | Delay | the longer of the interval and the largest buffered gap, plus 3 × jitter, clamped to 80-350 ms |
-| Playback rate | the playback offset moves by at most 10% of elapsed time, so playback runs between 0.9× and 1.1× |
+| Playback rate | 0.9× to 1.1× real time; up to 2× while the render lags the sender's clock by more than 350 ms, down to 0.5× while it runs ahead of it |
 | Extrapolation cap | 250 ms past the newest sample |
 | Timeline discontinuity | 1 s |
 
@@ -220,22 +220,36 @@ longer, and a jitter margin goes on top.
 
 **Render clock:** the playback offset is the render time minus the local time, and its target is `offset - delay`.
 The first frame after a reset renders at the target. Each later frame moves the playback offset toward the target by
-at most 10% of the local time that passed (counting at most 1 s), and renders at `localNow + playbackOffset`, so
-playback advances between 0.9 and 1.1 times real time. A sudden change in either estimate is absorbed over time: a
-sample 700 ms late drags the offset estimate back 87.5 ms at once, which used to pause playback for five frames and
-then run it at up to 1.47 times real time.
+a slew percentage of the local time that passed (counting at most 1 s), and renders at `localNow + playbackOffset`.
+The slew is normally 10%, so playback advances between 0.9 and 1.1 times real time. A sudden change in either estimate
+is absorbed over time: a sample 700 ms late drags the offset estimate back 87.5 ms at once, which used to pause playback
+for five frames and then run it at up to 1.47 times real time.
 
-The render time never moves backwards between resets, and with a full buffer it never falls behind the oldest sample;
-either floor moves the playback offset with it. That is the one case where playback can run faster than 1.1×: a stream
-too fast for 8 samples to span the delay (faster than about 23 Hz at the 350 ms cap) is held at the oldest sample.
-`CurrentDelayMicros` reports `offset - playbackOffset`, the delay the last frame rendered at, which follows the target.
+Two corrections bound how far the render drifts from the sender's clock as estimated here, `localNow + offset`:
+
+- *Catch-up.* While the render lags that clock by more than the 350 ms cap, the slew grows by one percent for each
+  millisecond beyond the cap, up to 100%, so playback runs at up to twice real time. A timeline step under the 1 s
+  reset, a first sample that arrived late, or a fall in latency moves the offset estimate forward faster than 1.1×
+  can follow.
+- *Fall-back.* While the render runs ahead of that clock, the slew grows by one percent for each millisecond ahead,
+  up to 50%, so playback slows to as little as half real time. A rise in latency leaves the render past the newest
+  sample.
+
+The gain is proportional, so a small excursion is corrected gently and a large one quickly, and the slew is back to
+10% once the render is within bounds. Neither correction moves the render clock in a jump. The render time never moves
+backwards between resets: a local clock that steps back holds it, and the playback offset follows. `CurrentDelayMicros`
+reports `offset - playbackOffset`, the delay the last frame rendered at. It follows the target, and while the render
+catches up it can exceed the cap.
 
 **Samples:**
 
 - A sample with a time already buffered is a `Duplicate` and changes nothing.
 - One older than the sample rendering has consumed (the newest at or before the last render time), or older than
   everything in a full buffer, is `Stale`. An out-of-order sample newer than that is inserted in order.
-- A full buffer evicts its oldest sample.
+- A full buffer drops its oldest sample, unless the render still shows it. A render holding the oldest sample keeps it
+  and drops the next one; a render between the oldest two keeps both and drops the third. Dropping a sample never moves
+  the replica, and the render never has to jump forward to stay inside the buffer. The gap a dropped sample leaves
+  between its neighbours does not count as the largest buffered gap, because it says nothing about the cadence.
 - If a sample's offset differs from the estimate by more than 1 s, the sender's timeline jumped: a newer sample restarts
   the buffer (`Reset`), and an older one is `Stale`.
 
@@ -291,7 +305,7 @@ and owner so the sender can retry. Epochs are only compared for equality.
 
 | Event (host) | Server | Owned by the sender | Owned by someone else | Release window, sender's | Release window, someone else's |
 | --- | --- | --- | --- | --- | --- |
-| `Request` (current epoch) | `Granted`, epoch + 1, if in range and not yielding | `AlreadyOwned` | `Denied`: the first grab wins | `Granted`, no epoch change, if in range (a catch of one's own throw) | `Granted`, epoch + 1, if in range and not yielding (a steal) |
+| `Request` (current epoch) | `Granted`, epoch + 1, if in range and not yielding | `AlreadyOwned` | `Denied`: the first grab wins; from within the hold range, it contests the hold | `Granted`, no epoch change, if in range (a catch of one's own throw) | `Granted`, epoch + 1, if in range and not yielding (a steal) |
 | `Stream` | `NotOwner` | Validated, with the range check | `NotOwner` | Validated, no range check | `NotOwner` |
 | `BeginRelease` | `NotOwner` | `Releasing` if the body is in range of the holder: the window opens | `NotOwner` | `Releasing`, deadline kept | `NotOwner` |
 | `Handback` | `NotOwner` | Validated, then `HandedBack`, epoch + 1 | `NotOwner` | Validated, then `HandedBack`, epoch + 1 | `NotOwner` |
@@ -299,11 +313,12 @@ and owner so the sender can retry. Epochs are only compared for equality.
 A request checks the epoch, then the range, then yielding. One from beyond the hold range is `OutOfRange`, and one from
 a yielding participant is `Yielding`; like `Denied` and `StaleEpoch`, they change nothing.
 
-**Optimistic grant.** A client's `Grab` moves to `Requested` and starts simulating at once. Its samples carry
-`StreamEpoch`, the epoch a grant will assign (its last known epoch plus one), so they are accepted the moment the host
-processes the request, before the client hears back. A refusal (`Denied`, `OutOfRange`, `Yielding` or `StaleEpoch`)
-rolls the client back to `Server`. Ownership is checked by identity as well as epoch, so a stream that guesses another player's epoch is still
-`NotOwner`.
+**Optimistic grant.** A client's `Grab` of a body the server holds moves to `Requested` and starts simulating at once.
+Its samples carry `StreamEpoch`, the epoch a grant will assign (its last known epoch plus one), so they are accepted the
+moment the host processes the request, before the client hears back. A refusal (`Denied`, `OutOfRange`, `Yielding` or
+`StaleEpoch`) rolls the grab back. A grab of a body another player holds is sent without simulating, because the host
+denies it unless that player has thrown it, and takes effect when granted. Ownership is checked by identity as well as
+epoch, so a stream that guesses another player's epoch is still `NotOwner`.
 
 **Validation.** All in exact grid units:
 
@@ -332,20 +347,46 @@ throw.
 **Yielding.** An owner that loses the body by going quiet (no first sample, silence, or no hand-back) yields it for 1 s:
 its requests for that body are `Yielding` until the cooldown ends, so another player's request wins first. Before,
 a participant could take the body back straight after every reclaim without ever streaming it, and the players beside
-it never got it. A grant to the yielding participant after its cooldown clears the cooldown, and so does `Disconnect`.
-Only the participant that last went quiet is remembered. A failed validation, a disconnect or a host reclaim makes
-nobody yield.
+it never got it. Letting go and grabbing again would do the same, so two more cases yield:
+
+- A hand-back before the first sample, which is going quiet by another route.
+- The end of a *contested* hold by a hand-back or a failed validation. A hold is contested once another participant
+  within the hold range asks for the body and is denied, even one that is yielding itself. A request from out of range
+  does not count, so a player far away cannot make a holder wait.
+
+A grant to the yielding participant after its cooldown clears the cooldown, and so does `Disconnect`. Only the
+participant that last yielded is remembered, so when the owner of a contested hold yields, the player it kept waiting
+is free to take the body. A disconnect, a host reclaim, and the end of an uncontested hold by a hand-back after
+streaming or by a failed validation make nobody yield.
 
 **Reclaim.** `Poll` reclaims from a new owner that sent no first sample in time (`NoFirstSample`), from an owner that has
 sent nothing for more than 1 s (`Silence`), or from one that has not handed back more than 1 s after its window closed
 (`HandbackTimeout`), even if it is still streaming. `Disconnect` reclaims at once. The host can `Reclaim` for its own
 reasons, such as a despawn. Every reclaim increments the epoch.
 
-**Client view.** `OwnershipClaim.OnOwnerChanged` follows the host's broadcasts: losing the body (a reclaim, a steal, or
-the server taking a hand-back) stops local simulation, and hearing its own grant confirms a pending grab. A grant
-notice that arrives after the client already handed back does not restart simulation. If the host refuses a catch of
-the client's own throw as out of range, the refusal still names the client as owner, and the claim resumes the release
-window with its original deadline, as the host does, even if the client threw again while waiting.
+**Client view.** `OwnershipClaim` keeps what the host holds for its client as far as the host has confirmed it, plus
+the messages the client sent that no answer covers yet: its requests, and the throws and hand-backs between them. Its
+`State` is the confirmed state with those messages replayed on top, a request predicted granted when the body is free
+or already the client's. The host's answers and announcements must reach the claim in the order the host sent them,
+on one ordered channel: exactly one answer per request (`OnGranted` or `OnRefused`), and an `OnOwnerChanged` for every
+change of owner.
+
+- An answer settles the oldest outstanding request. The throws and hand-backs sent before that request are applied
+  first, as the host applied them, epoch check included; then the answer itself. A grant means the host holds the body
+  for the client under the answer's epoch, and a refusal changes nothing on the host. Once no answer is due, the
+  messages after the last request take effect as well, so the release window settles only on the last answer.
+- An announcement naming someone else means the body has left the client: a reclaim, a steal, or the server taking a
+  hand-back stops local simulation. One naming the client is its own grant. Heard before the answer, it settles the
+  request, and the answer then changes nothing; heard after it, or after the client has let go, it changes nothing.
+- A grab of a body the client does not hold waits until no answer is due, because an answer in flight may change the
+  epoch the request must name. A catch of the client's own throw does not wait, but no more than 16 requests may be
+  outstanding.
+
+So a catch refused behind a pending grab resumes the release window with the deadline the host kept, and two catches
+in one round trip settle where the host is, whichever is refused. A grant under an epoch the client did not predict, as
+when its catch turns out to steal another player's throw, leaves whatever the client sent under its guess ignored by
+the host, and the claim ignores it too. A lockstep sweep plays a claim against the host machine with random delays,
+steals and failed validations, and checks that the two agree whenever every reply has arrived.
 
 ## Scene object keys (WS3.5)
 
@@ -446,7 +487,8 @@ The Unity side is expected to use the model like this:
   replica's `SnapshotInterpolationBuffer` as samples arrive, and sample it once a frame before mods run.
 - **Motion leases:** the host keeps an `OwnershipStateMachine` per body that has been grabbed, passes the requester's or
   holder's avatar position to `Request`, `Stream`, `BeginRelease` and `Handback`, and calls `Poll` every tick; each
-  client keeps an `OwnershipClaim` for bodies its player grabs.
+  client keeps an `OwnershipClaim` for bodies its player grabs, and feeds it the host's answers and announcements in
+  the order they arrive on one ordered channel.
 - **Requests:** check every forwarded request with `PlayerRequestLimiter.Evaluate` before running it.
 - **Leaving players:** before a slot is reused, clear it as [Participant slots](#participant-slots) describes.
 - **Scene and spawns:** build a `SceneObjectKeyCensus` when the world loads or is promoted, and place joining players
@@ -465,10 +507,14 @@ holds a vector file that neither replays:
 - `scene-object-key.json`: FNV-1a vectors and scene keys, with their preimages.
 - `scheduler.json`: five scenarios, every tick's choices and the credit left.
 - `token-bucket.json`: take decisions, including time running backwards.
-- `ownership.json`: the hold range, quiet owners yielding, and 300 seeded events, each call's outcome with the
-  machine's credit, cooldown and first-sample state.
-- `interpolation.json`: a late sample, an uneven cadence, and jitter with a duplicate, stale samples and a timeline
-  reset, each arrival's result and each frame's render time, mode, position, target delay and playback offset.
+- `ownership.json`: the hold range, quiet owners yielding, contested holds yielding, and 300 seeded events, each
+  call's outcome with the machine's credit, cooldown and first-sample state and whether the hold is contested.
+- `interpolation.json`: a late sample, an uneven cadence, jitter with a duplicate, stale samples and a timeline reset,
+  a 900 ms timeline step, and latency falling from 950 to 50 ms and rising from 50 to 950 ms, each arrival's result and
+  each frame's render time, mode, position, target delay and playback offset.
+
+The client's `OwnershipClaim` has no vectors: it does no arithmetic of its own, and the lockstep sweep checks it
+against the host machine, which the vectors pin.
 
 Floats are written as float32 bit patterns and doubles as float64 ones. Regenerate with
 `python -I tests/fixtures/multiplayer/replication/generate.py .` from the repository root; a diff after regenerating
@@ -501,6 +547,21 @@ means a format or a rule changed.
   the offset estimate used to move the render clock without limit: playback ranged from a standstill to 2.06 times
   real time in the rough-network test. The price is a slower response when jitter starts: rendering no longer stops to
   wait, so more frames extrapolate at the onset (60 rather than 27 of 2,397 in that test), never further than before.
+- **Catch-up and fall-back.** A move of the sender's clock larger than that slew can follow is corrected at a bounded
+  rate rather than in a jump. Before, a full buffer held its render at the oldest sample instead, so the render clock
+  jumped whenever that sample left. At 10 Hz with 50 ms of transit and 60 Hz frames, one frame ran 17.2 times real
+  time after a 900 ms timeline step or a first sample 900 ms late, with the delay at 625 ms, and 12.5 times after a
+  fall in latency from 950 to 50 ms; at 20 Hz a fall of 300 ms already ran 4.2 times real time, and one of 600 ms 16.2
+  times. Now the timeline step and the late first sample peak at 2× and are caught up within two seconds, with the
+  delay at most 425 ms; the fall from 950 to 50 ms peaks at 1.75× with the delay at most 403 ms; the 300 ms fall at
+  20 Hz never leaves 0.9× to 1.1×; and no frame in any of them extrapolates. Treating such a move as a discontinuity
+  and re-anchoring, the other fix the review allowed, was not chosen: a re-anchor moves the replica in one frame,
+  which is the jump being removed. The fall-back goes beyond the review. Without it, a rise in latency from 50 to
+  950 ms left the render ahead of the samples, extrapolating, for 536 frames, nine seconds and more; with it, 231
+  frames, back among the samples 4.2 s after the rise. The 2× and 0.5× limits and the one percent per millisecond gain
+  are this record's choices. Catch-up also engages when heavy jitter holds the delay at the cap: the rough-network
+  test now peaks at 1.27×, and 400 ms of uniform jitter at 1.41×. A full buffer keeps the render's segment rather than
+  its oldest sample, because dropping a sample the render is between moved the replica as well.
 - **Velocity scale.** 1/16 m/s per step gives ±64 m/s, above the Gravity Gun's default 35 m/s hold speed and 22 m/s
   throw; faster values clamp. Angular velocity uses the same format in rad/s.
 - **Scheduler tie-breaking and rest confirmation.** Ties go to priority, then send order, then id. Id order alone
@@ -516,9 +577,25 @@ means a format or a rule changed.
   reclaim without ever streaming it. Yielding after a grant that lapses without a first sample stops that, but one
   sample per grant would then hold a body just as well, so yielding also follows a silence or hand-back timeout. It is
   a fixed refusal for the cooldown rather than a queue, because the host answers each request as it arrives: during
-  the cooldown any other player's request wins, and after it the first request wins again. Only the last quiet owner
-  is remembered, so two players taking turns to go quiet could still hold a body, as two players taking turns to hold
-  it legitimately can.
+  the cooldown any other player's request wins, and after it the first request wins again.
+- **Letting go of a contested body yields too.** Letting go sidestepped the timeouts: a hand-back and a fresh grab
+  every tick won 201 of 201 grants against a player beside the body, and so did one sample per grant, or a sample
+  rejected on purpose. So a hand-back before the first sample counts as going quiet, and a hold that another player
+  within range was refused yields when it ends with a hand-back or a failed validation; in each of those loops the
+  griefer now never wins twice in a row. A request from out of range does not contest, so nobody can make a holder
+  wait from afar. A denied request from a yielding participant does: only the last participant to yield is remembered,
+  so the holder's yield frees the player it kept waiting. Leaving such requests out let a holder hand back and grab
+  again uncontested for the whole of the other player's cooldown, up to 20 grants in a row. A streamed hold nobody else
+  asked for ends without a cooldown, so a player can put down a body nobody wants and pick it up again. Two players
+  taking turns can still keep a body from a third, as two players taking turns to hold it legitimately can.
+- **Client claim.** The review asked that answers be matched to requests and that the release window settle only on
+  the last answer. The claim also replays the throws and hand-backs sent before each answer as the host applied them,
+  because a lockstep sweep against the host found one more way to disagree with it: a grant that arrived after a
+  refusal of an earlier request had rolled the claim back. The replay keeps the host's epoch check, which a catch needs
+  when, unknown to the client, it steals another player's throw under an epoch the client's samples did not guess; the
+  sweep's steals exercise that, and dropping the check fails it. A grab of a body the client does not hold waits for
+  outstanding answers, so the epoch it names is current and the claim never predicts more than one grant at a time. A
+  catch does not wait; the 16-request limit is far more than a player can throw and catch within one round trip.
 - **Steals.** "First grab wins" applies to a held body. A body in its thrower's release window can be caught by another
   player, which the plan's ownership tests call a steal; the thrower can also catch its own throw without an epoch
   change.
