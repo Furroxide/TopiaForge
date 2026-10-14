@@ -1,0 +1,214 @@
+extern alias provider;
+
+using TopiaForge.Multiplayer.Engine;
+using OpusToc = provider::TopiaForge.Multiplayer.Voice.OpusToc;
+using OpusVoiceCodec = provider::TopiaForge.Multiplayer.Voice.OpusVoiceCodec;
+
+namespace TopiaForge.Mods.Multiplayer.Tests;
+
+/// <summary>
+/// The host's relay policy on its own, against explicit times: each limit, stale and backwards frames, the escalation
+/// from strikes to an automatic mute to removal, and the provider's Opus header check through the codec seam.
+/// </summary>
+internal static class VoiceRelayPolicyTests
+{
+    private const long Second = 1_000_000;
+
+    internal static void AStreamWithinTheLimitsIsRelayed()
+    {
+        var (policy, speaker, codec) = Create();
+        for (var index = 0; index < 75; index++)
+        {
+            // 25 datagrams a second, two 50-byte frames each: 20 kbit/s of codec data.
+            var admission = policy.Admit(speaker, Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair: true), index * 40_000);
+            Assert(admission.Verdict == VoiceVerdict.Relay && admission.Packet.Count == 2, "datagram " + index + " is relayed");
+        }
+
+        Assert(speaker.LastSequence == 150 && speaker.LastTimestamp == 149, "the stream position follows the last frame relayed");
+    }
+
+    internal static void EachLimitStrikes()
+    {
+        // Frame rate: the 31st datagram within a second is one too many.
+        var (policy, speaker, codec) = Create();
+        for (var index = 0; index < 30; index++)
+        {
+            Assert(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * 1_000).Verdict == VoiceVerdict.Relay,
+                "thirty datagrams in a burst pass");
+        }
+
+        Expect(policy.Admit(speaker, Datagram(codec, 31, 30), 31_000), VoiceDropReason.RateLimited, struck: true, "the 31st within a second");
+        Assert(policy.Admit(speaker, Datagram(codec, 32, 31), Second + 1_000).Verdict == VoiceVerdict.Relay, "a second later the rate is free again");
+
+        // Bitrate: datagrams of two 160-byte frames at 25 a second are about 66 kbit/s, past the 40 kbit/s bucket.
+        (policy, speaker, codec) = Create(new FakeVoiceCodec(160));
+        var limited = -1;
+        for (var index = 0; index < 50 && limited < 0; index++)
+        {
+            var admission = policy.Admit(speaker, Datagram(codec, (ulong)(2 * index) + 1, (ulong)(2 * index), pair: true), index * 40_000);
+            if (admission.Verdict != VoiceVerdict.Relay) limited = index;
+        }
+
+        // About 8.2 KB/s against a 5 KB/s refill drains the one-second bucket in about one and a half seconds.
+        Assert(limited > 30 && limited < 45, "the bitrate bucket runs dry once its burst is spent (datagram " + limited + ")");
+
+        // Size, codec header and format.
+        (policy, speaker, codec) = Create();
+        var oversized = new byte[161];
+        oversized[0] = FakeVoiceCodec.AudioHeader;
+        Expect(policy.Admit(speaker, Raw(1, 0, oversized), 0), VoiceDropReason.Oversized, struck: true, "a 161-byte frame");
+        Expect(policy.Admit(speaker, Raw(2, 1, new byte[] { 0x00, 1, 2, 3, 4, 5 }), 1_000), VoiceDropReason.InvalidPacket, struck: true,
+            "a frame whose header the codec refuses");
+        Expect(policy.Admit(speaker, new byte[] { 0x01, 0x05 }, 2_000), VoiceDropReason.Malformed, struck: true, "a truncated datagram");
+        var relayedKind = Datagram(codec, 3, 2);
+        relayedKind[0] = VoicePacket.RelayedKind;
+        Expect(policy.Admit(speaker, relayedKind, 3_000), VoiceDropReason.Malformed, struck: true, "a client posing as the relay");
+        Assert(policy.Admit(speaker, Datagram(codec, 3, 2), 4_000).Verdict == VoiceVerdict.Relay, "a valid frame still passes after them");
+
+        // Order: a repeat is stale and harmless; time that stands still is malformed.
+        Expect(policy.Admit(speaker, Datagram(codec, 3, 2), 5_000), VoiceDropReason.Stale, struck: false, "a repeated datagram");
+        Expect(policy.Admit(speaker, Datagram(codec, 2, 1), 6_000), VoiceDropReason.Stale, struck: false, "an older datagram");
+        Expect(policy.Admit(speaker, Datagram(codec, 4, 2), 7_000), VoiceDropReason.Malformed, struck: true, "a timestamp that does not advance");
+        Assert(policy.Admit(speaker, Datagram(codec, 5, 3), 8_000).Verdict == VoiceVerdict.Relay, "the stream carries on");
+        speaker.ResetStream();
+        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 9_000).Verdict == VoiceVerdict.Relay, "a new connection starts its sequence again");
+    }
+
+    internal static void StrikesMuteThenRemoveTheSpeaker()
+    {
+        var (policy, speaker, codec) = Create();
+        var garbage = new byte[] { 0x7F };
+        for (var strike = 1; strike < 20; strike++)
+        {
+            Expect(policy.Admit(speaker, garbage, strike * 1_000), VoiceDropReason.Malformed, struck: true, "strike " + strike);
+        }
+
+        var muted = policy.Admit(speaker, garbage, 20_000);
+        Assert(muted.Verdict == VoiceVerdict.AutoMute && muted.Struck, "the 20th strike within ten seconds mutes the speaker");
+        Assert(speaker.IsAutoMuted(20_000) && speaker.IsMuted(20_000), "the speaker is muted automatically");
+        Expect(policy.Admit(speaker, Datagram(codec, 1, 0), 21_000), VoiceDropReason.ServerMuted, struck: false,
+            "while muted, frames are dropped on arrival and earn no strikes");
+        var unmutedAt = 20_000 + (30 * Second);
+        Assert(!speaker.IsMuted(unmutedAt), "the automatic mute lasts thirty seconds");
+        Assert(policy.Admit(speaker, Datagram(codec, 2, 1), unmutedAt).Verdict == VoiceVerdict.Relay, "then the speaker is heard again");
+
+        // A second and a third automatic mute within ten minutes remove the speaker.
+        var now = unmutedAt;
+        for (var round = 2; round <= 3; round++)
+        {
+            VoiceAdmission last = default;
+            for (var strike = 0; strike < 20; strike++)
+            {
+                now += 1_000;
+                last = policy.Admit(speaker, garbage, now);
+            }
+
+            Assert(last.Verdict == (round == 2 ? VoiceVerdict.AutoMute : VoiceVerdict.Kick), "round " + round + " ends in " + last.Verdict);
+            now += 30 * Second;
+        }
+
+        // Strikes spread thinner than the window never mute.
+        (policy, speaker, _) = Create();
+        for (var strike = 0; strike < 100; strike++)
+        {
+            Assert(policy.Admit(speaker, garbage, strike * 600_000).Verdict == VoiceVerdict.Drop, "an occasional bad frame is only dropped");
+        }
+
+        Assert(!speaker.IsMuted(100 * 600_000), "a strike every 0.6 s stays below twenty in ten seconds");
+    }
+
+    internal static void AServerMuteDropsOnArrivalWithoutStrikes()
+    {
+        var (policy, speaker, codec) = Create();
+        speaker.ServerMuted = true;
+        for (var index = 0; index < 100; index++)
+        {
+            Expect(policy.Admit(speaker, Datagram(codec, (ulong)index + 1, (ulong)index), index * 100), VoiceDropReason.ServerMuted, struck: false,
+                "a muted speaker's datagram " + index);
+        }
+
+        speaker.ServerMuted = false;
+        Assert(policy.Admit(speaker, Datagram(codec, 1, 0), 20 * Second).Verdict == VoiceVerdict.Relay,
+            "unmuted, the speaker is heard; the flood while muted spent none of the rate");
+    }
+
+    internal static void OpusHeadersAreCheckedBeforeRelay()
+    {
+        // The host runs the provider's own TOC check through the seam: only mono Opus packets of one 20 ms frame pass.
+        var options = new VoiceOptions(new OpusTocSeam());
+        options.Validate();
+        var policy = new VoiceRelayPolicy(options);
+        var speaker = new VoiceSpeaker(1, options);
+        ulong next = 0;
+        VoiceAdmission Admit(byte toc, int length = 40)
+        {
+            var payload = new byte[length];
+            payload[0] = toc;
+            next++;
+            return policy.Admit(speaker, Raw(next, next, payload), (long)next * 40_000);
+        }
+
+        foreach (var toc in new byte[] { 0x48, 0x78, 0xF8 })
+        {
+            Assert(Admit(toc).Verdict == VoiceVerdict.Relay, "TOC 0x" + toc.ToString("X2") + ", one mono 20 ms frame, is relayed");
+        }
+
+        Assert(Admit(0x48, length: 1).Verdict == VoiceVerdict.Relay, "so is a TOC-only silence packet");
+        foreach (var (toc, what) in new[] { ((byte)0x4C, "a stereo frame"), ((byte)0x49, "two frames in one packet"), ((byte)0x50, "a 40 ms frame"), ((byte)0x00, "a 10 ms frame") })
+        {
+            Expect(Admit(toc), VoiceDropReason.InvalidPacket, struck: true, what);
+        }
+    }
+
+    internal static byte[] Datagram(FakeVoiceCodec codec, ulong sequence, ulong timestamp, bool pair = false)
+    {
+        var first = codec.Packet((short)(timestamp + 1), (short)timestamp);
+        var second = pair ? codec.Packet((short)(timestamp + 2), (short)(timestamp + 1)) : Array.Empty<byte>();
+        var buffer = new byte[VoicePacket.MaximumBytes(codec.MaximumPacketBytes)];
+        var length = VoicePacket.Write(buffer, 0, sequence, timestamp, VoiceFrameFlags.None, first, VoiceFrameFlags.None, second);
+        return buffer.AsSpan(0, length).ToArray();
+    }
+
+    private static byte[] Raw(ulong sequence, ulong timestamp, byte[] payload)
+    {
+        var buffer = new byte[VoicePacket.MaximumBytes(payload.Length)];
+        var length = VoicePacket.Write(buffer, 0, sequence, timestamp, VoiceFrameFlags.None, payload, VoiceFrameFlags.None, ReadOnlySpan<byte>.Empty);
+        return buffer.AsSpan(0, length).ToArray();
+    }
+
+    private static (VoiceRelayPolicy Policy, VoiceSpeaker Speaker, FakeVoiceCodec Codec) Create(FakeVoiceCodec? codec = null)
+    {
+        codec ??= new FakeVoiceCodec();
+        var options = new VoiceOptions(codec);
+        options.Validate();
+        return (new VoiceRelayPolicy(options), new VoiceSpeaker(1, options), codec);
+    }
+
+    private static void Expect(VoiceAdmission admission, VoiceDropReason reason, bool struck, string what) =>
+        Assert(admission.Verdict == VoiceVerdict.Drop && admission.Reason == reason && admission.Struck == struck,
+            what + " is dropped as " + reason + (struck ? " with a strike" : " without a strike") +
+            " (got " + admission.Verdict + "/" + admission.Reason + "/" + admission.Struck + ")");
+
+    private static void Assert(bool condition, string message)
+    {
+        if (!condition) throw new InvalidOperationException("Assertion failed: " + message);
+    }
+
+    /// <summary>The provider's Opus header rules behind the engine's seam, which only the header check needs here.</summary>
+    private sealed class OpusTocSeam : IVoiceCodec
+    {
+        public int SampleRate => OpusVoiceCodec.SampleRateHz;
+
+        public int FrameSamples => OpusVoiceCodec.FrameSampleCount;
+
+        public int MaximumPacketBytes => OpusVoiceCodec.MaximumPacketLength;
+
+        public bool IsValidPacket(ReadOnlySpan<byte> packet) => OpusToc.IsVoicePacket(packet);
+
+        public bool IsDiscontinuous(ReadOnlySpan<byte> packet) => OpusToc.IsDiscontinuous(packet);
+
+        public IVoiceEncoder CreateEncoder() => throw new NotSupportedException();
+
+        public IVoiceDecoder CreateDecoder() => throw new NotSupportedException();
+    }
+}

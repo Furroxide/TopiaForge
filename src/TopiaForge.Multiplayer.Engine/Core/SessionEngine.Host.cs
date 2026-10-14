@@ -27,6 +27,7 @@ namespace TopiaForge.Multiplayer.Engine
                 {
                     if (connection.HasOutbound || connection.HasPendingDeltas) return true;
                     if (participantsDirty && connection.IsJoined) return true;
+                    if (voiceRosterDirty && connection.IsJoined) return true;
                 }
 
                 return false;
@@ -139,7 +140,12 @@ namespace TopiaForge.Multiplayer.Engine
                     throw new ArgumentException("A headless host has no local participant.", nameof(hostParticipant));
                 }
 
-                participantRecords.Add(new ParticipantRecord(hostParticipant.Value, null, hostDisplayName, isHost: true) { IsConnected = true });
+                participantRecords.Add(new ParticipantRecord(hostParticipant.Value, null, hostDisplayName, isHost: true)
+                {
+                    IsConnected = true,
+                    Voice = CreateVoiceSpeaker()
+                });
+                MarkVoiceRosterDirty();
                 localParticipantId = hostParticipant;
                 hostParticipantId = hostParticipant;
             }
@@ -174,6 +180,7 @@ namespace TopiaForge.Multiplayer.Engine
 
             ExpireDepartedParticipants();
             ScheduleClockSync();
+            FlushVoiceHold();
             FlushHost();
         }
 
@@ -231,6 +238,12 @@ namespace TopiaForge.Multiplayer.Engine
 
             while (connection.Phase != HostConnectionPhase.Closed && connection.Link.TryReceive(out var channelKind, out var frame))
             {
+                if (channelKind == EngineChannel.Voice)
+                {
+                    HandleUplinkVoice(connection, frame);
+                    continue;
+                }
+
                 if (channelKind != EngineChannel.Session) continue;
                 ProcessHostFrame(connection, frame);
                 Settle();
@@ -302,6 +315,9 @@ namespace TopiaForge.Multiplayer.Engine
                 case MessageType.ClockSyncReply:
                     ObserveRoundTrip(connection, body.ReadVarUInt());
                     break;
+                case MessageType.VoiceMutes:
+                    ApplyVoiceMutes(connection, body);
+                    break;
                 default:
                     if (!MessageType.IsIgnorable(type)) throw new ProtocolException("A client sent an unknown critical message.");
                     break;
@@ -347,6 +363,9 @@ namespace TopiaForge.Multiplayer.Engine
             connection.Participant = record;
             connection.Phase = HostConnectionPhase.Accepted;
             connection.AcknowledgedSequence = record.LastSequence;
+            // A new connection starts its voice sequences again, and needs the roster.
+            record.Voice?.ResetStream();
+            MarkVoiceRosterDirty();
             connection.Enqueue(new JoinAcceptedItem(new JoinAcceptedMessage
             {
                 SessionId = sessionId.Value,
@@ -379,7 +398,7 @@ namespace TopiaForge.Multiplayer.Engine
                 return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The session is full.");
             }
 
-            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false);
+            record = new ParticipantRecord(id.Value, identity, displayName, isHost: false) { Voice = CreateVoiceSpeaker() };
             participantRecords.Add(record);
             return null;
         }
@@ -396,6 +415,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (evicted == null) return false;
             participantRecords.Remove(evicted);
             MarkParticipantsChanged();
+            MarkVoiceRosterDirty();
             return true;
         }
 
@@ -578,11 +598,14 @@ namespace TopiaForge.Multiplayer.Engine
                 removed = true;
             }
 
-            if (removed) MarkParticipantsChanged();
+            if (!removed) return;
+            MarkParticipantsChanged();
+            MarkVoiceRosterDirty();
         }
 
         private void ShutdownHost(MultiplayerSessionEndReason reason)
         {
+            DiscardHeldVoice();
             foreach (var connection in connections.ToArray())
             {
                 EndConnection(connection, reason, "The host ended the session.");

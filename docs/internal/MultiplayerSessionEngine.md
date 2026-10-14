@@ -184,8 +184,9 @@ recovers or closes.
 
 ## Protocol
 
-Frames travel on the link's reliable-ordered *Session* channel. The *Realtime* and *Voice* channels are reserved for
-later workstreams. A frame is a sequence of envelopes `[type varint][length varint][body]`, and a host flush ends with
+Frames travel on the link's reliable-ordered *Session* channel. Voice datagrams travel on the unreliable, sequenced
+*Voice* channel (`MultiplayerVoice.md`, part 2), and *Realtime* is reserved for a later workstream. A frame is a
+sequence of envelopes `[type varint][length varint][body]`, and a host flush ends with
 `Commit` in its last frame. A sender ends a frame once a message takes it past 64 KiB, so a frame is at most 64 KiB, one
 1 MiB payload and 8 KiB for that message's envelope and fields.
 
@@ -212,7 +213,8 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | `0x15`–`0x17` | host → client | `ObjectSpawned`, `ObjectChanged`, `ObjectDespawned` |
 | `0x18` | host → client | `PresentationEvent` |
 | `0x20` | both | `SystemMessage`, reserved for WS3 |
-| `0x30` | both | voice, reserved for WS2g |
+| `0x30` | host → client | `VoiceRoster`: each speaker index, its participant, and whether the host muted it |
+| `0x31` | client → host | `VoiceMutes`: whom the client's player does not want to hear, or everyone |
 | `0x40`, `0x41` | both | `ClockSync`, `ClockSyncReply` |
 
 Submissions carry the session epoch. The host answers a submission from an earlier epoch, or one whose sequence does
@@ -225,12 +227,14 @@ endpoint.
 ## The rig on the engine
 
 `MultiplayerTestRig` keeps its public API. Each node owns a `SessionEngine`, and `VirtualEngineTransport` connects them
-with the production channel contract:
+with the production channel contracts:
 
-- per-direction FIFO;
-- loss becomes a retry delay that also holds later frames (head-of-line);
-- duplicates are discarded by sequence;
-- a closed link drops what was in flight.
+- **Session:** per-direction FIFO; loss becomes a retry delay that also holds later frames (head-of-line); duplicates
+  are discarded by sequence.
+- **Realtime and Voice:** one datagram per frame; loss is final; a datagram older than one already delivered on its
+  channel is dropped, duplicates included; nothing waits behind session frames; a path that is down loses datagrams
+  rather than holding them.
+- **Every channel** shares the link's rate, and a closed link drops what was in flight.
 
 `Advance()` pumps every engine at the current tick — the end-of-tick flush — then moves the tick, delivers due frames,
 and pumps again. `Flush()` advances until no frame is in flight and no engine has unsent or undelivered work.

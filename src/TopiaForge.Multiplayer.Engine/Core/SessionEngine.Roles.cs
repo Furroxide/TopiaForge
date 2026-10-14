@@ -156,6 +156,7 @@ namespace TopiaForge.Multiplayer.Engine
             ResetLocalSession(newSession, newSeed, newEpoch, message);
             foreach (var binding in commands.Values) binding.ResetForNewSession();
             reconcileRequested = false;
+            RetireVoice();
         }
     }
 }
