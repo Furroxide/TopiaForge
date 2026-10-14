@@ -54,6 +54,21 @@ updates:
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
 
+  # The control plane pins every package exactly and takes only releases at least two weeks old. Wrangler and the
+  # Vitest pool move together, so they are grouped into one update.
+  - package-ecosystem: npm
+    directory: /services/control-plane
+    schedule:
+      interval: weekly
+    target-branch: dev
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: deps
+    groups:
+      control-plane:
+        patterns: ["*"]
+
   - package-ecosystem: pub
     directory: /packages/launcher_domain
     schedule:
