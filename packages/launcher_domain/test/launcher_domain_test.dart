@@ -119,6 +119,7 @@ void main() {
           'player-token',
           'microphone',
           'speech-to-text',
+          'peer-network',
         ],
       );
 

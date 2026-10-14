@@ -67,6 +67,7 @@ const _knownCapabilities = {
   'network',
   'microphone',
   'particles',
+  'peer-network',
   'physics',
   'physics-settings',
   'player-control',
