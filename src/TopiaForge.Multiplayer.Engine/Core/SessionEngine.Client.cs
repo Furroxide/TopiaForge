@@ -140,7 +140,7 @@ namespace TopiaForge.Multiplayer.Engine
                     break;
                 case MessageType.JoinRejected:
                     var rejected = JoinMessages.ReadJoinRejected(body);
-                    EndClient(rejected.Reason, rejected.Message);
+                    EndClient(rejected.Reason, rejected.Message, rejected.Report);
                     break;
                 case MessageType.SessionEnded:
                     var reason = JoinMessages.ReadEndReason(body);
@@ -596,14 +596,14 @@ namespace TopiaForge.Multiplayer.Engine
             MarkSessionChanged(participantsChanged: true);
         }
 
-        private void EndClient(MultiplayerSessionEndReason reason, string message)
+        private void EndClient(MultiplayerSessionEndReason reason, string message, byte[]? report = null)
         {
             var lost = channel;
             channel = null;
             lost?.Link.Close();
             CancelAllPending(string.IsNullOrEmpty(message) ? "The multiplayer session ended." : message);
             localParticipantId = null;
-            FinishClientSession(reason, message);
+            FinishClientSession(new ClientSessionEnd(reason, message, report));
         }
 
         private void FailContract(string what)

@@ -64,9 +64,9 @@ internal static class EngineRoleTests
     {
         var endings = new List<MultiplayerSessionEndReason>();
         var round = 0;
-        using var harness = new EngineHarness(MultiplayerProcessKind.Interactive, options => options.AfterClientSessionEnds = (reason, _) =>
+        using var harness = new EngineHarness(MultiplayerProcessKind.Interactive, options => options.AfterClientSessionEnds = end =>
         {
-            endings.Add(reason);
+            endings.Add(end.Reason);
             return new SoloSessionStart(new MultiplayerSessionId("back-" + ++round), new SessionSeed((ulong)round), new ParticipantId("guest"), "Guest");
         });
         Register(harness.HostSession);

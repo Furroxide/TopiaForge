@@ -140,6 +140,31 @@ namespace TopiaForge.Multiplayer.Network
             if (entries.Count > MaximumEntries) entries.RemoveAt(0);
         }
 
+        /// <summary>
+        /// Adds the entries of <paramref name="other"/> this record lacks, as older than this record's own and in their
+        /// own order, so the cap drops the oldest first. Where both name a target, this record's entry wins.
+        /// </summary>
+        internal void MergeFrom(KnownHosts other)
+        {
+            if (other == null) throw new ArgumentNullException(nameof(other));
+            var position = 0;
+            foreach (var entry in other.entries)
+            {
+                if (entries.Exists(existing => existing.Target == entry.Target)) continue;
+                entries.Insert(position++, entry);
+            }
+
+            while (entries.Count > MaximumEntries) entries.RemoveAt(0);
+        }
+
+        /// <summary>Gets the server ids in the order they would be dropped, oldest first, for tests.</summary>
+        internal IReadOnlyList<string> ServerIdsOldestFirst()
+        {
+            var ids = new List<string>(entries.Count);
+            foreach (var entry in entries) ids.Add(entry.ServerId);
+            return ids;
+        }
+
         internal bool Forget(string host, int port)
         {
             var target = TargetKey(host, port);
