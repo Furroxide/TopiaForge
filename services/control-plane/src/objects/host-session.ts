@@ -1,25 +1,47 @@
 /**
  * HostSession: one per server id. It holds the session a host registered with a proof of its signing key: the signed
- * descriptor, a hash of the session token, the invites it issued, and the signaling room for joining peers.
+ * descriptor, a hash of the session token, the session's random epoch, the invites it issued, and the signaling room
+ * for joining peers.
  *
  * Heartbeats keep the session for LISTING_TTL_SECONDS. When they stop, the alarm delists the server, revokes its
  * invites, closes the room and deletes the session's storage, so nothing about an ended session remains.
- * Operations that change state run one at a time; calls to directory and invite shards are idempotent.
+ * Operations that change state, signaling upgrades included, run one at a time; calls to directory and invite shards
+ * are idempotent.
+ *
+ * A join ticket holds only while the admission it was issued under does. It must carry this session's epoch, so a host
+ * that ends its session and registers again starts with no tickets; and the invite it was issued with must still be
+ * live, or, for a ticket issued without one, the session must still be public. Upgrades and relay grants check that,
+ * and the room closes a peer's socket once its ticket stops holding.
  */
 import { DurableObject } from "cloudflare:workers";
+import { readConfig } from "../config";
 import type { Env } from "../env";
 import type { ErrorCode } from "../api/http";
 import { stringify } from "../shared/canonical-json";
 import { protocolMajor, type Visibility } from "../shared/descriptor";
 import { inviteCodeFrom } from "../shared/invite-code";
+import { ownScope } from "../shared/ip";
 import { hmacHex, serviceKeys } from "../shared/keys";
 import { listingJson, type DescriptorSummary } from "../shared/listing";
-import { PEER_ID_PATTERN } from "../shared/signaling";
+import { PEER_ID_PATTERN, type CandidatePolicy } from "../shared/signaling";
 import { clock, entropy, nowSeconds } from "../shared/runtime";
-import { bytesEqual, utf8 } from "../shared/wire-text";
+import { SESSION_EPOCH_BYTES, inviteHash } from "../shared/tokens";
+import { bytesEqual, toHex, utf8 } from "../shared/wire-text";
 import { directoryShardName, type DirectoryShard } from "./directory-shard";
 import { HostStore, type InviteRow, type SessionRow } from "./host-store";
-import { CLOSE, acceptHost, acceptPeer, closeRoom, expirePeers, onClosed, onFrame } from "./host-signaling";
+import {
+  CLOSE,
+  acceptHost,
+  acceptPeer,
+  closePeersUnless,
+  closeRoom,
+  closeStaleHosts,
+  expirePeers,
+  isOpen,
+  onClosed,
+  onFrame,
+  openSockets,
+} from "./host-signaling";
 import { inviteShardName, type InviteShard } from "./invite-shard";
 
 export const HEARTBEAT_SECONDS = 30;
@@ -73,6 +95,17 @@ export interface Description {
   readonly descriptorSha256: string;
 }
 
+export interface Admission {
+  readonly hostRelayOnly: boolean;
+  /** The session's epoch, which the join ticket carries. */
+  readonly epoch: string;
+}
+
+/** Who asks for relay credentials: the host by its token hash, or a joiner by what its ticket says it was issued under. */
+export type GrantSide =
+  | { readonly kind: "host"; readonly tokenHash: string }
+  | { readonly kind: "join"; readonly epoch: string; readonly invite: string | null };
+
 export interface RelayGrant {
   /** Peers this side may relay to: every other player for the host, the host for a joiner. */
   readonly peers: number;
@@ -106,12 +139,11 @@ export class HostSession extends DurableObject<Env> {
       const kept = previous === null ? null : (this.store.invites(now).find((row) => row.primary) ?? null);
       const invite = kept ?? (await this.issueInvite(input.serverId, now, PRIMARY_INVITE_SECONDS, true));
       if (invite === null) return fail("service-unavailable");
-      if (previous !== null) {
-        for (const socket of this.ctx.getWebSockets("host")) socket.close(CLOSE.replaced, "replaced");
-      }
       const session: SessionRow = {
         serverId: input.serverId,
         tokenHash: input.tokenHash,
+        // Registering again keeps the session, and with it the tickets its players already hold.
+        epoch: previous?.epoch ?? toHex(entropy.bytes(SESSION_EPOCH_BYTES)),
         descriptor: input.descriptor,
         descriptorSha256: input.descriptorSha256,
         issuedAt: input.issuedAt,
@@ -134,6 +166,7 @@ export class HostSession extends DurableObject<Env> {
         }
         throw error;
       }
+      await this.enforceAdmissions();
       await this.scheduleAlarm();
       return ok({ expiresAt: session.expiresAt, listed, invite });
     });
@@ -187,6 +220,8 @@ export class HostSession extends DurableObject<Env> {
         players: Math.min(session.players, update.summary.maxPlayers),
       };
       const listed = await this.publish(updated);
+      // A session that stops being public no longer admits the tickets issued without an invite.
+      await this.enforceAdmissions();
       return ok({ expiresAt: updated.expiresAt, listed });
     });
   }
@@ -212,17 +247,24 @@ export class HostSession extends DurableObject<Env> {
     });
   }
 
+  /**
+   * Withdraws one of the session's live invites. The invite shard is told first: if it cannot be reached, the invite
+   * stays live everywhere and the host can simply try again. Players admitted with the invite lose their sockets.
+   */
   revokeInvite(serverId: string, tokenHash: string, code: string): Promise<Outcome<null>> {
     return this.serial(async () => {
-      const session = this.authorized(serverId, tokenHash, nowSeconds());
+      const now = nowSeconds();
+      const session = this.authorized(serverId, tokenHash, now);
       if (session === null) return fail("unauthorized");
-      if (!this.store.removeInvite(code)) return fail("not-found");
+      if (!this.store.invites(now).some((row) => row.code === code)) return fail("not-found");
       await this.invites(code).revoke(code, serverId);
+      this.store.removeInvite(code);
+      await this.enforceAdmissions();
       return ok(null);
     });
   }
 
-  /** What a joining player may see of a live session, or null. */
+  /** What anyone may see of a live public session, or null. */
   async describe(serverId: string): Promise<Description | null> {
     const session = this.store.liveSession(nowSeconds());
     if (session === null || session.serverId !== serverId) return null;
@@ -234,11 +276,17 @@ export class HostSession extends DurableObject<Env> {
     };
   }
 
+  /** What a joining player may see of a live session through `code`, which must be one of its live invites; or null. */
+  async describeInvite(serverId: string, code: string): Promise<Description | null> {
+    if (!this.store.invites(nowSeconds()).some((row) => row.code === code)) return null;
+    return this.describe(serverId);
+  }
+
   /**
    * Whether a player may have a join ticket. An invite-only session requires one of its own live invite codes; a
-   * public one requires nothing. Every refusal is the same not-found.
+   * public one requires nothing, but a code given must be one of its own. Every refusal is the same not-found.
    */
-  async admit(serverId: string, inviteCode: string | null): Promise<Outcome<{ readonly hostRelayOnly: boolean }>> {
+  async admit(serverId: string, inviteCode: string | null): Promise<Outcome<Admission>> {
     const now = nowSeconds();
     const session = this.store.liveSession(now);
     if (session === null || session.serverId !== serverId) return fail("not-found");
@@ -246,18 +294,19 @@ export class HostSession extends DurableObject<Env> {
     if (inviteCode !== null && session.visibility === "public" && !this.store.invites(now).some((row) => row.code === inviteCode)) {
       return fail("not-found");
     }
-    return ok({ hostRelayOnly: session.relayOnly });
+    return ok({ hostRelayOnly: session.relayOnly, epoch: session.epoch });
   }
 
   /** Whether a side of this live session may mint relay credentials, and for how many peers. */
-  async relayGrant(serverId: string, tokenHash: string | null): Promise<Outcome<RelayGrant>> {
+  async relayGrant(serverId: string, side: GrantSide): Promise<Outcome<RelayGrant>> {
     const now = nowSeconds();
-    if (tokenHash !== null) {
-      const session = this.authorized(serverId, tokenHash, now);
+    if (side.kind === "host") {
+      const session = this.authorized(serverId, side.tokenHash, now);
       return session === null ? fail("unauthorized") : ok({ peers: session.summary.maxPlayers - 1 });
     }
     const session = this.store.liveSession(now);
-    return session === null || session.serverId !== serverId ? fail("not-found") : ok({ peers: 1 });
+    if (session === null || session.serverId !== serverId) return fail("not-found");
+    return (await this.ticketHolds(session, side.epoch, side.invite)) ? ok({ peers: 1 }) : fail("unauthorized");
   }
 
   /** An operator's delisting: ends the session at once and refuses registration until the hold ends. */
@@ -271,26 +320,12 @@ export class HostSession extends DurableObject<Env> {
     });
   }
 
-  /** Signaling: the Worker has authenticated the request and forwards it here with the facts it established. */
-  override async fetch(request: Request): Promise<Response> {
-    const now = nowSeconds();
-    const serverId = request.headers.get("x-signal-server") ?? "";
-    const session = this.store.liveSession(now);
-    if (session === null || session.serverId !== serverId) return signalRefusal(404);
-    const self = request.headers.get("x-signal-self") || null;
-    if (request.headers.get("x-signal-role") === "host") {
-      const tokenHash = request.headers.get("x-signal-token-hash") ?? "";
-      if (!bytesEqual(utf8(tokenHash), utf8(session.tokenHash))) return signalRefusal(401);
-      return acceptHost(this.ctx, now, session.relayOnly, self);
-    }
-    const peer = request.headers.get("x-signal-peer") ?? "";
-    const expiresAt = Number(request.headers.get("x-signal-ticket-expires"));
-    if (!PEER_ID_PATTERN.test(peer) || !Number.isSafeInteger(expiresAt) || expiresAt <= now) return signalRefusal(401);
-    const relayOnly = request.headers.get("x-signal-relay-only") === "1";
-    const accepted = acceptPeer(this.ctx, now, peer, relayOnly, self, expiresAt, session.relayOnly);
-    if (accepted === null) return signalRefusal(409);
-    await this.scheduleAlarm();
-    return accepted;
+  /**
+   * Signaling: the Worker has authenticated the request and forwards it here with the facts it established. Upgrades
+   * queue behind registrations, so none can slip in under a token that a registration is replacing.
+   */
+  override fetch(request: Request): Promise<Response> {
+    return this.serial(() => this.acceptSignal(request));
   }
 
   /**
@@ -299,10 +334,17 @@ export class HostSession extends DurableObject<Env> {
    */
   override webSocketMessage(socket: WebSocket, frame: string | ArrayBuffer): Promise<void> {
     return this.inOrder(async () => {
+      // A socket the service has closed can still deliver frames; they go nowhere, and storage is not touched for them.
+      if (!isOpen(socket)) return;
       const keys = await serviceKeys(this.env.SERVICE_KEY);
-      // Without keys no fingerprint can match, so a relay-only side's relay candidates still face every other check.
-      const fingerprint = (address: string): Promise<string> => (keys === null ? Promise.resolve("") : hmacHex(keys.self, address));
-      await onFrame({ ctx: this.ctx, now: nowSeconds(), fingerprint }, socket, frame);
+      const now = nowSeconds();
+      const policy: CandidatePolicy = {
+        relayRanges: readConfig(this.env).relayRanges,
+        // Without keys no fingerprint can match, so a relay-only side's candidates still face every other check.
+        scopeOf: (address) => (keys === null ? Promise.resolve("") : hmacHex(keys.self, ownScope(address))),
+      };
+      const sessionLive = this.store.liveSession(now) !== null;
+      await onFrame({ ctx: this.ctx, now, sessionLive, policy, exclude: (peer, until) => this.store.excludePeer(peer, until) }, socket, frame);
     });
   }
 
@@ -314,12 +356,6 @@ export class HostSession extends DurableObject<Env> {
     return this.inOrder(async () => onClosed(this.ctx, socket));
   }
 
-  private inOrder(work: () => Promise<void>): Promise<void> {
-    const run = this.frames.then(work, work);
-    this.frames = run.catch(() => undefined);
-    return run;
-  }
-
   override async alarm(): Promise<void> {
     await this.serial(async () => {
       const now = nowSeconds();
@@ -329,13 +365,84 @@ export class HostSession extends DurableObject<Env> {
     });
   }
 
+  private async acceptSignal(request: Request): Promise<Response> {
+    const now = nowSeconds();
+    const serverId = request.headers.get("x-signal-server") ?? "";
+    const session = this.store.liveSession(now);
+    if (session === null || session.serverId !== serverId) return signalRefusal(404);
+    const self = request.headers.get("x-signal-self") || null;
+    if (request.headers.get("x-signal-role") === "host") {
+      const tokenHash = request.headers.get("x-signal-token-hash") ?? "";
+      if (!bytesEqual(utf8(tokenHash), utf8(session.tokenHash))) return signalRefusal(401);
+      return acceptHost(this.ctx, { now, tokenHash: session.tokenHash, relayOnly: session.relayOnly, self });
+    }
+    const peer = request.headers.get("x-signal-peer") ?? "";
+    const expiresAt = Number(request.headers.get("x-signal-ticket-expires"));
+    if (!PEER_ID_PATTERN.test(peer) || !Number.isSafeInteger(expiresAt) || expiresAt <= now) return signalRefusal(401);
+    const invite = request.headers.get("x-signal-invite") || null;
+    // A peer the host said goodbye to stays out, and a ticket from another session or a withdrawn invite opens nothing.
+    if (this.store.isExcluded(peer, now) || !(await this.ticketHolds(session, request.headers.get("x-signal-epoch") ?? "", invite))) {
+      return signalRefusal(401);
+    }
+    const accepted = acceptPeer(this.ctx, {
+      now,
+      peer,
+      relayOnly: request.headers.get("x-signal-relay-only") === "1",
+      self,
+      source: request.headers.get("x-signal-source") ?? "",
+      invite,
+      ticketExpiresAt: expiresAt,
+      hostRelayOnly: session.relayOnly,
+      maxPlayers: session.summary.maxPlayers,
+    });
+    if (accepted === null) return signalRefusal(409);
+    await this.scheduleAlarm();
+    return accepted;
+  }
+
+  private inOrder(work: () => Promise<void>): Promise<void> {
+    const run = this.frames.then(work, work);
+    this.frames = run.catch(() => undefined);
+    return run;
+  }
+
   private authorized(serverId: string, tokenHash: string, now: number): SessionRow | null {
     const session = this.store.liveSession(now);
     if (session === null || session.serverId !== serverId) return null;
     return bytesEqual(utf8(tokenHash), utf8(session.tokenHash)) ? session : null;
   }
 
-  /** Saves the session and puts its listing where it belongs: in its directory shard when public, nowhere otherwise. */
+  /** The session's live invites, keyed by the hash a join ticket carries for each. Empty without a service key. */
+  private async liveInvites(): Promise<ReadonlyMap<string, string>> {
+    const keys = await serviceKeys(this.env.SERVICE_KEY);
+    const byHash = new Map<string, string>();
+    if (keys === null) return byHash;
+    for (const row of this.store.invites(nowSeconds())) byHash.set(await inviteHash(keys.invite, row.code), row.code);
+    return byHash;
+  }
+
+  /** Whether a join ticket's admission still holds in this live session. */
+  private async ticketHolds(session: SessionRow, epoch: string, invite: string | null): Promise<boolean> {
+    if (!bytesEqual(utf8(epoch), utf8(session.epoch))) return false;
+    if (invite === null) return session.visibility === "public";
+    const code = (await this.liveInvites()).get(invite);
+    // Hashing took a moment, so the invite must still be live now.
+    return code !== undefined && this.store.invites(nowSeconds()).some((row) => row.code === code);
+  }
+
+  /** Closes the sockets of peers whose tickets stopped holding: an invite withdrawn or expired, or a session gone private. */
+  private async enforceAdmissions(): Promise<void> {
+    const session = this.store.liveSession(nowSeconds());
+    if (session === null || openSockets(this.ctx, "peer").length === 0) return;
+    const live = await this.liveInvites();
+    const holds = (invite: string | null): boolean => (invite === null ? session.visibility === "public" : live.has(invite));
+    closePeersUnless(this.ctx, (state) => holds(state.invite), CLOSE.withdrawn, "admission withdrawn");
+  }
+
+  /**
+   * Saves the session and puts its listing where it belongs: in its directory shard when public, nowhere otherwise.
+   * Host sockets opened under another registration close as soon as this one is saved.
+   */
   private async publish(session: SessionRow): Promise<boolean> {
     const wanted = session.visibility === "public" ? directoryShardName(session.summary.gameBuild, protocolMajor(session.summary.protocolVersion), session.serverId) : null;
     if (session.directory !== null && session.directory !== wanted) await this.directory(session.directory).remove(session.serverId);
@@ -345,6 +452,7 @@ export class HostSession extends DurableObject<Env> {
       directory = (await this.directory(wanted).upsert(session.serverId, body, session.expiresAt)) ? wanted : null;
     }
     this.store.saveSession({ ...session, directory });
+    closeStaleHosts(this.ctx, session.tokenHash);
     return directory !== null;
   }
 
@@ -375,7 +483,8 @@ export class HostSession extends DurableObject<Env> {
     const now = nowSeconds();
     this.store.purgeExpired(now);
     expirePeers(this.ctx, now);
-    if (this.store.isEmpty() && this.ctx.getWebSockets().length === 0) {
+    await this.enforceAdmissions();
+    if (this.store.isEmpty() && !this.ctx.getWebSockets().some(isOpen)) {
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
       this.store.wiped();

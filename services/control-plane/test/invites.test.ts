@@ -1,4 +1,8 @@
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ROUTES } from "../src/index";
+import { inviteShardName } from "../src/objects/invite-shard";
 import { serviceKeys } from "../src/shared/keys";
 import { readJoinTicket } from "../src/shared/tokens";
 import { call, identity, register, type ApiResult } from "./support/api";
@@ -14,6 +18,10 @@ const seconds = () => Math.floor(scenario.clock.now() / 1000);
 const resolve = (code: string, ip = scenario.otherIp) => call("POST", "/v1/invites/resolve", { ip, body: { code } });
 const createInvite = (serverId: string, token: string, ttlSeconds = 3600) =>
   call("POST", `/v1/hosts/${serverId}/invites`, { ip: scenario.ip, token, body: { ttlSeconds } });
+const revokeInvite = (serverId: string, token: string, code: string) =>
+  call("POST", `/v1/hosts/${serverId}/invites/revoke`, { ip: scenario.ip, token, body: { code } });
+const statusCounts = (results: readonly ApiResult[]) =>
+  results.reduce<Record<number, number>>((counts, result) => ({ ...counts, [result.status]: (counts[result.status] ?? 0) + 1 }), {});
 
 /** Everything a client can see of a miss is identical, apart from the runtime's own Date header. */
 function sameMiss(response: ApiResult, reference: ApiResult): void {
@@ -37,9 +45,60 @@ describe("invites", () => {
     expect(resolved.json["descriptor"]).toEqual(expect.stringContaining(host.serverId));
     const view = await call("GET", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token });
     expect((view.json["invites"] as unknown[]).length).toBe(2);
-    expect((await call("DELETE", `/v1/hosts/${host.serverId}/invites/${invite["code"]}`, { ip: scenario.ip, token })).status).toBe(204);
+    const withdrawn = await revokeInvite(host.serverId, token, invite["code"] as string);
+    expect(withdrawn.status).toBe(204);
+    expect(withdrawn.text).toBe("");
     expect((await resolve(invite["code"] as string)).status).toBe(404);
-    expect((await call("DELETE", `/v1/hosts/${host.serverId}/invites/${invite["code"]}`, { ip: scenario.ip, token })).status).toBe(404);
+    expect((await revokeInvite(host.serverId, token, invite["code"] as string)).status).toBe(404);
+    expect((await revokeInvite(host.serverId, token, "not a code")).status).toBe(404);
+    expect((await revokeInvite(host.serverId, "tfh1_" + "A".repeat(43), invite["code"] as string)).status).toBe(401);
+  });
+
+  it("are withdrawn with the code in the body, never in a URL", async () => {
+    const host = await identity("withdraw-by-body");
+    const { token, response } = await register(host, scenario.ip);
+    const code = (response.json["invite"] as Record<string, string>)["code"]!;
+    // The old route, with the code as a path segment, no longer exists.
+    expect((await call("DELETE", `/v1/hosts/${host.serverId}/invites/${code}`, { ip: scenario.ip, token })).status).toBe(404);
+    expect((await resolve(code)).status).toBe(200);
+    for (const route of ROUTES) expect(route.pattern.source, "no route takes an invite code").not.toContain("0-9A-Z");
+    expect((await call("POST", `/v1/hosts/${host.serverId}/invites/revoke`, { ip: scenario.ip, token, body: { code, extra: true } })).status).toBe(400);
+    expect((await revokeInvite(host.serverId, token, code)).status).toBe(204);
+    expect((await resolve(code)).status).toBe(404);
+  });
+
+  it("stay live when the invite shard cannot be told, so withdrawing again works", async () => {
+    const host = await identity("withdraw-shard-down");
+    const { token } = await register(host, scenario.ip);
+    const code = ((await createInvite(host.serverId, token)).json["invite"] as Record<string, string>)["code"]!;
+    const session = env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(host.serverId));
+    const unreachable = () => ({ revoke: () => Promise.reject(new Error("invite shard unreachable")) });
+    await runInDurableObject(session, (instance) => {
+      (instance as unknown as Record<string, unknown>)["invites"] = unreachable;
+    });
+    try {
+      expect((await revokeInvite(host.serverId, token, code)).status).toBe(500);
+    } finally {
+      await runInDurableObject(session, (instance) => {
+        delete (instance as unknown as Record<string, unknown>)["invites"];
+      });
+    }
+    // The withdrawal did not happen anywhere: the host still holds the invite, it still resolves, and trying again works.
+    const view = await call("GET", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token });
+    expect((view.json["invites"] as Record<string, string>[]).map((invite) => invite["code"])).toContain(code);
+    expect((await resolve(code)).status).toBe(200);
+    expect((await revokeInvite(host.serverId, token, code)).status).toBe(204);
+    expect((await resolve(code)).status).toBe(404);
+  });
+
+  it("resolve only while the session itself still holds the code, whatever the shard says", async () => {
+    const host = await identity("stale-shard");
+    await register(host, scenario.ip);
+    // A shard entry the session never issued, as a lost withdrawal would leave behind.
+    const stale = "ZZZZZ00000";
+    const shard = env.INVITE_SHARDS.get(env.INVITE_SHARDS.idFromName(inviteShardName(stale)));
+    await runInDurableObject(shard, (instance) => instance.place(stale, host.serverId, seconds() + 3600));
+    sameMiss(await resolve(stale, "192.0.2.30"), await resolve("ZZZZZZZZZZ", "192.0.2.31"));
   });
 
   it("read forgivingly: case, hyphens, spaces and look-alike letters", async () => {
@@ -77,7 +136,7 @@ describe("invites", () => {
     const host = await identity("uniform");
     const { token } = await register(host, scenario.ip);
     const revoked = ((await createInvite(host.serverId, token)).json["invite"] as Record<string, string>)["code"]!;
-    await call("DELETE", `/v1/hosts/${host.serverId}/invites/${revoked}`, { ip: scenario.ip, token });
+    await revokeInvite(host.serverId, token, revoked);
     const reference = await resolve("ZZZZZZZZZZ", "192.0.2.1");
     sameMiss(await resolve(revoked, "192.0.2.2"), reference);
     sameMiss(await resolve("not a code", "192.0.2.3"), reference);
@@ -111,6 +170,33 @@ describe("invites", () => {
     // Two hours on, the prefix's misses have aged out: a miss is a plain 404 again, not a refusal.
     scenario.clock.advance(3600 * 2);
     expect((await resolve("ZZZZZZZZZZ", "192.0.2.79")).status).toBe(404);
+  });
+
+  it("count every miss of a concurrent burst, so wrong codes cannot outrun the limit", async () => {
+    const burst = await Promise.all(Array.from({ length: 40 }, (_, index) => resolve(`ZZZZZZZZ${String(index).padStart(2, "0")}`, "192.0.2.60")));
+    expect(statusCounts(burst)).toEqual({ 404: 10, 429: 30 });
+    const host = await identity("burst-target");
+    await register(host, scenario.ip, { visibility: "invite" });
+    const tickets = await Promise.all(
+      Array.from({ length: 40 }, (_, index) =>
+        call("POST", "/v1/join-tickets", { ip: "198.51.100.60", body: { serverId: host.serverId, invite: `ZZZZZZZZ${String(index).padStart(2, "0")}`, relayOnly: false } }),
+      ),
+    );
+    expect(statusCounts(tickets)).toEqual({ 404: 10, 429: 30 });
+  });
+
+  it("give a lookup's slot back when it hits, so finding codes never counts as missing", async () => {
+    const host = await identity("hits");
+    const { response } = await register(host, scenario.ip);
+    const code = (response.json["invite"] as Record<string, string>)["code"]!;
+    for (let attempt = 0; attempt < 15; attempt++) expect((await resolve(code, "192.0.2.70")).status).toBe(200);
+    for (let attempt = 0; attempt < 15; attempt++) {
+      const ticket = await call("POST", "/v1/join-tickets", { ip: "192.0.2.71", body: { serverId: host.serverId, invite: code, relayOnly: false } });
+      expect(ticket.status).toBe(201);
+    }
+    // The prefix has missed nothing yet, so all ten misses it is allowed come before any refusal.
+    for (let attempt = 0; attempt < 10; attempt++) expect((await resolve(`ZZZZZZZZ${String(attempt).padStart(2, "0")}`, "192.0.2.72")).status).toBe(404);
+    expect((await resolve(code, "192.0.2.73")).status).toBe(429);
   });
 });
 

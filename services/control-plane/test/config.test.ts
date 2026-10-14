@@ -3,6 +3,7 @@ import wranglerToml from "../wrangler.toml?raw";
 import { readConfig } from "../src/config";
 import type { Env } from "../src/env";
 import * as worker from "../src/index";
+import { inRanges, parseIp } from "../src/shared/ip";
 
 const CLASSES = ["HostSession", "DirectoryShard", "InviteShard", "SpendGuard", "RateLimiter"];
 const BINDINGS: Record<string, string> = {
@@ -26,9 +27,17 @@ describe("configuration", () => {
     expect(readConfig(env({ ENVIRONMENT: "Prod!" })).environment).toBe("development");
   });
 
-  it("leaves relay unavailable until the key, its token and both spend ceilings are set", () => {
-    const complete = { TURN_KEY_ID: "test-turn-key-id", TURN_KEY_API_TOKEN: "test-turn-api-token", TURN_DAILY_CAP_GB: "0.5", TURN_TICKET_CAP_GB: "0.25" };
+  it("leaves relay unavailable until the key, its token, both spend ceilings and the relay ranges are set", () => {
+    const complete = {
+      TURN_KEY_ID: "test-turn-key-id",
+      TURN_KEY_API_TOKEN: "test-turn-api-token",
+      TURN_DAILY_CAP_GB: "0.5",
+      TURN_TICKET_CAP_GB: "0.25",
+      RELAY_ADDRESS_RANGES: "141.101.64.0/18 2a06:98c0::/29",
+    };
     expect(readConfig(env(complete)).provider).toMatchObject({ dailyCapBytes: 500_000_000, ticketCapBytes: 250_000_000 });
+    expect(readConfig(env(complete)).relayRanges).toHaveLength(2);
+    expect(readConfig(env({ ...complete, RELAY_ADDRESS_RANGES: "141.101.64.0/18 10.0.0.0/8" })).relayRanges).toEqual([]);
     for (const missing of Object.keys(complete)) {
       const partial = { ...complete } as Record<string, string>;
       delete partial[missing];
@@ -62,6 +71,16 @@ describe("wrangler.toml", () => {
     }
     expect(staging).toContain('ENVIRONMENT = "staging"');
     expect(production).toContain('ENVIRONMENT = "production"');
+  });
+
+  it("ships Cloudflare's published address ranges as the relay ranges, which parse in full", () => {
+    const shipped = /^RELAY_ADDRESS_RANGES = "([^"]*)"$/m.exec(wranglerToml)?.[1];
+    const config = readConfig(env({ RELAY_ADDRESS_RANGES: shipped! }));
+    expect(config.relayRanges).toHaveLength(shipped!.split(" ").length);
+    expect(config.relayRanges.filter((range) => range.family === 4)).toHaveLength(15);
+    expect(config.relayRanges.filter((range) => range.family === 6)).toHaveLength(7);
+    for (const inside of ["141.101.90.1", "162.159.207.1", "2a06:98c1:3200::1", "2606:4700::1"]) expect(inRanges(parseIp(inside)!, config.relayRanges), inside).toBe(true);
+    for (const outside of ["203.0.113.50", "198.51.100.77", "2001:db8::50"]) expect(inRanges(parseIp(outside)!, config.relayRanges), outside).toBe(false);
   });
 
   it("keeps account details and secrets out of the file", () => {

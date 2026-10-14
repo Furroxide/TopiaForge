@@ -33,6 +33,12 @@ export interface Env {
   readonly TURN_DAILY_CAP_GB?: string;
   readonly TURN_TICKET_CAP_GB?: string;
 
+  /**
+   * The relay provider's address ranges, as CIDR blocks separated by single spaces. A relay-only side's candidates
+   * must lie inside them, and relay is unavailable until they parse.
+   */
+  readonly RELAY_ADDRESS_RANGES?: string;
+
   readonly TURN_CREDENTIAL_TTL_SECONDS?: string;
   readonly TURN_IP_MINTS_PER_HOUR?: string;
   readonly TURN_IP_MINTS_PER_MINUTE?: string;

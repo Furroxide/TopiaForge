@@ -6,7 +6,7 @@ import { isJsonObject, parse, type JsonObject } from "../shared/canonical-json";
 import { isGameBuild } from "../shared/descriptor";
 import { DIRECTORY_SHARDS, directoryShardName } from "../objects/directory-shard";
 import type { RequestContext } from "./context";
-import { ApiError, jsonResponse } from "./http";
+import { ApiError, jsonResponse, requireNoBody } from "./http";
 import { SERVER_ID_PATTERN } from "./validate";
 
 export const DEFAULT_PAGE = 50;
@@ -18,6 +18,7 @@ export const BROWSE_LIMITS = [
 const QUERY_KEYS = ["build", "protocol", "after", "limit"];
 
 export async function listServers(context: RequestContext): Promise<Response> {
+  requireNoBody(context.request);
   const query = context.url.searchParams;
   const keys = [...query.keys()];
   if (keys.some((key) => !QUERY_KEYS.includes(key)) || new Set(keys).size !== keys.length) throw new ApiError("invalid-request");
@@ -53,6 +54,7 @@ export async function listServers(context: RequestContext): Promise<Response> {
 }
 
 export async function serverDetail(context: RequestContext, serverId: string): Promise<Response> {
+  requireNoBody(context.request);
   const description = await context.hostSession(serverId).describe(serverId);
   if (description === null || description.visibility !== "public") throw new ApiError("not-found");
   return jsonResponse(200, {

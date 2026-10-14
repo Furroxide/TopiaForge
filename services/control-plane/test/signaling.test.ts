@@ -20,7 +20,8 @@ const PEER_IP = "198.51.100.77";
 const ICE = { ufrag: "abcd1234", pwd: "0123456789abcdefABCDEF" };
 const HOST_CANDIDATE = { kind: "host", address: "192.168.1.20", port: 27250, priority: 2130706431 };
 const SRFLX_CANDIDATE = { kind: "srflx", address: "198.51.100.77", port: 40000, priority: 1694498815 };
-const RELAY_CANDIDATE = { kind: "relay", address: "203.0.113.50", port: 50000, priority: 16777215 };
+// Relay addresses come from the relay provider's ranges (RELAY_ADDRESS_RANGES in wrangler.toml).
+const RELAY_CANDIDATE = { kind: "relay", address: "141.101.90.10", port: 50000, priority: 16777215 };
 
 interface Room {
   readonly serverId: string;
@@ -43,13 +44,14 @@ async function track(client: Promise<SignalClient>): Promise<SignalClient> {
   return connected;
 }
 
-async function room(options: { readonly hostRelayOnly?: boolean; readonly peerRelayOnly?: boolean } = {}): Promise<Room> {
+async function room(options: { readonly hostRelayOnly?: boolean; readonly peerRelayOnly?: boolean; readonly peerIp?: string } = {}): Promise<Room> {
   const identityOfHost = await identity(`room-${scenario.day}-${open.length}`);
   const { token } = await register(identityOfHost, scenario.ip, { relayOnly: options.hostRelayOnly ?? false });
   const host = await track(connect(identityOfHost.serverId, token, scenario.ip));
   expect(await host.next()).toEqual({ type: "welcome", role: "host", peers: [] });
-  const ticket = await ticketFor(identityOfHost.serverId, options.peerRelayOnly ?? false);
-  const peer = await track(connect(identityOfHost.serverId, ticket, PEER_IP));
+  const peerIp = options.peerIp ?? PEER_IP;
+  const ticket = await ticketFor(identityOfHost.serverId, options.peerRelayOnly ?? false, peerIp);
+  const peer = await track(connect(identityOfHost.serverId, ticket, peerIp));
   const welcome = await peer.next();
   expect(welcome).toMatchObject({ type: "welcome", role: "peer", hostOnline: true, hostRelayOnly: options.hostRelayOnly ?? false });
   const peerId = welcome["peer"] as string;
@@ -97,6 +99,37 @@ describe("signaling between a host and a joining peer", () => {
     peer.send({ type: "offer", ice: ICE, candidates: [...mislabelled, RELAY_CANDIDATE] });
     expect(await peer.next()).toEqual({ type: "notice", code: "candidates-withheld", withheld: 3 });
     expect(await host.next()).toEqual({ type: "offer", peer: peerId, ice: ICE, candidates: [RELAY_CANDIDATE] });
+  });
+
+  it("forwards from a relay-only side only addresses inside the relay provider's ranges", async () => {
+    // A peer connected over IPv6 labels an unrelated address and a neighbour in its own /64 as relays.
+    const { host, peer, peerId } = await room({ peerRelayOnly: true, peerIp: "2001:db8:1:2::10" });
+    const outside = [
+      { kind: "relay", address: "203.0.113.77", port: 3478, priority: 1 },
+      { kind: "relay", address: "2001:db8:1:2::abcd", port: 3478, priority: 1 },
+    ];
+    peer.send({ type: "offer", ice: ICE, candidates: [...outside, RELAY_CANDIDATE] });
+    expect(await peer.next()).toEqual({ type: "notice", code: "candidates-withheld", withheld: 2 });
+    expect(await host.next()).toEqual({ type: "offer", peer: peerId, ice: ICE, candidates: [RELAY_CANDIDATE] });
+    peer.send({ type: "candidate", candidate: outside[0]! });
+    expect(await peer.next()).toEqual({ type: "notice", code: "candidates-withheld", withheld: 1 });
+  });
+
+  it("withholds a relay-only side's own IPv4 address and IPv6 /64, even inside the relay ranges", async () => {
+    // A side that reaches the service through the relay provider's own network has an observed address in its ranges.
+    const v4 = await room({ peerRelayOnly: true, peerIp: "162.158.10.20" });
+    const sameAddress = { kind: "relay", address: "162.158.10.20", port: 3478, priority: 2 };
+    const neighbour = { kind: "relay", address: "162.158.10.21", port: 3478, priority: 1 };
+    v4.peer.send({ type: "offer", ice: ICE, candidates: [sameAddress, neighbour] });
+    expect(await v4.peer.next()).toEqual({ type: "notice", code: "candidates-withheld", withheld: 1 });
+    expect(await v4.host.next()).toEqual({ type: "offer", peer: v4.peerId, ice: ICE, candidates: [neighbour] });
+
+    const v6 = await room({ peerRelayOnly: true, peerIp: "2a06:98c1:3200::10" });
+    const sameNetwork = { kind: "relay", address: "2a06:98c1:3200::abcd", port: 3478, priority: 2 };
+    const otherNetwork = { kind: "relay", address: "2a06:98c1:3201::1", port: 3478, priority: 1 };
+    v6.peer.send({ type: "offer", ice: ICE, candidates: [sameNetwork, otherNetwork] });
+    expect(await v6.peer.next()).toEqual({ type: "notice", code: "candidates-withheld", withheld: 1 });
+    expect(await v6.host.next()).toEqual({ type: "offer", peer: v6.peerId, ice: ICE, candidates: [otherNetwork] });
   });
 
   it("strips a relay-only host's direct candidates toward its peers", async () => {
@@ -212,9 +245,21 @@ describe("the signaling room", () => {
   });
 
   it("closes an expired peer's socket on its next frame", async () => {
-    const { peer } = await room();
-    scenario.clock.advance(15 * 60);
+    const { serverId, hostToken, peer } = await room();
+    // The session stays live; the last heartbeat comes just before the socket's fifteen minutes are up.
+    for (let beat = 0; beat < 29; beat++) {
+      scenario.clock.advance(30);
+      await call("POST", `/v1/hosts/${serverId}/heartbeat`, { ip: scenario.ip, token: hostToken, body: { players: 1 } });
+    }
+    scenario.clock.advance(30);
     peer.send({ type: "punch", delayMs: 1 });
     expect((await peer.closed()).code).toBe(4411);
+  });
+
+  it("closes a socket whose session lapsed on its next frame, before the alarm sweeps the room", async () => {
+    const { peer } = await room();
+    scenario.clock.advance(91);
+    peer.send({ type: "punch", delayMs: 1 });
+    expect((await peer.closed()).code).toBe(4410);
   });
 });

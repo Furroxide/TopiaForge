@@ -161,7 +161,7 @@
           "content-type": "application/json; charset=utf-8",
           "x-content-type-options": "nosniff"
         },
-        "body": "{\"invite\":{\"code\":\"MBFAG69CX4\",\"display\":\"MBFAG-69CX4\",\"expiresAt\":1969664430,\"link\":\"topiaforge://join/MBFAG69CX4\"}}"
+        "body": "{\"invite\":{\"code\":\"F80BHRS9YW\",\"display\":\"F80BH-RS9YW\",\"expiresAt\":1969664430,\"link\":\"topiaforge://join/F80BHRS9YW\"}}"
       }
     },
     {
@@ -214,7 +214,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"code\":\"mbfag-69CX4\"}"
+        "body": "{\"code\":\"f80bh-RS9YW\"}"
       },
       "response": {
         "status": 200,
@@ -245,7 +245,7 @@
           "content-type": "application/json; charset=utf-8",
           "x-content-type-options": "nosniff"
         },
-        "body": "{\"expiresAt\":1969682430,\"hostRelayOnly\":false,\"relayOnly\":true,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"ticket\":\"tfj1_AcXzkGAnHr0vItm_FVomv0WSdOMbeVFF_Z2GLcIG2YuziGvAF96YzyhgKxE4OSmevAAAAAB1Zvf-AdjOvGUvf4Nsw0rd-7-O95A\"}"
+        "body": "{\"expiresAt\":1969682430,\"hostRelayOnly\":false,\"relayOnly\":true,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"ticket\":\"tfj1_AcXzkGAnHr0vItm_FVomv0WSdOMbeVFF_Z2GLcIG2YuzdAtvivCmqcydhIhrwBfemKHFzB8rVNgUXu5GF0E2620AAAAAAAAAAAAAAAAAAAAAAAAAAHVm9_4BGGeqb5zmuT4eHERB0NMYzQ\"}"
       }
     },
     {
@@ -256,7 +256,7 @@
         "method": "POST",
         "path": "/v1/turn/credentials",
         "headers": {
-          "authorization": "Bearer tfj1_AcXzkGAnHr0vItm_FVomv0WSdOMbeVFF_Z2GLcIG2YuziGvAF96YzyhgKxE4OSmevAAAAAB1Zvf-AdjOvGUvf4Nsw0rd-7-O95A",
+          "authorization": "Bearer tfj1_AcXzkGAnHr0vItm_FVomv0WSdOMbeVFF_Z2GLcIG2YuzdAtvivCmqcydhIhrwBfemKHFzB8rVNgUXu5GF0E2620AAAAAAAAAAAAAAAAAAAAAAAAAAHVm9_4BGGeqb5zmuT4eHERB0NMYzQ",
           "content-type": "application/json"
         },
         "body": "{\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"}"
@@ -319,15 +319,16 @@
     },
     {
       "id": "invite-revoke",
-      "about": "The host revokes an invite.",
+      "about": "The host withdraws an invite, naming it in the body so the code stays out of the URL.",
       "at": 1969660830,
       "request": {
-        "method": "DELETE",
-        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/invites/MBFAG69CX4",
+        "method": "POST",
+        "path": "/v1/hosts/c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3/invites/revoke",
         "headers": {
-          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4"
+          "authorization": "Bearer tfh1_CP64OMr4OHh0LqD7rolXdIPbWh3jO81Y6ipv6p3fGX4",
+          "content-type": "application/json"
         },
-        "body": null
+        "body": "{\"code\":\"F80BHRS9YW\"}"
       },
       "response": {
         "status": 204,
@@ -348,7 +349,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"code\":\"MBFAG69CX4\"}"
+        "body": "{\"code\":\"F80BHRS9YW\"}"
       },
       "response": {
         "status": 404,

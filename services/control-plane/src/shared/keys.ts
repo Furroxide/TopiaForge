@@ -6,8 +6,10 @@
  * - `ticket` authenticates join tickets.
  * - `rate` turns an address prefix and an hour into a rate-limit key. Keys change every hour, so a stored key never
  *   links one hour's traffic to the next, and without the secret it reveals nothing about the address.
- * - `self` fingerprints a signaling client's own address in memory, so a relay-only side's own address is recognized
- *   in a candidate without the address being kept.
+ * - `self` fingerprints a signaling client's own address scope and address prefix in memory, so a relay-only side's
+ *   own address is recognized in a candidate, and a room can count its sockets per prefix, without either being kept.
+ * - `invite` hashes the invite code a join ticket was issued under into the ticket, so the ticket names its invite
+ *   without carrying the code.
  */
 import { parseBase64Url, toHex, utf8, type Bytes } from "./wire-text";
 
@@ -16,6 +18,7 @@ export interface ServiceKeys {
   readonly ticket: CryptoKey;
   readonly rate: CryptoKey;
   readonly self: CryptoKey;
+  readonly invite: CryptoKey;
 }
 
 const SALT = utf8("TopiaForge control plane v1");
@@ -72,6 +75,6 @@ async function derive(raw: Bytes): Promise<ServiceKeys> {
     const bits = await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: SALT, info: utf8(label) }, master, 256);
     return crypto.subtle.importKey("raw", bits, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   };
-  const [challenge, ticket, rate, self] = await Promise.all([one("challenge"), one("ticket"), one("rate"), one("self")]);
-  return { challenge, ticket, rate, self };
+  const [challenge, ticket, rate, self, invite] = await Promise.all([one("challenge"), one("ticket"), one("rate"), one("self"), one("invite")]);
+  return { challenge, ticket, rate, self, invite };
 }

@@ -1,13 +1,18 @@
 /**
  * The host session's durable state, in its own SQLite database: the session (the signed descriptor, a hash of the
- * session token, and what the listing shows), the invites it issued, the challenge nonces it accepted, an operator's
- * hold, and small per-session operation budgets. No address is ever stored here; signaling state lives only in memory.
+ * session token, its random epoch, and what the listing shows), the invites it issued, the challenge nonces it
+ * accepted, an operator's hold, small per-session operation budgets, and the peer ids the host said goodbye to. No
+ * address is ever stored here, and signaling frames live only in memory.
  */
 import type { DescriptorSummary } from "../shared/listing";
+
+const MAXIMUM_EXCLUDED_PEERS = 1024;
 
 export interface SessionRow {
   readonly serverId: string;
   readonly tokenHash: string;
+  /** Random per session and kept across re-registration, so join tickets are honoured by the session they came from. */
+  readonly epoch: string;
   readonly descriptor: string;
   readonly descriptorSha256: string;
   readonly issuedAt: number;
@@ -31,6 +36,7 @@ export interface InviteRow {
 interface SessionRecord extends Record<string, SqlStorageValue> {
   server_id: string;
   token_hash: string;
+  epoch: string;
   descriptor: string;
   descriptor_sha256: string;
   issued_at: number;
@@ -54,7 +60,7 @@ export class HostStore {
     if (this.ready) return;
     this.sql.exec(`CREATE TABLE IF NOT EXISTS session (
       id INTEGER PRIMARY KEY CHECK (id = 1),
-      server_id TEXT NOT NULL, token_hash TEXT NOT NULL, descriptor TEXT NOT NULL, descriptor_sha256 TEXT NOT NULL,
+      server_id TEXT NOT NULL, token_hash TEXT NOT NULL, epoch TEXT NOT NULL, descriptor TEXT NOT NULL, descriptor_sha256 TEXT NOT NULL,
       issued_at INTEGER NOT NULL, visibility TEXT NOT NULL, directory TEXT, summary TEXT NOT NULL,
       players INTEGER NOT NULL, relay_only INTEGER NOT NULL, created_at INTEGER NOT NULL,
       heartbeat_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`);
@@ -62,6 +68,7 @@ export class HostStore {
     this.sql.exec("CREATE TABLE IF NOT EXISTS used_challenge (nonce TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS hold (id INTEGER PRIMARY KEY CHECK (id = 1), until INTEGER NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS budget (name TEXT PRIMARY KEY, window_start INTEGER NOT NULL, count INTEGER NOT NULL)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS excluded_peer (peer TEXT PRIMARY KEY, until INTEGER NOT NULL)");
     this.ready = true;
   }
 
@@ -78,6 +85,7 @@ export class HostStore {
     return {
       serverId: row.server_id,
       tokenHash: row.token_hash,
+      epoch: row.epoch,
       descriptor: row.descriptor,
       descriptorSha256: row.descriptor_sha256,
       issuedAt: row.issued_at,
@@ -101,16 +109,17 @@ export class HostStore {
   saveSession(row: SessionRow): void {
     this.ensure();
     this.sql.exec(
-      `INSERT INTO session (id, server_id, token_hash, descriptor, descriptor_sha256, issued_at, visibility, directory, summary,
+      `INSERT INTO session (id, server_id, token_hash, epoch, descriptor, descriptor_sha256, issued_at, visibility, directory, summary,
          players, relay_only, created_at, heartbeat_at, expires_at)
-       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET server_id = excluded.server_id, token_hash = excluded.token_hash,
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET server_id = excluded.server_id, token_hash = excluded.token_hash, epoch = excluded.epoch,
          descriptor = excluded.descriptor, descriptor_sha256 = excluded.descriptor_sha256, issued_at = excluded.issued_at,
          visibility = excluded.visibility, directory = excluded.directory, summary = excluded.summary,
          players = excluded.players, relay_only = excluded.relay_only, created_at = excluded.created_at,
          heartbeat_at = excluded.heartbeat_at, expires_at = excluded.expires_at`,
       row.serverId,
       row.tokenHash,
+      row.epoch,
       row.descriptor,
       row.descriptorSha256,
       row.issuedAt,
@@ -130,6 +139,7 @@ export class HostStore {
     this.sql.exec("DELETE FROM session");
     this.sql.exec("DELETE FROM invite");
     this.sql.exec("DELETE FROM budget");
+    this.sql.exec("DELETE FROM excluded_peer");
   }
 
   invites(now: number): InviteRow[] {
@@ -163,6 +173,25 @@ export class HostStore {
     this.sql.exec("DELETE FROM invite WHERE expires_at <= ?", now);
     this.sql.exec("DELETE FROM used_challenge WHERE expires_at <= ?", now);
     this.sql.exec("DELETE FROM hold WHERE until <= ?", now);
+    this.sql.exec("DELETE FROM excluded_peer WHERE until <= ?", now);
+  }
+
+  /**
+   * Keeps a peer id the host said goodbye to out of the room until `until`, when its ticket expires and can open
+   * nothing more. The list is capped: when it is full, the entry that would expire first makes way.
+   */
+  excludePeer(peer: string, until: number): void {
+    this.ensure();
+    const count = this.sql.exec<{ total: number }>("SELECT COUNT(*) AS total FROM excluded_peer").one().total;
+    if (count >= MAXIMUM_EXCLUDED_PEERS) {
+      this.sql.exec("DELETE FROM excluded_peer WHERE peer = (SELECT peer FROM excluded_peer ORDER BY until LIMIT 1)");
+    }
+    this.sql.exec("INSERT INTO excluded_peer (peer, until) VALUES (?, ?) ON CONFLICT (peer) DO UPDATE SET until = MAX(until, excluded.until)", peer, until);
+  }
+
+  isExcluded(peer: string, now: number): boolean {
+    this.ensure();
+    return this.sql.exec("SELECT 1 FROM excluded_peer WHERE peer = ? AND until > ?", peer, now).toArray().length > 0;
   }
 
   /** Records a challenge nonce; false when it was already used. */
@@ -200,13 +229,17 @@ export class HostStore {
     return true;
   }
 
-  /** The earliest time anything stored here falls due: session expiry, a used challenge's expiry, or a hold's end. */
+  /**
+   * The earliest time anything stored here falls due: session expiry, an invite's expiry (its tickets' sockets close
+   * then), a used challenge's expiry, or a hold's end.
+   */
   nextDue(): number | null {
     this.ensure();
     const row = this.sql
       .exec<{ next: number | null }>(
         `SELECT MIN(t) AS next FROM (
-           SELECT expires_at AS t FROM session UNION ALL SELECT expires_at FROM used_challenge UNION ALL SELECT until FROM hold)`,
+           SELECT expires_at AS t FROM session UNION ALL SELECT expires_at FROM invite UNION ALL SELECT expires_at FROM used_challenge
+           UNION ALL SELECT until FROM hold)`,
       )
       .one();
     return row.next;
@@ -217,7 +250,8 @@ export class HostStore {
     this.ensure();
     const row = this.sql
       .exec<{ total: number }>(
-        "SELECT (SELECT COUNT(*) FROM session) + (SELECT COUNT(*) FROM used_challenge) + (SELECT COUNT(*) FROM hold) + (SELECT COUNT(*) FROM invite) AS total",
+        `SELECT (SELECT COUNT(*) FROM session) + (SELECT COUNT(*) FROM used_challenge) + (SELECT COUNT(*) FROM hold)
+           + (SELECT COUNT(*) FROM invite) + (SELECT COUNT(*) FROM excluded_peer) AS total`,
       )
       .one();
     return row.total === 0;

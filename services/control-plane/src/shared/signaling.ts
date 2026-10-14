@@ -5,7 +5,7 @@
  * travel is a candidate, which the service filters before forwarding.
  */
 import { isJsonObject, parse, type JsonObject, type JsonValue } from "./canonical-json";
-import { isLocalOnly, normalizeIp, parseIp } from "./ip";
+import { inRanges, isLocalOnly, normalizeIp, parseIp, type IpAddress, type IpRange } from "./ip";
 import { utf8 } from "./wire-text";
 
 export const MAXIMUM_FRAME_BYTES = 8192;
@@ -87,27 +87,37 @@ export function readSignal(role: SignalRole, frame: string): SignalMessage | nul
 /** What a side may reveal about its own network position. */
 export interface SenderPrivacy {
   readonly relayOnly: boolean;
-  /** The keyed fingerprint of the sender's own public address, when the service saw one. */
-  readonly selfFingerprint: string | null;
+  /** The keyed fingerprint of the sender's own address scope (`ownScope` in ip.ts), when the service saw its address. */
+  readonly ownScope: string | null;
+}
+
+/** How the room judges a relay-only side's candidates. */
+export interface CandidatePolicy {
+  /** The relay provider's address ranges: every relay address it allocates lies inside them. */
+  readonly relayRanges: readonly IpRange[];
+  /** The keyed fingerprint of an address's scope, computed exactly as the sender's own was. */
+  readonly scopeOf: (address: IpAddress) => Promise<string>;
 }
 
 /**
- * The candidates a sender's message may carry onward. A relay-only side keeps only relay candidates, and of those only
- * ones that are not local-only addresses and not the sender's own observed address: a client that mislabels its
- * address as a relay still never reveals it.
+ * The candidates a sender's message may carry onward. A direct side's pass unchanged. A relay-only side keeps only
+ * candidates that are labelled relay, lie inside the relay provider's address ranges, are not local-only, and are not
+ * in the sender's own observed scope: the same IPv4 address, or the same IPv6 /64. Whatever it labels them, a
+ * relay-only side therefore forwards only addresses of the relay provider, and never one from the scope the service
+ * saw it connect from.
  */
 export async function permittedCandidates(
   candidates: readonly Candidate[],
   privacy: SenderPrivacy,
-  fingerprint: (address: string) => Promise<string>,
+  policy: CandidatePolicy,
 ): Promise<readonly Candidate[]> {
   if (!privacy.relayOnly) return candidates;
   const kept: Candidate[] = [];
   for (const candidate of candidates) {
     if (candidate.kind !== "relay") continue;
     const address = parseIp(candidate.address);
-    if (address === null || isLocalOnly(address)) continue;
-    if (privacy.selfFingerprint !== null && (await fingerprint(candidate.address)) === privacy.selfFingerprint) continue;
+    if (address === null || isLocalOnly(address) || !inRanges(address, policy.relayRanges)) continue;
+    if (privacy.ownScope !== null && (await policy.scopeOf(address)) === privacy.ownScope) continue;
     kept.push(candidate);
   }
   return kept;

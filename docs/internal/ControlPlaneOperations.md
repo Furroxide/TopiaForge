@@ -154,12 +154,35 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 - **Durable Object changes.** Migrations are append-only. A new class gets a new `[[migrations]]` entry with the next
   tag (`v2`) and its class under `new_sqlite_classes`. Never rename or delete a class without its own migration step,
   and never edit or remove an applied migration.
-- **Vars.** Mint limits and the credential lifetime are vars in `wrangler.toml`, changed by pull request. Keep the
-  top level, `env.staging` and `env.production` identical apart from `ENVIRONMENT`; a test enforces it.
+- **Vars.** Mint limits, the credential lifetime and the relay address ranges (4.1) are vars in `wrangler.toml`,
+  changed by pull request. Keep the top level, `env.staging` and `env.production` identical apart from `ENVIRONMENT`; a
+  test enforces it.
 - **Dependencies.** Dependabot proposes npm updates for `services/control-plane` weekly, at least 14 days after
   release. Wrangler and `@cloudflare/vitest-plugin` must move together: the plugin depends on one exact Wrangler
   release, and the service pins that same release so only one copy installs. The `sharp` override pins a patched
   release over the vulnerable one Miniflare names; remove it once Miniflare names a patched release itself.
+
+### 4.1 Relay address ranges
+
+`RELAY_ADDRESS_RANGES` lists the addresses Cloudflare Realtime TURN allocates relay addresses from, as CIDR blocks
+separated by single spaces. A relay-only side's signaling candidates are forwarded only when they lie inside it
+(ControlPlaneApi.md, section 8.3). That makes the list a privacy control: a block too wide lets more through, and a
+missing block breaks relay-only joins.
+
+It holds Cloudflare's published address list, IPv4 then IPv6, from https://www.cloudflare.com/ips/. Check it against
+that page every quarter and whenever Cloudflare announces a change of its addresses:
+
+1. Copy both published lists, IPv4 first, joined by single spaces.
+2. Replace the value in all three places in `wrangler.toml`: the top level, `env.staging` and `env.production`.
+3. Run `npm test` in `services/control-plane`. The configuration tests refuse a list that does not parse in full, and
+   one that differs between environments.
+4. Merge by pull request, and deploy as above.
+
+A list that does not parse leaves relay unavailable rather than unchecked: `GET /v1/status` reports `features.relay`
+`false`, and admin state reports `providerConfigured` `false`.
+
+The relay join with "hide my IP" in the first staging session (section 3, step 5) confirms the list. If that joiner
+receives a `candidates-withheld` notice for its relay candidates, Cloudflare's relay addresses lie outside the list.
 
 ## 5. Rotating secrets
 
@@ -176,8 +199,24 @@ few seconds without a deploy.
 
 ### 5.1 The kill switch
 
-The kill switch halts all relay minting and revokes every live credential, so relayed sessions drop to direct and LAN
-play within seconds. `GET /v1/status` then reports `killSwitch` `true` and clients stop offering relay.
+The kill switch halts all relay minting at once and revokes every live credential. That includes a credential whose
+mint is still waiting on the provider when the switch engages: the mint answers `relay-unavailable`, and the credential
+is revoked without reaching the client. `GET /v1/status` then reports `killSwitch` `true`, and clients stop offering
+relay.
+
+Revocation reaches every credential promptly, but not in one step:
+
+- It runs in passes of at most 40 calls to the provider, six at a time. A pass therefore stays inside the smallest
+  number of subrequests Workers allow one invocation, 50.
+- The request that engages the switch, or the hourly run that trips it, runs the first pass itself. Each further pass
+  starts as soon as the one before it ends.
+- A pass in which the provider confirms nothing is tried again a minute later.
+- A credential not yet revoked keeps working until it is, or until it expires: at most `TURN_CREDENTIAL_TTL_SECONDS`,
+  ten minutes by default.
+
+With the production figures (section 6.2) at most about 1,500 credentials are live at once, which is about 40 passes
+back to back. The first 40 are revoked within the engaging request; how quickly the rest follow depends on how fast the
+provider answers, each call having a five-second deadline.
 
 ```bash
 curl -s -X PUT -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
@@ -263,10 +302,11 @@ Logpush or saved tail output for these Workers, because their request metadata i
 
 | Data | Where | Kept |
 | --- | --- | --- |
-| Host session: signed descriptor, session token hash, listing fields, player count, privacy choice | `HostSession` | Until 90 seconds after the last heartbeat; the alarm then deletes it and its invites |
+| Host session: signed descriptor, session token hash, random session epoch, listing fields, player count, privacy choice | `HostSession` | Until 90 seconds after the last heartbeat; the alarm then deletes it and its invites |
 | A session's invites | `HostSession`, `InviteShard` | Until expiry (at most seven days) or the session's end |
 | Used challenge nonces | `HostSession` | Two minutes |
 | Operator holds | `HostSession` | Up to 30 days, as set |
+| Peer ids the host said goodbye to, derived from random ticket ids | `HostSession` | Until that peer's ticket expires (at most six hours) or the session ends |
 | Public listings | `DirectoryShard` | Until the session's expiry |
 | Rate-limit counts, keyed by prefix hash and hour | `RateLimiter`, `SpendGuard` | At most two hours |
 | Relay accounting per ticket (random ticket id or token hash) | `SpendGuard` | A day past the ticket's expiry |
@@ -286,6 +326,7 @@ must say so before Internet play is enabled.
 | The deploy's preflight fails on the environment check | Compare `gh api repos/Furroxide/TopiaForge/environments/<name>` with the `jq` expression in the workflow: the environment must exist, have a required reviewer, refuse administrator bypass and use custom branch rules. The expression holds for the `release` environment as configured today. |
 | The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
-| `features.relay` is `false` with the kill switch released | A TURN secret or a spend ceiling is missing or malformed; admin state shows `providerConfigured` `false`. |
+| `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |
+| Relay-only joins fail while other relay joins work | The joiner receives a `candidates-withheld` notice for its relay candidates, so Cloudflare's relay addresses lie outside `RELAY_ADDRESS_RANGES`. Compare the list with Cloudflare's (section 4.1). |
 | `measurementFailures` climbs | The analytics token lacks Account Analytics read, `ANALYTICS_ACCOUNT_ID` is wrong, or the dataset query changed; run `POST /v1/admin/spend/measure` after each fix. The query is in `src/relay/usage-api.ts`. |
 | Admin answers `429` | Admin requests are limited per prefix (30 a minute); wait a minute. |

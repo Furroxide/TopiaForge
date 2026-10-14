@@ -4,12 +4,14 @@
  * - A **host challenge** is stateless: version, expiry, a random nonce and a MAC that binds them to the signing key
  *   it was issued for. The host session records each nonce it accepts until expiry, so a challenge works once.
  * - A **host session token** is 32 random bytes. The host session keeps only its SHA-256.
- * - A **join ticket** is stateless: version, server id, ticket id, expiry and flags under a MAC. Tickets open
- *   signaling and mint relay credentials; the spend guard counts per ticket id.
+ * - A **join ticket** is stateless: version, server id, the host session's epoch, ticket id, a keyed hash of the
+ *   invite it was issued under, expiry and flags under a MAC. Tickets open signaling and mint relay credentials, and
+ *   the host session honours one only for its own epoch and while its invite is still live; the spend guard counts
+ *   per ticket id.
  *
  * MACs are truncated to 16 bytes, compared in constant time, and keyed per purpose (see keys.ts).
  */
-import { hmac } from "./keys";
+import { hmac, hmacHex } from "./keys";
 import {
   bytesEqual,
   concatBytes,
@@ -35,7 +37,15 @@ const MAC_BYTES = 16;
 const NONCE_BYTES = 16;
 const CHALLENGE_BYTES = 1 + 8 + NONCE_BYTES + MAC_BYTES;
 const TICKET_ID_BYTES = 16;
-const TICKET_PAYLOAD_BYTES = 1 + 32 + TICKET_ID_BYTES + 8 + 1;
+export const SESSION_EPOCH_BYTES = 16;
+const INVITE_HASH_BYTES = 16;
+const RELAY_ONLY_FLAG = 1;
+const INVITE_FLAG = 2;
+const EPOCH_OFFSET = 1 + 32;
+const TICKET_ID_OFFSET = EPOCH_OFFSET + SESSION_EPOCH_BYTES;
+const INVITE_OFFSET = TICKET_ID_OFFSET + TICKET_ID_BYTES;
+const EXPIRY_OFFSET = INVITE_OFFSET + INVITE_HASH_BYTES;
+const TICKET_PAYLOAD_BYTES = EXPIRY_OFFSET + 8 + 1;
 const TICKET_BYTES = TICKET_PAYLOAD_BYTES + MAC_BYTES;
 const HOST_TOKEN_BYTES = 32;
 
@@ -47,7 +57,11 @@ export interface Challenge {
 
 export interface JoinTicket {
   readonly serverId: string;
+  /** The host session it was issued for. A host that ends its session and registers again starts a new epoch. */
+  readonly epoch: string;
   readonly ticketId: string;
+  /** The keyed hash of the invite it was issued under (`inviteHash`), or null when it was issued without one. */
+  readonly invite: string | null;
   readonly expiresAt: number;
   readonly relayOnly: boolean;
 }
@@ -83,17 +97,21 @@ export async function hostTokenHash(token: unknown): Promise<string | null> {
   return toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", utf8(token))));
 }
 
+/** The keyed hash a join ticket carries for the canonical invite code it was issued under, as hexadecimal. */
+export function inviteHash(key: CryptoKey, code: string): Promise<string> {
+  return hmacHex(key, `invite v1|${code}`, INVITE_HASH_BYTES);
+}
+
 export async function issueJoinTicket(key: CryptoKey, ticket: JoinTicket): Promise<string> {
   const serverId = parseHex(ticket.serverId, 32);
+  const epoch = parseHex(ticket.epoch, SESSION_EPOCH_BYTES);
   const ticketId = parseHex(ticket.ticketId, TICKET_ID_BYTES);
-  if (serverId === null || ticketId === null) throw new Error("A join ticket needs a server id and a ticket id.");
-  const payload = concatBytes(
-    Uint8Array.of(VERSION),
-    serverId,
-    ticketId,
-    uintBytes(ticket.expiresAt, 8),
-    Uint8Array.of(ticket.relayOnly ? 1 : 0),
-  );
+  const invite = ticket.invite === null ? new Uint8Array(INVITE_HASH_BYTES) : parseHex(ticket.invite, INVITE_HASH_BYTES);
+  if (serverId === null || epoch === null || ticketId === null || invite === null) {
+    throw new Error("A join ticket needs a server id, a session epoch, a ticket id and, when it has one, an invite hash.");
+  }
+  const flags = (ticket.relayOnly ? RELAY_ONLY_FLAG : 0) | (ticket.invite === null ? 0 : INVITE_FLAG);
+  const payload = concatBytes(Uint8Array.of(VERSION), serverId, epoch, ticketId, invite, uintBytes(ticket.expiresAt, 8), Uint8Array.of(flags));
   const mac = (await hmac(key, TICKET_LABEL, payload)).slice(0, MAC_BYTES);
   return JOIN_TICKET_PREFIX + toBase64Url(concatBytes(payload, mac));
 }
@@ -107,13 +125,19 @@ export async function readJoinTicket(key: CryptoKey, text: unknown, now: number)
   const expected = (await hmac(key, TICKET_LABEL, payload)).slice(0, MAC_BYTES);
   if (!bytesEqual(expected, bytes.slice(TICKET_PAYLOAD_BYTES))) return null;
   const flags = payload[TICKET_PAYLOAD_BYTES - 1]!;
-  const expiresAt = readUint(payload, 1 + 32 + TICKET_ID_BYTES, 8);
-  if (flags > 1 || expiresAt <= now) return null;
+  const expiresAt = readUint(payload, EXPIRY_OFFSET, 8);
+  const invite = payload.slice(INVITE_OFFSET, EXPIRY_OFFSET);
+  const hasInvite = (flags & INVITE_FLAG) !== 0;
+  if (flags > (RELAY_ONLY_FLAG | INVITE_FLAG) || expiresAt <= now) return null;
+  // A ticket issued without an invite carries none: one spelling per ticket.
+  if (!hasInvite && invite.some((value) => value !== 0)) return null;
   return {
-    serverId: toHex(payload.slice(1, 33)),
-    ticketId: toHex(payload.slice(33, 33 + TICKET_ID_BYTES)),
+    serverId: toHex(payload.slice(1, EPOCH_OFFSET)),
+    epoch: toHex(payload.slice(EPOCH_OFFSET, TICKET_ID_OFFSET)),
+    ticketId: toHex(payload.slice(TICKET_ID_OFFSET, INVITE_OFFSET)),
+    invite: hasInvite ? toHex(invite) : null,
     expiresAt,
-    relayOnly: flags === 1,
+    relayOnly: (flags & RELAY_ONLY_FLAG) !== 0,
   };
 }
 
