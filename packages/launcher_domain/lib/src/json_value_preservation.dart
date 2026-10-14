@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'json_duplicate_properties.dart';
+import 'json_number_normalization.dart';
 
 /// Refuses numeric JSON values that would change during persistence or migration.
 /// Equivalent decimal spellings may change; quoted values are never inspected.
@@ -30,7 +31,8 @@ Object? decodeJsonPreservingValues(String text, {required String label}) {
     final token = match.group(0)!;
     final value = jsonDecode(token) as num;
     if (!value.isFinite ||
-        _decimalValue(token) != _decimalValue(jsonEncode(value))) {
+        normalizedJsonNumber(token) !=
+            normalizedJsonNumber(jsonEncode(value))) {
       throw FormatException(
         '$label contains a number at character ${offset + 1} that cannot be preserved without changing its value. No state was written. Repair or explicitly replace that value in the original file before retrying.',
       );
@@ -43,21 +45,3 @@ Object? decodeJsonPreservingValues(String text, {required String label}) {
 final _jsonNumber = RegExp(
   r'-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
 );
-
-String _decimalValue(String token) {
-  final negative = token.startsWith('-');
-  final unsigned = negative ? token.substring(1) : token;
-  final parts = unsigned.toLowerCase().split('e');
-  final mantissa = parts.first;
-  final dot = mantissa.indexOf('.');
-  var digits = mantissa.replaceAll('.', '').replaceFirst(RegExp(r'^0+'), '');
-  if (digits.isEmpty) return '0';
-  var exponent = parts.length == 1 ? BigInt.zero : BigInt.parse(parts.last);
-  if (dot >= 0) exponent -= BigInt.from(mantissa.length - dot - 1);
-  final suffix = RegExp(r'0+$').firstMatch(digits);
-  if (suffix != null) {
-    exponent += BigInt.from(digits.length - suffix.start);
-    digits = digits.substring(0, suffix.start);
-  }
-  return '${negative ? '-' : ''}$digits:$exponent';
-}
