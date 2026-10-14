@@ -232,24 +232,13 @@ namespace TopiaForge.Mods.UnityUi
         {
             var column = sort.Column;
             var comparer = column >= 0 ? columns[column].Comparer : null;
-            if (comparer == null)
-            {
-                sorter.Reset(items.Count);
-                return;
-            }
 
-            try
+            // A failed comparer leaves the rows in their supplied order and clears the sort, so the
+            // headers repainted after this never show a chevron for a sort that is not applied.
+            if (!sort.TryApply(sorter, items, comparer, out var failure) && !sortFailureWarned)
             {
-                sorter.Sort(items, comparer, sort.Direction);
-            }
-            catch (Exception exception)
-            {
-                // The sorter restored the supplied order; keep showing rows rather than failing the frame.
-                if (!sortFailureWarned)
-                {
-                    sortFailureWarned = true;
-                    TopiaForgeLog.Warn("Table sort failed (" + exception.GetType().Name + ": " + exception.Message + "); showing rows unsorted.");
-                }
+                sortFailureWarned = true;
+                TopiaForgeLog.Warn("Table sort failed (" + failure!.GetType().Name + ": " + failure.Message + "); showing rows unsorted.");
             }
         }
 

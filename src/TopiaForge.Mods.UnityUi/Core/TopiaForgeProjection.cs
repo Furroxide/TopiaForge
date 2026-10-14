@@ -34,10 +34,22 @@ namespace TopiaForge.Mods.UnityUi
             0f, 0f, 0f, 1f);
 
         /// <summary>Gets an element by row and column (both 0 to 3).</summary>
+        /// <exception cref="ArgumentOutOfRangeException">The row or the column is outside 0 to 3.</exception>
         public float this[int row, int column]
         {
             get
             {
+                // Each index is checked on its own: a flattened check would let [0, 4] read row 1.
+                if (row < 0 || row > 3)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(row), "Matrix rows run from 0 to 3.");
+                }
+
+                if (column < 0 || column > 3)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(column), "Matrix columns run from 0 to 3.");
+                }
+
                 switch ((row * 4) + column)
                 {
                     case 0: return M00;
@@ -56,7 +68,7 @@ namespace TopiaForge.Mods.UnityUi
                     case 13: return M31;
                     case 14: return M32;
                     case 15: return M33;
-                    default: throw new ArgumentOutOfRangeException(nameof(row), "Matrix indices run from 0 to 3.");
+                    default: throw new InvalidOperationException("Matrix indices were validated above; this is unreachable.");
                 }
             }
         }

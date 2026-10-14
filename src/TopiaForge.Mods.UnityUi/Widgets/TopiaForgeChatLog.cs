@@ -118,7 +118,6 @@ namespace TopiaForge.Mods.UnityUi
             open = value;
             ApplyOpenState();
             ApplyTheme(Theme);
-            Refresh();
             if (open)
             {
                 ScrollToEnd();
@@ -146,7 +145,10 @@ namespace TopiaForge.Mods.UnityUi
             scrollRect.verticalNormalizedPosition = 0f;
         }
 
-        /// <summary>Applies the resolved theme to this UI element.</summary>
+        /// <summary>
+        /// Applies the resolved theme, and re-evaluates which lines show: accessibility changes arrive
+        /// here, so turning reduced motion off mid-fade brings a hidden line back and restarts the fade.
+        /// </summary>
         public void ApplyTheme(TopiaForgeResolvedTheme theme)
         {
             backdrop.color = theme.Surface;
@@ -164,6 +166,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             lineBacking = backing;
+            Refresh();
         }
 
         internal void Tick()

@@ -161,7 +161,7 @@ namespace TopiaForge.Mods.UnityUi
             head.Go.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
             Talk = head.TalkIndicator(16f).HideWhenIdle();
             Name = head.Label(string.Empty, TopiaForgeTextStyle.Label).NoWrap().PlainText();
-            badge = head.Badge(string.Empty, badgeTone);
+            badge = head.Badge(string.Empty, badgeTone).PlainText();
             badge.Go.SetActive(false);
             secondary = content.Label(TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).NoWrap().PlainText();
             secondary.Go.SetActive(false);
