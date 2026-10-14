@@ -179,6 +179,35 @@ internal static class VoiceBudgetTests
         Assert(b.GetVoiceStatistics().Dropped(VoiceDropReason.InboxOverflow) == 6, "and counts the six it dropped");
     }
 
+    internal static void VoiceKeepsItsPaceOnARateLimitedLink()
+    {
+        // Three talkers and one listener on links of a million bytes a second, of which voice uses under 1%. Each datagram
+        // costs the link its bytes, not a whole tick, so the 75 a second relayed to the listener never queue on a 60-tick
+        // link, and the session stream waits behind nothing. A frame still arrives in the tick after its last byte, so
+        // each of the two hops can add a tick to what a link with no rate at all takes, and no more, however long it runs.
+        long WorstDelay(int bandwidth, out ulong sessionBacklog)
+        {
+            using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = bandwidth });
+            var talkers = new[] { "a", "b", "c" }.Select(name => rig.AddClient(name).Engine).ToList();
+            var (listener, link) = rig.AddClient("d");
+            var ears = rig.Listen(listener);
+            var start = rig.NowMicros;
+            for (var index = 0; index < talkers.Count; index++) rig.Talk(talkers[index], (short)(1000 * (index + 1)), 250);
+            rig.Advance(5 * 60);
+            var downlink = link.Peer!.Outbound!;
+            sessionBacklog = downlink.BusyUntilTick > rig.Tick ? downlink.BusyUntilTick - rig.Tick : 0;
+            rig.Flush();
+            Assert(ears.Frames.Count == 750, "the listener hears all 750 frames (" + ears.Frames.Count + ")");
+            return ears.Frames.Max(frame => frame.ArrivalMicros - (start + ((long)frame.Timestamp * VoiceSessionHarness.FrameMicros)));
+        }
+
+        var free = WorstDelay(0, out _);
+        var limited = WorstDelay(1_000_000, out var backlog);
+        Assert(limited <= free + 33_334,
+            "voice on the rate-limited link is within a tick a hop of a free one (" + (limited / 1_000) + " ms against " + (free / 1_000) + " ms)");
+        Assert(backlog <= 1, "and after five seconds the listener's session stream is not waiting behind voice (" + backlog + " ticks)");
+    }
+
     /// <summary>One session frame holding a single ignorable message of <paramref name="bytes"/> bytes.</summary>
     private static byte[] IgnorableMessage(int bytes)
     {

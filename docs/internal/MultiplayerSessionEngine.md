@@ -235,7 +235,9 @@ with the production channel contracts:
   channel is dropped, duplicates included; nothing waits behind session frames; a path that is down loses datagrams
   rather than holding them.
 - **Every channel** shares the link's rate: datagrams serialize in their own lane, as the real transport writes them
-  first in every packet, but their bytes push later session frames back. A closed link drops what was in flight.
+  first in every packet, but their bytes push later session frames back. Both lanes keep time in millionths of a tick
+  and round only the tick a frame is delivered in, so a small frame costs its bytes rather than a whole tick. A closed
+  link drops what was in flight.
 - **Reading:** a link returns waiting datagrams before session frames and holds at most 128 of them, dropping the
   oldest, as the real connection does.
 

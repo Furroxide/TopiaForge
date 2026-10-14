@@ -19,12 +19,18 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>
         /// Gets or sets how many voice datagrams a speaker may send a second, the refill of a token bucket that holds one
         /// second of burst. Two 20 ms frames per datagram make 25 a second, so the default leaves 20% headroom, and the
-        /// burst absorbs a second's backlog after a stall. Datagrams over it are dropped; they strike only when a speaker
-        /// keeps up twice this rate for five seconds.
+        /// burst absorbs a second's backlog after a stall. Datagrams over it are dropped. They strike only once a speaker
+        /// has sent more than twice this rate for long enough to spend a five-second allowance at twice the rate: 300
+        /// datagrams by default, so a flood of r a second is first struck after 300 / (r - 60) seconds.
         /// </summary>
         internal int MaximumPacketsPerSecond { get; set; } = 30;
 
-        /// <summary>Gets or sets a speaker's sustained voice bitrate, counting whole datagrams; a token bucket holds one second.</summary>
+        /// <summary>
+        /// Gets or sets a speaker's voice bitrate, counting whole datagrams; a token bucket holds one second. Datagrams over
+        /// it are dropped, and strike only once a speaker has sent more than twice it for long enough to spend a five-second
+        /// allowance at twice the bitrate: 50,000 bytes by default, so a flood of b bytes a second is first struck after
+        /// 50,000 / (b - 10,000) seconds.
+        /// </summary>
         internal int MaximumBitsPerSecond { get; set; } = 40_000;
 
         /// <summary>Gets or sets the largest codec packet one frame may carry.</summary>
@@ -75,7 +81,7 @@ namespace TopiaForge.Multiplayer.Engine
     /// <summary>Why a voice frame was not relayed or delivered.</summary>
     internal enum VoiceDropReason
     {
-        /// <summary>The sender's connection has not finished joining.</summary>
+        /// <summary>The sender's connection has not been admitted, or the receiver has not finished joining.</summary>
         NotReady = 0,
 
         /// <summary>The host muted the speaker, by hand or automatically.</summary>

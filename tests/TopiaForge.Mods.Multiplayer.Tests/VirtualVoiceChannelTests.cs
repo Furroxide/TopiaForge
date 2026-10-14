@@ -154,6 +154,38 @@ internal static class VirtualVoiceChannelTests
             "the oldest 72 make room, and are counted");
     }
 
+    internal static void SmallFramesCostTheirBytesNotWholeTicks()
+    {
+        // 600,000 bytes a second at 60 ticks a second is 10,000 bytes a tick. 120 datagrams of 100 bytes take 1.2 ticks
+        // between them, and a 100-byte session frame sent after them a hundredth of a tick more: time on the link is kept
+        // in fractions of a tick, and only the tick of delivery is rounded.
+        var network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 600_000 });
+        var pair = network.Connect("client");
+        for (var index = 0; index < 120; index++) pair.ClientEnd.Send(EngineChannel.Voice, Filled(index, 100));
+        pair.ClientEnd.Send(EngineChannel.Session, Filled(200, 100));
+        var heard = Deliver(network, pair, 10);
+        var voice = heard.Where(item => item.Channel == EngineChannel.Voice).ToList();
+        Assert(voice.Count == 120 && voice.Min(item => item.Tick) == 2 && voice.Max(item => item.Tick) == 3,
+            "the datagrams arrive in ticks 2 and 3, after their bytes and the latency (the last in tick " + voice.Max(item => item.Tick) + ")");
+        Assert(heard.Single(item => item.Channel == EngineChannel.Session).Tick == 3,
+            "and so does the session frame behind them (tick " + heard.Single(item => item.Channel == EngineChannel.Session).Tick + ")");
+
+        // A link kept exactly full never falls behind: a hundred of those datagrams every tick for ten seconds each arrive
+        // two ticks after they were sent, as the first ones did.
+        network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 600_000 });
+        pair = network.Connect("client");
+        var received = 0;
+        for (ulong tick = 0; tick < 600; tick++)
+        {
+            network.Now = tick;
+            for (var index = 0; index < 100; index++) pair.ClientEnd.Send(EngineChannel.Voice, Filled(index, 100));
+            network.Now = tick + 1;
+            network.DeliverDue(tick + 1);
+            while (pair.HostEnd.TryReceive(out _, out _)) received++;
+            Assert(received == 100 * (int)tick, "by tick " + (tick + 1) + " everything sent two ticks before has arrived (" + received + ")");
+        }
+    }
+
     private static List<(EngineChannel Channel, int Marker, ulong Tick)> Deliver(VirtualEngineTransport network, VirtualLinkPair pair, int ticks)
     {
         var heard = new List<(EngineChannel, int, ulong)>();
@@ -169,6 +201,8 @@ internal static class VirtualVoiceChannelTests
     }
 
     private static ArraySegment<byte> Marker(int marker) => new(new[] { (byte)marker });
+
+    private static ArraySegment<byte> Filled(int marker, int length) => new(Enumerable.Repeat((byte)marker, length).ToArray());
 
     private static void Assert(bool condition, string message)
     {

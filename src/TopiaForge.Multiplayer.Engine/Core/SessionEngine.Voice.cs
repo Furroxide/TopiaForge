@@ -51,6 +51,7 @@ namespace TopiaForge.Multiplayer.Engine
         private byte[] heldVoice = Array.Empty<byte>();
         private long voiceFrameMicros;
         private ulong nextSpeakerIndex;
+        private ulong nextVoiceStream;
         private bool voiceRosterDirty;
         private bool localVoiceMuteAll;
         private ulong voiceSequence;
@@ -211,14 +212,32 @@ namespace TopiaForge.Multiplayer.Engine
         internal int VoiceModerationCount => voiceModeration.Count;
 
         /// <summary>
-        /// Creates the voice state of a participant record: a new speaker index, and the moderation the session keeps for
-        /// <paramref name="identity"/>, or a fresh one for the host's own player, who has none.
+        /// Creates the voice state of a participant record: a new speaker index, its first stream, and the moderation the
+        /// session keeps for <paramref name="identity"/>, or a fresh one for the host's own player, who has none.
         /// </summary>
         private VoiceSpeaker? CreateVoiceSpeaker(string? identity)
         {
             var voice = options.Voice;
             if (voice == null) return null;
-            return new VoiceSpeaker(++nextSpeakerIndex, voice, identity == null ? null : ModerationFor(identity, voice));
+            var speaker = new VoiceSpeaker(++nextSpeakerIndex, voice, identity == null ? null : ModerationFor(identity, voice));
+            StartVoiceStream(speaker);
+            return speaker;
+        }
+
+        /// <summary>
+        /// Starts a speaker's stream again, as a new connection does, with a generation no stream of this host has had, so
+        /// listeners notice the restart even if the new stream's first datagram never reaches them.
+        /// </summary>
+        private void StartVoiceStream(VoiceSpeaker? speaker) => speaker?.ResetStream(++nextVoiceStream);
+
+        /// <summary>
+        /// Notes that a player was present until now: when they leave, and when their record goes. A full moderation table
+        /// forgets the absent player seen longest ago first, so one who stayed long is not mistaken for the oldest.
+        /// </summary>
+        private void NoteVoiceSeen(ParticipantRecord record)
+        {
+            var speaker = record.Voice;
+            if (speaker != null) speaker.Moderation.LastSeenMicros = nowMicros;
         }
 
         private VoiceModeration ModerationFor(string identity, VoiceOptions voice)
@@ -322,7 +341,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (Role == EngineRole.Client)
             {
                 if (channel == null || channel.Link.State == EngineLinkState.Closed) return VoiceSubmitResult.NotConnected;
-                var length = VoicePacket.Write(voiceScratch, 0, sequence, timestamp, firstFlags, first, secondFlags, second);
+                var length = VoicePacket.WriteUplink(voiceScratch, sequence, timestamp, firstFlags, first, secondFlags, second);
                 if (!voicePolicy!.TrySpend(voicePace!, length, nowMicros))
                 {
                     voiceDropped[(int)VoiceDropReason.RateLimited]++;
@@ -335,34 +354,41 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             var speaker = localParticipantId.HasValue ? FindParticipant(localParticipantId.Value) : null;
-            if (speaker?.Voice == null) return VoiceSubmitResult.NotConnected;
-            var relayed = VoicePacket.Write(voiceScratch, speaker.Voice.Index, sequence, timestamp, firstFlags, first, secondFlags, second);
+            var voice = speaker?.Voice;
+            if (speaker == null || voice == null) return VoiceSubmitResult.NotConnected;
+            var relayed = VoicePacket.WriteRelayed(voiceScratch, voice.Index, voice.Stream, sequence, timestamp, firstFlags, first, secondFlags, second);
             RelayVoice(speaker.Id.Value, new ArraySegment<byte>(voiceScratch, 0, relayed), null);
             return VoiceSubmitResult.Sent;
         }
 
-        /// <summary>Handles a voice datagram from a client: the relay policy, then the relay and the host's own playback.</summary>
+        /// <summary>
+        /// Handles a voice datagram from a client: the relay policy, then the relay and the host's own playback. Voice is
+        /// taken as soon as the host has admitted the client, before it acknowledges the session snapshot: links hand
+        /// datagrams over before session frames, so a datagram sent just after the acknowledgement is often read first.
+        /// </summary>
         private void HandleUplinkVoice(HostConnection connection, byte[] datagram)
         {
             var policy = voicePolicy;
             if (policy == null) return;
             var record = connection.Participant;
-            if (connection.Phase != HostConnectionPhase.Ready || record?.Voice == null)
+            if (!connection.IsJoined || record?.Voice == null)
             {
                 voiceDropped[(int)VoiceDropReason.NotReady]++;
                 return;
             }
 
-            var admission = policy.Admit(record.Voice, datagram, nowMicros);
+            var speaker = record.Voice;
+            var admission = policy.Admit(speaker, datagram, nowMicros);
             if (admission.Struck) voiceStrikes++;
             switch (admission.Verdict)
             {
                 case VoiceVerdict.Relay:
                     voiceRelayed++;
                     var packet = admission.Packet;
-                    var length = VoicePacket.Write(
+                    var length = VoicePacket.WriteRelayed(
                         voiceScratch,
-                        record.Voice.Index,
+                        speaker.Index,
+                        speaker.Stream,
                         packet.First.Sequence,
                         packet.First.Timestamp,
                         packet.First.Flags,
@@ -370,7 +396,7 @@ namespace TopiaForge.Multiplayer.Engine
                         packet.Second.Flags,
                         packet.Count == 2 ? datagram.AsSpan(packet.Second.PayloadOffset, packet.Second.PayloadLength) : ReadOnlySpan<byte>.Empty);
                     RelayVoice(record.Id.Value, new ArraySegment<byte>(voiceScratch, 0, length), connection);
-                    DeliverLocal(record.Id, packet, datagram);
+                    DeliverLocal(record.Id, speaker.Stream, packet, datagram);
                     return;
                 case VoiceVerdict.Drop:
                     voiceDropped[(int)admission.Reason]++;
@@ -378,7 +404,7 @@ namespace TopiaForge.Multiplayer.Engine
                 case VoiceVerdict.AutoMute:
                     voiceDropped[(int)admission.Reason]++;
                     voiceAutoMutes++;
-                    record.Voice.AutoMuteAnnounced = true;
+                    speaker.AutoMuteAnnounced = true;
                     MarkVoiceRosterDirty();
                     Report(new EngineDiagnostic(EngineDiagnosticKind.VoiceAbuse, "A participant was muted automatically for abusing voice chat.", record.Id));
                     return;
@@ -386,7 +412,7 @@ namespace TopiaForge.Multiplayer.Engine
                     voiceDropped[(int)admission.Reason]++;
                     voiceAutoMutes++;
                     voiceKicks++;
-                    record.Voice.AutoMuteAnnounced = true;
+                    speaker.AutoMuteAnnounced = true;
                     MarkVoiceRosterDirty();
                     Report(new EngineDiagnostic(EngineDiagnosticKind.VoiceAbuse, "A participant was removed for abusing voice chat.", record.Id));
                     EndConnection(connection, MultiplayerSessionEndReason.Kicked, VoiceKickMessage);
@@ -444,10 +470,10 @@ namespace TopiaForge.Multiplayer.Engine
                 }
             }
 
-            DeliverLocal(new ParticipantId(entry.ParticipantId), packet, datagram);
+            DeliverLocal(new ParticipantId(entry.ParticipantId), packet.First.Stream, packet, datagram);
         }
 
-        private void DeliverLocal(ParticipantId speaker, VoicePacket packet, byte[] datagram)
+        private void DeliverLocal(ParticipantId speaker, ulong stream, VoicePacket packet, byte[] datagram)
         {
             var inbox = voiceInbox;
             if (inbox == null || ProcessKind != MultiplayerProcessKind.Interactive || !localParticipantId.HasValue) return;
@@ -462,6 +488,7 @@ namespace TopiaForge.Multiplayer.Engine
                 var frame = packet[index];
                 var queued = inbox.Enqueue(new VoiceFrame(
                     speaker,
+                    stream,
                     frame.Sequence,
                     frame.Timestamp,
                     frame.Flags,
@@ -529,17 +556,26 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         /// <summary>
+        /// Forgets whom the local player muted. Participant ids name players within one session only, so a mute set made in
+        /// one session names nobody in another, and must never tell its host whom the player muted before.
+        /// </summary>
+        private void ForgetListenerMutes()
+        {
+            localVoiceMutes.Clear();
+            localVoiceMuteAll = false;
+        }
+
+        /// <summary>
         /// Forgets the voice of a session the process leaves for another role: what it held, heard and expected, the
-        /// moderation it kept as a host, and whom its player muted, because participant ids name nobody in the next
-        /// session. A reconnect to the same session keeps the mutes.
+        /// moderation it kept as a host, and whom its player muted. A reconnect to the same session keeps the mutes; one
+        /// that finds another session forgets them too.
         /// </summary>
         private void RetireVoice()
         {
             ResetClientVoice();
             if (options.Voice != null) voicePace = new VoiceSpeaker(1, options.Voice);
             voiceModeration.Clear();
-            localVoiceMutes.Clear();
-            localVoiceMuteAll = false;
+            ForgetListenerMutes();
             voiceRosterDirty = false;
             voiceSequence = 0;
             lastVoiceTimestamp = 0;

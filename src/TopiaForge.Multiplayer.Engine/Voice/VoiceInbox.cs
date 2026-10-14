@@ -6,9 +6,10 @@ namespace TopiaForge.Multiplayer.Engine
     /// <summary>A received voice frame waiting for playback: one speaker's codec packet and its place in their stream.</summary>
     internal readonly struct VoiceFrame
     {
-        internal VoiceFrame(ParticipantId speaker, ulong sequence, ulong timestamp, VoiceFrameFlags flags, ArraySegment<byte> payload, long arrivalMicros)
+        internal VoiceFrame(ParticipantId speaker, ulong stream, ulong sequence, ulong timestamp, VoiceFrameFlags flags, ArraySegment<byte> payload, long arrivalMicros)
         {
             Speaker = speaker;
+            Stream = stream;
             Sequence = sequence;
             Timestamp = timestamp;
             Flags = flags;
@@ -18,6 +19,13 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>Gets the speaker, as the host stamped it.</summary>
         internal ParticipantId Speaker { get; }
+
+        /// <summary>
+        /// Gets the generation of the speaker's stream, as the host stamped it. It changes when the talker starts a new
+        /// stream, after a rejoin or a restart, and is never reused within the host's session, so a jitter buffer starts
+        /// again whenever it changes. Generations from different sessions are unrelated.
+        /// </summary>
+        internal ulong Stream { get; }
 
         internal ulong Sequence { get; }
 
