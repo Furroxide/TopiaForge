@@ -3,6 +3,7 @@
  * token, a joining player with a join ticket for that server. The host session decides whether a ticket still holds:
  * it must be from the session's own epoch, and its invite, if it had one, must still be live.
  */
+import type { GrantSide } from "../objects/host-session";
 import type { JoinTicket } from "../shared/tokens";
 import { JOIN_TICKET_PREFIX, JOIN_TICKET_TTL_SECONDS, bearer, hostTokenHash, readJoinTicket } from "../shared/tokens";
 import type { RequestContext } from "./context";
@@ -50,18 +51,19 @@ export async function mintRelayCredentials(context: RequestContext): Promise<Res
   const flags = await context.flags();
   if (!flags.features.relay || flags.killSwitch.engaged || context.config.provider === null) throw new ApiError("relay-unavailable");
   const side = await authenticate(context, serverId);
-  const grant = unwrap(
-    await context
-      .hostSession(serverId)
-      .relayGrant(serverId, side.kind === "host" ? { kind: "host", tokenHash: side.tokenHash } : { kind: "join", epoch: side.ticket.epoch, invite: side.ticket.invite }),
-  );
+  const grantSide: GrantSide =
+    side.kind === "host" ? { kind: "host", tokenHash: side.tokenHash } : { kind: "join", epoch: side.ticket.epoch, invite: side.ticket.invite };
+  const grant = unwrap(await context.hostSession(serverId).relayGrant(serverId, grantSide));
   const { keys } = await context.bucket();
+  // The spend guard asks the host session again once the provider answers, so an admission that lapses while the mint
+  // waits gets no credential either.
   const outcome = await context.spendGuard().mint({
     ticket: side.kind === "host" ? `host:${side.tokenHash.slice(0, 32)}` : `join:${side.ticket.ticketId}`,
     ticketExpiresAt: side.kind === "host" ? context.now + JOIN_TICKET_TTL_SECONDS : side.ticket.expiresAt,
     peers: grant.peers,
     keys,
     at: context.at,
+    scope: { serverId, side: grantSide },
   });
   if (!outcome.ok) throw new ApiError(outcome.error, outcome.retryAfter);
   return jsonResponse(201, {

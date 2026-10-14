@@ -11,9 +11,13 @@
  * after repeated failures to measure it trips it too, and a credential that relays well past its reservation is
  * revoked and its ticket blocked.
  *
- * Tripping the switch revokes every live credential, including one whose mint is still waiting on the provider: a mint
- * looks again once the provider answers, and if the relay was switched off meanwhile it revokes the new credential and
- * answers relay-unavailable. Revocation runs in passes small enough for one Worker invocation's subrequests; a pass
+ * Tripping the switch revokes every live credential, including one whose mint is still waiting on the provider. A mint
+ * looks again once the provider answers. If the relay was switched off meanwhile, even if it was switched on again, it
+ * revokes the new credential and answers relay-unavailable. It also asks the host session again whether the side's
+ * admission still holds: a joiner's ticket stops holding when its invite is withdrawn or expires, when its session
+ * ends, or, for a ticket without an invite, when the session goes private; a host's token stops holding when its
+ * session ends or a new registration replaces it. A lapsed admission gets the same revocation, and the answer a
+ * request made now would get. Revocation runs in passes small enough for one Worker invocation's subrequests; a pass
  * that makes progress is followed at once by the next, through the alarm.
  */
 import { DurableObject } from "cloudflare:workers";
@@ -24,6 +28,7 @@ import { generateIceServers, revokeCredential } from "../relay/turn-api";
 import { readTurnUsage } from "../relay/usage-api";
 import { clock, entropy, nowSeconds } from "../shared/runtime";
 import { toHex } from "../shared/wire-text";
+import type { GrantSide } from "./host-session";
 import { SpendStore, type Features, type KillReason, type KillSwitch, type Measurement } from "./spend-store";
 import { evaluate, increment, type BucketKeys, type WindowRule } from "./windows";
 
@@ -42,6 +47,12 @@ export interface Flags {
   readonly killSwitch: KillSwitch;
 }
 
+/** Whose admission a credential rests on: the session's server and the side, as the host session's relay grant reads it. */
+export interface MintScope {
+  readonly serverId: string;
+  readonly side: GrantSide;
+}
+
 export interface MintRequest {
   /** "join:<ticket id>" for a joiner, "host:<token hash prefix>" for a host. */
   readonly ticket: string;
@@ -50,11 +61,20 @@ export interface MintRequest {
   readonly keys: BucketKeys;
   /** The time the keys were derived for, in milliseconds. */
   readonly at: number;
+  /** Checked again once the provider answers, so a credential never outlives the admission it was minted under. */
+  readonly scope: MintScope;
 }
+
+/** Why a mint is refused after the provider answered because the side's admission lapsed while it waited. */
+type Lapse = "unauthorized" | "not-found" | "internal";
 
 export type MintOutcome =
   | { readonly ok: true; readonly iceServers: readonly IceServer[]; readonly expiresAt: number }
-  | { readonly ok: false; readonly error: "relay-unavailable" | "rate-limited" | "ticket-limit" | "upstream-failed"; readonly retryAfter?: number };
+  | {
+      readonly ok: false;
+      readonly error: "relay-unavailable" | "rate-limited" | "ticket-limit" | "upstream-failed" | Lapse;
+      readonly retryAfter?: number;
+    };
 
 export interface SpendReport {
   readonly day: string;
@@ -87,6 +107,8 @@ export class SpendGuard extends DurableObject<Env> {
   }
 
   setFeatures(changes: Partial<Features>): Flags {
+    // Every mint waiting on the provider when relay is turned off is refused, even if relay is on again when it answers.
+    if (changes.relay === false) this.store.markMintsInFlight();
     this.store.setFeatures({ ...this.store.features(), ...changes });
     return this.flags();
   }
@@ -145,15 +167,19 @@ export class SpendGuard extends DurableObject<Env> {
       return { ok: false, error: "upstream-failed" };
     }
     const expiresAt = nowSeconds() + limits.credentialTtlSeconds;
-    // The relay may have been switched off while the provider answered: the kill switch marks credentials still being
-    // minted, and the feature flag or the switch may read differently now. Such a credential is never handed out.
+    // The side's admission may have lapsed while the provider answered, so the host session is asked again.
+    const lapse = await this.admissionLapse(request.scope);
+    // The relay may have been switched off meanwhile too: the kill switch and turning relay off mark credentials still
+    // being minted, and the switch or the flag may read differently now. Nothing awaits between these checks and the
+    // credential's confirmation, and a refused credential is never handed out.
     const after = this.flags();
-    if (this.store.isMarked(provisional) || !after.features.relay || after.killSwitch.engaged) {
+    const refusal = this.store.isMarked(provisional) || !after.features.relay || after.killSwitch.engaged ? "relay-unavailable" : lapse;
+    if (refusal !== null) {
       refund();
       this.store.withdrawCredential(provisional, minted.username, expiresAt);
       if (await revokeCredential(provider, minted.username)) this.store.markRevoked(minted.username);
       await this.scheduleAlarm(false);
-      return { ok: false, error: "relay-unavailable" };
+      return { ok: false, error: refusal };
     }
     this.store.confirmCredential(provisional, minted.username, expiresAt);
     await this.scheduleAlarm(false);
@@ -217,6 +243,21 @@ export class SpendGuard extends DurableObject<Env> {
     this.store.purge(nowSeconds());
     const provider = readConfig(this.env).provider;
     await this.scheduleAlarm(provider !== null && (await this.revokePass(provider)));
+  }
+
+  /**
+   * Null while the side's admission still holds in its host session; otherwise what its request would be answered now:
+   * unauthorized for a ticket that stopped holding or a host token that no longer opens the session, not-found for a
+   * joiner whose session has ended. A host session that cannot be asked holds nothing.
+   */
+  private async admissionLapse(scope: MintScope): Promise<Lapse | null> {
+    try {
+      const session = this.env.HOST_SESSIONS.get(this.env.HOST_SESSIONS.idFromName(scope.serverId));
+      const grant = await session.relayGrant(scope.serverId, scope.side);
+      return grant.ok ? null : grant.error === "not-found" ? "not-found" : "unauthorized";
+    } catch {
+      return "internal";
+    }
   }
 
   /** Today's measured egress plus every reservation the latest measurement cannot have seen yet. */
