@@ -37,6 +37,11 @@ class ModRegistryFormat {
 /// One prior version of a mod in the published index (`history` array) or a
 /// non-latest version of a community entry. Ignored by launchers that only
 /// understand the flat `mods` list — the field is purely additive.
+///
+/// The index builder inlines the [manifest] (and the archive size,
+/// [packageBytes]) for the newest history versions, so a launcher can
+/// install the exact older version a multiplayer server runs. Such rows
+/// feed exact-version resolution only; they never become catalog tiles.
 class RegistryVersionRef {
   RegistryVersionRef({
     required this.version,
@@ -44,6 +49,8 @@ class RegistryVersionRef {
     required this.packageSha256,
     this.changelog = '',
     this.publishedAt = '',
+    this.manifest,
+    this.packageBytes,
     Map<String, Object?> extraFields = const {},
   }) : extraFields = _withoutKnownRegistryFields(
          extraFields,
@@ -55,15 +62,30 @@ class RegistryVersionRef {
   final String packageSha256;
   final String changelog;
   final String publishedAt;
+
+  /// The version's full `topiaforge.mod.json`, when the index inlines it.
+  final ModManifest? manifest;
+
+  /// The archive's size in bytes, when the index states it.
+  final int? packageBytes;
   final Map<String, Object?> extraFields;
 
   factory RegistryVersionRef.fromJson(Map<String, Object?> json) {
+    final manifestJson = _objectMap(json['manifest']);
+    final bytes = json['packageBytes'];
     return RegistryVersionRef(
       version: (json['version'] as String?) ?? '',
       downloadUrl: (json['downloadUrl'] as String?) ?? '',
       packageSha256: _lowercaseSha(json['packageSha256']),
       changelog: (json['changelog'] as String?) ?? '',
       publishedAt: (json['publishedAt'] as String?) ?? '',
+      manifest: _historyManifest(manifestJson),
+      packageBytes:
+          bytes is int &&
+              bytes >= 0 &&
+              bytes <= ModRegistryFormat.maxPackageBytes
+          ? bytes
+          : null,
       extraFields: _unknownRegistryFields(json, _registryVersionRefKeys),
     );
   }
@@ -75,6 +97,8 @@ class RegistryVersionRef {
     'packageSha256': packageSha256.toLowerCase(),
     if (changelog.isNotEmpty) 'changelog': changelog,
     if (publishedAt.isNotEmpty) 'publishedAt': publishedAt,
+    if (manifest != null) 'manifest': manifest!.toJson(),
+    if (packageBytes != null) 'packageBytes': packageBytes,
   };
 }
 
@@ -362,6 +386,18 @@ class RegistryEntryFile {
   }
 }
 
+/// A history row's inlined manifest, or null when there is none or it does
+/// not read, whatever the fault: the row then stays out of exact-version
+/// resolution, as it would for a launcher that ignores history.
+ModManifest? _historyManifest(Map<String, Object?> json) {
+  if (json.isEmpty) return null;
+  try {
+    return ModManifest.fromJson(json);
+  } on Object {
+    return null;
+  }
+}
+
 String _lowercaseSha(Object? value) {
   return (value is String ? value : '').trim().toLowerCase();
 }
@@ -435,6 +471,8 @@ const _registryVersionRefKeys = {
   'packageSha256',
   'changelog',
   'publishedAt',
+  'manifest',
+  'packageBytes',
 };
 const _registryIndexEntryKeys = {
   'manifest',

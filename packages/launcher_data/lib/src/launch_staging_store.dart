@@ -11,6 +11,7 @@ import 'package:crypto/crypto.dart';
 import 'acceptance_isolation_context.dart';
 
 part 'acceptance_isolation_staging.dart';
+part 'launch_staging_sessions.dart';
 
 /// One bounded launch protocol directory beneath a caller-established game root.
 final class LaunchStagingStore {
@@ -61,7 +62,22 @@ final class LaunchStagingStore {
     if (bytes.length > documentLimit) {
       throw const FormatException('Launch request exceeds its byte limit.');
     }
-    final file = _channel('launch-profile', value.requestId);
+    return _publishRequest(value.requestId, bytes);
+  }
+
+  /// Stages [value] as written by [StagedLaunchRequest.encode]: V4 exactly
+  /// as [writeRequest] writes it, or V5 for a session launch.
+  Future<File> writeLaunchRequest(StagedLaunchRequest value) async {
+    if (value is StagedV4LaunchRequest) return writeRequest(value.profile);
+    final bytes = utf8.encode(value.encode());
+    if (bytes.length > documentLimit) {
+      throw const FormatException('Launch request exceeds its byte limit.');
+    }
+    return _publishRequest(value.requestId, bytes);
+  }
+
+  Future<File> _publishRequest(String requestId, List<int> bytes) async {
+    final file = _channel('launch-profile', requestId);
     _directories(create: true);
     _ordinaryFile(file, allowMissing: true);
     if (file.existsSync()) {
@@ -111,6 +127,27 @@ final class LaunchStagingStore {
           /* Never follow a substituted ancestor to remove an unowned file. */
         }
       }
+    }
+  }
+
+  /// Removes [expected] if it is still staged exactly as written.
+  Future<void> deleteLaunchRequest(StagedLaunchRequest expected) async {
+    if (expected is StagedV4LaunchRequest) {
+      return deleteRequest(expected.profile);
+    }
+    final file = _channel('launch-profile', expected.requestId);
+    final staged = expected.encode();
+    try {
+      if (await _readText(file, documentLimit) != staged) return;
+      _directories();
+      _ordinaryFile(file);
+      // Read again immediately before deletion; replacements are not ours.
+      if (await _readText(file, documentLimit) != staged) return;
+      _directories();
+      _ordinaryFile(file);
+      file.deleteSync();
+    } on Object {
+      /* Failed or foreign requests remain inspectable, never swept. */
     }
   }
 
@@ -248,6 +285,12 @@ final class LaunchStagingStore {
   }
 
   Future<Object?> _read(File file, int maximumBytes) async {
+    final text = await _readText(file, maximumBytes);
+    return text == null ? null : jsonDecode(text);
+  }
+
+  /// The strict UTF-8 text of [file], or null when it is absent.
+  Future<String?> _readText(File file, int maximumBytes) async {
     if (!_directories()) return null;
     final type = FileSystemEntity.typeSync(file.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) return null;
@@ -271,7 +314,7 @@ final class LaunchStagingStore {
         }
         bytes.add(chunk);
       }
-      return jsonDecode(utf8.decode(bytes.takeBytes()));
+      return utf8.decode(bytes.takeBytes());
     } finally {
       await input.close();
     }

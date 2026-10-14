@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager
         private bool rejectedLauncherCommand;
         private LaunchRequestCorrelation? rejectedCorrelation;
         private string rejectionReason = string.Empty;
+        private ProfileLaunchConfigurationV5? launchSession;
 
         private void AdmitStartup()
         {
@@ -35,8 +36,11 @@ namespace TopiaForge.ModManager
             if (!hasLauncherCommand) return null;
             try
             {
-                var request = launchStaging.ConsumeRequest(configuredPath!);
-                managerLogger.Info("Using one-shot V4 launch profile " + request.ProfileId + " request " + request.RequestId + ".");
+                var consumed = launchStaging.ConsumeLaunchRequest(configuredPath!);
+                var request = consumed.Profile;
+                launchSession = consumed.SessionRequest;
+                // The session's target is never logged: a direct target is an address.
+                managerLogger.Info(consumed.Describe());
                 return request;
             }
             catch (Exception error)
@@ -48,6 +52,24 @@ namespace TopiaForge.ModManager
                 return null;
             }
         }
+
+        /// <summary>Hands a V5 request's session to the multiplayer provider, unless the command was rejected or recovery runs.</summary>
+        private void OfferLaunchSession()
+        {
+            if (launchSession == null) return;
+            if (rejectedLauncherCommand || startupSelection.SafeMode)
+            {
+                managerLogger.Warn("The session launch was not offered to the multiplayer provider: this process starts in recovery.");
+                return;
+            }
+
+            LaunchSessionOffer.Offer(launchSession.Session);
+            managerLogger.Info("Offered the " + launchSession.Session.Role + " session to the multiplayer provider.");
+        }
+
+        /// <summary>The identity a session launch's records are published under, from its request or its rejected correlation.</summary>
+        private LaunchSessionIdentity? LaunchSessionIdentityForPublication() =>
+            launchSession != null ? LaunchSessionIdentity.Of(launchSession) : rejectedCorrelation?.Session;
 
         private void ApplyStartupRecovery()
         {

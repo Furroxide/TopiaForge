@@ -4,13 +4,16 @@ part of '../local_launcher_repository.dart';
 /// VPM-style listing (`packages`) into registry mods with resolved package
 /// URLs. (Split from registry_source_helpers.dart for the 500-line file cap.)
 extension _RegistrySourceParsing on LocalLauncherRepository {
-  List<RegistryMod> _flatRegistryMods(
+  /// The index's current entries, and the history rows that carry a
+  /// manifest. History never becomes a catalog tile: it only lets an exact
+  /// older version be found and installed.
+  _RegistrySourceMods _flatRegistryMods(
     Map<String, Object?> decoded,
     PackageSource source,
     Uri baseUri,
   ) {
     if (!decoded.containsKey('mods')) {
-      return const <RegistryMod>[];
+      return const _RegistrySourceMods(current: <RegistryMod>[]);
     }
     if (decoded['formatVersion'] != ModRegistryFormat.indexFormatVersion) {
       throw FormatException(
@@ -22,7 +25,9 @@ extension _RegistrySourceParsing on LocalLauncherRepository {
     if (entries is! List) {
       throw const FormatException('Registry index mods must be a JSON array.');
     }
-    return entries.whereType<Map>().map((item) {
+    final current = <RegistryMod>[];
+    final history = <RegistryMod>[];
+    for (final item in entries.whereType<Map>()) {
       final json = item.map((key, value) => MapEntry(key.toString(), value));
       final parsed = RegistryMod.fromJson(json);
       final localPath = json['localPath'] as String?;
@@ -35,15 +40,61 @@ extension _RegistrySourceParsing on LocalLauncherRepository {
         parsed.downloadUrl.isNotEmpty ? parsed.downloadUrl : localPath ?? '',
         packageBaseUri,
       );
-      return RegistryMod(
-        manifest: parsed.manifest,
-        downloadUrl: downloadUrl,
-        packageSha256: parsed.packageSha256,
-        changelog: parsed.changelog,
-        sourceId: source.id,
-        sourceName: source.name,
+      current.add(
+        RegistryMod(
+          manifest: parsed.manifest,
+          downloadUrl: downloadUrl,
+          packageSha256: parsed.packageSha256,
+          changelog: parsed.changelog,
+          sourceId: source.id,
+          sourceName: source.name,
+        ),
       );
-    }).toList();
+      history.addAll(_historyMods(json, parsed.manifest, source, baseUri));
+    }
+    return _RegistrySourceMods(current: current, history: history);
+  }
+
+  /// The history rows of one index entry that inline a manifest for this
+  /// mod at the row's own version. A row that is malformed, names another
+  /// mod or version, or has no safe package URL is left out instead of
+  /// failing the source, as a launcher that ignores history would.
+  List<RegistryMod> _historyMods(
+    Map<String, Object?> entry,
+    ModManifest latest,
+    PackageSource source,
+    Uri baseUri,
+  ) {
+    final rows = entry['history'];
+    if (rows is! List) return const [];
+    final mods = <RegistryMod>[];
+    for (final row in rows.whereType<Map>()) {
+      try {
+        final ref = RegistryVersionRef.fromJson(
+          row.map((key, value) => MapEntry(key.toString(), value)),
+        );
+        final manifest = ref.manifest;
+        if (manifest == null ||
+            manifest.id.toLowerCase() != latest.id.toLowerCase() ||
+            manifest.version != ref.version ||
+            ref.downloadUrl.trim().isEmpty) {
+          continue;
+        }
+        final mod = RegistryMod(
+          manifest: manifest,
+          downloadUrl: _resolvePackageUrl(ref.downloadUrl, baseUri),
+          packageSha256: ref.packageSha256,
+          changelog: ref.changelog,
+          sourceId: source.id,
+          sourceName: source.name,
+          packageBytes: ref.packageBytes,
+        );
+        if (_registryModTrustProblem(source, mod) == null) mods.add(mod);
+      } on Object {
+        continue;
+      }
+    }
+    return mods;
   }
 
   List<RegistryMod> _vpmRegistryMods(

@@ -51,6 +51,7 @@ extension _ModRegistryEntryCollection on ModRegistryIndexBuilder {
             packageSha256: package.sha256Hex,
             publishedAt: release.publishedAt,
             sourceLabel: '${release.tagName}/${asset.name}',
+            packageBytes: bytes.length,
           ),
         );
       }
@@ -80,10 +81,13 @@ extension _ModRegistryEntryCollection on ModRegistryIndexBuilder {
     final byId = <String, List<_CollectedVersion>>{};
     for (final file in files) {
       final ModPackageSummary package;
+      final List<int> bytes;
       try {
-        package = readModPackage(
-          readBoundedRegularFileSync(file, maxBytes: CliFileLimits.package),
+        bytes = readBoundedRegularFileSync(
+          file,
+          maxBytes: CliFileLimits.package,
         );
+        package = readModPackage(bytes);
       } on StateError catch (error) {
         throw StateError(
           '${p.basename(file.path)} is not a valid mod package: '
@@ -100,6 +104,7 @@ extension _ModRegistryEntryCollection on ModRegistryIndexBuilder {
               : baseUri.resolve(Uri.encodeComponent(fileName)).toString(),
           packageSha256: package.sha256Hex,
           sourceLabel: file.path,
+          packageBytes: bytes.length,
         ),
       );
     }
@@ -153,6 +158,7 @@ extension _ModRegistryEntryCollection on ModRegistryIndexBuilder {
   List<RegistryIndexEntry> _loadCommunityEntries(
     String entriesDirectory, {
     required Set<String> firstPartyIds,
+    required int historyManifests,
   }) {
     if (entriesDirectory.trim().isEmpty) {
       return const [];
@@ -218,12 +224,21 @@ extension _ModRegistryEntryCollection on ModRegistryIndexBuilder {
           origin: 'community',
           extraFields: latest.extraFields,
           history: [
-            for (final version in versions.skip(1))
+            for (final (index, version) in versions.skip(1).indexed)
               RegistryVersionRef(
                 version: version.version,
                 downloadUrl: version.downloadUrl,
                 packageSha256: version.packageSha256,
                 changelog: version.changelog,
+                manifest: index < historyManifests ? version.manifest : null,
+                // An entry may state its archive size; history keeps it.
+                packageBytes: switch (version.extraFields['packageBytes']) {
+                  final int bytes
+                      when bytes >= 0 &&
+                          bytes <= ModRegistryFormat.maxPackageBytes =>
+                    bytes,
+                  _ => null,
+                },
                 extraFields: version.extraFields,
               ),
           ],

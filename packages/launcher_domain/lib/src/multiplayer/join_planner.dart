@@ -39,11 +39,29 @@ final class JoinPlanner {
   /// The derived profile name: `Server · <name>`.
   static String derivedProfileName(String serverName) => 'Server · $serverName';
 
+  /// Plans joining [server] from what [catalog] holds: the exact archives
+  /// installed and offered by the player's sources, history included
+  /// ([ExactPackageCatalog.resolve]).
+  JoinPlan planFromCatalog({
+    required VerifiedServerDescriptor server,
+    required ExactPackageCatalog catalog,
+    required JoinEnvironment environment,
+    required bool mayContactHost,
+  }) => plan(
+    server: server,
+    resolutions: catalog.resolve(
+      server.descriptor,
+      developerMode: environment.developerMode,
+    ),
+    environment: environment,
+    mayContactHost: mayContactHost,
+  );
+
   /// Plans joining [server]. [resolutions] maps package SHA-256 values to
   /// what the launcher found for them; a package without an entry counts as
-  /// not in any source. [mayContactHost] is the join's
-  /// [JoinSessionState.mayContactHost]: without it, nothing can come from the
-  /// host itself.
+  /// not in any source. [ExactPackageCatalog.resolve] produces them.
+  /// [mayContactHost] is the join's [JoinSessionState.mayContactHost]:
+  /// without it, nothing can come from the host itself.
   JoinPlan plan({
     required VerifiedServerDescriptor server,
     required Map<String, JoinPackageResolution> resolutions,
