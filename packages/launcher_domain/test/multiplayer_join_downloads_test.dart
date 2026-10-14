@@ -194,4 +194,33 @@ void main() {
       expect(ended.downloadRequest, isNull);
     }
   });
+
+  test('a host the game may not reach ends the join while connecting', () {
+    // The game resolves the target again when it connects. A local name
+    // that now resolves only to public addresses, or a listing whose sender
+    // has left the local network, makes it refuse a relay-only join, and
+    // the launcher must end the join rather than wait for the game.
+    final lanListing = JoinListingTarget(
+      serverId: hostAServerId,
+      source: ServerListingSource.lan,
+    );
+    final state = checking(startJoin(lanListing));
+    final connecting = [
+      JoinPlanReady(planFor(state)),
+      const JoinConsentGiven(hostServedAcknowledged: true),
+      const JoinDownloadsCompleted(),
+      const JoinInstallCompleted(),
+      const JoinProfilePrepared(),
+      const JoinGameStarted(),
+    ].fold(state, JoinSession.reduce);
+    expect(connecting.stage, JoinStage.connecting);
+    final ended = JoinSession.reduce(
+      connecting,
+      JoinFailed(JoinFailureCode.directNotAllowed),
+    );
+    expect(ended.stage, JoinStage.ended);
+    final failure = ended.outcome!.failure!;
+    expect(failure.code, JoinFailureCode.directNotAllowed);
+    expect(failure.stage, JoinStage.connecting);
+  });
 }

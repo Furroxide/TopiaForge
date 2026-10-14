@@ -65,6 +65,9 @@ void main() {
       JoinFailureCode.protocolMismatch,
       JoinFailureCode.admissionChanged,
       JoinFailureCode.disconnected,
+      // The game resolves the target again, and refuses a host the
+      // session's privacy forbids once the network has changed.
+      JoinFailureCode.directNotAllowed,
     },
     JoinStage.synchronizing: {
       JoinFailureCode.snapshotFailed,
