@@ -189,8 +189,8 @@ internal static class TransportHandshakeTests
             "the Initiation goes at 0, 0.25, 0.75, 1.75 and 3.75 seconds (" + silent.Inbox.Count + ")");
         network.RunFor(1_000);
         That(connection.State == TransportConnectionState.Closed && network.Now - start == 5_000_000 &&
-             diagnostics.Reports.Single().Message == "The handshake timed out.",
-            "after five seconds the attempt ends");
+             diagnostics.Reports.Single().Message == "The handshake timed out." && connection.CloseReason == TransportCloseReason.HandshakeTimedOut,
+            "after five seconds the attempt ends, as a timeout rather than a failed proof");
         That(endpoint.ConnectionCount == 0, "and the endpoint forgets it");
     }
 

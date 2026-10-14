@@ -43,7 +43,11 @@ namespace TopiaForge.Multiplayer.Network
         private bool disposed;
 
         /// <summary>Binds to <paramref name="port"/>, or to a free port when it is zero.</summary>
-        internal UdpSocketDriver(int port)
+        /// <param name="bindAddress">
+        /// The address to bind, every local address by default. Tests bind a loopback address: binding every address makes
+        /// Windows ask the player to allow the program through its firewall.
+        /// </param>
+        internal UdpSocketDriver(int port, IPAddress? bindAddress = null)
         {
             if (port < 0 || port > 65535) throw new ArgumentOutOfRangeException(nameof(port));
             socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
@@ -60,7 +64,7 @@ namespace TopiaForge.Multiplayer.Network
                 // A host's well-known port must not be shared with another process on Windows, where a second bind
                 // could otherwise steal its datagrams.
                 if (port != 0 && Environment.OSVersion.Platform == PlatformID.Win32NT) socket.ExclusiveAddressUse = true;
-                socket.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+                socket.Bind(new IPEndPoint(AsDualMode(bindAddress ?? IPAddress.IPv6Any), port));
                 LocalPort = ((IPEndPoint)socket.LocalEndPoint!).Port;
             }
             catch
@@ -144,6 +148,10 @@ namespace TopiaForge.Multiplayer.Network
             disposed = true;
             socket.Dispose();
         }
+
+        /// <summary>A dual-mode socket binds IPv6 addresses; an IPv4 one is bound through its mapped form.</summary>
+        internal static IPAddress AsDualMode(IPAddress address) =>
+            address.AddressFamily == AddressFamily.InterNetwork ? address.MapToIPv6() : address;
 
         private static bool IsTransient(SocketError error) =>
             error == SocketError.WouldBlock || error == SocketError.ConnectionReset || error == SocketError.MessageSize ||

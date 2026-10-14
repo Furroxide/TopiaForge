@@ -24,7 +24,7 @@ internal static class NetworkFixtures
 
     internal static byte[] Utf8(string text) => System.Text.Encoding.UTF8.GetBytes(text);
 
-    private static string RepositoryRoot()
+    internal static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory != null && !File.Exists(Path.Combine(directory.FullName, "TopiaForge.slnx"))) directory = directory.Parent;

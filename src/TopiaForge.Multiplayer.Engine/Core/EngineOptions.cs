@@ -38,6 +38,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the interval between clock probes to each client; zero disables periodic probes.</summary>
         internal long ClockSyncIntervalMicros { get; set; } = 2_000_000;
 
+        /// <summary>
+        /// Gets or sets how long a host keeps a link that has not asked to join. A peer that connects and says nothing
+        /// would otherwise hold a connection slot on keepalives alone.
+        /// </summary>
+        internal long JoinRequestTimeoutMicros { get; set; } = 10_000_000;
+
         /// <summary>Gets or sets the most participants a host admits, including its own player.</summary>
         internal int MaximumParticipants { get; set; } = 16;
 
@@ -54,10 +60,10 @@ namespace TopiaForge.Multiplayer.Engine
         internal IJoinPolicy? JoinPolicy { get; set; }
 
         /// <summary>
-        /// Gets or sets what a client does when its session ends: given the reason and message, return the solo session to
-        /// go back to, or null to end as before. It runs inside the engine and must not call back into it.
+        /// Gets or sets what a client does when its session ends: given how it ended, return the solo session to go back
+        /// to, or null to end as before. It runs inside the engine and must not call back into it.
         /// </summary>
-        internal Func<MultiplayerSessionEndReason, string, SoloSessionStart?>? AfterClientSessionEnds { get; set; }
+        internal Func<ClientSessionEnd, SoloSessionStart?>? AfterClientSessionEnds { get; set; }
 
         /// <summary>
         /// Gets or sets how a host names the participant behind an authenticated link identity. Null assigns

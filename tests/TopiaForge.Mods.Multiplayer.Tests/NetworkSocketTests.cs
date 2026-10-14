@@ -55,19 +55,25 @@ internal static class NetworkSocketTests
 
     internal static void TheUdpDriverCarriesDatagramsAndShrugsOffNoise()
     {
-        using var first = new UdpSocketDriver(0);
-        using var second = new UdpSocketDriver(0);
+        // Every socket here binds a loopback address: binding every address would make Windows ask to let the test
+        // program through its firewall. Each family gets its own pair, as a dual-mode socket bound to one loopback
+        // address hears only that family.
         var buffer = new byte[TransportOptions.MaximumDatagramBytes];
         var loopbacks = Socket.OSSupportsIPv6 ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback } : new[] { IPAddress.Loopback };
         foreach (var loopback in loopbacks)
         {
-            first.Send(UdpPaths.For(new IPEndPoint(loopback, second.LocalPort)), new byte[] { 1, 2, 3 }, 0, 3);
-            That(Receive(second, buffer, out var count, out var path) && count == 3 && buffer[0] == 1, "a datagram crosses " + loopback.AddressFamily);
-            That(UdpPaths.TryGetEndPoint(path!, out var from) && from.Port == first.LocalPort && path!.Kind == TransportPathKind.Lan,
+            using var sender = new UdpSocketDriver(0, loopback);
+            using var receiver = new UdpSocketDriver(0, loopback);
+            sender.Send(UdpPaths.For(new IPEndPoint(loopback, receiver.LocalPort)), new byte[] { 1, 2, 3 }, 0, 3);
+            That(Receive(receiver, buffer, out var count, out var path) && count == 3 && buffer[0] == 1, "a datagram crosses " + loopback.AddressFamily);
+            That(UdpPaths.TryGetEndPoint(path!, out var from) && from.Port == sender.LocalPort && path!.Kind == TransportPathKind.Lan,
                 "and arrives on a LAN path back to the sender");
-            second.Send(path!, new byte[] { 9 }, 0, 1);
-            That(Receive(first, buffer, out count, out _) && count == 1 && buffer[0] == 9, "a reply on that path reaches the sender");
+            receiver.Send(path!, new byte[] { 9 }, 0, 1);
+            That(Receive(sender, buffer, out count, out _) && count == 1 && buffer[0] == 9, "a reply on that path reaches the sender");
         }
+
+        using var first = new UdpSocketDriver(0, IPAddress.Loopback);
+        using var second = new UdpSocketDriver(0, IPAddress.Loopback);
 
         // A datagram larger than any transport datagram is read and dropped: the read that consumed it yields no path,
         // so the network thread counts it against its turn. The next one still arrives.
@@ -84,7 +90,7 @@ internal static class NetworkSocketTests
 
         // A datagram to a closed port draws an ICMP unreachable; it must not break the next receive.
         int closedPort;
-        using (var probe = new UdpSocketDriver(0)) closedPort = probe.LocalPort;
+        using (var probe = new UdpSocketDriver(0, IPAddress.Loopback)) closedPort = probe.LocalPort;
         first.Send(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, closedPort)), new byte[] { 1 }, 0, 1);
         Thread.Sleep(50);
         second.Send(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, first.LocalPort)), new byte[] { 6 }, 0, 1);
@@ -103,8 +109,8 @@ internal static class NetworkSocketTests
             new TransportEndpoint(identity.CopyTransportPrivateKey(), new TransportOptions(), Clock()),
             key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)));
         var clientStack = new NetworkStack(new TransportEndpoint(TransportPair.Key(120, 2), new TransportOptions(), Clock()));
-        using var hostThread = new NetworkThread("TopiaForge test host", new UdpSocketDriver(0), hostStack, Clock);
-        using var clientThread = new NetworkThread("TopiaForge test client", new UdpSocketDriver(0), clientStack, Clock);
+        using var hostThread = new NetworkThread("TopiaForge test host", new UdpSocketDriver(0, IPAddress.Loopback), hostStack, Clock);
+        using var clientThread = new NetworkThread("TopiaForge test client", new UdpSocketDriver(0, IPAddress.Loopback), clientStack, Clock);
         hostThread.Start();
         clientThread.Start();
 
@@ -160,8 +166,8 @@ internal static class NetworkSocketTests
     {
         var hostStack = new NetworkStack(new TransportEndpoint(TransportPair.Key(121, 1), new TransportOptions(), Clock()));
         var clientStack = new NetworkStack(new TransportEndpoint(TransportPair.Key(121, 2), new TransportOptions(), Clock()));
-        var hostThread = new NetworkThread("TopiaForge test host", new UdpSocketDriver(0), hostStack, Clock);
-        var clientThread = new NetworkThread("TopiaForge test client", new UdpSocketDriver(0), clientStack, Clock);
+        var hostThread = new NetworkThread("TopiaForge test host", new UdpSocketDriver(0, IPAddress.Loopback), hostStack, Clock);
+        var clientThread = new NetworkThread("TopiaForge test client", new UdpSocketDriver(0, IPAddress.Loopback), clientStack, Clock);
         hostThread.Start();
         clientThread.Start();
         var attempt = clientThread.Connect(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, hostThread.LocalPort)), null);
@@ -193,7 +199,7 @@ internal static class NetworkSocketTests
         clientThread.Stop(0);
         That(clientThread.HasStopped, "an immediate stop returns once the loop has ended");
 
-        var unused = new NetworkThread("TopiaForge test unused", new UdpSocketDriver(0), new NetworkStack(new TransportEndpoint(TransportPair.Key(121, 3), new TransportOptions(), Clock())), Clock);
+        var unused = new NetworkThread("TopiaForge test unused", new UdpSocketDriver(0, IPAddress.Loopback), new NetworkStack(new TransportEndpoint(TransportPair.Key(121, 3), new TransportOptions(), Clock())), Clock);
         unused.Stop(0);
         Throws<InvalidOperationException>(() => unused.Start(), "a thread stopped before it started cannot start");
         unused.Stop(0);

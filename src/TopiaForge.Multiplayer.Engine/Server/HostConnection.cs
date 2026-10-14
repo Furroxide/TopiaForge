@@ -23,6 +23,9 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal IEngineLink Link { get; }
         internal HostConnectionPhase Phase { get; set; } = HostConnectionPhase.AwaitingJoin;
+
+        /// <summary>Gets or sets when the host accepted the link, which bounds how long it may wait to ask to join.</summary>
+        internal long AcceptedAtMicros { get; set; }
         internal ParticipantRecord? Participant { get; set; }
         internal InternWriter OutIntern { get; } = new InternWriter();
         internal InternReader InIntern { get; } = new InternReader();
