@@ -171,6 +171,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// limited. Every remote request spends a token first, so a player who floods forbidden requests is throttled too;
     /// then the target rule, then the spawn quota.
     /// </summary>
+    /// <remarks>
+    /// Buckets are kept per participant slot, and the runtime reuses slots. It must call <see cref="Forget"/> for a
+    /// leaver before its slot goes to someone else, or the newcomer starts with the leaver's spent buckets.
+    /// </remarks>
     internal sealed class PlayerRequestLimiter
     {
         private readonly Dictionary<int, TokenBucket[]> buckets = new Dictionary<int, TokenBucket[]>();
@@ -213,7 +217,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return NetPermission.Allowed;
         }
 
-        /// <summary>Drops a departed participant's buckets.</summary>
+        /// <summary>Drops a departed participant's buckets; call it before the slot is reused.</summary>
         public bool Forget(int participant) => buckets.Remove(participant);
 
         private TokenBucket[] BucketsFor(int participant, long nowMicros)

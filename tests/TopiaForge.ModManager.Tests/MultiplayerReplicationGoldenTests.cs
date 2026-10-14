@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text.Json.Nodes;
 using TopiaForge.ModManager.Core.Multiplayer;
 using static TopiaForge.ModManager.Tests.MultiplayerModelAssert;
@@ -13,8 +14,16 @@ namespace TopiaForge.ModManager.Tests
     /// </summary>
     internal static class MultiplayerReplicationGoldenTests
     {
+        /// <summary>Every vector file in the folder, each replayed by this class or by MultiplayerMotionGoldenTests.</summary>
+        private static readonly string[] VectorFiles =
+        {
+            "interpolation.json", "ownership.json", "quantization.json", "scene-object-key.json", "scheduler.json",
+            "token-bucket.json"
+        };
+
         public static void Run()
         {
+            EveryVectorFileIsReplayed();
             var quantization = Quantization();
             var keys = SceneObjectKeys();
             var scheduler = Scheduler();
@@ -24,10 +33,28 @@ namespace TopiaForge.ModManager.Tests
                 scheduler + " scheduler and " + buckets + " token bucket vectors).");
         }
 
+        /// <summary>A vector file nothing replays looks like coverage and asserts nothing, so the folder is closed.</summary>
+        private static void EveryVectorFileIsReplayed()
+        {
+            var folder = Path.Combine(Program.FindRepoRoot(), "tests", "fixtures", "multiplayer", "replication");
+            var found = new List<string>();
+            foreach (var path in Directory.GetFiles(folder, "*.json")) found.Add(Path.GetFileName(path));
+            found.Sort(StringComparer.Ordinal);
+            Sequence(VectorFiles, found, "the replication vector files");
+        }
+
         private static int Quantization()
         {
             var document = LoadFixture("quantization.json");
             var count = 0;
+            foreach (var node in document["rounding"]!.AsArray())
+            {
+                var input = DoubleFromHex(node!["input"]!.GetValue<string>());
+                var rounded = NetQuantization.RoundHalfAwayFromZero(input);
+                Equal(node["rounded"]!.GetValue<string>(), DoubleBits(rounded), "rounding " + input.ToString("R", CultureInfo.InvariantCulture));
+                count++;
+            }
+
             foreach (var node in document["positions"]!.AsArray())
             {
                 var value = Input(node!["input"]!);
@@ -179,5 +206,11 @@ namespace TopiaForge.ModManager.Tests
         }
 
         private static float Input(JsonNode node) => FloatFromHex(node["bits"]!.GetValue<string>());
+
+        private static double DoubleFromHex(string bits) =>
+            BitConverter.Int64BitsToDouble(unchecked((long)ulong.Parse(bits, NumberStyles.HexNumber, CultureInfo.InvariantCulture)));
+
+        private static string DoubleBits(double value) =>
+            unchecked((ulong)BitConverter.DoubleToInt64Bits(value)).ToString("x16", CultureInfo.InvariantCulture);
     }
 }

@@ -3,9 +3,11 @@ using System;
 namespace TopiaForge.ModManager.Core.Multiplayer
 {
     /// <summary>
-    /// Plays a replica's samples back a little in the past, so it moves smoothly between updates. The delay covers one
-    /// observed sample interval plus three times the observed jitter, clamped to 80-350 ms, and changes by at most 10%
-    /// of elapsed time so playback never jumps. All bookkeeping is integer microseconds.
+    /// Plays a replica's samples back a little in the past, so it moves smoothly between updates. The delay covers the
+    /// longest wait for the next sample (the observed interval, or the longest gap between buffered samples if that is
+    /// longer) plus three times the observed jitter, clamped to 80-350 ms. The playback offset, the render time minus
+    /// the local time, moves toward the offset estimate minus that delay by at most 10% of elapsed time, so playback
+    /// runs between 0.9 and 1.1 times real time. All bookkeeping is integer microseconds.
     /// </summary>
     internal sealed class SnapshotInterpolationBuffer
     {
@@ -15,7 +17,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public const long ExtrapolationLimitMicros = 250_000;
         public const long DiscontinuityMicros = 1_000_000;
         public const int JitterMarginMultiplier = 3;
-        public const int DelaySlewPercent = 10;
+
+        /// <summary>The playback offset moves by at most this percentage of elapsed time: 0.9 to 1.1 times real time.</summary>
+        public const int PlaybackSlewPercent = 10;
+
         public const long DefaultNominalIntervalMicros = 100_000;
 
         /// <summary>Times must be below 2^53 microseconds (about 285 years), which keeps every sum exact.</summary>
@@ -29,7 +34,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private long jitterScaled;
         private long intervalScaled;
         private long lastTransit;
-        private long currentDelay;
+        private long playbackOffset;
         private bool hasRendered;
         private long lastRenderTime;
         private long lastSampleLocal;
@@ -54,16 +59,43 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>The mean gap between successive newest samples, with gain 1/8.</summary>
         public long IntervalMicros => (intervalScaled + 4) >> 3;
 
+        /// <summary>
+        /// The longest gap between successive buffered samples, or zero with fewer than two. An uneven cadence, such
+        /// as the scheduler's rotation or a lost sample, makes some gaps longer than the mean interval.
+        /// </summary>
+        public long LargestGapMicros
+        {
+            get
+            {
+                var largest = 0L;
+                for (var index = 1; index < count; index++)
+                {
+                    largest = Math.Max(largest, samples[index].ServerTimeMicros - samples[index - 1].ServerTimeMicros);
+                }
+
+                return largest;
+            }
+        }
+
+        /// <summary>The longest expected wait for the next sample plus a jitter margin, clamped to 80-350 ms.</summary>
         public long TargetDelayMicros
         {
             get
             {
-                var delay = IntervalMicros + JitterMarginMultiplier * JitterMicros;
+                var wait = Math.Max(IntervalMicros, LargestGapMicros);
+                var delay = wait + JitterMarginMultiplier * JitterMicros;
                 return Math.Max(MinimumDelayMicros, Math.Min(MaximumDelayMicros, delay));
             }
         }
 
-        public long CurrentDelayMicros => currentDelay;
+        /// <summary>
+        /// The delay of the last rendered frame behind the estimated sender clock. It follows the target as the
+        /// playback offset slews, so a sudden change of estimate shows here first; before rendering it is the target.
+        /// </summary>
+        public long CurrentDelayMicros => hasRendered ? OffsetMicros - playbackOffset : TargetDelayMicros;
+
+        /// <summary>The last rendered frame's render time minus its local time.</summary>
+        public long PlaybackOffsetMicros => playbackOffset;
 
         /// <summary>The mean of sender time minus local arrival time, with gain 1/8.</summary>
         public long OffsetMicros => (offsetScaled + 4) >> 3;
@@ -84,7 +116,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             jitterScaled = 0;
             intervalScaled = nominalIntervalMicros << 3;
             lastTransit = 0;
-            currentDelay = TargetDelayMicros;
+            playbackOffset = 0;
             hasRendered = false;
             lastRenderTime = 0;
             lastSampleLocal = 0;
@@ -131,8 +163,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         }
 
         /// <summary>
-        /// Evaluates the replica at <paramref name="localNowMicros"/>. The render time never moves backwards between
-        /// resets, and with a full buffer it never falls behind the oldest sample.
+        /// Evaluates the replica at <paramref name="localNowMicros"/>. The first frame after a reset renders at the
+        /// offset estimate minus the target delay; later frames move the playback offset toward that by at most 10% of
+        /// the elapsed time. The render time never moves backwards between resets, and with a full buffer it never
+        /// falls behind the oldest sample; either floor moves the playback offset with it.
         /// </summary>
         public bool TrySample(long localNowMicros, out InterpolatedTransform result)
         {
@@ -143,24 +177,25 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 return false;
             }
 
-            var target = TargetDelayMicros;
+            var target = OffsetMicros - TargetDelayMicros;
             if (!hasRendered)
             {
-                currentDelay = target;
+                playbackOffset = target;
                 lastSampleLocal = localNowMicros;
             }
             else if (localNowMicros > lastSampleLocal)
             {
-                var step = Math.Min(localNowMicros - lastSampleLocal, DiscontinuityMicros) * DelaySlewPercent / 100;
-                currentDelay = currentDelay < target
-                    ? Math.Min(target, currentDelay + step)
-                    : Math.Max(target, currentDelay - step);
+                var step = Math.Min(localNowMicros - lastSampleLocal, DiscontinuityMicros) * PlaybackSlewPercent / 100;
+                playbackOffset = playbackOffset < target
+                    ? Math.Min(target, playbackOffset + step)
+                    : Math.Max(target, playbackOffset - step);
                 lastSampleLocal = localNowMicros;
             }
 
-            var render = localNowMicros + OffsetMicros - currentDelay;
+            var render = localNowMicros + playbackOffset;
             if (hasRendered && render < lastRenderTime) render = lastRenderTime;
             if (count == Capacity && render < samples[0].ServerTimeMicros) render = samples[0].ServerTimeMicros;
+            playbackOffset = render - localNowMicros;
             hasRendered = true;
             lastRenderTime = render;
             result = Evaluate(render);
