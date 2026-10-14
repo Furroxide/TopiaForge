@@ -7,13 +7,24 @@ import 'package:path/path.dart' as p;
 
 typedef UpdateHealthFrameScheduler = void Function(FrameCallback callback);
 
+/// The options the update helper starts a freshly installed launcher with.
+const updateHealthNonceOption = '--topiaforge-update-health-nonce';
+const updateHealthFileOption = '--topiaforge-update-health-file';
+
+/// Whether [arguments] start a launcher for an update health check. Such a
+/// start never hands over to another launcher: the update helper is waiting
+/// for this process to report, and rolls the update back if it does not.
+bool isUpdateHealthStart(List<String> arguments) =>
+    arguments.contains(updateHealthNonceOption) ||
+    arguments.contains(updateHealthFileOption);
+
 void scheduleUpdateHealthHandshake(
   List<String> arguments, {
   required String dataRoot,
   UpdateHealthFrameScheduler? frameScheduler,
 }) {
-  final nonce = _option(arguments, '--topiaforge-update-health-nonce');
-  final path = _option(arguments, '--topiaforge-update-health-file');
+  final nonce = _option(arguments, updateHealthNonceOption);
+  final path = _option(arguments, updateHealthFileOption);
   if (nonce == null && path == null) return;
   if (nonce == null ||
       path == null ||

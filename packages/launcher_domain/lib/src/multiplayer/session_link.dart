@@ -137,6 +137,39 @@ final class SessionLink {
     return null;
   }
 
+  /// Reads [text] as [tryParse] does, and says why when it is not a session
+  /// link. A text over [maximumLength] is refused before anything else is
+  /// read. The refusal never repeats the text, which may hold an address.
+  static SessionLinkReading read(String? text) {
+    final link = tryParse(text);
+    if (link != null) return SessionLinkReading._(link, null);
+    if (text != null && text.length > maximumLength) {
+      return const SessionLinkReading.refused(SessionLinkRefusal.tooLong);
+    }
+    return SessionLinkReading.refused(
+      hasScheme(text)
+          ? SessionLinkRefusal.invalid
+          : SessionLinkRefusal.notSessionLink,
+    );
+  }
+
+  /// Whether [text] starts with the `topiaforge:` scheme. The scheme is
+  /// compared in ASCII case only, so no other script's letter can stand in
+  /// for one of its letters.
+  static bool hasScheme(String? text) {
+    if (text == null ||
+        text.length <= scheme.length ||
+        text.codeUnitAt(scheme.length) != 0x3A) {
+      return false;
+    }
+    for (var index = 0; index < scheme.length; index++) {
+      var unit = text.codeUnitAt(index);
+      if (unit >= 0x41 && unit <= 0x5A) unit += 0x20;
+      if (unit != scheme.codeUnitAt(index)) return false;
+    }
+    return true;
+  }
+
   /// The canonical link. For a direct link it holds the host's address.
   String get canonical => switch (kind) {
     SessionLinkKind.invite => '$_prefix$inviteCode',
@@ -166,4 +199,34 @@ final class SessionLink {
       );
     }
   }
+}
+
+/// Why [SessionLink.read] refused a text. The launcher words each one for
+/// people without repeating the text.
+enum SessionLinkRefusal {
+  /// Longer than [SessionLink.maximumLength] characters.
+  tooLong,
+
+  /// Not a `topiaforge:` link at all.
+  notSessionLink,
+
+  /// A `topiaforge:` link that is not a valid `topiaforge://join/…` link: a
+  /// malformed invite code, server id, host or port, another path, or a
+  /// query, fragment, escape or space.
+  invalid,
+}
+
+/// What [SessionLink.read] made of a text: a link, or why there is none.
+final class SessionLinkReading {
+  const SessionLinkReading._(this.link, this.refusal);
+
+  /// A reading refused for [refusal], as when a text was too long to carry.
+  const SessionLinkReading.refused(SessionLinkRefusal this.refusal)
+    : link = null;
+
+  /// The link, when the text was one.
+  final SessionLink? link;
+
+  /// Why the text was refused, when it was.
+  final SessionLinkRefusal? refusal;
 }

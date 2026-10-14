@@ -4,13 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:launcher_data/launcher_data.dart'
+    show TransientSessionLinkSetting;
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_app.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_bloc.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
+import 'package:topiaforge_launcher_flutter/src/launcher_exit.dart';
+import 'package:topiaforge_launcher_flutter/src/launcher_multiplayer_state.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_section.dart';
 import 'package:topiaforge_launcher_flutter/src/screens.dart';
+import 'package:topiaforge_launcher_flutter/src/session_link_inbox.dart';
 
 part 'widget_test_fakes.dart';
 part 'widget_test_developer_repository.dart';
@@ -30,6 +35,7 @@ part 'widget_test_snapshots.dart';
 part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
 part 'widget_reachability_test_cases.dart';
+part 'widget_session_link_test_cases.dart';
 
 Finder _devScrollable() => find
     .descendant(
@@ -47,6 +53,7 @@ void main() {
   registerAccessibilityWidgetTests();
   registerLauncherUpdateWidgetTests();
   registerReachabilityProbeWidgetTests();
+  registerSessionLinkWidgetTests();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would
   // deadlock pumpAndSettle. Running the suite with reduced motion keeps every

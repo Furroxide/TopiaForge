@@ -1,4 +1,3 @@
-import 'package:launcher_data/src/data_root.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';

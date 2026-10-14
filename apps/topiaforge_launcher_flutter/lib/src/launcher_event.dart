@@ -1,8 +1,10 @@
 import 'package:launcher_domain/launcher_domain.dart';
 
 import 'launcher_section.dart';
+import 'session_link_inbox.dart';
 
 part 'launcher_developer_event.dart';
+part 'launcher_multiplayer_event.dart';
 
 sealed class LauncherEvent {
   const LauncherEvent();
