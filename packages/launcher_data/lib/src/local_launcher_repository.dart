@@ -59,6 +59,7 @@ part 'local_launcher_repository/acceptance_launch_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
 part 'local_launcher_repository/registry_source_models.dart';
 part 'local_launcher_repository/registry_source_parsing.dart';
+part 'local_launcher_repository/exact_package_catalog_loading.dart';
 part 'local_launcher_repository/repository_hooks.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
@@ -374,6 +375,47 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     selectionOverride: selectionOverride,
     restart: true,
   );
+
+  /// Starts [profile] to host or join [session], staging launch request V5.
+  /// [launch] and [restart] keep staging V4 for every other launch.
+  ///
+  /// A join always starts at the main menu: the host's session decides what
+  /// loads. [restart] replaces a running game this launcher owns, as the
+  /// join flow does to restart into a server's profile.
+  ///
+  /// Not on [LauncherRepository] yet: the multiplayer slices consume the
+  /// concrete type, and widening the interface breaks external fakes.
+  Future<LaunchResult> launchSession(
+    GameInstall install,
+    LauncherProfile profile,
+    LaunchSessionRequest session, {
+    LaunchSelection? selectionOverride,
+    bool restart = false,
+  }) {
+    if (session.role == LaunchSessionRole.join &&
+        selectionOverride != null &&
+        selectionOverride.kind != LaunchSelectionKind.mainMenu) {
+      throw ArgumentError(
+        'A join starts at the main menu.',
+        'selectionOverride',
+      );
+    }
+    return _launchProfile(
+      install,
+      profile,
+      selectionOverride: session.role == LaunchSessionRole.join
+          ? const LaunchSelection.mainMenu()
+          : selectionOverride,
+      restart: restart,
+      session: session,
+    );
+  }
+
+  /// The exact archives installed in [install] and offered by the player's
+  /// package sources, history included, for planning a join
+  /// ([JoinPlanner.planFromCatalog]).
+  Future<ExactPackageCatalog> loadExactPackageCatalog(GameInstall install) =>
+      _loadExactPackageCatalog(install);
 
   @override
   Future<DiagnosticBundle> createDiagnosticBundle(

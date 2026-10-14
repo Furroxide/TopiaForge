@@ -53,6 +53,14 @@ namespace TopiaForge.Multiplayer
 
         internal SessionEngine Engine => engine;
 
+        /// <summary>
+        /// Takes the session the launcher asked this process to host or join (launch request V5), once: null when there is
+        /// none, or when it cannot be planned yet, which <paramref name="unsupported"/> explains. This only plans the
+        /// session; starting it is the in-game flows' decision.
+        /// </summary>
+        internal LaunchSessionPlan? TakeLaunchSession(out LaunchSessionUnsupported unsupported) =>
+            LaunchSessionPlan.FromTicket(LaunchSessionTickets.Take(), out unsupported);
+
         public MultiplayerSessionSnapshot Snapshot => reserved.Snapshot;
 
         public System.Threading.CancellationToken CurrentSessionToken => reserved.CurrentSessionToken;

@@ -307,6 +307,7 @@ class RegistryMod {
     this.sourceId = '',
     this.sourceName = '',
     this.installedVersion,
+    this.packageBytes,
   });
 
   final ModManifest manifest;
@@ -316,6 +317,9 @@ class RegistryMod {
   final String sourceId;
   final String sourceName;
   final String? installedVersion;
+
+  /// The archive size in bytes, when the source states it.
+  final int? packageBytes;
 
   bool get isInstalled => installedVersion != null;
 

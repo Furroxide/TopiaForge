@@ -12,6 +12,7 @@ namespace TopiaForge.ModManager
         private readonly GamemodeSessionOrchestrator sessions;
         private readonly LaunchStagingStore store;
         private readonly string? requestId;
+        private readonly LaunchSessionIdentity? session;
         private readonly Action<Exception> report;
         private readonly Stopwatch retryClock = Stopwatch.StartNew();
         private readonly Func<long> milliseconds;
@@ -24,15 +25,21 @@ namespace TopiaForge.ModManager
         private RuntimeSessionSnapshot? publishedSnapshot;
         private RuntimeBindingRegistry? lastBindings;
         private bool disposed;
+        /// <param name="session">
+        /// The session a V5 request launches. Its records are then published as progress and outcomes V2: see
+        /// <see cref="LaunchSessionPublication"/>. Null for every other launch, whose records stay version 1.
+        /// </param>
         internal RuntimeLaunchPublisher(GamemodeSessionOrchestrator sessions, LaunchStagingStore store, string? requestId, Action<Exception> report,
-            Func<long>? milliseconds = null)
+            Func<long>? milliseconds = null, LaunchSessionIdentity? session = null)
         {
             this.sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
             this.store = store ?? throw new ArgumentNullException(nameof(store));
             this.report = report ?? throw new ArgumentNullException(nameof(report));
             this.milliseconds = milliseconds ?? (() => retryClock.ElapsedMilliseconds);
             if (requestId != null) _ = LaunchStorageKeys.Request(requestId);
+            if (session != null && session.RequestId != requestId) throw new ArgumentException("A session launch publishes under its own request.", nameof(session));
             this.requestId = requestId;
+            this.session = session;
             sessions.Progress += Progress;
             sessions.Outcome += Outcome;
         }
@@ -42,7 +49,7 @@ namespace TopiaForge.ModManager
             {
                 if (disposed || requestId == null || progress.RequestId != requestId || progress.Sequence <= progressSequence
                     || (pendingProgress != null && progress.Sequence <= pendingProgress.Sequence)) return;
-                pendingProgress = progress;
+                pendingProgress = session == null ? progress : LaunchSessionPublication.ToSessionProgress(progress, session);
                 WritePendingProgress();
             }
         }
@@ -52,6 +59,13 @@ namespace TopiaForge.ModManager
             {
                 if (disposed || requestId == null || outcome.RequestId != requestId || outcomes.Contains(outcome.Kind)
                     || pendingOutcomes.ContainsKey(outcome.Kind)) return;
+                if (session != null)
+                {
+                    var published = LaunchSessionPublication.ToSessionOutcome(outcome, session);
+                    if (published == null) return;
+                    outcome = published;
+                }
+
                 pendingOutcomes.Add(outcome.Kind, outcome);
                 WritePendingOutcome(outcome.Kind);
             }

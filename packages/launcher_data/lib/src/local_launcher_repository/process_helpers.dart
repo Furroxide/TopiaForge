@@ -5,9 +5,13 @@ extension _ProcessHelpers on LocalLauncherRepository {
     GameInstall install,
     LauncherProfile profile, {
     LaunchSelection? selectionOverride,
+    LaunchSessionRequest? session,
     required String message,
   }) async {
     final acceptance = _acceptanceIsolation;
+    if (acceptance != null && session != null) {
+      throw StateError('Acceptance runs never host or join a session.');
+    }
     if (acceptance != null) {
       acceptance.verify();
       if (_acceptanceChallenge == null ||
@@ -73,8 +77,13 @@ extension _ProcessHelpers on LocalLauncherRepository {
       digest: preview.packageDigest,
       plan: preview.resolution?.plan?.descriptor,
     );
+    // Only a host or join writes V5; every other launch stages V4 unchanged.
+    final request = StagedLaunchRequest.forLaunch(
+      configuration,
+      session: session,
+    );
     final store = LaunchStagingStore(refreshed.path);
-    final launchFile = await store.writeRequest(configuration);
+    final launchFile = await store.writeLaunchRequest(request);
     late final Map<String, String> environment;
     try {
       if (acceptance == null) {
@@ -97,7 +106,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
         );
       }
       if (await _runningForLaunch(refreshed)) {
-        await store.deleteRequest(configuration);
+        await store.deleteLaunchRequest(request);
         return const LaunchResult(
           started: false,
           message:
@@ -110,7 +119,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
         selectionOverride: selectionOverride,
       );
       if (!finalPreview.canLaunch) {
-        await store.deleteRequest(configuration);
+        await store.deleteLaunchRequest(request);
         return _previewLaunchFailure(finalPreview);
       }
       if (finalPreview.packageDigest != preview.packageDigest ||
@@ -119,7 +128,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
               ) !=
               _canonicalProfileValue(configuration.plan?.toJson()) ||
           finalPreview.effectiveSelection != preview.effectiveSelection) {
-        await store.deleteRequest(configuration);
+        await store.deleteLaunchRequest(request);
         return const LaunchResult(
           started: false,
           message:
@@ -128,11 +137,11 @@ extension _ProcessHelpers on LocalLauncherRepository {
       }
       await _requireCurrentProfileRevision(profile);
     } on Object {
-      await store.deleteRequest(configuration);
+      await store.deleteLaunchRequest(request);
       rethrow;
     }
     if (_disposed) {
-      await store.deleteRequest(configuration);
+      await store.deleteLaunchRequest(request);
       return const LaunchResult(
         started: false,
         message: 'The launcher repository closed before process creation.',
@@ -152,7 +161,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
         layout.executablePath,
       );
     } on Object {
-      await store.deleteRequest(configuration);
+      await store.deleteLaunchRequest(request);
       return LaunchResult(
         started: false,
         requestId: requestId,
@@ -176,7 +185,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
       profileRevision: profile.revision,
       installIdentity: identity,
       packageDigest: configuration.digest,
-      command: configuration.command,
+      command: request.command,
       process: process,
       unconfirmed: true,
     );

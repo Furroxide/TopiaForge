@@ -33,6 +33,34 @@ namespace TopiaForge.ModManager.Core
             { "idle", "preparing", "loading-world", "starting-mode", "running", "stopping" };
         internal static readonly string[] Commands = { "main-menu", "launch-target" };
         internal static readonly string[] Statuses = { "succeeded", "failed", "cancelled" };
+
+        // Session launches (request V5, progress and outcome V2). Only a join connects or synchronizes.
+        internal static readonly string[] SessionPhases =
+            { "idle", "preparing", "loading-world", "starting-mode", "running", "stopping", "connecting", "synchronizing" };
+        internal static readonly string[] SessionCommands = { "host-session", "join-session" };
+        internal static readonly string[] SessionRoles = { "host", "join" };
+        internal static readonly string[] Privacies = { "relay-only", "direct" };
+        internal static readonly string[] Visibilities = { "public", "invite", "lan" };
+        internal static readonly string[] ListingSources = { "internet", "lan" };
+        internal static readonly string[] HostStates = { "pending", "starting", "hosting", "stopping", "stopped" };
+        internal static readonly string[] JoinStates =
+        {
+            "pending", "resolving", "checking", "awaiting-password", "preparing-proof", "connecting", "synchronizing",
+            "in-session", "reconnecting", "ended"
+        };
+        internal static readonly string[] JoinFailures =
+        {
+            "timeout", "nat-traversal-failed", "relay-unavailable", "server-full", "password-rejected", "kicked",
+            "protocol-mismatch", "admission-changed", "disconnected", "direct-not-allowed", "snapshot-failed"
+        };
+        internal static readonly string[] HostFailures = { "port-in-use", "identity-unavailable", "network-stopped", "service-unavailable" };
+        internal static readonly string[] EndReasons =
+        {
+            "left", "host-ended", "kicked", "banned", "timed-out", "replaced", "admission-rejected", "protocol-mismatch",
+            "transport-failed"
+        };
+        internal static readonly string[] AdmissionCodes =
+            { "other", "full", "protocol", "password-required", "password-wrong", "too-many-attempts", "banned", "content" };
         internal static readonly string[] RuntimeErrors =
         {
             "invalidArgument", "notFound", "unavailable", "conflict", "invalidState", "cancelled",

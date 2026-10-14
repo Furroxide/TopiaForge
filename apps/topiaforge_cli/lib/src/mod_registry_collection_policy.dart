@@ -52,6 +52,7 @@ class _CollectedVersion {
     required this.packageSha256,
     required this.sourceLabel,
     this.publishedAt = '',
+    this.packageBytes,
   });
 
   final ModManifest manifest;
@@ -59,5 +60,8 @@ class _CollectedVersion {
   final String packageSha256;
   final String sourceLabel;
   final String publishedAt;
+
+  /// The package archive's size in bytes, when the bytes were read.
+  final int? packageBytes;
   String changelog = '';
 }

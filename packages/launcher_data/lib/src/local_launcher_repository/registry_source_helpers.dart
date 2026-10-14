@@ -56,10 +56,12 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
   ) async {
     final byId = <String, RegistryMod>{};
     final byIdVersion = <String, RegistryMod>{};
+    final history = <RegistryMod>[];
     final statuses = <PackageSourceStatus>[];
     for (final source in sources.where((source) => source.enabled)) {
       try {
-        final mods = await _loadRegistrySource(source);
+        final loaded = await _loadRegistrySource(source);
+        final mods = loaded.current;
         statuses.add(
           PackageSourceStatus(
             sourceId: source.id,
@@ -90,6 +92,11 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
             byId[id] = mod;
           }
         }
+        history.addAll(
+          loaded.history.where(
+            (mod) => !mod.manifest.validate().any((issue) => issue.isBlocking),
+          ),
+        );
       } on Object catch (error) {
         await _appendLauncherLogBestEffort(
           'Package source ${source.id} failed: $error',
@@ -106,6 +113,15 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
       }
     }
 
+    // History rows only fill exact versions no current entry offers, and
+    // never become tiles.
+    for (final mod in history) {
+      byIdVersion.putIfAbsent(
+        '${mod.manifest.id.toLowerCase()}@${mod.manifest.version.toLowerCase()}',
+        () => mod,
+      );
+    }
+
     RegistryMod withInstalledVersion(RegistryMod mod) {
       final installed = installedMods
           .where(
@@ -120,6 +136,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
         sourceId: mod.sourceId,
         sourceName: mod.sourceName,
         installedVersion: installed?.version,
+        packageBytes: mod.packageBytes,
       );
     }
 
@@ -134,53 +151,54 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
     return source.url.trim().toLowerCase().startsWith('https://');
   }
 
-  Future<List<RegistryMod>> _loadRegistrySource(PackageSource source) async {
+  Future<_RegistrySourceMods> _loadRegistrySource(PackageSource source) async {
     // A local source can point at a DIRECTORY of .topiaforgemod packages. The catalog is then
     // derived straight from the packages (manifest + sha read from each file) with no separate
     // pinned metadata, so the listing can never disagree with the packages on disk.
     final directory = _resolveDirectorySource(source);
     if (directory != null) {
-      return _packagesInDirectory(directory, source);
+      return _RegistrySourceMods(
+        current: await _packagesInDirectory(directory, source),
+      );
     }
 
     final document = await _readSourceDocument(source);
     final decoded = jsonDecode(document.content) as Map<String, Object?>;
+    final flat = _flatRegistryMods(decoded, source, document.baseUri);
     final mods = <RegistryMod>[
-      ..._flatRegistryMods(decoded, source, document.baseUri),
+      ...flat.current,
       ..._vpmRegistryMods(decoded, source, document.baseUri),
     ];
     _validateRegistryModTrust(source, mods);
-    return mods;
+    return _RegistrySourceMods(current: mods, history: flat.history);
   }
 
   void _validateRegistryModTrust(PackageSource source, List<RegistryMod> mods) {
     for (final mod in mods) {
-      final reference = mod.downloadUrl.trim();
-      final uri = Uri.tryParse(reference);
-      if (uri == null || !uri.hasScheme) {
-        throw StateError(
-          '${mod.manifest.id} has no absolute package download URL.',
-        );
-      }
-      if (uri.scheme == 'file') {
-        if (_isRemoteSource(source)) {
-          throw StateError(
-            '${mod.manifest.id} from a remote source points at a local file.',
-          );
-        }
-        continue;
-      }
-      if (!isPublicHttpsUri(uri)) {
-        throw StateError(
-          '${mod.manifest.id} package downloads must use an absolute HTTPS URL without credentials, query, or fragment.',
-        );
-      }
-      if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(mod.packageSha256.trim())) {
-        throw StateError(
-          '${mod.manifest.id} remote package is missing a valid SHA-256 hash.',
-        );
-      }
+      final problem = _registryModTrustProblem(source, mod);
+      if (problem != null) throw StateError(problem);
     }
+  }
+
+  /// Why [mod] may not be installed from [source], or null when it may.
+  String? _registryModTrustProblem(PackageSource source, RegistryMod mod) {
+    final reference = mod.downloadUrl.trim();
+    final uri = Uri.tryParse(reference);
+    if (uri == null || !uri.hasScheme) {
+      return '${mod.manifest.id} has no absolute package download URL.';
+    }
+    if (uri.scheme == 'file') {
+      return _isRemoteSource(source)
+          ? '${mod.manifest.id} from a remote source points at a local file.'
+          : null;
+    }
+    if (!isPublicHttpsUri(uri)) {
+      return '${mod.manifest.id} package downloads must use an absolute HTTPS URL without credentials, query, or fragment.';
+    }
+    if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(mod.packageSha256.trim())) {
+      return '${mod.manifest.id} remote package is missing a valid SHA-256 hash.';
+    }
+    return null;
   }
 
   // Returns the directory a source points at, or null when the source is a document (JSON/VPM
@@ -248,6 +266,7 @@ extension _RegistrySourceHelpers on LocalLauncherRepository {
             packageSha256: package.sha256Hex,
             sourceId: source.id,
             sourceName: source.name,
+            packageBytes: file.lengthSync(),
           ),
         );
       } on Object catch (error) {

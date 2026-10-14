@@ -106,6 +106,7 @@ namespace TopiaForge.ModManager
                     { rejectedLauncherCommand = true; rejectionReason = stateStore.Failure; }
                 }
                 ApplyStartupRecovery();
+                OfferLaunchSession();
                 try
                 {
                     if (CanSaveState) registry.ApplyPendingUninstalls(paths, state);
@@ -144,7 +145,8 @@ namespace TopiaForge.ModManager
                 runtime.ActivateSessionRuntime(selection.Profile, rejectedSelections: selection.RejectedSelections);
                 launchPublisher = new RuntimeLaunchPublisher(runtime.Sessions, launchStaging,
                     launchProfile?.RequestId ?? rejectedCorrelation?.RequestId,
-                    error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."));
+                    error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."),
+                    session: LaunchSessionIdentityForPublication());
                 initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
                 PublishRuntimeObservations();
                 // Every selected package now has a binding result, including failed owners.

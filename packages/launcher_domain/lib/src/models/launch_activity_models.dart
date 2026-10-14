@@ -30,7 +30,9 @@ final class LaunchActivity {
     this.unconfirmed = false,
     this.processExited = false,
   }) {
-    if (command != 'main-menu' && command != 'launch-target') {
+    if (command != 'main-menu' &&
+        command != 'launch-target' &&
+        !sessionLaunchCommands.contains(command)) {
       throw const FormatException('Invalid activity command.');
     }
     if ((progress != null && progress!.requestId != requestId) ||
@@ -68,7 +70,16 @@ final class LaunchActivity {
   final bool processExited;
   bool get acknowledged => launchOutcome != null;
   bool get sessionStarted =>
-      command == 'launch-target' && launchOutcome?.status == 'succeeded';
+      (command == 'launch-target' || isSessionLaunch) &&
+      launchOutcome?.status == 'succeeded';
+
+  /// Whether the request hosts or joins a live session (request V5).
+  bool get isSessionLaunch => sessionLaunchCommands.contains(command);
+
+  /// Whether a terminal record follows a successful launch: a gamemode
+  /// session's, or a live session's.
+  bool get expectsTerminalOutcome =>
+      command == 'launch-target' || isSessionLaunch;
   int get sequence => [
     progress?.sequence ?? -1,
     launchOutcome?.sequence ?? -1,

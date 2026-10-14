@@ -30,6 +30,38 @@ abstract final class LaunchTransport {
       _encodeContract(value.toJson(), maxDocumentBytes);
   static String writeObservation(LaunchObservationEnvelope value) =>
       _encodeContract(value.toJson(), maxObservationBytes);
+
+  // Session launches: request V5 (progress and outcome V2 go through
+  // [readProgress] and [readOutcome]), the session channels and the
+  // multiplayer preferences. Each is written as sorted JSON.
+  static const maxChannelBytes = _channelDocumentBytes;
+
+  static ProfileLaunchConfigurationV5 readProfileV5(String json) =>
+      ProfileLaunchConfigurationV5.fromJson(
+        _decodeContract(json, maxDocumentBytes),
+      );
+  static String writeProfileV5(ProfileLaunchConfigurationV5 value) =>
+      _encodeContract(value.toJson(), maxDocumentBytes);
+  static SessionHandoff readSessionHandoff(String json) =>
+      SessionHandoff.fromJson(_decodeContract(json, maxChannelBytes));
+  static String writeSessionHandoff(SessionHandoff value) =>
+      _encodeContract(value.toJson(), maxChannelBytes);
+  static SessionJoinRequest readSessionJoin(String json) =>
+      SessionJoinRequest.fromJson(_decodeContract(json, maxChannelBytes));
+  static String writeSessionJoin(SessionJoinRequest value) =>
+      _encodeContract(value.toJson(), maxChannelBytes);
+  static MultiplayerPreferencesProjection readPreferences(String json) =>
+      MultiplayerPreferencesProjection.fromJson(
+        _decodeContract(json, maxChannelBytes),
+      );
+  static String writePreferences(MultiplayerPreferencesProjection value) =>
+      _encodeContract(value.toJson(), maxChannelBytes);
+  static MultiplayerPreferencesJournal readPreferencesJournal(String json) =>
+      MultiplayerPreferencesJournal.fromJson(
+        _decodeContract(json, maxChannelBytes),
+      );
+  static String writePreferencesJournal(MultiplayerPreferencesJournal value) =>
+      _encodeContract(value.toJson(), maxChannelBytes);
 }
 
 Object? _decodeContract(String source, int limit) {

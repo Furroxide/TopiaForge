@@ -60,7 +60,17 @@
         "downloadUrl": { "type": "string" },
         "packageSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "changelog": { "type": "string" },
-        "publishedAt": { "type": "string" }
+        "publishedAt": { "type": "string" },
+        "manifest": {
+          "description": "This version's full topiaforge.mod.json, inlined for the newest older versions so a launcher can install the exact version a multiplayer server runs. Such rows never become catalog entries.",
+          "$ref": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.schema.json"
+        },
+        "packageBytes": {
+          "description": "The package archive's size in bytes, when the index states it.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 536870912
+        }
       }
     }
   }

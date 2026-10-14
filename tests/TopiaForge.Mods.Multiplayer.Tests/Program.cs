@@ -231,6 +231,9 @@ internal static class Program
             NetworkPrivacyTests.WhatModsSeeHasNoAddress();
             NetworkPrivacyTests.TheNetworkLayerReportsReasonsNotAddresses();
             NetworkPrivacyTests.ARelayOnlyResolveContactsOnlyTheLan();
+            LaunchSessionPlanTests.HostsAndJoinsAreMappedOntoLiveSessions();
+            LaunchSessionPlanTests.APlanNeverShowsItsAddress();
+            LaunchSessionPlanTests.TheProviderTakesTheOfferedTicketOnce();
             LiveSessionFailureTests.ALinkLostBeforeTheSessionStartsEndsTheJoin();
             LiveSessionFailureTests.SilentConnectionsCannotFillAHost();
             LiveSessionFailureTests.OneSourceHoldsOnlyItsShareOfAHost();

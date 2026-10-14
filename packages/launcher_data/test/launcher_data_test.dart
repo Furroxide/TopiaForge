@@ -23,6 +23,8 @@ part 'runtime_repair_security_test_part.dart';
 part 'runtime_loader_payload_test_part.dart';
 part 'restart_requirement_test_part.dart';
 part 'world_catalog_test_part.dart';
+part 'launch_v5_integration_test_part.dart';
+part 'registry_history_test_part.dart';
 
 void main() {
   late Directory root;
@@ -141,6 +143,17 @@ void main() {
   _registerInstalledBuildProvenanceTests(
     repository: () => repository,
     root: () => root,
+    gameRoot: () => gameRoot,
+  );
+  _registerLaunchV5IntegrationTests(
+    root: () => root,
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
+    gameRoot: () => gameRoot,
+  );
+  _registerRegistryHistoryTests(
+    root: () => root,
+    repository: () => repository,
     gameRoot: () => gameRoot,
   );
 

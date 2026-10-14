@@ -330,7 +330,9 @@ writing a launch instruction or spawning a process. Preserve exact empty profile
 selected versions, and inherited manager state according to the existing package
 selection rules. Safe mode explicitly starts at main-menu.
 
-Profile launch wire version 4 replaces version 3. Every command carries a request
+Profile launch wire version 4 replaces version 3. (Host-session and join-session
+launches later add version 5 on top of it, leaving version 4 unchanged for every
+other launch; see `MultiplayerLaunchContract.md`.) Every command carries a request
 ID, profile revision, immutable package identities and digest; its explicit command
 is main-menu or launch-target. Launch-target additionally carries a resolved plan
 descriptor whose package identities and digest must match the envelope. Main-menu
