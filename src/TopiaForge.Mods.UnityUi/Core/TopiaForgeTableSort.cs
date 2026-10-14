@@ -94,6 +94,47 @@ namespace TopiaForge.Mods.UnityUi
         {
             return column >= 0 && column == Column ? Direction : TopiaForgeSortDirection.None;
         }
+
+        /// <summary>
+        /// Orders <paramref name="items"/> into <paramref name="sorter"/> by this sort, using the sorted
+        /// column's <paramref name="comparer"/>. Whenever the rows end up in their supplied order instead
+        /// (no comparer, or a comparer that threw), the sort clears too, so no header claims a sort the
+        /// rows do not show. Returns false, with the exception, only when the comparer threw.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="sorter"/> or <paramref name="items"/> is null.</exception>
+        public bool TryApply<T>(TopiaForgeStableSorter sorter, IReadOnlyList<T> items, IComparer<T>? comparer, out Exception? failure)
+        {
+            if (sorter == null)
+            {
+                throw new ArgumentNullException(nameof(sorter));
+            }
+
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            failure = null;
+            if (Column < 0 || Direction == TopiaForgeSortDirection.None || comparer == null)
+            {
+                Clear();
+                sorter.Reset(items.Count);
+                return true;
+            }
+
+            try
+            {
+                sorter.Sort(items, comparer, Direction);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                // The sorter has already restored the supplied order; the state must say so as well.
+                Clear();
+                failure = exception;
+                return false;
+            }
+        }
     }
 
     /// <summary>

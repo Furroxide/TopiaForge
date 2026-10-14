@@ -113,11 +113,33 @@ namespace TopiaForge.ModManager.Tests
             Assert(stepper.MoveTo(1), "jumping backwards");
             AssertEqual(stepper.StatusOf(1), TopiaForgeStepStatus.Active, "earlier step active again");
             AssertEqual(stepper.StatusOf(3), TopiaForgeStepStatus.Pending, "later steps return to pending");
+            AssertEqual(stepper.StatusOf(2), TopiaForgeStepStatus.Pending, "a backward jump undoes a later skip");
             AssertEqual(stepper.StatusOf(0), TopiaForgeStepStatus.Done, "earlier steps stay done");
 
+            Assert(stepper.Skip(2), "skip the next step again");
             Assert(stepper.MoveTo(2), "jumping onto a skipped step");
             AssertEqual(stepper.StatusOf(2), TopiaForgeStepStatus.Active, "a jump un-skips its target");
             AssertEqual(stepper.StatusOf(1), TopiaForgeStepStatus.Done, "the step jumped past is done");
+
+            // A retry from an earlier phase must never leave a later phase permanently skipped.
+            var retry = new TopiaForgePhaseStepperState(7);
+            Assert(retry.Skip(3), "skip a phase up front");
+            Assert(retry.MoveTo(5), "jump forward past the skipped phase");
+            AssertEqual(retry.StatusOf(3), TopiaForgeStepStatus.Skipped, "a forward jump keeps the earlier skip");
+            AssertEqual(retry.StatusOf(4), TopiaForgeStepStatus.Done, "a forward jump finishes the steps it passes");
+            Assert(retry.Fail(), "the jumped-to phase fails");
+            Assert(retry.MoveTo(1), "retry from an earlier phase");
+            for (var step = 2; step < retry.Count; step++)
+            {
+                AssertEqual(retry.StatusOf(step), TopiaForgeStepStatus.Pending, "after a retry, phase " + step + " is pending again");
+            }
+
+            for (var step = 1; step < retry.Count; step++)
+            {
+                Assert(retry.Advance(), "walk the retried flow (" + step + ")");
+            }
+
+            Assert(retry.IsComplete && retry.DoneCount == retry.Count, "the retried flow runs every phase, including the one skipped before");
 
             Assert(stepper.Complete(), "complete");
             Assert(stepper.IsComplete, "complete reports so");
@@ -248,6 +270,15 @@ namespace TopiaForge.ModManager.Tests
             AssertEqual(log.CountVisibleWhenClosed(10f, 8f, 1.5f, 3), 3, "the closed view caps its line count");
             AssertEqual(log.CountVisibleWhenClosed(100f, 8f, 1.5f, 8), 0, "an idle log shows nothing");
             AssertEqual(log.CountVisibleWhenClosed(19f, 8f, 1.5f, 8), 1, "only the newest line remains");
+
+            // Reduced motion hides a fading line early, but the closed view still counts it until its
+            // normal fade ends, so a refresh after reduced motion is turned off brings it back mid-fade.
+            const float midFade = 10.6f;
+            AssertNear(TopiaForgeChatFade.Alpha(midFade, 10f, 1.5f, true), 0f, "reduced motion hides the fading line");
+            Assert(TopiaForgeChatFade.Alpha(midFade, 10f, 1.5f, false) > 0f, "without reduced motion the same line is partly visible");
+            var fading = new TopiaForgeChatLogModel(capacity: 4);
+            fading.TryAppend("still fading", TopiaForgeChatLineKind.Player, 0f, out _);
+            AssertEqual(fading.CountVisibleWhenClosed(midFade, 10f, 1.5f, 8), 1, "the closed view keeps counting a line hidden early by reduced motion");
         }
     }
 }

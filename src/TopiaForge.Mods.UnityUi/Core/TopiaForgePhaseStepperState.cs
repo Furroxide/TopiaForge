@@ -162,9 +162,10 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         /// <summary>
-        /// Jumps straight to a step, as when a driver reports its phase directly. Earlier steps that
-        /// were not skipped become done, later ones pending (their progress clears), and any failure
-        /// clears. Activating a skipped step un-skips it.
+        /// Jumps straight to a step, as when a driver reports its phase directly or a failed phase is
+        /// retried. Earlier steps keep a skip and otherwise become done. The target becomes active,
+        /// even if it was skipped. Every later step returns to pending, its progress cleared and any
+        /// skip undone, so a backward jump can never leave a future phase skipped. Any failure clears.
         /// </summary>
         public bool MoveTo(int index)
         {
@@ -184,7 +185,7 @@ namespace TopiaForge.Mods.UnityUi
                 }
                 else
                 {
-                    next = current == TopiaForgeStepStatus.Skipped ? TopiaForgeStepStatus.Skipped : TopiaForgeStepStatus.Pending;
+                    next = TopiaForgeStepStatus.Pending;
                     if (progressTotal[step] != 0 || progressCurrent[step] != 0)
                     {
                         progressCurrent[step] = 0;

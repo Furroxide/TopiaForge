@@ -15,7 +15,21 @@ namespace TopiaForge.ModManager.Tests
             var identity = TopiaForgeMatrix4.Identity;
             AssertNear(identity[2, 2], 1f, "identity diagonal");
             AssertNear(identity[0, 3], 0f, "identity off-diagonal");
-            AssertThrows<ArgumentOutOfRangeException>(() => _ = identity[4, 0], "matrix rows stop at 3");
+
+            var numbered = new TopiaForgeMatrix4(0f, 1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f, 9f, 10f, 11f, 12f, 13f, 14f, 15f);
+            for (var row = 0; row < 4; row++)
+            {
+                for (var column = 0; column < 4; column++)
+                {
+                    AssertNear(numbered[row, column], (row * 4) + column, "element [" + row + ", " + column + "]");
+                }
+            }
+
+            // Each index is validated on its own; a flattened check would alias [0, 4] onto [1, 0].
+            foreach (var (row, column) in new[] { (4, 0), (0, 4), (1, -1), (-1, 3), (3, 4), (-1, 5), (int.MaxValue, 0), (0, int.MinValue) })
+            {
+                AssertThrows<ArgumentOutOfRangeException>(() => _ = numbered[row, column], "index [" + row + ", " + column + "] is rejected");
+            }
 
             var translate = new TopiaForgeMatrix4(1f, 0f, 0f, 5f, 0f, 1f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 1f);
             var scale = new TopiaForgeMatrix4(2f, 0f, 0f, 0f, 0f, 2f, 0f, 0f, 0f, 0f, 2f, 0f, 0f, 0f, 0f, 1f);

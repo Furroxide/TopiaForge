@@ -29,6 +29,7 @@ namespace TopiaForge.ModManager.Tests
             TableSortStateToggles();
             StableSorterKeepsTiesInSuppliedOrder();
             StableSorterSurvivesBadComparers();
+            SortStateClearsWhenRowsFallBack();
             IconRasterDrawsEveryIcon();
             SteadyStatePathsAllocateNothing();
             Console.WriteLine("UiKitMultiplayerCoreTests passed.");

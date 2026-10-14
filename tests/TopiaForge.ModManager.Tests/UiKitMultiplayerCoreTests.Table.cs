@@ -141,6 +141,41 @@ namespace TopiaForge.ModManager.Tests
             Assert(seen.All(value => value), "an inconsistent comparer never loses a row");
         }
 
+        private static void SortStateClearsWhenRowsFallBack()
+        {
+            var keys = new[] { 3, 1, 2, 1 };
+            var sorter = new TopiaForgeStableSorter();
+            var sort = new TopiaForgeTableSortState();
+
+            sort.Set(1, TopiaForgeSortDirection.Descending);
+            Assert(sort.TryApply(sorter, keys, Comparer<int>.Default, out var none) && none == null, "a working comparer applies");
+            AssertEqual((sort.Column, sort.Direction), (1, TopiaForgeSortDirection.Descending), "a successful sort keeps its state");
+            AssertEqual(sorter.SourceIndexAt(0), 0, "the rows are sorted (largest first)");
+            AssertEqual(sorter.SourceIndexAt(1), 2, "the rows are sorted (then the 2)");
+
+            var throwing = Comparer<int>.Create((a, b) => throw new InvalidOperationException("comparer failed"));
+            var version = sort.Version;
+            Assert(!sort.TryApply(sorter, keys, throwing, out var failure), "a throwing comparer reports a failure");
+            Assert(failure is InvalidOperationException, "the comparer's exception is returned");
+            AssertEqual((sort.Column, sort.Direction), (-1, TopiaForgeSortDirection.None), "a failed sort clears, so no header shows a sort that is not applied");
+            Assert(sort.Version != version, "clearing after a failure moves the version");
+            for (var view = 0; view < keys.Length; view++)
+            {
+                AssertEqual(sorter.SourceIndexAt(view), view, "a failed sort shows the supplied order at " + view);
+            }
+
+            sort.Set(0, TopiaForgeSortDirection.Ascending);
+            Assert(sort.TryApply(sorter, keys, null, out failure) && failure == null, "a missing comparer is not a failure");
+            AssertEqual(sort.Column, -1, "a sort without a comparer clears");
+            AssertEqual(sorter.SourceIndexAt(0), 0, "a sort without a comparer shows the supplied order");
+
+            version = sort.Version;
+            Assert(sort.TryApply(sorter, keys, Comparer<int>.Default, out failure) && failure == null, "an unsorted table applies trivially");
+            AssertEqual(sort.Version, version, "an unsorted table stays unchanged");
+            AssertThrows<ArgumentNullException>(() => sort.TryApply<int>(null!, keys, null, out _), "a null sorter is rejected");
+            AssertThrows<ArgumentNullException>(() => sort.TryApply<int>(sorter, null!, null, out _), "null items are rejected");
+        }
+
         private static string Names((string Name, int Score)[] rows, TopiaForgeStableSorter sorter)
         {
             var names = new string[sorter.Count];
