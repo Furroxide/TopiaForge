@@ -21,7 +21,17 @@ namespace TopiaForge.ModManager.Tests
             ProtocolAndSynchronizedPathsAreValidated();
             PackagedContentHashesAreEnforced(root);
             InstallerAndRegistryEnforceSynchronizedHashes(root);
+            PeerNetworkIsARecognizedCapability();
             Console.WriteLine("ManifestV6Tests passed.");
+        }
+
+        private static void PeerNetworkIsARecognizedCapability()
+        {
+            var manifest = ValidSessionManifest();
+            manifest.Capabilities = new List<string> { "network", "microphone", "peer-network" };
+            Assert(ManifestValidator.Validate(manifest).Count == 0, "a multiplayer provider may disclose peer-network");
+            manifest.Capabilities = new List<string> { "peer-networks" };
+            Assert(ManifestValidator.Validate(manifest).Count > 0, "a near miss of the label is still an unknown capability");
         }
 
         private static void SchemaDispatchSharesUndeclaredV6Implicitly()
