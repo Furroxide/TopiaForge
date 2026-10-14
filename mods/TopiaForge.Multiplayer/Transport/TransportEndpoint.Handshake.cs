@@ -17,6 +17,12 @@ namespace TopiaForge.Multiplayer.Transport
 
         private void ReceiveInitiation(TransportPath path, byte[] datagram, int offset, int count, long now)
         {
+            if (!Options.AcceptsInbound)
+            {
+                Statistics.InitiationsRefused++;
+                return;
+            }
+
             if (!HandshakePackets.TryReadInitiation(datagram, offset, count, out var version, out var initiatorId, out var cookie, out var message1) ||
                 version != HandshakePackets.Version)
             {

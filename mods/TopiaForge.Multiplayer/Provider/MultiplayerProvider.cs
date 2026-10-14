@@ -3,6 +3,7 @@ using System.Diagnostics;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Multiplayer.Engine;
+using TopiaForge.Multiplayer.Network;
 
 namespace TopiaForge.Multiplayer
 {
@@ -24,7 +25,7 @@ namespace TopiaForge.Multiplayer
         private readonly EngineSessionFacade reserved;
         private bool disposed;
 
-        internal MultiplayerProvider(string providerModId, IEngineDiagnostics? diagnostics = null, Func<long>? clockMicros = null)
+        internal MultiplayerProvider(string providerModId, IEngineDiagnostics? diagnostics = null, Func<long>? clockMicros = null, LiveSessionsSetup? live = null)
         {
             if (!ProtocolLimits.IsValidIdentity(providerModId)) throw new ArgumentException("A provider mod id is required.", nameof(providerModId));
             this.providerModId = providerModId;
@@ -33,13 +34,21 @@ namespace TopiaForge.Multiplayer
             engine = SessionEngine.CreateHost(
                 options,
                 MultiplayerProcessKind.Interactive,
-                new MultiplayerSessionId("solo:" + providerModId),
+                SoloSessionId(providerModId),
                 new SessionSeed(SoloSeed),
                 new ParticipantId(LocalParticipantId),
                 LocalDisplayName,
                 this.clockMicros());
             reserved = engine.CreateFacade(providerModId);
+            if (live != null)
+            {
+                Live = new LiveSessions(engine, live.Files, live.Content, live.Factory ?? new SocketNetworkFactory(this.clockMicros), this.clockMicros,
+                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver);
+            }
         }
+
+        /// <summary>Gets live hosting and joining, or null while live sessions are switched off.</summary>
+        internal LiveSessions? Live { get; }
 
         internal SessionEngine Engine => engine;
 
@@ -52,7 +61,9 @@ namespace TopiaForge.Multiplayer
         /// <summary>Advances the engine to the current time. The provider calls it once per game frame.</summary>
         internal void Pump()
         {
-            if (!disposed) engine.Pump(clockMicros());
+            if (disposed) return;
+            Live?.Pump();
+            engine.Pump(clockMicros());
         }
 
         object IOwnerBoundExtensionFactory.CreateOwnerFacade(Type contractType, string ownerModId, IModLifetime lifetime) =>
@@ -168,7 +179,19 @@ namespace TopiaForge.Multiplayer
         {
             if (disposed) return;
             disposed = true;
+            Live?.Dispose();
             engine.Shutdown(MultiplayerSessionEndReason.HostEnded);
+        }
+
+        /// <summary>
+        /// Names a new solo session uniquely, so a joined host's session and every later solo session differ from it even
+        /// when two processes run the same provider.
+        /// </summary>
+        internal static MultiplayerSessionId SoloSessionId(string providerModId)
+        {
+            var random = new byte[8];
+            Transport.Crypto.CryptoRandom.Fill(random);
+            return new MultiplayerSessionId("solo:" + providerModId + ":" + Network.WireText.ToHex(random));
         }
 
         /// <summary>Reads a monotonic clock in microseconds without overflowing on long uptimes.</summary>
@@ -195,5 +218,27 @@ namespace TopiaForge.Multiplayer
             if (diagnostic.Exception != null) logger.Error(diagnostic.Exception, "Multiplayer: " + diagnostic.Message);
             else logger.Warn("Multiplayer: " + diagnostic);
         }
+    }
+}
+
+namespace TopiaForge.Multiplayer.Network
+{
+    /// <summary>What live sessions need from their host process: data files, installed content, and optionally the network.</summary>
+    internal sealed class LiveSessionsSetup
+    {
+        internal LiveSessionsSetup(INetworkDataFiles files, ILiveSessionContent content)
+        {
+            Files = files ?? throw new System.ArgumentNullException(nameof(files));
+            Content = content ?? throw new System.ArgumentNullException(nameof(content));
+        }
+
+        internal INetworkDataFiles Files { get; }
+        internal ILiveSessionContent Content { get; }
+
+        /// <summary>Gets or sets the network factory; null uses real sockets.</summary>
+        internal INetworkFactory? Factory { get; set; }
+
+        /// <summary>Gets or sets the target resolver; null resolves over real networks.</summary>
+        internal IJoinTargetResolver? Resolver { get; set; }
     }
 }

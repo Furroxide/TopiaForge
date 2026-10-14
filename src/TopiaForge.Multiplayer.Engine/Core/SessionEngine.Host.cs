@@ -45,7 +45,7 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
-            connections.Add(new HostConnection(link) { NextClockSyncAt = nowMicros });
+            connections.Add(new HostConnection(link) { NextClockSyncAt = nowMicros, AcceptedAtMicros = nowMicros });
         }
 
         /// <summary>
@@ -234,6 +234,14 @@ namespace TopiaForge.Multiplayer.Engine
                 if (channelKind != EngineChannel.Session) continue;
                 ProcessHostFrame(connection, frame);
                 Settle();
+            }
+
+            if (connection.Phase == HostConnectionPhase.AwaitingJoin && nowMicros - connection.AcceptedAtMicros > Options.JoinRequestTimeoutMicros)
+            {
+                // A peer that connects but never asks to join would hold a slot on keepalives alone.
+                DropConnection(connection);
+                Settle();
+                return;
             }
 
             if (connection.Phase != HostConnectionPhase.Closed && connection.Link.State == EngineLinkState.Closed)

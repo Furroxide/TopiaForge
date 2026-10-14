@@ -56,18 +56,22 @@ namespace TopiaForge.Multiplayer.Network
     /// bounded frame queues. The thread sleeps until its next timer or a datagram, and at most 2 ms, so frames the
     /// main thread queues go out within that.
     /// </summary>
-    internal sealed class NetworkThread : IDisposable
+    internal sealed class NetworkThread : INetworkControl
     {
         internal const long MaximumWaitMicros = 2_000;
         private const int MaximumDatagramsPerTurn = 1024;
         private const int MaximumCommandsPerTurn = 256;
         private const int MaximumConsecutiveFaults = 64;
 
+        /// <summary>The most events that wait for the main thread; past it, new ones are dropped and new links closed.</summary>
+        internal const int MaximumEvents = 1024;
+
         private readonly IDatagramSocket socket;
         private readonly NetworkStack stack;
         private readonly Func<long> clock;
         private readonly ConcurrentQueue<Action<NetworkStack, long>> commands = new ConcurrentQueue<Action<NetworkStack, long>>();
         private readonly ConcurrentQueue<NetworkEvent> events = new ConcurrentQueue<NetworkEvent>();
+        private int eventCount;
         private readonly byte[] buffer = new byte[TransportOptions.MaximumDatagramBytes];
         private readonly List<INetworkService> services = new List<INetworkService>();
         private readonly object gate = new object();
@@ -88,7 +92,10 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>Gets the local port of the socket the thread owns.</summary>
-        internal int LocalPort => socket.LocalPort;
+        public int LocalPort => socket.LocalPort;
+
+        /// <summary>Gets how many events wait for the main thread.</summary>
+        internal int PendingEvents => Volatile.Read(ref eventCount);
 
         /// <summary>Gets whether the loop has ended.</summary>
         internal bool HasStopped => started != 0 && !thread.IsAlive;
@@ -100,7 +107,7 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>Runs <paramref name="command"/> on the network thread, with the time it runs at.</summary>
-        internal void Post(Action<NetworkStack, long> command)
+        public void Post(Action<NetworkStack, long> command)
         {
             if (command == null) throw new ArgumentNullException(nameof(command));
             commands.Enqueue(command);
@@ -110,7 +117,7 @@ namespace TopiaForge.Multiplayer.Network
         /// Starts a connection; the attempt fills in from the network thread. Every attempt completes: one made once the
         /// thread is stopping, or still queued when it stops, fails.
         /// </summary>
-        internal ConnectAttempt Connect(TransportPath path, byte[]? expectedKey)
+        public ConnectAttempt Connect(TransportPath path, byte[]? expectedKey)
         {
             if (path == null) throw new ArgumentNullException(nameof(path));
             var attempt = new ConnectAttempt();
@@ -132,13 +139,18 @@ namespace TopiaForge.Multiplayer.Network
             return attempt;
         }
 
-        internal bool TryTakeEvent(out NetworkEvent networkEvent) => events.TryDequeue(out networkEvent!);
+        public bool TryTakeEvent(out NetworkEvent networkEvent)
+        {
+            if (!events.TryDequeue(out networkEvent!)) return false;
+            Interlocked.Decrement(ref eventCount);
+            return true;
+        }
 
         /// <summary>
         /// Runs <paramref name="service"/> on the network thread from its next turn until it is detached. The thread owns
         /// it from this call: stopping disposes it even if it never ran, and a thread already stopping disposes it now.
         /// </summary>
-        internal void Attach(INetworkService service)
+        public void Attach(INetworkService service)
         {
             if (service == null) throw new ArgumentNullException(nameof(service));
             lock (gate)
@@ -155,7 +167,7 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>Stops running <paramref name="service"/> and disposes it, on the network thread.</summary>
-        internal void Detach(INetworkService service)
+        public void Detach(INetworkService service)
         {
             if (service == null) throw new ArgumentNullException(nameof(service));
             Post((_, _) =>
@@ -172,7 +184,7 @@ namespace TopiaForge.Multiplayer.Network
         /// disposes the services, the stack, which wipes the transport's keys, and the socket. Nothing new is attached or
         /// connected from this call on. Blocks until the thread has ended.
         /// </summary>
-        internal void Stop(long gracefulMicros)
+        public void Stop(long gracefulMicros)
         {
             if (Interlocked.Exchange(ref stopRequested, 1) == 0)
             {
@@ -213,7 +225,7 @@ namespace TopiaForge.Multiplayer.Network
                     }
                     catch (Exception exception) when (!(exception is ThreadAbortException))
                     {
-                        events.Enqueue(NetworkEvent.Failed(exception));
+                        Raise(NetworkEvent.Failed(exception));
                         if (++faults >= MaximumConsecutiveFaults) break;
                     }
 
@@ -232,6 +244,8 @@ namespace TopiaForge.Multiplayer.Network
             finally
             {
                 ReleaseResources();
+                // The end is always told, whatever the queue holds: the main thread must learn its network is gone.
+                Interlocked.Increment(ref eventCount);
                 events.Enqueue(NetworkEvent.Ended());
             }
         }
@@ -268,6 +282,22 @@ namespace TopiaForge.Multiplayer.Network
             socket.Dispose();
         }
 
+        /// <summary>
+        /// Hands an event to the main thread unless it already has <see cref="MaximumEvents"/> waiting, so a main
+        /// thread that never reads cannot make the queue grow. A link nobody will take is closed rather than dropped.
+        /// </summary>
+        internal void Raise(NetworkEvent networkEvent)
+        {
+            if (Interlocked.Increment(ref eventCount) > MaximumEvents)
+            {
+                Interlocked.Decrement(ref eventCount);
+                networkEvent.Link?.Close();
+                return;
+            }
+
+            events.Enqueue(networkEvent);
+        }
+
         private void Turn(long now)
         {
             for (var count = 0; count < MaximumCommandsPerTurn && commands.TryDequeue(out var command); count++) command(stack, now);
@@ -291,12 +321,12 @@ namespace TopiaForge.Multiplayer.Network
                 }
             }
 
-            while (stack.TryAccept(out var link)) events.Enqueue(NetworkEvent.Accepted(link));
+            while (stack.TryAccept(out var link)) Raise(NetworkEvent.Accepted(link));
             while (stack.Endpoint.TryReceiveInfo(out var reply))
             {
                 var claimed = false;
                 foreach (var service in services) claimed = claimed || service.TryClaim(reply, now);
-                if (!claimed) events.Enqueue(NetworkEvent.Received(reply));
+                if (!claimed) Raise(NetworkEvent.Received(reply));
             }
         }
     }

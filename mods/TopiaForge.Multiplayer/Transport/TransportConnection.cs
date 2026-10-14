@@ -56,14 +56,17 @@ namespace TopiaForge.Multiplayer.Transport
         /// <summary>No authenticated packet arrived within the idle timeout.</summary>
         IdleTimeout = 3,
 
-        /// <summary>The handshake failed, timed out, or met an unexpected key.</summary>
+        /// <summary>The handshake failed to authenticate or met an unexpected key.</summary>
         HandshakeFailed = 4,
 
         /// <summary>The peer broke the protocol or its flow control.</summary>
         ProtocolViolation = 5,
 
         /// <summary>The send backlog or the endpoint's capacity ran out.</summary>
-        Overloaded = 6
+        Overloaded = 6,
+
+        /// <summary>The handshake got no answer in time: the peer is down, full, or ignoring this path.</summary>
+        HandshakeTimedOut = 7
     }
 
     /// <summary>
@@ -259,7 +262,7 @@ namespace TopiaForge.Multiplayer.Transport
             realtime.ClearQueued();
             voice.ClearQueued();
             ClearPaths();
-            if (CloseReason != TransportCloseReason.HandshakeFailed)
+            if (CloseReason != TransportCloseReason.HandshakeFailed && CloseReason != TransportCloseReason.HandshakeTimedOut)
             {
                 endpoint.Report(TransportDiagnosticKind.Closed, Number, Describe(CloseReason));
             }

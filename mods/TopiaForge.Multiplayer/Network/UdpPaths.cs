@@ -49,6 +49,21 @@ namespace TopiaForge.Multiplayer.Network
             return true;
         }
 
+        /// <summary>
+        /// Names the host a UDP path reaches, without its port: the address and its scope, as opaque hexadecimal that
+        /// never leaves the network layer. Null for any other kind of path.
+        /// </summary>
+        internal static string? SourceOf(TransportPath path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var key = path.KeyBytes;
+            if (key.Length != KeySize || key[0] != UdpKeyType) return null;
+            var source = new byte[20];
+            Buffer.BlockCopy(key, 1, source, 0, 16);
+            Buffer.BlockCopy(key, 19, source, 16, 4);
+            return WireText.ToHex(source);
+        }
+
         /// <summary>Whether <paramref name="address"/> is on the local network: private, link-local, unique local or loopback.</summary>
         internal static TransportPathKind Classify(IPAddress address)
         {

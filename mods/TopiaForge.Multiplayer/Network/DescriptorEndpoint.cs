@@ -41,7 +41,14 @@ namespace TopiaForge.Multiplayer.Network
         /// <param name="port">The game port; zero takes a free one, as tests do.</param>
         /// <param name="packages">Opens a package archive by SHA-256 in developer mode; null serves none.</param>
         /// <param name="relayOnly">Serves only LAN addresses, for a host that hides its own.</param>
-        internal DescriptorEndpoint(int port, Func<string, Stream?>? packages = null, bool relayOnly = false, long requestTimeoutMicros = 5_000_000, long transferTimeoutMicros = 120_000_000)
+        /// <param name="bindAddress">The address to listen on, every local address by default; tests use loopback.</param>
+        internal DescriptorEndpoint(
+            int port,
+            Func<string, Stream?>? packages = null,
+            bool relayOnly = false,
+            long requestTimeoutMicros = 5_000_000,
+            long transferTimeoutMicros = 120_000_000,
+            IPAddress? bindAddress = null)
         {
             if (port < 0 || port > 65535) throw new ArgumentOutOfRangeException(nameof(port));
             this.packages = packages;
@@ -54,7 +61,7 @@ namespace TopiaForge.Multiplayer.Network
                 listener.DualMode = true;
                 listener.Blocking = false;
                 if (port != 0 && Environment.OSVersion.Platform == PlatformID.Win32NT) listener.ExclusiveAddressUse = true;
-                listener.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+                listener.Bind(new IPEndPoint(UdpSocketDriver.AsDualMode(bindAddress ?? IPAddress.IPv6Any), port));
                 listener.Listen(16);
                 LocalPort = ((IPEndPoint)listener.LocalEndPoint!).Port;
             }

@@ -61,6 +61,12 @@ namespace TopiaForge.Multiplayer.Transport
         /// </summary>
         internal bool RelayOnly { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether peers may open connections to this endpoint. Only a host accepts them; a joining player
+        /// or a LAN browser refuses every Initiation, so nobody else can connect to it or learn its key.
+        /// </summary>
+        internal bool AcceptsInbound { get; set; } = true;
+
         internal int MaximumConnections { get; set; } = 64;
 
         internal int MaximumHalfOpen { get; set; } = 256;

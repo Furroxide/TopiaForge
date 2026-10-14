@@ -27,14 +27,15 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <param name="beacon">The beacon to send.</param>
         /// <param name="targets">Where to send it; null means every local broadcast address, as in the game.</param>
-        internal LanAnnouncer(LanBeacon beacon, IReadOnlyList<IPEndPoint>? targets = null)
+        /// <param name="bindAddress">The IPv4 address to send from, any by default; tests send from loopback.</param>
+        internal LanAnnouncer(LanBeacon beacon, IReadOnlyList<IPEndPoint>? targets = null, IPAddress? bindAddress = null)
         {
             this.beacon = beacon.Encode();
             fixedTargets = targets;
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp) { Blocking = false, EnableBroadcast = true };
             try
             {
-                socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+                socket.Bind(new IPEndPoint(bindAddress ?? IPAddress.Any, 0));
             }
             catch
             {
@@ -162,14 +163,15 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <param name="port">The discovery port; tests listen elsewhere.</param>
         /// <param name="expiryMicros">How long a silent session stays listed.</param>
-        internal LanBrowser(int port = LanBeacon.DiscoveryPort, long expiryMicros = ExpiryMicros)
+        /// <param name="bindAddress">The IPv4 address to listen on, any by default; tests listen on loopback.</param>
+        internal LanBrowser(int port = LanBeacon.DiscoveryPort, long expiryMicros = ExpiryMicros, IPAddress? bindAddress = null)
         {
             this.expiryMicros = expiryMicros;
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp) { Blocking = false };
             try
             {
                 socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                socket.Bind(new IPEndPoint(IPAddress.Any, port));
+                socket.Bind(new IPEndPoint(bindAddress ?? IPAddress.Any, port));
                 LocalPort = ((IPEndPoint)socket.LocalEndPoint!).Port;
             }
             catch
