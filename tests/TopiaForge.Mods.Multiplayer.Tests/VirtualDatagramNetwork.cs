@@ -1,6 +1,7 @@
 extern alias provider;
 
 using System.Security.Cryptography;
+using provider::TopiaForge.Multiplayer.Network;
 using provider::TopiaForge.Multiplayer.Transport;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
@@ -19,7 +20,7 @@ internal sealed class NetworkConditions
 }
 
 /// <summary>
-/// One attachment point: a transport endpoint, or a raw inbox a test reads and writes by hand. A node is reachable
+/// One attachment point: a transport endpoint, a network stack around one, or a raw inbox a test reads and writes by hand. A node is reachable
 /// three ways, as in the field: directly, through a relay, and on the LAN. A datagram sent to one of its addresses
 /// arrives as if from the sender's address of the same kind, the way a relay shows each side only its channel.
 /// </summary>
@@ -28,16 +29,20 @@ internal sealed class VirtualNode
     private readonly int index;
     private int rebinds;
 
-    internal VirtualNode(string name, int index, TransportEndpoint? endpoint)
+    internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null)
     {
         Name = name;
-        Endpoint = endpoint;
+        Stack = stack;
+        Endpoint = stack?.Endpoint ?? endpoint;
         this.index = index;
     }
 
     internal string Name { get; }
 
     internal TransportEndpoint? Endpoint { get; }
+
+    /// <summary>Gets the network stack the node runs, which polls its endpoint and moves frames to its links.</summary>
+    internal NetworkStack? Stack { get; }
 
     /// <summary>Gets the direct address; a NAT rebinding changes it.</summary>
     internal byte[] Address => AddressOf(TransportPathKind.Direct);
@@ -108,6 +113,13 @@ internal sealed class VirtualDatagramNetwork
     internal VirtualNode AddEndpoint(string name, TransportEndpoint endpoint) => Add(name, endpoint);
 
     internal VirtualNode AddRaw(string name) => Add(name, null);
+
+    internal VirtualNode AddStack(string name, NetworkStack stack)
+    {
+        var node = new VirtualNode(name, nodes.Count + 1, null, stack);
+        nodes.Add(node);
+        return node;
+    }
 
     /// <summary>Gets the path a node uses to reach <paramref name="target"/>: its address, as the I/O layer would key it.</summary>
     internal static TransportPath PathTo(VirtualNode target, TransportPathKind kind = TransportPathKind.Direct) =>
@@ -201,15 +213,17 @@ internal sealed class VirtualDatagramNetwork
             inFlight.RemoveAt(0);
             Delivered++;
             var to = datagram.To;
-            if (to.Endpoint != null) to.Endpoint.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
+            if (to.Stack != null) to.Stack.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
+            else if (to.Endpoint != null) to.Endpoint.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
             else to.Inbox.Enqueue((datagram.From, datagram.Bytes));
         }
 
         foreach (var node in nodes)
         {
             if (node.Endpoint == null) continue;
-            node.Endpoint.Poll(Now);
-            while (node.Endpoint.TryDequeueDatagram(out var outgoing))
+            if (node.Stack != null) node.Stack.Poll(Now);
+            else node.Endpoint.Poll(Now);
+            while (TryDequeue(node, out var outgoing))
             {
                 var bytes = new byte[outgoing.Length];
                 Buffer.BlockCopy(outgoing.Buffer, 0, bytes, 0, outgoing.Length);
@@ -222,6 +236,9 @@ internal sealed class VirtualDatagramNetwork
             }
         }
     }
+
+    private static bool TryDequeue(VirtualNode node, out OutgoingDatagram datagram) =>
+        node.Stack != null ? node.Stack.TryDequeueDatagram(out datagram) : node.Endpoint!.TryDequeueDatagram(out datagram);
 
     /// <summary>Finds the node and kind an address belongs to; an address a rebinding retired belongs to nobody.</summary>
     private (VirtualNode? Node, TransportPathKind Kind) Resolve(byte[] key)
@@ -242,7 +259,8 @@ internal sealed class VirtualDatagramNetwork
         var next = inFlight.Count > 0 ? inFlight[0].DeliverAt : long.MaxValue;
         foreach (var node in nodes)
         {
-            if (node.Endpoint != null) next = Math.Min(next, node.Endpoint.NextTimeoutMicros());
+            if (node.Stack != null) next = Math.Min(next, node.Stack.NextTimeoutMicros());
+            else if (node.Endpoint != null) next = Math.Min(next, node.Endpoint.NextTimeoutMicros());
         }
 
         return next;
