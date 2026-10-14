@@ -61,19 +61,22 @@ namespace TopiaForge.Multiplayer.Network
     /// <summary>
     /// The bytes a joining player puts in its join request: version 1, a flag byte, a 32-byte password proof when the
     /// flag says so, then the runtime's content bytes with a varint length. The host's policy reads it; the engine never
-    /// looks inside.
+    /// looks inside, but it bounds the whole field, so the content is bounded to fit with its header.
     /// </summary>
     internal static class JoinContent
     {
         private const byte Version = 1;
         private const byte HasProof = 1;
-        private const int MaximumContentBytes = 64 * 1024;
+        private const int HeaderBytes = 2 + PasswordProof.ProofSize + 3;
+
+        /// <summary>The most content a player presents: the engine's bound on the field, less the largest header.</summary>
+        internal const int MaximumContentBytes = ProtocolLimits.MaximumOpaqueBytes - HeaderBytes;
 
         internal static byte[] Encode(byte[]? passwordProof, byte[] content)
         {
             if (content == null) throw new ArgumentNullException(nameof(content));
             if (passwordProof != null && passwordProof.Length != PasswordProof.ProofSize) throw new ArgumentException("A proof is 32 bytes.", nameof(passwordProof));
-            if (content.Length > MaximumContentBytes) throw new ArgumentException("Join content is at most 64 KiB.", nameof(content));
+            if (content.Length > MaximumContentBytes) throw new ArgumentException("Join content must fit the engine's 64 KiB field with its header.", nameof(content));
             var output = new List<byte>(2 + (passwordProof?.Length ?? 0) + 5 + content.Length) { Version, passwordProof != null ? HasProof : (byte)0 };
             if (passwordProof != null) output.AddRange(passwordProof);
             var length = (uint)content.Length;
@@ -145,25 +148,37 @@ namespace TopiaForge.Multiplayer.Network
     internal static class AdmissionReport
     {
         internal const string Schema = "topiaforge.admission-report/1";
-        private const int MaximumBytes = 16 * 1024;
+        internal const int MaximumBytes = 16 * 1024;
         private const int MaximumProblems = 64;
 
         private static readonly string[] Codes = { "other", "full", "protocol", "password-required", "password-wrong", "too-many-attempts", "banned", "content" };
 
+        /// <summary>Encodes a report, keeping problems in order until the next would not fit the reader's bound.</summary>
         internal static byte[] Encode(AdmissionCode code, IReadOnlyList<string>? problems = null)
         {
             var items = new List<JsonNode>();
-            if (problems != null)
+            var encoded = Serialize(code, items);
+            if (problems == null) return encoded;
+            for (var index = 0; index < problems.Count && items.Count < MaximumProblems; index++)
             {
-                for (var index = 0; index < problems.Count && index < MaximumProblems; index++)
+                var problem = problems[index];
+                if (!WireText.IsDisplayText(problem, 256)) continue;
+                items.Add(new JsonStringNode(problem));
+                var larger = Serialize(code, items);
+                if (larger.Length > MaximumBytes)
                 {
-                    var problem = problems[index];
-                    if (WireText.IsDisplayText(problem, 256)) items.Add(new JsonStringNode(problem));
+                    items.RemoveAt(items.Count - 1);
+                    break;
                 }
+
+                encoded = larger;
             }
 
-            return CanonicalJson.Serialize(new JsonObjectNode().Add("schema", Schema).Add("code", Codes[(int)code]).Add("problems", new JsonArrayNode(items)));
+            return encoded;
         }
+
+        private static byte[] Serialize(AdmissionCode code, List<JsonNode> problems) =>
+            CanonicalJson.Serialize(new JsonObjectNode().Add("schema", Schema).Add("code", Codes[(int)code]).Add("problems", new JsonArrayNode(new List<JsonNode>(problems))));
 
         internal static bool TryDecode(byte[] bytes, out AdmissionCode code, out IReadOnlyList<string> problems)
         {

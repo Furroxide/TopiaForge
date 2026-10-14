@@ -24,9 +24,12 @@ internal static class LivePolicyTests
             "and so does empty content without one");
         That(JoinContent.TryDecode(Array.Empty<byte>(), out none, out empty) && none == null && empty.Length == 0,
             "no bytes at all is a player with nothing to present");
-        var largest = new byte[64 * 1024];
-        That(JoinContent.TryDecode(JoinContent.Encode(null, largest), out _, out var read) && read.Length == largest.Length, "64 KiB of content fits");
-        Throws<ArgumentException>(() => JoinContent.Encode(null, new byte[(64 * 1024) + 1]), "more does not");
+        // The engine bounds the whole field at 64 KiB, so the largest content fits there with the largest header.
+        var largest = new byte[JoinContent.MaximumContentBytes];
+        var encodedLargest = JoinContent.Encode(proof, largest);
+        That(encodedLargest.Length <= 64 * 1024 && JoinContent.TryDecode(encodedLargest, out _, out var read) && read.Length == largest.Length,
+            "the largest content fits the engine's field with a proof (" + encodedLargest.Length + " bytes)");
+        Throws<ArgumentException>(() => JoinContent.Encode(null, new byte[JoinContent.MaximumContentBytes + 1]), "more does not");
         Throws<ArgumentException>(() => JoinContent.Encode(new byte[31], content), "and a proof is 32 bytes");
 
         var good = JoinContent.Encode(proof, content);
@@ -64,6 +67,14 @@ internal static class LivePolicyTests
         var many = Enumerable.Range(0, 70).Select(index => "Problem " + index).ToArray();
         That(AdmissionReport.TryDecode(AdmissionReport.Encode(AdmissionCode.Content, many), out _, out var kept) && kept.Count == 64,
             "at most 64 problems are kept");
+
+        // The longest problems would not all fit the reader's bound: the report keeps as many as fit, in order, and stays
+        // readable rather than becoming a report nobody can read.
+        var longest = Enumerable.Range(0, 64).Select(index => index.ToString("D3", System.Globalization.CultureInfo.InvariantCulture) + new string('x', 253)).ToArray();
+        var bounded = AdmissionReport.Encode(AdmissionCode.Content, longest);
+        var readable = AdmissionReport.TryDecode(bounded, out _, out var fitted);
+        That(bounded.Length <= AdmissionReport.MaximumBytes && readable && fitted.Count > 0 && fitted.Count < 64 && fitted.SequenceEqual(longest.Take(fitted.Count)),
+            "a report of the longest problems keeps those that fit, in order (" + fitted.Count + ", " + bounded.Length + " bytes)");
         foreach (var (text, about) in new[]
                  {
                      ("{\"code\":\"full\",\"problems\":[],\"schema\":\"topiaforge.admission-report/2\"}", "another schema"),
@@ -97,6 +108,12 @@ internal static class LivePolicyTests
         for (var index = 0; index <= BanList.MaximumEntries; index++) full.Add(Identity(1_000 + index), "Player " + index, index);
         That(full.Count == BanList.MaximumEntries && !full.IsBanned(Identity(1_000)) && full.IsBanned(Identity(1_000 + BanList.MaximumEntries)),
             "past the cap the oldest ban gives way");
+
+        // A full list with the longest names, every character three bytes in UTF-8, still reads back whole.
+        var widest = new BanList();
+        for (var index = 0; index < BanList.MaximumEntries; index++) widest.Add(Identity(5_000 + index), new string('東', 48), 9_007_199_254_740_991);
+        That(BanList.Parse(widest.Serialize()).Count == BanList.MaximumEntries,
+            "a full list of the widest names survives a save and a load (" + widest.Serialize().Length + " bytes)");
 
         foreach (var damaged in new[] { null, Array.Empty<byte>(), Encoding.UTF8.GetBytes("not json"), Encoding.UTF8.GetBytes("{\"bans\":[],\"schema\":\"topiaforge.bans/2\"}") })
         {

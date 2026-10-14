@@ -43,12 +43,12 @@ namespace TopiaForge.Multiplayer.Network
             this.fetch = fetch ?? ((endpoint, serverId, token) => DescriptorClient.FetchAsync(endpoint, serverId, FetchTimeout, token));
         }
 
-        public async Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, bool trustChangedIdentity, CancellationToken cancellationToken)
+        public async Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken)
         {
             if (target == null) throw new ArgumentNullException(nameof(target));
             return target.Kind == JoinTargetKind.Lan
                 ? await ResolveLanAsync(target, allowDirect, cancellationToken).ConfigureAwait(false)
-                : await ResolveDirectAsync(target, allowDirect, trustChangedIdentity, cancellationToken).ConfigureAwait(false);
+                : await ResolveDirectAsync(target, allowDirect, trustedServerId, cancellationToken).ConfigureAwait(false);
         }
 
         private async Task<ResolvedTarget> ResolveLanAsync(JoinTarget target, bool allowDirect, CancellationToken cancellationToken)
@@ -70,12 +70,19 @@ namespace TopiaForge.Multiplayer.Network
             return fetched.Outcome == DescriptorFetchOutcome.Fetched ? ResolvedTarget.Found(found.Path, fetched.Descriptor!) : Failed(fetched);
         }
 
-        private async Task<ResolvedTarget> ResolveDirectAsync(JoinTarget target, bool allowDirect, bool trustChangedIdentity, CancellationToken cancellationToken)
+        private async Task<ResolvedTarget> ResolveDirectAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken)
         {
             IPAddress[] addresses;
             if (IPAddress.TryParse(target.Host!, out var literal))
             {
                 addresses = new[] { literal };
+            }
+            else if (!allowDirect && !IsLocalName(target.Host!))
+            {
+                // Looking a name up asks the name's own servers, which can learn this player's resolver, network or
+                // address from the query. A relay-only player therefore resolves only names that stay on this machine
+                // or the local network.
+                return ResolvedTarget.Failed(LiveFailure.DirectNotAllowed, DirectNotAllowed);
             }
             else
             {
@@ -112,9 +119,9 @@ namespace TopiaForge.Multiplayer.Network
                 last = await fetch(endpoint, target.ServerId, cancellationToken).ConfigureAwait(false);
                 if (last.Outcome != DescriptorFetchOutcome.Fetched) continue;
                 var descriptor = last.Descriptor!;
-                if (target.ServerId == null && !Trust(target, descriptor.Descriptor.ServerId, trustChangedIdentity))
+                if (target.ServerId == null && !Trust(target, descriptor.Descriptor.ServerId, trustedServerId))
                 {
-                    return ResolvedTarget.Failed(LiveFailure.HostIdentityChanged, "This address served a different server last time.");
+                    return ResolvedTarget.IdentityChanged(descriptor.Descriptor.ServerId);
                 }
 
                 return ResolvedTarget.Found(UdpPaths.For(endpoint), descriptor);
@@ -123,13 +130,18 @@ namespace TopiaForge.Multiplayer.Network
             return last == null ? ResolvedTarget.Failed(LiveFailure.Unreachable, "The host name has no usable address.") : Failed(last);
         }
 
-        private bool Trust(JoinTarget target, string serverId, bool trustChangedIdentity)
+        /// <summary>Whether a name resolves without asking anyone beyond this machine and the local network.</summary>
+        private static bool IsLocalName(string host) =>
+            string.Equals(host, "localhost", StringComparison.Ordinal) || host.EndsWith(".localhost", StringComparison.Ordinal) ||
+            host.EndsWith(".local", StringComparison.Ordinal);
+
+        private bool Trust(JoinTarget target, string serverId, string? trustedServerId)
         {
             lock (knownHosts)
             {
                 var check = knownHosts.Check(target.Host!, target.Port, serverId);
-                if (check == KnownHostCheck.Mismatch && !trustChangedIdentity) return false;
                 if (check == KnownHostCheck.Match) return true;
+                if (check == KnownHostCheck.Mismatch && !string.Equals(serverId, trustedServerId, StringComparison.Ordinal)) return false;
                 knownHosts.Remember(target.Host!, target.Port, serverId, unixSeconds());
             }
 

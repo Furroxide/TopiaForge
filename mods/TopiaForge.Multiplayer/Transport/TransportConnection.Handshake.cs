@@ -202,7 +202,7 @@ namespace TopiaForge.Multiplayer.Transport
         {
             if (now >= handshakeDeadline)
             {
-                FailHandshake("The handshake timed out.");
+                FailHandshake("The handshake timed out.", TransportCloseReason.HandshakeTimedOut);
                 return;
             }
 
@@ -262,12 +262,12 @@ namespace TopiaForge.Multiplayer.Transport
         /// Ends a failed handshake. The local player started an initiator's attempt, so diagnostics hear of it; a
         /// responder's half-open handshake is unauthenticated traffic and only counted.
         /// </summary>
-        private void FailHandshake(string message)
+        private void FailHandshake(string message, TransportCloseReason reason = TransportCloseReason.HandshakeFailed)
         {
             DisposeHandshake();
             if (IsInitiator) endpoint.Report(TransportDiagnosticKind.HandshakeFailed, Number, message);
             else endpoint.Statistics.HandshakesAbandoned++;
-            Finish(TransportCloseReason.HandshakeFailed);
+            Finish(reason);
         }
 
         private void DisposeHandshake()

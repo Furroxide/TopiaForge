@@ -33,6 +33,9 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<long> clock;
         private readonly Func<long> unixSeconds;
         private readonly string providerModId;
+
+        /// <summary>How long closing waits for the last saves to land.</summary>
+        private const int SaveFlushMilliseconds = 1_000;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly Func<ClientSessionEnd, SoloSessionStart?> endHook;
         private Task<(LocalIdentity Identity, BanList Bans)>? loading;
@@ -66,7 +69,7 @@ namespace TopiaForge.Multiplayer.Network
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
             KnownHosts = new KnownHosts();
-            this.resolver = resolver ?? new NetworkTargetResolver(() => browser, KnownHosts, () => Interlocked.Exchange(ref knownHostsDirty, 1), unixSeconds);
+            this.resolver = resolver ?? new NetworkTargetResolver(() => browser, KnownHosts, MarkKnownHostsChanged, unixSeconds);
             endHook = OnClientSessionEnded;
             engine.Options.AfterClientSessionEnds = endHook;
         }
@@ -81,6 +84,9 @@ namespace TopiaForge.Multiplayer.Network
         internal LiveJoin? Join { get; private set; }
 
         internal KnownHosts KnownHosts { get; }
+
+        /// <summary>Marks the known-hosts record for saving; the resolver calls it from its own thread after a change.</summary>
+        internal void MarkKnownHostsChanged() => Interlocked.Exchange(ref knownHostsDirty, 1);
 
         /// <summary>Gets the sessions heard on the LAN while browsing; empty otherwise.</summary>
         internal IReadOnlyList<LanServer> LanServers => browser?.Servers ?? Array.Empty<LanServer>();
@@ -140,10 +146,10 @@ namespace TopiaForge.Multiplayer.Network
         {
             ThrowIfDisposed();
             if (browserNetwork != null) return;
-            var endpoint = new Transport.TransportEndpoint(X25519.GeneratePrivateKey(), new Transport.TransportOptions { RelayOnly = true }, clock());
+            var endpoint = new Transport.TransportEndpoint(X25519.GeneratePrivateKey(), new Transport.TransportOptions { RelayOnly = true, AcceptsInbound = false }, clock());
             browserNetwork = factory.Start(0, new NetworkStack(endpoint));
-            browser = new LanBrowser(discoveryPort);
-            browserNetwork.Attach(browser);
+            browser = factory.CreateBrowser(discoveryPort);
+            if (browser != null) browserNetwork.Attach(browser);
         }
 
         internal void StopBrowsing()
@@ -161,7 +167,14 @@ namespace TopiaForge.Multiplayer.Network
             if (identity == null && loading != null && loading.IsCompleted) Loaded();
             if (pendingHost != null && identity != null && hostKey != null && hostKey.IsCompleted) BeginHosting();
             Host?.Pump();
+            if (Host != null && Host.Failure != LiveFailure.None)
+            {
+                Fail(Host.Failure);
+                Host = null;
+            }
+
             Join?.Pump();
+            DrainBrowserEvents();
             Persist();
         }
 
@@ -169,13 +182,35 @@ namespace TopiaForge.Multiplayer.Network
         {
             if (disposed) return;
             disposed = true;
-            lifetime.Cancel();
             StopHosting();
             Join?.Dispose();
             Join = null;
             StopBrowsing();
             if (ReferenceEquals(engine.Options.AfterClientSessionEnds, endHook)) engine.Options.AfterClientSessionEnds = null;
+
+            // Whatever changed is saved before the game closes, and the saves get a moment to land.
+            Persist();
+            try
+            {
+                Task.WaitAll(new[] { bansWrite, knownHostsWrite }, SaveFlushMilliseconds);
+            }
+            catch (AggregateException)
+            {
+                // A save that failed leaves the previous file; there is nothing more to do while closing.
+            }
+
+            lifetime.Cancel();
             identity?.Dispose();
+
+            // An identity still loading is released the moment it arrives.
+            loading?.ContinueWith(
+                task =>
+                {
+                    if (task.Status == TaskStatus.RanToCompletion && !ReferenceEquals(task.Result.Identity, identity)) task.Result.Identity.Dispose();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
             lifetime.Dispose();
         }
 
@@ -187,11 +222,21 @@ namespace TopiaForge.Multiplayer.Network
             loading = Task.Run(async () =>
             {
                 var loaded = await store.LoadOrCreateAsync(token).ConfigureAwait(false);
-                var banned = await BanList.LoadAsync(files, token).ConfigureAwait(false);
-                var known = await files.ReadAsync(Network.KnownHosts.FilePath, token).ConfigureAwait(false);
-                var parsed = Network.KnownHosts.Parse(known);
-                lock (KnownHosts) KnownHosts.MergeFrom(parsed);
-                return (loaded, banned);
+                var handedOver = false;
+                try
+                {
+                    // The ban list and known hosts are side records: one that cannot be read is treated as empty, the
+                    // way a damaged one is, rather than keeping the player out of live play.
+                    var banned = BanList.Parse(await ReadSideFileAsync(BanList.FilePath, token).ConfigureAwait(false));
+                    var parsed = Network.KnownHosts.Parse(await ReadSideFileAsync(Network.KnownHosts.FilePath, token).ConfigureAwait(false));
+                    lock (KnownHosts) KnownHosts.MergeFrom(parsed);
+                    handedOver = true;
+                    return (loaded, banned);
+                }
+                finally
+                {
+                    if (!handedOver) loaded.Dispose();
+                }
             });
         }
 
@@ -208,6 +253,18 @@ namespace TopiaForge.Multiplayer.Network
 
             identity = task.Result.Identity;
             bans = task.Result.Bans;
+        }
+
+        private async Task<byte[]?> ReadSideFileAsync(string relativePath, CancellationToken token)
+        {
+            try
+            {
+                return await files.ReadAsync(relativePath, token).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (!(exception is OperationCanceledException))
+            {
+                return null;
+            }
         }
 
         private Task<byte[]?> DeriveHostKeyAsync(string password)
@@ -235,6 +292,9 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             var host = new LiveHost(engine, identity!, bans!, settings, content, clock, unixSeconds, keyTask.Result);
+
+            // The host's policy keeps its own copy of the key, so the derived one is wiped at once.
+            if (keyTask.Result != null) Array.Clear(keyTask.Result, 0, keyTask.Result.Length);
             var failure = host.Start(factory);
             if (failure != LiveFailure.None)
             {
@@ -250,7 +310,10 @@ namespace TopiaForge.Multiplayer.Network
         internal bool Ban(ParticipantId participant, string displayName)
         {
             if (Host == null || !Host.Ban(participant, displayName)) return false;
+
+            // The save starts now rather than at the next frame, so a ban survives the game closing right away.
             Interlocked.Exchange(ref bansDirty, 1);
+            Persist();
             return true;
         }
 
@@ -278,10 +341,19 @@ namespace TopiaForge.Multiplayer.Network
             }
         }
 
-        private Task After(Task previous, string path, byte[] bytes)
+        /// <summary>
+        /// Queues a save behind the previous one. Saves are never cancelled, even while closing: a cancelled write would
+        /// lose the change, and each is small and bounded.
+        /// </summary>
+        private Task After(Task previous, string path, byte[] bytes) =>
+            previous.ContinueWith(_ => files.WriteAsync(path, bytes, CancellationToken.None), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+
+        /// <summary>The browser accepts no peers and claims its own replies, so anything else it reports is let go.</summary>
+        private void DrainBrowserEvents()
         {
-            var token = lifetime.Token;
-            return previous.ContinueWith(_ => files.WriteAsync(path, bytes, token), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+            var current = browserNetwork;
+            if (current == null) return;
+            while (current.TryTakeEvent(out var networkEvent)) networkEvent.Link?.Close();
         }
 
         /// <summary>Runs inside the engine when a joined session ends: the join hears why, and the process returns to solo play.</summary>

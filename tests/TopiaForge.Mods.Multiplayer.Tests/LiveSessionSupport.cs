@@ -27,6 +27,9 @@ internal sealed class SteppedNetwork : INetworkControl
 
     internal bool Stopped { get; private set; }
 
+    /// <summary>Makes the next event say the network gave up, as the game's network thread does after repeated faults.</summary>
+    internal bool FailNextEvent { get; set; }
+
     public int LocalPort { get; }
 
     public ConnectAttempt Connect(TransportPath path, byte[]? expectedKey)
@@ -40,6 +43,13 @@ internal sealed class SteppedNetwork : INetworkControl
 
     public bool TryTakeEvent(out NetworkEvent networkEvent)
     {
+        if (FailNextEvent)
+        {
+            FailNextEvent = false;
+            networkEvent = NetworkEvent.Ended();
+            return true;
+        }
+
         if (stack.TryAccept(out var link))
         {
             networkEvent = NetworkEvent.Accepted(link);
@@ -86,8 +96,12 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
 
     internal List<SteppedNetwork> Networks { get; } = new();
 
+    /// <summary>Gets or sets whether starting a network fails, as binding a socket can.</summary>
+    internal bool FailStarts { get; set; }
+
     public INetworkControl Start(int port, NetworkStack stack)
     {
+        if (FailStarts) throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.AddressFamilyNotSupported);
         var started = new SteppedNetwork(network, name + "-" + ++created, stack, port == 0 ? 40_000 + created : port);
         Networks.Add(started);
         return started;
@@ -96,6 +110,8 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
     public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => null;
 
     public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => null;
+
+    public LanBrowser? CreateBrowser(int discoveryPort) => null;
 }
 
 /// <summary>
@@ -113,9 +129,13 @@ internal sealed class SteppedResolver : IJoinTargetResolver
     /// <summary>Gets whether the last join asked to allow direct paths; the join itself refuses one it was not allowed.</summary>
     internal bool? LastAllowDirect { get; private set; }
 
-    public Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, bool trustChangedIdentity, CancellationToken cancellationToken)
+    /// <summary>Gets the server the last join said the player trusts at a changed address, if any.</summary>
+    internal string? LastTrustedServerId { get; private set; }
+
+    public Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken)
     {
         LastAllowDirect = allowDirect;
+        LastTrustedServerId = trustedServerId;
         if (Override != null) return Task.FromResult(Override);
         var host = Host?.Invoke();
         return Task.FromResult(host == null
@@ -158,12 +178,15 @@ internal sealed class MemoryDataFiles : INetworkDataFiles
     /// <summary>Gets or sets whether reads fail, as on a damaged or locked disk.</summary>
     internal bool FailReads { get; set; }
 
+    /// <summary>Gets the files whose reads fail, while the rest read normally.</summary>
+    internal HashSet<string> FailReadsOf { get; } = new();
+
     /// <summary>Gets or sets what each write waits for before it lands, so a test can make one slow.</summary>
     internal Func<string, Task>? BeforeWrite { get; set; }
 
     public Task<byte[]?> ReadAsync(string relativePath, CancellationToken cancellationToken)
     {
-        if (FailReads) return Task.FromException<byte[]?>(new IOException("The disk could not be read."));
+        if (FailReads || FailReadsOf.Contains(relativePath)) return Task.FromException<byte[]?>(new IOException("The disk could not be read."));
         lock (Contents) return Task.FromResult(Contents.TryGetValue(relativePath, out var bytes) ? (byte[]?)bytes.ToArray() : null);
     }
 
@@ -172,6 +195,9 @@ internal sealed class MemoryDataFiles : INetworkDataFiles
         var copy = content.ToArray();
         var gate = BeforeWrite;
         if (gate != null) await gate(relativePath).ConfigureAwait(false);
+
+        // Like the SDK's mod files, a cancelled write is refused.
+        cancellationToken.ThrowIfCancellationRequested();
         lock (Contents) Contents[relativePath] = copy;
     }
 }
@@ -200,9 +226,16 @@ internal sealed class LiveRig : IDisposable
 
     internal Dictionary<Provider, SteppedNetworkFactory> Factories { get; } = new();
 
+    private readonly Dictionary<Provider, MemoryDataFiles> clientFiles = new();
+
+    /// <summary>Gets the data folder of a client the rig added.</summary>
+    internal MemoryDataFiles ClientFiles(Provider client) => clientFiles[client];
+
     internal Provider AddClient(string name, TestContent? content = null)
     {
-        var client = NewProvider(name, new MemoryDataFiles(), content ?? new TestContent(), out var factory);
+        var files = new MemoryDataFiles();
+        var client = NewProvider(name, files, content ?? new TestContent(), out var factory);
+        clientFiles[client] = files;
         Clients.Add(client);
         Factories[client] = factory;
         return client;
