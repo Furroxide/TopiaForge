@@ -31,6 +31,7 @@ internal sealed class VirtualNode
 
     internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null)
     {
+        if (index < 1 || index > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(index));
         Name = name;
         Stack = stack;
         Endpoint = stack?.Endpoint ?? endpoint;
@@ -49,12 +50,31 @@ internal sealed class VirtualNode
 
     internal Queue<(VirtualNode From, byte[] Bytes)> Inbox { get; } = new();
 
+    /// <summary>Gets whether the node left the network: nothing reaches it any more, as with a closed socket.</summary>
+    internal bool Removed { get; set; }
+
+    /// <summary>
+    /// Gets an address of the node. The node's index takes two bytes, so a long run that opens a network for every join
+    /// never hands two nodes the same address; the first 255 nodes keep the addresses they always had.
+    /// </summary>
     internal byte[] AddressOf(TransportPathKind kind) => kind switch
     {
-        TransportPathKind.Relayed => new byte[] { 100, 64, 0, (byte)index, 0x0D, 0x96 },
-        TransportPathKind.Lan => new byte[] { 192, 168, 0, (byte)index, 0x6A, 0x72 },
-        _ => new byte[] { 10, (byte)rebinds, 0, (byte)index, 0x6A, 0x72 }
+        TransportPathKind.Relayed => new byte[] { 100, 64, (byte)(index >> 8), (byte)index, 0x0D, 0x96 },
+        TransportPathKind.Lan => new byte[] { 192, 168, (byte)(index >> 8), (byte)index, 0x6A, 0x72 },
+        _ => new byte[] { 10, (byte)rebinds, (byte)(index >> 8), (byte)index, 0x6A, 0x72 }
     };
+
+    /// <summary>Gets whether <paramref name="key"/> is this node's address of <paramref name="kind"/>, without allocating.</summary>
+    internal bool Owns(byte[] key, TransportPathKind kind)
+    {
+        if (key.Length != 6 || key[2] != (byte)(index >> 8) || key[3] != (byte)index) return false;
+        return kind switch
+        {
+            TransportPathKind.Relayed => key[0] == 100 && key[1] == 64 && key[4] == 0x0D && key[5] == 0x96,
+            TransportPathKind.Lan => key[0] == 192 && key[1] == 168 && key[4] == 0x6A && key[5] == 0x72,
+            _ => key[0] == 10 && key[1] == (byte)rebinds && key[4] == 0x6A && key[5] == 0x72
+        };
+    }
 
     /// <summary>Moves the node to a new direct address, as a NAT does when its mapping expires; the old one goes dead.</summary>
     internal void Rebind() => rebinds++;
@@ -69,13 +89,17 @@ internal sealed class VirtualDatagramNetwork
 {
     private const int SpinLimit = 10_000;
 
+    private static readonly TransportPathKind[] Kinds = { TransportPathKind.Direct, TransportPathKind.Relayed, TransportPathKind.Lan };
+
     private readonly Random random;
     private readonly List<VirtualNode> nodes = new();
     private readonly List<InFlight> inFlight = new();
+    private readonly List<(VirtualNode Node, long At)> retiring = new();
     private readonly HashSet<(VirtualNode, VirtualNode)> partitions = new();
     private readonly IncrementalHash transcript = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     private long ordinal;
     private int spinStreak;
+    private int nodeCount;
 
     internal VirtualDatagramNetwork(int seed, long startMicros = 1_000_000)
     {
@@ -116,9 +140,23 @@ internal sealed class VirtualDatagramNetwork
 
     internal VirtualNode AddStack(string name, NetworkStack stack)
     {
-        var node = new VirtualNode(name, nodes.Count + 1, null, stack);
+        var node = new VirtualNode(name, ++nodeCount, null, stack);
         nodes.Add(node);
         return node;
+    }
+
+    /// <summary>Gets how many nodes are attached now; retired ones no longer count.</summary>
+    internal int NodeCount => nodes.Count;
+
+    /// <summary>
+    /// Takes a node off the network at <paramref name="atMicros"/>, the way a network thread disposes its stack once a
+    /// stop's grace period ends: the stack is disposed, which wipes its keys, and datagrams still on their way to it are
+    /// lost. Until then the node keeps running, so graceful closes still go out.
+    /// </summary>
+    internal void Retire(VirtualNode node, long atMicros)
+    {
+        if (node.Removed || retiring.Exists(entry => ReferenceEquals(entry.Node, node))) return;
+        retiring.Add((node, Math.Max(atMicros, Now)));
     }
 
     /// <summary>Gets the path a node uses to reach <paramref name="target"/>: its address, as the I/O layer would key it.</summary>
@@ -200,19 +238,26 @@ internal sealed class VirtualDatagramNetwork
 
     private VirtualNode Add(string name, TransportEndpoint? endpoint)
     {
-        var node = new VirtualNode(name, nodes.Count + 1, endpoint);
+        var node = new VirtualNode(name, ++nodeCount, endpoint);
         nodes.Add(node);
         return node;
     }
 
     private void Settle()
     {
+        RetireDue();
         while (inFlight.Count > 0 && inFlight[0].DeliverAt <= Now)
         {
             var datagram = inFlight[0];
             inFlight.RemoveAt(0);
-            Delivered++;
             var to = datagram.To;
+            if (to.Removed)
+            {
+                Lost++;
+                continue;
+            }
+
+            Delivered++;
             if (to.Stack != null) to.Stack.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
             else if (to.Endpoint != null) to.Endpoint.Receive(datagram.Source, datagram.Bytes, 0, datagram.Bytes.Length, Now);
             else to.Inbox.Enqueue((datagram.From, datagram.Bytes));
@@ -245,18 +290,32 @@ internal sealed class VirtualDatagramNetwork
     {
         foreach (var node in nodes)
         {
-            foreach (var kind in new[] { TransportPathKind.Direct, TransportPathKind.Relayed, TransportPathKind.Lan })
+            foreach (var kind in Kinds)
             {
-                if (node.AddressOf(kind).AsSpan().SequenceEqual(key)) return (node, kind);
+                if (node.Owns(key, kind)) return (node, kind);
             }
         }
 
         return (null, TransportPathKind.Direct);
     }
 
+    private void RetireDue()
+    {
+        for (var index = retiring.Count - 1; index >= 0; index--)
+        {
+            var (node, at) = retiring[index];
+            if (at > Now) continue;
+            retiring.RemoveAt(index);
+            node.Removed = true;
+            nodes.Remove(node);
+            node.Stack?.Dispose();
+        }
+    }
+
     private long NextEvent()
     {
         var next = inFlight.Count > 0 ? inFlight[0].DeliverAt : long.MaxValue;
+        foreach (var (_, at) in retiring) next = Math.Min(next, at);
         foreach (var node in nodes)
         {
             if (node.Stack != null) next = Math.Min(next, node.Stack.NextTimeoutMicros());
@@ -279,7 +338,7 @@ internal sealed class VirtualDatagramNetwork
         var source = new TransportPath(from.AddressOf(kind), kind);
         var lost = random.NextDouble() < Conditions.LossRate;
         var copies = random.NextDouble() < Conditions.DuplicateRate ? 2 : 1;
-        if (lost || partitions.Contains((from, to)) || (Drop?.Invoke(from, to, bytes) ?? false))
+        if (lost || to.Removed || partitions.Contains((from, to)) || (Drop?.Invoke(from, to, bytes) ?? false))
         {
             Lost++;
             return;

@@ -21,7 +21,7 @@ namespace TopiaForge.Multiplayer.Network
     internal sealed class DescriptorEndpoint : INetworkService
     {
         internal const int MaximumConnections = 8;
-        internal const int MaximumRequestBytes = 128;
+        internal const int MaximumRequestBytes = DescriptorRequest.MaximumBytes;
         internal const int RequestsPerSecond = 10;
         private const int ChunkBytes = 64 * 1024;
         private const int ChunksPerTurn = 4;
@@ -151,8 +151,8 @@ namespace TopiaForge.Multiplayer.Network
             if (!client.Responding)
             {
                 if (now - client.OpenedAt > requestTimeoutMicros) return false;
-                if (!client.TryReadRequest(out var line, out var closed)) return !closed;
-                Answer(client, line, now);
+                if (!client.TryReadRequest(out var request, out var closed)) return !closed;
+                Answer(client, request, now);
             }
             else if (now - client.OpenedAt > transferTimeoutMicros)
             {
@@ -162,9 +162,9 @@ namespace TopiaForge.Multiplayer.Network
             return Flush(client);
         }
 
-        private void Answer(Client client, string? line, long now)
+        private void Answer(Client client, DescriptorRequest request, long now)
         {
-            if (line == null)
+            if (request.Kind == DescriptorRequestKind.Overlong)
             {
                 client.Respond("TFD1 400\n", null);
                 return;
@@ -176,7 +176,7 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
-            if (line == "TFD1 descriptor")
+            if (request.Kind == DescriptorRequestKind.Descriptor)
             {
                 var bytes = Volatile.Read(ref descriptor);
                 if (bytes == null) client.Respond("TFD1 404\n", null);
@@ -184,14 +184,13 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
-            const string PackagePrefix = "TFD1 package ";
-            if (line.StartsWith(PackagePrefix, StringComparison.Ordinal) && WireText.IsHex(line.Substring(PackagePrefix.Length), 32))
+            if (request.Kind == DescriptorRequestKind.Package)
             {
                 Stream? stream = null;
                 long length = 0;
                 try
                 {
-                    stream = packages?.Invoke(line.Substring(PackagePrefix.Length));
+                    stream = packages?.Invoke(request.Sha256!);
                     if (stream != null) length = stream.Length;
                 }
                 catch (Exception exception) when (IsArchiveFailure(exception))
@@ -313,10 +312,10 @@ namespace TopiaForge.Multiplayer.Network
             /// <summary>Gets whether the header and the whole body have been handed to the socket.</summary>
             internal bool Complete => Pending.Count == 0 && body == null;
 
-            /// <summary>Reads what has arrived; yields the request line once its newline is in, or null if malformed.</summary>
-            internal bool TryReadRequest(out string? line, out bool closed)
+            /// <summary>Reads what has arrived; yields the request once its newline is in or its bytes run out.</summary>
+            internal bool TryReadRequest(out DescriptorRequest parsed, out bool closed)
             {
-                line = null;
+                parsed = default;
                 closed = false;
                 try
                 {
@@ -340,10 +339,8 @@ namespace TopiaForge.Multiplayer.Network
                 }
 
                 // A line that matches no request, control characters and all, is answered 400 by the caller.
-                var end = Array.IndexOf(request, (byte)'\n', 0, requestLength);
-                if (end < 0) return requestLength == request.Length;
-                line = Encoding.ASCII.GetString(request, 0, end);
-                return true;
+                parsed = DescriptorRequest.Read(request, requestLength);
+                return parsed.Kind != DescriptorRequestKind.Incomplete;
             }
 
             internal void Respond(string header, Stream? content)

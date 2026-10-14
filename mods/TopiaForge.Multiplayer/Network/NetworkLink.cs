@@ -81,6 +81,9 @@ namespace TopiaForge.Multiplayer.Network
 
         internal long InboundBytes => Interlocked.Read(ref inboundBytes);
 
+        /// <summary>Gets the bytes the main thread queued that the network thread has not taken yet.</summary>
+        internal long OutboundBytes => Interlocked.Read(ref outboundBytes);
+
         /// <summary>Gets whether the main thread has room for more session frames: the network thread checks before it moves any.</summary>
         internal bool HasInboundRoom => Interlocked.Read(ref inboundBytes) < InboundBudgetBytes;
 

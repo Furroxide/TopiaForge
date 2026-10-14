@@ -163,6 +163,15 @@ namespace TopiaForge.Multiplayer.Transport
         /// <summary>Gets the session bytes waiting for the reader, which count toward the endpoint's reassembly cap.</summary>
         internal long BufferedBytes => receiveStream.BufferedBytes;
 
+        /// <summary>Gets the session bytes sent or queued and not yet acknowledged.</summary>
+        internal long SendBacklogBytes => sendStream.Backlog;
+
+        /// <summary>Gets the packets awaiting acknowledgement.</summary>
+        internal int PacketsInFlight => loss.InFlightCount;
+
+        /// <summary>Gets the realtime and voice frames waiting for the reader.</summary>
+        internal int QueuedDatagrams => inboundDatagrams.Count;
+
         /// <summary>Gets or sets whether the endpoint still routes to this connection and counts its buffers.</summary>
         internal bool IsRegistered { get; set; }
 

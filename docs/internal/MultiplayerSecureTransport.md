@@ -312,4 +312,8 @@ Before joining, a browser asks a host about its session without a handshake.
 - **Fuzzing.** `TransportFuzzTests` sends 4,000 seeded hostile datagrams against a live session, over every kind of
   path: random bytes, typed random bytes, forged info replies, and captured datagrams flipped, cut, extended or
   replayed. Oversized ones are included. The session must stand, stay on its paths and still deliver. A seeded run
-  must also repeat every byte.
+  must also repeat every byte. `TransportDeepFuzzTests` goes further: it captures every kind of datagram, Retry and
+  cookie Initiations included, and sends 50,000 mutations of them per run, many readdressed to a live connection id so
+  they reach the connection's own checks, from an attacker's paths and from forged ones. Nothing the endpoints send the
+  attacker may outweigh what it sent them, and every table stays within its bound. It also completes handshakes by hand
+  and sends authenticated packets of garbage frames, which may end only their own connection.

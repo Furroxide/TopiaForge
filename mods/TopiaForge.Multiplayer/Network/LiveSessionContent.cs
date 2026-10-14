@@ -108,12 +108,14 @@ namespace TopiaForge.Multiplayer.Network
                 position += PasswordProof.ProofSize;
             }
 
-            uint length = 0;
+            // Five varint bytes carry 35 bits, so the length is read into 64: a length past the bound is refused however
+            // it is spelled, rather than wrapping in 32 bits to a small one under a second spelling.
+            ulong length = 0;
             for (var shift = 0; ; shift += 7)
             {
                 if (shift > 28 || position >= bytes.Length) return false;
                 var next = bytes[position++];
-                length |= (uint)(next & 0x7F) << shift;
+                length |= (ulong)(next & 0x7F) << shift;
                 if ((next & 0x80) == 0)
                 {
                     if (next == 0 && shift > 0) return false;
@@ -121,7 +123,7 @@ namespace TopiaForge.Multiplayer.Network
                 }
             }
 
-            if (length > MaximumContentBytes || bytes.Length - position != length) return false;
+            if (length > MaximumContentBytes || (ulong)(bytes.Length - position) != length) return false;
             content = new byte[length];
             Buffer.BlockCopy(bytes, position, content, 0, (int)length);
             return true;

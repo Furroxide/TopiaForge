@@ -12,11 +12,13 @@ internal sealed class SteppedNetwork : INetworkControl
 {
     private readonly VirtualDatagramNetwork network;
     private readonly NetworkStack stack;
+    private readonly bool retireWhenStopped;
 
-    internal SteppedNetwork(VirtualDatagramNetwork network, string name, NetworkStack stack, int port)
+    internal SteppedNetwork(VirtualDatagramNetwork network, string name, NetworkStack stack, int port, bool retireWhenStopped = false)
     {
         this.network = network;
         this.stack = stack;
+        this.retireWhenStopped = retireWhenStopped;
         LocalPort = port;
         Node = network.AddStack(name, stack);
     }
@@ -70,12 +72,16 @@ internal sealed class SteppedNetwork : INetworkControl
 
     public void Detach(INetworkService service) => service.Dispose();
 
-    /// <summary>Closes the links gracefully; the virtual network keeps carrying the closes.</summary>
+    /// <summary>
+    /// Closes the links gracefully; the virtual network keeps carrying the closes. A network that retires when stopped
+    /// then leaves the virtual network once the grace period ends, its stack disposed, as the network thread does.
+    /// </summary>
     public void Stop(long gracefulMicros)
     {
         if (Stopped) return;
         Stopped = true;
         stack.CloseAll();
+        if (retireWhenStopped) network.Retire(Node, network.Now + Math.Max(0, gracefulMicros));
     }
 
     public void Dispose() => Stop(0);
@@ -99,10 +105,26 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
     /// <summary>Gets or sets whether starting a network fails, as binding a socket can.</summary>
     internal bool FailStarts { get; set; }
 
+    /// <summary>
+    /// Gets or sets a seed for the transport's randomness. The flows build their endpoints with the platform's generator;
+    /// with a seed, each endpoint this factory starts draws connection ids, ephemeral keys, path challenges and query ids
+    /// from its own seeded source instead, before it has made a connection, so a run repeats every byte.
+    /// </summary>
+    internal int? TransportSeed { get; set; }
+
+    /// <summary>Gets or sets where every endpoint this factory starts reports transport events.</summary>
+    internal ITransportDiagnostics? TransportDiagnostics { get; set; }
+
+    /// <summary>Gets or sets whether a stopped network leaves the virtual network after its grace period.</summary>
+    internal bool RetireStopped { get; set; }
+
     public INetworkControl Start(int port, NetworkStack stack)
     {
         if (FailStarts) throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.AddressFamilyNotSupported);
-        var started = new SteppedNetwork(network, name + "-" + ++created, stack, port == 0 ? 40_000 + created : port);
+        ++created;
+        if (TransportSeed is int seed) stack.Endpoint.Options.Random = new SeededTransportRandom((seed * 7_919) + created);
+        if (TransportDiagnostics != null) stack.Endpoint.Options.Diagnostics = TransportDiagnostics;
+        var started = new SteppedNetwork(network, name + "-" + created, stack, port == 0 ? 40_000 + created : port, RetireStopped);
         Networks.Add(started);
         return started;
     }
