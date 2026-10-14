@@ -171,34 +171,35 @@ blocks separated by single spaces. A relay-only side's signaling candidates are 
 (ControlPlaneApi.md, section 8.3). That makes the list a privacy control: a block too wide lets more through, and a
 missing block breaks relay-only joins.
 
-**The shipped value is unchecked.** It is Cloudflare's published CDN address list, IPv4 then IPv6, as written down from
-memory when the service was built. Nobody has compared it with https://www.cloudflare.com/ips/, and nobody has
-confirmed that Realtime TURN allocates relay addresses from those ranges at all. It is also far wider than relay needs:
-it spans every address Cloudflare publishes for its network, so a candidate anywhere inside it passes as a relay
-address.
+**The shipped value is unchecked.** It was written down from memory, when the service was built, as Cloudflare's
+published CDN address list, IPv4 then IPv6. Nobody has compared it with https://www.cloudflare.com/ips/, and nobody has
+confirmed that Realtime TURN allocates relay addresses from those ranges at all. It may also be far wider than relay
+needs: a list of every address Cloudflare publishes for its network passes a candidate anywhere in that network as a
+relay address.
 
 Before deploying, check the list against Cloudflare's current Realtime TURN documentation and its published ranges.
 Check it again every quarter, and whenever Cloudflare announces a change of its addresses:
 
 1. Find the ranges Realtime TURN allocates relay addresses from in Cloudflare's current documentation, and compare
    them with the published lists. If the documentation names no ranges of its own, fall back to the published lists
-   at https://www.cloudflare.com/ips/, checked entry by entry, knowing that they are wider than relay needs.
+   at https://www.cloudflare.com/ips/, checked entry by entry, knowing that they may be far wider than relay needs.
 2. Write the narrowest list that covers every relay range, IPv4 blocks first, joined by single spaces.
 3. Replace the value in all three places in `wrangler.toml`: the top level, `env.staging` and `env.production`.
 4. Run `npm test` in `services/control-plane`. The configuration tests refuse a list that does not parse in full, and
    one that differs between environments. They also pin the shipped list's size and a few addresses inside it, and
-   the signaling tests and the recorded client fixtures use relay addresses in 141.101.64.0/18, 162.158.0.0/15 and
-   2a06:98c0::/29. If the new list leaves those out, move the tests to addresses inside it and regenerate the fixtures
-   (ControlPlaneApi.md, section 11).
+   the signaling tests and the recorded client fixtures use relay candidates with addresses in 141.101.64.0/18,
+   162.158.0.0/15 and 2a06:98c0::/29. If the new list leaves those out, move the tests to addresses inside it and
+   regenerate the fixtures (ControlPlaneApi.md, section 11).
 5. Merge by pull request, and deploy as above.
 
 A list that does not parse leaves relay unavailable rather than unchecked: `GET /v1/status` reports `features.relay`
 `false`, and admin state reports `providerConfigured` `false`.
 
 The relay join with "hide my IP" in the first staging session (section 3, step 5) catches a missing block: if that
-joiner receives a `candidates-withheld` notice for its relay candidates, Cloudflare's relay addresses lie outside the
-list. It cannot catch a list that is too wide. A wider list passes the same join without any sign, so only the check
-against Cloudflare's documentation keeps the list narrow.
+joiner receives a `candidates-withheld` notice for its relay candidates, the relay addresses it was given lie outside
+the list. One join exercises only the relay addresses it was given, so a block that covers none of them can be missing
+without any sign. It cannot catch a list that is too wide either: a wider list passes the same join without any sign,
+so only the check in step 1 can keep the list narrow.
 
 ## 5. Rotating secrets
 
@@ -275,7 +276,8 @@ caller's prefix has minted five in the last minute or twenty in the last hour, o
 every reservation the last measurement cannot have seen would pass `TURN_DAILY_CAP_GB`. The hourly measurement
 replaces reservations with real usage once credentials have expired, so the daily gate tightens only while relayed
 traffic is unmeasured. A credential whose measured egress passes twice its reservation is revoked and its ticket
-blocked.
+blocked. A mint that ticket is still waiting on is refused once the provider answers, and its credential is revoked
+without reaching the client.
 
 ### 6.2 Starting figures
 
@@ -322,7 +324,7 @@ Logpush or saved tail output for these Workers, because their request metadata i
 | A session's invites | `HostSession`, `InviteShard` | Until expiry (at most seven days) or the session's end |
 | Used challenge nonces | `HostSession` | Two minutes |
 | Operator holds | `HostSession` | Up to 30 days, as set |
-| Peer ids the host said goodbye to, derived from random ticket ids | `HostSession` | Until that peer's ticket expires, or, for a peer already gone at the goodbye, six hours after it; at most six hours, and never past the session's end |
+| Peer ids the signaling room admitted, and those the host said goodbye to, derived from random ticket ids | `HostSession` | Until that peer's ticket expires (at most six hours), and never past the session's end |
 | Public listings | `DirectoryShard` | Until the session's expiry |
 | Rate-limit counts, keyed by prefix hash and hour | `RateLimiter`, `SpendGuard` | At most two hours |
 | Relay accounting per ticket (random ticket id or token hash) | `SpendGuard` | A day past the ticket's expiry |
@@ -343,6 +345,6 @@ must say so before Internet play is enabled.
 | The deploy's smoke test fails | `CONTROL_PLANE_ORIGIN` must be set on the environment as `https://` plus a host, with no path or trailing slash. |
 | Everything answers `503 service-unavailable` | `SERVICE_KEY` is missing or is not base64url of 32 to 64 bytes. |
 | `features.relay` is `false` with the kill switch released | A TURN secret, a spend ceiling or `RELAY_ADDRESS_RANGES` is missing or malformed; admin state shows `providerConfigured` `false`. |
-| Relay-only joins fail while other relay joins work | The joiner receives a `candidates-withheld` notice for its relay candidates, so Cloudflare's relay addresses lie outside `RELAY_ADDRESS_RANGES`. Compare the list with Cloudflare's (section 4.1). |
+| Relay-only joins fail while other relay joins work | The joiner receives a `candidates-withheld` notice for its relay candidates, so the relay addresses it was given lie outside `RELAY_ADDRESS_RANGES`. Compare the list with Cloudflare's (section 4.1). |
 | `measurementFailures` climbs | The analytics token lacks Account Analytics read, `ANALYTICS_ACCOUNT_ID` is wrong, or the dataset query changed; run `POST /v1/admin/spend/measure` after each fix. The query is in `src/relay/usage-api.ts`. |
 | Admin answers `429` | Admin requests are limited per prefix (30 a minute); wait a minute. |

@@ -37,8 +37,8 @@ export interface Config {
   /** Null until the TURN key, both spend ceilings and the relay address ranges are configured. */
   readonly provider: RelayProvider | null;
   /**
-   * The relay provider's address ranges. A relay-only side may forward only candidates inside them, so the list is
-   * empty, and such a side forwards nothing, while the configured ranges are missing or malformed.
+   * The deployment's relay address ranges (RELAY_ADDRESS_RANGES). A relay-only side may forward only candidates inside
+   * them, so the list is empty, and such a side forwards nothing, while the configured ranges are missing or malformed.
    */
   readonly relayRanges: readonly IpRange[];
   /** Null until the analytics account and token are configured. */

@@ -228,10 +228,10 @@ with, and it holds only while that admission still would:
 
 The service checks this whenever a ticket opens a signaling socket or mints relay credentials, and answers `401` once it
 no longer holds: the player asks for a new ticket. A mint is checked twice, before the service asks the relay provider
-and again once the provider answers, so a mint that was already waiting when its ticket stopped holding gets no
-credential either (section 7). The service also closes the ticket's open signaling socket with 4403. A relayed player
-whose ticket stops holding cannot renew its relay credentials, so its relayed path ends when its current credential
-expires.
+and again once the provider answers, so a mint that was already waiting when its ticket stopped holding, or when it
+expired, gets no credential either (section 7). The service also closes the ticket's open signaling socket with 4403.
+A relayed player whose ticket stops holding cannot renew its relay credentials, so its relayed path ends when its
+current credential expires.
 
 ## 6. One answer for every miss
 
@@ -257,16 +257,19 @@ are refused with `429` before any lookup, so a refusal reveals nothing either. C
 - Credentials are short-lived (`ttlSeconds`, ten minutes by default). Expiry ends the allocation, so a client mints the
   next credential before the current one expires and moves its relayed path to the new allocation.
 - Every mint goes through the spend guard. It may refuse with `429` (the per-prefix mint limit), `403 ticket-limit`
-  (the ticket has minted its share), `503 relay-unavailable` (relay off, kill switch engaged, or the day's relay budget
-  spent) or `502 upstream-failed`. A failed mint costs the caller nothing.
+  (the ticket has minted its share, or the hourly measurement blocked it for relaying far past its plan),
+  `503 relay-unavailable` (relay off, kill switch engaged, or the day's relay budget spent) or `502 upstream-failed`. A
+  failed mint costs the caller nothing.
 - The kill switch revokes every live credential (ControlPlaneOperations.md, section 5.1). That includes a credential
   still being minted when it engages: the credential the provider returns is revoked without reaching the client, and
   the mint answers `503 relay-unavailable`. A mint that is waiting when an operator turns relay off answers the same
   way, even if relay is on again by the time the provider answers.
-- Once the provider answers, the service also checks again that the caller's admission holds. If it lapsed while the
-  mint waited, the credential is revoked the same way, and the mint answers as a request made then would: `401` for a
-  join ticket that stopped holding (section 5.2) or a host token that no longer opens the session, and `404` for a
-  joiner whose session has ended. If the service cannot make that check, it hands nothing out and answers `500`.
+- Once the provider answers, the service also checks the caller again: that its ticket has not expired, that its
+  admission holds, and that the hourly measurement has not blocked its ticket meanwhile. If any of that changed while
+  the mint waited, the credential is revoked the same way, and the mint answers as a request made then would: `401`
+  for a join ticket that expired or stopped holding (section 5.2) or a host token that no longer opens the session,
+  `404` for a joiner whose session has ended, and `403 ticket-limit` for a blocked ticket. If the service cannot ask
+  whether the admission holds, it hands nothing out and answers `500`, or `401` for a ticket that has also expired.
 
 ## 8. Signaling
 
@@ -307,15 +310,15 @@ Frames are canonical JSON text of at most 8 KiB. Binary frames close the socket.
 A peer id is 16 hexadecimal characters derived from its ticket. Peers never learn each other's ids.
 
 `host-offline` and `unknown-peer` mean that a frame's counterpart has no open socket, so the frame went nowhere. A host's
-`bye` is the exception: it takes effect without being delivered (section 8.4), so it is never answered with
-`unknown-peer`.
+`bye` is the exception: it is never answered with `unknown-peer`, because for any peer the room admitted it takes
+effect without being delivered (section 8.4).
 
 ### 8.3 Privacy, enforced here
 
 When a side is relay-only, the service forwards from it only candidates that are all of these:
 
 1. of kind `relay`;
-2. inside the deployment's relay address ranges, `RELAY_ADDRESS_RANGES`, which the operator sets to the ranges the
+2. inside the deployment's relay address ranges, `RELAY_ADDRESS_RANGES`, which the operator must set to the ranges the
    relay provider allocates relay addresses from (ControlPlaneOperations.md, section 4.1);
 3. not a local-only address (unspecified, loopback, private, shared CGNAT, link-local, unique-local, multicast or
    broadcast);
@@ -325,12 +328,20 @@ When a side is relay-only, the service forwards from it only candidates that are
 What that guarantees: whatever a relay-only side sends, and however it labels it, every candidate the other side
 receives from it names an address inside `RELAY_ADDRESS_RANGES`, and none names the IPv4 address or an address in the
 IPv6 /64 the side connected to the service from. Rule 4 still applies when that address is itself inside those ranges,
-as it is for a side that reaches the service through the relay provider's own network.
+as it may be for a side that reaches the service through the relay provider's own network.
 
 What it cannot guarantee: the service sees only the one address a side connects from. Its other addresses, such as
-another interface's or those of the other address family, stay back only because they lie outside
-`RELAY_ADDRESS_RANGES`. The guarantee is therefore only as narrow as that list: one wider than the provider's relay
-allocations lets through any address of the side's that falls inside it, and nothing in the service can notice.
+another interface's or those of the other address family, stay back only if they lie outside `RELAY_ADDRESS_RANGES`.
+The guarantee is therefore only as narrow as that list: one wider than the provider's relay allocations lets through
+any address of the side's that falls inside it, and nothing in the service can notice.
+
+**The shipped list is unchecked.** The value in `services/control-plane/wrangler.toml` was written down from memory as
+Cloudflare's published address list. Nobody has compared it with that list or with Cloudflare's Realtime TURN
+documentation, nobody has confirmed that Realtime TURN allocates relay addresses from it, and it may be far wider than
+relay needs. The maintainer must check it against both, and correct it by pull request, before deploying
+(ControlPlaneOperations.md, section 4.1). The relay-only join in the first staging session catches a missing block,
+but it cannot catch a list that is too wide: a wider list passes the same join without any sign. Even a missing block
+shows only for the relay addresses that one join was given.
 
 Anything withheld is reported to the sender in a `notice`; a trickled candidate that may not leave is dropped whole. A
 direct side's candidates pass unchanged: privacy protects the side that chose it. Signaling is held in memory only and
@@ -343,11 +354,18 @@ never stored.
   joiner's socket counts until it closes, so a joiner closes it once its connection is up. A refused upgrade answers
   `409 room-full`.
 - **Frames.** At most 40 per socket in any ten seconds.
-- **A host's goodbye.** A `bye` from the host closes that peer's socket and keeps its ticket out of the room for the
-  rest of the session: a later upgrade with it answers `401`. It does so whether or not the peer still has an open
-  socket. A host may say goodbye after the peer's `left`, whether the peer closed its socket or the service closed it,
-  and the ticket stays out all the same; such a goodbye has nothing to deliver and gets no answer. The player can come
-  back only with a new ticket, which has a new peer id.
+- **A host's goodbye.** A `bye` from the host closes that peer's socket and keeps its ticket out of the room for as
+  long as the ticket could open it: a later upgrade with it answers `401`. It does so whether or not the peer still has
+  an open socket, because the room remembers every peer it admitted until that peer's ticket expires. A host may say
+  goodbye after the peer's `left`, whether the peer closed its socket or the service closed it, and the ticket stays
+  out all the same; such a goodbye has nothing to deliver and gets no answer. A goodbye for a peer id the room never
+  admitted, or whose ticket has expired, changes nothing and gets no answer either. The player can come back only with
+  a new ticket, which has a new peer id.
+- **What the room remembers.** At most 1,024 goodbyes and 4,096 admitted peer ids at once, each until its ticket
+  expires and never past the session's end. Only a new entry can find a list full, and then the entry whose ticket
+  expires first makes way: a repeated goodbye, or the same ticket admitted again, never pushes another entry out. A
+  goodbye that makes way lets its ticket back in until that ticket expires. Once a peer's admission has made way, a
+  goodbye keeps the peer out only while the room still holds its socket.
 
 | Code | Reason |
 | --- | --- |
@@ -380,7 +398,7 @@ is the same `401`. See ControlPlaneOperations.md for when to use each.
 
 | Object | Instances | Holds |
 | --- | --- | --- |
-| `HostSession` | One per server id | The session with its random epoch, its invites, used challenge nonces, an operator hold, the peer ids its host said goodbye to, and the signaling room in memory. Its alarm ends a lapsed session and deletes its storage, and closes the sockets of tickets whose invite has expired. |
+| `HostSession` | One per server id | The session with its random epoch, its invites, used challenge nonces, an operator hold, the peer ids its room admitted and those its host said goodbye to, and the signaling room in memory. Its alarm ends a lapsed session and deletes its storage, and closes the sockets of tickets whose invite has expired. |
 | `DirectoryShard` | 16 per game build and protocol major, by the server id's first hex digit | Public listings, each with its expiry |
 | `InviteShard` | 32, by the code's first character | Code to server id, with expiry |
 | `SpendGuard` | One | Feature flags, the kill switch, per-ticket relay accounting, per-prefix mint windows, minted credential names, daily totals, and the latest usage measurement |
@@ -399,11 +417,12 @@ ControlPlaneOperations.md.
 - The service replays the shared descriptor and link fixtures: every valid descriptor verifies and signs back to its
   served bytes, every invalid one is refused, and invite-code normalization matches.
 - `npm test` there type-checks and runs every suite: auth and challenges, TTLs and heartbeats, alarms, invites and
-  the uniform miss under concurrency, ticket scope (mints whose ticket stops holding while they wait included),
-  signaling and candidate stripping, the room's places, the host's goodbyes and host sockets across registrations, the
-  spend guard's caps and concurrency, the kill switch and turning relay off with mints in flight, the switch's
-  revocation passes and its hourly trip, admin access, semantic versions (hostile ones read in bounded time), and a
-  property test that no response and no stored byte carries an address.
+  the uniform miss under concurrency, ticket scope (mints whose ticket stops holding or expires while they wait
+  included), signaling and candidate stripping, the room's places, the host's goodbyes and what the room remembers for
+  them, host sockets across registrations, the spend guard's caps and concurrency, the kill switch, turning relay off
+  and a measurement blocking a ticket with mints in flight, the switch's revocation passes and its hourly trip, admin
+  access, semantic versions (hostile ones read in bounded time), and a property test that no response and no stored
+  byte carries an address.
 
 ## 12. Decisions recorded here
 

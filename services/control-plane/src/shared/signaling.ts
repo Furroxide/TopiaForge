@@ -93,7 +93,7 @@ export interface SenderPrivacy {
 
 /** How the room judges a relay-only side's candidates. */
 export interface CandidatePolicy {
-  /** The relay provider's address ranges: every relay address it allocates lies inside them. */
+  /** The deployment's relay address ranges, which must hold every relay address the provider allocates. */
   readonly relayRanges: readonly IpRange[];
   /** The keyed fingerprint of an address's scope, computed exactly as the sender's own was. */
   readonly scopeOf: (address: IpAddress) => Promise<string>;
@@ -101,10 +101,10 @@ export interface CandidatePolicy {
 
 /**
  * The candidates a sender's message may carry onward. A direct side's pass unchanged. A relay-only side keeps only
- * candidates that are labelled relay, lie inside the relay provider's address ranges, are not local-only, and are not
+ * candidates that are labelled relay, lie inside the deployment's relay address ranges, are not local-only, and are not
  * in the sender's own observed scope: the same IPv4 address, or the same IPv6 /64. Whatever it labels them, a
- * relay-only side therefore forwards only addresses of the relay provider, and never one from the scope the service
- * saw it connect from.
+ * relay-only side therefore forwards only addresses inside those ranges, and never one from the scope the service saw
+ * it connect from.
  */
 export async function permittedCandidates(
   candidates: readonly Candidate[],

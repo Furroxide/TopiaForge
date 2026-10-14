@@ -8,6 +8,8 @@ import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HostSession } from "../src/objects/host-session";
+import { serviceKeys } from "../src/shared/keys";
+import { issueJoinTicket, readJoinTicket } from "../src/shared/tokens";
 import { call, identity, register, signedDescriptor, type ApiResult } from "./support/api";
 import { endScenario, startScenario, type Scenario } from "./support/scenario";
 import { openSignal, type SignalClient, type Upgrade } from "./support/sockets";
@@ -38,6 +40,7 @@ async function signal(serverId: string, ticket: string): Promise<Upgrade> {
 }
 
 const mint = (serverId: string, ticket: string): Promise<ApiResult> => call("POST", "/v1/turn/credentials", { ip: PEER_IP, token: ticket, body: { serverId } });
+const seconds = (): number => Math.floor(scenario.clock.now() / 1000);
 const inviteCode = (result: ApiResult): string => (result.json["invite"] as Record<string, string>)["code"]!;
 const spendState = async () => (await call("GET", "/v1/admin/state", { ip: "192.0.2.250", token: ADMIN_TOKEN })).json["spend"] as Record<string, number>;
 
@@ -207,6 +210,24 @@ describe("a mint waiting on the relay provider", () => {
     await expectRefusedUnseen(joiner, 404, "not-found");
     await expectRefusedUnseen(own, 401, "unauthorized");
     await expectNothingLive(2);
+  });
+
+  it("gets no credential once its ticket expires, answered as a request made now would be", async () => {
+    const host = await identity(`expiring-in-flight-${scenario.day}`);
+    await register(host, scenario.ip);
+    // The service's own ticket for this session, issued again to expire in two seconds, as one issued almost six hours
+    // ago would: the session stays live, and only the ticket runs out.
+    const keys = (await serviceKeys(env.SERVICE_KEY))!;
+    const issued = (await readJoinTicket(keys.ticket, await ticketFor(host.serverId, null, true), seconds()))!;
+    const ticket = await issueJoinTicket(keys.ticket, { ...issued, expiresAt: seconds() + 2 });
+    const release = holdProvider();
+    const held = mint(host.serverId, ticket);
+    await scenario.relay.mintsArrived(1);
+    scenario.clock.advance(5);
+    expect((await mint(host.serverId, ticket)).status).toBe(401);
+    release();
+    await expectRefusedUnseen(held, 401, "unauthorized");
+    await expectNothingLive(1);
   });
 
   it("gets no credential when its host session cannot be asked again", async () => {

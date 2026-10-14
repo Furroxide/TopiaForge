@@ -13,12 +13,13 @@
  *
  * Tripping the switch revokes every live credential, including one whose mint is still waiting on the provider. A mint
  * looks again once the provider answers. If the relay was switched off meanwhile, even if it was switched on again, it
- * revokes the new credential and answers relay-unavailable. It also asks the host session again whether the side's
- * admission still holds: a joiner's ticket stops holding when its invite is withdrawn or expires, when its session
- * ends, or, for a ticket without an invite, when the session goes private; a host's token stops holding when its
- * session ends or a new registration replaces it. A lapsed admission gets the same revocation, and the answer a
- * request made now would get. Revocation runs in passes small enough for one Worker invocation's subrequests; a pass
- * that makes progress is followed at once by the next, through the alarm.
+ * revokes the new credential and answers relay-unavailable. It also reads the ticket again, which may have expired or
+ * been blocked by a measurement meanwhile, and asks the host session again whether the side's admission still holds:
+ * a joiner's ticket stops holding when its invite is withdrawn or expires, when its session ends, or, for a ticket
+ * without an invite, when the session goes private; a host's token stops holding when its session ends or a new
+ * registration replaces it. Each of these gets the same revocation, and the answer a request made now would get.
+ * Revocation runs in passes small enough for one Worker invocation's subrequests; a pass that makes progress is
+ * followed at once by the next, through the alarm.
  */
 import { DurableObject } from "cloudflare:workers";
 import { readConfig, type RelayProvider } from "../config";
@@ -68,11 +69,14 @@ export interface MintRequest {
 /** Why a mint is refused after the provider answered because the side's admission lapsed while it waited. */
 type Lapse = "unauthorized" | "not-found" | "internal";
 
+/** Why a mint is refused after the provider answered; its credential is then revoked unseen. */
+type MintRefusal = "relay-unavailable" | "ticket-limit" | Lapse;
+
 export type MintOutcome =
   | { readonly ok: true; readonly iceServers: readonly IceServer[]; readonly expiresAt: number }
   | {
       readonly ok: false;
-      readonly error: "relay-unavailable" | "rate-limited" | "ticket-limit" | "upstream-failed" | Lapse;
+      readonly error: "rate-limited" | "upstream-failed" | MintRefusal;
       readonly retryAfter?: number;
     };
 
@@ -169,11 +173,9 @@ export class SpendGuard extends DurableObject<Env> {
     const expiresAt = nowSeconds() + limits.credentialTtlSeconds;
     // The side's admission may have lapsed while the provider answered, so the host session is asked again.
     const lapse = await this.admissionLapse(request.scope);
-    // The relay may have been switched off meanwhile too: the kill switch and turning relay off mark credentials still
-    // being minted, and the switch or the flag may read differently now. Nothing awaits between these checks and the
-    // credential's confirmation, and a refused credential is never handed out.
-    const after = this.flags();
-    const refusal = this.store.isMarked(provisional) || !after.features.relay || after.killSwitch.engaged ? "relay-unavailable" : lapse;
+    // Nothing awaits between the checks in `refusalOnceMinted` and the credential's confirmation, and a refused
+    // credential is never handed out.
+    const refusal = this.refusalOnceMinted(request, provisional, lapse);
     if (refusal !== null) {
       refund();
       this.store.withdrawCredential(provisional, minted.username, expiresAt);
@@ -243,6 +245,26 @@ export class SpendGuard extends DurableObject<Env> {
     this.store.purge(nowSeconds());
     const provider = readConfig(this.env).provider;
     await this.scheduleAlarm(provider !== null && (await this.revokePass(provider)));
+  }
+
+  /**
+   * What a mint whose provider has answered is refused with, or null to hand its credential out. Every refusal that can
+   * arise while the provider answers is read again here, synchronously, in the order a request made now would meet
+   * them, and answered as that request would be:
+   * - relay-unavailable when the kill switch or turning relay off marked the mint, or the switch or the flag reads so
+   *   now, even if it read otherwise in between;
+   * - unauthorized once the ticket has expired;
+   * - the admission's lapse, which the host session was asked about once the provider answered;
+   * - ticket-limit once a measurement has blocked the ticket for relaying past its plan.
+   * The ticket's, the prefix's and the day's limits need no second look, because this mint's reservation already holds
+   * its place under each of them.
+   */
+  private refusalOnceMinted(request: MintRequest, provisional: string, lapse: Lapse | null): MintRefusal | null {
+    const flags = this.flags();
+    if (this.store.isMarked(provisional) || !flags.features.relay || flags.killSwitch.engaged) return "relay-unavailable";
+    if (request.ticketExpiresAt <= nowSeconds()) return "unauthorized";
+    if (lapse !== null) return lapse;
+    return this.store.ticket(request.ticket).blocked ? "ticket-limit" : null;
   }
 
   /**

@@ -344,7 +344,8 @@ export class HostSession extends DurableObject<Env> {
         scopeOf: (address) => (keys === null ? Promise.resolve("") : hmacHex(keys.self, ownScope(address))),
       };
       const sessionLive = this.store.liveSession(now) !== null;
-      await onFrame({ ctx: this.ctx, now, sessionLive, policy, exclude: (peer, until) => this.store.excludePeer(peer, until) }, socket, frame);
+      const exclude = (peer: string, listedExpiry: number | null): void => void this.store.excludePeer(peer, now, listedExpiry);
+      await onFrame({ ctx: this.ctx, now, sessionLive, policy, exclude }, socket, frame);
     });
   }
 
@@ -396,6 +397,8 @@ export class HostSession extends DurableObject<Env> {
       maxPlayers: session.summary.maxPlayers,
     });
     if (accepted === null) return signalRefusal(409);
+    // Remembered until the ticket expires, so a goodbye from the host still counts once this socket has closed.
+    this.store.admitPeer(peer, expiresAt);
     await this.scheduleAlarm();
     return accepted;
   }
