@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json.Nodes;
+using TopiaForge.ModManager.Core.Multiplayer;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -78,6 +79,65 @@ namespace TopiaForge.ModManager.Tests
             unchecked((uint)BitConverter.SingleToInt32Bits(value)).ToString("x8", CultureInfo.InvariantCulture);
 
         public static string HexOf(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Renders a buffer frame by frame and checks each frame's render advance against the written rule, not the code:
+    /// within 10% of the elapsed time while the delay before the frame lay between zero and the cap; beyond the cap, one
+    /// percent more per millisecond of excess, up to 100%; ahead of the sender clock, one percent more per millisecond
+    /// of lead, up to 50%. So playback never runs faster than twice or slower than half real time.
+    /// </summary>
+    internal sealed class PlaybackRate
+    {
+        private long lastNow = -1;
+        private long lastRender;
+
+        public int Frames { get; private set; }
+
+        /// <summary>Frames that used more than the normal 10% to correct the delay.</summary>
+        public int Corrections { get; private set; }
+
+        public long SlowestAdvance { get; private set; } = long.MaxValue;
+
+        public double SlowestRatio { get; private set; } = double.MaxValue;
+
+        public double FastestRatio { get; private set; }
+
+        public long LargestDelay { get; private set; } = long.MinValue;
+
+        public bool Sample(SnapshotInterpolationBuffer buffer, long now, out InterpolatedTransform result)
+        {
+            var delayBefore = buffer.CurrentDelayMicros;
+            if (!buffer.TrySample(now, out result)) return false;
+            Frames++;
+            if (lastNow >= 0 && now > lastNow)
+            {
+                var elapsed = now - lastNow;
+                var advance = result.RenderTimeMicros - lastRender;
+                var percent = AllowedPercent(delayBefore);
+                var allowed = Math.Min(elapsed, SnapshotInterpolationBuffer.DiscontinuityMicros) * percent / 100;
+                var ratio = advance / (double)elapsed;
+                MultiplayerModelAssert.True(
+                    Math.Abs(advance - elapsed) <= allowed,
+                    "playback ran at " + ratio.ToString("F3", CultureInfo.InvariantCulture) + " times real time with a delay of " +
+                    delayBefore + " us, where " + percent + "% is allowed");
+                if (percent > SnapshotInterpolationBuffer.PlaybackSlewPercent) Corrections++;
+                SlowestAdvance = Math.Min(SlowestAdvance, advance);
+                SlowestRatio = Math.Min(SlowestRatio, ratio);
+                FastestRatio = Math.Max(FastestRatio, ratio);
+            }
+
+            LargestDelay = Math.Max(LargestDelay, buffer.CurrentDelayMicros);
+            lastNow = now;
+            lastRender = result.RenderTimeMicros;
+            return true;
+        }
+
+        private static long AllowedPercent(long delay)
+        {
+            if (delay > 350_000) return Math.Min(100, 10 + (delay - 350_000) / 1_000);
+            return delay < 0 ? Math.Min(50, 10 + -delay / 1_000) : 10;
+        }
     }
 
     /// <summary>A seeded SplitMix64 stream, so randomized sweeps repeat exactly.</summary>

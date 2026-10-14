@@ -213,50 +213,74 @@ namespace TopiaForge.ModManager.Tests
 
         private static void QuietOwnersCannotKeepABodyFromOthers()
         {
-            // A griefer asks for the body first on every 20 Hz tick and never streams it, or streams one sample a
-            // grant. It used to win every request straight after each reclaim, so the honest player beside it never
-            // got the body. With yielding turned off, the same scenario still does exactly that.
+            // A griefer asks for the body first on every 20 Hz tick and never streams it, or streams one sample a grant,
+            // or lets go and grabs again every tick: handing back with no sample or with one, or sending a sample far
+            // enough off to be rejected. Each used to win every grant (201 of 201 for the hand-back loop), so the honest
+            // player beside it never got the body. With yielding turned off, each still does exactly that.
             var noYield = new OwnershipPolicy(yieldCooldownMicros: 0);
-            foreach (var oneSample in new[] { false, true })
+            foreach (var grief in new[] { Grief.Silent, Grief.OneSample, Grief.HandBackEveryTick, Grief.OneSampleThenHandBack, Grief.RejectedSample })
             {
-                var name = oneSample ? "one sample a grant" : "no samples";
-                var grantees = GriefedGrants(OwnershipPolicy.Default, oneSample);
+                var grantees = GriefedGrants(OwnershipPolicy.Default, grief);
                 var honestGrants = grantees.FindAll(grantee => grantee == Bob).Count;
-                True(honestGrants >= 5, name + ": the honest player gets the body (" + honestGrants + " of " + grantees.Count + " grants)");
+                True(honestGrants >= 5, grief + ": the honest player gets the body (" + honestGrants + " of " + grantees.Count + " grants)");
                 for (var index = 1; index < grantees.Count; index++)
                 {
-                    True(grantees[index] != Alice || grantees[index - 1] != Alice, name + ": a griefer that went quiet never wins the next grant");
+                    True(grantees[index] != Alice || grantees[index - 1] != Alice, grief + ": the griefer never wins two grants in a row");
                 }
 
-                var unprotected = GriefedGrants(noYield, oneSample);
-                True(unprotected.Count > 5 && !unprotected.Contains(Bob), name + ": without yielding the griefer keeps the body");
+                var unprotected = GriefedGrants(noYield, grief);
+                True(unprotected.Count > 5 && !unprotected.Contains(Bob), grief + ": without yielding the griefer keeps the body");
             }
         }
 
+        private enum Grief
+        {
+            Silent,
+            OneSample,
+            HandBackEveryTick,
+            OneSampleThenHandBack,
+            RejectedSample
+        }
+
         /// <summary>Who wins each grant over ten seconds of a griefer racing an honest player for one body.</summary>
-        private static List<int> GriefedGrants(OwnershipPolicy policy, bool oneSample)
+        private static List<int> GriefedGrants(OwnershipPolicy policy, Grief grief)
         {
             var host = new OwnershipStateMachine(policy);
             var grantees = new List<int>();
             var griefSampled = false;
             var honestSince = 0L;
+            var sampling = grief == Grief.OneSample || grief == Grief.OneSampleThenHandBack;
             for (var now = 0L; now <= 10_000_000; now += 50_000)
             {
                 host.Poll(now);
-                if (host.State == OwnershipState.Server &&
+                if (host.Owner.Equals(NetOwner.ForParticipant(Alice)))
+                {
+                    if (grief == Grief.HandBackEveryTick || grief == Grief.OneSampleThenHandBack)
+                    {
+                        host.Handback(Alice, host.Epoch, new MotionHandback(Origin, NetVector3.Zero, NetVector3.Zero), Origin, now, out _);
+                    }
+                    else if (grief == Grief.RejectedSample)
+                    {
+                        // Twenty metres in one sample breaks the speed budget, so the host takes the body back.
+                        host.Stream(Alice, host.Epoch, new NetQuantizedPosition(20 * Unit, 0, 0), Origin, now);
+                    }
+                }
+
+                // Both players keep asking for the body whenever they do not hold it, the griefer first.
+                if (!host.Owner.Equals(NetOwner.ForParticipant(Alice)) &&
                     host.Request(Alice, host.Epoch, Origin, Origin, now).Result == OwnershipResult.Granted)
                 {
                     grantees.Add(Alice);
                     griefSampled = false;
                 }
 
-                if (oneSample && host.Owner.Equals(NetOwner.ForParticipant(Alice)) && !griefSampled)
+                if (sampling && host.Owner.Equals(NetOwner.ForParticipant(Alice)) && !griefSampled)
                 {
                     host.Stream(Alice, host.Epoch, Origin, Origin, now);
                     griefSampled = true;
                 }
 
-                if (host.State == OwnershipState.Server &&
+                if (!host.Owner.Equals(NetOwner.ForParticipant(Bob)) &&
                     host.Request(Bob, host.Epoch, Origin, Origin, now).Result == OwnershipResult.Granted)
                 {
                     grantees.Add(Bob);

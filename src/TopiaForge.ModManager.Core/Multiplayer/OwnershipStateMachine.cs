@@ -18,6 +18,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// velocities.</item>
     /// <item>An owner that goes quiet (no first sample, silence or no hand-back), disconnects or fails validation loses
     /// the body to the host. One that went quiet is refused the body for a cooldown, so another player can take it.</item>
+    /// <item>So is one that hands back before its first sample, and one that hands back or fails validation after
+    /// another player in range was refused the body during its hold, so letting go and grabbing again cannot keep a
+    /// contested body.</item>
     /// </list>
     /// Participants are slots that the runtime reuses once their participant leaves, so it must call
     /// <see cref="Disconnect"/> for a leaver on every machine before the slot goes to someone else. Otherwise the
@@ -65,6 +68,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>Until when <see cref="YieldingParticipant"/> is refused the body.</summary>
         public long YieldUntilMicros { get; private set; }
 
+        /// <summary>
+        /// Whether, during the current hold, another participant within the hold range asked for the body and was
+        /// denied. The owner then yields once it hands back or fails validation. A request from out of range does not
+        /// count, so a player far away cannot make a holder wait.
+        /// </summary>
+        public bool Contested { get; private set; }
+
         /// <summary>A participant asks to simulate the body.</summary>
         /// <param name="participant">The requester's participant slot.</param>
         /// <param name="observedEpoch">The epoch the requester last heard.</param>
@@ -88,7 +98,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                     if (IsYielding(participant, nowMicros)) return Report(OwnershipResult.Yielding);
                     return Grant(participant, bodyPosition, nowMicros);
                 case OwnershipState.Owned:
-                    if (Owner.Participant != participant) return Report(OwnershipResult.Denied);
+                    if (Owner.Participant != participant)
+                    {
+                        // Someone close enough to take the body is kept from it, so the holder yields once it lets go.
+                        if (IsInHoldRange(bodyPosition, requesterPosition)) Contested = true;
+                        return Report(OwnershipResult.Denied);
+                    }
+
                     return Report(observedEpoch == Epoch ? OwnershipResult.AlreadyOwned : OwnershipResult.StaleEpoch);
                 default:
                     if (observedEpoch != Epoch) return Report(OwnershipResult.StaleEpoch);
@@ -123,7 +139,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             var held = State == OwnershipState.Owned;
             if ((held && !IsInHoldRange(position, holderPosition)) || !Spend(position, nowMicros))
             {
-                return Reclaim(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected);
+                return TakeBack(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected, nowMicros, Contested);
             }
 
             AwaitingFirstSample = false;
@@ -146,7 +162,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             if (State == OwnershipState.ReleaseWindow) return Report(OwnershipResult.Releasing);
             if (!IsInHoldRange(LastValidatedPosition, holderPosition))
             {
-                return Reclaim(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected);
+                return TakeBack(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected, nowMicros, Contested);
             }
 
             State = OwnershipState.ReleaseWindow;
@@ -157,7 +173,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// The owner returns the body, normally when its release window closes. Its position must pass the same
-        /// checks as a sample; velocities longer than the limits are scaled down, and non-finite ones become zero.
+        /// checks as a sample; velocities longer than the limits are scaled down, and non-finite ones become zero. An
+        /// owner that hands back before its first sample, or after a contested hold, yields the body for the cooldown.
         /// </summary>
         public OwnershipOutcome Handback(
             int participant,
@@ -175,15 +192,16 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             var held = State == OwnershipState.Owned;
             if ((held && !IsInHoldRange(handback.Position, holderPosition)) || !Spend(handback.Position, nowMicros))
             {
-                return Reclaim(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected);
+                return TakeBack(OwnershipReclaimReason.ValidationFailed, OwnershipResult.Rejected, nowMicros, Contested);
             }
 
             accepted = new MotionHandback(
                 handback.Position,
                 ClampMagnitude(handback.LinearVelocity, policy.MaximumSpeedMetersPerSecond),
                 ClampMagnitude(handback.AngularVelocity, policy.MaximumAngularSpeedRadiansPerSecond));
-            ChangeToServer();
-            return Report(OwnershipResult.HandedBack, OwnershipReclaimReason.None, true);
+
+            // Handing back before any sample is going quiet; handing back a contested body lets the other player go first.
+            return TakeBack(OwnershipReclaimReason.None, OwnershipResult.HandedBack, nowMicros, AwaitingFirstSample || Contested);
         }
 
         /// <summary>
@@ -215,23 +233,26 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             if (State == OwnershipState.Server) return Report(OwnershipResult.NoChange);
             if (AwaitingFirstSample && nowMicros > FirstSampleDeadlineMicros)
             {
-                return Lapse(OwnershipReclaimReason.NoFirstSample, nowMicros);
+                return TakeBack(OwnershipReclaimReason.NoFirstSample, OwnershipResult.Reclaimed, nowMicros, true);
             }
 
             if (State == OwnershipState.ReleaseWindow && nowMicros - ReleaseDeadlineMicros > policy.SilenceTimeoutMicros)
             {
-                return Lapse(OwnershipReclaimReason.HandbackTimeout, nowMicros);
+                return TakeBack(OwnershipReclaimReason.HandbackTimeout, OwnershipResult.Reclaimed, nowMicros, true);
             }
 
             if (nowMicros - LastStreamMicros > policy.SilenceTimeoutMicros)
             {
-                return Lapse(OwnershipReclaimReason.Silence, nowMicros);
+                return TakeBack(OwnershipReclaimReason.Silence, OwnershipResult.Reclaimed, nowMicros, true);
             }
 
             return Report(OwnershipResult.NoChange);
         }
 
-        /// <summary>Whether a participant is refused the body for now because it recently went quiet holding it.</summary>
+        /// <summary>
+        /// Whether a participant is refused the body for now, because it recently went quiet holding it or let go of a
+        /// contested hold.
+        /// </summary>
         public bool IsYielding(int participant, long nowMicros) =>
             participant == YieldingParticipant && participant != 0 && nowMicros < YieldUntilMicros;
 
@@ -246,6 +267,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             credit = policy.BurstCreditUnits;
             AwaitingFirstSample = true;
             FirstSampleDeadlineMicros = nowMicros + policy.FirstSampleTimeoutMicros;
+            Contested = false;
             if (YieldingParticipant == participant) ClearYield();
             return Report(OwnershipResult.Granted, OwnershipReclaimReason.None, true);
         }
@@ -277,18 +299,18 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return true;
         }
 
-        /// <summary>Reclaims from an owner that went quiet, which then yields the body for the cooldown.</summary>
-        private OwnershipOutcome Lapse(OwnershipReclaimReason reason, long nowMicros)
+        /// <summary>The body goes back to the server, and the owner it leaves yields for the cooldown if it must.</summary>
+        private OwnershipOutcome TakeBack(OwnershipReclaimReason reason, OwnershipResult result, long nowMicros, bool yield)
         {
             var participant = Owner.Participant;
-            var outcome = Reclaim(reason, OwnershipResult.Reclaimed);
-            if (policy.YieldCooldownMicros > 0)
+            ChangeToServer();
+            if (yield && policy.YieldCooldownMicros > 0)
             {
                 YieldingParticipant = participant;
                 YieldUntilMicros = nowMicros + policy.YieldCooldownMicros;
             }
 
-            return outcome;
+            return Report(result, reason, true);
         }
 
         private OwnershipOutcome Reclaim(OwnershipReclaimReason reason, OwnershipResult result)
@@ -304,6 +326,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             State = OwnershipState.Server;
             credit = 0;
             AwaitingFirstSample = false;
+            Contested = false;
         }
 
         private void ClearYield()

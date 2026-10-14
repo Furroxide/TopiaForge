@@ -24,6 +24,7 @@ namespace TopiaForge.ModManager.Tests
             UnevenCadenceNeverRunsPastTheNewestSample();
             OrdersDuplicatesAndStaleSamples();
             FullBufferEvictsTheOldest();
+            AFullBufferKeepsTheSegmentOnScreen();
             ExtrapolatesUpToTheCap();
             HoldsAndResetsAtTheEdges();
             InterpolatesRotationsAlongTheShortArc();
@@ -113,14 +114,15 @@ namespace TopiaForge.ModManager.Tests
                     if (arrivals[index] > now - 16_667 && arrivals[index] <= now) buffer.Add(Moving(index, true), arrivals[index]);
                 }
 
-                if (!buffer.TrySample(now, out var result)) continue;
+                if (!playback.Sample(buffer, now, out _)) continue;
                 maximumDelay = Math.Max(maximumDelay, buffer.CurrentDelayMicros);
-                playback.Frame(now, result.RenderTimeMicros);
                 True(buffer.TargetDelayMicros >= SnapshotInterpolationBuffer.MinimumDelayMicros &&
                      buffer.TargetDelayMicros <= SnapshotInterpolationBuffer.MaximumDelayMicros, "the target stays in range");
             }
 
             True(playback.Frames > 2000, "every frame was checked");
+            True(playback.Corrections > 0 && playback.FastestRatio < 1.3,
+                "the rough phase needed gentle catch-up only: " + playback.FastestRatio.ToString("F3", CultureInfo.InvariantCulture));
             True(maximumDelay > 200_000, "the rough phase raised the delay to " + maximumDelay);
             Equal(Step, buffer.CurrentDelayMicros, "the calm phase brought it back to one interval");
             Equal(Step, buffer.TargetDelayMicros, "and the target with it");
@@ -144,8 +146,7 @@ namespace TopiaForge.ModManager.Tests
                     if (index == 30) lateResult = outcome;
                 }
 
-                if (!buffer.TrySample(now, out var result)) continue;
-                playback.Frame(now, result.RenderTimeMicros);
+                if (!playback.Sample(buffer, now, out _)) continue;
                 maximumTarget = Math.Max(maximumTarget, buffer.TargetDelayMicros);
             }
 
@@ -153,6 +154,7 @@ namespace TopiaForge.ModManager.Tests
             Equal(SnapshotInterpolationBuffer.MaximumDelayMicros, maximumTarget, "its jitter still raised the target to the cap");
             True(playback.Frames > 590, "every frame was checked");
             True(playback.SlowestAdvance > 0, "playback never stands still");
+            Equal(0, playback.Corrections, "and never leaves 0.9 to 1.1 times real time");
         }
 
         private static void TheDelayCoversTheLongestBufferedGap()
@@ -204,9 +206,8 @@ namespace TopiaForge.ModManager.Tests
                         next++;
                     }
 
-                    if (!buffer.TrySample(now, out var result)) continue;
+                    if (!playback.Sample(buffer, now, out var result)) continue;
                     if (++frames <= 300) continue;
-                    playback.Frame(now, result.RenderTimeMicros);
                     if (result.Mode != InterpolationMode.Extrapolating && result.Mode != InterpolationMode.ExtrapolationCapped) continue;
                     extrapolating++;
                     ahead = Math.Max(ahead, result.RenderTimeMicros - buffer.GetSample(buffer.Count - 1).ServerTimeMicros);
@@ -249,27 +250,77 @@ namespace TopiaForge.ModManager.Tests
             Equal(SnapshotInterpolationBuffer.Capacity, buffer.Count, "eight samples");
             Equal(Start + Step, buffer.GetSample(0).ServerTimeMicros, "the oldest was evicted");
             Equal(SnapshotSampleResult.Stale, buffer.Add(Sample(Start, 0), Start + 9 * Step + Transit), "older than a full buffer");
-            // Eight samples 10 ms apart cover only 70 ms, less than the 80 ms minimum delay. The render time is held
-            // at the oldest sample instead of falling behind the whole buffer.
+            // Eight samples 10 ms apart cover only 70 ms, less than the 80 ms minimum delay. The render starts behind
+            // the buffer and holds its oldest sample, and the buffer keeps that sample while the render needs it: the
+            // delay holds at 80 ms and the render clock never jumps forward to stay inside the buffer.
             var dense = new SnapshotInterpolationBuffer();
             for (var index = 0; index < SnapshotInterpolationBuffer.Capacity; index++)
             {
                 dense.Add(Sample(Start + index * 10_000, index), Start + index * 10_000);
             }
 
-            True(dense.TrySample(Start + 70_000, out var clamped), "render a dense buffer");
-            Equal(Start, clamped.RenderTimeMicros, "a full buffer never renders behind its oldest sample");
-            Equal(InterpolationMode.Interpolating, clamped.Mode, "it interpolates from the oldest sample");
-            Equal(Start - (Start + 70_000), dense.PlaybackOffsetMicros, "the floor moves the playback offset with it");
-
-            // From the floor, playback carries on at the bounded rate instead of falling back to the old offset.
             var playback = new PlaybackRate();
-            playback.Frame(Start + 70_000, clamped.RenderTimeMicros);
-            for (var now = Start + 86_667; now < Start + 400_000; now += 16_667)
+            True(playback.Sample(dense, Start + 70_000, out var held), "render a dense buffer");
+            Equal(Start - 10_000, held.RenderTimeMicros, "the render keeps the 80 ms delay");
+            Equal(InterpolationMode.Holding, held.Mode, "and holds the oldest sample until it gets there");
+            for (var index = SnapshotInterpolationBuffer.Capacity; index < 60; index++)
             {
-                True(dense.TrySample(now, out var after), "render after the floor");
-                playback.Frame(now, after.RenderTimeMicros);
+                var now = Start + index * 10_000;
+                dense.Add(Sample(now, index), now);
+                True(playback.Sample(dense, now, out var frame), "render while the dense stream goes on");
+                Equal(now - 80_000, frame.RenderTimeMicros, "every frame keeps the delay");
+                True(frame.Mode == InterpolationMode.Interpolating || frame.Mode == InterpolationMode.Holding, "inside the buffer");
             }
+
+            Equal(80_000L, dense.CurrentDelayMicros, "the delay held");
+            True(dense.GetSample(0).ServerTimeMicros <= Start + 510_000, "the buffer kept the sample the render needed");
+        }
+
+        private static void AFullBufferKeepsTheSegmentOnScreen()
+        {
+            // Positions on a curve, x = index squared, so dropping either sample the render is between would move it.
+            var buffer = new SnapshotInterpolationBuffer();
+            for (var index = 0; index < SnapshotInterpolationBuffer.Capacity; index++)
+            {
+                buffer.Add(Sample(Start + index * Step, index * index), Start + index * Step + Transit);
+            }
+
+            True(buffer.TrySample(Start + 200_000, out var before), "render between the oldest two samples");
+            Equal(Start + 50_000, before.RenderTimeMicros, "a quarter-way render");
+            Near(0.5, before.Position.X, 1e-6, "halfway from 0 to 1");
+            buffer.Add(Sample(Start + 8 * Step, 64), Start + 8 * Step + Transit);
+            Equal(SnapshotInterpolationBuffer.Capacity, buffer.Count, "still full");
+            Equal(Start, buffer.GetSample(0).ServerTimeMicros, "the oldest sample is still on screen");
+            Equal(Start + Step, buffer.GetSample(1).ServerTimeMicros, "and so is the next");
+            Equal(Start + 3 * Step, buffer.GetSample(2).ServerTimeMicros, "the oldest sample outside the segment went");
+            True(buffer.TrySample(Start + 200_000, out var after), "render again at the same moment");
+            Near(0.5, after.Position.X, 1e-6, "dropping a sample did not move the replica");
+
+            // Once the render has passed the second sample, the oldest goes as usual.
+            True(buffer.TrySample(Start + 300_000, out var later) && later.RenderTimeMicros == Start + 150_000, "render on");
+            buffer.Add(Sample(Start + 9 * Step, 81), Start + 9 * Step + Transit);
+            Equal(Start + Step, buffer.GetSample(0).ServerTimeMicros, "the oldest is dropped once passed");
+
+            // Holding the oldest sample keeps it, and the one after it goes instead.
+            var holding = new SnapshotInterpolationBuffer();
+            for (var index = 0; index < SnapshotInterpolationBuffer.Capacity; index++)
+            {
+                holding.Add(Sample(Start + index * Step, index), Start + index * Step + Transit);
+            }
+
+            True(holding.TrySample(Start + 100_000, out var held) && held.Mode == InterpolationMode.Holding, "render before the oldest sample");
+            holding.Add(Sample(Start + 8 * Step, 8), Start + 8 * Step + Transit);
+            Equal(Start, holding.GetSample(0).ServerTimeMicros, "the held sample stays");
+            Equal(Start + 2 * Step, holding.GetSample(1).ServerTimeMicros, "the next one went");
+
+            // The gap a dropped sample leaves says nothing about the cadence, so it does not raise the delay, even
+            // after a late sample lands in front of it and moves it along. That sample fills the buffer again, so the
+            // sample after the held one goes too.
+            Equal(Step, holding.LargestGapMicros, "the dropped sample's gap does not count");
+            Equal(SnapshotSampleResult.Accepted, holding.Add(Sample(Start + 25_000, 0.25f), Start + 8 * Step + Transit + 1_000), "a late sample");
+            True(holding.GetSample(1).ServerTimeMicros == Start + 25_000 && holding.GetSample(2).ServerTimeMicros == Start + 3 * Step,
+                "lands in front of that gap");
+            Equal(Step, holding.LargestGapMicros, "which still does not count");
         }
 
         private static void ExtrapolatesUpToTheCap()
@@ -311,10 +362,13 @@ namespace TopiaForge.ModManager.Tests
 
             buffer.Add(Sample(Start + Step, 5), Start + Step + Transit);
 
-            // A local clock that steps back holds the render time rather than rewinding it.
+            // A local clock that steps back holds the render time rather than rewinding it, and the playback offset
+            // follows, so playback runs on from there instead of waiting for the clock to catch up.
             True(buffer.TrySample(Start + Step + Transit + 40_000, out var before), "render");
             True(buffer.TrySample(Start + Step + Transit, out var steppedBack), "render with the clock stepped back");
             Equal(before.RenderTimeMicros, steppedBack.RenderTimeMicros, "the render time never rewinds");
+            True(buffer.TrySample(Start + Step + Transit + 10_000, out var runOn), "render as the clock runs on");
+            Equal(before.RenderTimeMicros + 10_000, runOn.RenderTimeMicros, "playback goes on from where it was held");
             Equal(SnapshotSampleResult.Reset, buffer.Add(Sample(Start + 6_000_000, 9), Start + 2 * Step + Transit), "a jump ahead resets");
             Equal(1, buffer.Count, "the reset keeps only the new sample");
             Equal(SnapshotSampleResult.Stale, buffer.Add(Sample(Start + 3_000_000, 8), Start + 3 * Step + Transit), "a jump behind is stale");
@@ -374,8 +428,7 @@ namespace TopiaForge.ModManager.Tests
                     if (arrivals[index] > now - 16_667 && arrivals[index] <= now) buffer.Add(Moving(index, true), arrivals[index]);
                 }
 
-                if (!buffer.TrySample(now, out var result)) continue;
-                playback.Frame(now, result.RenderTimeMicros);
+                if (!playback.Sample(buffer, now, out var result)) continue;
                 if (now > Start + 5_000_000 && now < end && result.Mode != InterpolationMode.Interpolating) extrapolatingFrames++;
             }
 
@@ -397,33 +450,6 @@ namespace TopiaForge.ModManager.Tests
             }
 
             return sends;
-        }
-
-        /// <summary>Checks that each frame's render time advances by 0.9 to 1.1 times the local time that passed.</summary>
-        private sealed class PlaybackRate
-        {
-            private long lastNow = -1;
-            private long lastRender;
-
-            public int Frames { get; private set; }
-
-            public long SlowestAdvance { get; private set; } = long.MaxValue;
-
-            public void Frame(long now, long render)
-            {
-                Frames++;
-                if (lastNow >= 0)
-                {
-                    var elapsed = now - lastNow;
-                    var advance = render - lastRender;
-                    True(advance * 10 >= elapsed * 9 && advance * 10 <= elapsed * 11,
-                        "playback ran at " + (advance / (double)elapsed).ToString("F3", CultureInfo.InvariantCulture) + " times real time");
-                    SlowestAdvance = Math.Min(SlowestAdvance, advance);
-                }
-
-                lastNow = now;
-                lastRender = render;
-            }
         }
 
         private static NetTransformSample Moving(int index, bool withVelocity) =>

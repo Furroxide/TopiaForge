@@ -492,6 +492,9 @@ EXTRAPOLATION_LIMIT = 250_000
 DISCONTINUITY = 1_000_000
 JITTER_MARGIN = 3
 PLAYBACK_SLEW_PERCENT = 10
+CATCH_UP_SLEW_PERCENT = 100
+FALL_BACK_SLEW_PERCENT = 50
+CORRECTION_MICROS_PER_PERCENT = 1_000
 
 
 class InterpolationBuffer:
@@ -499,6 +502,7 @@ class InterpolationBuffer:
 
     def __init__(self, nominal):
         self.samples = []
+        self.merged = []
         self.started = False
         self.offset_scaled = 0
         self.jitter_scaled = 0
@@ -519,7 +523,9 @@ class InterpolationBuffer:
         return (self.offset_scaled + 4) >> 3
 
     def largest_gap(self):
-        return max((later[0] - earlier[0] for earlier, later in zip(self.samples, self.samples[1:])), default=0)
+        # A gap left by a sample dropped to keep the render's segment says nothing about the cadence.
+        return max((self.samples[i][0] - self.samples[i - 1][0] for i in range(1, len(self.samples)) if not self.merged[i]),
+                   default=0)
 
     def target_delay(self):
         delay = max(self.interval(), self.largest_gap()) + JITTER_MARGIN * self.jitter()
@@ -527,6 +533,7 @@ class InterpolationBuffer:
 
     def start(self, sample, offset):
         self.samples = [sample]
+        self.merged = [False]
         self.started = True
         self.offset_scaled = offset << 3
         self.last_transit = -offset
@@ -569,12 +576,33 @@ class InterpolationBuffer:
             gap = min(server - newest, DISCONTINUITY)
             self.interval_scaled += gap - ((self.interval_scaled + 4) >> 3)
         if len(self.samples) == CAPACITY:
-            self.samples.pop(0)
+            evicted = self.eviction_index()
+            del self.samples[evicted]
+            del self.merged[evicted]
+            self.merged[evicted] = evicted > 0
+            self.merged[0] = False
         position = len(self.samples)
         while position > 0 and self.samples[position - 1][0] > server:
             position -= 1
         self.samples.insert(position, sample)
+        self.merged.insert(position, False)
         return "Accepted"
+
+    def eviction_index(self):
+        # The oldest sample, unless the render holds it (then the next) or is between the oldest two (then the third).
+        if not self.rendered:
+            return 0
+        if self.last_render < self.samples[0][0]:
+            return 1
+        return 2 if self.last_render < self.samples[1][0] else 0
+
+    def slew_percent(self):
+        delay = self.offset() - self.playback
+        if delay > MAX_DELAY:
+            return min(CATCH_UP_SLEW_PERCENT, PLAYBACK_SLEW_PERCENT + (delay - MAX_DELAY) // CORRECTION_MICROS_PER_PERCENT)
+        if delay < 0:
+            return min(FALL_BACK_SLEW_PERCENT, PLAYBACK_SLEW_PERCENT + -delay // CORRECTION_MICROS_PER_PERCENT)
+        return PLAYBACK_SLEW_PERCENT
 
     def sample(self, now):
         if not self.samples:
@@ -584,7 +612,7 @@ class InterpolationBuffer:
             self.playback = target
             self.last_local = now
         elif now > self.last_local:
-            step = min(now - self.last_local, DISCONTINUITY) * PLAYBACK_SLEW_PERCENT // 100
+            step = min(now - self.last_local, DISCONTINUITY) * self.slew_percent() // 100
             if self.playback < target:
                 self.playback = min(target, self.playback + step)
             else:
@@ -593,8 +621,6 @@ class InterpolationBuffer:
         render = now + self.playback
         if self.rendered and render < self.last_render:
             render = self.last_render
-        if len(self.samples) == CAPACITY and render < self.samples[0][0]:
-            render = self.samples[0][0]
         self.playback = render - now
         self.rendered = True
         self.last_render = render
@@ -636,9 +662,10 @@ INTERPOLATION_FRAME = 33_333
 
 
 def interpolation_scenario(name, arrivals, seconds, nominal=100_000):
-    """arrivals: (server time, x, x velocity or None, local arrival), applied in this order before each frame."""
+    """arrivals: (server time, x, x velocity or None, local arrival), applied before each frame by arrival, then
+    server time."""
     buffer = InterpolationBuffer(nominal)
-    pending = sorted(arrivals, key=lambda arrival: arrival[3])
+    pending = sorted(arrivals, key=lambda arrival: (arrival[3], arrival[0]))
     steps = []
     next_arrival = 0
     now = INTERPOLATION_START
@@ -692,21 +719,41 @@ for index in range(40, 50):
     server = INTERPOLATION_START + 5_000_000 + index * 100_000
     rough.append((server, float(index), 2.0, server - 5_000_000 + 50_000 + jitter_rng.randrange(0, 20_000)))
 
+# The sender's timeline steps 900 ms forward, under the 1 s that resets: the render catches up and keeps its segment.
+timeline_step = []
+for index in range(80):
+    sent = INTERPOLATION_START + index * 100_000
+    timeline_step.append((sent + (900_000 if index >= 30 else 0), float(index), None, sent + 50_000))
+
+
+def latency_change(before, after, switch_at):
+    changed = []
+    for index in range(80):
+        sent = INTERPOLATION_START + index * 100_000
+        changed.append((sent, float(index), None, sent + (before if index < switch_at else after)))
+    return changed
+
 write("interpolation.json", {
     "schema": 1,
     "about": "SnapshotInterpolationBuffer, replayed step by step: each add gives the sample's server time, local "
              "arrival, x and x velocity (float32 bits, velocity null when absent) and the result; each frame gives the "
              "local time, render time, mode, x, target delay and playback offset after the frame. Delay: the longer of "
-             "the interval estimate and the largest gap between buffered samples, plus three jitters, clamped to "
-             "80-350 ms. The playback offset (render time minus local time) moves toward offset minus delay by at most "
-             "10% of elapsed local time, then the render time is floored at the last render time and, for a full "
-             "buffer, at the oldest sample, and the playback offset follows the floored render time. Y and z are zero "
-             "and rotations identity.",
+             "the interval estimate and the largest gap between buffered samples (ignoring gaps that span a dropped "
+             "sample), plus three jitters, clamped to 80-350 ms. The playback offset (render time minus local time) "
+             "moves toward offset minus delay by at most 10% of elapsed local time; while offset minus playback offset "
+             "exceeds 350 ms, one percent more per millisecond beyond it, up to 100%; while it is below zero, one "
+             "percent more per millisecond, up to 50%. The render time is then floored at the last render time, and "
+             "the playback offset follows it. A full buffer drops its oldest sample, the next one if the render holds "
+             "the oldest, or the third if the render is between the oldest two. Samples arriving together go in by "
+             "server time. Y and z are zero and rotations identity.",
     "capacity": CAPACITY,
     "scenarios": [
         interpolation_scenario("a late sample never pauses playback", late_sample, 5),
         interpolation_scenario("uneven cadence is covered by the delay", uneven, 5),
         interpolation_scenario("jitter, a duplicate, a stale sample and a timeline reset", rough, 6),
+        interpolation_scenario("a 900 ms timeline step is caught up", timeline_step, 7),
+        interpolation_scenario("latency drops from 950 to 50 ms", latency_change(950_000, 50_000, 30), 7),
+        interpolation_scenario("latency rises from 50 to 950 ms", latency_change(50_000, 950_000, 30), 7),
     ],
 }, compact_depth=4)
 
@@ -758,6 +805,7 @@ class OwnershipMachine:
         self.first_deadline = 0
         self.yielding = 0
         self.yield_until = 0
+        self.contested = False
 
     def report(self, result, reason="None", changed=False):
         return [result, reason, self.state, self.owner, self.epoch, changed]
@@ -779,6 +827,8 @@ class OwnershipMachine:
             return self.grant(participant, body, now)
         if self.state == "Owned":
             if self.owner != participant:
+                if self.in_range(body, avatar):
+                    self.contested = True
                 return self.report("Denied")
             return self.report("AlreadyOwned" if observed == self.epoch else "StaleEpoch")
         if observed != self.epoch:
@@ -804,7 +854,7 @@ class OwnershipMachine:
             return self.report(refusal)
         held = self.state == "Owned"
         if (held and not self.in_range(position, holder)) or not self.spend(position, now):
-            return self.take_back("ValidationFailed", "Rejected")
+            return self.take_back("ValidationFailed", "Rejected", now, self.contested)
         self.awaiting = False
         self.last_stream = max(self.last_stream, now)
         return self.report("Accepted")
@@ -816,7 +866,7 @@ class OwnershipMachine:
         if self.state == "ReleaseWindow":
             return self.report("Releasing")
         if not self.in_range(self.last_validated, holder):
-            return self.take_back("ValidationFailed", "Rejected")
+            return self.take_back("ValidationFailed", "Rejected", now, self.contested)
         self.state = "ReleaseWindow"
         self.release_deadline = now + RELEASE_WINDOW
         self.last_stream = max(self.last_stream, now)
@@ -828,10 +878,9 @@ class OwnershipMachine:
             return self.report(refusal), None
         held = self.state == "Owned"
         if (held and not self.in_range(position, holder)) or not self.spend(position, now):
-            return self.take_back("ValidationFailed", "Rejected"), None
+            return self.take_back("ValidationFailed", "Rejected", now, self.contested), None
         accepted = clamp_magnitude(linear, MAXIMUM_SPEED), clamp_magnitude(angular, MAXIMUM_ANGULAR_SPEED)
-        self.to_server()
-        return self.report("HandedBack", "None", True), accepted
+        return self.take_back("None", "HandedBack", now, self.awaiting or self.contested), accepted
 
     def disconnect(self, participant):
         if self.yielding == participant:
@@ -839,22 +888,22 @@ class OwnershipMachine:
             self.yield_until = 0
         if self.state == "Server" or self.owner != participant:
             return self.report("NoChange")
-        return self.take_back("Disconnected", "Reclaimed")
+        return self.take_back("Disconnected", "Reclaimed", 0, False)
 
     def reclaim(self):
         if self.state == "Server":
             return self.report("NoChange")
-        return self.take_back("Host", "Reclaimed")
+        return self.take_back("Host", "Reclaimed", 0, False)
 
     def poll(self, now):
         if self.state == "Server":
             return self.report("NoChange")
         if self.awaiting and now > self.first_deadline:
-            return self.lapse("NoFirstSample", now)
+            return self.take_back("NoFirstSample", "Reclaimed", now, True)
         if self.state == "ReleaseWindow" and now - self.release_deadline > SILENCE_TIMEOUT:
-            return self.lapse("HandbackTimeout", now)
+            return self.take_back("HandbackTimeout", "Reclaimed", now, True)
         if now - self.last_stream > SILENCE_TIMEOUT:
-            return self.lapse("Silence", now)
+            return self.take_back("Silence", "Reclaimed", now, True)
         return self.report("NoChange")
 
     def grant(self, participant, body, now):
@@ -867,6 +916,7 @@ class OwnershipMachine:
         self.credit = BURST_CREDIT
         self.awaiting = True
         self.first_deadline = now + FIRST_SAMPLE_TIMEOUT
+        self.contested = False
         if self.yielding == participant:
             self.yielding = 0
             self.yield_until = 0
@@ -884,15 +934,12 @@ class OwnershipMachine:
         self.last_validated = position
         return True
 
-    def lapse(self, reason, now):
+    def take_back(self, reason, result, now, make_yield):
         participant = self.owner
-        outcome = self.take_back(reason, "Reclaimed")
-        self.yielding = participant
-        self.yield_until = now + YIELD_COOLDOWN
-        return outcome
-
-    def take_back(self, reason, result):
         self.to_server()
+        if make_yield:
+            self.yielding = participant
+            self.yield_until = now + YIELD_COOLDOWN
         return self.report(result, reason, True)
 
     def to_server(self):
@@ -901,6 +948,7 @@ class OwnershipMachine:
         self.state = "Server"
         self.credit = 0
         self.awaiting = False
+        self.contested = False
 
 
 def ownership_scenario(name, calls, initial_epoch=0):
@@ -928,7 +976,8 @@ def ownership_scenario(name, calls, initial_epoch=0):
         else:
             outcome = machine.poll(arguments[0])
         step = {"call": [operation] + list(arguments),
-                "outcome": outcome + [machine.credit, machine.yielding, machine.yield_until, machine.awaiting]}
+                "outcome": outcome + [machine.credit, machine.yielding, machine.yield_until, machine.awaiting,
+                                      machine.contested]}
         if accepted is not None:
             step["accepted"] = [[hex32(v) for v in accepted[0]], [hex32(v) for v in accepted[1]]]
         steps.append(step)
@@ -987,6 +1036,44 @@ quiet_owners = [
     ["disconnect", 3],
 ]
 
+NONE = [0.0, 0.0, 0.0]
+contested_holds = [
+    ["request", 2, 0, O, O, 0],
+    ["stream", 2, 1, O, O, 10_000],
+    ["request", 3, 1, O, [R + 1, 0, 0], 20_000],
+    ["handback", 2, 1, O, NONE, NONE, O, 30_000],
+    ["request", 2, 2, O, O, 40_000],
+    ["stream", 2, 3, O, O, 50_000],
+    ["request", 3, 3, O, O, 60_000],
+    ["handback", 2, 3, O, NONE, NONE, O, 70_000],
+    ["request", 2, 4, O, O, 80_000],
+    ["request", 3, 4, O, O, 90_000],
+    ["handback", 3, 5, O, NONE, NONE, O, 100_000],
+    ["request", 3, 6, O, O, 110_000],
+    ["request", 1, 6, O, O, 120_000],
+    ["stream", 1, 7, O, O, 130_000],
+    ["request", 3, 7, O, O, 140_000],
+    ["handback", 1, 7, O, NONE, NONE, O, 150_000],
+    ["request", 3, 8, O, O, 160_000],
+    ["stream", 3, 9, O, O, 170_000],
+    ["request", 2, 9, O, O, 180_000],
+    ["stream", 3, 9, [20 * POSITION_UNITS, 0, 0], O, 190_000],
+    ["request", 3, 10, O, O, 200_000],
+    ["request", 2, 10, O, O, 210_000],
+    ["stream", 2, 11, O, O, 220_000],
+    ["request", 3, 11, O, O, 230_000],
+    ["handback", 2, 11, [20 * POSITION_UNITS, 0, 0], NONE, NONE, O, 240_000],
+    ["request", 2, 12, O, O, 250_000],
+    ["request", 3, 12, O, O, 260_000],
+    ["stream", 3, 13, O, O, 270_000],
+    ["request", 2, 13, O, O, 280_000],
+    ["release", 3, 13, O, 290_000],
+    ["request", 1, 13, O, O, 300_000],
+    ["stream", 1, 14, O, O, 310_000],
+    ["handback", 1, 14, O, NONE, NONE, O, 320_000],
+    ["request", 1, 15, O, O, 330_000],
+]
+
 ownership_rng = random.Random(97)
 random_calls = []
 shadow = OwnershipMachine()
@@ -1026,13 +1113,18 @@ write("ownership.json", {
              "deadline and whether a first sample is still owed. A grab, steal or catch needs the requester's avatar "
              "within the hold range of the body; a throw needs the body's last validated position within it of the "
              "holder; a grant with no sample by its deadline, a silent owner and a missing hand-back are reclaimed and "
-             "make that participant yield for the cooldown; a disconnect forgets its cooldown.",
+             "make that participant yield for the cooldown, and so does a hand-back before the first sample. A request "
+             "from another participant within the hold range, denied while the body is held, contests the hold; the "
+             "owner of a contested hold yields once it hands back or fails validation, replacing any earlier cooldown. "
+             "Every grant, a steal included, starts an uncontested hold. A disconnect forgets its cooldown. The last "
+             "outcome field is whether the current hold is contested.",
     "policy": {"holdRangeUnits": HOLD_RANGE, "burstCreditUnits": BURST_CREDIT,
                "firstSampleTimeoutMicros": FIRST_SAMPLE_TIMEOUT, "yieldCooldownMicros": YIELD_COOLDOWN,
                "silenceTimeoutMicros": SILENCE_TIMEOUT, "releaseWindowMicros": RELEASE_WINDOW},
     "scenarios": [
         ownership_scenario("the hold range", hold_range),
         ownership_scenario("quiet owners yield", quiet_owners),
+        ownership_scenario("contested holds yield", contested_holds),
         ownership_scenario("seeded events", random_calls),
     ],
 }, compact_depth=4)
