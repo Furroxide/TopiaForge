@@ -24,11 +24,51 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Gets what a joining player presents for admission, as opaque bytes the host's runtime reads.</summary>
         byte[] ClientContent();
 
-        /// <summary>Decides, on the host, whether a player presenting <paramref name="clientContent"/> may join; null admits.</summary>
-        JoinDecision? Admit(byte[] clientContent);
+        /// <summary>
+        /// Decides, on the host, whether a player presenting <paramref name="clientContent"/> may join. A refusal lists
+        /// what the player is missing or runs differently; the host's policy turns it into the admission report.
+        /// </summary>
+        ContentAdmission Admit(byte[] clientContent);
 
         /// <summary>Checks, on a joining player, whether the host's packages are installed exactly.</summary>
         ContentCheck Check(ServerDescriptor descriptor);
+    }
+
+    /// <summary>
+    /// The runtime's verdict on what a joining player presents: admitted, or refused with a code and one line per problem,
+    /// such as "Zombies 0.2.0 is missing.". The runtime's admission report (one mismatch per package, each with its
+    /// message) fills it directly. Content refuses for its packages (<see cref="AdmissionCode.Content"/>) or for a
+    /// runtime protocol it cannot share (<see cref="AdmissionCode.Protocol"/>); every other code belongs to the host.
+    /// </summary>
+    internal sealed class ContentAdmission
+    {
+        internal static readonly ContentAdmission Admitted = new ContentAdmission(true, AdmissionCode.Other, Array.Empty<string>());
+
+        private ContentAdmission(bool admitted, AdmissionCode code, IReadOnlyList<string> problems)
+        {
+            IsAdmitted = admitted;
+            Code = code;
+            Problems = problems;
+        }
+
+        internal bool IsAdmitted { get; }
+
+        /// <summary>Gets why the content was refused: <see cref="AdmissionCode.Content"/> or <see cref="AdmissionCode.Protocol"/>.</summary>
+        internal AdmissionCode Code { get; }
+
+        /// <summary>Gets the lines the player sees, in order; the report keeps those that are display text and fit its bound.</summary>
+        internal IReadOnlyList<string> Problems { get; }
+
+        internal static ContentAdmission Refused(IReadOnlyList<string> problems, AdmissionCode code = AdmissionCode.Content)
+        {
+            if (problems == null) throw new ArgumentNullException(nameof(problems));
+            if (code != AdmissionCode.Content && code != AdmissionCode.Protocol)
+            {
+                throw new ArgumentOutOfRangeException(nameof(code), "Content refuses a join for its packages or its protocol; the host decides every other refusal.");
+            }
+
+            return new ContentAdmission(false, code, new List<string>(problems).AsReadOnly());
+        }
     }
 
     /// <summary>
@@ -53,7 +93,7 @@ namespace TopiaForge.Multiplayer.Network
 
         public byte[] ClientContent() => Array.Empty<byte>();
 
-        public JoinDecision? Admit(byte[] clientContent) => null;
+        public ContentAdmission Admit(byte[] clientContent) => ContentAdmission.Admitted;
 
         public ContentCheck Check(ServerDescriptor descriptor) => ContentCheck.Ready;
     }

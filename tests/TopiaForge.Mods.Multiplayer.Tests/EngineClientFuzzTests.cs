@@ -22,23 +22,39 @@ internal static class EngineClientFuzzTests
 
     internal static void HostileHostFramesStayInsideTheClient()
     {
-        var first = Run(161);
-        That(first.SequenceEqual(Run(161)), "a seed repeats the client fuzz exactly");
+        var first = Run(161, record: true);
+        That(first.SequenceEqual(Run(161, record: false)), "a seed repeats the client fuzz exactly");
     }
 
-    private static List<string> Run(int seed)
+    private static List<string> Run(int seed, bool record)
     {
         var fuzz = new FuzzMutator(seed);
         var outcomes = new List<string>();
-        using var run = FuzzLedger.Start("frames into client engines");
-        for (var round = 0; round < FuzzMutator.Iterations(1_000); round++)
+        var reached = 0L;
+        var delivered = 0L;
+        var run = record ? FuzzLedger.Start("frames into client engines") : null;
+        try
         {
-            var client = new FuzzedClient(fuzz, round);
-            outcomes.Add(client.Play());
-            run.Inputs += client.Frames;
-        }
+            for (var round = 0; round < FuzzMutator.Iterations(1_000); round++)
+            {
+                var client = new FuzzedClient(fuzz, round);
+                outcomes.Add(client.Play());
+                delivered += client.Frames;
+                reached += client.Reach;
+                if (run != null) run.Inputs += client.Frames;
+            }
 
-        return outcomes;
+            // Frames that arrive after a round's session has ended only exercise the solo session the client returned
+            // to. Most frames must reach the joined session's handlers, which they almost never did before most rounds
+            // started Ready and stopped once the session ended.
+            That(reached >= delivered * 3 / 4, "most frames reached the joined session (" + reached + " of " + delivered + ")");
+            outcomes.Add("reached " + reached + "/" + delivered);
+            return outcomes;
+        }
+        finally
+        {
+            run?.Dispose();
+        }
     }
 
     /// <summary>One client engine whose host is a raw peer that writes what the fuzzer chooses.</summary>
@@ -91,11 +107,19 @@ internal static class EngineClientFuzzTests
 
         internal int Frames { get; private set; }
 
+        /// <summary>Gets how many frames arrived while the client was still in the joined session, not the solo one after it.</summary>
+        internal int Reach { get; private set; }
+
         internal string Play()
         {
-            Send(fuzz.Chance(85) ? Join() : Message());
+            // Most rounds join cleanly to Ready first, so the hostile frames that follow reach the joined session's
+            // handlers; the rest start from a mutated or arbitrary frame, to fuzz the join path too.
+            Send(fuzz.Chance(80) ? Join() : fuzz.Chance(60) ? Join() : Message());
             for (var frame = 1 + fuzz.Random.Next(6); frame > 0; frame--)
             {
+                // Once a frame has ended the session and returned the client to solo play, nothing more reaches the
+                // joined session, so stop rather than fuzzing the solo session the client fell back to.
+                if (solo) break;
                 if (!crateRegistered && fuzz.Chance(15))
                 {
                     // The client adopts the crates the host already sent; one that does not decode ends the session.
@@ -148,6 +172,7 @@ internal static class EngineClientFuzzTests
         {
             var wasSolo = solo;
             Frames++;
+            if (engine.Role == EngineRole.Client) Reach++;
             host.SendRaw(frame);
             tick++;
             network.Now = tick;

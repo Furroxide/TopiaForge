@@ -220,8 +220,9 @@ internal sealed class SoakRig : IDisposable
         Census.Observe("host objects", host.Objects, SoakWorkload.MaximumMarkers);
         Census.Observe("host rate history", host.RateHistoryEntries, Math.Max(1, host.Connections) * (1 + SoakWorkload.MaximumMarkers));
 
-        // A limiter belongs to a participant the host still knows: one per sender for the add command, one per sender per object.
-        Census.Observe("host command limiters", host.CommandRateLimiters, host.ParticipantRecords);
+        // A limiter belongs to a participant the host still knows: one per sender per command it used (add for any
+        // peer, ping only for the host), and one per sender per object.
+        Census.Observe("host command limiters", host.CommandRateLimiters, host.ParticipantRecords + 1);
         Census.Observe("host object limiters", host.ObjectRateLimiters, host.ParticipantRecords * host.Objects);
         Census.Observe("host queued items", host.QueuedOutbound, 64);
         Census.Observe("network nodes", Network.NodeCount, (Players * 3) + 1);
@@ -231,7 +232,10 @@ internal sealed class SoakRig : IDisposable
             Census.Observe("queued callbacks", engine.QueuedCallbacks, 0);
             Census.Observe("unbound values", engine.UnboundStates + engine.UnboundObjects, 0);
             Census.Observe("pending submissions", engine.PendingSubmissions, 96);
-            Census.Observe("tombstones", engine.Tombstones, 8_192);
+
+            // A tombstone per object despawned in the current session, cleared at replacement. The ceiling is well under
+            // TombstoneSet's 8,192 capacity, which the old ceiling equalled and so could never catch a leak.
+            Census.Observe("tombstones", engine.Tombstones, 2_000);
             Census.Observe("participant list", engine.ParticipantRecords, 1 + Players);
             var stack = peer.Stack;
             if (stack == null) continue;
@@ -239,6 +243,11 @@ internal sealed class SoakRig : IDisposable
             var side = peer == Host ? "host " : "client ";
             Census.Observe(side + "transport connections", transport.Connections, peer == Host ? 4 * Players : 4);
             Census.Observe("half-open handshakes", transport.HalfOpen, Players);
+
+            // A responder keeps one initiation entry per half-open handshake, removed when the connection completes or
+            // closes; before the leak was fixed these outlived connections that changed path, so a clients-come-and-go
+            // soak grew them without bound. A client accepts nobody, so it keeps none.
+            Census.Observe(side + "initiations", transport.Initiations, peer == Host ? 2 * Players : 0);
             Census.Observe("queued datagrams", transport.OutboundDatagrams + transport.QueuedDatagrams, TransportEndpoint.MaximumQueuedDatagrams);
             Census.Observe("reassembly bytes", transport.ReassemblyBytes, 4 * 1024 * 1024);
             Census.Observe("send backlog bytes", transport.SendBacklogBytes, 4 * 1024 * 1024);
@@ -268,14 +277,14 @@ internal sealed class SoakRig : IDisposable
             fingerprint = identity.Fingerprint;
         }
 
-        var factory = new SteppedNetworkFactory(Network, name)
-        {
-            TransportSeed = (seed * 101) + index,
-            TransportDiagnostics = TransportDiagnostics,
-            RetireStopped = true
-        };
+        var factory = new SteppedNetworkFactory(Network, name) { RetireStopped = true };
         var diagnostics = new ProviderDiagnostics();
-        var setup = new LiveSessionsSetup(files, new TestContent()) { Factory = factory, Resolver = Resolver };
+        var setup = new LiveSessionsSetup(files, new TestContent())
+        {
+            Factory = factory,
+            Resolver = Resolver,
+            TransportOptions = new SeededTransportOptions((seed * 101) + index, TransportDiagnostics).Next
+        };
         var created = new Provider(LiveRig.ProviderId, diagnostics, () => Network.Now, setup);
         return new SoakPeer(name, index, created, files, factory, diagnostics, fingerprint);
     }

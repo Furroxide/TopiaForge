@@ -20,17 +20,19 @@ internal static class EngineHostFuzzTests
 
     internal static void HostileClientFramesEndOnlyTheirOwnConnection()
     {
-        var first = Run(160);
-        That(first == Run(160), "a seed repeats the host fuzz exactly");
+        var first = Run(160, record: true);
+        That(first == Run(160, record: false), "a seed repeats the host fuzz exactly");
     }
 
-    private static string Run(int seed)
+    private static string Run(int seed, bool record)
     {
         var fuzz = new FuzzMutator(seed);
         using var harness = new EngineHarness(MultiplayerProcessKind.Interactive, options =>
         {
             options.MaximumParticipants = 8;
-            options.ParticipantGraceMicros = 2_000_000;
+
+            // A short grace frees a closed peer's slot soon, so fresh hostile peers keep getting in to be fuzzed.
+            options.ParticipantGraceMicros = 200_000;
         });
         var hostScore = Register(harness.HostSession);
         var good = harness.AddClient("good");
@@ -43,36 +45,80 @@ internal static class EngineHostFuzzTests
         var corpus = Corpus();
         var peers = new List<RawPeer>();
         var opened = 0;
-        using var run = FuzzLedger.Start("frames into a host engine");
-        for (var round = 0; round < FuzzMutator.Iterations(1_000); round++)
+        var joined = 0;
+        var delivered = 0L;
+        var attempted = 0L;
+        var run = record ? FuzzLedger.Start("frames into a host engine") : null;
+        try
         {
-            if (peers.Count < 6 || fuzz.Chance(10)) peers.Add(harness.AddRawPeer("hostile-" + ++opened));
-            var peer = fuzz.Pick(peers);
-            for (var frame = 1 + fuzz.Random.Next(4); frame > 0; frame--, run.Inputs++) peer.SendRaw(Hostile(fuzz, corpus));
-            harness.Advance(1 + fuzz.Random.Next(3));
-            foreach (var other in peers) other.Receive();
-            if (fuzz.Chance(8))
+            for (var round = 0; round < FuzzMutator.Iterations(1_000); round++)
             {
-                var leaving = fuzz.Pick(peers);
-                harness.Network.Sever(leaving.End);
-                peers.Remove(leaving);
+                // Peers the host has closed carry no more frames, so drop them: a frame to a closed link is silently
+                // dropped and would never reach the engine. Only open links count as reach.
+                peers.RemoveAll(peer => peer.End.State == EngineLinkState.Closed);
+                while (peers.Count < 6)
+                {
+                    var fresh = harness.AddRawPeer("hostile-" + ++opened);
+
+                    // Most hostile peers join properly first, so their later mutations reach the post-join handlers,
+                    // not only the join path. A valid request, then a ReadyAck for the host's epoch.
+                    if (fuzz.Chance(85))
+                    {
+                        fresh.Join("Raw-" + opened);
+                        harness.Advance(2);
+                        fresh.Send((frame, body) => SessionMessages.WriteEpochMessage(frame, body, MessageType.ReadyAck, 0));
+                        harness.Advance(1);
+                        fresh.Receive();
+                        if (harness.Host.Snapshot.TryGetParticipant(new ParticipantId("hostile-" + opened), out var record2) && record2!.IsConnected) joined++;
+                    }
+
+                    peers.Add(fresh);
+                }
+
+                var peer = fuzz.Pick(peers);
+                for (var frame = 1 + fuzz.Random.Next(4); frame > 0; frame--)
+                {
+                    attempted++;
+                    if (peer.End.State == EngineLinkState.Closed) continue;
+                    peer.SendRaw(Hostile(fuzz, corpus));
+                    delivered++;
+                    if (run != null) run.Inputs++;
+                }
+
+                harness.Advance(1 + fuzz.Random.Next(3));
+                foreach (var other in peers) other.Receive();
+                if (fuzz.Chance(8))
+                {
+                    var leaving = fuzz.Pick(peers);
+                    harness.Network.Sever(leaving.End);
+                    peers.Remove(leaving);
+                }
+
+                if (round % 30 == 0) GoodClientPlays(harness, good.Session, goodScore, hostScore);
+                var census = harness.Host.Census();
+                That(census.Connections <= peers.Count + 1 + 6, "the host keeps no connection it was not given (" + census + ")");
+                That(census.ParticipantRecords <= 1 + (2 * 8) && census.QueuedCallbacks == 0 && census.QueuedOutbound <= 64,
+                    "and its records and queues stay within their bounds (" + census + ")");
+                That(census.CommandRateLimiters <= census.ParticipantRecords && census.ObjectRateLimiters <= census.ParticipantRecords * census.Objects,
+                    "and every rate limiter belongs to a participant it still knows (" + census + ")");
             }
 
-            if (round % 30 == 0) GoodClientPlays(harness, good.Session, goodScore, hostScore);
-            var census = harness.Host.Census();
-            That(census.Connections <= peers.Count + 1 + 6, "the host keeps no connection it was not given (" + census + ")");
-            That(census.ParticipantRecords <= 1 + (2 * 8) && census.QueuedCallbacks == 0 && census.QueuedOutbound <= 64,
-                "and its records and queues stay within their bounds (" + census + ")");
-            That(census.CommandRateLimiters <= census.ParticipantRecords && census.ObjectRateLimiters <= census.ParticipantRecords * census.Objects,
-                "and every rate limiter belongs to a participant it still knows (" + census + ")");
-        }
+            GoodClientPlays(harness, good.Session, goodScore, hostScore);
+            That(good.Engine.Snapshot.State == MultiplayerSessionState.Ready && harness.Host.Snapshot.TryGetParticipant(new ParticipantId("good"), out var kept) &&
+                 kept!.IsConnected, "the good client played through it all");
 
-        GoodClientPlays(harness, good.Session, goodScore, hostScore);
-        That(good.Engine.Snapshot.State == MultiplayerSessionState.Ready && harness.Host.Snapshot.TryGetParticipant(new ParticipantId("good"), out var kept) &&
-             kept!.IsConnected, "the good client played through it all");
-        var participants = string.Join(",", harness.Host.Snapshot.Participants.Select(participant => participant.Id + (participant.IsConnected ? "+" : "-")));
-        return participants + "; score " + hostScore.Value.Value + "@" + hostScore.Version + "; violations " +
-               harness.Diagnostics.Count(EngineDiagnosticKind.ProtocolViolation) + "; " + harness.Host.Census();
+            // The fuzzer is worth running only if its frames actually reach an open link and its mutations reach the
+            // post-join handlers: both were almost never true before closed peers were dropped and peers joined first.
+            That(delivered >= attempted * 3 / 4, "most hostile frames reached an open link (" + delivered + " of " + attempted + ")");
+            That(joined >= 100, "many hostile peers joined, so mutations reached the post-join handlers (" + joined + ")");
+            var participants = string.Join(",", harness.Host.Snapshot.Participants.Select(participant => participant.Id + (participant.IsConnected ? "+" : "-")));
+            return participants + "; delivered " + delivered + "/" + attempted + "; joined " + joined + "; score " + hostScore.Value.Value + "@" + hostScore.Version +
+                   "; violations " + harness.Diagnostics.Count(EngineDiagnosticKind.ProtocolViolation) + "; " + harness.Host.Census();
+        }
+        finally
+        {
+            run?.Dispose();
+        }
     }
 
     private static void GoodClientPlays(EngineHarness harness, EngineSessionFacade session, IReplicatedState<CounterValue> clientScore, IReplicatedState<CounterValue> hostScore)

@@ -26,17 +26,31 @@ internal sealed class NetworkConditions
 /// </summary>
 internal sealed class VirtualNode
 {
+    private const int LanPort = 0x6A72;
+    private const int RelayPort = 0x0D96;
+
     private readonly int index;
+    private readonly int portOffset;
     private int rebinds;
 
-    internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null)
+    /// <param name="index">The node's address: two bytes, so a long run never hands two nodes the same one.</param>
+    /// <param name="portOffset">Moves the node's ports, so several nodes can share one address as one machine's sockets do.</param>
+    internal VirtualNode(string name, int index, TransportEndpoint? endpoint, NetworkStack? stack = null, int portOffset = 0)
     {
         if (index < 1 || index > ushort.MaxValue) throw new ArgumentOutOfRangeException(nameof(index));
+        if (portOffset < 0 || portOffset > 0x8000) throw new ArgumentOutOfRangeException(nameof(portOffset));
         Name = name;
         Stack = stack;
         Endpoint = stack?.Endpoint ?? endpoint;
         this.index = index;
+        this.portOffset = portOffset;
     }
+
+    /// <summary>Gets the node's address, which nodes made with <see cref="VirtualDatagramNetwork.AddStack"/>'s sharing share.</summary>
+    internal int AddressIndex => index;
+
+    /// <summary>Gets how far the node's ports sit from the usual ones; nodes sharing an address differ here.</summary>
+    internal int PortOffset => portOffset;
 
     internal string Name { get; }
 
@@ -57,24 +71,32 @@ internal sealed class VirtualNode
     /// Gets an address of the node. The node's index takes two bytes, so a long run that opens a network for every join
     /// never hands two nodes the same address; the first 255 nodes keep the addresses they always had.
     /// </summary>
-    internal byte[] AddressOf(TransportPathKind kind) => kind switch
+    internal byte[] AddressOf(TransportPathKind kind)
     {
-        TransportPathKind.Relayed => new byte[] { 100, 64, (byte)(index >> 8), (byte)index, 0x0D, 0x96 },
-        TransportPathKind.Lan => new byte[] { 192, 168, (byte)(index >> 8), (byte)index, 0x6A, 0x72 },
-        _ => new byte[] { 10, (byte)rebinds, (byte)(index >> 8), (byte)index, 0x6A, 0x72 }
-    };
+        var port = PortOf(kind);
+        return kind switch
+        {
+            TransportPathKind.Relayed => new byte[] { 100, 64, (byte)(index >> 8), (byte)index, (byte)(port >> 8), (byte)port },
+            TransportPathKind.Lan => new byte[] { 192, 168, (byte)(index >> 8), (byte)index, (byte)(port >> 8), (byte)port },
+            _ => new byte[] { 10, (byte)rebinds, (byte)(index >> 8), (byte)index, (byte)(port >> 8), (byte)port }
+        };
+    }
 
     /// <summary>Gets whether <paramref name="key"/> is this node's address of <paramref name="kind"/>, without allocating.</summary>
     internal bool Owns(byte[] key, TransportPathKind kind)
     {
         if (key.Length != 6 || key[2] != (byte)(index >> 8) || key[3] != (byte)index) return false;
+        var port = PortOf(kind);
+        if (key[4] != (byte)(port >> 8) || key[5] != (byte)port) return false;
         return kind switch
         {
-            TransportPathKind.Relayed => key[0] == 100 && key[1] == 64 && key[4] == 0x0D && key[5] == 0x96,
-            TransportPathKind.Lan => key[0] == 192 && key[1] == 168 && key[4] == 0x6A && key[5] == 0x72,
-            _ => key[0] == 10 && key[1] == (byte)rebinds && key[4] == 0x6A && key[5] == 0x72
+            TransportPathKind.Relayed => key[0] == 100 && key[1] == 64,
+            TransportPathKind.Lan => key[0] == 192 && key[1] == 168,
+            _ => key[0] == 10 && key[1] == (byte)rebinds
         };
     }
+
+    private int PortOf(TransportPathKind kind) => (kind == TransportPathKind.Relayed ? RelayPort : LanPort) + portOffset;
 
     /// <summary>Moves the node to a new direct address, as a NAT does when its mapping expires; the old one goes dead.</summary>
     internal void Rebind() => rebinds++;
@@ -96,6 +118,7 @@ internal sealed class VirtualDatagramNetwork
     private readonly List<InFlight> inFlight = new();
     private readonly List<(VirtualNode Node, long At)> retiring = new();
     private readonly HashSet<(VirtualNode, VirtualNode)> partitions = new();
+    private readonly Dictionary<int, int> portsTaken = new();
     private readonly IncrementalHash transcript = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     private long ordinal;
     private int spinStreak;
@@ -138,11 +161,48 @@ internal sealed class VirtualDatagramNetwork
 
     internal VirtualNode AddRaw(string name) => Add(name, null);
 
-    internal VirtualNode AddStack(string name, NetworkStack stack)
+    /// <summary>
+    /// Attaches a network stack. With <paramref name="sharesAddressOf"/>, the new node takes that node's address and a port
+    /// of its own, as another socket on the same machine does, so it reaches the same hosts from the same network. With
+    /// <paramref name="samePort"/> as well, it takes that node's port too, as the next socket bound to a port the last one
+    /// let go: the node it replaces must already have left the network.
+    /// </summary>
+    internal VirtualNode AddStack(string name, NetworkStack stack, VirtualNode? sharesAddressOf = null, bool samePort = false)
     {
-        var node = new VirtualNode(name, ++nodeCount, null, stack);
+        VirtualNode node;
+        if (sharesAddressOf == null)
+        {
+            node = new VirtualNode(name, ++nodeCount, null, stack);
+        }
+        else if (samePort)
+        {
+            if (nodes.Exists(existing => existing.AddressIndex == sharesAddressOf.AddressIndex && existing.PortOffset == sharesAddressOf.PortOffset))
+            {
+                throw new InvalidOperationException("Another node still holds that address and port.");
+            }
+
+            node = new VirtualNode(name, sharesAddressOf.AddressIndex, null, stack, sharesAddressOf.PortOffset);
+        }
+        else
+        {
+            var offset = portsTaken.TryGetValue(sharesAddressOf.AddressIndex, out var taken) ? taken + 1 : 1;
+            portsTaken[sharesAddressOf.AddressIndex] = offset;
+            node = new VirtualNode(name, sharesAddressOf.AddressIndex, null, stack, offset);
+        }
+
         nodes.Add(node);
         return node;
+    }
+
+    /// <summary>Names the host a virtual path reaches, without its port, as the game does for UDP; null through a relay.</summary>
+    internal static string? SourceOf(TransportPath path) =>
+        path.Kind == TransportPathKind.Relayed || path.KeyBytes.Length != 6 ? null : Convert.ToHexString(path.KeyBytes, 0, 4);
+
+    /// <summary>Names the network a virtual path comes from: its four address bytes as an IPv4 address, never the port; null through a relay.</summary>
+    internal static byte[]? NetworkOf(TransportPath path)
+    {
+        var key = path.KeyBytes;
+        return path.Kind == TransportPathKind.Relayed || key.Length != 6 ? null : new byte[] { 4, key[0], key[1], key[2], key[3] };
     }
 
     /// <summary>Gets how many nodes are attached now; retired ones no longer count.</summary>

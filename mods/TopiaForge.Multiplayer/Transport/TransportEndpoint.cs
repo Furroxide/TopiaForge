@@ -338,7 +338,11 @@ namespace TopiaForge.Multiplayer.Transport
             if (connection.IsInitiator) return;
             connection.CountsAsHalfOpen = true;
             halfOpen++;
-            initiations[new InitiationKey(connection.Path, connection.RemoteConnectionId)] = connection;
+
+            // The connection keeps its key: it may move to another path before it closes, and the entry must go with it.
+            var key = new InitiationKey(connection.Path, connection.RemoteConnectionId);
+            connection.Initiation = key;
+            initiations[key] = connection;
         }
 
         private void Unregister(int index)
@@ -346,10 +350,10 @@ namespace TopiaForge.Multiplayer.Transport
             var connection = connections[index];
             connections.RemoveAt(index);
             byConnectionId.Remove(connection.LocalConnectionId);
-            if (!connection.IsInitiator)
+            if (connection.Initiation is InitiationKey key)
             {
-                var key = new InitiationKey(connection.Path, connection.RemoteConnectionId);
                 if (initiations.TryGetValue(key, out var existing) && ReferenceEquals(existing, connection)) initiations.Remove(key);
+                connection.Initiation = null;
             }
 
             if (connection.CountsAsHalfOpen)

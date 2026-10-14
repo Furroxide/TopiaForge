@@ -118,20 +118,55 @@ internal static class HardeningRegressionTests
     private static ObjectWireMessage Box(ReplicatedObjectType<CounterValue, AddRequest> type, string id, byte[] bytes) =>
         new() { Owner = EngineHarness.Owner, TypeId = type.Id, ObjectId = id, Bytes = bytes };
 
+    /// <summary>
+    /// Found by review: a client that registered a state after the host had sent it a value its codec cannot read
+    /// reported the failure and played on at the default, while an object adopted the same way ended the session. A
+    /// value that cannot be shown now ends the session either way: back to solo play where the provider returns there,
+    /// and ended as a protocol mismatch where nothing does.
+    /// </summary>
+    internal static void AStateAdoptedThatDoesNotDecodeEndsTheSession()
+    {
+        var bad = new byte[] { (byte)'{' };
+        foreach (var returnToSolo in new[] { true, false })
+        {
+            var client = new SoloReturningClient(BoxType, returnToSolo);
+            client.Join(_ => Array.Empty<ObjectWireMessage>(), new[] { ("late", bad), ("score", CounterCodec.Encode(new CounterValue(4)).Value!) });
+            Assert(client.Engine.Role == EngineRole.Client && client.Engine.Snapshot.State == MultiplayerSessionState.Ready,
+                "values of states the client has not registered wait for it");
+            var score = Require(client.Session.RegisterState(new ReplicatedStateDefinition<CounterValue>("score", new CounterValue(0), CounterCodec)), "register score");
+            Assert(score.Value.Value == 4 && client.Engine.Snapshot.State == MultiplayerSessionState.Ready, "a value that decodes is adopted and the session goes on");
+            var late = Require(client.Session.RegisterState(new ReplicatedStateDefinition<CounterValue>("late", new CounterValue(0), CounterCodec)), "register late");
+            Assert(client.Diagnostics.Count(EngineDiagnosticKind.CodecFailed) == 1, "the value that does not decode is reported");
+            if (returnToSolo)
+            {
+                Assert(client.Engine.Role == EngineRole.Host && client.Engine.Snapshot.Id.Value == "solo" && late.Version == 0 && score.Version == 0,
+                    "and ends the session, back in solo play with every value at its default (" + client.Engine.Role + ", " + client.Engine.Snapshot.State + ")");
+            }
+            else
+            {
+                Assert(client.Engine.Snapshot.State == MultiplayerSessionState.Ended && client.Engine.Snapshot.EndReason == MultiplayerSessionEndReason.ProtocolMismatch,
+                    "and ends the session as a protocol mismatch (" + client.Engine.Snapshot.State + ", " + client.Engine.Snapshot.EndReason + ")");
+            }
+        }
+    }
+
     /// <summary>A client that returns to solo play when its session ends, as the provider's does, joined by a raw host.</summary>
     private sealed class SoloReturningClient
     {
         private readonly VirtualEngineTransport network = new(new VirtualLinkConditions());
         private readonly RawPeer host;
 
-        internal SoloReturningClient(ReplicatedObjectType<CounterValue, AddRequest> type)
+        internal SoloReturningClient(ReplicatedObjectType<CounterValue, AddRequest> type, bool returnToSolo = true)
         {
             var pair = network.Connect("client");
             Engine = SessionEngine.CreateClient(
                 new EngineOptions
                 {
                     StepRateHz = 60,
-                    AfterClientSessionEnds = _ => new SoloSessionStart(new MultiplayerSessionId("solo"), new SessionSeed(1), new ParticipantId("local"), "Local player")
+                    Diagnostics = Diagnostics,
+                    AfterClientSessionEnds = returnToSolo
+                        ? _ => new SoloSessionStart(new MultiplayerSessionId("solo"), new SessionSeed(1), new ParticipantId("local"), "Local player")
+                        : null
                 },
                 new MultiplayerSessionId("placeholder"),
                 0);
@@ -146,8 +181,10 @@ internal static class HardeningRegressionTests
 
         internal EngineSessionFacade Session { get; }
 
-        /// <summary>Accepts the join with a snapshot of <paramref name="objects"/>, then lets the client read it.</summary>
-        internal void Join(Func<InternWriter, ObjectWireMessage[]> objects)
+        internal RecordingDiagnostics Diagnostics { get; } = new();
+
+        /// <summary>Accepts the join with a snapshot of <paramref name="objects"/> and <paramref name="states"/>, then lets the client read it.</summary>
+        internal void Join(Func<InternWriter, ObjectWireMessage[]> objects, (string Id, byte[] Bytes)[]? states = null)
         {
             host.Send((frame, body) =>
             {
@@ -161,6 +198,7 @@ internal static class HardeningRegressionTests
                     NextSequence = 1
                 });
                 SessionMessages.WriteEpochMessage(frame, body, MessageType.SnapshotBegin, 0);
+                foreach (var (id, bytes) in states ?? Array.Empty<(string, byte[])>()) ReplicationMessages.WriteStateDelta(frame, body, intern, EngineHarness.Owner, id, 1, bytes);
                 foreach (var item in objects(intern)) ReplicationMessages.WriteObjectSpawned(frame, body, intern, item);
                 SessionMessages.WriteEmpty(frame, body, MessageType.SnapshotEnd);
                 SessionMessages.WriteCommit(frame, body, 0, 0);

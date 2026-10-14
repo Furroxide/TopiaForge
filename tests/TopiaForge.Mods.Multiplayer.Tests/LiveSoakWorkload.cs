@@ -62,14 +62,21 @@ internal sealed class SoakNudge
     public int Delta { get; }
 }
 
+/// <summary>
+/// A presentation event, carrying the (peer, nonce) of the submission that emitted it, so every delivery is a distinct
+/// thing a workload can see arrive. A ping (see <see cref="SoakWorkload.Ping"/>) carries its own peer space.
+/// </summary>
 internal sealed class SoakFlash
 {
-    public SoakFlash(long score)
+    public SoakFlash(int peer, int nonce)
     {
-        Score = score;
+        Peer = peer;
+        Nonce = nonce;
     }
 
-    public long Score { get; }
+    public int Peer { get; }
+
+    public int Nonce { get; }
 }
 
 /// <summary>What one process ran canonically: every add and nudge by nonce, and each session's running score.</summary>
@@ -118,13 +125,19 @@ internal sealed class SoakLedger
 internal sealed class SoakWorkload
 {
     internal const int MaximumMarkers = 8;
+
+    /// <summary>The peer space ping flashes use, so they never collide with an add's (peer, nonce).</summary>
+    private const int PingPeer = -1;
     internal static readonly MultiplayerCommandType<SoakOrder, SoakScore> AddType = new("soak.add");
+    internal static readonly MultiplayerCommandType<SoakOrder, SoakScore> PingType = new("soak.ping");
     internal static readonly ReplicatedObjectType<SoakMarker, SoakNudge> MarkerType = new("soak.marker");
     internal static readonly PresentationEventType<SoakFlash> FlashType = new("soak.flash", new JsonTestCodec<SoakFlash>());
 
     private readonly Provider provider;
     private readonly Random random;
     private readonly Func<bool> quiet;
+    private readonly HashSet<(int Peer, int Nonce)> flashes = new();
+    private int pingNonce;
 
     internal SoakWorkload(Provider provider, int seed, Func<bool> quiet)
     {
@@ -136,10 +149,12 @@ internal sealed class SoakWorkload
             "soak.tally", new SoakScore(0), new JsonTestCodec<SoakScore>(), MultiplayerDelivery.Immediate, 10)), "tally");
         Require(provider.RegisterCommand(new MultiplayerCommandDefinition<SoakOrder, SoakScore>(
             AddType, new JsonTestCodec<SoakOrder>(), new JsonTestCodec<SoakScore>(), Add, PredictionMode.Owner, 20, 4096)), "add");
+        Require(provider.RegisterCommand(new MultiplayerCommandDefinition<SoakOrder, SoakScore>(
+            PingType, new JsonTestCodec<SoakOrder>(), new JsonTestCodec<SoakScore>(), PingHandler, PredictionMode.None, 30, 4096)), "ping");
         Require(provider.RegisterObjectType(new ReplicatedObjectTypeDefinition<SoakMarker, SoakNudge>(
             MarkerType, new JsonTestCodec<SoakMarker>(), new JsonTestCodec<SoakNudge>(), Nudge, PredictionMode.Owner, 15, 4096,
             MultiplayerDelivery.Coalesced, 5)), "marker");
-        Require(provider.RegisterPresentation(new PresentationEventDefinition<SoakFlash>(FlashType, _ => Flashes++)), "flash");
+        Require(provider.RegisterPresentation(new PresentationEventDefinition<SoakFlash>(FlashType, OnFlash)), "flash");
         provider.SubscribeTick(Tick);
     }
 
@@ -149,7 +164,37 @@ internal sealed class SoakWorkload
 
     internal SoakLedger Ledger { get; } = new();
 
-    internal int Flashes { get; private set; }
+    /// <summary>Every presentation event delivered more than once to this process, which must never happen.</summary>
+    internal List<string> FlashViolations { get; } = new();
+
+    internal int Flashes => flashes.Count;
+
+    /// <summary>Gets whether a flash for this (peer, nonce) reached this process.</summary>
+    internal bool GotFlash(int peer, int nonce) => flashes.Contains((peer, nonce));
+
+    /// <summary>
+    /// Submits a ping from the host, which emits one unique flash to everyone and changes no state, and returns its
+    /// (peer, nonce). A soak checkpoint emits pings while every peer is settled and connected, then checks each one got
+    /// every ping: a flash a connected peer missed, or got twice, fails the soak.
+    /// </summary>
+    internal (int Peer, int Nonce) Ping()
+    {
+        var nonce = ++pingNonce;
+        provider.SubmitAsync(PingType, new SoakOrder(PingPeer, nonce, 0));
+        return (PingPeer, nonce);
+    }
+
+    private void OnFlash(SoakFlash value)
+    {
+        if (!flashes.Add((value.Peer, value.Nonce))) FlashViolations.Add("flash " + value.Peer + "/" + value.Nonce + " delivered twice");
+    }
+
+    private OperationResult<SoakScore> PingHandler(MultiplayerCommandContext command, SoakOrder order)
+    {
+        // A ping changes nothing, so it never moves the score or the convergence check; it only emits one flash.
+        command.Emit(FlashType, new SoakFlash(order.Peer, order.Nonce));
+        return OperationResult<SoakScore>.Success(Score.Value);
+    }
 
     internal IReadOnlyList<IReplicatedObject<SoakMarker, SoakNudge>> Markers => provider.GetObjects(MarkerType);
 
@@ -172,9 +217,9 @@ internal sealed class SoakWorkload
         }
 
         var updated = Score.Update(current => OperationResult<SoakScore>.Success(new SoakScore(current.Value + order.Amount)));
-        if (!updated.TryGetValue(out var score)) return updated;
+        if (!updated.TryGetValue(out _)) return updated;
         if (Canonical) Ledger.RecordAdd(provider.Snapshot.Id.Value, order);
-        command.Emit(FlashType, new SoakFlash(score.Value));
+        command.Emit(FlashType, new SoakFlash(order.Peer, order.Nonce));
         return updated;
     }
 

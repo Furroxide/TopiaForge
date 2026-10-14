@@ -126,31 +126,34 @@ namespace TopiaForge.Multiplayer.Network
     /// A listen host's admission, ahead of the engine's own protocol and contract checks:
     /// <list type="bullet">
     /// <item>A banned identity is refused first.</item>
-    /// <item>A password-protected session needs a proof bound to this link's handshake. Five wrong proofs from one
-    /// identity within a minute refuse it for the rest of that minute, so guessing online is slow as well as offline.</item>
+    /// <item>A password-protected session needs a proof bound to this link's handshake. Wrong proofs are limited per
+    /// identity, per source network and for the whole host (<see cref="PasswordGuessLimiter"/>): one network gets five
+    /// guesses before a lockout that grows to eight minutes, and the whole host fifteen, so guessing online takes days
+    /// rather than minutes. A returning player, one the host already holds a place for, is never held back by them.</item>
     /// <item>The runtime's content admission decides last.</item>
     /// </list>
     /// Every refusal carries an <see cref="AdmissionReport"/> for the joining player.
     /// </summary>
     internal sealed class HostPolicy : IJoinPolicy
     {
-        internal const int AttemptsPerMinute = 5;
-        private const long MinuteMicros = 60_000_000;
-        private const int TrackedIdentities = 1024;
+        internal const int AttemptsPerMinute = PasswordGuessLimits.DefaultPerIdentity;
 
         private readonly BanList bans;
         private readonly byte[]? passwordKey;
         private readonly ILiveSessionContent content;
         private readonly Func<long> clock;
-        private readonly Dictionary<string, Attempts> failures = new Dictionary<string, Attempts>(StringComparer.Ordinal);
 
-        internal HostPolicy(BanList bans, byte[]? passwordKey, ILiveSessionContent content, Func<long> clock)
+        internal HostPolicy(BanList bans, byte[]? passwordKey, ILiveSessionContent content, Func<long> clock, PasswordGuessLimits? limits = null)
         {
             this.bans = bans ?? throw new ArgumentNullException(nameof(bans));
             this.passwordKey = passwordKey == null ? null : (byte[])passwordKey.Clone();
             this.content = content ?? throw new ArgumentNullException(nameof(content));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            Guesses = new PasswordGuessLimiter(limits);
         }
+
+        /// <summary>Gets the limiter that counts wrong password proofs; tests read its tables.</summary>
+        internal PasswordGuessLimiter Guesses { get; }
 
         public JoinDecision Evaluate(JoinRequestContext context)
         {
@@ -177,22 +180,28 @@ namespace TopiaForge.Multiplayer.Network
                 if (refusal.HasValue) return refusal.Value;
             }
 
-            return content.Admit(clientContent) ?? JoinDecision.Accept();
+            return Admit(clientContent);
         }
 
         private JoinDecision? CheckPassword(JoinRequestContext context, byte[]? proof)
         {
             var now = clock();
-            Attempts? attempts = failures.TryGetValue(context.PeerIdentity, out var found) ? found : null;
-            if (attempts != null && now - attempts.WindowStart >= MinuteMicros)
-            {
-                failures.Remove(context.PeerIdentity);
-                attempts = null;
-            }
+            var identity = context.PeerIdentity;
 
-            if (attempts != null && attempts.Count >= AttemptsPerMinute)
+            // The network layer hands over only an opaque hash of where the link came from, never an address.
+            var network = (context.Link as NetworkLink)?.SourceNetwork;
+
+            // A player the host already holds a place for proved the password when it joined, so a lockout meant for
+            // guessers never keeps it out; it still proves the password on this link.
+            var refusal = context.Returning ? GuessRefusal.None : Guesses.Check(identity, network, now);
+            switch (refusal)
             {
-                return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "Too many wrong passwords; wait a minute.", AdmissionReport.Encode(AdmissionCode.TooManyAttempts));
+                case GuessRefusal.Host:
+                    return TooManyAttempts("The host is turning passwords away for a moment after many wrong guesses; try again shortly.");
+                case GuessRefusal.Network:
+                    return TooManyAttempts("Too many wrong passwords from your network; try again in a few minutes.");
+                case GuessRefusal.Identity:
+                    return TooManyAttempts("Too many wrong passwords; wait a minute.");
             }
 
             if (proof == null)
@@ -201,32 +210,31 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             if (PasswordProof.Verify(passwordKey!, context.Link.ChannelBinding, proof)) return null;
-            if (attempts == null)
-            {
-                if (failures.Count >= TrackedIdentities) failures.Clear();
-                attempts = new Attempts(now);
-                failures[context.PeerIdentity] = attempts;
-            }
-
-            attempts.Count++;
+            if (refusal == GuessRefusal.None && !context.Returning) Guesses.RecordWrong(identity, network, now);
             return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The password is wrong.", AdmissionReport.Encode(AdmissionCode.PasswordWrong));
         }
+
+        /// <summary>
+        /// Lets the runtime's content admission decide, and turns a refusal into the report the joining player reads: the
+        /// content's code and every problem it listed, so the player learns what to install, not just that it failed.
+        /// </summary>
+        private JoinDecision Admit(byte[] clientContent)
+        {
+            var verdict = content.Admit(clientContent);
+            if (verdict != null && verdict.IsAdmitted) return JoinDecision.Accept();
+            var problems = verdict?.Problems ?? Array.Empty<string>();
+            return verdict?.Code == AdmissionCode.Protocol
+                ? JoinDecision.Reject(MultiplayerSessionEndReason.ProtocolMismatch, "Your version of TopiaForge cannot join this session.", AdmissionReport.Encode(AdmissionCode.Protocol, problems))
+                : JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "Your packages do not match this session's.", AdmissionReport.Encode(AdmissionCode.Content, problems));
+        }
+
+        private static JoinDecision TooManyAttempts(string message) =>
+            JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, message, AdmissionReport.Encode(AdmissionCode.TooManyAttempts));
 
         /// <summary>Wipes the password key once the host stops; a stopped host admits nobody.</summary>
         internal void Wipe()
         {
             if (passwordKey != null) Array.Clear(passwordKey, 0, passwordKey.Length);
-        }
-
-        private sealed class Attempts
-        {
-            internal Attempts(long windowStart)
-            {
-                WindowStart = windowStart;
-            }
-
-            internal long WindowStart { get; }
-            internal int Count { get; set; }
         }
     }
 }

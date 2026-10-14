@@ -151,9 +151,40 @@ is NFC-normalized and encoded as UTF-8.
   the proof to one transport session, so it cannot be replayed, and it travels inside that session's encryption.
 - An impostor without the host's key cannot complete a pinned handshake. An unpinned first contact could reach one, so
   the 100,000 rounds make guessing a captured proof offline expensive.
-- Passwords are 1 to 64 characters without control characters. They are typed in game and never stored or staged.
+- Passwords are 1 to 64 UTF-16 code units without control characters or unpaired surrogates. A lone surrogate cannot be
+  NFC-normalized, and UTF-8 would fold every one to U+FFFD, so two different passwords would derive the same key; it is
+  refused where the player sets it, before hosting or a join begins, not with a late unexplained failure. Passwords are
+  typed in game and never stored or staged.
 - PBKDF2 is written out in the provider, because Mono's class library may lack the SHA-256 form. It runs off the main
   thread, and a host derives its key once when it starts hosting.
+
+## 6a. Limiting guesses
+
+Online guessing is not slow by itself: a wrong proof costs the attacker almost nothing to send, and the 100,000 PBKDF2
+rounds are the host's cost, not the guesser's. A fresh key per attempt from one address and port is held only by the
+transport's per-source handshake limit — on the virtual network with real cryptography that is **450 to 480 wrong
+guesses a minute**, and 64 to 256 addresses reached **2,900 to 3,600 a minute** and crowded out real joins. So the host
+counts wrong proofs itself, three ways at once, keyed by values the network layer hands it; none of them is an address.
+
+- **Per identity:** five wrong proofs in a minute, then that identity waits a minute. Identities are free, so this is
+  only a courtesy to an honest typo, not a real bound.
+- **Per source network:** five wrong proofs from one network — an IPv4 address, or an IPv6 `/64`, and never the port,
+  so rotating source ports or the addresses of a `/64` does not help — then a lockout that starts at a minute and
+  doubles with each further spent budget to at most eight minutes.
+- **Host-wide:** fifteen wrong proofs across all networks, then the same backoff, during which every newcomer's
+  password is turned away, so many networks together are held no looser than three.
+
+Measured the same way, one address and port now gets about **four wrong guesses a minute**, and sixty-four addresses
+about **eleven a minute** at first and far fewer as the host-wide backoff climbs — on the order of **150 an hour** in
+the steady state. A 100,000-word dictionary that took about 30 minutes before now takes **about a month**. The counters
+are bounded tables of entries that limit something; an entry that no longer limits anything is evicted to make room,
+and when none can be the proof is turned away unchecked rather than forgetting a limit still in force. Only verified
+wrong proofs make entries, and the host-wide budget bounds how many of those there can be.
+
+**Privacy.** The network layer gives `HostPolicy` only an opaque source-network value — a keyed hash it computes under a
+secret of its own — so the limiter can tell two links apart by network without ever seeing, logging or exposing an
+address. The limiter is exercised by its own tests; the admission fuzzer builds a fresh `HostPolicy` per input and so
+never drives it.
 
 ## 7. Player keys
 
@@ -227,10 +258,15 @@ players join, leave, are kicked and banned, lose their links for a blip, a stall
 frames stall, the host replaces its session, and the network moves between LAN, Wi-Fi, Internet and congested
 conditions with loss, delay, jitter and duplication. Every five minutes the workload holds still and every player in
 the session must match the host value for value, every submission must have its one answer, and the host's ledger must
-show each command run once. Every growing table, in the engines, the endpoints and the links, is held to a ceiling all
-along; no endpoint may report a timer already due; nothing may throw or report a fault. Identities and every
-endpoint's randomness come from the seed, so a seed repeats every byte, and the run takes a few seconds, so every pass
-runs it twice and compares. The harness's `--soak` flag adds eight more seeds and a four-hour run.
+show each command run once. Presentation events are checked too: every one carries the (peer, nonce) of what emitted
+it, so a delivery is a distinct thing to count, and while everyone is settled and connected the host emits a few flashes
+nobody else does — each must reach every connected peer exactly once, so one lost to a connected peer or delivered to it
+twice fails. Every growing table, in the engines, the endpoints and the links, is held to a ceiling all along — the
+responder's handshake entries among them, which a connection that changed path once leaked; each ceiling is set where
+the workload could break it, not at a table's own capacity. No endpoint may report a timer already due; nothing may
+throw or report a fault. Identities and every endpoint's randomness come from the seed, so a seed repeats every byte,
+and the run takes a few seconds, so every pass runs it twice and compares. The harness's `--soak` flag adds eight more
+seeds and a four-hour run.
 
 The fuzzers feed seeded hostile input to every format and boundary this layer reads: canonical JSON (checked against
 an independent JSON reader), signed descriptors, links, invite codes and hosts, LAN beacons and session info, join
@@ -238,8 +274,12 @@ content, admission reports, the host's admission decision, the descriptor endpoi
 arrive, session frames into host and client engines through their links, and the transport's datagrams, mutated from
 every kind it sends, as well as authenticated packets of garbage frames. Each property is the same: nothing throws past
 its boundary, whatever is accepted has exactly one spelling or follows the rules an independent reading gives, and
-nothing grows without bound. The default run makes about 240,000 inputs in under a second; the `--fuzz` flag makes
-twenty times as many. `HardeningRegressionTests` pins what they found. None of them opens a socket.
+nothing grows without bound. The engine fuzzers now count only frames that reach an open link or a joined session, and
+each asserts that most of its inputs did — a hostile client fuzzer starts most of its peers properly joined and drops
+the ones the host has closed, and the client fuzzer starts most rounds Ready and stops once a frame has returned it to
+solo play. The ledger reports distinct inputs, not the determinism repeat counted twice. The default run makes about
+230,000 inputs in a second or two; the `--fuzz` flag makes twenty times as many. `HardeningRegressionTests` pins what
+they found. None of them opens a socket.
 
 ## 11. The network thread
 
@@ -417,9 +457,14 @@ A host admits players through `HostPolicy`, which checks, in order:
    passes under a second spelling. The engine bounds the whole field at 64 KiB, so the content is bounded at that less
    the largest header (37 bytes). Anything else is a protocol refusal.
 4. **The password.** A protected session needs a proof bound to this link's handshake (section 6), so a proof made
-   for another link is wrong here. Five wrong proofs from one identity within a minute refuse even the right one for
-   the rest of that minute. The transport's per-source handshake limit bounds how fast new identities can try.
-5. **Content.** The runtime's content admission decides last.
+   for another link is wrong here. Because an identity costs nothing and one machine can rotate source ports, wrong
+   proofs are counted three ways at once (section 6a): per identity, per source network, and for the whole host. A
+   player the host already keeps a place for — one connected or within its grace period — is never held back by them,
+   so a real player's reconnection always goes through; the refusal a newcomer meets says to try again shortly and
+   carries an admission report.
+5. **Content.** The runtime's content admission decides last. It returns a verdict — admitted, or refused with a code
+   and a line per problem — which the policy turns into the admission report the joining player reads, so a content
+   refusal names what to install rather than reaching the player as a bare `other`.
 
 Every refusal carries an admission report, canonical JSON the joining player's interface reads:
 
@@ -452,6 +497,11 @@ host is up, so any failure before that leaves the player's own session untouched
   host beyond it fails as `DirectNotAllowed`. It does not look names up either, because a name's own servers would
   learn something of the player from the query; only `localhost` names and mDNS `.local` names resolve. The join
   checks the resolved path again before connecting.
+- **A host name that .NET reads as an address is never resolved** unless it is the canonical literal. The link grammar
+  treats `0x7f000001`, `0x7f.1` and the like as DNS names (a name of digits and dots alone is already refused), but
+  `IPAddress.TryParse` reads them as `127.0.0.1`, so the game would have joined them under relay-only while the launcher
+  refused them. The resolver now refuses any host that parses as an address in such a shortened or hexadecimal form,
+  under relay-only and direct alike, matching the launcher. No privacy harm was shown; this keeps the two in step.
 - **Nobody connects to a joining player.** Its endpoint refuses every Initiation, so no one else can reach it or
   learn its key, and it closes anything its network reports. LAN browsing works the same way.
 - **How it ends** is told to the player: kicked, banned, the host ended it, a protocol mismatch, refused with the

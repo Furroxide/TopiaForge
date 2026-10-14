@@ -211,4 +211,35 @@ internal static class TransportPathTests
         That(raw.Received.Responses.Count == 2 && raw.Received.Responses[1][0] == 0 && answers.Count == 1 && answers.Sum() <= packed.Length,
             "four challenges in one datagram earn one answer (" + string.Join(", ", raw.OpenedSizes) + " bytes back for " + packed.Length + ")");
     }
+
+    /// <summary>
+    /// A responder keys each handshake by the path its Initiation came from, and the connection may move afterwards.
+    /// Closing a connection that moved must still forget that entry, or every rebound player leaves one behind, holding
+    /// the closed connection.
+    /// </summary>
+    internal static void AConnectionThatMovedLeavesNothingBehindWhenItCloses()
+    {
+        var pair = new TransportPair(77);
+        for (var round = 1; round <= 5; round++)
+        {
+            var (client, host) = pair.Establish();
+            pair.ClientNode.Rebind();
+            client.Send(ProviderChannel.Session, Pattern(64, round), 0, 64);
+            var atHost = new List<byte[]>();
+            That(pair.Network.RunUntil(() =>
+            {
+                Drain(host, atHost);
+                return atHost.Count == 1 && host.PathChanges == 1;
+            }, 3_000_000), "round " + round + ": the host follows the client to its new address");
+            client.Close();
+            That(pair.Network.RunUntil(() => client.State == TransportConnectionState.Closed && host.State == TransportConnectionState.Closed &&
+                                             pair.Host.Census().Connections == 0, 10_000_000),
+                "round " + round + ": both ends close and the host forgets the connection (" + pair.Host.Census() + ")");
+            var census = pair.Host.Census();
+            That(census.Initiations == 0 && census.HalfOpen == 0,
+                "round " + round + ": no handshake entry outlives a connection that moved (" + census + ")");
+        }
+
+        That(pair.Network.Spins == 0, "no busy loop");
+    }
 }

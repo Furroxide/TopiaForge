@@ -179,6 +179,12 @@ namespace TopiaForge.Multiplayer.Transport
         internal bool CountsAsHalfOpen { get; set; }
 
         /// <summary>
+        /// Gets or sets the key a responder's endpoint registered this connection under for duplicate Initiations: the
+        /// path the Initiation came from, which <see cref="Path"/> may since have left. Null for an initiator.
+        /// </summary>
+        internal InitiationKey? Initiation { get; set; }
+
+        /// <summary>
         /// Queues one frame. Session frames are reliable and ordered and may be queued during the handshake; Realtime
         /// and Voice frames are sequenced datagrams that must fit one packet.
         /// </summary>

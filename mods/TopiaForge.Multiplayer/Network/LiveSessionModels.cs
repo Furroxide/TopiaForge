@@ -27,8 +27,15 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Gets or sets whether another port may be taken when the chosen one is busy.</summary>
         internal bool FallBackToAnyPort { get; set; } = true;
 
-        /// <summary>Gets or sets the session password, or null for an open session. It is never stored.</summary>
-        internal string? Password { get; set; }
+        /// <summary>
+        /// Gets or sets the session password, or null for an open session. It is never stored. A password that breaks
+        /// <see cref="PasswordProof.Rule"/> is refused here, before hosting starts.
+        /// </summary>
+        internal string? Password
+        {
+            get => password;
+            set => password = PasswordSetting.Check(value);
+        }
 
         /// <summary>
         /// Gets or sets whether players outside the LAN may connect directly, which shows them this host's address. The
@@ -39,6 +46,18 @@ namespace TopiaForge.Multiplayer.Network
         internal bool Voice { get; set; }
         internal string? Gamemode { get; set; }
         internal string? World { get; set; }
+
+        private string? password;
+    }
+
+    /// <summary>Checks a password a player sets for hosting or joining, so a bad one fails at once with the rule it breaks.</summary>
+    internal static class PasswordSetting
+    {
+        internal static string? Check(string? value)
+        {
+            if (value != null && !PasswordProof.IsValidPassword(value)) throw new ArgumentException(PasswordProof.Rule, nameof(value));
+            return value;
+        }
     }
 
     internal enum JoinTargetKind
@@ -97,8 +116,17 @@ namespace TopiaForge.Multiplayer.Network
 
         internal string DisplayName { get; }
 
-        /// <summary>Gets or sets the password, when the player typed one in advance; otherwise the join asks for it.</summary>
-        internal string? Password { get; set; }
+        /// <summary>
+        /// Gets or sets the password, when the player typed one in advance; otherwise the join asks for it. A password
+        /// that breaks <see cref="PasswordProof.Rule"/> is refused here, before the join starts.
+        /// </summary>
+        internal string? Password
+        {
+            get => password;
+            set => password = PasswordSetting.Check(value);
+        }
+
+        private string? password;
 
         /// <summary>
         /// Gets or sets whether a direct path outside the LAN may be used, which shows the host this player's address.

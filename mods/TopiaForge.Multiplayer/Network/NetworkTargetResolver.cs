@@ -73,9 +73,19 @@ namespace TopiaForge.Multiplayer.Network
         private async Task<ResolvedTarget> ResolveDirectAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken)
         {
             IPAddress[] addresses;
-            if (IPAddress.TryParse(target.Host!, out var literal))
+            if (IsCanonicalLiteral(target.Host!) && IPAddress.TryParse(target.Host!, out var literal))
             {
                 addresses = new[] { literal };
+            }
+            else if (IPAddress.TryParse(target.Host!, out _))
+            {
+                // The link grammar reads 0x7f000001, 0x7f.1 and other hexadecimal and shortened forms as names, but .NET,
+                // and the system's own resolver, read them as addresses. They are never resolved, as the launcher never
+                // resolves them: relay-only refuses them as names beyond the local network, and direct play as names
+                // that are not names at all.
+                return allowDirect
+                    ? ResolvedTarget.Failed(LiveFailure.Unreachable, "This host name reads as an address in an unusual form; type the address itself.")
+                    : ResolvedTarget.Failed(LiveFailure.DirectNotAllowed, DirectNotAllowed);
             }
             else if (!allowDirect && !IsLocalName(target.Host!))
             {
@@ -128,6 +138,21 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             return last == null ? ResolvedTarget.Failed(LiveFailure.Unreachable, "The host name has no usable address.") : Failed(last);
+        }
+
+        /// <summary>
+        /// Whether a normalized host is an address in the one spelling links use: an RFC 5952 IPv6 address, or dotted
+        /// decimal, since the grammar refuses any name of digits and dots alone.
+        /// </summary>
+        private static bool IsCanonicalLiteral(string host)
+        {
+            if (host.IndexOf(':') >= 0) return true;
+            foreach (var character in host)
+            {
+                if (character != '.' && (character < '0' || character > '9')) return false;
+            }
+
+            return true;
         }
 
         /// <summary>Whether a name resolves without asking anyone beyond this machine and the local network.</summary>

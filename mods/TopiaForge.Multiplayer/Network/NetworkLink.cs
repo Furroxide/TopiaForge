@@ -42,7 +42,7 @@ namespace TopiaForge.Multiplayer.Network
         private int closeRequested;
         private int overloaded;
 
-        internal NetworkLink(long number, byte[] remoteStaticKey, MultiplayerPlayerKey playerKey, byte[] channelBinding)
+        internal NetworkLink(long number, byte[] remoteStaticKey, MultiplayerPlayerKey playerKey, byte[] channelBinding, SourceNetwork? sourceNetwork = null)
         {
             if (remoteStaticKey == null || remoteStaticKey.Length != 32) throw new ArgumentException("A peer key is 32 bytes.", nameof(remoteStaticKey));
             if (channelBinding == null || channelBinding.Length != 32) throw new ArgumentException("A channel binding is 32 bytes.", nameof(channelBinding));
@@ -51,10 +51,17 @@ namespace TopiaForge.Multiplayer.Network
             PeerIdentity = WireText.ToHex(remoteStaticKey);
             PlayerKey = playerKey;
             this.channelBinding = (byte[])channelBinding.Clone();
+            SourceNetwork = sourceNetwork;
         }
 
         /// <summary>Gets the connection's endpoint-local number, the only name diagnostics use for it.</summary>
         internal long Number { get; }
+
+        /// <summary>
+        /// Gets the network an inbound link came from, as the opaque value its stack computed for a host's password limits;
+        /// null for an outbound link and where sources cannot be told apart, such as through a relay.
+        /// </summary>
+        internal SourceNetwork? SourceNetwork { get; }
 
         internal byte[] RemoteStaticKey { get; }
 

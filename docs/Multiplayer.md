@@ -214,9 +214,10 @@ and the snapshot says which one is current, whether this process holds world aut
   its player stays the host participant. When hosting stops, every other player's session ends and the host plays on
   alone in the same session.
 - **Joining.** Joining another host replaces this process's session with the host's. Nothing changes until the
-  connection to the host is up, so a join that fails leaves solo play as it was. From then on the snapshot names the
-  host's session and `HasWorldAuthority` is false. The state goes from `Connecting` through `Synchronizing` to `Ready`,
-  which it reaches only once all the host's values and objects have arrived.
+  connection to the host is up, so a join that fails leaves solo play as it was. Once the link is up the snapshot names
+  a placeholder session and `HasWorldAuthority` is false; it takes the host's own session id when the host accepts the
+  join. The state goes from `Connecting` through `Synchronizing` to `Ready`, which it reaches only once all the host's
+  values and objects have arrived.
 - **What replicates.** What a contract declares, and nothing else: `[ReplicatedState]` values, `[ReplicatedObject]`
   objects, commands with their confirmations, and presentation events, which reach players only once the host commits
   them. Unity objects, files, configuration and a mod's own fields stay in their process. Replicating the world itself,
