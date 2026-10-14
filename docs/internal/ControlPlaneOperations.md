@@ -157,8 +157,9 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 - **Vars.** Mint limits and the credential lifetime are vars in `wrangler.toml`, changed by pull request. Keep the
   top level, `env.staging` and `env.production` identical apart from `ENVIRONMENT`; a test enforces it.
 - **Dependencies.** Dependabot proposes npm updates for `services/control-plane` weekly, at least 14 days after
-  release. Wrangler and `@cloudflare/vitest-pool-workers` must move together. The pool package has since been renamed
-  `@cloudflare/vitest-plugin`; switch to it in a dedicated pull request.
+  release. Wrangler and `@cloudflare/vitest-plugin` must move together: the plugin depends on one exact Wrangler
+  release, and the service pins that same release so only one copy installs. The `sharp` override pins a patched
+  release over the vulnerable one Miniflare names; remove it once Miniflare names a patched release itself.
 
 ## 5. Rotating secrets
 
