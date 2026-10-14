@@ -155,6 +155,26 @@ export class SpendStore {
     );
   }
 
+  /**
+   * Records a credential the provider minted but the guard will not hand out: under its username, with nothing
+   * reserved, and marked for revocation.
+   */
+  withdrawCredential(provisional: string, username: string, expiresAt: number): void {
+    this.sql.exec(
+      "UPDATE credential SET username = ?, expires_at = ?, forget_at = ?, reserved_bytes = 0, revoke = MAX(revoke, 1) WHERE username = ?",
+      username,
+      expiresAt,
+      expiresAt + CREDENTIAL_MEMORY_SECONDS,
+      provisional,
+    );
+  }
+
+  /** Whether a credential row, provisional or confirmed, is marked for revocation or already revoked. */
+  isMarked(username: string): boolean {
+    const row = this.sql.exec<{ revoke: number }>("SELECT revoke FROM credential WHERE username = ?", username).toArray()[0];
+    return row !== undefined && row.revoke > 0;
+  }
+
   removeCredential(username: string): void {
     this.sql.exec("DELETE FROM credential WHERE username = ?", username);
   }
@@ -171,22 +191,33 @@ export class SpendStore {
     return this.sql.exec<{ total: number | null }>("SELECT SUM(reserved_bytes) AS total FROM credential WHERE expires_at > ?", since).one().total ?? 0;
   }
 
+  /** Credentials the provider still honours: minted, unexpired and not yet revoked. */
   activeCredentials(now: number): number {
-    return this.sql.exec<{ total: number }>("SELECT COUNT(*) AS total FROM credential WHERE expires_at > ? AND username NOT LIKE 'pending:%'", now).one().total;
+    return this.sql
+      .exec<{ total: number }>("SELECT COUNT(*) AS total FROM credential WHERE expires_at > ? AND revoke < 2 AND username NOT LIKE 'pending:%'", now)
+      .one().total;
   }
 
-  /** Marks every live, confirmed credential for revocation. */
+  /**
+   * Marks every live credential for revocation, including one still being minted: its mint sees the mark once the
+   * provider answers, and revokes the credential instead of handing it out.
+   */
   revokeAllLive(now: number): void {
-    this.sql.exec("UPDATE credential SET revoke = 1 WHERE expires_at > ? AND revoke = 0 AND username NOT LIKE 'pending:%'", now);
+    this.sql.exec("UPDATE credential SET revoke = 1 WHERE expires_at > ? AND revoke = 0", now);
   }
 
   markForRevocation(username: string): void {
     this.sql.exec("UPDATE credential SET revoke = 1 WHERE username = ? AND revoke = 0", username);
   }
 
+  /** Minted credentials marked for revocation and not yet revoked, soonest expiry first. */
   pendingRevocations(now: number, limit: number): string[] {
     return this.sql
-      .exec<{ username: string }>("SELECT username FROM credential WHERE revoke = 1 AND expires_at > ? ORDER BY expires_at LIMIT ?", now, limit)
+      .exec<{ username: string }>(
+        "SELECT username FROM credential WHERE revoke = 1 AND expires_at > ? AND username NOT LIKE 'pending:%' ORDER BY expires_at LIMIT ?",
+        now,
+        limit,
+      )
       .toArray()
       .map((row) => row.username);
   }

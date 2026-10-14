@@ -1,7 +1,8 @@
-import { createExecutionContext, createScheduledController, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, createScheduledController, runDurableObjectAlarm, runInDurableObject, waitOnExecutionContext } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
+import { REVOCATIONS_PER_PASS, REVOCATION_RETRY_SECONDS } from "../src/objects/spend-guard";
 import type { JsonObject } from "../src/shared/canonical-json";
 import { call, identity, register, type ApiResult } from "./support/api";
 import { useUpstream } from "./support/runtime";
@@ -56,6 +57,38 @@ async function runCron(): Promise<void> {
   const context = createExecutionContext();
   await worker.scheduled(createScheduledController({ scheduledTime: scenario.clock.now(), cron: "7 * * * *" }), env, context);
   await waitOnExecutionContext(context);
+}
+
+const spendGuard = () => env.SPEND_GUARD.get(env.SPEND_GUARD.idFromName("spend-guard"));
+const nextAlarm = () => runInDurableObject(spendGuard(), (_, state) => state.storage.getAlarm());
+const spendState = async () => (await admin("GET", "/v1/admin/state")).json["spend"] as Record<string, number>;
+/** The spend guard is one instance for every test; an alarm left from an earlier test's day would mask this test's. */
+const runStaleAlarm = async () => void (await runDurableObjectAlarm(spendGuard()));
+
+/** Starts a joiner's mint and holds it at the provider until `release` is called. */
+async function heldMint(serverId: string, ip: string): Promise<{ readonly response: Promise<ApiResult>; readonly release: () => void }> {
+  const joiner = await ticket(serverId);
+  let open: () => void = () => undefined;
+  scenario.relay.gate = new Promise((resolve) => (open = resolve));
+  const response = mint(serverId, joiner, ip);
+  await scenario.relay.mintsArrived(1);
+  return {
+    response,
+    release: () => {
+      scenario.relay.gate = null;
+      open();
+    },
+  };
+}
+
+/** A mint that was in flight when relay was switched off: refused, its credential revoked, and nothing charged. */
+async function expectWithdrawn(response: Promise<ApiResult>): Promise<void> {
+  const answer = await response;
+  expect(answer.status).toBe(503);
+  expect(answer.json["error"]).toMatchObject({ code: "relay-unavailable" });
+  expect(answer.text).not.toContain("test-credential-1");
+  expect(scenario.relay.revoked).toEqual(["test-user-1"]);
+  expect(await spendState()).toMatchObject({ mints: 0, reservedBytes: 0, activeCredentials: 0, pendingRevocations: 0 });
 }
 
 describe("relay credentials", () => {
@@ -180,6 +213,14 @@ describe("relay credentials", () => {
     expect((state.json["spend"] as Record<string, number>)["reservedBytes"]).toBe(5 * JOINER_RESERVATION);
   });
 
+  it("are refused, and revoked unseen, when an operator turns relay off while the provider is answering", async () => {
+    const session = await host("in-flight-feature", 2);
+    const held = await heldMint(session.serverId, "10.8.3.1");
+    await admin("PUT", "/v1/admin/features", { relay: false });
+    held.release();
+    await expectWithdrawn(held.response);
+  });
+
   it("are refused when relay is off and for a session that has ended", async () => {
     const session = await host("gone", 2);
     const joiner = await ticket(session.serverId);
@@ -202,6 +243,8 @@ describe("the kill switch", () => {
     expect(scenario.relay.revoked.sort()).toEqual(["test-user-1", "test-user-2"]);
     const refused = await mint(session.serverId, await ticket(session.serverId), "10.5.9.1");
     expect(refused.json["error"]).toMatchObject({ code: "relay-unavailable" });
+    // Refused before the provider is asked, so nothing is minted only to be revoked.
+    expect(scenario.relay.generateBodies).toHaveLength(2);
     const status = await call("GET", "/v1/status", { ip: scenario.otherIp });
     expect(status.json).toMatchObject({ killSwitch: true, features: { relay: false } });
     await admin("PUT", "/v1/admin/kill-switch", { engaged: false, note: null });
@@ -231,6 +274,66 @@ describe("the kill switch", () => {
     scenario.relay.failUsage = true;
     for (let run = 0; run < 3; run++) await runCron();
     expect((await admin("GET", "/v1/admin/state")).json["killSwitch"]).toMatchObject({ engaged: true, reason: "measurement-failed" });
+  });
+
+  it("revokes a credential whose mint was waiting on the provider when it engaged", async () => {
+    const session = await host("in-flight-manual", 2);
+    const held = await heldMint(session.serverId, "10.8.0.1");
+    expect((await admin("PUT", "/v1/admin/kill-switch", { engaged: true, note: "drill" })).status).toBe(200);
+    held.release();
+    await expectWithdrawn(held.response);
+  });
+
+  it("revokes such a credential when the hourly measurement trips it, too", async () => {
+    const session = await host("in-flight-cron", 2);
+    const held = await heldMint(session.serverId, "10.8.1.1");
+    scenario.relay.egressBytes = 2_000_000_000;
+    await runCron();
+    expect((await admin("GET", "/v1/admin/state")).json["killSwitch"]).toMatchObject({ engaged: true, reason: "spend-cap" });
+    held.release();
+    await expectWithdrawn(held.response);
+  });
+
+  it("revokes such a credential even when it was released again before the provider answered", async () => {
+    const session = await host("in-flight-released", 2);
+    const held = await heldMint(session.serverId, "10.8.2.1");
+    await admin("PUT", "/v1/admin/kill-switch", { engaged: true, note: null });
+    await admin("PUT", "/v1/admin/kill-switch", { engaged: false, note: null });
+    held.release();
+    await expectWithdrawn(held.response);
+  });
+
+  it("revokes every live credential promptly, a pass at a time, however many there are", async () => {
+    await runStaleAlarm();
+    const session = await host("many-live", 2);
+    // More than one pass's worth, minted through two tickets and five to a prefix, as the mint limits allow.
+    const live = REVOCATIONS_PER_PASS + 15;
+    const tickets = [await ticket(session.serverId), await ticket(session.serverId)];
+    for (let index = 0; index < live; index++) {
+      expect((await mint(session.serverId, tickets[index < 30 ? 0 : 1]!, `10.9.${Math.floor(index / 5)}.1`)).status).toBe(201);
+    }
+    await admin("PUT", "/v1/admin/kill-switch", { engaged: true, note: null });
+    // The engaging request runs the first pass itself, and the next is due at once rather than a minute later.
+    expect(scenario.relay.revoked).toHaveLength(REVOCATIONS_PER_PASS);
+    expect(await nextAlarm()).toBe(scenario.clock.now());
+    expect(await runDurableObjectAlarm(spendGuard())).toBe(true);
+    expect(new Set(scenario.relay.revoked).size).toBe(live);
+    expect(await spendState()).toMatchObject({ activeCredentials: 0, pendingRevocations: 0 });
+  });
+
+  it("waits a minute before trying again when the provider refuses every revocation in a pass", async () => {
+    await runStaleAlarm();
+    const session = await host("revoke-retry", 2);
+    expect((await mint(session.serverId, await ticket(session.serverId), "10.9.20.1")).status).toBe(201);
+    scenario.relay.failRevoke = true;
+    await admin("PUT", "/v1/admin/kill-switch", { engaged: true, note: null });
+    expect(scenario.relay.revoked).toEqual([]);
+    expect(await spendState()).toMatchObject({ activeCredentials: 1, pendingRevocations: 1 });
+    expect(await nextAlarm()).toBe(scenario.clock.now() + REVOCATION_RETRY_SECONDS * 1000);
+    scenario.relay.failRevoke = false;
+    expect(await runDurableObjectAlarm(spendGuard())).toBe(true);
+    expect(scenario.relay.revoked).toEqual(["test-user-1"]);
+    expect(await spendState()).toMatchObject({ activeCredentials: 0, pendingRevocations: 0 });
   });
 
   it("is left alone by a measurement under the cap, which instead revokes a credential relaying far past its plan", async () => {

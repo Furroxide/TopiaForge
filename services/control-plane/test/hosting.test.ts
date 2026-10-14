@@ -1,7 +1,9 @@
 import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { call, identity, register, registrationBody, registrationProof, signedDescriptor, type HostIdentity } from "./support/api";
+import { handle } from "../src/index";
+import { inviteShardName } from "../src/objects/invite-shard";
+import { ORIGIN, call, identity, register, registrationBody, registrationProof, signedDescriptor, type HostIdentity } from "./support/api";
 import { endScenario, startScenario, type Scenario } from "./support/scenario";
 
 let scenario: Scenario;
@@ -164,6 +166,9 @@ describe("the session alarm", () => {
     const shard = env.DIRECTORY_SHARDS.get(env.DIRECTORY_SHARDS.idFromName(`directory/2545/1/${parseInt(host.serverId[0]!, 16)}`));
     const rows = await runInDurableObject(shard, (_, state) => state.storage.sql.exec("SELECT server_id FROM listing WHERE server_id = ?", host.serverId).toArray());
     expect(rows).toEqual([]);
+    // The invite index forgets the code too, not only the session: it keeps a code no longer than its session.
+    const invites = env.INVITE_SHARDS.get(env.INVITE_SHARDS.idFromName(inviteShardName(code)));
+    expect(await runInDurableObject(invites, (_, state) => state.storage.sql.exec("SELECT code FROM invite WHERE code = ?", code).toArray())).toEqual([]);
   });
 
   it("leaves a heartbeating session alone", async () => {
@@ -217,6 +222,23 @@ describe("descriptor updates, ending and re-registration", () => {
     const view = await call("GET", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token: second.token });
     expect(view.status).toBe(200);
     expect((view.json["invites"] as Record<string, string>[]).map((invite) => invite["code"])).toEqual([code]);
+  });
+
+  it("refuse a body on every request that takes none, so nothing a client sends is silently dropped", async () => {
+    const host = await identity("bodiless");
+    const { token } = await register(host, scenario.ip);
+    const ended = await call("DELETE", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token, body: {} });
+    expect(ended.status).toBe(400);
+    expect(ended.json["error"]).toMatchObject({ code: "invalid-request" });
+    expect((await call("GET", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token })).status).toBe(200);
+    // Fetch cannot send a GET with a body, so a declared length stands in for one.
+    for (const path of [`/v1/hosts/${host.serverId}`, "/v1/servers?build=2545&protocol=1", `/v1/servers/${host.serverId}`, `/v1/signal/${host.serverId}`, "/v1/status"]) {
+      const headers = { "content-length": "2", "cf-connecting-ip": scenario.ip, authorization: `Bearer ${token}`, upgrade: "websocket" };
+      const response = await handle(new Request(`${ORIGIN}${path}`, { headers }), env);
+      expect(response.status, path).toBe(400);
+      await response.body?.cancel();
+    }
+    expect((await call("DELETE", `/v1/hosts/${host.serverId}`, { ip: scenario.ip, token })).status).toBe(204);
   });
 
   it("start afresh when an expired session was never swept, so old invites do not carry over", async () => {

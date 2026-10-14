@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatIp, isLocalOnly, normalizeIp, parseIp, prefixBucket } from "../src/shared/ip";
+import { formatIp, inRanges, isLocalOnly, normalizeIp, ownScope, parseIp, parseIpRanges, prefixBucket } from "../src/shared/ip";
 import { serviceKeys } from "../src/shared/keys";
 import {
   CHALLENGE_TTL_SECONDS,
   bearer,
   hostTokenHash,
   issueChallenge,
+  inviteHash,
   issueJoinTicket,
   newHostToken,
   readChallenge,
@@ -87,6 +88,58 @@ describe("addresses", () => {
     }
     expect(formatIp(parseIp("::ffff:10.0.0.1")!)).toBe("10.0.0.1");
   });
+
+  it("scope an own address as the whole IPv4 address or the IPv6 /64", () => {
+    expect(ownScope(parseIp("198.51.100.7")!)).toBe("v4:198.51.100.7");
+    expect(ownScope(parseIp("::ffff:198.51.100.7")!)).toBe("v4:198.51.100.7");
+    expect(ownScope(parseIp("198.51.100.8")!)).not.toBe(ownScope(parseIp("198.51.100.7")!));
+    expect(ownScope(parseIp("2001:db8:1:2::10")!)).toBe("v6/64:20010db800010002");
+    expect(ownScope(parseIp("2001:db8:1:2:ffff:ffff:ffff:abcd")!)).toBe(ownScope(parseIp("2001:db8:1:2::10")!));
+    expect(ownScope(parseIp("2001:db8:1:3::10")!)).not.toBe(ownScope(parseIp("2001:db8:1:2::10")!));
+  });
+});
+
+describe("address ranges", () => {
+  it("read space-separated CIDR blocks and match addresses of either family against them", () => {
+    const ranges = parseIpRanges("198.51.100.0/24 104.16.0.0/13 2001:db8::/32 2a06:98c0::/29")!;
+    expect(ranges).toHaveLength(4);
+    for (const inside of ["198.51.100.0", "198.51.100.255", "104.23.255.255", "::ffff:104.16.0.1", "2001:db8:ffff::1", "2a06:98c7:ffff::1"]) {
+      expect(inRanges(parseIp(inside)!, ranges), inside).toBe(true);
+    }
+    for (const outside of ["198.51.101.0", "104.24.0.0", "104.15.255.255", "2001:db9::1", "2a06:98c8::1", "2a06:98bf::1"]) {
+      expect(inRanges(parseIp(outside)!, ranges), outside).toBe(false);
+    }
+    expect(inRanges(parseIp("198.51.100.1")!, [])).toBe(false);
+  });
+
+  it("refuse any list that is not exactly right, so a typo can only allow less", () => {
+    for (const text of [
+      "",
+      " 198.51.100.0/24",
+      "198.51.100.0/24 ",
+      "198.51.100.0/24  2001:db8::/32",
+      "198.51.100.0/24,2001:db8::/32",
+      "198.51.100.1/24",
+      "198.51.100.0/33",
+      "198.51.100.0/7",
+      "0.0.0.0/8",
+      "10.0.0.0/8",
+      "198.51.100.0/024",
+      "198.51.100.0",
+      "2001:DB8::/32",
+      "2001:db8:0::/32",
+      "2001:db8::/15",
+      "2001:db8::/129",
+      "fc00::/7",
+      "::ffff:198.51.100.0/120",
+      "2001:db8::/32/1",
+      Array.from({ length: 65 }, (_, index) => `198.51.${index}.0/24`).join(" "),
+      undefined,
+      42,
+    ]) {
+      expect(parseIpRanges(text), String(text)).toBeNull();
+    }
+  });
 });
 
 describe("credentials", () => {
@@ -103,16 +156,25 @@ describe("credentials", () => {
     expect(await readChallenge(keys.challenge, tampered, signingKey, 1000)).toBeNull();
   });
 
-  it("issue join tickets that carry their facts under a MAC", async () => {
+  it("issue join tickets that carry their session, invite and facts under a MAC", async () => {
     const keys = (await serviceKeys(SERVICE_KEY))!;
-    const ticket = { serverId: "a".repeat(64), ticketId: "b".repeat(32), expiresAt: 5000, relayOnly: true };
+    const invite = await inviteHash(keys.invite, "RJ9JMV1V09");
+    expect(invite).toMatch(/^[0-9a-f]{32}$/);
+    expect(await inviteHash(keys.invite, "RJ9JMV1V08")).not.toBe(invite);
+    const ticket = { serverId: "a".repeat(64), epoch: "c".repeat(32), ticketId: "b".repeat(32), invite, expiresAt: 5000, relayOnly: true };
     const text = await issueJoinTicket(keys.ticket, ticket);
+    expect(text).toMatch(/^tfj1_[A-Za-z0-9_-]{142}$/);
     expect(await readJoinTicket(keys.ticket, text, 4999)).toEqual(ticket);
     expect(await readJoinTicket(keys.ticket, text, 5000)).toBeNull();
     expect(await readJoinTicket(keys.challenge, text, 1)).toBeNull();
-    const body = parseBase64Url(text.slice(5), 74)!;
-    body[57] = 0;
-    expect(await readJoinTicket(keys.ticket, `tfj1_${toBase64Url(body)}`, 1)).toBeNull();
+    const withoutInvite = { ...ticket, invite: null, relayOnly: false };
+    expect(await readJoinTicket(keys.ticket, await issueJoinTicket(keys.ticket, withoutInvite), 1)).toEqual(withoutInvite);
+    // Every byte is covered by the MAC: the epoch, the invite hash and the flags among them.
+    for (const offset of [40, 70, 89]) {
+      const body = parseBase64Url(text.slice(5), 106)!;
+      body[offset] = body[offset]! ^ 1;
+      expect(await readJoinTicket(keys.ticket, `tfj1_${toBase64Url(body)}`, 1), String(offset)).toBeNull();
+    }
   });
 
   it("hash only well-formed host tokens and read only bearer credentials", async () => {

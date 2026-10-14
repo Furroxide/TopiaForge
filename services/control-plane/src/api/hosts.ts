@@ -12,7 +12,7 @@ import { concatBytes, parseBase64Url, utf8 } from "../shared/wire-text";
 import type { InviteRow } from "../objects/host-store";
 import { HEARTBEAT_SECONDS, LISTING_TTL_SECONDS, MAXIMUM_INVITE_SECONDS, MINIMUM_INVITE_SECONDS, type Outcome } from "../objects/host-session";
 import type { RequestContext } from "./context";
-import { ApiError, emptyResponse, jsonResponse, readJsonBody } from "./http";
+import { ApiError, emptyResponse, jsonResponse, readJsonBody, requireNoBody } from "./http";
 import { expectBoolean, expectInteger, expectObject, expectString } from "./validate";
 
 const REGISTRATION_LABEL = utf8("TopiaForge host registration v1\n");
@@ -85,6 +85,7 @@ export async function register(context: RequestContext): Promise<Response> {
 }
 
 export async function hostView(context: RequestContext, serverId: string): Promise<Response> {
+  requireNoBody(context.request);
   const tokenHash = await hostToken(context);
   const view = unwrap(await context.hostSession(serverId).view(serverId, tokenHash));
   return jsonResponse(200, {
@@ -125,6 +126,7 @@ export async function updateDescriptor(context: RequestContext, serverId: string
 }
 
 export async function endHost(context: RequestContext, serverId: string): Promise<Response> {
+  requireNoBody(context.request);
   const tokenHash = await hostToken(context);
   unwrap(await context.hostSession(serverId).end(serverId, tokenHash));
   return emptyResponse();
@@ -139,8 +141,11 @@ export async function createInvite(context: RequestContext, serverId: string): P
   return jsonResponse(201, { invite: inviteJson(invite) });
 }
 
-export async function revokeInvite(context: RequestContext, serverId: string, code: string): Promise<Response> {
+/** Withdraws one of the session's invites. The code travels in the body, so it never appears in a URL. */
+export async function revokeInvite(context: RequestContext, serverId: string): Promise<Response> {
   const tokenHash = await hostToken(context);
+  const body = expectObject(await readJsonBody(context.request, SMALL_BODY_BYTES), ["code"]);
+  const code = expectString(body["code"], undefined, 64);
   if (!isCanonicalInviteCode(code)) throw new ApiError("not-found");
   unwrap(await context.hostSession(serverId).revokeInvite(serverId, tokenHash, code));
   return emptyResponse();

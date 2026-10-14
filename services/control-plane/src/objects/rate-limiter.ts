@@ -10,7 +10,7 @@ import type { Env } from "../env";
 import { clock, nowSeconds } from "../shared/runtime";
 import { ensureCounterTable, evaluate, increment, nextCounterExpiry, purgeCounters, type BucketKeys, type WindowRule, type WindowVerdict } from "./windows";
 
-export type LimitMode = "consume" | "check" | "record";
+export type LimitMode = "consume" | "refund";
 
 export interface LimitRequest {
   readonly scope: string;
@@ -19,8 +19,8 @@ export interface LimitRequest {
   /** The time the keys were derived for. */
   readonly at: number;
   /**
-   * `consume` counts one event if it fits, `check` only asks whether one more would fit, and `record` counts one event
-   * unconditionally (the invite miss limiter checks before a lookup and records only misses).
+   * `consume` counts one event if it fits under every rule, in the same step as the check, so concurrent requests can
+   * never all fit. `refund` gives one back: an invite lookup holds a miss slot while it runs and returns it on a hit.
    */
   readonly mode: LimitMode;
 }
@@ -37,9 +37,12 @@ export class RateLimiter extends DurableObject<Env> {
 
   async limit(request: LimitRequest): Promise<WindowVerdict> {
     purgeCounters(this.sql, nowSeconds());
-    let verdict: WindowVerdict = { allowed: true, retryAfterSeconds: 0 };
-    if (request.mode !== "record") verdict = evaluate(this.sql, request.scope, request.keys, request.rules, 1, request.at);
-    if (request.mode === "record" || (request.mode === "consume" && verdict.allowed)) {
+    if (request.mode === "refund") {
+      increment(this.sql, request.scope, request.keys, request.rules, -1, request.at);
+      return { allowed: true, retryAfterSeconds: 0 };
+    }
+    const verdict = evaluate(this.sql, request.scope, request.keys, request.rules, 1, request.at);
+    if (verdict.allowed) {
       increment(this.sql, request.scope, request.keys, request.rules, 1, request.at);
       await this.scheduleCleanup();
     }

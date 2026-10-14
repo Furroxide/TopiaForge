@@ -10,9 +10,9 @@ import type { HostSession } from "../objects/host-session";
 import { inviteShardName, type InviteShard } from "../objects/invite-shard";
 import type { LimitMode, RateLimiter } from "../objects/rate-limiter";
 import type { Flags, SpendGuard } from "../objects/spend-guard";
-import type { BucketKeys, WindowRule } from "../objects/windows";
+import type { BucketKeys, WindowRule, WindowVerdict } from "../objects/windows";
 import { hmac, hmacHex, serviceKeys, type ServiceKeys } from "../shared/keys";
-import { formatIp, parseIp, prefixBucket, type IpAddress } from "../shared/ip";
+import { ownScope, parseIp, prefixBucket, type IpAddress } from "../shared/ip";
 import { clock } from "../shared/runtime";
 import { utf8 } from "../shared/wire-text";
 import { ApiError } from "./http";
@@ -55,10 +55,19 @@ export class RequestContext {
     return parseIp(this.request.headers.get("cf-connecting-ip"));
   }
 
-  /** The keyed fingerprint of the caller's full address, used only to recognize it in its own signaling. */
+  /**
+   * The keyed fingerprint of the caller's own address scope (its IPv4 address or its IPv6 /64), used only to recognize
+   * it in the caller's own signaling candidates.
+   */
   async selfFingerprint(): Promise<string | null> {
     const address = this.clientAddress();
-    return address === null ? null : hmacHex((await this.keys()).self, formatIp(address));
+    return address === null ? null : hmacHex((await this.keys()).self, ownScope(address));
+  }
+
+  /** The keyed fingerprint of the caller's /24 or /56, which a signaling room counts its sockets by. */
+  async sourceFingerprint(): Promise<string> {
+    const address = this.clientAddress();
+    return hmacHex((await this.keys()).self, `source v1|${address === null ? "unknown" : prefixBucket(address)}`);
   }
 
   /** This hour's and the previous hour's rate-limit keys for the caller's /24 or /56, and its limiter shard. */
@@ -80,12 +89,21 @@ export class RequestContext {
     return this.bucketPromise;
   }
 
-  /** Applies a per-prefix limit and throws `rate-limited` when it refuses. */
-  async limit(scope: string, rules: readonly WindowRule[], mode: LimitMode = "consume"): Promise<void> {
+  /** Counts one request against a per-prefix limit, in the same step as the check; throws `rate-limited` when it refuses. */
+  async limit(scope: string, rules: readonly WindowRule[]): Promise<void> {
+    const verdict = await this.limiter(scope, rules, "consume");
+    if (!verdict.allowed) throw new ApiError("rate-limited", verdict.retryAfterSeconds);
+  }
+
+  /** Gives back one request this request counted with `limit`, in the same windows. */
+  async refund(scope: string, rules: readonly WindowRule[]): Promise<void> {
+    await this.limiter(scope, rules, "refund");
+  }
+
+  private async limiter(scope: string, rules: readonly WindowRule[], mode: LimitMode): Promise<WindowVerdict> {
     const { keys, shard } = await this.bucket();
     const stub = this.env.RATE_LIMITER.get(this.env.RATE_LIMITER.idFromName(`rate/${shard}`)) as DurableObjectStub<RateLimiter>;
-    const verdict = await stub.limit({ scope, keys, rules, at: this.at, mode });
-    if (!verdict.allowed) throw new ApiError("rate-limited", verdict.retryAfterSeconds);
+    return stub.limit({ scope, keys, rules, at: this.at, mode });
   }
 
   /** Feature flags and the kill switch, cached in the isolate for FLAG_CACHE_SECONDS. */

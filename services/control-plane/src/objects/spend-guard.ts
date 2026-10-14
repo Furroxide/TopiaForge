@@ -9,12 +9,17 @@
  * - the day: today's measured egress plus every reservation not yet measured stays under TURN_DAILY_CAP_GB.
  * A failed mint refunds all of it. The hourly measurement reads real egress: at the daily cap it trips the kill switch,
  * after repeated failures to measure it trips it too, and a credential that relays well past its reservation is
- * revoked and its ticket blocked. Tripping the switch revokes every live credential.
+ * revoked and its ticket blocked.
+ *
+ * Tripping the switch revokes every live credential, including one whose mint is still waiting on the provider: a mint
+ * looks again once the provider answers, and if the relay was switched off meanwhile it revokes the new credential and
+ * answers relay-unavailable. Revocation runs in passes small enough for one Worker invocation's subrequests; a pass
+ * that makes progress is followed at once by the next, through the alarm.
  */
 import { DurableObject } from "cloudflare:workers";
 import { readConfig, type RelayProvider } from "../config";
 import type { Env } from "../env";
-import type { IceServer } from "../relay/turn-api";
+import type { IceServer, MintedCredentials } from "../relay/turn-api";
 import { generateIceServers, revokeCredential } from "../relay/turn-api";
 import { readTurnUsage } from "../relay/usage-api";
 import { clock, entropy, nowSeconds } from "../shared/runtime";
@@ -24,7 +29,12 @@ import { evaluate, increment, type BucketKeys, type WindowRule } from "./windows
 
 /** Analytics trail real usage; credentials that expired this long before a measurement count as measured. */
 export const MEASUREMENT_LATENCY_SECONDS = 15 * 60;
-const REVOCATIONS_PER_RUN = 50;
+/** Provider calls in one revocation pass, inside the smallest per-invocation subrequest limit Workers apply (50). */
+export const REVOCATIONS_PER_PASS = 40;
+/** Revocations in flight at once; a Worker invocation keeps at most six connections open. */
+const CONCURRENT_REVOCATIONS = 6;
+/** How long a pass that revoked nothing waits before the next try. */
+export const REVOCATION_RETRY_SECONDS = 60;
 const MAXIMUM_NOTE_LENGTH = 200;
 
 export interface Flags {
@@ -82,8 +92,13 @@ export class SpendGuard extends DurableObject<Env> {
   }
 
   async setKillSwitch(engaged: boolean, note: string | null): Promise<Flags> {
-    if (engaged) await this.engage("manual", note);
-    else this.store.setKillSwitch({ engaged: false, reason: null, since: null, note: null });
+    if (!engaged) {
+      this.store.setKillSwitch({ engaged: false, reason: null, since: null, note: null });
+      return this.flags();
+    }
+    this.trip("manual", note);
+    const provider = readConfig(this.env).provider;
+    await this.scheduleAlarm(provider !== null && (await this.revokePass(provider)));
     return this.flags();
   }
 
@@ -116,19 +131,33 @@ export class SpendGuard extends DurableObject<Env> {
     this.store.chargeDay(utcDay(now), 1, reservation, now);
     this.store.addCredential(provisional, request.ticket, reservation, now + limits.credentialTtlSeconds);
 
-    try {
-      const minted = await generateIceServers(provider, limits.credentialTtlSeconds);
-      const expiresAt = nowSeconds() + limits.credentialTtlSeconds;
-      this.store.confirmCredential(provisional, minted.username, expiresAt);
-      await this.scheduleAlarm();
-      return { ok: true, iceServers: minted.iceServers, expiresAt };
-    } catch {
+    const refund = (): void => {
       increment(this.ctx.storage.sql, "mint", request.keys, rules, -1, request.at);
       this.store.chargeTicket(request.ticket, -1, -reservation, forgetAt);
       this.store.chargeDay(utcDay(now), -1, -reservation, now);
+    };
+    let minted: MintedCredentials;
+    try {
+      minted = await generateIceServers(provider, limits.credentialTtlSeconds);
+    } catch {
+      refund();
       this.store.removeCredential(provisional);
       return { ok: false, error: "upstream-failed" };
     }
+    const expiresAt = nowSeconds() + limits.credentialTtlSeconds;
+    // The relay may have been switched off while the provider answered: the kill switch marks credentials still being
+    // minted, and the feature flag or the switch may read differently now. Such a credential is never handed out.
+    const after = this.flags();
+    if (this.store.isMarked(provisional) || !after.features.relay || after.killSwitch.engaged) {
+      refund();
+      this.store.withdrawCredential(provisional, minted.username, expiresAt);
+      if (await revokeCredential(provider, minted.username)) this.store.markRevoked(minted.username);
+      await this.scheduleAlarm(false);
+      return { ok: false, error: "relay-unavailable" };
+    }
+    this.store.confirmCredential(provisional, minted.username, expiresAt);
+    await this.scheduleAlarm(false);
+    return { ok: true, iceServers: minted.iceServers, expiresAt };
   }
 
   /** The hourly measurement, also run on demand by an admin. */
@@ -137,6 +166,7 @@ export class SpendGuard extends DurableObject<Env> {
     const now = nowSeconds();
     this.store.purge(now);
     const provider = config.provider;
+    let progressed = false;
     if (provider !== null) {
       const previous = this.store.measurement();
       try {
@@ -151,16 +181,16 @@ export class SpendGuard extends DurableObject<Env> {
             this.store.blockTicket(credential.ticket);
           }
         }
-        if (usage.egressBytes >= provider.dailyCapBytes) await this.engage("spend-cap", null);
+        if (usage.egressBytes >= provider.dailyCapBytes) this.trip("spend-cap", null);
       } catch {
         const failures = previous.failures + 1;
         this.store.setMeasurement({ ...previous, failures, lastFailureAt: now });
         const limit = config.limits.measurementFailureLimit;
-        if (limit > 0 && failures >= limit) await this.engage("measurement-failed", null);
+        if (limit > 0 && failures >= limit) this.trip("measurement-failed", null);
       }
-      await this.revokePending(provider);
+      progressed = await this.revokePass(provider);
     }
-    await this.scheduleAlarm();
+    await this.scheduleAlarm(progressed);
     return this.report();
   }
 
@@ -186,8 +216,7 @@ export class SpendGuard extends DurableObject<Env> {
     this.alarmAt = null;
     this.store.purge(nowSeconds());
     const provider = readConfig(this.env).provider;
-    if (provider !== null) await this.revokePending(provider);
-    await this.scheduleAlarm();
+    await this.scheduleAlarm(provider !== null && (await this.revokePass(provider)));
   }
 
   /** Today's measured egress plus every reservation the latest measurement cannot have seen yet. */
@@ -205,29 +234,44 @@ export class SpendGuard extends DurableObject<Env> {
     return measurement.day === utcDay(now) ? measurement.egressBytes : 0;
   }
 
-  private async engage(reason: KillReason, note: string | null): Promise<void> {
+  /** Engages the kill switch and marks every live credential for revocation, those still being minted included. */
+  private trip(reason: KillReason, note: string | null): void {
     const now = nowSeconds();
-    const current = this.store.killSwitch();
-    if (!current.engaged) {
+    if (!this.store.killSwitch().engaged) {
       const trimmed = note === null ? null : note.slice(0, MAXIMUM_NOTE_LENGTH);
       this.store.setKillSwitch({ engaged: true, reason, since: now, note: trimmed });
     }
     this.store.revokeAllLive(now);
-    const provider = readConfig(this.env).provider;
-    if (provider !== null) await this.revokePending(provider);
-    await this.scheduleAlarm();
   }
 
-  private async revokePending(provider: RelayProvider): Promise<void> {
-    for (const username of this.store.pendingRevocations(nowSeconds(), REVOCATIONS_PER_RUN)) {
-      if (await revokeCredential(provider, username)) this.store.markRevoked(username);
+  /**
+   * One revocation pass: up to REVOCATIONS_PER_PASS marked credentials, CONCURRENT_REVOCATIONS at a time. Passes chain
+   * through the alarm, which gives each its own invocation. True when the pass revoked anything.
+   */
+  private async revokePass(provider: RelayProvider): Promise<boolean> {
+    const batch = this.store.pendingRevocations(nowSeconds(), REVOCATIONS_PER_PASS);
+    let revoked = 0;
+    for (let start = 0; start < batch.length; start += CONCURRENT_REVOCATIONS) {
+      const group = batch.slice(start, start + CONCURRENT_REVOCATIONS);
+      const results = await Promise.all(group.map((username) => revokeCredential(provider, username)));
+      results.forEach((done, index) => {
+        if (!done) return;
+        this.store.markRevoked(group[index]!);
+        revoked++;
+      });
     }
+    return revoked > 0;
   }
 
-  private async scheduleAlarm(): Promise<void> {
+  /**
+   * The next alarm: when a row falls due for deletion, or when revocations are still owed. After a pass that made
+   * progress the next pass runs at once; after one that made none, REVOCATION_RETRY_SECONDS later.
+   */
+  private async scheduleAlarm(progressed: boolean): Promise<void> {
     const now = nowSeconds();
     const due = this.store.nextDue();
-    const retry = this.store.pendingRevocations(now, 1).length > 0 ? now + 60 : null;
+    const owed = this.store.pendingRevocations(now, 1).length > 0;
+    const retry = owed ? (progressed ? now : now + REVOCATION_RETRY_SECONDS) : null;
     const next = [due, retry].filter((value): value is number => value !== null);
     if (next.length === 0) return;
     const at = Math.max(Math.min(...next) * 1000, clock.now());

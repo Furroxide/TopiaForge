@@ -1,12 +1,13 @@
 /**
  * Signaling upgrades and relay credentials. Both are open to either side of a session: the host with its session
- * token, a joining player with a join ticket for that server.
+ * token, a joining player with a join ticket for that server. The host session decides whether a ticket still holds:
+ * it must be from the session's own epoch, and its invite, if it had one, must still be live.
  */
 import type { JoinTicket } from "../shared/tokens";
 import { JOIN_TICKET_PREFIX, JOIN_TICKET_TTL_SECONDS, bearer, hostTokenHash, readJoinTicket } from "../shared/tokens";
 import type { RequestContext } from "./context";
 import { unwrap } from "./hosts";
-import { ApiError, jsonResponse, readJsonBody } from "./http";
+import { ApiError, jsonResponse, readJsonBody, requireNoBody } from "./http";
 import { SERVER_ID_PATTERN, expectObject, expectString } from "./validate";
 
 export const SIGNAL_LIMITS = [
@@ -17,12 +18,13 @@ export const SIGNAL_LIMITS = [
 type Side = { readonly kind: "host"; readonly tokenHash: string } | { readonly kind: "join"; readonly ticket: JoinTicket };
 
 export async function openSignaling(context: RequestContext, serverId: string): Promise<Response> {
+  requireNoBody(context.request);
   if (context.request.headers.get("upgrade")?.toLowerCase() !== "websocket") throw new ApiError("invalid-request");
   await context.requireFeature("signaling");
   await context.limit("signal", SIGNAL_LIMITS);
   const side = await authenticate(context, serverId);
   // A fresh request carries only what the session needs; nothing the client sent passes through unchecked.
-  const headers = new Headers({ upgrade: "websocket", "x-signal-server": serverId });
+  const headers = new Headers({ upgrade: "websocket", "x-signal-server": serverId, "x-signal-source": await context.sourceFingerprint() });
   const self = await context.selfFingerprint();
   if (self !== null) headers.set("x-signal-self", self);
   if (side.kind === "host") {
@@ -33,6 +35,8 @@ export async function openSignaling(context: RequestContext, serverId: string): 
     headers.set("x-signal-peer", side.ticket.ticketId.slice(0, 16));
     headers.set("x-signal-relay-only", side.ticket.relayOnly ? "1" : "0");
     headers.set("x-signal-ticket-expires", String(side.ticket.expiresAt));
+    headers.set("x-signal-epoch", side.ticket.epoch);
+    if (side.ticket.invite !== null) headers.set("x-signal-invite", side.ticket.invite);
   }
   const response = await context.hostSession(serverId).fetch(new Request("https://host-session.internal/signal", { headers }));
   if (response.status === 101) return response;
@@ -46,7 +50,11 @@ export async function mintRelayCredentials(context: RequestContext): Promise<Res
   const flags = await context.flags();
   if (!flags.features.relay || flags.killSwitch.engaged || context.config.provider === null) throw new ApiError("relay-unavailable");
   const side = await authenticate(context, serverId);
-  const grant = unwrap(await context.hostSession(serverId).relayGrant(serverId, side.kind === "host" ? side.tokenHash : null));
+  const grant = unwrap(
+    await context
+      .hostSession(serverId)
+      .relayGrant(serverId, side.kind === "host" ? { kind: "host", tokenHash: side.tokenHash } : { kind: "join", epoch: side.ticket.epoch, invite: side.ticket.invite }),
+  );
   const { keys } = await context.bucket();
   const outcome = await context.spendGuard().mint({
     ticket: side.kind === "host" ? `host:${side.tokenHash.slice(0, 32)}` : `join:${side.ticket.ticketId}`,

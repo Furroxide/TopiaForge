@@ -27,7 +27,7 @@ nothing here redefines them. How the service is deployed and operated is in
   | Credential | Shape | Issued by | Used for |
   | --- | --- | --- | --- |
   | Host session token | `tfh1_` + 43 base64url characters | `POST /v1/hosts` | The host's own endpoints, signaling as host, relay as host |
-  | Join ticket | `tfj1_` + 99 base64url characters | `POST /v1/join-tickets` | Signaling as a peer, relay as a peer |
+  | Join ticket | `tfj1_` + 142 base64url characters | `POST /v1/join-tickets` | Signaling as a peer, relay as a peer |
   | Admin token | Set by the operator | — | `/v1/admin` |
 
   Clients treat tokens, tickets and challenges as opaque strings. The service keeps only a hash of a session token.
@@ -93,8 +93,9 @@ new invites an hour.
 {"api":1,"features":{"hosting":true,"invites":true,"relay":true,"signaling":true},"hosting":{"heartbeatSeconds":30,"listingTtlSeconds":90},"killSwitch":false,"relay":{"credentialTtlSeconds":600},"schema":"topiaforge.control-plane-status/1"}
 ```
 
-- `features.relay` is false when relay is turned off, when the kill switch is engaged, or when the deployment has no
-  relay provider configured. A client then offers direct and LAN play only, and says why.
+- `features.relay` is false when relay is turned off, when the kill switch is engaged, or when the deployment's relay
+  provider is not fully configured: its TURN key, its spend ceilings and its relay address ranges. A client then offers
+  direct and LAN play only, and says why.
 - `killSwitch` is true while relay minting is halted for spend safety.
 
 ## 3. Hosting
@@ -131,8 +132,10 @@ accepted once.
 
 - `listed` says whether a public server made it into the directory; a full directory shard refuses new listings
   without refusing the session.
-- Registering again with the same key replaces the session token and keeps the session's live invites. A session
-  whose heartbeats had stopped is ended first, so its invites do not carry over.
+- Registering again with the same key replaces the session token and keeps the session: its live invites and the join
+  tickets issued for it stay valid. Host signaling sockets opened with the old token close (4409) as soon as the new
+  registration is saved, and none can open with it afterwards, so the new `relayOnly` holds from then on. A session
+  whose heartbeats had stopped is ended first, so its invites and tickets do not carry over.
 - An operator's hold answers `403 server-blocked`.
 
 ### 3.3 Heartbeat
@@ -159,10 +162,13 @@ and its `topiaforge://join/<code>` link.
 - Registration creates the session's first invite, valid for seven days or until the session ends.
 - `POST /v1/hosts/{serverId}/invites`, host token, body `{"ttlSeconds":N}` with five minutes to seven days: `201`
   `{"invite":…}`. A session holds at most eight live invites.
-- `DELETE /v1/hosts/{serverId}/invites/{code}`, host token, canonical code: `204`, or `404` when it is not this
-  session's.
+- `POST /v1/hosts/{serverId}/invites/revoke`, host token, body `{"code":"<canonical code>"}`: `204`, or `404` when it
+  is not one of this session's live invites. The code travels in the body, so it never appears in a URL. The service
+  withdraws the code from its invite index before it forgets it: if the index cannot be reached, the request fails with
+  `500`, the invite stays live everywhere, and the host tries again.
 
-Every invite dies with its session.
+Every invite dies with its session. Withdrawing an invite, or its expiry, also ends the join tickets issued with it
+(section 5.2).
 
 ## 4. Server browser
 
@@ -197,8 +203,8 @@ require before using its transport key.
 `POST /v1/invites/resolve`, no credential, body `{"code":"<text>"}`. The code is read forgivingly
 (MultiplayerLiveSessions.md, section 4), so a client may pass what the player typed.
 
-`200` `{"descriptor":…,"descriptorSha256":…,"listing":…,"serverId":…}`. The call is a POST so that codes never appear
-in a URL.
+`200` `{"descriptor":…,"descriptorSha256":…,"listing":…,"serverId":…}`. A code resolves only while it is one of a live
+session's own live invites. The call is a POST so that codes never appear in a URL.
 
 ### 5.2 Join tickets
 
@@ -211,12 +217,28 @@ in a URL.
 
 `201` `{"expiresAt":…,"hostRelayOnly":…,"relayOnly":…,"serverId":…,"ticket":"tfj1_…"}`. A ticket lasts six hours.
 
+A ticket also carries, under its MAC, the host session it was issued for and a keyed hash of the invite it was issued
+with, and it holds only while that admission still would:
+
+- **The same session.** A host that ends its session, or lets it lapse, and registers again starts a new session, in
+  which earlier tickets open nothing. Registering again while the session is live keeps it (section 3.2).
+- **A ticket issued with an invite** holds while that invite is live. Withdrawing the invite, or its expiry, ends the
+  ticket, on a public server as on an invite-only one.
+- **A ticket issued without an invite** holds while the server stays public.
+
+The service checks this whenever a ticket opens a signaling socket or mints relay credentials, and answers `401` once it
+no longer holds: the player asks for a new ticket. It also closes the ticket's open signaling socket with 4403. A
+relayed player whose ticket stops holding cannot renew its relay credentials, so its relayed path ends when its current
+credential expires.
+
 ## 6. One answer for every miss
 
 Invite resolution and join tickets give the identical `404` for an unknown, malformed, revoked or expired code, for a
 code of another server, and for a server that has gone: same status, headers and body. Every miss counts against the
-caller's prefix. Once a prefix has missed ten times in a minute or thirty in an hour, its invite resolutions and join
-tickets are refused with `429` before any lookup, so a refusal reveals nothing either. Codes carry 50 random bits.
+caller's prefix, exactly, however many requests run at once: each invite resolution and join ticket request takes one
+of the prefix's miss slots before it looks anything up, in the same step as the check, and gives it back unless it
+missed. Once a prefix has missed ten times in a minute or thirty in an hour, its invite resolutions and join tickets
+are refused with `429` before any lookup, so a refusal reveals nothing either. Codes carry 50 random bits.
 
 ## 7. Relay credentials
 
@@ -235,7 +257,10 @@ tickets are refused with `429` before any lookup, so a refusal reveals nothing e
 - Every mint goes through the spend guard. It may refuse with `429` (the per-prefix mint limit), `403 ticket-limit`
   (the ticket has minted its share), `503 relay-unavailable` (relay off, kill switch engaged, or the day's relay budget
   spent) or `502 upstream-failed`. A failed mint costs the caller nothing.
-- An operator can revoke live credentials at any time; the kill switch revokes them all.
+- The kill switch revokes every live credential (ControlPlaneOperations.md, section 5.1). That includes a credential
+  still being minted when it engages: the credential the provider returns is revoked without reaching the client, and
+  the mint answers `503 relay-unavailable`. A mint that is waiting when an operator turns relay off answers the same
+  way.
 
 ## 8. Signaling
 
@@ -277,20 +302,39 @@ A peer id is 16 hexadecimal characters derived from its ticket. Peers never lear
 
 ### 8.3 Privacy, enforced here
 
-When a side is relay-only, the service forwards from it only candidates that are:
+When a side is relay-only, the service forwards from it only candidates that are all of these:
 
 1. of kind `relay`;
-2. not a local-only address (unspecified, loopback, private, shared CGNAT, link-local, unique-local, multicast or
+2. inside the relay provider's address ranges: the deployment's `RELAY_ADDRESS_RANGES`, which holds Cloudflare's
+   published address list (ControlPlaneOperations.md, section 4.1);
+3. not a local-only address (unspecified, loopback, private, shared CGNAT, link-local, unique-local, multicast or
    broadcast);
-3. not the sender's own address as the service observed it, compared by a keyed hash held only for the socket's life.
+4. outside the sender's own scope as the service observed it on the socket's upgrade: not its IPv4 address, and not in
+   its IPv6 /64. The comparison uses keyed hashes held only for the socket's life.
 
-So a client that mislabels its own address as a relay still never reveals it. Anything withheld is reported to the
-sender in a `notice`; a trickled candidate that may not leave is dropped whole. A direct side's candidates pass
-unchanged: privacy protects the side that chose it. Signaling is held in memory only and never stored.
+What that guarantees: whatever a relay-only side sends, and however it labels it, every candidate the other side
+receives from it names an address inside the relay provider's ranges, and none names the IPv4 address or an address in
+the IPv6 /64 the side connected to the service from. Rule 4 still applies when that address is itself inside the
+relay provider's ranges, as it is for a side that reaches the service through the provider's own network.
+
+What it cannot guarantee: the service sees only the one address a side connects from. Its other addresses, such as
+another interface's or those of the other address family, stay back only because they lie outside the relay
+provider's ranges.
+
+Anything withheld is reported to the sender in a `notice`; a trickled candidate that may not leave is dropped whole. A
+direct side's candidates pass unchanged: privacy protects the side that chose it. Signaling is held in memory only and
+never stored.
 
 ### 8.4 Limits and close codes
 
-At most 32 peers per room and 40 frames per socket in any ten seconds.
+- **Places.** A room takes `maxPlayers + 2` peer sockets: a place for every joiner a full session has, and three more.
+  One /24 or /56 may hold at most four of them, and never more than half, so no one network can fill a room. A
+  joiner's socket counts until it closes, so a joiner closes it once its connection is up. A refused upgrade answers
+  `409 room-full`.
+- **Frames.** At most 40 per socket in any ten seconds.
+- **A host's goodbye.** A `bye` from the host closes that peer's socket and keeps its ticket out of the room for the
+  rest of the session: a later upgrade with it answers `401`. The player can come back only with a new ticket, which
+  has a new peer id.
 
 | Code | Reason |
 | --- | --- |
@@ -298,12 +342,13 @@ At most 32 peers per room and 40 frames per socket in any ten seconds.
 | 1003 | Binary frame |
 | 1009 | Frame too large |
 | 4400 | Five invalid frames |
+| 4403 | The peer's ticket stopped holding: its invite was withdrawn or expired, or the server stopped being public |
 | 4408 | Frame rate exceeded |
-| 4409 | Replaced by a newer socket |
-| 4410 | The host session ended |
+| 4409 | Replaced by a newer socket, or the host registered again |
+| 4410 | The host session ended; a socket of a session that lapsed closes on its next frame |
 | 4411 | The peer socket's lifetime ended |
 
-An upgrade the service refuses answers with an ordinary error response (`401`, `404`, `409`, `429` or `503`).
+An upgrade the service refuses answers with an ordinary error response (`400`, `401`, `404`, `409`, `429` or `503`).
 
 ## 9. Admin
 
@@ -322,7 +367,7 @@ is the same `401`. See ControlPlaneOperations.md for when to use each.
 
 | Object | Instances | Holds |
 | --- | --- | --- |
-| `HostSession` | One per server id | The session, its invites, used challenge nonces, an operator hold, and the signaling room in memory. Its alarm ends a lapsed session and deletes its storage. |
+| `HostSession` | One per server id | The session with its random epoch, its invites, used challenge nonces, an operator hold, the peer ids its host said goodbye to, and the signaling room in memory. Its alarm ends a lapsed session and deletes its storage, and closes the sockets of tickets whose invite has expired. |
 | `DirectoryShard` | 16 per game build and protocol major, by the server id's first hex digit | Public listings, each with its expiry |
 | `InviteShard` | 32, by the code's first character | Code to server id, with expiry |
 | `SpendGuard` | One | Feature flags, the kill switch, per-ticket relay accounting, per-prefix mint windows, minted credential names, daily totals, and the latest usage measurement |
@@ -341,8 +386,10 @@ ControlPlaneOperations.md.
 - The service replays the shared descriptor and link fixtures: every valid descriptor verifies and signs back to its
   served bytes, every invalid one is refused, and invite-code normalization matches.
 - `npm test` there type-checks and runs every suite: auth and challenges, TTLs and heartbeats, alarms, invites and
-  the uniform miss, signaling and candidate stripping, the spend guard's caps and concurrency, the kill switch and its
-  hourly trip, admin access, and a property test that no response and no stored byte carries an address.
+  the uniform miss under concurrency, ticket scope, signaling and candidate stripping, the room's places and host
+  sockets across registrations, the spend guard's caps and concurrency, the kill switch with mints in flight and its
+  revocation passes, its hourly trip, admin access, and a property test that no response and no stored byte carries an
+  address.
 
 ## 12. Decisions recorded here
 
@@ -350,8 +397,13 @@ ControlPlaneOperations.md.
   signature covers exactly what was parsed.
 - **The descriptor travels as a string.** The bytes the host signed reach the service unchanged and are served
   unchanged, so `descriptorSha256` pins the exact served bytes.
-- **Invite resolution is a POST,** so codes stay out of URLs and any request log.
-- **Join tickets are stateless,** authenticated by a MAC, so relay minting and signaling need no ticket lookup.
+- **Invite resolution and withdrawal are POSTs with the code in the body,** so codes stay out of URLs and any request
+  log.
+- **Join tickets are stateless,** authenticated by a MAC, so relay minting and signaling need no ticket lookup. They
+  carry the session's epoch and a keyed hash of their invite, so the session can refuse a ticket from an earlier
+  session or a withdrawn invite without storing any ticket.
+- **Relay-only is an allowlist.** A relay-only side forwards only addresses inside the relay provider's ranges, rather
+  than everything except what the service can recognize as the side's own.
 - **A fifth Durable Object, `RateLimiter`,** carries every per-prefix limit except relay minting, which the spend
   guard keeps itself as the plan says. Counting invite misses inside the invite shards would undercount by the number
   of shards.

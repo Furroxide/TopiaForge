@@ -6,8 +6,8 @@
 import { listDurableObjectIds, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseIp, formatIp, isLocalOnly, prefixBucket } from "../src/shared/ip";
-import { permittedCandidates, type Candidate } from "../src/shared/signaling";
+import { parseIp, formatIp, inRanges, isLocalOnly, ownScope, parseIpRanges, prefixBucket } from "../src/shared/ip";
+import { permittedCandidates, type Candidate, type CandidatePolicy } from "../src/shared/signaling";
 import { call, identity, register, signedDescriptor, type ApiResult, type HostIdentity } from "./support/api";
 import { seededBytes } from "./support/runtime";
 import { endScenario, startScenario, type Scenario } from "./support/scenario";
@@ -100,7 +100,7 @@ describe("no response ever carries an address", () => {
           () => call("POST", "/v1/hosts", { ip, body: pick(['{"challenge": 1}', "[]", '"x"', "{}"]) }),
           () => call("GET", `/v1/nowhere/${ip}`, { ip }),
           () => call("GET", "/v1/admin/state", { ip, token: ADMIN_TOKEN }),
-          () => call("DELETE", `/v1/hosts/${serverId}/invites/ZZZZZZZZZZ`, { ip, token: host.token }),
+          () => call("POST", `/v1/hosts/${serverId}/invites/revoke`, { ip, token: host.token, body: { code: "ZZZZZZZZZZ" } }),
         ];
         const response = await pick(operations)();
         checkResponse(response, `walk ${run} step ${step}`);
@@ -141,26 +141,39 @@ describe("no stored byte names a caller", () => {
 });
 
 describe("relay-only candidates", () => {
-  it("only ever keep public relay candidates that are not the sender's own address", async () => {
+  it("only ever keep relay candidates inside the relay ranges and outside the sender's own scope", async () => {
     const random = seededBytes("candidate property");
-    const own = "198.51.100.77";
-    const pool = ["192.168.1.20", "10.0.0.5", "100.64.1.1", "fe80::1", "fd00::5", "::1", own, "203.0.113.50", "2001:db8::50", "141.101.90.1"];
-    const fingerprint = async (address: string) => `fp:${address}`;
+    // 100.0.0.0/8 holds the shared (CGNAT) block, so a range alone cannot make a local-only address forwardable.
+    const relayRanges = parseIpRanges("141.101.64.0/18 162.158.0.0/15 100.0.0.0/8 2a06:98c0::/29")!;
+    const policy: CandidatePolicy = { relayRanges, scopeOf: async (address) => `fp:${ownScope(address)}` };
+    // Senders seen over IPv4 and over IPv6, one of them from inside the relay ranges themselves.
+    const senders = ["198.51.100.77", "141.101.90.7", "2001:db8:1:2::10", "2a06:98c1:3200::10"];
+    const pool = [
+      "192.168.1.20", "10.0.0.5", "100.64.1.1", "100.1.2.3", "fe80::1", "fd00::5", "::1", "203.0.113.50", "2001:db8::50", "2001:db8:1:2::abcd",
+      "141.101.90.1", "141.101.90.7", "162.159.207.1", "2a06:98c1:3200::1", "2a06:98c1:3200::abcd", "2a06:98c1:3201::1", ...senders,
+    ];
     for (let trial = 0; trial < 500; trial++) {
+      const sender = parseIp(senders[random(1)[0]! % senders.length])!;
+      const own = `fp:${ownScope(sender)}`;
       const candidates: Candidate[] = Array.from({ length: random(1)[0]! % 17 }, () => ({
         kind: (["host", "srflx", "relay"] as const)[random(1)[0]! % 3]!,
         address: pool[random(1)[0]! % pool.length]!,
         port: 1 + (random(1)[0]! % 65535),
         priority: random(1)[0]!,
       }));
-      const kept = await permittedCandidates(candidates, { relayOnly: true, selfFingerprint: `fp:${own}` }, fingerprint);
+      const allowed = (candidate: Candidate): boolean => {
+        const address = parseIp(candidate.address)!;
+        return candidate.kind === "relay" && !isLocalOnly(address) && inRanges(address, relayRanges) && ownScope(address) !== ownScope(sender);
+      };
+      const kept = await permittedCandidates(candidates, { relayOnly: true, ownScope: own }, policy);
       for (const candidate of kept) {
+        const address = parseIp(candidate.address)!;
         expect(candidate.kind).toBe("relay");
-        expect(isLocalOnly(parseIp(candidate.address)!)).toBe(false);
-        expect(candidate.address).not.toBe(own);
+        expect(inRanges(address, relayRanges), candidate.address).toBe(true);
+        expect(ownScope(address), candidate.address).not.toBe(ownScope(sender));
       }
-      expect(kept.length).toBe(candidates.filter((c) => c.kind === "relay" && !isLocalOnly(parseIp(c.address)!) && c.address !== own).length);
-      expect(await permittedCandidates(candidates, { relayOnly: false, selfFingerprint: `fp:${own}` }, fingerprint)).toEqual(candidates);
+      expect(kept).toEqual(candidates.filter(allowed));
+      expect(await permittedCandidates(candidates, { relayOnly: false, ownScope: own }, policy)).toEqual(candidates);
     }
   });
 });

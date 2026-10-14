@@ -31,7 +31,6 @@ interface Route {
 }
 
 const ID = "([0-9a-f]{64})";
-const CODE = "([0-9A-Z]{10})";
 
 export const ROUTES: readonly Route[] = [
   { pattern: /^\/v1\/status$/, methods: { GET: status } },
@@ -41,7 +40,7 @@ export const ROUTES: readonly Route[] = [
   { pattern: new RegExp(`^/v1/hosts/${ID}/heartbeat$`), methods: { POST: hosts.heartbeat } },
   { pattern: new RegExp(`^/v1/hosts/${ID}/descriptor$`), methods: { PUT: hosts.updateDescriptor } },
   { pattern: new RegExp(`^/v1/hosts/${ID}/invites$`), methods: { POST: hosts.createInvite } },
-  { pattern: new RegExp(`^/v1/hosts/${ID}/invites/${CODE}$`), methods: { DELETE: hosts.revokeInvite } },
+  { pattern: new RegExp(`^/v1/hosts/${ID}/invites/revoke$`), methods: { POST: hosts.revokeInvite } },
   { pattern: /^\/v1\/servers$/, methods: { GET: servers.listServers }, query: true },
   { pattern: new RegExp(`^/v1/servers/${ID}$`), methods: { GET: servers.serverDetail } },
   { pattern: /^\/v1\/invites\/resolve$/, methods: { POST: invites.resolveInvite } },

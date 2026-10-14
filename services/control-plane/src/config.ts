@@ -3,6 +3,7 @@
  * its default when one is safe, and otherwise leaves its feature unavailable: relay minting never runs on a guess.
  */
 import type { Env } from "./env";
+import { parseIpRanges, type IpRange } from "./shared/ip";
 
 export interface RelayLimits {
   /** Lifetime of each minted TURN credential, which is also the kill switch's worst-case latency. */
@@ -33,8 +34,13 @@ export interface Analytics {
 export interface Config {
   readonly environment: string;
   readonly limits: RelayLimits;
-  /** Null until the TURN key and both spend ceilings are configured. */
+  /** Null until the TURN key, both spend ceilings and the relay address ranges are configured. */
   readonly provider: RelayProvider | null;
+  /**
+   * The relay provider's address ranges. A relay-only side may forward only candidates inside them, so the list is
+   * empty, and such a side forwards nothing, while the configured ranges are missing or malformed.
+   */
+  readonly relayRanges: readonly IpRange[];
   /** Null until the analytics account and token are configured. */
   readonly analytics: Analytics | null;
   readonly flagCacheMilliseconds: number;
@@ -57,8 +63,13 @@ export function readConfig(env: Env): Config {
   };
   const dailyCapBytes = gigabytes(env.TURN_DAILY_CAP_GB);
   const ticketCapBytes = gigabytes(env.TURN_TICKET_CAP_GB);
+  const relayRanges = parseIpRanges(env.RELAY_ADDRESS_RANGES);
   const provider =
-    matches(env.TURN_KEY_ID, KEY_ID_PATTERN) && matches(env.TURN_KEY_API_TOKEN, TOKEN_PATTERN) && dailyCapBytes !== null && ticketCapBytes !== null
+    matches(env.TURN_KEY_ID, KEY_ID_PATTERN) &&
+    matches(env.TURN_KEY_API_TOKEN, TOKEN_PATTERN) &&
+    dailyCapBytes !== null &&
+    ticketCapBytes !== null &&
+    relayRanges !== null
       ? { keyId: env.TURN_KEY_ID, apiToken: env.TURN_KEY_API_TOKEN, dailyCapBytes, ticketCapBytes }
       : null;
   const analytics =
@@ -69,6 +80,7 @@ export function readConfig(env: Env): Config {
     environment: typeof env.ENVIRONMENT === "string" && /^[a-z]{1,16}$/.test(env.ENVIRONMENT) ? env.ENVIRONMENT : "development",
     limits,
     provider,
+    relayRanges: relayRanges ?? [],
     analytics,
     flagCacheMilliseconds: integer(env.FLAG_CACHE_SECONDS, 5, 0, 60) * 1000,
   };

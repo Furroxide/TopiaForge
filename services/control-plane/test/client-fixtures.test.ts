@@ -96,7 +96,10 @@ describe("the client fixtures", () => {
     await record("turn-credentials-host", "Relay credentials for the host.", "POST", "/v1/turn/credentials", { token, body: { serverId } });
     const updated = await signedDescriptor(identity, { name: "Sam's Sandbox", issuedAt: sandbox.descriptor.issuedAt + 60, maxPlayers: 8 });
     await record("host-descriptor", "The host publishes a newer signed descriptor.", "PUT", `/v1/hosts/${serverId}/descriptor`, { token, body: { descriptor: updated } });
-    await record("invite-revoke", "The host revokes an invite.", "DELETE", `/v1/hosts/${serverId}/invites/${code}`, { token });
+    await record("invite-revoke", "The host withdraws an invite, naming it in the body so the code stays out of the URL.", "POST", `/v1/hosts/${serverId}/invites/revoke`, {
+      token,
+      body: { code },
+    });
     await record("invite-resolve-miss", "Every miss is the same 404.", "POST", "/v1/invites/resolve", { body: { code } });
     await record("error-unauthorized", "A wrong or missing credential.", "POST", `/v1/hosts/${serverId}/heartbeat`, { token: `tfh1_${"A".repeat(43)}`, body: { players: 0 } });
     await record("error-malformed", "A body that is not canonical JSON.", "POST", "/v1/invites/resolve", { body: '{"code": "ABCDE12345"}' });
@@ -147,7 +150,9 @@ describe("the client fixtures", () => {
       candidates: [
         { kind: "host", address: "192.168.1.20", port: 27250, priority: 2130706431 },
         { kind: "srflx", address: PEER, port: 40000, priority: 1694498815 },
-        { kind: "relay", address: "203.0.113.50", port: 50000, priority: 16777215 },
+        { kind: "relay", address: "141.101.90.10", port: 50000, priority: 16777215 },
+        // Labelled a relay, but outside the relay provider's ranges: withheld like the others.
+        { kind: "relay", address: "203.0.113.50", port: 50000, priority: 16777214 },
       ],
     });
     await receive(peer, "peer");
@@ -159,7 +164,7 @@ describe("the client fixtures", () => {
       candidates: [{ kind: "srflx", address: "203.0.113.9", port: 27250, priority: 1694498815 }],
     });
     await receive(peer, "peer");
-    send(peer, "peer", { type: "candidate", candidate: { kind: "relay", address: "203.0.113.51", port: 50001, priority: 16777214 } });
+    send(peer, "peer", { type: "candidate", candidate: { kind: "relay", address: "141.101.90.11", port: 50001, priority: 16777213 } });
     await receive(hostClient, "host");
     send(hostClient, "host", { type: "punch", peer: peerId, delayMs: 250 });
     await receive(peer, "peer");
@@ -172,7 +177,7 @@ describe("the client fixtures", () => {
     const document = {
       schema: 1,
       about:
-        "A signaling transcript (docs/internal/ControlPlaneApi.md, Signaling), recorded by services/control-plane/test/client-fixtures.test.ts. The joining peer chose relay-only, so the service withholds its host and server-reflexive candidates. Frames are exact canonical JSON text; a client must send its frames byte for byte and parse every frame it receives.",
+        "A signaling transcript (docs/internal/ControlPlaneApi.md, Signaling), recorded by services/control-plane/test/client-fixtures.test.ts. The joining peer chose relay-only, so the service forwards only its relay candidates inside the relay provider's address ranges, and withholds its host, server-reflexive and mislabelled candidates. Frames are exact canonical JSON text; a client must send its frames byte for byte and parse every frame it receives.",
       relayOnly: { host: false, peer: true },
       transcript,
     };

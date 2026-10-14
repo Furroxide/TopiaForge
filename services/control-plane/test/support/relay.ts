@@ -11,6 +11,7 @@ export class FakeRelayProvider {
   readonly byUsername = new Map<string, number>();
   failGenerate = false;
   failUsage = false;
+  failRevoke = false;
   /** When set, mints wait on this promise, so tests can hold requests in flight. */
   gate: Promise<void> | null = null;
   private arrivalWaiters: { readonly count: number; readonly resolve: () => void }[] = [];
@@ -51,6 +52,7 @@ export class FakeRelayProvider {
     }
     const revoke = /\/credentials\/([^/]+)\/revoke$/.exec(url.pathname);
     if (url.origin === TURN_ORIGIN && revoke !== null && request.method === "POST") {
+      if (this.failRevoke) return new Response("upstream failure", { status: 500 });
       this.revoked.push(decodeURIComponent(revoke[1]!));
       return new Response(null, { status: 204 });
     }

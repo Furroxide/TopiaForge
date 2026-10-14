@@ -8,6 +8,16 @@ export interface IpAddress {
   readonly bytes: Uint8Array;
 }
 
+/** A block of addresses: a network address and how many of its leading bits every member shares. */
+export interface IpRange {
+  readonly family: 4 | 6;
+  readonly bytes: Uint8Array;
+  readonly prefixLength: number;
+}
+
+const MAXIMUM_RANGES = 64;
+const MAXIMUM_RANGES_TEXT = 4096;
+
 /** Parses an IPv4 address in dotted decimal or an IPv6 address in text form, without zone or brackets. */
 export function parseIp(text: unknown): IpAddress | null {
   if (typeof text !== "string" || text.length === 0 || text.length > 45) return null;
@@ -76,6 +86,57 @@ export function prefixBucket(address: IpAddress): string {
 }
 
 /**
+ * What identifies an address's holder in signaling's own-address check: the whole IPv4 address, or the IPv6 /64, the
+ * one network whose hosts each pick their own interface ids. The text only ever feeds a keyed hash.
+ */
+export function ownScope(address: IpAddress): string {
+  const plain = unmapIPv4(address);
+  if (plain.family === 4) return `v4:${Array.from(plain.bytes).join(".")}`;
+  return `v6/64:${Array.from(plain.bytes.slice(0, 8), (value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * Reads CIDR blocks separated by single spaces, such as "198.51.100.0/24 2001:db8::/32". Each block names its network
+ * address in canonical text with no host bits set, an IPv4 prefix of /8 to /32 or an IPv6 prefix of /16 to /128, and
+ * no local-only network. Anything else, an empty list included, gives null, so a mistyped list can only refuse more.
+ */
+export function parseIpRanges(text: unknown): readonly IpRange[] | null {
+  if (typeof text !== "string" || text.length === 0 || text.length > MAXIMUM_RANGES_TEXT) return null;
+  const parts = text.split(" ");
+  if (parts.length > MAXIMUM_RANGES) return null;
+  const ranges: IpRange[] = [];
+  for (const part of parts) {
+    const range = parseIpRange(part);
+    if (range === null) return null;
+    ranges.push(range);
+  }
+  return ranges;
+}
+
+/** One CIDR block under the rules of `parseIpRanges`, or null. */
+export function parseIpRange(text: string): IpRange | null {
+  const slash = text.indexOf("/");
+  if (slash < 0) return null;
+  const addressText = text.slice(0, slash);
+  const lengthText = text.slice(slash + 1);
+  if (!/^(0|[1-9][0-9]{0,2})$/.test(lengthText)) return null;
+  const address = parseIp(addressText);
+  // Canonical text only, which also refuses an IPv4-mapped spelling of an IPv4 block.
+  if (address === null || formatIp(address) !== addressText) return null;
+  const prefixLength = Number(lengthText);
+  const [minimum, maximum] = address.family === 4 ? [8, 32] : [16, 128];
+  if (prefixLength < minimum || prefixLength > maximum) return null;
+  if (!hostBitsClear(address.bytes, prefixLength) || isLocalOnly(address)) return null;
+  return { family: address.family, bytes: address.bytes, prefixLength };
+}
+
+/** Whether an address lies inside any of the ranges. An IPv4-mapped address counts as the IPv4 address it maps. */
+export function inRanges(address: IpAddress, ranges: readonly IpRange[]): boolean {
+  const plain = unmapIPv4(address);
+  return ranges.some((range) => range.family === plain.family && sharesPrefix(plain.bytes, range.bytes, range.prefixLength));
+}
+
+/**
  * Whether an address can only be local to the sender: unspecified, loopback, private, shared (CGNAT), link-local,
  * unique-local, multicast or broadcast. A relay's address is public, so a relay candidate never has one of these.
  */
@@ -101,6 +162,22 @@ export function isLocalOnly(address: IpAddress): boolean {
     (b[0] === 0xfe && (b[1]! & 0xc0) === 0x80) ||
     b[0] === 0xff
   );
+}
+
+function sharesPrefix(address: Uint8Array, network: Uint8Array, prefixLength: number): boolean {
+  const whole = Math.floor(prefixLength / 8);
+  for (let index = 0; index < whole; index++) if (address[index] !== network[index]) return false;
+  const rest = prefixLength % 8;
+  if (rest === 0) return true;
+  const mask = (0xff << (8 - rest)) & 0xff;
+  return (address[whole]! & mask) === (network[whole]! & mask);
+}
+
+function hostBitsClear(network: Uint8Array, prefixLength: number): boolean {
+  for (let bit = prefixLength; bit < network.length * 8; bit++) {
+    if ((network[bit >> 3]! >> (7 - (bit & 7))) & 1) return false;
+  }
+  return true;
 }
 
 function isMappedIPv4(bytes: Uint8Array): boolean {
