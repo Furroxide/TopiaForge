@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Multiplayer.Engine;
 using TopiaForge.Multiplayer.ThirdParty.Concentus.Enums;
 using TopiaForge.Multiplayer.ThirdParty.Concentus.Structs;
 
@@ -8,7 +9,7 @@ namespace TopiaForge.Multiplayer.Voice
     /// Encodes one talker's 20 ms frames with the settings of <see cref="OpusVoiceCodec"/>. It writes into the caller's
     /// buffer and allocates nothing itself. One thread owns it.
     /// </summary>
-    internal sealed class OpusVoiceEncoder
+    internal sealed class OpusVoiceEncoder : IVoiceEncoder
     {
         private readonly OpusEncoder encoder;
 
@@ -36,7 +37,7 @@ namespace TopiaForge.Multiplayer.Voice
             set => encoder.Complexity = OpusVoiceCodec.RequireComplexity(value, nameof(value));
         }
 
-        /// <summary>Gets or sets the VBR target, 20,000 to 24,000 bit/s.</summary>
+        /// <summary>Gets or sets the VBR target: 20,000 bit/s, the only target voice allows.</summary>
         internal int BitrateBitsPerSecond
         {
             get => encoder.Bitrate;
@@ -61,7 +62,7 @@ namespace TopiaForge.Multiplayer.Voice
         /// the packet's length: 1 for silence under discontinuous transmission (see <see cref="OpusToc.IsDiscontinuous"/>),
         /// and never more than 160.
         /// </summary>
-        internal int Encode(ReadOnlySpan<short> frame, Span<byte> packet)
+        public int Encode(ReadOnlySpan<short> frame, Span<byte> packet)
         {
             OpusVoiceCodec.RequireFrame(frame.Length, nameof(frame));
             if (packet.Length < OpusVoiceCodec.MaximumPacketLength)
@@ -73,6 +74,6 @@ namespace TopiaForge.Multiplayer.Voice
         }
 
         /// <summary>Starts a new stream, keeping the settings. A talker's first frame after a reconnect expects this.</summary>
-        internal void Reset() => encoder.ResetState();
+        public void Reset() => encoder.ResetState();
     }
 }

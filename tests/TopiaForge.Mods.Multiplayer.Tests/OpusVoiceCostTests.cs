@@ -128,21 +128,22 @@ internal static class OpusVoiceCostTests
     {
         var codec = new OpusVoiceCodec();
         Assert(codec.SampleRate == 48_000 && codec.FrameSamples == 960 && codec.MaximumPacketBytes == 160, "the frame format is fixed");
-        Assert(codec.Complexity == 10 && codec.BitrateBitsPerSecond == 24_000 && codec.ExpectedLossPercent == 10, "the plan's defaults");
+        Assert(codec.Complexity == 10 && codec.BitrateBitsPerSecond == 20_000 && codec.ExpectedLossPercent == 10,
+            "the defaults: complexity 10, the 20 kbit/s target and a 10% loss hint");
         AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(4), "complexity below 5 is refused");
         AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(11), "complexity above 10 is refused");
         AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(bitrateBitsPerSecond: 19_999), "a bitrate below 20 kbit/s is refused");
-        AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(bitrateBitsPerSecond: 24_001), "a bitrate above 24 kbit/s is refused");
+        AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(bitrateBitsPerSecond: 20_001), "a target above 20 kbit/s is refused");
         AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(expectedLossPercent: -1), "negative loss is refused");
         AssertThrows<ArgumentOutOfRangeException>(() => new OpusVoiceCodec(expectedLossPercent: 101), "loss above 100% is refused");
         var encoder = new OpusVoiceCodec(5, 20_000, 0).CreateEncoder();
         Assert(encoder.Complexity == 5 && encoder.BitrateBitsPerSecond == 20_000 && encoder.ExpectedLossPercent == 0, "encoders start from the codec");
         encoder.Complexity = 10;
-        encoder.BitrateBitsPerSecond = 24_000;
+        encoder.BitrateBitsPerSecond = 20_000;
         encoder.ExpectedLossPercent = 30;
-        Assert(encoder.Complexity == 10 && encoder.BitrateBitsPerSecond == 24_000 && encoder.ExpectedLossPercent == 30, "settings change live");
+        Assert(encoder.Complexity == 10 && encoder.BitrateBitsPerSecond == 20_000 && encoder.ExpectedLossPercent == 30, "settings change live");
         AssertThrows<ArgumentOutOfRangeException>(() => encoder.Complexity = 4, "live complexity keeps its bound");
-        AssertThrows<ArgumentOutOfRangeException>(() => encoder.BitrateBitsPerSecond = 32_000, "the live bitrate keeps its bound");
+        AssertThrows<ArgumentOutOfRangeException>(() => encoder.BitrateBitsPerSecond = 24_000, "the live bitrate keeps its 20 kbit/s target");
         AssertThrows<ArgumentOutOfRangeException>(() => encoder.ExpectedLossPercent = 101, "the live loss hint keeps its bound");
     }
 
@@ -242,7 +243,7 @@ internal static class OpusVoiceCostTests
             SignalType = ConcentusSignal.OPUS_SIGNAL_VOICE,
             MaxBandwidth = ConcentusBandwidth.OPUS_BANDWIDTH_WIDEBAND,
             Complexity = 10,
-            Bitrate = 24_000,
+            Bitrate = 20_000,
             PacketLossPercent = 10
         };
     }
