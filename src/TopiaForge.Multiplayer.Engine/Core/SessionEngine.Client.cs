@@ -76,6 +76,7 @@ namespace TopiaForge.Multiplayer.Engine
             while (ReferenceEquals(channel, current) && current.Link.TryReceive(out var channelKind, out var frame))
             {
                 if (channelKind == EngineChannel.Session) ProcessClientFrame(current, frame);
+                else if (channelKind == EngineChannel.Voice) HandleRelayedVoice(current, frame);
             }
 
             if (ReferenceEquals(channel, current) && current.Link.State == EngineLinkState.Closed)
@@ -84,6 +85,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             UpdateClientTick();
+            FlushVoiceHold();
             FlushClient();
         }
 
@@ -191,6 +193,9 @@ namespace TopiaForge.Multiplayer.Engine
                 case MessageType.Commit:
                     ApplyCommit(current, body.ReadVarUInt(), body.ReadVarUInt());
                     break;
+                case MessageType.VoiceRoster:
+                    ApplyVoiceRoster(body);
+                    break;
                 case MessageType.ClockSync:
                     var hostMicros = body.ReadVarUInt();
                     ObserveHostTick(body.ReadVarUInt());
@@ -210,6 +215,8 @@ namespace TopiaForge.Multiplayer.Engine
                 ResetLocalSession(newSession, new SessionSeed(message.Seed), message.Epoch, "The multiplayer session was replaced.");
             }
 
+            // Listener mutes follow the people, not the session id: see AdoptListenerMutes.
+            AdoptListenerMutes(current.Link.PeerIdentity, message.RecordKept);
             sessionId = newSession;
             seed = new SessionSeed(message.Seed);
             epoch = message.Epoch;
@@ -220,6 +227,7 @@ namespace TopiaForge.Multiplayer.Engine
             ObserveHostTick(message.Tick);
             joinedBefore = true;
             current.Phase = ClientPhase.Synchronizing;
+            current.VoiceMutesPending = options.Voice != null && (localVoiceMuteAll || localVoiceMutes.Count > 0);
             state = MultiplayerSessionState.Synchronizing;
             MarkSessionChanged(participantsChanged: true);
         }
@@ -590,6 +598,7 @@ namespace TopiaForge.Multiplayer.Engine
             var lost = channel;
             channel = null;
             if (lost != null && lost.Link.State != EngineLinkState.Closed) lost.Link.Close();
+            ResetClientVoice();
             CancelAllPending(message);
             localParticipantId = null;
             if (!ended) state = MultiplayerSessionState.Connecting;
@@ -601,6 +610,7 @@ namespace TopiaForge.Multiplayer.Engine
             var lost = channel;
             channel = null;
             lost?.Link.Close();
+            ResetClientVoice();
             CancelAllPending(string.IsNullOrEmpty(message) ? "The multiplayer session ended." : message);
             localParticipantId = null;
             FinishClientSession(new ClientSessionEnd(reason, message, report));
@@ -624,6 +634,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             channel = null;
+            ResetClientVoice();
             CancelAllPending("The multiplayer session ended.");
         }
 
@@ -675,6 +686,12 @@ namespace TopiaForge.Multiplayer.Engine
             {
                 SessionMessages.WriteClockSyncReply(clientFrame, clientBody, current.PendingClockReply.Value);
                 current.PendingClockReply = null;
+            }
+
+            if (current.VoiceMutesPending && current.Phase != ClientPhase.AwaitingJoin)
+            {
+                VoiceMessages.WriteMutes(clientFrame, clientBody, localVoiceMuteAll, localVoiceMutes);
+                current.VoiceMutesPending = false;
             }
 
             SendClientFrame(current);

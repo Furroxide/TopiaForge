@@ -30,8 +30,11 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Reserved for runtime system channels (world replication, avatars, chat, scene follow).</summary>
         internal const byte SystemMessage = 0x20;
 
-        /// <summary>Reserved for voice frames.</summary>
-        internal const byte Voice = 0x30;
+        /// <summary>Host to client: speaker indexes, whose they are, and who the host muted. Voice itself uses the Voice channel.</summary>
+        internal const byte VoiceRoster = 0x30;
+
+        /// <summary>Client to host: the speakers this listener does not want relayed.</summary>
+        internal const byte VoiceMutes = 0x31;
 
         internal const byte ClockSync = 0x40;
         internal const byte ClockSyncReply = 0x41;

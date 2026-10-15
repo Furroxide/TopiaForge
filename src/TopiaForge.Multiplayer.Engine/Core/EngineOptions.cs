@@ -71,8 +71,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// </summary>
         internal Func<string, ParticipantId>? ParticipantIdForIdentity { get; set; }
 
+        /// <summary>Gets or sets the voice codec and the host's voice limits; null leaves voice off and sends nothing for it.</summary>
+        internal VoiceOptions? Voice { get; set; }
+
         internal void Validate()
         {
+            Voice?.Validate();
             if (StepRateHz < 1 || StepRateHz > 1000) throw new ArgumentOutOfRangeException(nameof(StepRateHz));
             if (DownstreamRateHz < 0 || DownstreamRateHz > 1000) throw new ArgumentOutOfRangeException(nameof(DownstreamRateHz));
             if (MaximumCatchUpSteps < 1) throw new ArgumentOutOfRangeException(nameof(MaximumCatchUpSteps));
@@ -96,7 +100,10 @@ namespace TopiaForge.Multiplayer.Engine
         CallbackFailed = 1,
 
         /// <summary>A canonical value could not be decoded with the local codec.</summary>
-        CodecFailed = 2
+        CodecFailed = 2,
+
+        /// <summary>A participant broke the voice limits often enough to be muted automatically or removed.</summary>
+        VoiceAbuse = 3
     }
 
     /// <summary>One engine diagnostic. It names participants, owners and wire ids, never network addresses.</summary>

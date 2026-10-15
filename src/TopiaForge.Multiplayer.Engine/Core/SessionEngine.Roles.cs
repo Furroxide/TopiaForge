@@ -102,6 +102,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (ended) throw new ObjectDisposedException(nameof(SessionEngine));
             if (Role != EngineRole.Host) throw new InvalidOperationException("Only a host has client connections.");
             foreach (var connection in connections.ToArray()) EndConnection(connection, reason, message);
+            foreach (var record in participantRecords) NoteVoiceSeen(record);
             if (participantRecords.RemoveAll(record => record.Identity != null) > 0) MarkParticipantsChanged();
             EndOperation();
         }
@@ -156,6 +157,7 @@ namespace TopiaForge.Multiplayer.Engine
             ResetLocalSession(newSession, newSeed, newEpoch, message);
             foreach (var binding in commands.Values) binding.ResetForNewSession();
             reconcileRequested = false;
+            RetireVoice();
         }
     }
 }

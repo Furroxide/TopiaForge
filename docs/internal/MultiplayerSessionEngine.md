@@ -169,7 +169,9 @@ with that result, because the host executed it; the rest complete as `Cancelled`
 The host maps each link's authenticated identity to a participant. A participant whose link closes is marked
 disconnected at once, and objects it owned return to server ownership. Its record stays for a 30-second grace period,
 so a returning identity keeps its participant id and submission sequence. `JoinAccepted` tells the client the next
-sequence the host will accept, so a restarted client cannot collide with one the host has already processed.
+sequence the host will accept, so a restarted client cannot collide with one the host has already processed. It also
+says whether the host kept the player's record, within the grace or across an in-place replacement, rather than
+creating one; only then does the client keep its listener mutes (`MultiplayerVoice.md`, section 2.5).
 
 The host keeps at most twice `MaximumParticipants` records, connected or within their grace period, and never more
 than the 256 a snapshot and a peer accept. A new identity that would exceed the limit takes the place of the
@@ -184,8 +186,9 @@ recovers or closes.
 
 ## Protocol
 
-Frames travel on the link's reliable-ordered *Session* channel. The *Realtime* and *Voice* channels are reserved for
-later workstreams. A frame is a sequence of envelopes `[type varint][length varint][body]`, and a host flush ends with
+Frames travel on the link's reliable-ordered *Session* channel. Voice datagrams travel on the unreliable, sequenced
+*Voice* channel (`MultiplayerVoice.md`, part 2), and *Realtime* is reserved for a later workstream. A frame is a
+sequence of envelopes `[type varint][length varint][body]`, and a host flush ends with
 `Commit` in its last frame. A sender ends a frame once a message takes it past 64 KiB, so a frame is at most 64 KiB, one
 1 MiB payload and 8 KiB for that message's envelope and fields.
 
@@ -197,7 +200,7 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | Type | Direction | Message |
 | --- | --- | --- |
 | `0x01` | client → host | `JoinRequest`: protocol version, display name, registered contracts, opaque content descriptor |
-| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence |
+| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report |
 | `0x03` | host → client | `JoinRejected`: end reason, message, opaque admission report |
 | `0x04`, `0x05` | host → client | `SnapshotBegin` (epoch), `SnapshotEnd` |
 | `0x06` | client → host | `ReadyAck` (epoch) |
@@ -212,7 +215,8 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | `0x15`–`0x17` | host → client | `ObjectSpawned`, `ObjectChanged`, `ObjectDespawned` |
 | `0x18` | host → client | `PresentationEvent` |
 | `0x20` | both | `SystemMessage`, reserved for WS3 |
-| `0x30` | both | voice, reserved for WS2g |
+| `0x30` | host → client | `VoiceRoster`: each speaker index, its participant, and whether the host muted it |
+| `0x31` | client → host | `VoiceMutes`: whom the client's player does not want to hear, or everyone |
 | `0x40`, `0x41` | both | `ClockSync`, `ClockSyncReply` |
 
 Submissions carry the session epoch. The host answers a submission from an earlier epoch, or one whose sequence does
@@ -225,12 +229,22 @@ endpoint.
 ## The rig on the engine
 
 `MultiplayerTestRig` keeps its public API. Each node owns a `SessionEngine`, and `VirtualEngineTransport` connects them
-with the production channel contract:
+with the production channel contracts:
 
-- per-direction FIFO;
-- loss becomes a retry delay that also holds later frames (head-of-line);
-- duplicates are discarded by sequence;
-- a closed link drops what was in flight.
+- **Session:** per-direction FIFO; loss becomes a retry delay that also holds later frames (head-of-line); duplicates
+  are discarded by sequence.
+- **Realtime and Voice:** one datagram per frame; loss is final; a datagram older than one already delivered on its
+  channel is dropped, duplicates included; nothing waits behind session frames; a path that is down loses datagrams
+  rather than holding them; a datagram the link cannot carry in time is shed and counted, never queued: one whose lane
+  is already more than three ticks behind, or, while the session lane is that far behind, one past its channel's share
+  of the link (Voice 96 and Realtime 64 of every 256), as the real transport drops datagrams first
+  (`MultiplayerVoice.md`, section 2.8).
+- **Every channel** shares the link's rate: datagrams serialize in their own lane, as the real transport writes them
+  first in every packet, but their bytes push later session frames back. Both lanes keep time in millionths of a tick
+  and round only the tick a frame is delivered in, so a small frame costs its bytes rather than a whole tick. A closed
+  link drops what was in flight.
+- **Reading:** a link returns waiting datagrams before session frames and holds at most 128 of them, dropping the
+  oldest, as the real connection does.
 
 `Advance()` pumps every engine at the current tick — the end-of-tick flush — then moves the tick, delivers due frames,
 and pumps again. `Flush()` advances until no frame is in flight and no engine has unsent or undelivered work.
