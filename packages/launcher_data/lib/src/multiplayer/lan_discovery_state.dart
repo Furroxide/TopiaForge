@@ -16,7 +16,7 @@ enum LanDiscoveryStatus {
   /// Listening for beacons on the discovery port.
   listening,
 
-  /// The discovery port could not be opened; see [LanDiscoveryProblem].
+  /// Discovery cannot run just now; see [LanDiscoveryProblem].
   unavailable,
 }
 
@@ -30,6 +30,10 @@ enum LanDiscoveryProblem {
 
   /// Any other failure to open a socket.
   failed,
+
+  /// The player's multiplayer settings could not be read, so whether they
+  /// allow discovery is unknown, and it stays off. No socket was opened.
+  settingsUnreadable,
 }
 
 /// Running totals for diagnostics. They count datagrams, never who sent them.
@@ -150,6 +154,9 @@ final class LanBrowseSnapshot {
       LanDiscoveryProblem.permissionDenied =>
         'The system blocked the LAN discovery port '
             '${LanBeacon.discoveryPort}, so local sessions cannot be found.',
+      LanDiscoveryProblem.settingsUnreadable =>
+        'Your multiplayer settings could not be read just now, so LAN '
+            'discovery stays off. Try again in a moment.',
       _ => 'LAN discovery could not start, so local sessions cannot be found.',
     },
   };

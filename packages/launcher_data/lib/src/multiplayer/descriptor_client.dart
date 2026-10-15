@@ -5,6 +5,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:launcher_domain/launcher_domain.dart';
 
@@ -20,8 +21,10 @@ enum DescriptorFetchFailure {
   /// Nothing answered, or the connection failed.
   unreachable,
 
-  /// This computer has no route to any network.
-  offline,
+  /// There is no route to the host's network, as for an IPv6 address on a
+  /// network with IPv4 only. That is about one destination: whether this
+  /// computer is offline is decided across every address a join tried.
+  noRoute,
 
   /// The host did not connect or answer in time.
   timedOut,
@@ -35,7 +38,8 @@ enum DescriptorFetchFailure {
   /// `TFD1 503`: the host's endpoint is full.
   busy,
 
-  /// Another status, such as `TFD1 400`.
+  /// Another status, such as `TFD1 400`, which the game reports as
+  /// unreachable too.
   refused,
 
   /// The answer broke the protocol or its bounds.
@@ -103,8 +107,9 @@ typedef DescriptorTimer = Timer Function(Duration delay, void Function() fire);
 ///   [JoinContactRules], which callers also apply before they get here.
 /// - **Bounds.** The connection must open within [connectTimeout] and the
 ///   whole answer arrive within [responseTimeout]. The status line must come
-///   within 64 bytes and the body be at most 256 KiB and exactly as long as
-///   announced.
+///   within 64 bytes and the body be at most 256 KiB. The body is read up to
+///   its announced length, and the connection closes there, as the game's
+///   client does ([Tfd1ResponseReader]).
 /// - **Cancellation** closes the connection at once.
 /// - **Failures** never throw and never name an address: a socket's own
 ///   messages can, so none is passed on.
@@ -183,7 +188,7 @@ final class DescriptorClient {
     final reader = Tfd1ResponseReader();
     ConnectionTask<Socket>? task;
     Socket? socket;
-    StreamSubscription<List<int>>? subscription;
+    StreamSubscription<Uint8List>? subscription;
     Timer? deadline;
     CancellationRegistration? registration;
 
@@ -313,18 +318,18 @@ final class DescriptorClient {
         ),
       };
 
-  /// Error codes for "no network at all": ENETDOWN and ENETUNREACH on
-  /// Windows, Linux and macOS.
-  static const _offlineCodes = {10050, 10051, 100, 101, 50, 51};
+  /// Error codes for no route to the host's network: ENETDOWN and
+  /// ENETUNREACH on Windows, Linux and macOS.
+  static const _noRouteCodes = {10050, 10051, 100, 101, 50, 51};
 
   /// A socket failure as a reason. The error's own text may name the
   /// address, so only its code is read.
   static DescriptorFetchFailed _failureOf(Object error) {
     final code = error is SocketException ? error.osError?.errorCode : null;
-    if (code != null && _offlineCodes.contains(code)) {
+    if (code != null && _noRouteCodes.contains(code)) {
       return const DescriptorFetchFailed(
-        DescriptorFetchFailure.offline,
-        'This computer is not connected to a network.',
+        DescriptorFetchFailure.noRoute,
+        "This computer has no route to the host's network.",
       );
     }
     return const DescriptorFetchFailed(

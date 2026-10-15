@@ -141,6 +141,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
     File file,
     List<String> gamePaths,
   ) async {
+    if (_isMultiplayerData(file)) return;
     final type = FileSystemEntity.typeSync(file.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) {
       return;
@@ -180,6 +181,17 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
         lineLimit: _maxDiagnosticSourceLines,
       ),
     );
+  }
+
+  /// Whether [file] is in the multiplayer folder, which no bundle includes.
+  /// Its known-hosts keys are unsalted SHA-256 hashes of typed `host:port`
+  /// targets, and a LAN address is recovered from one in milliseconds.
+  bool _isMultiplayerData(File file) {
+    final folder = p.join(
+      _dataRoot.path,
+      LocalMultiplayerRepository.folderName,
+    );
+    return p.equals(folder, file.path) || p.isWithin(folder, file.path);
   }
 
   DiagnosticEntryMetadata _addDiagnosticText(

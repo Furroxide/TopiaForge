@@ -1,6 +1,7 @@
 /// Answers the domain's descriptor requests under its contact rules.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:launcher_domain/launcher_domain.dart';
@@ -14,8 +15,17 @@ import 'multiplayer_store.dart';
 /// Looks a host name up; the seam tests use to watch what is resolved.
 typedef HostLookup = Future<List<InternetAddress>> Function(String host);
 
+/// Whether this computer has any network up apart from loopback; the seam
+/// tests use in place of the system's interfaces.
+typedef NetworkPresence = Future<bool> Function();
+
 Future<List<InternetAddress>> _systemLookup(String host) =>
     InternetAddress.lookup(host);
+
+Future<bool> _anyNetworkUp() async {
+  final networks = await NetworkInterface.list();
+  return networks.any((network) => network.addresses.isNotEmpty);
+}
 
 /// Fetches the descriptor a [JoinDescriptorRequest] asks for and turns the
 /// outcome into the [JoinEvent] the join reducer expects, keeping to the
@@ -29,11 +39,13 @@ Future<List<InternetAddress>> _systemLookup(String host) =>
 /// - A direct link or typed address that is an IP literal is contacted only
 ///   when the rules allow it. A name is looked up only when relay-only allows
 ///   it (a local name), and of what it resolves to only the addresses the
-///   rules allow are contacted, IPv4 first. A local name that resolves only
-///   beyond the local network is refused before any connection.
+///   rules allow are contacted, IPv4 first, within [fetchBudget] for them
+///   all. A local name that resolves only beyond the local network is
+///   refused before any connection.
 /// - A typed address names no server, so the first server it serves is
 ///   remembered, and a different one later is an identity change unless the
-///   join already expects that server.
+///   join already expects that server. When the record cannot be read, no
+///   server is taken on trust: the player is asked as for a change.
 ///
 /// No event or detail names a host, a name or an address.
 final class JoinDescriptorResolver {
@@ -43,19 +55,30 @@ final class JoinDescriptorResolver {
     ControlPlaneClient controlPlane = const UnavailableControlPlane(),
     LanDiscoveryClient? lan,
     HostLookup? lookup,
+    NetworkPresence? networkPresence,
+    DescriptorTimer? timer,
     DateTime Function()? clock,
   }) : _descriptors = descriptors,
        _store = store,
        _controlPlane = controlPlane,
        _lan = lan,
        _lookup = lookup ?? _systemLookup,
+       _networkPresence = networkPresence ?? _anyNetworkUp,
+       _timer = timer ?? Timer.new,
        _clock = clock ?? DateTime.now;
+
+  /// The longest the addresses of one target are tried, however many a name
+  /// has: one address's connect and response deadlines, and a connect
+  /// deadline more for the next address.
+  static const fetchBudget = Duration(seconds: 15);
 
   final DescriptorClient _descriptors;
   final MultiplayerStore _store;
   final ControlPlaneClient _controlPlane;
   final LanDiscoveryClient? _lan;
   final HostLookup _lookup;
+  final NetworkPresence _networkPresence;
+  final DescriptorTimer _timer;
   final DateTime Function() _clock;
 
   /// The event that answers [request]; null only when [cancellation] stopped
@@ -131,20 +154,50 @@ final class JoinDescriptorResolver {
             : _directNotAllowed;
       }
     }
+    return _fetchFirst(request, candidates, port, cancellation);
+  }
+
+  /// Tries [candidates] in order within [fetchBudget], stopping at the first
+  /// descriptor. The budget cancels a fetch still running when it ends.
+  Future<DescriptorFetch> _fetchFirst(
+    JoinDescriptorRequest request,
+    List<InternetAddress> candidates,
+    int port,
+    CancellationToken? cancellation,
+  ) async {
+    final budget = CancellationToken();
+    var expired = false;
+    final deadline = _timer(fetchBudget, () {
+      expired = true;
+      budget.cancel();
+    });
+    final linked = cancellation?.register(budget.cancel);
     DescriptorFetchFailed? reported;
-    for (final address in candidates) {
-      final fetch = await _descriptors.fetchFrom(
-        address,
-        port,
-        allowDirect: request.allowsDirect,
-        expectedServerId: request.expectedServerId,
-        cancellation: cancellation,
-      );
-      if (fetch is! DescriptorFetchFailed) return fetch;
-      if (fetch.failure == DescriptorFetchFailure.cancelled) return fetch;
-      if (reported == null || _rank(fetch) > _rank(reported)) reported = fetch;
+    try {
+      for (final address in candidates) {
+        if (budget.isCancelled) break;
+        final fetch = await _descriptors.fetchFrom(
+          address,
+          port,
+          allowDirect: request.allowsDirect,
+          expectedServerId: request.expectedServerId,
+          cancellation: budget,
+        );
+        if (fetch is! DescriptorFetchFailed) return fetch;
+        if (fetch.failure == DescriptorFetchFailure.cancelled) break;
+        if (reported == null || _rank(fetch) > _rank(reported)) {
+          reported = fetch;
+        }
+      }
+    } finally {
+      deadline.cancel();
+      linked?.dispose();
     }
-    return reported!;
+    if (cancellation?.isCancelled ?? false) return _cancelled;
+    if (expired && (reported == null || _rank(_outOfTime) > _rank(reported))) {
+      reported = _outOfTime;
+    }
+    return reported ?? _outOfTime;
   }
 
   /// The addresses of [resolved] the rules allow, in the order they allow
@@ -180,9 +233,20 @@ final class JoinDescriptorResolver {
     }
   }
 
+  /// Whether any network is up; true when that cannot be told, so offline
+  /// is reported only when it is certain.
+  Future<bool> _anyNetwork() async {
+    try {
+      return await _networkPresence();
+    } on Object {
+      return true;
+    }
+  }
+
   /// When several addresses fail, the most telling failure is reported:
   /// evidence about the server outweighs a busy host, which outweighs one
-  /// that never answered.
+  /// that never answered. No route ranks last, so it is reported only when
+  /// every address had none.
   static int _rank(DescriptorFetchFailed failed) => switch (failed.failure) {
     DescriptorFetchFailure.directNotAllowed => 7,
     DescriptorFetchFailure.otherServer => 6,
@@ -195,7 +259,7 @@ final class JoinDescriptorResolver {
     DescriptorFetchFailure.refused => 3,
     DescriptorFetchFailure.timedOut => 2,
     DescriptorFetchFailure.unreachable => 1,
-    DescriptorFetchFailure.offline || DescriptorFetchFailure.cancelled => 0,
+    DescriptorFetchFailure.noRoute || DescriptorFetchFailure.cancelled => 0,
   };
 
   Future<JoinEvent?> _eventOf(
@@ -216,22 +280,29 @@ final class JoinDescriptorResolver {
             JoinFailureCode.directNotAllowed,
             detail: message,
           ),
-          DescriptorFetchFailure.offline => JoinFailed(
-            JoinFailureCode.offline,
-            detail: message,
-          ),
+          // No route to one destination, such as an IPv6 address on a
+          // network with IPv4 only, is not being offline.
+          DescriptorFetchFailure.noRoute =>
+            await _anyNetwork()
+                ? JoinFailed(JoinFailureCode.unreachable, detail: message)
+                : JoinFailed(
+                    JoinFailureCode.offline,
+                    detail: 'This computer is not connected to a network.',
+                  ),
           DescriptorFetchFailure.rateLimited => JoinFailed(
             JoinFailureCode.rateLimited,
             detail: message,
           ),
+          // The game reports every status but 200 as unreachable, `TFD1 400`
+          // and unknown ones included.
           DescriptorFetchFailure.unreachable ||
           DescriptorFetchFailure.timedOut ||
           DescriptorFetchFailure.busy ||
-          DescriptorFetchFailure.notServing => JoinFailed(
+          DescriptorFetchFailure.notServing ||
+          DescriptorFetchFailure.refused => JoinFailed(
             JoinFailureCode.unreachable,
             detail: message,
           ),
-          DescriptorFetchFailure.refused ||
           DescriptorFetchFailure.malformedResponse ||
           DescriptorFetchFailure.invalidDescriptor ||
           DescriptorFetchFailure.badSignature => JoinFailed(
@@ -257,6 +328,10 @@ final class JoinDescriptorResolver {
   /// before is an identity change while the join expects no server; once it
   /// does, the client already refused any other. The accepted server is
   /// remembered either way, replacing an older record.
+  ///
+  /// A record that cannot be read cannot vouch for anyone, so a join that
+  /// expects no server fails closed: the player is asked to trust the server
+  /// as for a change, and the record is left as it is.
   Future<JoinEvent> _accepted(
     VerifiedServerDescriptor descriptor,
     JoinDescriptorRequest request,
@@ -264,17 +339,28 @@ final class JoinDescriptorResolver {
     final target = request.target;
     if (target is! JoinAddressTarget) return JoinDescriptorVerified(descriptor);
     final served = descriptor.serverId;
+    final expectsServer = request.expectedServerId != null;
     var changed = false;
     try {
       await _store.updateKnownHosts((hosts) {
-        if (request.expectedServerId == null &&
+        if (!expectsServer &&
             hosts.check(target, served) == KnownHostCheck.mismatch) {
           changed = true;
           return hosts;
         }
         return hosts.remember(target, served, _clock());
       });
-    } on MultiplayerStoreException {
+    } on MultiplayerStoreException catch (error) {
+      if (error.unreadable && !expectsServer) {
+        return JoinFailed.identityChanged(
+          servedServerId: served,
+          detail:
+              'The record of the servers this address served before could '
+              'not be read just now, so this server could not be checked. '
+              'Make sure it is the server you expect before you trust it, or '
+              'try again in a moment.',
+        );
+      }
       // An unsaved record only costs a prompt next time.
     }
     if (changed) {
@@ -305,5 +391,10 @@ final class JoinDescriptorResolver {
   static const _cancelled = DescriptorFetchFailed(
     DescriptorFetchFailure.cancelled,
     'The request was cancelled.',
+  );
+
+  static const _outOfTime = DescriptorFetchFailed(
+    DescriptorFetchFailure.timedOut,
+    'The host did not answer in time.',
   );
 }

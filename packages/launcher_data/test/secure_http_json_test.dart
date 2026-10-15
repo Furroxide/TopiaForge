@@ -126,6 +126,23 @@ void main() {
     });
   });
 
+  test('a repeated Retry-After gives no delay, rather than failing', () async {
+    final https = await serve((request) {
+      // Two header lines, as a proxy can add one of its own.
+      request.response.headers
+        ..noFolding('retry-after')
+        ..add('retry-after', '30')
+        ..add('retry-after', '600');
+      return json(request, {'error': 'rate-limited'}, status: 429);
+    });
+    final limited = await https.run(
+      () => requestHttpsJson(base, label: label, maxResponseBytes: 4096),
+    );
+    expect(limited.statusCode, 429);
+    expect(limited.body, {'error': 'rate-limited'});
+    expect(limited.retryAfter, isNull);
+  });
+
   test('never follows a redirect', () async {
     var followed = 0;
     final https = await serve((request) async {

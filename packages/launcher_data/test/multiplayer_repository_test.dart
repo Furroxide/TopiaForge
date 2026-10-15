@@ -157,7 +157,7 @@ void main() {
       expect(compiled.origin, isNull);
     });
 
-    test('accepts only a bare HTTPS origin', () {
+    test('accepts only an HTTPS DNS name and a port, in one spelling', () {
       for (final text in ['', '   ']) {
         expect(
           MultiplayerServiceConfiguration.parse(text).status,
@@ -168,30 +168,100 @@ void main() {
         ('https://play.example', 'https://play.example'),
         ('https://play.example/', 'https://play.example'),
         ('https://play.example:8443', 'https://play.example:8443'),
+        ('https://play.example:1', 'https://play.example:1'),
+        ('https://play.example:65535', 'https://play.example:65535'),
+        ('https://a-b.example.org:443', 'https://a-b.example.org'),
+        ('https://localhost:8787', 'https://localhost:8787'),
+        ('HTTPS://Play.Example/', 'https://play.example'),
         ('  https://play.example  ', 'https://play.example'),
       ]) {
         final configuration = MultiplayerServiceConfiguration.parse(text);
         expect(configuration.status, MultiplayerServiceStatus.configured);
         expect(configuration.isConfigured, isTrue);
-        expect(configuration.origin.toString(), origin);
+        expect(configuration.origin.toString(), origin, reason: text);
+        // The spelling the launch request accepts: `https://`, a lowercase
+        // DNS name, a port without a leading zero, and nothing after.
+        final host = configuration.origin!.host;
+        expect(NetworkHost.tryNormalize(host), host);
+        expect(NetworkHost.pathKindOf(host), isNull);
+        expect(origin, matches(RegExp(r'^https://[a-z0-9.-]+(:[1-9]\d*)?$')));
       }
-      for (final text in [
-        'http://play.example',
-        'https://user:secret@play.example',
-        'https://play.example/v1',
-        'https://play.example?region=eu',
-        'https://play.example#top',
-        'play.example',
-        'https://',
-        'https://${'a' * 300}.example',
+      for (final (about, texts) in [
+        (
+          'another scheme',
+          [
+            'http://play.example',
+            'ftp://play.example',
+            'play.example',
+            'https:play.example',
+            '//play.example',
+          ],
+        ),
+        (
+          'an IP literal',
+          [
+            'https://203.0.113.5',
+            'https://127.0.0.1:8443',
+            'https://[::1]',
+            'https://[2001:db8::1]:8443',
+            'https://[::ffff:203.0.113.5]',
+            'https://::1',
+            'https://2001:db8::1',
+          ],
+        ),
+        (
+          'a port out of range or not plain decimal',
+          [
+            'https://play.example:0',
+            'https://play.example:65536',
+            'https://play.example:99999',
+            'https://play.example:08443',
+            'https://play.example:',
+            'https://play.example:-1',
+            'https://play.example:84a3',
+            'https://play.example:8443:1',
+          ],
+        ),
+        (
+          'a host that is not a DNS name',
+          [
+            'https://pl%20ay.example',
+            'https://pl ay.example',
+            'https://play..example',
+            'https://-play.example',
+            'https://play.example.',
+            'https://${'a' * 64}.example',
+            'https://${'a' * 300}.example',
+            'https://',
+            'https://:8443',
+          ],
+        ),
+        (
+          'user info',
+          ['https://user:secret@play.example', 'https://user@play.example'],
+        ),
+        (
+          'a path, query or fragment',
+          [
+            'https://play.example/v1',
+            'https://play.example//',
+            'https://play.example\\v1',
+            'https://play.example?region=eu',
+            'https://play.example/?region=eu',
+            'https://play.example#top',
+            'https://play.example/#top',
+          ],
+        ),
       ]) {
-        final configuration = MultiplayerServiceConfiguration.parse(text);
-        expect(
-          configuration.status,
-          MultiplayerServiceStatus.invalid,
-          reason: text,
-        );
-        expect(configuration.origin, isNull);
+        for (final text in texts) {
+          final configuration = MultiplayerServiceConfiguration.parse(text);
+          expect(
+            configuration.status,
+            MultiplayerServiceStatus.invalid,
+            reason: '$about: $text',
+          );
+          expect(configuration.origin, isNull);
+        }
       }
     });
 

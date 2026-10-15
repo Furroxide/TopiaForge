@@ -125,9 +125,9 @@ void main() {
   });
 
   test('statuses without a body name their reason', () async {
-    var status = '';
+    var status = <int>[];
     final endpoint = await host(
-      (socket, _) => LoopbackDescriptorHost.raw(socket, ascii.encode(status)),
+      (socket, _) => LoopbackDescriptorHost.raw(socket, status),
     );
     for (final (line, failure) in [
       ('TFD1 404\n', DescriptorFetchFailure.notServing),
@@ -135,10 +135,17 @@ void main() {
       ('TFD1 503\n', DescriptorFetchFailure.busy),
       ('TFD1 400\n', DescriptorFetchFailure.refused),
       ('TFD1 999\n', DescriptorFetchFailure.refused),
+      // Any eight bytes after `TFD1 ` are a status to the game, this too.
+      ('TFD1 200\n', DescriptorFetchFailure.refused),
     ]) {
-      status = line;
+      status = ascii.encode(line);
       expect(failureOf(await fetchFrom(endpoint)), failure, reason: line);
     }
+    status = [...ascii.encode('TFD1 '), 0xE9, ...ascii.encode('00\n')];
+    expect(
+      failureOf(await fetchFrom(endpoint)),
+      DescriptorFetchFailure.refused,
+    );
   });
 
   test('answers that break the protocol are refused', () async {
@@ -147,7 +154,6 @@ void main() {
       (socket, _) => LoopbackDescriptorHost.raw(socket, answer),
     );
     for (final text in [
-      'TFD1 200\n',
       'HTTP/1.1 200 OK\r\n\r\n',
       'TFD1 200 abc\n',
       'TFD1 200 0\n',
@@ -156,6 +162,7 @@ void main() {
       'TFD1 200 262145\n',
       'TFD1 200 99999999\n',
       'TFD1 4040\n',
+      'TFD1 40\n',
       '\n',
       '${'A' * 64}\n',
       '',
@@ -168,24 +175,39 @@ void main() {
         reason: jsonEncode(text),
       );
     }
-    answer = [...ascii.encode('TFD1 '), 0xE9, ...ascii.encode('00\n')];
-    expect(
-      failureOf(await fetchFrom(endpoint)),
-      DescriptorFetchFailure.malformedResponse,
-    );
   });
 
-  test('more bytes than announced are refused', () async {
+  test('bytes after the announced body are never read, however they '
+      'arrive', () async {
     final body = hostADescriptor;
-    final endpoint = await host(
-      (socket, _) => LoopbackDescriptorHost.raw(socket, [
-        ...ascii.encode('TFD1 200 ${body.length - 1}\n'),
-        ...body,
-      ]),
-    );
+    final header = ascii.encode('TFD1 200 ${body.length}\n');
+    final trailing = ascii.encode('trailing bytes\n');
+    var split = false;
+    final endpoint = await host((socket, _) async {
+      if (!split) {
+        return LoopbackDescriptorHost.raw(socket, [
+          ...header,
+          ...body,
+          ...trailing,
+        ]);
+      }
+      socket.add([...header, ...body]);
+      await socket.flush();
+      return LoopbackDescriptorHost.raw(socket, trailing);
+    });
+    for (final apart in [false, true]) {
+      split = apart;
+      final fetch = await fetchFrom(endpoint, expectedServerId: hostAServerId);
+      expect(fetch, isA<DescriptorFetched>(), reason: 'split: $apart');
+    }
+    // A length one short reads one byte short, which does not verify.
+    endpoint.respond = (socket, _) => LoopbackDescriptorHost.raw(socket, [
+      ...ascii.encode('TFD1 200 ${body.length - 1}\n'),
+      ...body,
+    ]);
     expect(
       failureOf(await fetchFrom(endpoint)),
-      DescriptorFetchFailure.malformedResponse,
+      DescriptorFetchFailure.invalidDescriptor,
     );
   });
 
@@ -368,8 +390,10 @@ void main() {
     for (final (code, failure) in [
       (10061, DescriptorFetchFailure.unreachable),
       (111, DescriptorFetchFailure.unreachable),
-      (10051, DescriptorFetchFailure.offline),
-      (101, DescriptorFetchFailure.offline),
+      (10051, DescriptorFetchFailure.noRoute),
+      (10050, DescriptorFetchFailure.noRoute),
+      (101, DescriptorFetchFailure.noRoute),
+      (51, DescriptorFetchFailure.noRoute),
       (null, DescriptorFetchFailure.unreachable),
     ]) {
       final client = DescriptorClient(

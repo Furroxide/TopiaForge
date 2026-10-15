@@ -44,23 +44,20 @@ final class MultiplayerServiceConfiguration {
         const String.fromEnvironment(defineName),
       );
 
-  /// Reads an origin such as `https://play.example`: HTTPS, a host, an
-  /// optional port, and nothing else. Empty text is no service; anything
-  /// else that is not such an origin is [MultiplayerServiceStatus.invalid].
+  /// Reads an origin such as `https://play.example`: HTTPS, a DNS name, an
+  /// optional port of 1 to 65535 in plain decimal, at most a trailing `/`,
+  /// and nothing else. An IP literal is refused, bracketed or not, as the
+  /// launch request refuses it. Empty text is no service; anything else that
+  /// is not such an origin is [MultiplayerServiceStatus.invalid].
+  ///
+  /// The [origin] is the one spelling the launch request carries: lowercase,
+  /// with no trailing `/` and no default port, so any text read here as
+  /// configured is an origin the launch request accepts.
   factory MultiplayerServiceConfiguration.parse(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return none;
-    final uri = Uri.tryParse(trimmed);
-    final valid =
-        uri != null &&
-        trimmed.length <= 256 &&
-        uri.scheme == 'https' &&
-        uri.host.isNotEmpty &&
-        uri.userInfo.isEmpty &&
-        (uri.path.isEmpty || uri.path == '/') &&
-        !uri.hasQuery &&
-        !uri.hasFragment;
-    if (!valid) {
+    final origin = _tryParseOrigin(trimmed);
+    if (origin == null) {
       return const MultiplayerServiceConfiguration._(
         MultiplayerServiceStatus.invalid,
         null,
@@ -68,8 +65,45 @@ final class MultiplayerServiceConfiguration {
     }
     return MultiplayerServiceConfiguration._(
       MultiplayerServiceStatus.configured,
-      Uri(scheme: 'https', host: uri.host, port: uri.hasPort ? uri.port : null),
+      origin,
     );
+  }
+
+  /// The origin [text] names, or null. The text is read as written rather
+  /// than through [Uri.parse], which decodes escapes in a host and takes a
+  /// port of any size.
+  static Uri? _tryParseOrigin(String text) {
+    const scheme = 'https://';
+    if (text.length > 256 || !text.toLowerCase().startsWith(scheme)) {
+      return null;
+    }
+    var authority = text.substring(scheme.length);
+    if (authority.endsWith('/')) {
+      authority = authority.substring(0, authority.length - 1);
+    }
+    // A path, query, fragment or credentials make it more than an origin,
+    // and brackets hold an IPv6 address.
+    if (authority.isEmpty || authority.contains(RegExp(r'[/?#@\[\]\\\s]'))) {
+      return null;
+    }
+    final colon = authority.indexOf(':');
+    final host = colon < 0 ? authority : authority.substring(0, colon);
+    final port = colon < 0
+        ? null
+        : _tryParsePort(authority.substring(colon + 1));
+    if (colon >= 0 && port == null) return null;
+    // A DNS name only: an IPv4 literal is refused here, and an IPv6 one never
+    // gets this far.
+    final name = NetworkHost.tryNormalize(host);
+    if (name == null || NetworkHost.pathKindOf(name) != null) return null;
+    return Uri(scheme: 'https', host: name, port: port);
+  }
+
+  /// One to five digits without a leading zero, from 1 to 65535.
+  static int? _tryParsePort(String text) {
+    if (!RegExp(r'^[1-9][0-9]{0,4}$').hasMatch(text)) return null;
+    final port = int.parse(text);
+    return port <= 65535 ? port : null;
   }
 
   final MultiplayerServiceStatus status;

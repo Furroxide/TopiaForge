@@ -48,8 +48,8 @@ final class SecureHttpJsonResponse {
   /// of an unsuccessful response, whose status alone is the answer.
   final Object? body;
 
-  /// The `Retry-After` delay in whole seconds, when the service sent one of
-  /// at most a day.
+  /// The `Retry-After` delay in whole seconds, when the service sent one
+  /// such header, of at most a day.
   final Duration? retryAfter;
 
   bool get isSuccess => statusCode >= 200 && statusCode < 300;
@@ -229,7 +229,8 @@ Future<SecureHttpJsonResponse> _sendJson(
   return SecureHttpJsonResponse(
     statusCode: status,
     body: _decodeJsonBody(response, bytes, label),
-    retryAfter: _retryAfter(response.headers.value('retry-after')),
+    // `value` throws on a repeated header, so the list is read instead.
+    retryAfter: _retryAfter(response.headers['retry-after']),
   );
 }
 
@@ -258,11 +259,14 @@ Object? _decodeJsonBody(
   }
 }
 
-Duration? _retryAfter(String? value) {
-  if (value == null || !RegExp(r'^[0-9]{1,6}$').hasMatch(value.trim())) {
-    return null;
-  }
-  final seconds = int.parse(value.trim());
+/// The delay a single `Retry-After` header gives in whole seconds, when it is
+/// at most a day. A header sent more than once is ignored: it does not say
+/// which delay holds.
+Duration? _retryAfter(List<String>? values) {
+  if (values == null || values.length != 1) return null;
+  final value = values.single.trim();
+  if (!RegExp(r'^[0-9]{1,6}$').hasMatch(value)) return null;
+  final seconds = int.parse(value);
   return seconds > _maximumRetryAfterSeconds
       ? null
       : Duration(seconds: seconds);

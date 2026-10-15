@@ -20,7 +20,9 @@ enum PortCheckResult {
   /// The check was not run; it binds sockets, so it runs only on request.
   notChecked,
 
-  /// The port could be bound, so hosting or browsing can use it.
+  /// The port could be bound just now. That is all it means: it says nothing
+  /// of whether a firewall, the router or other players let anything reach
+  /// it.
   available,
 
   /// Another program holds the port.
@@ -177,7 +179,7 @@ final class MultiplayerNetworkDiagnostics {
       );
       return PortCheckResult.available;
     } on SocketException catch (error) {
-      return _resultOf(error);
+      return _resultOf(error, shared: reuse);
     } finally {
       socket?.close();
     }
@@ -189,19 +191,25 @@ final class MultiplayerNetworkDiagnostics {
       socket = await ServerSocket.bind(_bindAddress, port);
       return PortCheckResult.available;
     } on SocketException catch (error) {
-      return _resultOf(error);
+      return _resultOf(error, shared: false);
     } finally {
       await socket?.close();
     }
   }
 
-  /// Address-in-use and access-denied codes on Windows, Linux and macOS.
-  static PortCheckResult _resultOf(SocketException error) =>
-      switch (error.osError?.errorCode) {
-        10048 || 98 || 48 => PortCheckResult.inUse,
-        10013 || 13 => PortCheckResult.denied,
-        _ => PortCheckResult.failed,
-      };
+  /// Address-in-use and access-denied codes on Windows, Linux and macOS. On
+  /// Windows a [shared] bind, as the discovery port's is, fails with
+  /// WSAEACCES (10013) on a port another program holds exclusively, so there
+  /// it means in use.
+  static PortCheckResult _resultOf(
+    SocketException error, {
+    required bool shared,
+  }) => switch (error.osError?.errorCode) {
+    10048 || 98 || 48 => PortCheckResult.inUse,
+    10013 when shared => PortCheckResult.inUse,
+    10013 || 13 => PortCheckResult.denied,
+    _ => PortCheckResult.failed,
+  };
 
   static Future<NetworkCheckState> _seam(
     Future<NetworkCheckState> Function({CancellationToken? cancellation})?
