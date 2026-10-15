@@ -73,6 +73,7 @@ namespace TopiaForge.Multiplayer.Engine
             originMicros = startMicros;
             nowMicros = startMicros;
             Clock = new FixedStepClock(options.StepRateHz);
+            InitializeVoice();
         }
 
         /// <summary>Gets the engine's role; a process moves between solo hosting and joining, see <c>SessionEngine.Roles.cs</c>.</summary>
@@ -202,6 +203,7 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool HasPendingWork =>
             !inbox.IsEmpty ||
             presentationDeliveries.Count > 0 ||
+            voiceHeld ||
             (Role == EngineRole.Host ? HostHasPendingWork : ClientHasPendingWork);
 
         /// <summary>Ends this process's participation: a host ends the session for everyone, a client leaves.</summary>

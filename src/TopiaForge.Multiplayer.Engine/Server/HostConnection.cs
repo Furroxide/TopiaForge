@@ -51,6 +51,12 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal bool IsJoined => Phase == HostConnectionPhase.Accepted || Phase == HostConnectionPhase.Ready;
 
+        /// <summary>Gets or sets the speakers this client asked not to have relayed, by participant id.</summary>
+        internal HashSet<string> VoiceMutes { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>Gets or sets whether this client asked for no voice at all.</summary>
+        internal bool VoiceMuteAll { get; set; }
+
         internal bool HasOutbound => Queue.Count > 0 || CommitNeeded || CloseAfterFlush;
 
         internal bool HasPendingDeltas => PendingStates.Count > 0 || PendingObjects.Count > 0;
@@ -110,6 +116,9 @@ namespace TopiaForge.Multiplayer.Engine
         internal ulong LastSequence { get; set; }
         internal long RttMicros { get; set; } = -1;
         internal string? PlayerKey { get; set; }
+
+        /// <summary>Gets or sets the host's voice state for this participant, or null when voice is off.</summary>
+        internal VoiceSpeaker? Voice { get; set; }
 
         /// <summary>Gets the round trip rounded to 10 ms before it leaves the host, or null when unmeasured.</summary>
         internal int? PingMilliseconds =>

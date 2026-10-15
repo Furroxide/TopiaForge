@@ -49,6 +49,13 @@ namespace TopiaForge.Multiplayer.Engine
         internal ulong Tick;
         internal int StepRateHz;
         internal ulong NextSequence;
+
+        /// <summary>
+        /// Whether the host kept the player's participant record from before this join, as within the grace period or
+        /// across an in-place replacement, rather than creating one. Only then may the client's listener mutes stay.
+        /// </summary>
+        internal bool RecordKept;
+
         internal byte[] Report = Array.Empty<byte>();
     }
 
@@ -119,6 +126,7 @@ namespace TopiaForge.Multiplayer.Engine
             body.WriteVarUInt(message.Tick);
             body.WriteVarUInt((ulong)message.StepRateHz);
             body.WriteVarUInt(message.NextSequence);
+            body.WriteBool(message.RecordKept);
             body.WriteBytes(message.Report);
             frame.WriteEnvelope(MessageType.JoinAccepted, body);
         }
@@ -135,6 +143,7 @@ namespace TopiaForge.Multiplayer.Engine
                 Tick = reader.ReadVarUInt(),
                 StepRateHz = (int)reader.ReadVarUInt(1000),
                 NextSequence = reader.ReadVarUInt(),
+                RecordKept = reader.ReadBool(),
                 Report = reader.ReadBytes(ProtocolLimits.MaximumOpaqueBytes)
             };
             if (message.StepRateHz < 1) throw new ProtocolException("The host announced a step rate of zero.");

@@ -157,6 +157,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (connections.Count == 0)
             {
                 participantsDirty = false;
+                voiceRosterDirty = false;
                 return;
             }
 
@@ -172,6 +173,7 @@ namespace TopiaForge.Multiplayer.Engine
                 }
             }
 
+            FlushVoiceRoster();
             var downstreamDue = options.DownstreamRateHz == 0 || nowMicros >= nextDownstreamAt;
             if (downstreamDue && options.DownstreamRateHz > 0) nextDownstreamAt = nowMicros + (1_000_000 / options.DownstreamRateHz);
             foreach (var connection in connections.ToArray()) FlushConnection(connection, downstreamDue);

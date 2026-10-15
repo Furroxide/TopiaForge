@@ -42,7 +42,10 @@ namespace TopiaForge.Multiplayer.Engine
         /// </summary>
         internal bool FlushOpen { get; set; }
 
-        internal bool HasOutbound => JoinPending || ReadyAckPending || Unsent.Count > 0 || PendingClockReply.HasValue;
+        /// <summary>Gets or sets whether the local listener mute set must be sent to the host.</summary>
+        internal bool VoiceMutesPending { get; set; }
+
+        internal bool HasOutbound => JoinPending || ReadyAckPending || Unsent.Count > 0 || PendingClockReply.HasValue || VoiceMutesPending;
     }
 
     /// <summary>Canonical values received between <c>SnapshotBegin</c> and <c>SnapshotEnd</c>.</summary>
