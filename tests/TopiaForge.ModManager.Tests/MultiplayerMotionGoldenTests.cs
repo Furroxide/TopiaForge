@@ -73,6 +73,7 @@ namespace TopiaForge.ModManager.Tests
                     }
 
                     var expected = step["outcome"]!.AsArray();
+                    Equal(13, expected.Count, where + ": outcome fields");
                     Equal(expected[0]!.GetValue<string>(), outcome.Result.ToString(), where + ": result");
                     Equal(expected[1]!.GetValue<string>(), outcome.ReclaimReason.ToString(), where + ": reclaim reason");
                     Equal(expected[2]!.GetValue<string>(), outcome.State.ToString(), where + ": state");
@@ -84,6 +85,8 @@ namespace TopiaForge.ModManager.Tests
                     Equal(expected[8]!.GetValue<long>(), host.YieldUntilMicros, where + ": yield deadline");
                     Equal(expected[9]!.GetValue<bool>(), host.AwaitingFirstSample, where + ": first sample owed");
                     Equal(expected[10]!.GetValue<bool>(), host.Contested, where + ": hold contested");
+                    Equal(expected[11]!.GetValue<int>(), host.LastReleaser, where + ": last releaser");
+                    Equal(expected[12]!.GetValue<long>(), host.LastReleaseMicros, where + ": release time");
                     if (step["accepted"] is JsonArray velocities)
                     {
                         Equal(VectorBits(velocities[0]!), VectorBits(accepted.LinearVelocity), where + ": accepted linear velocity");

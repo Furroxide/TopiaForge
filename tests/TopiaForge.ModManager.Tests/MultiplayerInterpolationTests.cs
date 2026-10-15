@@ -95,7 +95,10 @@ namespace TopiaForge.ModManager.Tests
         {
             // Calm for five seconds, rough for ten, then calm for twenty-five: long enough for the jitter estimate to
             // decay to zero, so the target moves up and all the way back down. Moving the render clock with the offset
-            // estimate as well used to swing playback between a standstill and 2.06 times real time here.
+            // estimate as well used to swing playback between a standstill and 2.06 times real time here, and catching
+            // up as soon as the delay passed the cap ran it at up to 1.27. Now it never runs faster than 1.1; when the
+            // rough phase starts, the late samples pull the delay under the floor and the render falls back for a few
+            // frames.
             var random = new SeededRandom(29);
             var arrivals = new long[400];
             for (var index = 0; index < arrivals.Length; index++)
@@ -121,8 +124,9 @@ namespace TopiaForge.ModManager.Tests
             }
 
             True(playback.Frames > 2000, "every frame was checked");
-            True(playback.Corrections > 0 && playback.FastestRatio < 1.3,
-                "the rough phase needed gentle catch-up only: " + playback.FastestRatio.ToString("F3", CultureInfo.InvariantCulture));
+            True(playback.FastestRatio <= 1.1, "the rough phase never sped playback up: " + playback.FastestRatio.ToString("F3", CultureInfo.InvariantCulture));
+            True(playback.Corrections > 0 && playback.SlowestRatio >= 0.75,
+                "it only fell back, gently: " + playback.SlowestRatio.ToString("F3", CultureInfo.InvariantCulture));
             True(maximumDelay > 200_000, "the rough phase raised the delay to " + maximumDelay);
             Equal(Step, buffer.CurrentDelayMicros, "the calm phase brought it back to one interval");
             Equal(Step, buffer.TargetDelayMicros, "and the target with it");
@@ -174,7 +178,11 @@ namespace TopiaForge.ModManager.Tests
             // The gap filled late shrinks it again; a gap that leaves the buffer stops counting.
             Equal(SnapshotSampleResult.Accepted, buffer.Add(Sample(Start + 200_000, 2), Start + 360_000), "a late sample fills the gap");
             Equal(100_000L, buffer.LargestGapMicros, "the gap is filled");
-            for (var index = 5; index <= 12; index++) buffer.Add(Sample(Start + 300_000 + index * 10_000, index), Start + 300_000 + index * 10_000);
+            for (var index = 6; index < 6 + SnapshotInterpolationBuffer.Capacity; index++)
+            {
+                buffer.Add(Sample(Start + 300_000 + index * 10_000, index), Start + 300_000 + index * 10_000);
+            }
+
             Equal(10_000L, buffer.LargestGapMicros, "evicted samples take their gaps with them");
 
             // A gap longer than the cap clamps the delay at 350 ms.
@@ -247,33 +255,37 @@ namespace TopiaForge.ModManager.Tests
                 buffer.Add(Sample(Start + index * Step, index), Start + index * Step + Transit);
             }
 
-            Equal(SnapshotInterpolationBuffer.Capacity, buffer.Count, "eight samples");
+            Equal(SnapshotInterpolationBuffer.Capacity, buffer.Count, "a full buffer");
             Equal(Start + Step, buffer.GetSample(0).ServerTimeMicros, "the oldest was evicted");
             Equal(SnapshotSampleResult.Stale, buffer.Add(Sample(Start, 0), Start + 9 * Step + Transit), "older than a full buffer");
-            // Eight samples 10 ms apart cover only 70 ms, less than the 80 ms minimum delay. The render starts behind
+
+            // Twenty samples 4 ms apart cover only 76 ms, less than the 80 ms minimum delay. The render starts behind
             // the buffer and holds its oldest sample, and the buffer keeps that sample while the render needs it: the
             // delay holds at 80 ms and the render clock never jumps forward to stay inside the buffer.
+            const long spacing = 4_000;
             var dense = new SnapshotInterpolationBuffer();
             for (var index = 0; index < SnapshotInterpolationBuffer.Capacity; index++)
             {
-                dense.Add(Sample(Start + index * 10_000, index), Start + index * 10_000);
+                dense.Add(Sample(Start + index * spacing, index), Start + index * spacing);
             }
 
             var playback = new PlaybackRate();
-            True(playback.Sample(dense, Start + 70_000, out var held), "render a dense buffer");
-            Equal(Start - 10_000, held.RenderTimeMicros, "the render keeps the 80 ms delay");
+            True(playback.Sample(dense, Start + 76_000, out var held), "render a dense buffer");
+            Equal(Start - 4_000, held.RenderTimeMicros, "the render keeps the 80 ms delay");
             Equal(InterpolationMode.Holding, held.Mode, "and holds the oldest sample until it gets there");
-            for (var index = SnapshotInterpolationBuffer.Capacity; index < 60; index++)
+            var lastNow = 0L;
+            for (var index = SnapshotInterpolationBuffer.Capacity; index < 150; index++)
             {
-                var now = Start + index * 10_000;
+                var now = Start + index * spacing;
                 dense.Add(Sample(now, index), now);
                 True(playback.Sample(dense, now, out var frame), "render while the dense stream goes on");
                 Equal(now - 80_000, frame.RenderTimeMicros, "every frame keeps the delay");
                 True(frame.Mode == InterpolationMode.Interpolating || frame.Mode == InterpolationMode.Holding, "inside the buffer");
+                lastNow = now;
             }
 
             Equal(80_000L, dense.CurrentDelayMicros, "the delay held");
-            True(dense.GetSample(0).ServerTimeMicros <= Start + 510_000, "the buffer kept the sample the render needed");
+            True(dense.GetSample(0).ServerTimeMicros <= lastNow - 80_000, "the buffer kept the sample the render needed");
         }
 
         private static void AFullBufferKeepsTheSegmentOnScreen()
@@ -288,7 +300,8 @@ namespace TopiaForge.ModManager.Tests
             True(buffer.TrySample(Start + 200_000, out var before), "render between the oldest two samples");
             Equal(Start + 50_000, before.RenderTimeMicros, "a quarter-way render");
             Near(0.5, before.Position.X, 1e-6, "halfway from 0 to 1");
-            buffer.Add(Sample(Start + 8 * Step, 64), Start + 8 * Step + Transit);
+            const int full = SnapshotInterpolationBuffer.Capacity;
+            buffer.Add(Sample(Start + full * Step, full * full), Start + full * Step + Transit);
             Equal(SnapshotInterpolationBuffer.Capacity, buffer.Count, "still full");
             Equal(Start, buffer.GetSample(0).ServerTimeMicros, "the oldest sample is still on screen");
             Equal(Start + Step, buffer.GetSample(1).ServerTimeMicros, "and so is the next");
@@ -298,7 +311,7 @@ namespace TopiaForge.ModManager.Tests
 
             // Once the render has passed the second sample, the oldest goes as usual.
             True(buffer.TrySample(Start + 300_000, out var later) && later.RenderTimeMicros == Start + 150_000, "render on");
-            buffer.Add(Sample(Start + 9 * Step, 81), Start + 9 * Step + Transit);
+            buffer.Add(Sample(Start + (full + 1) * Step, (full + 1) * (full + 1)), Start + (full + 1) * Step + Transit);
             Equal(Start + Step, buffer.GetSample(0).ServerTimeMicros, "the oldest is dropped once passed");
 
             // Holding the oldest sample keeps it, and the one after it goes instead.
@@ -309,15 +322,15 @@ namespace TopiaForge.ModManager.Tests
             }
 
             True(holding.TrySample(Start + 100_000, out var held) && held.Mode == InterpolationMode.Holding, "render before the oldest sample");
-            holding.Add(Sample(Start + 8 * Step, 8), Start + 8 * Step + Transit);
+            holding.Add(Sample(Start + full * Step, full), Start + full * Step + Transit);
             Equal(Start, holding.GetSample(0).ServerTimeMicros, "the held sample stays");
             Equal(Start + 2 * Step, holding.GetSample(1).ServerTimeMicros, "the next one went");
 
             // The gap a dropped sample leaves says nothing about the cadence, so it does not raise the delay, even
             // after a late sample lands in front of it and moves it along. That sample fills the buffer again, so the
-            // sample after the held one goes too.
+            // sample after the held one goes too. It arrives 725 ms after it was due, inside the 1 s that would read as a jump.
             Equal(Step, holding.LargestGapMicros, "the dropped sample's gap does not count");
-            Equal(SnapshotSampleResult.Accepted, holding.Add(Sample(Start + 25_000, 0.25f), Start + 8 * Step + Transit + 1_000), "a late sample");
+            Equal(SnapshotSampleResult.Accepted, holding.Add(Sample(Start + 25_000, 0.25f), Start + 800_000), "a late sample");
             True(holding.GetSample(1).ServerTimeMicros == Start + 25_000 && holding.GetSample(2).ServerTimeMicros == Start + 3 * Step,
                 "lands in front of that gap");
             Equal(Step, holding.LargestGapMicros, "which still does not count");
@@ -395,7 +408,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void ValidatesInputs()
         {
-            Throws<ArgumentOutOfRangeException>(() => new SnapshotInterpolationBuffer(999), "nominal interval too small");
+            Throws<ArgumentOutOfRangeException>(() => new SnapshotInterpolationBuffer(33_332), "a stream faster than 30 Hz");
+            Equal(0, new SnapshotInterpolationBuffer(33_333).Count, "a 30 Hz stream");
             Throws<ArgumentOutOfRangeException>(() => new SnapshotInterpolationBuffer(1_000_001), "nominal interval too large");
             var buffer = new SnapshotInterpolationBuffer();
             Throws<ArgumentOutOfRangeException>(() => buffer.Add(Sample(0, 0), -1), "negative arrival");

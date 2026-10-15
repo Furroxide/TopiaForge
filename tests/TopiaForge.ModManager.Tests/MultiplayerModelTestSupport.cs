@@ -83,9 +83,10 @@ namespace TopiaForge.ModManager.Tests
 
     /// <summary>
     /// Renders a buffer frame by frame and checks each frame's render advance against the written rule, not the code:
-    /// within 10% of the elapsed time while the delay before the frame lay between zero and the cap; beyond the cap, one
-    /// percent more per millisecond of excess, up to 100%; ahead of the sender clock, one percent more per millisecond
-    /// of lead, up to 50%. So playback never runs faster than twice or slower than half real time.
+    /// within 10% of the elapsed time while the delay before the frame lay between the 80 ms floor and 400 ms, the cap
+    /// plus the dead band; beyond 400 ms, one percent more per millisecond of excess, up to 100%; below the floor, one
+    /// percent more per millisecond short of it, up to 50%. So playback never runs faster than twice or slower than half
+    /// real time.
     /// </summary>
     internal sealed class PlaybackRate
     {
@@ -97,6 +98,9 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Frames that used more than the normal 10% to correct the delay.</summary>
         public int Corrections { get; private set; }
 
+        /// <summary>Frames that ran faster than 1.1 times real time.</summary>
+        public int FastFrames { get; private set; }
+
         public long SlowestAdvance { get; private set; } = long.MaxValue;
 
         public double SlowestRatio { get; private set; } = double.MaxValue;
@@ -104,6 +108,8 @@ namespace TopiaForge.ModManager.Tests
         public double FastestRatio { get; private set; }
 
         public long LargestDelay { get; private set; } = long.MinValue;
+
+        public long SmallestDelay { get; private set; } = long.MaxValue;
 
         public bool Sample(SnapshotInterpolationBuffer buffer, long now, out InterpolatedTransform result)
         {
@@ -122,12 +128,14 @@ namespace TopiaForge.ModManager.Tests
                     "playback ran at " + ratio.ToString("F3", CultureInfo.InvariantCulture) + " times real time with a delay of " +
                     delayBefore + " us, where " + percent + "% is allowed");
                 if (percent > SnapshotInterpolationBuffer.PlaybackSlewPercent) Corrections++;
+                if (advance * 10 > elapsed * 11) FastFrames++;
                 SlowestAdvance = Math.Min(SlowestAdvance, advance);
                 SlowestRatio = Math.Min(SlowestRatio, ratio);
                 FastestRatio = Math.Max(FastestRatio, ratio);
             }
 
             LargestDelay = Math.Max(LargestDelay, buffer.CurrentDelayMicros);
+            SmallestDelay = Math.Min(SmallestDelay, buffer.CurrentDelayMicros);
             lastNow = now;
             lastRender = result.RenderTimeMicros;
             return true;
@@ -135,8 +143,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static long AllowedPercent(long delay)
         {
-            if (delay > 350_000) return Math.Min(100, 10 + (delay - 350_000) / 1_000);
-            return delay < 0 ? Math.Min(50, 10 + -delay / 1_000) : 10;
+            if (delay > 400_000) return Math.Min(100, 10 + (delay - 400_000) / 1_000);
+            return delay < 80_000 ? Math.Min(50, 10 + (80_000 - delay) / 1_000) : 10;
         }
     }
 

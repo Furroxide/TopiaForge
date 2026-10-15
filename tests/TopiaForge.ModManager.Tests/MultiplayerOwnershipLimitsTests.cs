@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using TopiaForge.ModManager.Core.Multiplayer;
 using static TopiaForge.ModManager.Tests.MultiplayerModelAssert;
 
@@ -7,7 +6,8 @@ namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
     /// Motion ownership limits: the hold range on grabs, steals, catches and throws; the first-sample deadline; and
-    /// yielding after going quiet, so one player cannot keep a body from everyone else (WS3.5).
+    /// yielding after going quiet or after a hold too short to contest, so one player cannot keep a body from everyone
+    /// else (WS3.5). MultiplayerOwnershipGriefingTests races the griefers against a real claim over delayed links.
     /// </summary>
     internal static class MultiplayerOwnershipLimitsTests
     {
@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
         private static readonly NetQuantizedPosition Origin = new NetQuantizedPosition(0, 0, 0);
         private static readonly NetQuantizedPosition AtReach = new NetQuantizedPosition(Reach, 0, 0);
         private static readonly NetQuantizedPosition PastReach = new NetQuantizedPosition(Reach + 1, 0, 0);
+        private static readonly MotionHandback Rest = new MotionHandback(new NetQuantizedPosition(0, 0, 0), NetVector3.Zero, NetVector3.Zero);
 
         public static void Run()
         {
@@ -27,7 +28,7 @@ namespace TopiaForge.ModManager.Tests
             AThrowMustStartWithinTheHoldRange();
             AGrantWithoutAFirstSampleLapses();
             AQuietOwnerYieldsForTheCooldown();
-            QuietOwnersCannotKeepABodyFromOthers();
+            AHoldTooShortToContestStillYields();
             ADepartedSlotStartsClean();
             ValidatesThePolicy();
             Console.WriteLine("MultiplayerOwnershipLimitsTests passed.");
@@ -211,91 +212,78 @@ namespace TopiaForge.ModManager.Tests
             Equal(OwnershipResult.Granted, quick.Request(Alice, 2, Origin, Origin, 250_002).Result, "a zero cooldown turns yielding off");
         }
 
-        private static void QuietOwnersCannotKeepABodyFromOthers()
+        private static void AHoldTooShortToContestStillYields()
         {
-            // A griefer asks for the body first on every 20 Hz tick and never streams it, or streams one sample a grant,
-            // or lets go and grabs again every tick: handing back with no sample or with one, or sending a sample far
-            // enough off to be rejected. Each used to win every grant (201 of 201 for the hand-back loop), so the honest
-            // player beside it never got the body. With yielding turned off, each still does exactly that.
-            var noYield = new OwnershipPolicy(yieldCooldownMicros: 0);
-            foreach (var grief in new[] { Grief.Silent, Grief.OneSample, Grief.HandBackEveryTick, Grief.OneSampleThenHandBack, Grief.RejectedSample })
+            // A grab, a sample and a hand-back that arrive together end the hold before another request can reach it.
+            var host = new OwnershipStateMachine();
+            Equal(OwnershipResult.Granted, host.Request(Alice, 0, Origin, Origin, 0).Result, "grab");
+            Equal(OwnershipResult.Accepted, host.Stream(Alice, 1, Origin, Origin, 0).Result, "sample");
+            Equal(OwnershipResult.HandedBack, host.Handback(Alice, 1, Rest, Origin, 0, out _).Result, "hand-back");
+            True(!host.Contested && host.YieldingParticipant == 0, "nothing contested the hold");
+            True(host.LastReleaser == Alice && host.LastReleaseMicros == 0, "so the host remembers who let go, and when");
+
+            // Neither Alice's own stale grab nor one from out of range counts.
+            Equal(OwnershipResult.StaleEpoch, host.Request(Alice, 0, Origin, Origin, 10_000).Result, "Alice's own stale grab");
+            Equal(OwnershipResult.StaleEpoch, host.Request(Bob, 1, Origin, PastReach, 20_000).Result, "Bob's from out of range");
+            Equal(0, host.YieldingParticipant, "make nobody yield");
+
+            // Bob asked under the epoch of the hold he never saw: Alice yields from now, once, and Bob's retry wins.
+            var stale = host.Request(Bob, 1, Origin, Origin, 30_000);
+            True(stale.Result == OwnershipResult.StaleEpoch && stale.Epoch == 2 && !stale.EpochChanged, "Bob's stale grab is refused");
+            True(host.YieldingParticipant == Alice && host.YieldUntilMicros == 1_030_000, "and Alice yields for the cooldown");
+            Equal(0, host.LastReleaser, "each release makes its owner yield at most once");
+            host.Request(Bob, 1, Origin, Origin, 40_000);
+            Equal(1_030_000L, host.YieldUntilMicros, "a second stale grab does not extend it");
+            Equal(OwnershipResult.Yielding, host.Request(Alice, 2, Origin, Origin, 50_000).Result, "Alice cannot take it back");
+            Equal(OwnershipResult.Granted, host.Request(Bob, 2, Origin, Origin, 60_000).Result, "Bob's retry wins");
+
+            // The cooldown after the release bounds it: a stale grab one cooldown later is too late, one microsecond
+            // earlier is not.
+            foreach (var (late, yields) in new[] { (OwnershipPolicy.DefaultYieldCooldownMicros, false), (OwnershipPolicy.DefaultYieldCooldownMicros - 1, true) })
             {
-                var grantees = GriefedGrants(OwnershipPolicy.Default, grief);
-                var honestGrants = grantees.FindAll(grantee => grantee == Bob).Count;
-                True(honestGrants >= 5, grief + ": the honest player gets the body (" + honestGrants + " of " + grantees.Count + " grants)");
-                for (var index = 1; index < grantees.Count; index++)
-                {
-                    True(grantees[index] != Alice || grantees[index - 1] != Alice, grief + ": the griefer never wins two grants in a row");
-                }
-
-                var unprotected = GriefedGrants(noYield, grief);
-                True(unprotected.Count > 5 && !unprotected.Contains(Bob), grief + ": without yielding the griefer keeps the body");
-            }
-        }
-
-        private enum Grief
-        {
-            Silent,
-            OneSample,
-            HandBackEveryTick,
-            OneSampleThenHandBack,
-            RejectedSample
-        }
-
-        /// <summary>Who wins each grant over ten seconds of a griefer racing an honest player for one body.</summary>
-        private static List<int> GriefedGrants(OwnershipPolicy policy, Grief grief)
-        {
-            var host = new OwnershipStateMachine(policy);
-            var grantees = new List<int>();
-            var griefSampled = false;
-            var honestSince = 0L;
-            var sampling = grief == Grief.OneSample || grief == Grief.OneSampleThenHandBack;
-            for (var now = 0L; now <= 10_000_000; now += 50_000)
-            {
-                host.Poll(now);
-                if (host.Owner.Equals(NetOwner.ForParticipant(Alice)))
-                {
-                    if (grief == Grief.HandBackEveryTick || grief == Grief.OneSampleThenHandBack)
-                    {
-                        host.Handback(Alice, host.Epoch, new MotionHandback(Origin, NetVector3.Zero, NetVector3.Zero), Origin, now, out _);
-                    }
-                    else if (grief == Grief.RejectedSample)
-                    {
-                        // Twenty metres in one sample breaks the speed budget, so the host takes the body back.
-                        host.Stream(Alice, host.Epoch, new NetQuantizedPosition(20 * Unit, 0, 0), Origin, now);
-                    }
-                }
-
-                // Both players keep asking for the body whenever they do not hold it, the griefer first.
-                if (!host.Owner.Equals(NetOwner.ForParticipant(Alice)) &&
-                    host.Request(Alice, host.Epoch, Origin, Origin, now).Result == OwnershipResult.Granted)
-                {
-                    grantees.Add(Alice);
-                    griefSampled = false;
-                }
-
-                if (sampling && host.Owner.Equals(NetOwner.ForParticipant(Alice)) && !griefSampled)
-                {
-                    host.Stream(Alice, host.Epoch, Origin, Origin, now);
-                    griefSampled = true;
-                }
-
-                if (!host.Owner.Equals(NetOwner.ForParticipant(Bob)) &&
-                    host.Request(Bob, host.Epoch, Origin, Origin, now).Result == OwnershipResult.Granted)
-                {
-                    grantees.Add(Bob);
-                    honestSince = now;
-                }
-
-                if (host.Owner.Equals(NetOwner.ForParticipant(Bob)))
-                {
-                    // The honest player holds the body for half a second, streaming it, then lets go.
-                    if (now - honestSince < 500_000) host.Stream(Bob, host.Epoch, Origin, Origin, now);
-                    else host.Handback(Bob, host.Epoch, new MotionHandback(Origin, NetVector3.Zero, NetVector3.Zero), Origin, now, out _);
-                }
+                var edge = ShortHold(Alice, 100_000);
+                edge.Request(Bob, 0, Origin, Origin, 100_000 + late);
+                Equal(yields ? Alice : 0, edge.YieldingParticipant, "a stale grab " + late + " us after the release");
             }
 
-            return grantees;
+            // A sample rejected on purpose ends a hold as abruptly, and counts the same.
+            var rejected = new OwnershipStateMachine();
+            rejected.Request(Alice, 0, Origin, Origin, 0);
+            Equal(OwnershipResult.Rejected, rejected.Stream(Alice, 1, new NetQuantizedPosition(20 * Unit, 0, 0), Origin, 0).Result, "a rejected sample");
+            Equal(Alice, rejected.LastReleaser, "is remembered");
+            rejected.Request(Bob, 1, Origin, Origin, 500_000);
+            Equal(Alice, rejected.YieldingParticipant, "and yields to a stale grab");
+
+            // A grant, a host reclaim and a disconnect leave nobody to blame.
+            var granted = ShortHold(Alice, 0);
+            granted.Request(Bob, 2, Origin, Origin, 10_000);
+            Equal(0, granted.LastReleaser, "a grant forgets the release");
+            granted.Reclaim();
+            granted.Request(Alice, 3, Origin, Origin, 20_000);
+            True(granted.LastReleaser == 0 && granted.YieldingParticipant == 0, "and a host reclaim is nobody's release");
+            var departed = ShortHold(Alice, 0);
+            departed.Disconnect(Alice);
+            departed.Request(Bob, 0, Origin, Origin, 10_000);
+            True(departed.LastReleaser == 0 && departed.YieldingParticipant == 0, "a disconnect forgets the release");
+
+            // Putting a body down that nobody asked for still costs nothing: picking it up again under the epoch the
+            // hand-back made is granted at once.
+            var putDown = new OwnershipStateMachine();
+            putDown.Request(Alice, 0, Origin, Origin, 0);
+            putDown.Stream(Alice, 1, Origin, Origin, 33_333);
+            putDown.Handback(Alice, 1, Rest, Origin, 500_000, out _);
+            Equal(OwnershipResult.Granted, putDown.Request(Alice, 2, Origin, Origin, 510_000).Result, "an uncontested set-down and pick-up");
+            Equal(0, putDown.YieldingParticipant, "with no cooldown");
+        }
+
+        /// <summary>A grab, a sample and a hand-back by <paramref name="participant"/>, all at <paramref name="nowMicros"/>.</summary>
+        private static OwnershipStateMachine ShortHold(int participant, long nowMicros)
+        {
+            var host = new OwnershipStateMachine();
+            host.Request(participant, 0, Origin, Origin, nowMicros);
+            host.Stream(participant, 1, Origin, Origin, nowMicros);
+            Equal(OwnershipResult.HandedBack, host.Handback(participant, 1, Rest, Origin, nowMicros, out _).Result, "setup short hold");
+            return host;
         }
 
         private static void ADepartedSlotStartsClean()

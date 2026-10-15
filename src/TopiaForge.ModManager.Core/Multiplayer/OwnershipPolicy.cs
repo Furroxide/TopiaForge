@@ -57,7 +57,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         OutOfRange = 11,
 
         /// <summary>
-        /// The requester recently lost this body by going quiet, so other players go first until its cooldown ends.
+        /// The requester recently went quiet holding this body, or let go of it while another player in range wanted
+        /// it, so other players go first until its cooldown ends.
         /// </summary>
         Yielding = 12
     }
@@ -207,8 +208,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public long FirstSampleTimeoutMicros { get; }
 
         /// <summary>
-        /// How long a participant that lost the body by going quiet (no first sample, silence or no hand-back) is
-        /// refused it, so another player's request wins first. Zero turns yielding off.
+        /// How long a participant that lost the body by going quiet (no first sample, silence or no hand-back), or let
+        /// go of it while another player in range wanted it, is refused it, so another player's request wins first. It
+        /// is also how long after an uncontested release a stale request still counts. Zero turns yielding off.
         /// </summary>
         public long YieldCooldownMicros { get; }
 

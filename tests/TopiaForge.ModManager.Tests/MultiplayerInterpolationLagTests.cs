@@ -9,20 +9,25 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>
     /// Snapshot interpolation when the sender's timeline or the network's latency moves further than the 10% slew can
     /// absorb in time: the render catches up or falls back at a bounded rate, every frame is checked against the written
-    /// slew, and neither the render clock nor the replica jumps (WS3.5). Each stream is 10 or 20 Hz with 50 ms of
-    /// transit, rendered at 60 Hz.
+    /// slew, and neither the render clock nor the replica jumps (WS3.5). Each stream has 50 ms of transit before or after
+    /// the change and is rendered at 60 Hz; each case asserts the range of playback rates it ran at.
     /// </summary>
     internal static class MultiplayerInterpolationLagTests
     {
         private const long Start = 1_000_000;
         private const long Frame = 16_667;
 
+        /// <summary>The delay above which catching up speeds up: the 350 ms cap plus the 50 ms dead band.</summary>
+        private const long CatchUpFrom = SnapshotInterpolationBuffer.MaximumDelayMicros + SnapshotInterpolationBuffer.CatchUpDeadBandMicros;
+
         public static void Run()
         {
             ATimelineStepIsCaughtUpWithoutAJump();
             ALateFirstSampleIsCaughtUpWithoutAJump();
             LatencyDropsAreCaughtUpWithoutAJump();
+            ADropInsideTheDeadBandNeverSpeedsUp();
             ALatencyRiseFallsBackAtABoundedRate();
+            ASmallRiseFallsBackBelowTheFloor();
             Console.WriteLine("MultiplayerInterpolationLagTests passed.");
         }
 
@@ -37,7 +42,7 @@ namespace TopiaForge.ModManager.Tests
                 arrivals.Add(new Arrival(sent + (index >= 30 ? 900_000 : 0), index, sent + 50_000));
             }
 
-            ExpectCaughtUp(Play(arrivals, 100_000), "a 900 ms timeline step");
+            ExpectCaughtUp(Play(arrivals, 100_000), "a 900 ms timeline step", 1.85);
         }
 
         private static void ALateFirstSampleIsCaughtUpWithoutAJump()
@@ -46,16 +51,30 @@ namespace TopiaForge.ModManager.Tests
             // by 900 ms. The render used to jump 17.2 frames' worth when the late sample left the buffer.
             var arrivals = new List<Arrival> { new Arrival(Start, 0, Start + 950_000) };
             for (var index = 10; index < 150; index++) arrivals.Add(new Arrival(Start + index * 100_000L, index, Start + index * 100_000L + 50_000));
-            ExpectCaughtUp(Play(arrivals, 100_000), "a late first sample");
+            ExpectCaughtUp(Play(arrivals, 100_000), "a late first sample", 1.85);
         }
 
         private static void LatencyDropsAreCaughtUpWithoutAJump()
         {
             // 950 to 50 ms at 10 Hz used to jump 12.5 frames' worth, with 6 frames outside 0.9 to 1.1; at 20 Hz a drop of
-            // only 300 ms already went past 1.1, and one of 600 ms jumped 16.2 frames' worth.
-            ExpectCaughtUp(Play(Latency(10, 950_000, 50_000, 30), 100_000), "950 to 50 ms at 10 Hz");
-            ExpectCaughtUp(Play(Latency(20, 350_000, 50_000, 60), 50_000), "350 to 50 ms at 20 Hz", mustCorrect: false);
-            ExpectCaughtUp(Play(Latency(20, 650_000, 50_000, 60), 50_000), "650 to 50 ms at 20 Hz");
+            // 600 ms jumped 16.2 frames' worth.
+            ExpectCaughtUp(Play(Latency(10, 950_000, 50_000, 30), 100_000), "950 to 50 ms at 10 Hz", 1.6);
+            ExpectCaughtUp(Play(Latency(20, 650_000, 50_000, 60), 50_000), "650 to 50 ms at 20 Hz", 1.5);
+        }
+
+        private static void ADropInsideTheDeadBandNeverSpeedsUp()
+        {
+            // A 300 ms drop at 20 Hz takes the delay to 369 ms, past the cap but inside the dead band, so playback stays
+            // within 0.9 to 1.1 times real time. Without the dead band it reached 1.20.
+            var played = Play(Latency(20, 350_000, 50_000, 60), 50_000);
+            ExpectEveryFrame(played, "350 to 50 ms at 20 Hz");
+            Equal(0, played.Rate.Corrections, "350 to 50 ms at 20 Hz: no frame needed more than the normal slew");
+            True(played.Rate.FastestRatio > 1.09 && played.Rate.FastestRatio <= 1.1,
+                "it caught up at the normal 1.1 times real time: " + Format(played.Rate.FastestRatio));
+            True(played.Rate.SlowestRatio >= 0.9, "and never slowed: " + Format(played.Rate.SlowestRatio));
+            True(played.Rate.LargestDelay > SnapshotInterpolationBuffer.MaximumDelayMicros && played.Rate.LargestDelay <= CatchUpFrom,
+                "the delay went past the cap but stayed inside the dead band: " + played.Rate.LargestDelay);
+            Settled(played, "350 to 50 ms at 20 Hz");
         }
 
         private static void ALatencyRiseFallsBackAtABoundedRate()
@@ -63,29 +82,69 @@ namespace TopiaForge.ModManager.Tests
             // 50 to 950 ms at 10 Hz: the samples stop for 900 ms, then arrive later than the render. At 0.9 times real
             // time the render stayed ahead of them, extrapolating, for about nine seconds.
             var played = Play(Latency(10, 50_000, 950_000, 30), 100_000);
-            True(played.Rate.SlowestRatio < 0.9,
-                "the render fell back faster than the normal slew: " + played.Rate.SlowestRatio.ToString("F3", CultureInfo.InvariantCulture));
+            ExpectEveryFrame(played, "50 to 950 ms at 10 Hz", smooth: false);
+            True(played.Rate.SlowestRatio < 0.6, "the render fell back faster than the normal slew: " + Format(played.Rate.SlowestRatio));
             True(played.Rate.SlowestRatio >= 0.5, "but never below half real time");
-            True(played.Rate.FastestRatio <= 1.1, "and never sped up");
+            True(played.Rate.FastestRatio <= 1.1, "and never sped past the normal slew: " + Format(played.Rate.FastestRatio));
             True(played.LastExtrapolatingMicros < Start + 8_000_000, "it is back inside the samples within five seconds of the rise");
-            Equal(played.Buffer.TargetDelayMicros, played.Buffer.CurrentDelayMicros, "and settled on the target");
+            Settled(played, "50 to 950 ms at 10 Hz");
         }
 
-        /// <param name="mustCorrect">Whether the change is large enough to push the delay past the cap.</param>
-        private static void ExpectCaughtUp(Played played, string name, bool mustCorrect = true)
+        private static void ASmallRiseFallsBackBelowTheFloor()
         {
-            True(played.Rate.Frames > 650, name + ": every frame from the first sample on was checked");
-            if (mustCorrect) True(played.Rate.Corrections > 0, name + ": the render had to catch up");
-            True(played.Rate.FastestRatio <= 2.0, name + ": never faster than twice real time");
-            True(played.Rate.SlowestRatio >= 0.9, name + ": never slower than the normal slew");
-            True(played.Rate.LargestDelay <= SnapshotInterpolationBuffer.MaximumDelayMicros + 100_000,
-                name + ": the delay stayed within 100 ms of the cap, at most " + played.Rate.LargestDelay);
-            True(played.LargestStep <= 2.05,
-                name + ": the replica never jumps, at most " + played.LargestStep.ToString("F3", CultureInfo.InvariantCulture) + " frames' worth");
+            // 50 to 150 ms at 30 Hz: the first late sample moves the offset estimate 12.5 ms at once, and the estimate
+            // keeps falling faster than 0.9 times real time can follow, so the delay must dip below the 80 ms floor. The
+            // fall-back used to wait for the delay to go negative: it sat at 38 ms at 0.9 times real time for 58 frames,
+            // and 20 frames extrapolated. Now the render falls back faster below the floor: the delay dips only to
+            // 66 ms, for 26 frames, and is back above the floor within half a second. At 20 Hz it sat there for 55
+            // frames over 0.9 s, and now for 30 frames over 0.7 s.
+            foreach (var (hertz, worstDelay, extrapolating, framesBelow, window) in new[] { (30, 64_000L, 10, 28, 500_000L), (20, 68_000L, 15, 32, 750_000L) })
+            {
+                var name = "50 to 150 ms at " + hertz + " Hz";
+                var played = Play(Latency(hertz, 50_000, 150_000, hertz * 3), 1_000_000 / hertz);
+                ExpectEveryFrame(played, name);
+                True(played.Rate.SlowestRatio < 0.85 && played.Rate.SlowestRatio >= 0.5,
+                    name + ": below the floor it fell back faster than the normal slew: " + Format(played.Rate.SlowestRatio));
+                True(played.Rate.FastestRatio <= 1.0, name + ": and never sped up: " + Format(played.Rate.FastestRatio));
+                True(played.Rate.SmallestDelay >= worstDelay, name + ": the delay dipped only to " + played.Rate.SmallestDelay);
+                True(played.FramesBelowFloor > 0 && played.FramesBelowFloor <= framesBelow, name + ": " + played.FramesBelowFloor + " frames ended below the floor");
+                True(played.LastBelowFloorMicros - played.FirstBelowFloorMicros < window,
+                    name + ": all within " + (played.LastBelowFloorMicros - played.FirstBelowFloorMicros) + " us");
+                True(played.ExtrapolatingFrames <= extrapolating, name + ": " + played.ExtrapolatingFrames + " frames extrapolated");
+                Settled(played, name);
+            }
+        }
+
+        /// <param name="slowestCatchUp">The least the fastest frame must reach: the correction has to be a real catch-up.</param>
+        private static void ExpectCaughtUp(Played played, string name, double slowestCatchUp)
+        {
+            ExpectEveryFrame(played, name);
+            True(played.Rate.Corrections > 0, name + ": the render had to catch up");
+            True(played.Rate.FastestRatio >= slowestCatchUp && played.Rate.FastestRatio <= 2.0,
+                name + ": it caught up at up to twice real time: " + Format(played.Rate.FastestRatio));
+            True(played.Rate.SlowestRatio >= 0.9, name + ": never slower than the normal slew: " + Format(played.Rate.SlowestRatio));
+            True(played.Rate.LargestDelay <= CatchUpFrom + 100_000,
+                name + ": the delay stayed within 100 ms of where catching up speeds up, at most " + played.Rate.LargestDelay);
             Equal(0, played.ExtrapolatingFrames, name + ": the render never ran out of samples");
             True(played.LastCorrectionMicros < Start + 8_000_000, name + ": the correction was over within seconds");
-            Equal(played.Buffer.TargetDelayMicros, played.Buffer.CurrentDelayMicros, name + ": and playback settled on the target");
-            True(played.Buffer.CurrentDelayMicros <= SnapshotInterpolationBuffer.MaximumDelayMicros, name + ": within the cap");
+            Settled(played, name);
+        }
+
+        /// <summary>
+        /// The written slew was checked on every frame from the first sample on. A rise past the extrapolation cap holds
+        /// the replica where the cap left it, so only the other cases also check that it never jumps.
+        /// </summary>
+        private static void ExpectEveryFrame(Played played, string name, bool smooth = true)
+        {
+            True(played.Rate.Frames > 650, name + ": every frame from the first sample on was checked");
+            if (smooth) True(played.LargestStep <= 2.05, name + ": the replica never jumps, at most " + Format(played.LargestStep) + " frames' worth");
+        }
+
+        private static void Settled(Played played, string name)
+        {
+            Equal(played.Buffer.TargetDelayMicros, played.Buffer.CurrentDelayMicros, name + ": playback settled on the target");
+            True(played.Buffer.CurrentDelayMicros >= SnapshotInterpolationBuffer.MinimumDelayMicros &&
+                 played.Buffer.CurrentDelayMicros <= SnapshotInterpolationBuffer.MaximumDelayMicros, name + ": between the floor and the cap");
         }
 
         private static List<Arrival> Latency(int hertz, long before, long after, int switchAt)
@@ -124,7 +183,15 @@ namespace TopiaForge.ModManager.Tests
 
                 var delayBefore = buffer.CurrentDelayMicros;
                 if (!played.Rate.Sample(buffer, now, out var result)) continue;
-                if (delayBefore > SnapshotInterpolationBuffer.MaximumDelayMicros || delayBefore < 0) played.LastCorrectionMicros = now;
+                if (delayBefore > CatchUpFrom || delayBefore < SnapshotInterpolationBuffer.MinimumDelayMicros) played.LastCorrectionMicros = now;
+
+                // The frame's own correction counts: a frame that ends below the floor could not climb back in time.
+                if (buffer.CurrentDelayMicros < SnapshotInterpolationBuffer.MinimumDelayMicros)
+                {
+                    if (played.FramesBelowFloor++ == 0) played.FirstBelowFloorMicros = now;
+                    played.LastBelowFloorMicros = now;
+                }
+
                 if (result.Mode == InterpolationMode.Extrapolating || result.Mode == InterpolationMode.ExtrapolationCapped)
                 {
                     played.ExtrapolatingFrames++;
@@ -137,6 +204,8 @@ namespace TopiaForge.ModManager.Tests
 
             return played;
         }
+
+        private static string Format(double value) => value.ToString("F3", CultureInfo.InvariantCulture);
 
         private readonly struct Arrival
         {
@@ -170,6 +239,13 @@ namespace TopiaForge.ModManager.Tests
             public long LastExtrapolatingMicros { get; set; } = Start;
 
             public long LastCorrectionMicros { get; set; } = Start;
+
+            /// <summary>Frames that ended with the delay below the 80 ms floor.</summary>
+            public int FramesBelowFloor { get; set; }
+
+            public long FirstBelowFloorMicros { get; set; }
+
+            public long LastBelowFloorMicros { get; set; }
 
             /// <summary>The largest change of position in one frame, in frames' worth of smooth motion.</summary>
             public double LargestStep { get; set; }

@@ -485,7 +485,7 @@ write("token-bucket.json", {
 
 # ---------------------------------------------------------------- snapshot interpolation
 
-CAPACITY = 8
+CAPACITY = 20
 MIN_DELAY = 80_000
 MAX_DELAY = 350_000
 EXTRAPOLATION_LIMIT = 250_000
@@ -494,6 +494,7 @@ JITTER_MARGIN = 3
 PLAYBACK_SLEW_PERCENT = 10
 CATCH_UP_SLEW_PERCENT = 100
 FALL_BACK_SLEW_PERCENT = 50
+CATCH_UP_DEAD_BAND = 50_000
 CORRECTION_MICROS_PER_PERCENT = 1_000
 
 
@@ -597,11 +598,15 @@ class InterpolationBuffer:
         return 2 if self.last_render < self.samples[1][0] else 0
 
     def slew_percent(self):
+        # Catch up beyond the cap plus the dead band, fall back below the floor; the gain counts from those edges.
         delay = self.offset() - self.playback
-        if delay > MAX_DELAY:
-            return min(CATCH_UP_SLEW_PERCENT, PLAYBACK_SLEW_PERCENT + (delay - MAX_DELAY) // CORRECTION_MICROS_PER_PERCENT)
-        if delay < 0:
-            return min(FALL_BACK_SLEW_PERCENT, PLAYBACK_SLEW_PERCENT + -delay // CORRECTION_MICROS_PER_PERCENT)
+        catch_up_from = MAX_DELAY + CATCH_UP_DEAD_BAND
+        if delay > catch_up_from:
+            return min(CATCH_UP_SLEW_PERCENT,
+                       PLAYBACK_SLEW_PERCENT + (delay - catch_up_from) // CORRECTION_MICROS_PER_PERCENT)
+        if delay < MIN_DELAY:
+            return min(FALL_BACK_SLEW_PERCENT,
+                       PLAYBACK_SLEW_PERCENT + (MIN_DELAY - delay) // CORRECTION_MICROS_PER_PERCENT)
         return PLAYBACK_SLEW_PERCENT
 
     def sample(self, now):
@@ -711,10 +716,12 @@ rough = []
 for index in range(40):
     server = INTERPOLATION_START + index * 100_000
     rough.append((server, float(index), None, server + 50_000 + jitter_rng.randrange(0, 120_000)))
-# A duplicate; a resend older than the full buffer; and one so late that its offset jumps by over a second.
+# A duplicate; a late sample older than the segment the render is in; and one so late that its offset jumps by over a
+# second. Twenty samples at 10 Hz span 1.9 s, so a sample older than a full buffer is always that late here; the
+# 30 Hz scenario below has one.
 rough.append((INTERPOLATION_START + 10 * 100_000, 10.0, None, rough[10][3] + 30_000))
-rough.append((INTERPOLATION_START + 14 * 100_000, 14.0, None, rough[23][3]))
-rough.append((INTERPOLATION_START + 3 * 100_000, 3.0, None, rough[20][3]))
+rough.append((INTERPOLATION_START + 1_450_000, 14.5, None, rough[23][3]))
+rough.append((INTERPOLATION_START + 3 * 100_000, 3.0, None, rough[30][3]))
 for index in range(40, 50):
     server = INTERPOLATION_START + 5_000_000 + index * 100_000
     rough.append((server, float(index), 2.0, server - 5_000_000 + 50_000 + jitter_rng.randrange(0, 20_000)))
@@ -726,12 +733,17 @@ for index in range(80):
     timeline_step.append((sent + (900_000 if index >= 30 else 0), float(index), None, sent + 50_000))
 
 
-def latency_change(before, after, switch_at):
+def latency_change(before, after, switch_at, interval=100_000, count=80):
     changed = []
-    for index in range(80):
-        sent = INTERPOLATION_START + index * 100_000
+    for index in range(count):
+        sent = INTERPOLATION_START + index * interval
         changed.append((sent, float(index), None, sent + (before if index < switch_at else after)))
     return changed
+
+
+# At 30 Hz the rise comes after a resend of sample 30 that arrives with sample 52, older than the full buffer then.
+rise_at_30_hz = latency_change(50_000, 150_000, 90, 33_333, 210)
+rise_at_30_hz.append((INTERPOLATION_START + 30 * 33_333, 30.0, None, rise_at_30_hz[52][3]))
 
 write("interpolation.json", {
     "schema": 1,
@@ -741,11 +753,12 @@ write("interpolation.json", {
              "the interval estimate and the largest gap between buffered samples (ignoring gaps that span a dropped "
              "sample), plus three jitters, clamped to 80-350 ms. The playback offset (render time minus local time) "
              "moves toward offset minus delay by at most 10% of elapsed local time; while offset minus playback offset "
-             "exceeds 350 ms, one percent more per millisecond beyond it, up to 100%; while it is below zero, one "
-             "percent more per millisecond, up to 50%. The render time is then floored at the last render time, and "
-             "the playback offset follows it. A full buffer drops its oldest sample, the next one if the render holds "
-             "the oldest, or the third if the render is between the oldest two. Samples arriving together go in by "
-             "server time. Y and z are zero and rotations identity.",
+             "exceeds 400 ms (the 350 ms cap plus a 50 ms dead band), one percent more per millisecond beyond 400 ms, "
+             "up to 100%; while it is below the 80 ms floor, one percent more per millisecond below it, up to 50%. The "
+             "render time is then floored at the last render time, and the playback offset follows it. A full buffer "
+             "of 20 drops its oldest sample, the next one if the render holds the oldest, or the third if the render "
+             "is between the oldest two. Samples arriving together go in by server time. Y and z are zero and "
+             "rotations identity.",
     "capacity": CAPACITY,
     "scenarios": [
         interpolation_scenario("a late sample never pauses playback", late_sample, 5),
@@ -754,6 +767,10 @@ write("interpolation.json", {
         interpolation_scenario("a 900 ms timeline step is caught up", timeline_step, 7),
         interpolation_scenario("latency drops from 950 to 50 ms", latency_change(950_000, 50_000, 30), 7),
         interpolation_scenario("latency rises from 50 to 950 ms", latency_change(50_000, 950_000, 30), 7),
+        interpolation_scenario("a 300 ms latency drop at 20 Hz stays in the dead band",
+                               latency_change(350_000, 50_000, 60, 50_000, 140), 7, 50_000),
+        interpolation_scenario("a resend older than the full buffer, then a 100 ms latency rise at 30 Hz",
+                               rise_at_30_hz, 7, 33_333),
     ],
 }, compact_depth=4)
 
@@ -806,6 +823,8 @@ class OwnershipMachine:
         self.yielding = 0
         self.yield_until = 0
         self.contested = False
+        self.last_releaser = 0
+        self.last_release = 0
 
     def report(self, result, reason="None", changed=False):
         return [result, reason, self.state, self.owner, self.epoch, changed]
@@ -819,6 +838,9 @@ class OwnershipMachine:
     def request(self, participant, observed, body, avatar, now):
         if self.state == "Server":
             if observed != self.epoch:
+                # A request the last hold made stale: if that hold ended uncontested within the cooldown, its owner yields.
+                if self.in_range(body, avatar):
+                    self.yield_after_race(participant, now)
                 return self.report("StaleEpoch")
             if not self.in_range(body, avatar):
                 return self.report("OutOfRange")
@@ -886,6 +908,9 @@ class OwnershipMachine:
         if self.yielding == participant:
             self.yielding = 0
             self.yield_until = 0
+        if self.last_releaser == participant:
+            self.last_releaser = 0
+            self.last_release = 0
         if self.state == "Server" or self.owner != participant:
             return self.report("NoChange")
         return self.take_back("Disconnected", "Reclaimed", 0, False)
@@ -917,10 +942,22 @@ class OwnershipMachine:
         self.awaiting = True
         self.first_deadline = now + FIRST_SAMPLE_TIMEOUT
         self.contested = False
+        self.last_releaser = 0
+        self.last_release = 0
         if self.yielding == participant:
             self.yielding = 0
             self.yield_until = 0
         return self.report("Granted", "None", True)
+
+    def yield_after_race(self, participant, now):
+        if self.last_releaser == 0 or self.last_releaser == participant:
+            return
+        if now - self.last_release >= YIELD_COOLDOWN:
+            return
+        self.yielding = self.last_releaser
+        self.yield_until = now + YIELD_COOLDOWN
+        self.last_releaser = 0
+        self.last_release = 0
 
     def spend(self, position, now):
         if now > self.last_validated_micros:
@@ -940,6 +977,10 @@ class OwnershipMachine:
         if make_yield:
             self.yielding = participant
             self.yield_until = now + YIELD_COOLDOWN
+        elif reason in ("None", "ValidationFailed"):
+            # Let go, or refused, with nobody waiting: remembered in case a request this hold made stale arrives.
+            self.last_releaser = participant
+            self.last_release = now
         return self.report(result, reason, True)
 
     def to_server(self):
@@ -977,7 +1018,7 @@ def ownership_scenario(name, calls, initial_epoch=0):
             outcome = machine.poll(arguments[0])
         step = {"call": [operation] + list(arguments),
                 "outcome": outcome + [machine.credit, machine.yielding, machine.yield_until, machine.awaiting,
-                                      machine.contested]}
+                                      machine.contested, machine.last_releaser, machine.last_release]}
         if accepted is not None:
             step["accepted"] = [[hex32(v) for v in accepted[0]], [hex32(v) for v in accepted[1]]]
         steps.append(step)
@@ -1074,6 +1115,44 @@ contested_holds = [
     ["request", 1, 15, O, O, 330_000],
 ]
 
+# A grab, a sample and a hand-back that arrive together end a hold before any other request can contest it.
+short_holds = [
+    ["request", 2, 0, O, O, 0],
+    ["stream", 2, 1, O, O, 0],
+    ["handback", 2, 1, O, NONE, NONE, O, 0],
+    ["request", 2, 0, O, O, 10_000],
+    ["request", 3, 1, O, [R + 1, 0, 0], 20_000],
+    ["request", 3, 1, O, O, 30_000],
+    ["request", 1, 1, O, O, 35_000],
+    ["request", 2, 2, O, O, 40_000],
+    ["request", 3, 2, O, O, 50_000],
+    ["stream", 3, 3, O, O, 60_000],
+    ["handback", 3, 3, O, NONE, NONE, O, 70_000],
+    ["request", 1, 3, O, O, 1_070_000],
+    ["request", 1, 4, O, O, 1_070_001],
+    ["stream", 1, 5, [20 * POSITION_UNITS, 0, 0], O, 1_070_001],
+    ["request", 2, 5, O, O, 1_100_000],
+    ["request", 1, 6, O, O, 1_200_000],
+    ["request", 2, 6, O, O, 1_300_000],
+    ["stream", 2, 7, O, O, 1_310_000],
+    ["request", 3, 7, O, O, 1_320_000],
+    ["handback", 2, 7, O, NONE, NONE, O, 1_330_000],
+    ["request", 3, 7, O, O, 1_340_000],
+    ["request", 3, 8, O, O, 1_350_000],
+    ["stream", 3, 9, O, O, 1_360_000],
+    ["handback", 3, 9, O, NONE, NONE, O, 1_370_000],
+    ["request", 1, 10, O, O, 1_380_000],
+    ["reclaim"],
+    ["request", 2, 11, O, O, 1_390_000],
+    ["request", 1, 12, O, O, 1_400_000],
+    ["handback", 1, 13, O, NONE, NONE, O, 1_410_000],
+    ["request", 3, 14, O, O, 1_420_000],
+    ["stream", 3, 15, O, O, 1_430_000],
+    ["handback", 3, 15, O, NONE, NONE, O, 1_440_000],
+    ["disconnect", 3],
+    ["request", 2, 15, O, O, 1_450_000],
+]
+
 ownership_rng = random.Random(97)
 random_calls = []
 shadow = OwnershipMachine()
@@ -1116,8 +1195,12 @@ write("ownership.json", {
              "make that participant yield for the cooldown, and so does a hand-back before the first sample. A request "
              "from another participant within the hold range, denied while the body is held, contests the hold; the "
              "owner of a contested hold yields once it hands back or fails validation, replacing any earlier cooldown. "
-             "Every grant, a steal included, starts an uncontested hold. A disconnect forgets its cooldown. The last "
-             "outcome field is whether the current hold is contested.",
+             "Every grant, a steal included, starts an uncontested hold. An uncontested hold that ends by a hand-back "
+             "or a failed validation is remembered with its time until the body is granted or reclaimed; a request "
+             "naming another epoch while the body is free, from another participant within the hold range, within "
+             "the cooldown after that release, makes the releaser yield for the cooldown from then, once. A "
+             "disconnect forgets the participant's cooldown and release. The last three outcome fields are whether "
+             "the current hold is contested, the remembered releaser (0 for none) and its release time.",
     "policy": {"holdRangeUnits": HOLD_RANGE, "burstCreditUnits": BURST_CREDIT,
                "firstSampleTimeoutMicros": FIRST_SAMPLE_TIMEOUT, "yieldCooldownMicros": YIELD_COOLDOWN,
                "silenceTimeoutMicros": SILENCE_TIMEOUT, "releaseWindowMicros": RELEASE_WINDOW},
@@ -1125,6 +1208,7 @@ write("ownership.json", {
         ownership_scenario("the hold range", hold_range),
         ownership_scenario("quiet owners yield", quiet_owners),
         ownership_scenario("contested holds yield", contested_holds),
+        ownership_scenario("short holds yield to stale requests", short_holds),
         ownership_scenario("seeded events", random_calls),
     ],
 }, compact_depth=4)
