@@ -25,8 +25,14 @@ namespace TopiaForge.ModManager.Tests
             ACatchRefusedBehindAPendingGrabResumesTheWindow();
             TwoCatchesInOneRoundTripSettleOnTheLastAnswer();
             AGrabWaitsForOutstandingAnswers();
-            TheClaimAgreesWithTheHostWhateverTheTiming();
-            Console.WriteLine("MultiplayerOwnershipClaimTests passed.");
+            AGrabTheHostHasMovedPastStopsSimulating();
+            APickUpAfterASetDownNamesTheNewEpoch();
+            var sweep = TheClaimAgreesWithTheHostWhateverTheTiming();
+            Console.WriteLine(
+                "MultiplayerOwnershipClaimTests passed (" + sweep.Comparisons + " comparisons over 400 seeds, " + sweep.InWindow +
+                " in a release window, " + sweep.RefusedCatches + " refused catches, " + sweep.Steals + " steals, " + sweep.Rejections +
+                " failed validations; " + sweep.Deferred + " announcements deferred to a frame end, " + sweep.Coalesced +
+                " frames coalesced, " + sweep.Unannounced + " grants left to their answers).");
         }
 
         private static void ACatchRefusedBehindAPendingGrabResumesTheWindow()
@@ -114,23 +120,62 @@ namespace TopiaForge.ModManager.Tests
             True(!greedy.Grab(out _) && greedy.State == OwnershipState.ReleaseWindow, "no more than the outstanding limit");
         }
 
-        private static void TheClaimAgreesWithTheHostWhateverTheTiming()
+        private static void AGrabTheHostHasMovedPastStopsSimulating()
+        {
+            // Alice grabs a free body under epoch 0 and simulates it at once. Before her answer comes she hears that Bob
+            // won it: the host is past the epoch her grab named, so she stops simulating then rather than a round trip
+            // later, when the refusal arrives.
+            var alice = new OwnershipClaim(Alice);
+            True(alice.Grab(out _) && alice.IsSimulating, "a grab is simulated at once");
+            alice.OnOwnerChanged(NetOwner.ForParticipant(Bob), 1);
+            True(!alice.IsSimulating && !alice.GrantPending && alice.OutstandingRequests == 1, "Bob's grant ends the prediction, the answer still due");
+            True(!alice.Grab(out _), "and no new grab goes out before it");
+            alice.OnRefused(1, NetOwner.ForParticipant(Bob));
+            True(alice.State == OwnershipState.Server && alice.OutstandingRequests == 0, "the refusal settles it");
+
+            // A grab of the body Bob holds is simulated too: Alice cannot see whether he has thrown it.
+            True(alice.Grab(out var steal) && steal == 1 && alice.State == OwnershipState.Requested && alice.StreamEpoch == 2, "a grab of a held body");
+        }
+
+        private static void APickUpAfterASetDownNamesTheNewEpoch()
+        {
+            // Alice puts the body down and picks it up again before the host's announcement of the hand-back reaches her.
+            // The host's epoch moved on with the hand-back, and so does the claim's, so the grab is granted at once.
+            var host = new OwnershipStateMachine();
+            var alice = new OwnershipClaim(Alice);
+            alice.Grab(out var grab);
+            alice.OnGranted(host.Request(Alice, grab, Origin, Origin, 0).Epoch);
+            Equal(OwnershipResult.Accepted, host.Stream(Alice, alice.StreamEpoch, Origin, Origin, 10_000).Result, "streams");
+            alice.BeginRelease(20_000);
+            host.BeginRelease(Alice, alice.StreamEpoch, Origin, 20_000);
+            True(alice.TryCompleteHandback(1_020_000, out var handbackEpoch), "sets it down");
+            Equal(OwnershipResult.HandedBack, host.Handback(Alice, handbackEpoch, Rest, Origin, 1_020_000, out _).Result, "the host takes it");
+            True(alice.Grab(out var again) && again == host.Epoch, "the pick-up names the epoch the hand-back made");
+            Equal(OwnershipResult.Granted, host.Request(Alice, again, Origin, Origin, 1_030_000).Result, "and is granted");
+        }
+
+        private static Sweep TheClaimAgreesWithTheHostWhateverTheTiming()
         {
             // Alice grabs, throws, catches, streams and hands back at random; Bob grabs, throws and lets go, so each can
-            // steal the other's throw; and the host polls. The host's replies reach Alice after random delays, in order.
-            // Whenever every reply has arrived, Alice's claim must show exactly what the host holds for her. Bob's
-            // throws matter: a steal can grant Alice an epoch her optimistic samples did not guess, and the host then
-            // ignores what she sent under the guess.
+            // steal the other's throw; and the host polls. The host answers each request at once. It announces each
+            // change of owner at once or at the end of its frame, where a frame's announcements go out in full or only
+            // the newest, and it may leave Alice's own grants to their answers. The replies reach Alice after random
+            // delays, in order. Whenever every reply has arrived, Alice's claim must show exactly what the host holds for
+            // her, under the host's epoch. Bob's throws matter: a steal can grant Alice an epoch her optimistic samples
+            // did not guess, and the host then ignores what she sent under the guess.
             var sweep = new Sweep();
             for (ulong seed = 1; seed <= 400; seed++) Play(seed, sweep);
             True(sweep.Comparisons > 15_000 && sweep.InWindow > 1_000 && sweep.RefusedCatches > 200 && sweep.Steals > 200 && sweep.Rejections > 200,
                 "the sweep covered the cases: " + sweep.Comparisons + " comparisons, " + sweep.InWindow + " in a window, " +
                 sweep.RefusedCatches + " refused catches, " + sweep.Steals + " steals, " + sweep.Rejections + " rejections");
+            True(sweep.Deferred > 1_000 && sweep.Coalesced > 200 && sweep.Unannounced > 200,
+                "announcements were deferred, coalesced and left out: " + sweep.Deferred + ", " + sweep.Coalesced + ", " + sweep.Unannounced);
+            return sweep;
         }
 
         /// <summary>
         /// One seed of the sweep: 300 steps, each a random event. One in six of Alice's samples, throws and hand-backs
-        /// fails validation, and two steps in ten deliver nothing, so replies wait longer.
+        /// fails validation, and some steps deliver nothing, so replies wait longer.
         /// </summary>
         private static void Play(ulong seed, Sweep sweep)
         {
@@ -138,12 +183,13 @@ namespace TopiaForge.ModManager.Tests
             var host = new OwnershipStateMachine();
             var alice = new OwnershipClaim(Alice);
             var inbox = new Queue<Reply>();
+            var frame = new List<Reply>();
             var now = 0L;
             for (var step = 0; step < 300; step++)
             {
                 now += random.NextInt(1_000, 60_000);
                 var faulty = random.NextInt(0, 6) == 0;
-                switch (random.NextInt(0, 10))
+                switch (random.NextInt(0, 11))
                 {
                     case 0:
                     case 1:
@@ -153,42 +199,78 @@ namespace TopiaForge.ModManager.Tests
                         var answer = host.Request(Alice, requestEpoch, Origin, random.NextInt(0, 3) == 0 ? PastReach : Origin, now);
                         if (wasWindow && answer.Result == OwnershipResult.OutOfRange) sweep.RefusedCatches++;
                         if (bobsThrow && answer.Result == OwnershipResult.Granted) sweep.Steals++;
-                        var granted = answer.Result == OwnershipResult.Granted || answer.Result == OwnershipResult.AlreadyOwned;
-                        var notice = granted && answer.EpochChanged ? random.NextInt(0, 3) : 0;
-                        if (notice == 1) inbox.Enqueue(Reply.Changed(answer));
+                        if (!answer.EpochChanged)
+                        {
+                            inbox.Enqueue(Reply.Answer(answer));
+                            break;
+                        }
+
+                        // Alice's own grant: announced before its answer, after it, at the end of the frame, or not at all.
+                        var notice = random.NextInt(0, 4);
+                        if (notice == 0) inbox.Enqueue(Reply.Changed(answer));
                         inbox.Enqueue(Reply.Answer(answer));
-                        if (notice == 2) inbox.Enqueue(Reply.Changed(answer));
+                        if (notice == 1) inbox.Enqueue(Reply.Changed(answer));
+                        if (notice == 2) Defer(frame, answer, sweep);
+                        if (notice == 3) sweep.Unannounced++;
                         break;
                     case 2:
-                        if (alice.BeginRelease(now)) Note(inbox, host.BeginRelease(Alice, alice.StreamEpoch, faulty ? PastReach : Origin, now), sweep);
+                        if (alice.BeginRelease(now)) Note(inbox, frame, host.BeginRelease(Alice, alice.StreamEpoch, faulty ? PastReach : Origin, now), random, sweep);
                         break;
                     case 3:
-                        if (alice.IsSimulating) Note(inbox, host.Stream(Alice, alice.StreamEpoch, faulty ? TwentyMeters : Origin, Origin, now), sweep);
+                        if (alice.IsSimulating) Note(inbox, frame, host.Stream(Alice, alice.StreamEpoch, faulty ? TwentyMeters : Origin, Origin, now), random, sweep);
                         break;
                     case 4:
                         if (!alice.TryCompleteHandback(now, out var handbackEpoch)) break;
-                        Note(inbox, host.Handback(Alice, handbackEpoch, faulty ? FarHandback : Rest, Origin, now, out _), sweep);
+                        Note(inbox, frame, host.Handback(Alice, handbackEpoch, faulty ? FarHandback : Rest, Origin, now, out _), random, sweep);
                         break;
                     case 5:
-                        Note(inbox, Bobs(host, now, random.NextInt(0, 2) == 0), sweep);
+                        Note(inbox, frame, Bobs(host, now, random.NextInt(0, 2) == 0), random, sweep);
                         break;
                     case 6:
-                        Note(inbox, host.Poll(now), sweep);
+                        Note(inbox, frame, host.Poll(now), random, sweep);
                         break;
                     case 7:
+                    case 8:
                         for (var deliveries = random.NextInt(1, 4); deliveries > 0 && inbox.Count > 0; deliveries--) Deliver(alice, inbox.Dequeue());
+                        break;
+                    case 9:
+                        EndFrame(inbox, frame, random.NextInt(0, 2) == 0, sweep);
                         break;
                 }
 
-                if (inbox.Count > 0) continue;
+                if (inbox.Count > 0 || frame.Count > 0) continue;
                 sweep.Comparisons++;
                 var expected = host.Owner.Equals(NetOwner.ForParticipant(Alice)) ? host.State : OwnershipState.Server;
                 Equal(expected, alice.State, "seed " + seed + ", step " + step + ": the claim agrees with the host");
                 Equal(0, alice.OutstandingRequests, "seed " + seed + ", step " + step + ": every answer is in");
+                Equal(host.Epoch, alice.Epoch, "seed " + seed + ", step " + step + ": under the host's epoch");
                 if (expected != OwnershipState.ReleaseWindow) continue;
                 Equal(host.ReleaseDeadlineMicros, alice.ReleaseDeadlineMicros, "seed " + seed + ", step " + step + ": the same deadline");
                 sweep.InWindow++;
             }
+        }
+
+        private static void Defer(List<Reply> frame, OwnershipOutcome outcome, Sweep sweep)
+        {
+            frame.Add(Reply.Changed(outcome));
+            sweep.Deferred++;
+        }
+
+        /// <summary>The host's frame ends: its announcements go out in full, in order, or only the newest.</summary>
+        private static void EndFrame(Queue<Reply> inbox, List<Reply> frame, bool coalesce, Sweep sweep)
+        {
+            if (frame.Count == 0) return;
+            if (coalesce && frame.Count > 1)
+            {
+                inbox.Enqueue(frame[frame.Count - 1]);
+                sweep.Coalesced++;
+            }
+            else
+            {
+                foreach (var reply in frame) inbox.Enqueue(reply);
+            }
+
+            frame.Clear();
         }
 
         /// <summary>
@@ -233,11 +315,13 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        /// <summary>Every change of owner is announced to the client.</summary>
-        private static void Note(Queue<Reply> inbox, OwnershipOutcome outcome, Sweep sweep)
+        /// <summary>Every change of owner is announced to the client, at once or at the end of the host's frame.</summary>
+        private static void Note(Queue<Reply> inbox, List<Reply> frame, OwnershipOutcome outcome, SeededRandom random, Sweep sweep)
         {
             if (outcome.Result == OwnershipResult.Rejected) sweep.Rejections++;
-            if (outcome.EpochChanged) inbox.Enqueue(Reply.Changed(outcome));
+            if (!outcome.EpochChanged) return;
+            if (random.NextInt(0, 2) == 0) inbox.Enqueue(Reply.Changed(outcome));
+            else Defer(frame, outcome, sweep);
         }
 
         /// <summary>What the sweep compared and which cases it reached.</summary>
@@ -252,6 +336,12 @@ namespace TopiaForge.ModManager.Tests
             public int Steals { get; set; }
 
             public int Rejections { get; set; }
+
+            public int Deferred { get; set; }
+
+            public int Coalesced { get; set; }
+
+            public int Unannounced { get; set; }
         }
 
         private readonly struct Reply

@@ -7,14 +7,28 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// longest wait for the next sample (the observed interval, or the longest gap between buffered samples if that is
     /// longer) plus three times the observed jitter, clamped to 80-350 ms. The playback offset, the render time minus
     /// the local time, moves toward the offset estimate minus that delay by at most 10% of elapsed time, so playback
-    /// runs between 0.9 and 1.1 times real time. When the render lags the estimated sender clock by more than the cap it
-    /// catches up faster, at up to twice real time, and when it runs ahead of that clock it falls back faster, at down to
-    /// half real time. A full buffer keeps the samples the render is between, so the render clock never jumps to stay
-    /// inside it. All bookkeeping is integer microseconds.
+    /// runs between 0.9 and 1.1 times real time. When the render lags the estimated sender clock by more than the cap
+    /// plus a dead band it catches up faster, at up to twice real time, and when it comes closer to that clock than the
+    /// 80 ms floor it falls back faster, at down to half real time. A full buffer keeps the samples the render is
+    /// between, so the render clock never jumps to stay inside it. All bookkeeping is integer microseconds.
     /// </summary>
     internal sealed class SnapshotInterpolationBuffer
     {
-        public const int Capacity = 8;
+        /// <summary>
+        /// The render can sit the cap and the dead band behind the estimated sender clock, and the newest sample leads
+        /// that estimate by about half the jitter, some 160 ms when jitter just pins the delay at the cap at
+        /// <see cref="MaximumStreamRateHz"/>. Twenty samples at that rate span 633 ms: those 560 ms, the interval the
+        /// render is in, and one sample to spare. Eight spanned 233 ms and sixteen 500 ms, so a render held at the cap
+        /// cut across samples the buffer had dropped.
+        /// </summary>
+        public const int Capacity = 20;
+
+        /// <summary>The fastest stream the buffer is sized for: a held body's samples, the fastest the runtime sends.</summary>
+        public const int MaximumStreamRateHz = 30;
+
+        /// <summary>The shortest nominal interval a buffer accepts: one sample at <see cref="MaximumStreamRateHz"/>.</summary>
+        public const long MinimumNominalIntervalMicros = 1_000_000 / MaximumStreamRateHz;
+
         public const long MinimumDelayMicros = 80_000;
         public const long MaximumDelayMicros = 350_000;
         public const long ExtrapolationLimitMicros = 250_000;
@@ -24,19 +38,28 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>The playback offset moves by at most this percentage of elapsed time: 0.9 to 1.1 times real time.</summary>
         public const int PlaybackSlewPercent = 10;
 
-        /// <summary>The fastest catch-up, when the render lags beyond the cap: twice real time.</summary>
+        /// <summary>The fastest catch-up, when the render lags beyond the cap and the dead band: twice real time.</summary>
         public const int CatchUpSlewPercent = 100;
 
-        /// <summary>The fastest fall-back, when the render runs ahead of the estimated sender clock: half real time.</summary>
+        /// <summary>The fastest fall-back, when the render comes closer to the estimated sender clock than the floor: half real time.</summary>
         public const int FallBackSlewPercent = 50;
 
-        /// <summary>Each this many microseconds of lag beyond the cap, or of lead, add one percent to the slew.</summary>
+        /// <summary>
+        /// How far past the cap the delay may go before catching up speeds up. The offset estimate is noisy under heavy
+        /// jitter, and 50 ms is about 2.7 standard deviations of it when uniform jitter just pins the delay at the cap.
+        /// </summary>
+        public const long CatchUpDeadBandMicros = 50_000;
+
+        /// <summary>Each this many microseconds of lag beyond the dead band, or below the floor, add one percent to the slew.</summary>
         public const long CorrectionMicrosPerPercent = 1_000;
 
         public const long DefaultNominalIntervalMicros = 100_000;
 
         /// <summary>Times must be below 2^53 microseconds (about 285 years), which keeps every sum exact.</summary>
         public const long MaximumTimeMicros = 1L << 53;
+
+        /// <summary>The delay beyond which catching up speeds up: the cap plus the dead band.</summary>
+        private const long CatchUpFromMicros = MaximumDelayMicros + CatchUpDeadBandMicros;
 
         private readonly NetTransformSample[] samples = new NetTransformSample[Capacity];
 
@@ -55,10 +78,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private long lastRenderTime;
         private long lastSampleLocal;
 
-        /// <param name="nominalIntervalMicros">The expected gap between samples, used until gaps are observed.</param>
+        /// <param name="nominalIntervalMicros">
+        /// The expected gap between samples, used until gaps are observed: from one sample at
+        /// <see cref="MaximumStreamRateHz"/> to one a second.
+        /// </param>
         public SnapshotInterpolationBuffer(long nominalIntervalMicros = DefaultNominalIntervalMicros)
         {
-            if (nominalIntervalMicros < 1_000 || nominalIntervalMicros > DiscontinuityMicros)
+            if (nominalIntervalMicros < MinimumNominalIntervalMicros || nominalIntervalMicros > DiscontinuityMicros)
             {
                 throw new ArgumentOutOfRangeException(nameof(nominalIntervalMicros));
             }
@@ -222,19 +248,24 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// How fast the playback offset may move, as a percentage of elapsed time. Normally 10%. While the delay the
-        /// render is at exceeds the cap, one percent more per millisecond beyond it, up to 100% (twice real time); while
-        /// the render runs ahead of the estimated sender clock, one percent more per millisecond ahead, up to 50% (half
-        /// real time). The gain is proportional, so small excursions are corrected gently and large ones quickly.
+        /// render is at exceeds the cap plus the dead band, one percent more per millisecond beyond them, up to 100%
+        /// (twice real time); while it is below the 80 ms floor, one percent more per millisecond below it, up to 50%
+        /// (half real time). The gain is proportional, so small excursions are corrected gently and large ones quickly,
+        /// and noise in the offset estimate inside the dead band never speeds playback past 1.1 times real time.
         /// </summary>
         internal long SlewPercent()
         {
             var delay = OffsetMicros - playbackOffset;
-            if (delay > MaximumDelayMicros)
+            if (delay > CatchUpFromMicros)
             {
-                return Math.Min(CatchUpSlewPercent, PlaybackSlewPercent + (delay - MaximumDelayMicros) / CorrectionMicrosPerPercent);
+                return Math.Min(CatchUpSlewPercent, PlaybackSlewPercent + (delay - CatchUpFromMicros) / CorrectionMicrosPerPercent);
             }
 
-            if (delay < 0) return Math.Min(FallBackSlewPercent, PlaybackSlewPercent + -delay / CorrectionMicrosPerPercent);
+            if (delay < MinimumDelayMicros)
+            {
+                return Math.Min(FallBackSlewPercent, PlaybackSlewPercent + (MinimumDelayMicros - delay) / CorrectionMicrosPerPercent);
+            }
+
             return PlaybackSlewPercent;
         }
 

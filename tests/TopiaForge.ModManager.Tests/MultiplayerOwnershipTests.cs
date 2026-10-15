@@ -273,14 +273,20 @@ namespace TopiaForge.ModManager.Tests
             alice.OnOwnerChanged(NetOwner.Server, 2);
             True(alice.State == OwnershipState.Server && alice.Epoch == 2 && alice.KnownOwner.IsServer, "a reclaim stops simulation");
 
+            // Only an answer settles a request: an announcement of our own grant records it and nothing more.
             var bob = new OwnershipClaim(Bob);
             bob.Grab(out _);
             bob.OnOwnerChanged(NetOwner.ForParticipant(Bob), 1);
-            True(bob.State == OwnershipState.Owned && !bob.GrantPending, "hearing our own grant confirms it");
+            True(bob.State == OwnershipState.Requested && bob.GrantPending && bob.OutstandingRequests == 1, "hearing our own grant first settles nothing");
+            True(bob.Epoch == 1 && bob.KnownOwner.Equals(NetOwner.ForParticipant(Bob)) && bob.StreamEpoch == 1, "but records it");
+            bob.OnGranted(1);
+            True(bob.State == OwnershipState.Owned && !bob.GrantPending && bob.OutstandingRequests == 0, "its answer does");
+            bob.OnOwnerChanged(NetOwner.ForParticipant(Bob), 1);
+            Equal(OwnershipState.Owned, bob.State, "and hearing it again changes nothing");
             bob.OnOwnerChanged(NetOwner.ForParticipant(Alice), 2);
             True(bob.State == OwnershipState.Server && !bob.IsSimulating, "losing the body to someone else");
             bob.OnOwnerChanged(NetOwner.ForParticipant(Bob), 3);
-            Equal(OwnershipState.Server, bob.State, "an old grant notice never restarts simulation");
+            Equal(OwnershipState.Server, bob.State, "a grant notice with no request behind it never restarts simulation");
             True(!bob.BeginRelease(10_000) && !bob.TryCompleteHandback(10_000, out _), "nothing to release");
             Throws<ArgumentOutOfRangeException>(() => new OwnershipClaim(0), "participant zero");
         }

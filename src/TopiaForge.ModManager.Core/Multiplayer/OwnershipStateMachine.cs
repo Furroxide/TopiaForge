@@ -21,6 +21,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// <item>So is one that hands back before its first sample, and one that hands back or fails validation after
     /// another player in range was refused the body during its hold, so letting go and grabbing again cannot keep a
     /// contested body.</item>
+    /// <item>A hold can end before anyone's request reaches it, when a grab, a sample and a hand-back arrive together.
+    /// A request that such a hold made stale, from another player in range of the free body within the cooldown after
+    /// it ended, makes its owner yield too.</item>
     /// </list>
     /// Participants are slots that the runtime reuses once their participant leaves, so it must call
     /// <see cref="Disconnect"/> for a leaver on every machine before the slot goes to someone else. Otherwise the
@@ -75,6 +78,15 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// </summary>
         public bool Contested { get; private set; }
 
+        /// <summary>
+        /// The participant slot whose hold last ended uncontested, by its own hand-back or a failed validation, while
+        /// the body has been free since; otherwise zero. A request that hold made stale can still make it yield.
+        /// </summary>
+        public int LastReleaser { get; private set; }
+
+        /// <summary>When <see cref="LastReleaser"/>'s hold ended.</summary>
+        public long LastReleaseMicros { get; private set; }
+
         /// <summary>A participant asks to simulate the body.</summary>
         /// <param name="participant">The requester's participant slot.</param>
         /// <param name="observedEpoch">The epoch the requester last heard.</param>
@@ -93,7 +105,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             switch (State)
             {
                 case OwnershipState.Server:
-                    if (observedEpoch != Epoch) return Report(OwnershipResult.StaleEpoch);
+                    if (observedEpoch != Epoch)
+                    {
+                        // Someone close enough asked under the epoch of a hold too short to contest while it lasted.
+                        if (IsInHoldRange(bodyPosition, requesterPosition)) YieldAfterRace(participant, nowMicros);
+                        return Report(OwnershipResult.StaleEpoch);
+                    }
+
                     if (!IsInHoldRange(bodyPosition, requesterPosition)) return Report(OwnershipResult.OutOfRange);
                     if (IsYielding(participant, nowMicros)) return Report(OwnershipResult.Yielding);
                     return Grant(participant, bodyPosition, nowMicros);
@@ -212,6 +230,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         {
             RequireParticipant(participant);
             if (YieldingParticipant == participant) ClearYield();
+            if (LastReleaser == participant) ClearRelease();
             if (State == OwnershipState.Server || Owner.Participant != participant) return Report(OwnershipResult.NoChange);
             return Reclaim(OwnershipReclaimReason.Disconnected, OwnershipResult.Reclaimed);
         }
@@ -250,8 +269,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         }
 
         /// <summary>
-        /// Whether a participant is refused the body for now, because it recently went quiet holding it or let go of a
-        /// contested hold.
+        /// Whether a participant is refused the body for now, because it recently went quiet holding it, or let go of
+        /// it while another player in range wanted it.
         /// </summary>
         public bool IsYielding(int participant, long nowMicros) =>
             participant == YieldingParticipant && participant != 0 && nowMicros < YieldUntilMicros;
@@ -268,8 +287,23 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             AwaitingFirstSample = true;
             FirstSampleDeadlineMicros = nowMicros + policy.FirstSampleTimeoutMicros;
             Contested = false;
+            ClearRelease();
             if (YieldingParticipant == participant) ClearYield();
             return Report(OwnershipResult.Granted, OwnershipReclaimReason.None, true);
+        }
+
+        /// <summary>
+        /// A request named an epoch the last hold made stale, from another participant within range of the free body.
+        /// If that hold ended uncontested within the cooldown, it ended before the request could reach it, so its
+        /// owner yields from now as if the hold had been contested. Each release makes its owner yield at most once.
+        /// </summary>
+        private void YieldAfterRace(int participant, long nowMicros)
+        {
+            if (LastReleaser == 0 || LastReleaser == participant) return;
+            if (nowMicros - LastReleaseMicros >= policy.YieldCooldownMicros) return;
+            YieldingParticipant = LastReleaser;
+            YieldUntilMicros = nowMicros + policy.YieldCooldownMicros;
+            ClearRelease();
         }
 
         private OwnershipResult? CheckSender(int participant, uint epoch)
@@ -299,15 +333,27 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             return true;
         }
 
-        /// <summary>The body goes back to the server, and the owner it leaves yields for the cooldown if it must.</summary>
+        /// <summary>
+        /// The body goes back to the server, and the owner it leaves yields for the cooldown if it must. An owner that
+        /// let go, or failed validation, with nobody kept waiting is remembered instead, in case a request its hold
+        /// made stale arrives within the cooldown.
+        /// </summary>
         private OwnershipOutcome TakeBack(OwnershipReclaimReason reason, OwnershipResult result, long nowMicros, bool yield)
         {
             var participant = Owner.Participant;
             ChangeToServer();
-            if (yield && policy.YieldCooldownMicros > 0)
+            if (yield)
             {
-                YieldingParticipant = participant;
-                YieldUntilMicros = nowMicros + policy.YieldCooldownMicros;
+                if (policy.YieldCooldownMicros > 0)
+                {
+                    YieldingParticipant = participant;
+                    YieldUntilMicros = nowMicros + policy.YieldCooldownMicros;
+                }
+            }
+            else if (reason == OwnershipReclaimReason.None || reason == OwnershipReclaimReason.ValidationFailed)
+            {
+                LastReleaser = participant;
+                LastReleaseMicros = nowMicros;
             }
 
             return Report(result, reason, true);
@@ -333,6 +379,12 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         {
             YieldingParticipant = 0;
             YieldUntilMicros = 0;
+        }
+
+        private void ClearRelease()
+        {
+            LastReleaser = 0;
+            LastReleaseMicros = 0;
         }
 
         private OwnershipOutcome Report(
