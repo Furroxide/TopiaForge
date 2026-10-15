@@ -104,10 +104,13 @@ void main() {
   test(
     'a discovery port that cannot be opened is reported, not thrown',
     () async {
+      // The listener's bind is shared; on Windows a port another program
+      // holds exclusively refuses a shared bind with WSAEACCES (10013).
       for (final (code, problem) in [
         (10048, LanDiscoveryProblem.portInUse),
         (98, LanDiscoveryProblem.portInUse),
-        (10013, LanDiscoveryProblem.permissionDenied),
+        (10013, LanDiscoveryProblem.portInUse),
+        (13, LanDiscoveryProblem.permissionDenied),
         (1, LanDiscoveryProblem.failed),
       ]) {
         final rig = LanRig.fresh();
@@ -119,7 +122,7 @@ void main() {
         );
         final snapshot = await rig.client.start();
         expect(snapshot.status, LanDiscoveryStatus.unavailable);
-        expect(snapshot.problem, problem);
+        expect(snapshot.problem, problem, reason: '$code');
         expect(snapshot.message, isNot(contains('192.168')));
         expect(rig.client.isListening, isFalse);
         rig.binder.failWith = null;
@@ -127,6 +130,24 @@ void main() {
       }
     },
   );
+
+  test('the query socket\'s own bind is not shared, so 10013 there is '
+      'denied', () async {
+    for (final (code, problem) in [
+      (10013, LanDiscoveryProblem.permissionDenied),
+      (10048, LanDiscoveryProblem.portInUse),
+    ]) {
+      final rig = LanRig.fresh();
+      rig.binder.failQueryWith = SocketException(
+        'bind failed',
+        osError: OSError('denied', code),
+      );
+      final snapshot = await rig.client.start();
+      expect(snapshot.problem, problem, reason: '$code');
+      expect(rig.listener.closed, isTrue);
+      expect(rig.binder.binds.map((bind) => bind.$3), [true, false]);
+    }
+  });
 
   test('stopping forgets every session and closes both sockets', () async {
     final rig = LanRig.fresh();

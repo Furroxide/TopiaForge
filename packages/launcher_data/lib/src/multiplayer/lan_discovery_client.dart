@@ -135,7 +135,7 @@ final class LanDiscoveryClient {
       return _publish(
         LanBrowseSnapshot(
           status: LanDiscoveryStatus.unavailable,
-          problem: _problemOf(error),
+          problem: _problemOf(error, shared: listener == null),
         ),
       );
     }
@@ -154,8 +154,12 @@ final class LanDiscoveryClient {
   }
 
   /// Stops listening and forgets every session. Harmless when stopped.
-  /// [disabled] reports that the player turned discovery off.
-  Future<LanBrowseSnapshot> stop({bool disabled = false}) async {
+  /// [disabled] reports that the player turned discovery off, and
+  /// [unavailable] why it cannot run just now.
+  Future<LanBrowseSnapshot> stop({
+    bool disabled = false,
+    LanDiscoveryProblem? unavailable,
+  }) async {
     _generation++;
     _starting = null;
     _sweeper?.cancel();
@@ -168,6 +172,14 @@ final class LanDiscoveryClient {
     _queries.clear();
     _budget.clear();
     if (_disposed) return snapshot;
+    if (unavailable != null) {
+      return _publish(
+        LanBrowseSnapshot(
+          status: LanDiscoveryStatus.unavailable,
+          problem: unavailable,
+        ),
+      );
+    }
     return _publish(
       disabled ? LanBrowseSnapshot.disabled : LanBrowseSnapshot.stopped,
     );
@@ -427,11 +439,15 @@ final class LanDiscoveryClient {
     return InternetAddress.fromRawAddress(Uint8List.sublistView(raw, 12));
   }
 
-  /// Address-in-use and access-denied codes on Windows, Linux and macOS.
-  static LanDiscoveryProblem _problemOf(Object error) {
+  /// Address-in-use and access-denied codes on Windows, Linux and macOS. On
+  /// Windows a [shared] bind, as the listener's is, fails with WSAEACCES
+  /// (10013) on a port another program holds exclusively, so there it means
+  /// in use.
+  static LanDiscoveryProblem _problemOf(Object error, {required bool shared}) {
     final code = error is SocketException ? error.osError?.errorCode : null;
     return switch (code) {
       10048 || 98 || 48 => LanDiscoveryProblem.portInUse,
+      10013 when shared => LanDiscoveryProblem.portInUse,
       10013 || 13 => LanDiscoveryProblem.permissionDenied,
       _ => LanDiscoveryProblem.failed,
     };

@@ -24,8 +24,10 @@ enum MultiplayerStoreRecovery {
   /// replace it.
   reset,
 
-  /// It could not be read just now, as when another program holds it;
-  /// defaults are in use and the file is left as it is.
+  /// It could not be read just now, as when another program holds it. The
+  /// file is left as it is, nothing is written over it until it reads again,
+  /// and [MultiplayerStore.unreadableSettings] stand in meanwhile. Nothing on
+  /// this computer, such as link registration, should change to match them.
   unreadable,
 }
 
@@ -36,12 +38,17 @@ final class MultiplayerSettingsLoad {
   final MultiplayerStoreRecovery recovery;
 }
 
-/// A save that could not be written. [message] names neither the file nor
-/// anything in it.
+/// A change that was not made: the file could not be read, so it was left
+/// as it is ([unreadable]), or the result could not be written. [message]
+/// names neither the file nor anything in it.
 final class MultiplayerStoreException implements Exception {
-  const MultiplayerStoreException(this.message);
+  const MultiplayerStoreException(this.message, {this.unreadable = false});
 
   final String message;
+
+  /// Whether the stored file could not be read just now, so no check could
+  /// use it and nothing was written over it.
+  final bool unreadable;
 
   @override
   String toString() => 'MultiplayerStoreException: $message';
@@ -61,6 +68,17 @@ final class MultiplayerStoreException implements Exception {
 /// damaged file is never fatal: it is set aside as
 /// `<name>.damaged-<UTC time>.json`, the newest [keptDamagedCopies] kept, and
 /// what was valid in it, or the defaults, take its place.
+///
+/// A file that cannot be read just now, as when another program holds it,
+/// is never replaced. Saves and updates throw [MultiplayerStoreException]
+/// until it reads again, the settings load as [unreadableSettings], and
+/// loading the known hosts throws, so no check mistakes an unread record for
+/// an empty one.
+///
+/// Where Windows refuses to replace a held file, a write moves the old one
+/// aside as `<name>.<token>.bak` first. A write stopped between its two moves
+/// leaves that backup and no file, so reading restores the newest backup
+/// when the file is missing, as the launcher's own files do.
 final class MultiplayerStore {
   MultiplayerStore(this.directory, {DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
@@ -72,6 +90,16 @@ final class MultiplayerStore {
   static const maximumSettingsBytes = 256 * 1024;
   static const keptDamagedCopies = 3;
 
+  /// What stands in for settings that cannot be read. Everything that
+  /// reaches the network or changes this computer is off, and nothing is
+  /// acknowledged or consented to: LAN discovery, UPnP, voice and link
+  /// handling are off, privacy is relay-only, and a direct path still needs
+  /// the disclosure. They are never saved.
+  static final unreadableSettings = MultiplayerSettings(
+    lanDiscoveryEnabled: false,
+    linkHandlingEnabled: false,
+  );
+
   final String directory;
   final DateTime Function() _clock;
   final Random _random = Random();
@@ -80,31 +108,41 @@ final class MultiplayerStore {
   File get _settingsFile => File(p.join(directory, settingsFileName));
   File get _knownHostsFile => File(p.join(directory, knownHostsFileName));
 
-  /// Reads the settings, recovering from any damage. Never throws.
+  /// Reads the settings, recovering from any damage. Never throws: while the
+  /// file cannot be read, gives [unreadableSettings] and
+  /// [MultiplayerStoreRecovery.unreadable].
   Future<MultiplayerSettingsLoad> loadSettings() => _serial(_loadSettings);
 
-  /// Writes [settings]. Throws [MultiplayerStoreException] when it cannot.
+  /// Writes [settings]. Throws [MultiplayerStoreException] when they cannot
+  /// be written, and while the stored settings cannot be read, which are
+  /// then left as they are.
   Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings) =>
       _serial(() async {
+        await _readableSettings();
         await _writeSettings(settings);
         return settings;
       });
 
   /// Reads the settings, applies [change] and writes the result, with no
-  /// other save in between.
+  /// other save in between. Throws [MultiplayerStoreException] as
+  /// [saveSettings] does, before [change] runs when they cannot be read.
   Future<MultiplayerSettings> updateSettings(
     MultiplayerSettings Function(MultiplayerSettings current) change,
   ) => _serial(() async {
-    final next = change((await _loadSettings()).settings);
+    final next = change(await _readableSettings());
     await _writeSettings(next);
     return next;
   });
 
-  /// Reads the known-hosts record, recovering from any damage. Never throws.
+  /// Reads the known-hosts record, recovering from any damage. Throws
+  /// [MultiplayerStoreException] while it cannot be read, so no check can
+  /// mistake an unread record for an empty one.
   Future<KnownHosts> loadKnownHosts() => _serial(_loadKnownHosts);
 
   /// Reads the known-hosts record, applies [change] and writes the result
-  /// when it differs.
+  /// when it differs. Throws [MultiplayerStoreException] while the record
+  /// cannot be read, before [change] runs, and when the result cannot be
+  /// written.
   Future<KnownHosts> updateKnownHosts(
     KnownHosts Function(KnownHosts current) change,
   ) => _serial(() async {
@@ -134,7 +172,7 @@ final class MultiplayerStore {
         );
       case _Unreadable():
         return MultiplayerSettingsLoad(
-          MultiplayerSettings(),
+          unreadableSettings,
           MultiplayerStoreRecovery.unreadable,
         );
       case _Damaged():
@@ -175,12 +213,31 @@ final class MultiplayerStore {
     return MultiplayerSettingsLoad(settings, recovery);
   }
 
+  /// The stored settings, recovered from any damage; throws while they
+  /// cannot be read, so nothing is written over them.
+  Future<MultiplayerSettings> _readableSettings() async {
+    final load = await _loadSettings();
+    if (load.recovery == MultiplayerStoreRecovery.unreadable) {
+      throw _unreadable('multiplayer settings');
+    }
+    return load.settings;
+  }
+
+  static MultiplayerStoreException _unreadable(String label) =>
+      MultiplayerStoreException(
+        'The $label could not be read just now, so nothing was changed. Try '
+        'again in a moment.',
+        unreadable: true,
+      );
+
   Future<KnownHosts> _loadKnownHosts() async {
     final file = _knownHostsFile;
     final read = await _readBounded(file, KnownHosts.maximumBytes);
     switch (read) {
-      case _Missing() || _Unreadable():
+      case _Missing():
         return KnownHosts.empty();
+      case _Unreadable():
+        throw _unreadable('known hosts');
       case _Damaged():
         await _setAside(file);
         return KnownHosts.empty();
@@ -209,9 +266,12 @@ final class MultiplayerStore {
   );
 
   Future<_ReadResult> _readBounded(File file, int maximumBytes) async {
-    final FileSystemEntityType type;
+    FileSystemEntityType type;
     try {
       type = await FileSystemEntity.type(file.path, followLinks: false);
+      if (type == FileSystemEntityType.notFound && await _restoreBackup(file)) {
+        type = await FileSystemEntity.type(file.path, followLinks: false);
+      }
     } on FileSystemException {
       return const _Unreadable();
     }
@@ -225,6 +285,42 @@ final class MultiplayerStore {
     } on FileSystemException {
       return const _Unreadable();
     }
+  }
+
+  /// Puts back the newest `<name>.<token>.bak` of [file], which a write
+  /// stopped between its two moves left behind, and drops older ones; true
+  /// once one is back. Only regular files count, never a link or a folder.
+  Future<bool> _restoreBackup(File file) async {
+    final prefix = '${p.basename(file.path)}.';
+    final backups = <(File, DateTime)>[];
+    try {
+      await for (final entity in Directory(
+        directory,
+      ).list(followLinks: false)) {
+        final name = p.basename(entity.path);
+        if (entity is File &&
+            name.startsWith(prefix) &&
+            name.endsWith('.bak')) {
+          backups.add((entity, (await entity.stat()).modified));
+        }
+      }
+    } on FileSystemException {
+      return false;
+    }
+    backups.sort((left, right) => right.$2.compareTo(left.$2));
+    for (final (backup, _) in backups) {
+      try {
+        await backup.rename(file.path);
+      } on FileSystemException {
+        // Try the next one if this one vanished or is held.
+        continue;
+      }
+      for (final (stale, _) in backups) {
+        if (!identical(stale, backup)) await _deleteEntity(stale.path);
+      }
+      return true;
+    }
+    return false;
   }
 
   /// Renames [file] to a damaged copy beside it and keeps the newest

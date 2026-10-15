@@ -2,7 +2,7 @@
 /// (`docs/internal/MultiplayerLiveSessions.md`, section 15).
 library;
 
-import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:launcher_domain/launcher_domain.dart';
@@ -19,8 +19,8 @@ final class Tfd1Body extends Tfd1Response {
   final Uint8List bytes;
 }
 
-/// A status without a body, such as `TFD1 404`: [status] is the three
-/// characters after `TFD1 `.
+/// A status without a body, such as `TFD1 404`: [status] is the three bytes
+/// after `TFD1 `, as Latin-1 text.
 final class Tfd1Status extends Tfd1Response {
   const Tfd1Status(this.status);
 
@@ -40,9 +40,6 @@ enum Tfd1Problem {
   /// plain decimal.
   impossibleLength,
 
-  /// More bytes arrived than the status line announced.
-  moreThanAnnounced,
-
   /// The connection ended before the announced body was complete.
   endedEarly,
 }
@@ -56,10 +53,23 @@ final class Tfd1Malformed extends Tfd1Response {
   final String message;
 }
 
-/// Reads one response as its bytes arrive, within fixed bounds: a status
-/// line within the first 64 bytes, and a body of at most [maximumBodyBytes]
-/// that must be exactly as long as announced. Bytes are hostile input, so
-/// nothing here throws.
+/// Reads one descriptor answer as its bytes arrive, the way the game's
+/// `DescriptorClient` reads it: a status line within the first 64 bytes,
+/// then a body of at most [maximumBodyBytes], read up to the announced
+/// length and no further. Bytes after the body are never read, whether they
+/// arrive with its end or later, so the outcome never depends on how the
+/// network split them. Bytes are hostile input, so nothing here throws.
+///
+/// It reads descriptors only. A `TFD1 package <sha256>` archive does not fit
+/// it: the length here is at most seven digits and the body is held in
+/// memory, while the game writes an archive's length as a 64-bit integer.
+/// The slice that downloads host-served packages needs:
+///
+/// - a streaming reader with a wider length, writing to disk as it reads;
+/// - the contact rules checked again at download time, as
+///   `DescriptorClient.fetchFrom` checks them before it connects;
+/// - LAN browsing kept running through the join, since a LAN host is reached
+///   only through the entry its beacon made, and stopping browsing forgets it.
 final class Tfd1ResponseReader {
   Tfd1ResponseReader({
     this.maximumBodyBytes = SignedServerDescriptorV1.maximumBytes,
@@ -84,11 +94,8 @@ final class Tfd1ResponseReader {
   bool get isDone => _result != null;
 
   /// Takes the next bytes; true once the response is finished, with or
-  /// without success. Bytes after a finished body make it malformed.
-  bool add(List<int> chunk) {
-    if (_result case Tfd1Body() when chunk.isNotEmpty) {
-      _result = _tooMuch;
-    }
+  /// without success. Bytes past the finished response are ignored.
+  bool add(Uint8List chunk) {
     if (_result != null) return true;
     var offset = 0;
     if (_body == null) {
@@ -96,9 +103,7 @@ final class Tfd1ResponseReader {
         final byte = chunk[offset++];
         if (byte == 0x0A) {
           _readStatus();
-        } else if (_headerLength == maximumHeaderBytes - 1 ||
-            byte < 0 ||
-            byte > 0xFF) {
+        } else if (_headerLength == maximumHeaderBytes - 1) {
           _result = const Tfd1Malformed(
             Tfd1Problem.noStatusLine,
             "The host's answer did not start with a status line.",
@@ -111,19 +116,9 @@ final class Tfd1ResponseReader {
       if (_body == null) return false;
     }
     final body = _body!;
-    final remaining = chunk.length - offset;
-    if (remaining > body.length - _received) {
-      _result = _tooMuch;
-      return true;
-    }
-    for (var index = offset; index < chunk.length; index++) {
-      final byte = chunk[index];
-      if (byte < 0 || byte > 0xFF) {
-        _result = _tooMuch;
-        return true;
-      }
-      body[_received++] = byte;
-    }
+    final taken = min(chunk.length - offset, body.length - _received);
+    body.setRange(_received, _received + taken, chunk, offset);
+    _received += taken;
     if (_received == body.length) _result = Tfd1Body(body);
     return _result != null;
   }
@@ -142,18 +137,13 @@ final class Tfd1ResponseReader {
           );
   }
 
+  /// Reads the status line as the game does: `TFD1 200 <length>` announces
+  /// a body, and any other line of eight bytes that starts with `TFD1 ` is a
+  /// status, `TFD1 200` without a length included.
   void _readStatus() {
-    for (var index = 0; index < _headerLength; index++) {
-      final unit = _header[index];
-      if (unit < 0x20 || unit > 0x7E) {
-        _result = _badStatus;
-        return;
-      }
-    }
-    final line = ascii.decode(Uint8List.sublistView(_header, 0, _headerLength));
-    if (line.startsWith(_okPrefix)) {
-      final digits = line.substring(_okPrefix.length);
-      final length = _plainDecimal(digits);
+    final line = Uint8List.sublistView(_header, 0, _headerLength);
+    if (_startsWith(line, _okPrefix)) {
+      final length = _plainDecimal(line, _okPrefix.length);
       if (length == null || length < 1 || length > maximumBodyBytes) {
         _result = Tfd1Malformed(
           Tfd1Problem.impossibleLength,
@@ -165,38 +155,40 @@ final class Tfd1ResponseReader {
       _body = Uint8List(length);
       return;
     }
-    if (line.startsWith(_statusPrefix) &&
-        line.length == _statusPrefix.length + 3 &&
-        line != 'TFD1 200') {
-      _result = Tfd1Status(line.substring(_statusPrefix.length));
+    if (line.length == _statusPrefix.length + 3 &&
+        _startsWith(line, _statusPrefix)) {
+      _result = Tfd1Status(
+        String.fromCharCodes(line, _statusPrefix.length, line.length),
+      );
       return;
     }
-    _result = _badStatus;
+    _result = const Tfd1Malformed(
+      Tfd1Problem.badStatusLine,
+      "The host's answer did not start with a status line.",
+    );
   }
 
-  /// A decimal of one to seven digits without a leading zero, or null.
-  static int? _plainDecimal(String digits) {
-    if (digits.isEmpty ||
-        digits.length > 7 ||
-        (digits.length > 1 && digits.codeUnitAt(0) == 0x30)) {
+  static bool _startsWith(Uint8List line, String prefix) {
+    if (line.length < prefix.length) return false;
+    for (var index = 0; index < prefix.length; index++) {
+      if (line[index] != prefix.codeUnitAt(index)) return false;
+    }
+    return true;
+  }
+
+  /// The decimal of one to seven digits without a leading zero that fills
+  /// [line] from [start], or null.
+  static int? _plainDecimal(Uint8List line, int start) {
+    final digits = line.length - start;
+    if (digits < 1 || digits > 7 || (digits > 1 && line[start] == 0x30)) {
       return null;
     }
     var value = 0;
-    for (var index = 0; index < digits.length; index++) {
-      final unit = digits.codeUnitAt(index);
+    for (var index = start; index < line.length; index++) {
+      final unit = line[index];
       if (unit < 0x30 || unit > 0x39) return null;
       value = value * 10 + unit - 0x30;
     }
     return value;
   }
-
-  static const _badStatus = Tfd1Malformed(
-    Tfd1Problem.badStatusLine,
-    "The host's answer did not start with a status line.",
-  );
-
-  static const _tooMuch = Tfd1Malformed(
-    Tfd1Problem.moreThanAnnounced,
-    'The host sent more than it announced.',
-  );
 }

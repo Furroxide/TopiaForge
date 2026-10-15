@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_data/src/multiplayer/lan_discovery_client.dart';
 import 'package:test/test.dart';
 
 import 'multiplayer_network_support.dart';
@@ -52,6 +53,36 @@ Future<void> main() async {
   }
   exit(1);
 }
+''';
+
+/// Binds a UDP port on loopback for exclusive use, as a program can on
+/// Windows, prints it, and holds it until the release file appears.
+const _exclusiveHolder = r'''
+$ErrorActionPreference = 'Stop'
+$random = [System.Random]::new(20261015)
+for ($attempt = 0; $attempt -lt 64; $attempt++) {
+  $port = 20000 + $random.Next(40000)
+  $socket = [System.Net.Sockets.Socket]::new(
+    [System.Net.Sockets.AddressFamily]::InterNetwork,
+    [System.Net.Sockets.SocketType]::Dgram,
+    [System.Net.Sockets.ProtocolType]::Udp)
+  $socket.ExclusiveAddressUse = $true
+  try {
+    $socket.Bind(
+      [System.Net.IPEndPoint]::new([System.Net.IPAddress]::Loopback, $port))
+  } catch {
+    $socket.Dispose()
+    continue
+  }
+  [Console]::Out.WriteLine($port)
+  [Console]::Out.Flush()
+  while (-not [IO.File]::Exists($env:TOPIAFORGE_TEST_RELEASE)) {
+    [System.Threading.Thread]::Sleep(10)
+  }
+  $socket.Dispose()
+  exit 0
+}
+exit 1
 ''';
 
 /// Port checks bind the loopback interface only.
@@ -138,6 +169,74 @@ void main() {
       expect(report.gamePortTcp.result, PortCheckResult.inUse);
       expect(report.gamePortUdp.port, port);
     },
+  );
+
+  test(
+    'a port another program holds exclusively is in use, not denied, to a '
+    'shared bind',
+    () async {
+      final flags = Directory.systemTemp.createTempSync('tf-mp-exclusive-');
+      final release = File('${flags.path}${Platform.pathSeparator}release');
+      final holder = await Process.start(
+        '${Platform.environment['SystemRoot']}\\System32\\'
+        'WindowsPowerShell\\v1.0\\powershell.exe',
+        [
+          '-NoLogo',
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          _exclusiveHolder,
+        ],
+        environment: {'TOPIAFORGE_TEST_RELEASE': release.path},
+      );
+      addTearDown(() async {
+        release.writeAsStringSync('release');
+        await holder.exitCode.timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            holder.kill();
+            return holder.exitCode;
+          },
+        );
+        flags.deleteSync(recursive: true);
+      });
+      final port = int.parse(
+        await holder.stdout
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .first
+            .timeout(const Duration(seconds: 60)),
+      );
+
+      final report =
+          await MultiplayerNetworkDiagnostics(
+            bindAddress: loopback,
+            gamePort: port,
+            lanPort: port,
+          ).run(
+            service: MultiplayerServiceStatus.unconfigured,
+            lan: LanBrowseSnapshot.stopped,
+            checkPorts: true,
+          );
+      // The discovery port's check shares its bind, as browsing does, and
+      // Windows answers WSAEACCES; the game port's does not share.
+      expect(report.lanPort.result, PortCheckResult.inUse);
+      expect(report.gamePortUdp.result, PortCheckResult.inUse);
+
+      final lan = LanDiscoveryClient(
+        listenAddress: loopback,
+        port: port,
+        queryAddress: loopback,
+      );
+      addTearDown(lan.dispose);
+      final snapshot = await lan.start();
+      expect(snapshot.status, LanDiscoveryStatus.unavailable);
+      expect(snapshot.problem, LanDiscoveryProblem.portInUse);
+      expect(snapshot.message, contains('Another program'));
+    },
+    skip: Platform.isWindows
+        ? false
+        : 'Exclusive address use is a Windows sharing rule.',
   );
 
   test(

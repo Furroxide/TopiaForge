@@ -289,6 +289,84 @@ void main() {
     });
   });
 
+  group('a write stopped between its two moves', () {
+    /// Leaves what a write that died after moving [file] aside leaves: the
+    /// old file as a backup, the new one as a temporary file, and no file.
+    void interrupt(File file, String token) {
+      file.renameSync('${file.path}.$token.bak');
+      File('${file.path}.$token.tmp').writeAsStringSync('{"unfinished": ');
+    }
+
+    test('is undone from its backup when the settings are read', () async {
+      final kept = MultiplayerSettings(
+        displayName: 'Charl',
+        lanDiscoveryEnabled: false,
+        favorites: ServerFavorites([bookmark(1)]),
+      );
+      await store().saveSettings(kept);
+      interrupt(settingsFile(), '4242-1-1');
+      final load = await store().loadSettings();
+      expect(load.recovery, MultiplayerStoreRecovery.none);
+      expect(load.settings.toJson(), kept.toJson());
+      expect(settingsFile().existsSync(), isTrue);
+      expect(
+        Directory(folder).listSync().map((entity) => p.basename(entity.path)),
+        isNot(contains(endsWith('.bak'))),
+      );
+    });
+
+    test('restores the newest backup and drops the older ones', () async {
+      // The newest sorts between the others by name, so only times tell.
+      Directory(folder).createSync(recursive: true);
+      for (final (token, name, day) in [
+        ('1000-1-1', 'Oldest', 1),
+        ('5000-5-5', 'Newer', 3),
+        ('9000-9-9', 'Older', 2),
+      ]) {
+        File(p.join(folder, 'settings.json.$token.bak'))
+          ..writeAsStringSync(
+            jsonEncode(MultiplayerSettings(displayName: name).toJson()),
+          )
+          ..setLastModifiedSync(DateTime(2026, 10, day));
+      }
+      final updated = await store().updateSettings(
+        (settings) => settings.withUpnp(true),
+      );
+      expect(updated.displayName, 'Newer');
+      expect(updated.upnpEnabled, isTrue);
+      expect(
+        Directory(folder).listSync().map((entity) => p.basename(entity.path)),
+        isNot(contains(endsWith('.bak'))),
+      );
+    });
+
+    test('is undone for the known hosts too', () async {
+      final typed = JoinAddressTarget(host: '127.0.0.1', port: 27250);
+      await store().updateKnownHosts(
+        (hosts) => hosts.remember(typed, hostAServerId, now),
+      );
+      final original = knownHostsFile().readAsBytesSync();
+      interrupt(knownHostsFile(), '4242-3-3');
+      final hosts = await store().loadKnownHosts();
+      expect(hosts.check(typed, hostAServerId), KnownHostCheck.match);
+      expect(knownHostsFile().readAsBytesSync(), original);
+    });
+
+    test('never restores a folder named like a backup', () async {
+      Directory(
+        p.join(folder, 'settings.json.4242-4-4.bak'),
+      ).createSync(recursive: true);
+      final load = await store().loadSettings();
+      expect(load.recovery, MultiplayerStoreRecovery.none);
+      expect(load.settings.toJson(), MultiplayerSettings().toJson());
+      expect(settingsFile().existsSync(), isFalse);
+      expect(
+        Directory(p.join(folder, 'settings.json.4242-4-4.bak')).existsSync(),
+        isTrue,
+      );
+    });
+  });
+
   test('no stored file names an address', () async {
     final shared = store();
     await shared.updateSettings(

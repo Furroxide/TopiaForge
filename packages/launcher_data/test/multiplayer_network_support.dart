@@ -157,6 +157,10 @@ final class FakeLanBinder {
   /// Thrown by the next bind instead of binding.
   Object? failWith;
 
+  /// Thrown by the query socket's bind alone: the one that does not share
+  /// its address.
+  Object? failQueryWith;
+
   FakeLanSocket get listener => sockets[0];
   FakeLanSocket get querier => sockets[1];
 
@@ -166,7 +170,7 @@ final class FakeLanBinder {
     required bool reuseAddress,
   }) async {
     binds.add((address, port, reuseAddress));
-    final failure = failWith;
+    final failure = failWith ?? (reuseAddress ? null : failQueryWith);
     if (failure != null) throw failure;
     final socket = FakeLanSocket(port == 0 ? 50000 + sockets.length : port);
     sockets.add(socket);

@@ -23,15 +23,20 @@ import 'network_diagnostics.dart';
 /// reports name servers by server id; where a LAN server was heard stays in
 /// the LAN client, and a typed address stays in the join target the player
 /// typed.
+///
+/// Every change to the settings, favorites or history throws
+/// [MultiplayerStoreException] when it cannot be written, and while the
+/// stored settings cannot be read, which are then left as they are.
 abstract interface class MultiplayerRepository {
   /// Whether this build names a multiplayer service.
   MultiplayerServiceStatus get serviceStatus;
 
-  /// Reads the settings, recovering from damage. Never throws.
+  /// Reads the settings, recovering from damage. Never throws. While they
+  /// cannot be read, [MultiplayerStore.unreadableSettings] stand in.
   Future<MultiplayerSettingsLoad> loadSettings();
 
-  /// Saves [settings]; turning LAN discovery off stops browsing. Throws
-  /// [MultiplayerStoreException] when they cannot be written.
+  /// Saves [settings]. Turning LAN discovery off stops browsing at once,
+  /// even when the save then fails.
   Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings);
 
   /// Adds a favorite, or refreshes its name. Throws [StateError] when the
@@ -58,7 +63,9 @@ abstract interface class MultiplayerRepository {
   /// Every change to LAN browsing.
   Stream<LanBrowseSnapshot> get lanSnapshots;
 
-  /// Starts LAN browsing unless the player turned it off. Never throws.
+  /// Starts LAN browsing unless the player turned it off. While the settings
+  /// cannot be read it stays off, as [LanDiscoveryProblem.settingsUnreadable].
+  /// Never throws.
   Future<LanBrowseSnapshot> startLanBrowsing();
 
   Future<LanBrowseSnapshot> stopLanBrowsing();
@@ -167,9 +174,8 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
 
   @override
   Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings) async {
-    final saved = await _store.saveSettings(settings);
-    if (!saved.lanDiscoveryEnabled) await _lan.stop(disabled: true);
-    return saved;
+    if (!settings.lanDiscoveryEnabled) await _lan.stop(disabled: true);
+    return _store.saveSettings(settings);
   }
 
   @override
@@ -223,8 +229,13 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
 
   @override
   Future<LanBrowseSnapshot> startLanBrowsing() async {
-    final settings = (await _store.loadSettings()).settings;
-    if (!settings.lanDiscoveryEnabled) return _lan.stop(disabled: true);
+    final load = await _store.loadSettings();
+    // Settings that cannot be read never count as the defaults, which would
+    // turn discovery on for a player who turned it off.
+    if (load.recovery == MultiplayerStoreRecovery.unreadable) {
+      return _lan.stop(unavailable: LanDiscoveryProblem.settingsUnreadable);
+    }
+    if (!load.settings.lanDiscoveryEnabled) return _lan.stop(disabled: true);
     return _lan.start();
   }
 
