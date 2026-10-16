@@ -21,7 +21,8 @@ namespace TopiaForge.ModManager.Core
 
         /// <summary>
         /// Display text of <paramref name="minimum"/> to <paramref name="maximum"/> UTF-16 code units: no surrounding white
-        /// space, no control characters and no unpaired surrogates.
+        /// space, no control characters, no unpaired surrogates, and neither U+FFFE nor U+FFFF, which the JSON reader
+        /// refuses, so a document holding one could never be read back.
         /// </summary>
         internal static string DisplayText(string? value, string name, int minimum, int maximum)
         {
@@ -31,7 +32,8 @@ namespace TopiaForge.ModManager.Core
             for (var index = 0; index < value.Length; index++)
             {
                 var character = value[index];
-                if (char.IsControl(character)) throw new ArgumentException("Invalid session display text.", name);
+                if (char.IsControl(character) || character == '\uFFFE' || character == '\uFFFF')
+                    throw new ArgumentException("Invalid session display text.", name);
                 if (char.IsHighSurrogate(character))
                 {
                     if (index + 1 >= value.Length || !char.IsLowSurrogate(value[index + 1]))
@@ -73,8 +75,10 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>
-        /// A control-plane origin: <c>https://</c>, a lowercase DNS name and an optional port, nothing more. An IP literal is
-        /// refused, so no address can pass as the service.
+        /// A control-plane origin in the one spelling a launch carries: <c>https://</c>, a lowercase DNS name, and a port of 1
+        /// to 65535 in plain decimal, never the default 443. An address is refused, so none can pass as the service: an IP
+        /// literal, and a name whose last label is a number, decimal or <c>0x</c> hexadecimal, which the URL Standard and the
+        /// system resolver read as an IPv4 address (<c>0x7f000001</c> is 127.0.0.1).
         /// </summary>
         internal static string ServiceOrigin(string? value, string name)
         {
@@ -84,9 +88,9 @@ namespace TopiaForge.ModManager.Core
             var authority = value.Substring(scheme.Length);
             var colon = authority.IndexOf(':');
             var host = colon < 0 ? authority : authority.Substring(0, colon);
-            if (colon >= 0 && !IsPortText(authority.Substring(colon + 1)))
+            if (colon >= 0 && (!IsPortText(authority.Substring(colon + 1)) || authority.Substring(colon + 1) == "443"))
                 throw new ArgumentException("Invalid service origin.", name);
-            if (host.Length == 0 || LaunchSessionHosts.TryNormalize(host) != host || IsAddressLiteral(host))
+            if (host.Length == 0 || LaunchSessionHosts.TryNormalize(host) != host || IsAddressLiteral(host) || EndsInNumber(host))
                 throw new ArgumentException("Invalid service origin.", name);
             return value;
         }
@@ -122,6 +126,19 @@ namespace TopiaForge.ModManager.Core
                 {
                     if (character < '0' || character > '9') return false;
                 }
+            }
+
+            return true;
+        }
+
+        /// <summary>Whether the last label of a DNS name is all decimal digits, or <c>0x</c> and hexadecimal digits only.</summary>
+        private static bool EndsInNumber(string canonicalHost)
+        {
+            var last = canonicalHost.Substring(canonicalHost.LastIndexOf('.') + 1);
+            var hex = last.StartsWith("0x", StringComparison.Ordinal);
+            foreach (var character in hex ? last.Substring(2) : last)
+            {
+                if ((character < '0' || character > '9') && !(hex && character >= 'a' && character <= 'f')) return false;
             }
 
             return true;

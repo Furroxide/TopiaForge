@@ -550,9 +550,10 @@ Progress is logged by phase and reason, never by address. The switch never allow
 reaches LAN addresses only.
 
 The launcher's session launches (request V5, `MultiplayerLaunchContract.md`) reach the provider as a ticket the runtime
-offers before mods load. `MultiplayerProvider.TakeLaunchSession` takes it once and plans it: host settings, or a join
-target pinned by the server the launcher verified, so the join never repeats trust on first use. Planning starts
-nothing: the in-game flows of WS5, which replace the developer switch, start the planned session.
+offers before mods load. `MultiplayerProvider.TakeLaunchSession` takes it once, while mods load, and plans it: host
+settings, or a join target pinned by the server the launcher verified, so the join never repeats trust on first use.
+The runtime withdraws a ticket no one took once mods have loaded. Planning starts nothing: the in-game flows of WS5,
+which replace the developer switch, start the planned session.
 
 These choices differ from the plan:
 

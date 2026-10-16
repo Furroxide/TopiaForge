@@ -29,6 +29,7 @@ void main() {
           'executableCommand': request.executable.command,
           'intentId': session.intentId,
           'displayName': session.displayName,
+          'developerMode': session.developerMode,
           'privacy': session.transport.privacy.wireName,
           'consented': session.transport.directConsent != null,
           'port': session.transport.port,

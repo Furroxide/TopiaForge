@@ -134,13 +134,14 @@ namespace TopiaForge.ModManager.Core
     /// <see cref="Host"/>, a join <see cref="Target"/>. Direct privacy carries the player's consent for this session; under
     /// relay-only a direct target may only name a host on the local network, and any other is refused for lacking that
     /// consent. Invites, Internet listings, and public or invite-only hosting need a service origin; LAN listings and LAN or
-    /// public hosting need LAN discovery on. Passwords are typed in game and never staged.
+    /// public hosting need LAN discovery on. Only <see cref="DeveloperMode"/> lets a host serve its packages. Passwords are
+    /// typed in game and never staged.
     /// </summary>
     public sealed class LaunchSessionRequest
     {
         public LaunchSessionRequest(string role, string intentId, string displayName, LaunchSessionTransport transport,
             string? serviceOrigin = null, LaunchSessionTarget? target = null, LaunchHostOptions? host = null,
-            LaunchDevInstance? devInstance = null)
+            LaunchDevInstance? devInstance = null, bool developerMode = false)
         {
             Role = LaunchSessionValues.Choice(role, nameof(role), LaunchContractValues.SessionRoles);
             IntentId = LaunchContractValues.Token(intentId, nameof(intentId));
@@ -151,6 +152,7 @@ namespace TopiaForge.ModManager.Core
             Target = target;
             Host = host;
             DevInstance = devInstance;
+            DeveloperMode = developerMode;
             var consent = transport.DirectConsent;
             if ((Role == "host") != (host != null) || (Role == "join") != (target != null) || (Role == "join" && transport.Upnp)
                 || transport.AllowsDirect != (consent != null) || (consent != null && consent.IntentId != IntentId))
@@ -162,6 +164,8 @@ namespace TopiaForge.ModManager.Core
             var visibility = host?.Visibility;
             if (((visibility == "public" || visibility == "lan") && !transport.Lan) || ((visibility == "public" || visibility == "invite") && ServiceOrigin == null))
                 throw new ArgumentException("Inconsistent launch session.");
+            if (host != null && host.ServePackages && !developerMode)
+                throw new ArgumentException("Only developer mode serves packages.");
         }
 
         /// <summary>Gets <c>host</c> or <c>join</c>.</summary>
@@ -175,6 +179,9 @@ namespace TopiaForge.ModManager.Core
         public LaunchSessionTarget? Target { get; }
         public LaunchHostOptions? Host { get; }
         public LaunchDevInstance? DevInstance { get; }
+
+        /// <summary>Gets whether the launcher runs in developer mode, which alone lets a host serve its packages.</summary>
+        public bool DeveloperMode { get; }
         public string Command => Role == "host" ? "host-session" : "join-session";
 
         public override string ToString() => "launch session (" + Role + (Target == null ? string.Empty : ", " + Target) + ")";

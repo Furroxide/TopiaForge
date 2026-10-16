@@ -117,6 +117,7 @@
             "role": "join",
             "intentId": "intent-7d3e1f20",
             "displayName": "Charl",
+            "developerMode": false,
             "transport": {
               "privacy": "relay-only",
               "port": 0,
@@ -133,8 +134,8 @@
             }
           }
         },
-        "bytes": "{\"joinId\":\"join-5e6f7a8b\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"serviceOrigin\":\"https://mp.topiaforge.dev\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"inviteCode\":\"ABCDE12345\",\"kind\":\"invite\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}",
-        "reordered": "{\n  \"session\": {\n    \"transport\": {\n      \"upnp\": false,\n      \"privacy\": \"relay-only\",\n      \"port\": 0,\n      \"lan\": true\n    },\n    \"target\": {\n      \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\n      \"packageDigest\": \"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\n      \"kind\": \"invite\",\n      \"inviteCode\": \"ABCDE12345\",\n      \"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\"\n    },\n    \"serviceOrigin\": \"https://mp.topiaforge.dev\",\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"displayName\": \"Charl\"\n  },\n  \"schemaVersion\": 1,\n  \"requestId\": \"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\n  \"packageSetDigest\": \"aa1fa8782182a9af\",\n  \"joinId\": \"join-5e6f7a8b\"\n}"
+        "bytes": "{\"joinId\":\"join-5e6f7a8b\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"serviceOrigin\":\"https://mp.topiaforge.dev\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"inviteCode\":\"ABCDE12345\",\"kind\":\"invite\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}",
+        "reordered": "{\n  \"session\": {\n    \"transport\": {\n      \"upnp\": false,\n      \"privacy\": \"relay-only\",\n      \"port\": 0,\n      \"lan\": true\n    },\n    \"target\": {\n      \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\n      \"packageDigest\": \"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\n      \"kind\": \"invite\",\n      \"inviteCode\": \"ABCDE12345\",\n      \"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\"\n    },\n    \"serviceOrigin\": \"https://mp.topiaforge.dev\",\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"displayName\": \"Charl\",\n    \"developerMode\": false\n  },\n  \"schemaVersion\": 1,\n  \"requestId\": \"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\n  \"packageSetDigest\": \"aa1fa8782182a9af\",\n  \"joinId\": \"join-5e6f7a8b\"\n}"
       },
       {
         "id": "lan-listing",
@@ -148,6 +149,7 @@
             "role": "join",
             "intentId": "intent-7d3e1f20",
             "displayName": "Charl",
+            "developerMode": false,
             "transport": {
               "privacy": "relay-only",
               "port": 0,
@@ -163,8 +165,8 @@
             }
           }
         },
-        "bytes": "{\"joinId\":\"join-01\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}",
-        "reordered": "{\n  \"session\": {\n    \"transport\": {\n      \"upnp\": false,\n      \"privacy\": \"relay-only\",\n      \"port\": 0,\n      \"lan\": true\n    },\n    \"target\": {\n      \"source\": \"lan\",\n      \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\n      \"packageDigest\": \"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\n      \"kind\": \"listing\",\n      \"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\"\n    },\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"displayName\": \"Charl\"\n  },\n  \"schemaVersion\": 1,\n  \"requestId\": \"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\n  \"packageSetDigest\": \"aa1fa8782182a9af\",\n  \"joinId\": \"join-01\"\n}"
+        "bytes": "{\"joinId\":\"join-01\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}",
+        "reordered": "{\n  \"session\": {\n    \"transport\": {\n      \"upnp\": false,\n      \"privacy\": \"relay-only\",\n      \"port\": 0,\n      \"lan\": true\n    },\n    \"target\": {\n      \"source\": \"lan\",\n      \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\n      \"packageDigest\": \"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\n      \"kind\": \"listing\",\n      \"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\"\n    },\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"displayName\": \"Charl\",\n    \"developerMode\": false\n  },\n  \"schemaVersion\": 1,\n  \"requestId\": \"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\n  \"packageSetDigest\": \"aa1fa8782182a9af\",\n  \"joinId\": \"join-01\"\n}"
       },
       {
         "id": "internet-direct-privacy",
@@ -178,6 +180,7 @@
             "role": "join",
             "intentId": "intent-7d3e1f20",
             "displayName": "Charl",
+            "developerMode": false,
             "transport": {
               "privacy": "direct",
               "port": 0,
@@ -198,30 +201,30 @@
             }
           }
         },
-        "bytes": "{\"joinId\":\"join-02\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"serviceOrigin\":\"https://mp.topiaforge.dev\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"internet\"},\"transport\":{\"directConsent\":{\"disclosure\":1,\"intentId\":\"intent-7d3e1f20\"},\"lan\":true,\"port\":0,\"privacy\":\"direct\",\"upnp\":false}}}",
-        "reordered": "{\n  \"session\": {\n    \"transport\": {\n      \"upnp\": false,\n      \"privacy\": \"direct\",\n      \"port\": 0,\n      \"lan\": true,\n      \"directConsent\": {\n        \"intentId\": \"intent-7d3e1f20\",\n        \"disclosure\": 1\n      }\n    },\n    \"target\": {\n      \"source\": \"internet\",\n      \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\n      \"packageDigest\": \"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\n      \"kind\": \"listing\",\n      \"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\"\n    },\n    \"serviceOrigin\": \"https://mp.topiaforge.dev\",\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"displayName\": \"Charl\"\n  },\n  \"schemaVersion\": 1,\n  \"requestId\": \"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\n  \"packageSetDigest\": \"aa1fa8782182a9af\",\n  \"joinId\": \"join-02\"\n}"
+        "bytes": "{\"joinId\":\"join-02\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"serviceOrigin\":\"https://mp.topiaforge.dev\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"internet\"},\"transport\":{\"directConsent\":{\"disclosure\":1,\"intentId\":\"intent-7d3e1f20\"},\"lan\":true,\"port\":0,\"privacy\":\"direct\",\"upnp\":false}}}",
+        "reordered": "{\n  \"session\": {\n    \"transport\": {\n      \"upnp\": false,\n      \"privacy\": \"direct\",\n      \"port\": 0,\n      \"lan\": true,\n      \"directConsent\": {\n        \"intentId\": \"intent-7d3e1f20\",\n        \"disclosure\": 1\n      }\n    },\n    \"target\": {\n      \"source\": \"internet\",\n      \"serverId\": \"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\n      \"packageDigest\": \"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\n      \"kind\": \"listing\",\n      \"descriptorSha256\": \"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\"\n    },\n    \"serviceOrigin\": \"https://mp.topiaforge.dev\",\n    \"role\": \"join\",\n    \"intentId\": \"intent-7d3e1f20\",\n    \"displayName\": \"Charl\",\n    \"developerMode\": false\n  },\n  \"schemaVersion\": 1,\n  \"requestId\": \"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\n  \"packageSetDigest\": \"aa1fa8782182a9af\",\n  \"joinId\": \"join-02\"\n}"
       }
     ],
     "invalid": [
       {
         "id": "direct-target",
         "about": "A live join never carries an address; a direct target needs a launch request.",
-        "text": "{\"joinId\":\"join-5e6f7a8b\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"host\":\"192.168.77.31\",\"kind\":\"direct\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"port\":41297,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
+        "text": "{\"joinId\":\"join-5e6f7a8b\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"host\":\"192.168.77.31\",\"kind\":\"direct\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"port\":41297,\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
       },
       {
         "id": "host-session",
         "about": "A live join joins.",
-        "text": "{\"joinId\":\"join-5e6f7a8b\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"host\":{\"maxPlayers\":8,\"name\":\"Charl's Sandbox\",\"passwordRequired\":false,\"servePackages\":false,\"visibility\":\"lan\",\"voice\":true},\"intentId\":\"intent-7d3e1f20\",\"role\":\"host\",\"transport\":{\"lan\":true,\"port\":27250,\"privacy\":\"relay-only\",\"upnp\":false}}}"
+        "text": "{\"joinId\":\"join-5e6f7a8b\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"host\":{\"maxPlayers\":8,\"name\":\"Charl's Sandbox\",\"passwordRequired\":false,\"servePackages\":false,\"visibility\":\"lan\",\"voice\":true},\"intentId\":\"intent-7d3e1f20\",\"role\":\"host\",\"transport\":{\"lan\":true,\"port\":27250,\"privacy\":\"relay-only\",\"upnp\":false}}}"
       },
       {
         "id": "join-id-is-request",
         "about": "A live join reports under its own id.",
-        "text": "{\"joinId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
+        "text": "{\"joinId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
       },
       {
         "id": "digest-uppercase",
         "about": "The package-set digest is lowercase hexadecimal.",
-        "text": "{\"joinId\":\"join-01\",\"packageSetDigest\":\"AA1FA8782182A9AF\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
+        "text": "{\"joinId\":\"join-01\",\"packageSetDigest\":\"AA1FA8782182A9AF\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
       },
       {
         "id": "missing-session",
@@ -231,7 +234,7 @@
       {
         "id": "session-password",
         "about": "Passwords are typed in game, never staged.",
-        "text": "{\"joinId\":\"join-01\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"password\":\"hunter2\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
+        "text": "{\"joinId\":\"join-01\",\"packageSetDigest\":\"aa1fa8782182a9af\",\"requestId\":\"a1b2c3d4e5f60718293a4b5c6d7e8f90\",\"schemaVersion\":1,\"session\":{\"developerMode\":false,\"displayName\":\"Charl\",\"intentId\":\"intent-7d3e1f20\",\"password\":\"hunter2\",\"role\":\"join\",\"target\":{\"descriptorSha256\":\"7a706749ae75006a05d73307bb0580c9dad30a8e2b27b80e46788e81b96c3645\",\"kind\":\"listing\",\"packageDigest\":\"bce9911e3089c75307efb68e910ea9721a339eabeb490eae505cf2f0168d0d82\",\"serverId\":\"c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3\",\"source\":\"lan\"},\"transport\":{\"lan\":true,\"port\":0,\"privacy\":\"relay-only\",\"upnp\":false}}}"
       }
     ]
   },
@@ -316,6 +319,21 @@
         "id": "display-name-short",
         "about": "Display names are 2 to 24 UTF-16 code units.",
         "text": "{\"displayName\":\"A\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "display-name-noncharacter",
+        "about": "Display text never holds U+FFFE.",
+        "text": "{\"displayName\":\"Player￾\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "hosting-name-noncharacter",
+        "about": "Display text never holds U+FFFF.",
+        "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Server ￿\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "service-hex-address",
+        "about": "A hexadecimal number is an address, not a DNS name.",
+        "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"serviceOrigin\":\"https://0x7f000001\",\"voice\":{\"consent\":0,\"enabled\":false}}"
       },
       {
         "id": "service-ip-literal",
@@ -435,6 +453,11 @@
         "id": "voice-without-consent",
         "about": "Voice stays off until the player consents.",
         "text": "{\"changes\":[{\"sequence\":1,\"voice\":{\"consent\":0,\"enabled\":true}}],\"schemaVersion\":1}"
+      },
+      {
+        "id": "display-name-noncharacter",
+        "about": "Display text never holds U+FFFF.",
+        "text": "{\"changes\":[{\"displayName\":\"Charl￿\",\"sequence\":1}],\"schemaVersion\":1}"
       },
       {
         "id": "too-many",

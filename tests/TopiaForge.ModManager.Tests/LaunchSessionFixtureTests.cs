@@ -104,6 +104,7 @@ namespace TopiaForge.ModManager.Tests
                 && request.Executable.Command == expected.GetProperty("executableCommand").GetString()
                 && session.IntentId == expected.GetProperty("intentId").GetString()
                 && session.DisplayName == expected.GetProperty("displayName").GetString()
+                && session.DeveloperMode == expected.GetProperty("developerMode").GetBoolean()
                 && session.Transport.Privacy == expected.GetProperty("privacy").GetString()
                 && (session.Transport.DirectConsent != null) == expected.GetProperty("consented").GetBoolean()
                 && session.Transport.Port == expected.GetProperty("port").GetInt32()

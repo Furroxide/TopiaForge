@@ -11,55 +11,69 @@ part of 'launch_staging_store.dart';
 ///   projection.
 /// - `multiplayer-preferences-journal-v1.json`, game to launcher: changes the
 ///   player made in game.
+///
+/// A taker claims a channel file by renaming it to a private name before it
+/// reads it, so a newer file the other side writes meanwhile lands at the
+/// channel's name again and is never removed unread.
 extension LaunchStagingSessions on LaunchStagingStore {
   static const preferencesFile = 'multiplayer-preferences-v1.json';
   static const journalFile = 'multiplayer-preferences-journal-v1.json';
 
   /// Takes the handoff the game staged for the process launched as
   /// [requestId]: returns it and removes it, once. A malformed or foreign
-  /// handoff is never acted on and stays inspectable.
+  /// handoff is removed without being acted on.
   Future<SessionHandoff?> takeSessionHandoff(String requestId) async {
     final file = _channel('session-handoff', requestId);
+    final File claimed;
     try {
-      final text = await _readText(file, LaunchTransport.maxChannelBytes);
-      if (text == null) return null;
-      final handoff = LaunchTransport.readSessionHandoff(text);
-      if (handoff.requestId != requestId) return null;
-      _directories();
-      _ordinaryFile(file);
-      // Remove only what was read; a newer handoff waits for the next poll.
-      if (await _readText(file, LaunchTransport.maxChannelBytes) != text) {
+      if (!_directories()) return null;
+      if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+          FileSystemEntityType.notFound) {
         return null;
       }
-      _directories();
       _ordinaryFile(file);
-      file.deleteSync();
-      return handoff;
+      claimed = File('${file.path}.taking-${_nonce()}');
+      file.renameSync(claimed.path);
     } on Object {
       return null;
+    }
+    try {
+      _afterClaim?.call();
+      final text = await _readText(claimed, LaunchTransport.maxChannelBytes);
+      if (text == null) return null;
+      final handoff = LaunchTransport.readSessionHandoff(text);
+      return handoff.requestId == requestId ? handoff : null;
+    } on Object {
+      return null;
+    } finally {
+      _removeClaim(claimed);
     }
   }
 
   /// Stages a live join for the running process [SessionJoinRequest.requestId].
-  /// A newer join replaces one the game has not taken yet.
+  /// A newer join replaces one the game has not taken yet. The caller
+  /// serializes the writes and withdrawals of one request.
   Future<File> writeSessionJoin(SessionJoinRequest value) => _replace(
     _channel('session-join', value.requestId),
     LaunchTransport.writeSessionJoin(value),
   );
 
-  /// Withdraws [expected] if the game has not taken it.
-  Future<void> withdrawSessionJoin(SessionJoinRequest expected) async {
+  /// Withdraws [expected] if the game has not taken it, and says whether it
+  /// did. False means the game took it, or it was already gone or replaced.
+  Future<bool> withdrawSessionJoin(SessionJoinRequest expected) async {
     final file = _channel('session-join', expected.requestId);
     final staged = LaunchTransport.writeSessionJoin(expected);
     try {
       if (await _readText(file, LaunchTransport.maxChannelBytes) != staged) {
-        return;
+        return false;
       }
       _directories();
       _ordinaryFile(file);
       file.deleteSync();
+      return true;
     } on Object {
       /* A foreign or changed join is not ours to remove. */
+      return false;
     }
   }
 
@@ -71,7 +85,7 @@ extension LaunchStagingSessions on LaunchStagingStore {
       );
 
   /// The projection last written, or null when there is none or it cannot
-  /// be read; a damaged one is then replaced by the next sync.
+  /// be read; a damaged one is then rewritten from the launcher's store.
   Future<MultiplayerPreferencesProjection?> readPreferences() async {
     try {
       final text = await _readText(
@@ -84,19 +98,24 @@ extension LaunchStagingSessions on LaunchStagingStore {
     }
   }
 
-  /// Takes in the game's journal and brings the projection up to date with
-  /// [source], the multiplayer store and service configuration, writing it
-  /// when anything changed. When the result says the game changed a
-  /// preference, the caller keeps its settings and hosting defaults.
+  /// One preferences round ([MultiplayerPreferencesSync]): takes in the
+  /// game's journal and brings the projection up to date with [source], the
+  /// launcher's store and service configuration. When the projection must
+  /// change, [save] keeps the result in the store first, and only then is
+  /// the projection written, so a lost projection never re-applies an old
+  /// change or lowers the revision. If [save] throws, nothing is written.
   Future<MultiplayerPreferencesSync> syncPreferences(
-    MultiplayerPreferencesSource source,
-  ) async {
+    MultiplayerPreferencesSource source, {
+    required Future<void> Function(MultiplayerPreferencesSync sync) save,
+  }) async {
     final sync = MultiplayerPreferencesSync.of(
       previous: await readPreferences(),
       journal: await readPreferencesJournal(),
       source: source,
     );
-    if (sync.needsWrite) await writePreferences(sync.projection);
+    if (!sync.needsWrite) return sync;
+    await save(sync);
+    await writePreferences(sync.projection);
     return sync;
   }
 
@@ -115,7 +134,9 @@ extension LaunchStagingSessions on LaunchStagingStore {
   }
 
   /// Writes [text] to [file] through a same-directory temporary file, so a
-  /// reader sees the old document or the new one, never part of either.
+  /// reader sees the old document or the new one, never part of either. The
+  /// rename is retried briefly: Windows refuses to rename over a file while
+  /// another process reads it, however that reader shares it.
   Future<File> _replace(File file, String text) async {
     final bytes = utf8.encode(text);
     if (bytes.length > LaunchTransport.maxChannelBytes) {
@@ -123,12 +144,7 @@ extension LaunchStagingSessions on LaunchStagingStore {
     }
     _directories(create: true);
     _ordinaryFile(file, allowMissing: true);
-    final random = Random.secure();
-    final nonce = List.generate(
-      16,
-      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
-    ).join();
-    final temp = File('${file.path}.tmp-$nonce');
+    final temp = File('${file.path}.tmp-${_nonce()}');
     var created = false;
     try {
       temp.createSync(exclusive: true);
@@ -142,10 +158,18 @@ extension LaunchStagingSessions on LaunchStagingStore {
       } finally {
         await output.close();
       }
-      _directories();
-      _ordinaryFile(temp);
-      _ordinaryFile(file, allowMissing: true);
-      temp.renameSync(file.path);
+      for (var attempt = 0; ; attempt++) {
+        _directories();
+        _ordinaryFile(temp);
+        _ordinaryFile(file, allowMissing: true);
+        try {
+          temp.renameSync(file.path);
+          break;
+        } on FileSystemException {
+          if (attempt >= LaunchStagingStore.replaceRetries) rethrow;
+        }
+        await (_beforeRetry ?? _pause)(attempt);
+      }
       created = false;
       return file;
     } finally {
@@ -159,5 +183,27 @@ extension LaunchStagingSessions on LaunchStagingStore {
         }
       }
     }
+  }
+
+  /// Removes a claimed channel file, whatever it held.
+  void _removeClaim(File claimed) {
+    try {
+      _directories();
+      _ordinaryFile(claimed, allowMissing: true);
+      if (claimed.existsSync()) claimed.deleteSync();
+    } on Object {
+      /* Never follow a substituted ancestor to remove an unowned file. */
+    }
+  }
+
+  static Future<void> _pause(int attempt) =>
+      Future<void>.delayed(Duration(milliseconds: 10 << attempt));
+
+  static String _nonce() {
+    final random = Random.secure();
+    return List.generate(
+      16,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 }

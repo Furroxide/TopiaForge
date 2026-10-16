@@ -14,6 +14,8 @@ namespace TopiaForge.ModManager
         private LaunchRequestCorrelation? rejectedCorrelation;
         private string rejectionReason = string.Empty;
         private ProfileLaunchConfigurationV5? launchSession;
+        private LaunchSessionOffering? launchSessionOffering;
+        private string? launchSessionRefusal;
 
         private void AdmitStartup()
         {
@@ -60,11 +62,24 @@ namespace TopiaForge.ModManager
             if (rejectedLauncherCommand || startupSelection.SafeMode)
             {
                 managerLogger.Warn("The session launch was not offered to the multiplayer provider: this process starts in recovery.");
+                // A rejected command is reported as rejected; crash recovery would otherwise report nothing at all.
+                if (!rejectedLauncherCommand)
+                    launchSessionRefusal = "The game started in recovery after a crash, so it did not " + launchSession.Session.Role
+                        + " the session.";
                 return;
             }
 
-            LaunchSessionOffer.Offer(launchSession.Session);
+            launchSessionOffering = LaunchSessionOffer.Offer(launchSession.Session);
             managerLogger.Info("Offered the " + launchSession.Session.Role + " session to the multiplayer provider.");
+        }
+
+        /// <summary>Withdraws a session ticket the provider did not take while mods loaded.</summary>
+        private void WithdrawLaunchSession()
+        {
+            var offering = launchSessionOffering;
+            launchSessionOffering = null;
+            if (offering != null && offering.Withdraw())
+                managerLogger.Info("The multiplayer provider did not take the session launch during startup; it was withdrawn.");
         }
 
         /// <summary>The identity a session launch's records are published under, from its request or its rejected correlation.</summary>

@@ -29,8 +29,12 @@ namespace TopiaForge.ModManager
         /// The session a V5 request launches. Its records are then published as progress and outcomes V2: see
         /// <see cref="LaunchSessionPublication"/>. Null for every other launch, whose records stay version 1.
         /// </param>
+        /// <param name="sessionRefusal">
+        /// Why this process will not host or join <paramref name="session"/>, as in crash recovery. Nothing would report the
+        /// session then, so its launch outcome fails at once with this reason instead of leaving the launcher unconfirmed.
+        /// </param>
         internal RuntimeLaunchPublisher(GamemodeSessionOrchestrator sessions, LaunchStagingStore store, string? requestId, Action<Exception> report,
-            Func<long>? milliseconds = null, LaunchSessionIdentity? session = null)
+            Func<long>? milliseconds = null, LaunchSessionIdentity? session = null, string? sessionRefusal = null)
         {
             this.sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
             this.store = store ?? throw new ArgumentNullException(nameof(store));
@@ -40,6 +44,15 @@ namespace TopiaForge.ModManager
             if (session != null && session.RequestId != requestId) throw new ArgumentException("A session launch publishes under its own request.", nameof(session));
             this.requestId = requestId;
             this.session = session;
+            if (sessionRefusal != null)
+            {
+                if (session == null) throw new ArgumentException("Only a session launch is refused as one.", nameof(sessionRefusal));
+                pendingOutcomes.Add("launch", new LaunchOutcome("launch", session.RequestId, 0, "idle", "failed", Array.Empty<LaunchBlock>(),
+                    command: session.Command, error: new LaunchExecutionError("unavailable", sessionRefusal),
+                    multiplayer: new LaunchOutcomeMultiplayer(session.Role, session.IntentId)));
+                WritePendingOutcome("launch");
+            }
+
             sessions.Progress += Progress;
             sessions.Outcome += Outcome;
         }

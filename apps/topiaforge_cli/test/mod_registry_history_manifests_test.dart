@@ -162,6 +162,39 @@ void main() {
       await Directory(p.join(temp.path, 'packages')).delete(recursive: true);
     }
   });
+
+  test('the index never outgrows what a launcher reads', () async {
+    final source = packages(['1.0.0', '1.1.0', '1.2.0']);
+    Future<ModRegistryIndexResult> build(int limit, String folder, int count) =>
+        ModRegistryIndexBuilder(
+          clock: () => DateTime.utc(2026),
+          maxIndexBytes: limit,
+        ).build(
+          ModRegistryIndexConfig(
+            packagesDirectory: source.path,
+            outputDirectory: p.join(temp.path, folder),
+            historyManifests: count,
+          ),
+        );
+    final lean = await build(ModRegistryFormat.maxIndexBytes, 'lean', 0);
+    final limit = File(lean.indexPath).lengthSync();
+    expect(limit, lessThan(ModRegistryFormat.maxIndexBytes));
+
+    final refused = Directory(p.join(temp.path, 'full'));
+    await expectLater(
+      build(limit, 'full', 20),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('--history-manifests'),
+        ),
+      ),
+    );
+    expect(refused.existsSync(), isFalse);
+    final fits = await build(limit, 'fits', 0);
+    expect(File(fits.indexPath).lengthSync(), limit);
+  });
 }
 
 List<int> _packageBytes({required String id, required String version}) {

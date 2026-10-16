@@ -12,10 +12,23 @@ namespace TopiaForge.ModManager.Core
         private readonly ManagerPaths paths;
         private readonly string installRoot;
         private readonly Action? beforeCommit;
+        private readonly Action? afterClaim;
+        private readonly Action<string>? whileReading;
+        private readonly Action<int>? beforeRetry;
         public LaunchStagingStore(ManagerPaths paths) : this(paths, null) { }
-        internal LaunchStagingStore(ManagerPaths paths, Action? beforeCommit)
+        internal LaunchStagingStore(ManagerPaths paths, Action? beforeCommit) : this(paths, beforeCommit, null, null, null) { }
+
+        /// <summary>
+        /// Test seams, each run at its point so a test can interleave the other side: before a write commits, once a channel
+        /// file is claimed, while a file is open for reading, and before a refused channel write is retried.
+        /// </summary>
+        internal LaunchStagingStore(ManagerPaths paths, Action? beforeCommit, Action? afterClaim, Action<string>? whileReading,
+            Action<int>? beforeRetry)
         {
             this.beforeCommit = beforeCommit;
+            this.afterClaim = afterClaim;
+            this.whileReading = whileReading;
+            this.beforeRetry = beforeRetry;
             this.paths = paths ?? throw new ArgumentNullException(nameof(paths));
             installRoot = Path.GetDirectoryName(paths.BepInExRoot) ?? throw new InvalidDataException("The manager has no installation root.");
             EnsureStaging(create: false);
@@ -64,7 +77,10 @@ namespace TopiaForge.ModManager.Core
         {
             EnsureStaging(create: false);
             EnsureRegularFile(path);
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            // Sharing deletion lets the launcher claim or remove the file while the game reads it; this handle keeps the bytes it
+            // opened. A rename over it still waits for the read on Windows, so the launcher's replace retries.
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+            whileReading?.Invoke(path);
             if (stream.Length > maximumBytes) throw new InvalidDataException("Launch transport exceeds its byte limit.");
             var bytes = new byte[checked((int)stream.Length)];
             var offset = 0;

@@ -160,8 +160,9 @@ final class LaunchHostOptions {
   final bool voice;
   final bool passwordRequired;
 
-  /// Developer mode only: the host serves its package archives to joining
-  /// players, who consent to them separately.
+  /// Developer mode only ([LaunchSessionRequest.developerMode]): the host
+  /// serves its package archives to joining players, who consent to them
+  /// separately.
   final bool servePackages;
 
   Map<String, Object?> toJson() => {
@@ -210,6 +211,7 @@ final class LaunchDevInstance {
 /// - Invites, Internet listings, and public or invite-only hosting need the
 ///   control plane, so they need a [serviceOrigin]. LAN listings and LAN or
 ///   public hosting need LAN discovery on.
+/// - Only [developerMode] lets a host serve its packages.
 /// - Passwords are typed in game and never staged.
 final class LaunchSessionRequest {
   LaunchSessionRequest._({
@@ -217,6 +219,7 @@ final class LaunchSessionRequest {
     required String intentId,
     required String displayName,
     required this.transport,
+    required this.developerMode,
     String? serviceOrigin,
     this.target,
     this.host,
@@ -266,6 +269,9 @@ final class LaunchSessionRequest {
         !service) {
       throw invalid;
     }
+    if (host != null && host!.servePackages && !developerMode) {
+      throw const FormatException('Only developer mode serves packages.');
+    }
   }
 
   /// A host-session launch under the privacy the player chose for this
@@ -279,6 +285,7 @@ final class LaunchSessionRequest {
     int port = LanBeacon.defaultGamePort,
     String? serviceOrigin,
     LaunchDevInstance? devInstance,
+    bool developerMode = false,
   }) => LaunchSessionRequest._(
     role: LaunchSessionRole.host,
     intentId: intentId,
@@ -290,6 +297,7 @@ final class LaunchSessionRequest {
       port: port,
       upnp: settings.upnpEnabled,
     ),
+    developerMode: developerMode,
     serviceOrigin: serviceOrigin,
     host: host,
     devInstance: devInstance,
@@ -304,21 +312,35 @@ final class LaunchSessionRequest {
     required LaunchSessionTarget target,
     String? serviceOrigin,
     LaunchDevInstance? devInstance,
+    bool developerMode = false,
   }) => LaunchSessionRequest._(
     role: LaunchSessionRole.join,
     intentId: intentId,
     displayName: settings.displayName,
     transport: _transportFor(intentId, settings, privacy, port: 0, upnp: false),
+    developerMode: developerMode,
     serviceOrigin: serviceOrigin,
     target: target,
     devInstance: devInstance,
   );
+
+  /// Whether [origin] is a control-plane origin as a launch carries it: see
+  /// [serviceOrigin]. The multiplayer service configuration reads the same.
+  static bool isServiceOrigin(String origin) {
+    try {
+      _serviceOrigin(origin);
+      return true;
+    } on FormatException {
+      return false;
+    }
+  }
 
   factory LaunchSessionRequest.fromJson(Object? value) {
     final json = _object(
       value,
       {
         'devInstance',
+        'developerMode',
         'displayName',
         'host',
         'intentId',
@@ -327,13 +349,14 @@ final class LaunchSessionRequest {
         'target',
         'transport',
       },
-      {'displayName', 'intentId', 'role', 'transport'},
+      {'developerMode', 'displayName', 'intentId', 'role', 'transport'},
     );
     return LaunchSessionRequest._(
       role: _named(json['role'], LaunchSessionRole.values, (item) => item.name),
       intentId: _token(json['intentId']),
       displayName: _text(json['displayName'], max: 64),
       transport: LaunchSessionTransport._fromJson(json['transport']),
+      developerMode: _boolean(json['developerMode']),
       serviceOrigin: json.containsKey('serviceOrigin')
           ? _serviceOrigin(json['serviceOrigin'])
           : null,
@@ -365,10 +388,15 @@ final class LaunchSessionRequest {
   final LaunchHostOptions? host;
   final LaunchDevInstance? devInstance;
 
+  /// Whether the launcher runs in developer mode, which alone allows a host
+  /// to serve its packages ([LaunchHostOptions.servePackages]).
+  final bool developerMode;
+
   String get command => role.command;
 
   Map<String, Object?> toJson() => {
     if (devInstance != null) 'devInstance': devInstance!.toJson(),
+    'developerMode': developerMode,
     'displayName': displayName,
     if (host != null) 'host': host!.toJson(),
     'intentId': intentId,

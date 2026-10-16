@@ -454,6 +454,7 @@ namespace TopiaForge.ModManager.Tests
                 LaunchSessionFixtureTests.Run(FindRepoRoot());
                 LaunchSessionContractTests.Run(FindRepoRoot());
                 RuntimeSessionPublicationTests.Run(Path.Combine(root, "runtime-session-publication"));
+                LaunchSessionStagingTests.Run(FindRepoRoot());
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

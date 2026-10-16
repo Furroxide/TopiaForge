@@ -9,7 +9,7 @@ namespace TopiaForge.Mods.Internal
     {
         internal LaunchSessionTicket(string role, string intentId, string displayName, bool allowDirect, int port, bool upnp, bool lan,
             string? serviceOrigin, LaunchSessionTicketTarget? target, LaunchSessionTicketHost? host, int devInstanceIndex = -1,
-            int devInstanceCount = 0)
+            int devInstanceCount = 0, bool developerMode = false)
         {
             Role = role;
             IntentId = intentId;
@@ -23,6 +23,7 @@ namespace TopiaForge.Mods.Internal
             Host = host;
             DevInstanceIndex = devInstanceIndex;
             DevInstanceCount = devInstanceCount;
+            DeveloperMode = developerMode;
         }
 
         /// <summary>Gets <c>host</c> or <c>join</c>.</summary>
@@ -44,6 +45,9 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Gets the developer loop's peer slot, or -1 outside it.</summary>
         internal int DevInstanceIndex { get; }
         internal int DevInstanceCount { get; }
+
+        /// <summary>Gets whether the launcher runs in developer mode, which alone lets a host serve its packages.</summary>
+        internal bool DeveloperMode { get; }
 
         public override string ToString() => "launch session (" + Role + ")";
     }
@@ -109,7 +113,9 @@ namespace TopiaForge.Mods.Internal
 
     /// <summary>
     /// Hands one ticket from the runtime to the multiplayer provider: the runtime offers it at startup, before mods load,
-    /// and the provider takes it once. Taking it does not start anything; the in-game flows decide when to host or join.
+    /// and the provider takes it once while they load. Taking it does not start anything; the in-game flows decide when to
+    /// host or join. Once startup ends the runtime withdraws a ticket no one took, so a direct target's address does not
+    /// stay in memory for the whole process.
     /// </summary>
     internal static class LaunchSessionTickets
     {
@@ -128,6 +134,17 @@ namespace TopiaForge.Mods.Internal
                 var ticket = pending;
                 pending = null;
                 return ticket;
+            }
+        }
+
+        /// <summary>Withdraws <paramref name="ticket"/> if it still waits; true when it did, false when it was taken.</summary>
+        internal static bool Withdraw(LaunchSessionTicket ticket)
+        {
+            lock (Gate)
+            {
+                if (!ReferenceEquals(pending, ticket)) return false;
+                pending = null;
+                return true;
             }
         }
     }

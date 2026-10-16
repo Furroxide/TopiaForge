@@ -129,6 +129,8 @@ topiaforge registry index --dir packages --output site/registry
   `--changelogs <dir>` picks up per-mod changelogs (the official CI uses both).
 - `--history-manifests <n>` sets how many of each mod's newest older versions inline their manifest: 20 by default,
   0 to 1000. Zero writes history rows with only their version, URL and SHA-256.
+- The index stays within the 16 MiB a launcher reads: the builder refuses to write a larger one. Lower
+  `--history-manifests` or split the registry if it does.
 - Upload the output (plus the `.topiaforgemod` files, unless `--base-url` points elsewhere) and share the
   index URL. Players add it as a package source (see above).
 

@@ -113,6 +113,77 @@ void _registerLaunchV5IntegrationTests({
       expect(result.latestActivity!.command, 'join-session');
     });
 
+    test('a restart V5 cannot carry never stops the running game', () async {
+      var running = false;
+      var created = 0;
+      final stopped = <LaunchProcessIdentity>[];
+      final (repo, install) = await _prepareProfileLaunchRepository(
+        dataRoot: dataRoot(),
+        repositoryRoot: repositoryRoot(),
+        gameRoot: gameRoot(),
+        creator: (request) async {
+          created++;
+          running = true;
+          final identity = LaunchProcessIdentity(
+            pid: 700 + created,
+            executablePath: request.executable,
+            startTimeUtc: DateTime.utc(2026, 10, 16, 0, 0, created),
+            nativeStartToken: 'windows:${800 + created}',
+          );
+          return LaunchProcessReceipt(pid: identity.pid, identity: identity);
+        },
+        probe: (_) async => running,
+        liveness: (_) async => running,
+        stopper: (identity) async {
+          stopped.add(identity);
+          running = false;
+          return true;
+        },
+      );
+      await repo.installPackage(_v6Package(root()).path, install);
+      final first = await repo.launch(install, _v6Profile());
+      expect(first.processStarted, isTrue, reason: first.message);
+
+      final hostSession = LaunchSessionRequest.host(
+        intentId: 'intent-3',
+        settings: settings,
+        privacy: SessionPrivacy.relayOnly,
+        host: LaunchHostOptions(name: "Charl's Sandbox"),
+      );
+      final safe = _v6Profile().copyWith(
+        launchSettings: const LaunchSettings(safeMode: true),
+      );
+      final inheriting = _v6Profile().copyWith(inheritManagerModState: true);
+      for (final (profile, session, reason) in [
+        (safe, hostSession, 'Safe Mode'),
+        (safe, join(direct()), 'Safe Mode'),
+        (inheriting, join(direct()), "manager's mod state"),
+      ]) {
+        final result = await repo.launchSession(
+          install,
+          profile,
+          session,
+          restart: true,
+        );
+        expect(result.started, isFalse);
+        expect(result.message, contains(reason));
+        expect(result.message, contains('No process was stopped.'));
+      }
+      expect(stopped, isEmpty);
+      expect(running, isTrue);
+      expect(created, 1);
+
+      // A host from an inheriting profile is fine, and does replace the game.
+      final replaced = await repo.launchSession(
+        install,
+        inheriting,
+        hostSession,
+        restart: true,
+      );
+      expect(replaced.processStarted, isTrue, reason: replaced.message);
+      expect(stopped, hasLength(1));
+    });
+
     test('the direct address exists only in the staged request', () async {
       final (repo, install, staged) = await prepare();
       final result = await repo.launchSession(

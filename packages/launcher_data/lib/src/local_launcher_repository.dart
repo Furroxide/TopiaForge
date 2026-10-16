@@ -383,6 +383,10 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
   /// loads. [restart] replaces a running game this launcher owns, as the
   /// join flow does to restart into a server's profile.
   ///
+  /// A launch V5 cannot carry is refused before anything happens, so a
+  /// restart never stops the running game for it: Safe Mode, a join from a
+  /// profile that inherits the manager's mod state, and acceptance runs.
+  ///
   /// Not on [LauncherRepository] yet: the multiplayer slices consume the
   /// concrete type, and widening the interface breaks external fakes.
   Future<LaunchResult> launchSession(
@@ -398,6 +402,24 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
       throw ArgumentError(
         'A join starts at the main menu.',
         'selectionOverride',
+      );
+    }
+    final refusal = _acceptanceIsolation != null
+        ? 'Acceptance runs never host or join a session.'
+        : profile.launchSettings.safeMode
+        ? 'Safe Mode never hosts or joins a session. Turn Safe Mode off for '
+              'this profile, then try again.'
+        : session.role == LaunchSessionRole.join &&
+              profile.inheritManagerModState
+        ? "A join runs exactly the packages it planned, so its profile cannot "
+              "inherit the manager's mod state."
+        : null;
+    if (refusal != null) {
+      return Future.value(
+        LaunchResult(
+          started: false,
+          message: '$refusal No process was stopped.',
+        ),
       );
     }
     return _launchProfile(

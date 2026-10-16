@@ -113,6 +113,21 @@ namespace TopiaForge.ModManager.Tests
             var host = new LaunchSessionRequest("host", "intent-1", "Charl", new LaunchSessionTransport("relay-only", null, 27250, true, true),
                 host: new LaunchHostOptions("Charl's Sandbox", 8, "lan", true, true, false));
             Assert(host.Command == "host-session" && host.Host!.PasswordRequired, "A host asks for its password in game.");
+            // The JSON reader refuses U+FFFE and U+FFFF, so no writer may produce them.
+            foreach (var text in new[] { "Charl\uFFFF", "Charl\uFFFE" })
+            {
+                Rejects(() => new LaunchSessionRequest("host", "intent-1", text, new LaunchSessionTransport("relay-only", null, 0, false, true),
+                    host: new LaunchHostOptions("Sandbox", 8, "lan", false, false, false)), "Display names hold no noncharacters.");
+                Rejects(() => new LaunchHostOptions(text, 8, "lan", false, false, false), "Server names hold no noncharacters.");
+                Rejects(() => new LaunchOutcomeMultiplayer("join", "intent-1", detail: text), "Details hold no noncharacters.");
+                Rejects(() => new MultiplayerHostingDefaults(text, 8, "lan", 27250, false), "Hosting names hold no noncharacters.");
+            }
+
+            Rejects(() => new LaunchSessionRequest("host", "intent-1", "Charl", new LaunchSessionTransport("relay-only", null, 0, false, true),
+                host: new LaunchHostOptions("Sandbox", 8, "lan", false, false, true)), "Only developer mode serves packages.");
+            Assert(new LaunchSessionRequest("host", "intent-1", "Charl", new LaunchSessionTransport("relay-only", null, 0, false, true),
+                host: new LaunchHostOptions("Sandbox", 8, "lan", false, false, true), developerMode: true).Host!.ServePackages,
+                "Developer mode serves packages.");
             Rejects(() => new ProfileLaunchConfigurationV5("p", 0, "r", "join-session", Array.Empty<PackageIdentity>(),
                 PackageSetDigest.Of(Array.Empty<PackageIdentity>()), false, Array.Empty<string>(), new Dictionary<string, string>(), host),
                 "The command agrees with the role.");
@@ -210,7 +225,8 @@ namespace TopiaForge.ModManager.Tests
                 Assert(taken.JoinId == "join-1" && !File.Exists(store.SessionJoinPath("process-1")) && store.TakeSessionJoin("process-1") == null,
                     "A live join is taken once.");
                 File.WriteAllText(store.SessionJoinPath("process-1"), "{\"schemaVersion\":1}");
-                Assert(store.TakeSessionJoin("process-1") == null && File.Exists(store.SessionJoinPath("process-1")), "A malformed join stays inspectable.");
+                Assert(store.TakeSessionJoin("process-1") == null && !File.Exists(store.SessionJoinPath("process-1")),
+                    "A malformed join is removed without being acted on.");
                 Rejects(() => new SessionJoinRequest("process-1", "join-2", "0123456789abcdef", Join(Direct("10.0.0.1"))),
                     "A live join never carries an address.");
                 Assert(store.ReadPreferences() == null && store.ReadPreferencesJournal() == null, "Absent preferences read as none.");

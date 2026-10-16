@@ -84,14 +84,19 @@ class ModRegistryIndexResult {
 }
 
 class ModRegistryIndexBuilder {
+  /// [maxIndexBytes] is the largest index the builder writes: by default the
+  /// [ModRegistryFormat.maxIndexBytes] a launcher reads.
   ModRegistryIndexBuilder({
     GitHubReleaseClient? client,
     DateTime Function()? clock,
+    int maxIndexBytes = ModRegistryFormat.maxIndexBytes,
   }) : _client = client,
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _maxIndexBytes = maxIndexBytes;
 
   final GitHubReleaseClient? _client;
   final DateTime Function() _clock;
+  final int _maxIndexBytes;
 
   Future<ModRegistryIndexResult> build(ModRegistryIndexConfig config) async {
     if (config.historyManifests < 0 ||
@@ -138,8 +143,6 @@ class ModRegistryIndexBuilder {
           ),
         );
 
-    final output = createAtomicStagingDirectory(config.outputDirectory);
-    final indexPath = p.join(output.path, 'index.json');
     final index = <String, Object?>{
       r'$schema': ModRegistryFormat.canonicalIndexSchemaUrl,
       'formatVersion': ModRegistryFormat.indexFormatVersion,
@@ -149,9 +152,20 @@ class ModRegistryIndexBuilder {
         'sourceRepository': 'https://github.com/${config.repository.trim()}',
       'mods': mods.map((entry) => entry.toJson()).toList(),
     };
-    final json = const JsonEncoder.withIndent('  ').convert(index);
+    final json = '${const JsonEncoder.withIndent('  ').convert(index)}\n';
+    // A launcher refuses a larger index whole, so never publish one.
+    final size = utf8.encode(json).length;
+    if (size > _maxIndexBytes) {
+      throw StateError(
+        'The registry index would be $size bytes, more than the '
+        '$_maxIndexBytes a launcher reads. Lower --history-manifests or '
+        'split the registry.',
+      );
+    }
+    final output = createAtomicStagingDirectory(config.outputDirectory);
+    final indexPath = p.join(output.path, 'index.json');
     try {
-      await File(indexPath).writeAsString('$json\n');
+      await File(indexPath).writeAsString(json);
       await File(p.join(output.path, '.nojekyll')).writeAsString('');
       publishAtomicDirectory(output, config.outputDirectory);
       return ModRegistryIndexResult(

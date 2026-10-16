@@ -30,6 +30,9 @@ class ModRegistryFormat {
   /// oversized submissions are rejected before players ever see them.
   static const maxPackageBytes = 512 * 1024 * 1024;
 
+  /// The largest index a launcher reads; the index builder writes no larger.
+  static const maxIndexBytes = 16 * 1024 * 1024;
+
   /// Community entries may not claim these first-party namespaces.
   static const reservedIdPrefixes = ['io.github.furroxide.topiaforge.'];
 }
@@ -38,10 +41,9 @@ class ModRegistryFormat {
 /// non-latest version of a community entry. Ignored by launchers that only
 /// understand the flat `mods` list — the field is purely additive.
 ///
-/// The index builder inlines the [manifest] (and the archive size,
-/// [packageBytes]) for the newest history versions, so a launcher can
-/// install the exact older version a multiplayer server runs. Such rows
-/// feed exact-version resolution only; they never become catalog tiles.
+/// The index builder inlines the [manifest] and archive size ([packageBytes])
+/// of the newest history versions, so a launcher can install the exact one a
+/// server runs. Such rows never become catalog tiles.
 class RegistryVersionRef {
   RegistryVersionRef({
     required this.version,
@@ -71,21 +73,19 @@ class RegistryVersionRef {
   final Map<String, Object?> extraFields;
 
   factory RegistryVersionRef.fromJson(Map<String, Object?> json) {
-    final manifestJson = _objectMap(json['manifest']);
-    final bytes = json['packageBytes'];
     return RegistryVersionRef(
       version: (json['version'] as String?) ?? '',
       downloadUrl: (json['downloadUrl'] as String?) ?? '',
       packageSha256: _lowercaseSha(json['packageSha256']),
       changelog: (json['changelog'] as String?) ?? '',
       publishedAt: (json['publishedAt'] as String?) ?? '',
-      manifest: _historyManifest(manifestJson),
-      packageBytes:
-          bytes is int &&
-              bytes >= 0 &&
-              bytes <= ModRegistryFormat.maxPackageBytes
-          ? bytes
-          : null,
+      manifest: _historyManifest(_objectMap(json['manifest'])),
+      packageBytes: switch (json['packageBytes']) {
+        final int bytes
+            when bytes >= 0 && bytes <= ModRegistryFormat.maxPackageBytes =>
+          bytes,
+        _ => null,
+      },
       extraFields: _unknownRegistryFields(json, _registryVersionRefKeys),
     );
   }
@@ -387,8 +387,7 @@ class RegistryEntryFile {
 }
 
 /// A history row's inlined manifest, or null when there is none or it does
-/// not read, whatever the fault: the row then stays out of exact-version
-/// resolution, as it would for a launcher that ignores history.
+/// not read, whatever the fault: the row then stays out of exact installs.
 ModManifest? _historyManifest(Map<String, Object?> json) {
   if (json.isEmpty) return null;
   try {
