@@ -306,6 +306,40 @@ void main() {
     );
   });
 
+  test('keeps later Update and Remove items from undoing the pin', () async {
+    // MSBuild applies an Update or Remove item to the items before it, so
+    // the Update used to set Abstractions back to 0.0.1, and Debug builds
+    // lost the analyzer.
+    final project = await _scaffold(r'''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all" />
+    <PackageReference Update="TopiaForge.Mods.Abstractions" Version="0.0.1" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <PackageReference Remove="TopiaForge.Mods.Analyzers" />
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains(r'''
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all" />
+    <PackageReference Update="TopiaForge.Mods.Abstractions" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+  </ItemGroup>
+'''),
+    );
+  });
+
   test('finds the dev props import however it is written', () async {
     // The check used to need `Project="…"` first and double-quoted, so this
     // project got a second import, which MSBuild warns about.
@@ -374,7 +408,7 @@ Future<String> _scaffold(String project) async {
   for (final package in _sdkPackages) {
     expect(
       RegExp(
-        '${RegExp.escape(package)}\\s*["\']',
+        'Include\\s*=\\s*["\']\\s*${RegExp.escape(package)}\\s*["\']',
         caseSensitive: false,
       ).allMatches(items),
       hasLength(1),
