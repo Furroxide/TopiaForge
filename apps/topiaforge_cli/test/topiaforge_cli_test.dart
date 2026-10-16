@@ -18,6 +18,7 @@ part 'topiaforge_cli_registry_cases.dart';
 part 'topiaforge_cli_scaffold_cases.dart';
 part 'topiaforge_cli_launch_cases.dart';
 part 'topiaforge_cli_multiplayer_cases.dart';
+part 'topiaforge_cli_module_reference_cases.dart';
 
 void main() {
   late _CliTestHarness harness;
@@ -41,4 +42,5 @@ void main() {
   _scaffoldCliTests(() => harness);
   _launchCliTests(() => harness);
   _multiplayerCliTests(() => harness);
+  _moduleReferenceCliTests(() => harness);
 }
