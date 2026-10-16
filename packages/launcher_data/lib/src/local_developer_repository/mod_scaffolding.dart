@@ -391,7 +391,13 @@ String _withExactSdkPackageReferences(
       missing.add(package);
       continue;
     }
-    var item = result.substring(reference.start, reference.end);
+    // MSBuild applies child metadata after the attributes, so a Version child
+    // would override the pin. Dropping each one leaves the attribute as the
+    // item's only version.
+    var item = withoutMetadataElements(
+      result.substring(reference.start, reference.end),
+      'Version',
+    );
     final versionPattern = RegExp(r'\sVersion="[^"]*"');
     if (versionPattern.hasMatch(item)) {
       item = item.replaceFirst(versionPattern, ' Version="$version"');
@@ -401,8 +407,11 @@ String _withExactSdkPackageReferences(
         '<PackageReference Version="$version" ',
       );
     }
+    // PrivateAssets is added only when missing, and a child sets it as the
+    // attribute does.
     if (topiaForgeAnalyzerPackageIds.contains(package) &&
-        !item.contains('PrivateAssets=')) {
+        !item.contains('PrivateAssets=') &&
+        metadataElements(item, 'PrivateAssets').isEmpty) {
       item = item.replaceFirst(
         '<PackageReference ',
         '<PackageReference PrivateAssets="all" ',

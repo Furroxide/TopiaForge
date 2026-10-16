@@ -13,6 +13,7 @@ import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
 import 'linear_text_scan.dart';
+import 'msbuild_item_metadata.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'safe_zip_archive.dart';
