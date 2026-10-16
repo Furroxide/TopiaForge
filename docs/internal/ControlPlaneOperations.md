@@ -151,7 +151,7 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 
    ```bash
    cd services/control-plane && npm ci --ignore-scripts
-   node scripts/live-check.mjs https://mp-staging.topiaforge.dev ../..
+   node scripts/live-check.mjs https://mp-staging.topiaforge.dev
    ```
 
    It registers a host, resolves an invite, takes a join ticket, checks that signaling withholds a relay-only side's

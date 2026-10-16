@@ -1,6 +1,9 @@
 // End-to-end check of a deployed control plane, as a host and a joining player would use it.
 //
-//   node scripts/live-check.mjs https://mp-staging.topiaforge.dev ../..
+//   node scripts/live-check.mjs https://mp-staging.topiaforge.dev
+//
+// It talks only to the deployments this repository defines, or to `wrangler dev` on this machine, and reads its
+// fixtures and wrangler.toml from the checkout it lives in.
 //
 // It uses a freshly generated, invite-only test server named "TopiaForge staging check", so nothing is listed
 // publicly and no fixture data reaches the service. Tokens, tickets and relay credentials stay inside this process:
@@ -11,10 +14,18 @@ import dns from "node:dns/promises";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
-const origin = process.argv[2];
-const repo = process.argv[3] ? path.resolve(process.argv[3]) : undefined;
-if (!origin || !repo) throw new Error("usage: node scripts/live-check.mjs <origin> <repo-root>");
+const ORIGINS = new Map([
+  ["https://mp-staging.topiaforge.dev", "https://mp-staging.topiaforge.dev"],
+  ["https://mp.topiaforge.dev", "https://mp.topiaforge.dev"],
+  ["http://127.0.0.1:8787", "http://127.0.0.1:8787"],
+  ["http://localhost:8787", "http://localhost:8787"],
+]);
+// The request target is always one of the constants above, never the argument itself.
+const origin = ORIGINS.get(process.argv[2] ?? "");
+if (!origin) throw new Error(`usage: node scripts/live-check.mjs <${[...ORIGINS.keys()].join("|")}>`);
+const repo = fileURLToPath(new URL("../../../", import.meta.url));
 // The service's own dev dependencies carry the ws client, which can send an Authorization header.
 const WebSocketClient = createRequire(path.join(repo, "services/control-plane/package.json"))("ws");
 
