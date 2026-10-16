@@ -1,0 +1,102 @@
+import 'package:launcher_data/launcher_data.dart';
+import 'package:test/test.dart';
+
+const _abstractions = 'TopiaForge.Mods.Abstractions';
+const _analyzers = 'TopiaForge.Mods.Analyzers';
+const _robotKit = 'TopiaForge.Mods.RobotKit';
+
+/// How long an edit may take on input built to make a scan backtrack.
+const _budget = Duration(milliseconds: 100);
+
+String _project(String items) =>
+    '<Project Sdk="Microsoft.NET.Sdk">\n$items\n</Project>\n';
+
+void main() {
+  group('withPinnedSdkPackageReferences', () {
+    test('pins each item and adds the missing ones in one ItemGroup', () {
+      // `.` in an id matches only itself, so the lookalike stays as it is.
+      final pinned = withPinnedSdkPackageReferences(
+        _project(
+          '  <ItemGroup>\n'
+          '    <PackageReference Include="$_abstractions" Version="0.0.1" />\n'
+          '    <PackageReference Include="TopiaForge-Mods-RobotKit" Version="2.0.0" />\n'
+          '  </ItemGroup>',
+        ),
+        packages: const [_robotKit, _analyzers, _abstractions],
+        version: '1.0.0',
+      );
+
+      expect(
+        pinned,
+        _project(
+          '  <ItemGroup>\n'
+          '    <PackageReference Include="$_abstractions" Version="1.0.0" />\n'
+          '    <PackageReference Include="TopiaForge-Mods-RobotKit" Version="2.0.0" />\n'
+          '  </ItemGroup>\n'
+          '  <ItemGroup>\n'
+          '    <PackageReference Include="$_analyzers" Version="1.0.0" PrivateAssets="all" />\n'
+          '    <PackageReference Include="$_robotKit" Version="1.0.0" />\n'
+          '  </ItemGroup>',
+        ),
+      );
+    });
+
+    test('refuses to add an item to a project with no end tag', () {
+      expect(
+        () => withPinnedSdkPackageReferences(
+          '<Project Sdk="Microsoft.NET.Sdk">',
+          packages: const [_robotKit],
+          version: '1.0.0',
+        ),
+        throwsStateError,
+      );
+    });
+  });
+
+  group('withoutPackageReference', () {
+    test('removes only the first item for the exact id', () {
+      const lookalike =
+          '<PackageReference Include="TopiaForge-Mods-RobotKit" />';
+      const item = '<PackageReference Include="$_robotKit" Version="1.0.0" />';
+      const later =
+          '<PackageReference Include="Newtonsoft.Json" Version="13.0.3">\n'
+          '</PackageReference>';
+      final project = _project('$lookalike\n$item\n$later\n$item');
+
+      expect(
+        withoutPackageReference(project, _robotKit),
+        _project('$lookalike\n\n$later\n$item'),
+      );
+      expect(withoutPackageReference(project, _abstractions), project);
+    });
+  });
+
+  test('both edits finish malformed projects within the budget', () {
+    // An analyzer, so both metadata scans run over each item found.
+    const open = '<PackageReference Include="$_analyzers"';
+    for (final items in [
+      '$open>' * 20000,
+      '${open * 20000}>',
+      '$open>${'<Version>' * 20000}</PackageReference>',
+      '$open>${'<PrivateAssets a="' * 20000}</PackageReference>',
+      '$open>${'<!--' * 20000}</PackageReference>',
+      '$open${' a="1"' * 20000} />',
+      '$open${' a="1"' * 20000} b="/>',
+    ]) {
+      final project = _project(items);
+      for (final edit in [
+        () => withPinnedSdkPackageReferences(
+          project,
+          packages: const [_analyzers],
+          version: '1.0.0',
+        ),
+        () => withoutPackageReference(project, _analyzers),
+      ]) {
+        final watch = Stopwatch()..start();
+        edit();
+        watch.stop();
+        expect(watch.elapsed, lessThan(_budget));
+      }
+    }
+  });
+}

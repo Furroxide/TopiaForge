@@ -25,6 +25,7 @@ export 'src/reachability/stun_message.dart';
 export 'src/reachability/stun_transport.dart';
 export 'src/reachability_probe_service.dart';
 export 'src/safe_zip_archive.dart';
+export 'src/sdk_package_references.dart';
 export 'src/sdk_reference_pack.dart';
 export 'src/manifest_migration_writer.dart';
 export 'src/tomato_cake_launcher_state.dart';

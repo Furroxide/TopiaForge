@@ -384,46 +384,9 @@ String _withExactSdkPackageReferences(
         '${result.substring(offset)}';
   }
 
-  final missing = <String>[];
-  for (final package in packages.toList()..sort()) {
-    final reference = firstPackageReference(result, package);
-    if (reference == null) {
-      missing.add(package);
-      continue;
-    }
-    // MSBuild applies child metadata after the attributes, so a Version child
-    // would override the pin. Dropping each one leaves the attribute as the
-    // item's only version.
-    var item = withoutMetadataElements(
-      result.substring(reference.start, reference.end),
-      'Version',
-    );
-    // A missing attribute goes after the others, so Include stays first and
-    // the next rewrite finds this item rather than adding another.
-    item = withMetadataAttribute(item, 'Version', version);
-    // PrivateAssets is added only when missing, and a child sets it as an
-    // attribute does.
-    if (topiaForgeAnalyzerPackageIds.contains(package) &&
-        metadataAttributes(item, 'PrivateAssets').isEmpty &&
-        metadataElements(item, 'PrivateAssets').isEmpty) {
-      item = withMetadataAttribute(item, 'PrivateAssets', 'all');
-    }
-    result = result.replaceRange(reference.start, reference.end, item);
-  }
-  if (missing.isNotEmpty) {
-    final items = missing
-        .map((package) {
-          final private = topiaForgeAnalyzerPackageIds.contains(package)
-              ? ' PrivateAssets="all"'
-              : '';
-          return '    <PackageReference Include="$package" Version="$version"$private />';
-        })
-        .join('\n');
-    final close = result.lastIndexOf('</Project>');
-    if (close < 0) throw StateError('TopiaForge C# project is malformed.');
-    result =
-        '${result.substring(0, close)}  <ItemGroup>\n$items\n'
-        '  </ItemGroup>\n${result.substring(close)}';
-  }
-  return result;
+  return withPinnedSdkPackageReferences(
+    result,
+    packages: packages,
+    version: version,
+  );
 }
