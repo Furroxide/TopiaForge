@@ -5,8 +5,12 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <unistd.h>
+
+#include <cstdlib>
 #include <cstring>
 
+#include "data_root_id.h"
 #include "flutter/generated_plugin_registrant.h"
 
 // The channel Dart uses for single instance and session links
@@ -336,43 +340,30 @@ static void my_application_class_init(MyApplicationClass* klass) {
 
 static void my_application_init(MyApplication* self) {}
 
-// The data root a launcher gets without TOPIAFORGE_DATA_ROOT, as
-// resolveTopiaForgeDataRoot in Dart resolves it on Linux.
-static gchar* default_data_root() {
-  const gchar* home = g_getenv("HOME");
-  if (home == nullptr) {
-    home = g_getenv("USERPROFILE");
+// The current directory as Dart's Directory.current reads it: getcwd(), with
+// symbolic links resolved, never $PWD.
+static gchar* current_directory() {
+  char* current = getcwd(nullptr, 0);
+  if (current == nullptr) {
+    return nullptr;
   }
-  g_autofree gchar* current = nullptr;
-  if (home == nullptr) {
-    current = g_get_current_dir();
-    home = current;
-  }
-  g_autofree gchar* root = g_build_filename(home, ".topiaforge_launcher", nullptr);
-  return g_canonicalize_filename(root, nullptr);
+  gchar* copy = g_strdup(current);
+  free(current);
+  return copy;
 }
 
-// The application id names one launcher per data root. The default data root
-// keeps the plain id, however it is spelled; any other root gets an id of its
-// own, so launchers with different data roots never take each other's links.
-// Inside a snap the id stays the one its D-Bus slot declares.
+// The application id names one launcher per data root, from the same
+// variables and the same rules as Dart (data_root_id.cc), so a launcher on the
+// default data root keeps the plain id however it is spelled. Inside a snap
+// the id stays the one its D-Bus slot declares.
 static gchar* application_id() {
-  const gchar* configured = g_getenv("TOPIAFORGE_DATA_ROOT");
-  if (configured == nullptr || g_getenv("SNAP") != nullptr) {
+  if (g_getenv("SNAP") != nullptr) {
     return g_strdup(APPLICATION_ID);
   }
-  g_autofree gchar* root = g_strstrip(g_strdup(configured));
-  if (root[0] == '\0') {
-    return g_strdup(APPLICATION_ID);
-  }
-  g_autofree gchar* absolute = g_canonicalize_filename(root, nullptr);
-  g_autofree gchar* fallback = default_data_root();
-  if (g_strcmp0(absolute, fallback) == 0) {
-    return g_strdup(APPLICATION_ID);
-  }
-  g_autofree gchar* digest =
-      g_compute_checksum_for_string(G_CHECKSUM_SHA256, absolute, -1);
-  return g_strdup_printf("%s.r%.16s", APPLICATION_ID, digest);
+  g_autofree gchar* current = current_directory();
+  return data_root_application_id(
+      APPLICATION_ID, g_getenv("TOPIAFORGE_DATA_ROOT"), g_getenv("HOME"),
+      g_getenv("USERPROFILE"), current);
 }
 
 MyApplication* my_application_new() {

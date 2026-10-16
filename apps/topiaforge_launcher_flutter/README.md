@@ -66,10 +66,14 @@ shows a window:
   scope up before its window goes, and refuses a link it can no longer show,
   so the start that sent it claims the scope instead.
 - **Linux.** `GApplication` negotiates uniqueness over D-Bus
-  (`G_APPLICATION_HANDLES_COMMAND_LINE`). A launcher started with its own
-  `TOPIAFORGE_DATA_ROOT` gets an application id of its own, from a hash of the
-  resolved root; the default data root keeps the plain id however it is
-  spelled.
+  (`G_APPLICATION_HANDLES_COMMAND_LINE`). The application id is chosen before
+  Dart runs, so the runner resolves the data root by Dart's own rules
+  (`linux/runner/data_root_id.cc`): it trims the whitespace `String.trim()`
+  trims, resolves a relative root against `getcwd()` as `Directory.current`
+  does, and normalizes as package:path does. The default data root keeps the
+  plain id however it is spelled; any other root gets an id of its own, from a
+  hash of its normalized path. `test/linux_application_id_test.dart` compiles
+  that code and holds it to Dart.
 - **macOS.** LaunchServices keeps one launcher running and calls
   `application(_:open:)`.
 
@@ -85,14 +89,18 @@ and nothing else, is a health start. It never hands off: when another launcher
 owns the scope, it runs beside it and still writes its health marker, so the
 update can commit. Its options are checked before anything is claimed, and a
 start that is refused or fails before its window shows gives the scope up and
-exits with code 1.
+quits, with code 1 on Windows (the Linux embedder quits with 0).
 
 While link handling is on, which is the default, a launcher on the default data
 root registers itself at start: `HKCU\Software\Classes\topiaforge` on Windows,
 and a hidden desktop entry made the `x-scheme-handler/topiaforge` default with
 `xdg-mime` on Linux. On macOS the bundle declares the scheme with
 `CFBundleURLTypes`. A launcher on its own data root leaves the registration
-alone, since the system opens links with the default data root. Turning link
+alone, since the system opens links with the default data root. On Windows the
+default root is the one under the user's own roaming folder, read from the
+user's shell-folder setting and expanded for the user's token, never from
+`APPDATA` or `USERPROFILE`, so a run isolated with a scratch `APPDATA` or
+`USERPROFILE` never registers. Turning link
 handling off removes the registration while it names this launcher. Until the
 setting is saved with the other multiplayer settings, it is on again at the
 next start, which registers again. A link never joins by itself; it opens the

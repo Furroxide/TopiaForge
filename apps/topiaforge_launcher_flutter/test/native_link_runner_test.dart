@@ -126,8 +126,47 @@ void main() {
       _between(linux, 'session_link_argument(gchar** arguments) {', '\n}'),
       isNot(contains('for (')),
     );
-    // The default data root keeps the plain id however it is spelled.
-    expect(linux, contains('g_strcmp0(absolute, fallback) == 0'));
+  });
+
+  test('the Linux id follows the data root the way Dart resolves it', () {
+    // linux_application_id_test.dart holds data_root_id.cc to Dart on a
+    // Linux host; this pins how the runner feeds it.
+    final rootId = read(['linux', 'runner', 'data_root_id.cc']);
+    expect(linux, contains('data_root_application_id('));
+    // Directory.current is getcwd(): symbolic links resolved, never $PWD.
+    expect(linux, contains('getcwd(nullptr, 0)'));
+    for (final glibOnly in [
+      'g_get_current_dir',
+      'g_canonicalize_filename',
+      'g_strstrip',
+    ]) {
+      expect(linux, isNot(contains(glibOnly)), reason: glibOnly);
+      expect(rootId, isNot(contains(glibOnly)), reason: glibOnly);
+    }
+    // The whitespace String.trim() removes.
+    for (final unit in [
+      '0x09',
+      '0x0D',
+      '0x20',
+      '0x85',
+      '0xA0',
+      '0x1680',
+      '0x2000',
+      '0x200A',
+      '0x2028',
+      '0x2029',
+      '0x202F',
+      '0x205F',
+      '0x3000',
+      '0xFEFF',
+    ]) {
+      expect(rootId, contains(unit), reason: unit);
+    }
+    expect(rootId, contains('strcmp(key, fallback) == 0'));
+    expect(
+      read(['linux', 'runner', 'CMakeLists.txt']),
+      contains('"data_root_id.cc"'),
+    );
   });
 
   test('the macOS bundle declares the topiaforge scheme', () {

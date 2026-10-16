@@ -4,6 +4,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import '../data_root.dart';
 import 'linux_session_link_registrar.dart';
+import 'windows_roaming_app_data.dart';
 import 'windows_session_link_registrar.dart';
 
 /// The registrar for this launcher: the current user's registry on Windows,
@@ -15,12 +16,25 @@ import 'windows_session_link_registrar.dart';
 /// environment, so a link would reach the default data root rather than this
 /// one; and test, acceptance and release runs, which use their own data
 /// roots, must never take the player's registration.
+///
+/// [environment] is the one the launcher started with, by default this
+/// process's. On Windows it does not decide: the default root is under the
+/// user's own roaming folder ([windowsRoamingAppDataFolder]), so a run with a
+/// scratch `APPDATA` or `USERPROFILE` never registers.
 SessionLinkRegistrar platformSessionLinkRegistrar({
   String? executable,
   String? dataRoot,
+  Map<String, String>? environment,
 }) {
   if (Platform.isMacOS) return const BundleSessionLinkRegistrar();
-  if (dataRoot != null && !isDefaultTopiaForgeDataRoot(dataRoot)) {
+  if (dataRoot != null &&
+      !isDefaultTopiaForgeDataRoot(
+        dataRoot,
+        environment: environment,
+        windowsRoamingAppData: Platform.isWindows
+            ? windowsRoamingAppDataFolder()
+            : null,
+      )) {
     return const OwnDataRootSessionLinkRegistrar();
   }
   final launcher = executable ?? Platform.resolvedExecutable;
