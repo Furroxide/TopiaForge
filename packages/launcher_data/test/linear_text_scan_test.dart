@@ -3,8 +3,9 @@ import 'dart:math';
 import 'package:launcher_data/src/linear_text_scan.dart';
 import 'package:test/test.dart';
 
-// The patterns the scanners replaced. Each scanner must return exactly what
-// its pattern matched, and must stay fast where the pattern backtracked.
+// The patterns the scanners replaced, except where noted. Each scanner must
+// return exactly what its pattern matched, and must stay fast where the
+// pattern backtracked.
 RegExp _elementPattern(String name) =>
     RegExp('<$name>\\s*([^<]+?)\\s*</$name>');
 
@@ -13,8 +14,11 @@ RegExp _startTagPattern(String name) => RegExp('<$name(?:\\s[^>]*)?>');
 RegExp _textElementPattern(String name) =>
     RegExp('<$name(?:\\s[^>]*)?>[^<]*</$name>');
 
+// Corrected. The replaced pattern's greedy `[^>]*` tried
+// `>.*?</PackageReference>` before `/>`, so a self-closing item ran on to a
+// later closing tag. The lazy `[^>]*?` reaches `/>` first.
 RegExp _packageReferencePattern(String package) => RegExp(
-  '<PackageReference\\s+Include=["\\\']${RegExp.escape(package)}["\\\'][^>]*(?:/>|>.*?</PackageReference>)',
+  '<PackageReference\\s+Include=["\\\']${RegExp.escape(package)}["\\\'][^>]*?(?:/>|>.*?</PackageReference>)',
   dotAll: true,
 );
 
@@ -372,20 +376,24 @@ void main() {
       );
     });
 
-    test('runs a self-closing item on to a later closing tag', () {
-      // The pattern preferred `>.*?</PackageReference>` over `/>`, so a
-      // self-closing item swallowed the items up to the next closing tag.
-      const text =
-          '<PackageReference Include="$_abstractions" />\n'
-          '<PackageReference Include="Other" Version="1">\n'
+    test('ends each item at its own `/>` or closing tag', () {
+      // The replaced pattern ran a self-closing item on to the next
+      // `</PackageReference>`, swallowing the items in between.
+      const later =
+          '\n<PackageReference Include="Other" Version="1">\n'
           '</PackageReference>';
-      expect(firstPackageReference(text, _abstractions), (
-        start: 0,
-        end: text.length,
-      ));
+      for (final item in const [
+        '<PackageReference Include="$_abstractions" />',
+        '<PackageReference Include="$_abstractions">\n</PackageReference>',
+      ]) {
+        expect(firstPackageReference('$item$later', _abstractions), (
+          start: 0,
+          end: item.length,
+        ));
+      }
     });
 
-    test('agrees with the pattern on generated input', () {
+    test('agrees with the corrected pattern on generated input', () {
       final samples = _samples(const [
         '<PackageReference',
         '<PackageReference Include="$_abstractions"',
