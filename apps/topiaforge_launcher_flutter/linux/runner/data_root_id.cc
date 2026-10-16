@@ -12,25 +12,108 @@ static gboolean is_dart_whitespace(gunichar c) {
          c == 0xFEFF;
 }
 
-// |text| without the whitespace Dart's String.trim() removes from its ends.
-// Text that is not UTF-8 is kept as it is.
-static gchar* dart_trim(const gchar* text) {
-  if (!g_utf8_validate(text, -1, nullptr)) {
-    return g_strdup(text);
+// |text|, an environment variable, as the characters of the string Dart's
+// Platform.environment holds for it, or null when Dart leaves the variable
+// out. Dart decodes UTF-8 as its VM does: it leaves out a variable with a
+// stray or truncated sequence, an overlong form or a value past U+10FFFF, and
+// keeps an encoded surrogate as a code unit of its own, so a high surrogate
+// followed by a low one is one character, however each was encoded. GLib's
+// UTF-8 rules are not Dart's: they refuse an encoded surrogate.
+static GArray* dart_characters(const gchar* text) {
+  if (text == nullptr) {
+    return nullptr;
   }
-  const gchar* start = text;
-  while (*start != '\0' && is_dart_whitespace(g_utf8_get_char(start))) {
-    start = g_utf8_next_char(start);
-  }
-  const gchar* end = start + strlen(start);
-  while (end > start) {
-    const gchar* previous = g_utf8_prev_char(end);
-    if (!is_dart_whitespace(g_utf8_get_char(previous))) {
-      break;
+  static const gunichar minimum[] = {0, 0, 0x80, 0x800, 0x10000};
+  g_autoptr(GArray) characters = g_array_new(FALSE, FALSE, sizeof(gunichar));
+  const guchar* bytes = reinterpret_cast<const guchar*>(text);
+  while (*bytes != '\0') {
+    const guchar lead = *bytes;
+    const int length = lead < 0x80   ? 1
+                       : lead < 0xC0 ? 0
+                       : lead < 0xE0 ? 2
+                       : lead < 0xF0 ? 3
+                       : lead < 0xF8 ? 4
+                                     : 0;
+    if (length == 0) {
+      return nullptr;
     }
-    end = previous;
+    gunichar c = length == 1 ? lead : lead & (0x7F >> length);
+    for (int i = 1; i < length; ++i) {
+      if ((bytes[i] & 0xC0) != 0x80) {
+        return nullptr;
+      }
+      c = (c << 6) | (bytes[i] & 0x3F);
+    }
+    if (c < minimum[length] || c > 0x10FFFF) {
+      return nullptr;
+    }
+    bytes += length;
+    if (c >= 0xDC00 && c <= 0xDFFF && characters->len > 0) {
+      gunichar& previous =
+          g_array_index(characters, gunichar, characters->len - 1);
+      if (previous >= 0xD800 && previous <= 0xDBFF) {
+        previous = 0x10000 + ((previous - 0xD800) << 10) + (c - 0xDC00);
+        continue;
+      }
+    }
+    g_array_append_val(characters, c);
   }
-  return g_strndup(start, end - start);
+  return static_cast<GArray*>(g_steal_pointer(&characters));
+}
+
+// |characters| from |start| to |end| as UTF-8, a lone surrogate in the three
+// bytes Dart reads it from, so equal Dart strings give equal bytes.
+static gchar* utf8_of(GArray* characters, guint start, guint end) {
+  GString* text = g_string_sized_new(end - start);
+  for (guint i = start; i < end; ++i) {
+    const gunichar c = g_array_index(characters, gunichar, i);
+    if (c < 0x80) {
+      g_string_append_c(text, static_cast<gchar>(c));
+    } else if (c < 0x800) {
+      g_string_append_c(text, static_cast<gchar>(0xC0 | (c >> 6)));
+      g_string_append_c(text, static_cast<gchar>(0x80 | (c & 0x3F)));
+    } else if (c < 0x10000) {
+      g_string_append_c(text, static_cast<gchar>(0xE0 | (c >> 12)));
+      g_string_append_c(text, static_cast<gchar>(0x80 | ((c >> 6) & 0x3F)));
+      g_string_append_c(text, static_cast<gchar>(0x80 | (c & 0x3F)));
+    } else {
+      g_string_append_c(text, static_cast<gchar>(0xF0 | (c >> 18)));
+      g_string_append_c(text, static_cast<gchar>(0x80 | ((c >> 12) & 0x3F)));
+      g_string_append_c(text, static_cast<gchar>(0x80 | ((c >> 6) & 0x3F)));
+      g_string_append_c(text, static_cast<gchar>(0x80 | (c & 0x3F)));
+    }
+  }
+  return g_string_free(text, FALSE);
+}
+
+// |text|, an environment variable, as Dart holds it; null when Dart leaves it
+// out.
+static gchar* dart_text(const gchar* text) {
+  g_autoptr(GArray) characters = dart_characters(text);
+  if (characters == nullptr) {
+    return nullptr;
+  }
+  return utf8_of(characters, 0, characters->len);
+}
+
+// |text| as Dart holds it, without the whitespace Dart's String.trim() removes
+// from its ends; null when Dart leaves it out.
+static gchar* dart_trimmed(const gchar* text) {
+  g_autoptr(GArray) characters = dart_characters(text);
+  if (characters == nullptr) {
+    return nullptr;
+  }
+  guint start = 0;
+  guint end = characters->len;
+  while (start < end &&
+         is_dart_whitespace(g_array_index(characters, gunichar, start))) {
+    ++start;
+  }
+  while (end > start &&
+         is_dart_whitespace(g_array_index(characters, gunichar, end - 1))) {
+    --end;
+  }
+  return utf8_of(characters, start, end);
 }
 
 // |path| as package:path's POSIX normalize(absolute(path)) gives it, with a
@@ -73,27 +156,29 @@ gchar* data_root_application_id(const gchar* base_id,
                                 const gchar* home,
                                 const gchar* user_profile,
                                 const gchar* current_directory) {
-  if (configured == nullptr) {
+  // Each variable as Dart's Platform.environment holds it. One that Dart
+  // cannot decode is unset to Dart, so it is unset here too.
+  g_autofree gchar* root = dart_trimmed(configured);
+  if (root == nullptr || root[0] == '\0') {
     return g_strdup(base_id);
   }
-  g_autofree gchar* root = dart_trim(configured);
-  if (root[0] == '\0') {
-    return g_strdup(base_id);
-  }
-  g_autofree gchar* key = dart_normalized_absolute(root, current_directory);
+  g_autofree gchar* home_text = dart_text(home);
+  g_autofree gchar* profile_text = dart_text(user_profile);
+  g_autofree gchar* current = dart_text(current_directory);
+  g_autofree gchar* key = dart_normalized_absolute(root, current);
 
   // The root without TOPIAFORGE_DATA_ROOT: HOME, else USERPROFILE, else the
   // current directory, joined with ".topiaforge_launcher" the way
   // package:path joins, which skips an empty HOME.
-  const gchar* base = home != nullptr           ? home
-                      : user_profile != nullptr ? user_profile
-                                                : current_directory;
+  const gchar* base = home_text != nullptr      ? home_text
+                      : profile_text != nullptr ? profile_text
+                                                : current;
   g_autofree gchar* fallback = nullptr;
   if (base != nullptr) {
     g_autofree gchar* joined =
         base[0] == '\0' ? g_strdup(".topiaforge_launcher")
                         : g_strconcat(base, "/.topiaforge_launcher", nullptr);
-    fallback = dart_normalized_absolute(joined, current_directory);
+    fallback = dart_normalized_absolute(joined, current);
   }
   if (key != nullptr && fallback != nullptr && strcmp(key, fallback) == 0) {
     return g_strdup(base_id);

@@ -68,12 +68,14 @@ shows a window:
 - **Linux.** `GApplication` negotiates uniqueness over D-Bus
   (`G_APPLICATION_HANDLES_COMMAND_LINE`). The application id is chosen before
   Dart runs, so the runner resolves the data root by Dart's own rules
-  (`linux/runner/data_root_id.cc`): it trims the whitespace `String.trim()`
-  trims, resolves a relative root against `getcwd()` as `Directory.current`
-  does, and normalizes as package:path does. The default data root keeps the
-  plain id however it is spelled; any other root gets an id of its own, from a
-  hash of its normalized path. `test/linux_application_id_test.dart` compiles
-  that code and holds it to Dart.
+  (`linux/runner/data_root_id.cc`): it reads each variable as
+  `Platform.environment` does, so a value Dart cannot decode as UTF-8 counts
+  as unset; it trims the whitespace `String.trim()` trims, resolves a relative
+  root against `getcwd()` as `Directory.current` does, and normalizes as
+  package:path does. The default data root keeps the plain id however it is
+  spelled; any other root gets an id of its own, from a hash of its normalized
+  path. `test/linux_application_id_test.dart` compiles that code and holds it
+  to Dart.
 - **macOS.** LaunchServices keeps one launcher running and calls
   `application(_:open:)`.
 

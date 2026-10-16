@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -75,7 +76,144 @@ void main() {
       isNot(ids.single),
     );
   }, skip: skip);
+
+  test('counts a variable Dart cannot decode as unset, as Dart does', () {
+    for (final (bytes, decoded) in _decodings()) {
+      for (final start in [
+        // As the data root, beside the HOME of the default root.
+        _Start(
+          configured: decoded,
+          home: '/home/u',
+          raw: {'TOPIAFORGE_DATA_ROOT': bytes},
+        ),
+        // In HOME: without HOME, Dart takes the default root from the
+        // current directory, which makes the configured root the default.
+        _Start(
+          configured: '/home/u/.topiaforge_launcher',
+          home: decoded == null ? null : '/home$decoded',
+          raw: {
+            'HOME': [...utf8.encode('/home'), ...bytes],
+          },
+        ),
+      ]) {
+        expect(
+          runner.idFor(start) == _plainId,
+          start.isDefaultToDart,
+          reason: '$start',
+        );
+      }
+    }
+    // A character and its surrogate pair, each half encoded on its own, are
+    // one string to Dart, so they name one root.
+    final emoji = String.fromCharCode(0x1F600);
+    final start = _Start(
+      configured: '/home/$emoji/.topiaforge_launcher',
+      home: '/home/$emoji',
+      raw: {
+        'HOME': [...utf8.encode('/home/'), ..._encodedSurrogatePair],
+      },
+    );
+    expect(start.isDefaultToDart, isTrue, reason: '$start');
+    expect(runner.idFor(start), _plainId, reason: '$start');
+  }, skip: skip);
+
+  test(
+    'the decoding cases are what Dart makes of their bytes',
+    () {
+      final decodings = _decodings();
+      final directory = Directory.systemTemp.createTempSync(
+        'topiaforge-dart-environment-',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final probe = File(p.join(directory.path, 'environment.dart'))
+        ..writeAsStringSync(_environmentProbe);
+      final result = Process.runSync('/bin/sh', [
+        '-c',
+        _rawEnvironmentScript,
+        'sh',
+        _dartExecutable()!,
+        probe.path,
+        for (final (bytes, _) in decodings) bytes.map(_octal).join(),
+      ]);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+      final seen = {
+        for (final line in LineSplitter.split(result.stdout as String))
+          if (line.startsWith('raw ')) line.split(' ')[1]: line.split(' ')[2],
+      };
+      for (final (index, (bytes, decoded)) in decodings.indexed) {
+        expect(
+          seen['$index'],
+          decoded == null ? '-' : decoded.codeUnits.join(','),
+          reason: 'bytes ${_hex(bytes)}',
+        );
+      }
+    },
+    skip: _dartSkipReason(),
+  );
 }
+
+/// Bytes a Dart string cannot carry, and the string Dart's
+/// `Platform.environment` makes of each: null when Dart leaves the variable
+/// out.
+List<(List<int>, String?)> _decodings() => [
+  ([0x2F, 0x63, 0x61, 0x66, 0xE9], null), // Latin-1
+  ([0x2F, 0x63, 0x61, 0x66, 0xC3], null), // a truncated sequence
+  ([0x2F, 0x80], null), // a stray continuation byte
+  ([0x2F, 0xC0, 0xAF], null), // an overlong form
+  ([0x2F, 0xF4, 0x90, 0x80, 0x80], null), // past U+10FFFF
+  ([0x2F, 0xED, 0xA0, 0x80], '/${String.fromCharCode(0xD800)}'),
+  ([0x2F, ..._encodedSurrogatePair], '/${String.fromCharCode(0x1F600)}'),
+];
+
+/// U+1F600 as its two surrogates, each encoded on its own.
+const _encodedSurrogatePair = [0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
+
+/// Sets `TOPIAFORGE_RAW_<n>` to each `printf %b` argument after the Dart VM
+/// and the probe, then runs the probe with the count.
+const _rawEnvironmentScript = r'''
+dart=$1 probe=$2
+shift 2
+index=0
+for octal in "$@"; do
+  export "TOPIAFORGE_RAW_$index=$(printf %b "$octal")"
+  index=$((index + 1))
+done
+exec "$dart" "$probe" "$index"
+''';
+
+/// Prints the code units Dart holds for each `TOPIAFORGE_RAW_<n>`, or `-`.
+const _environmentProbe = r'''
+import 'dart:io';
+
+void main(List<String> arguments) {
+  for (var index = 0; index < int.parse(arguments.single); index++) {
+    final value = Platform.environment['TOPIAFORGE_RAW_$index'];
+    print('raw $index ${value == null ? '-' : value.codeUnits.join(',')}');
+  }
+}
+''';
+
+/// The Dart VM of the Flutter SDK that runs these tests.
+String? _dartExecutable() {
+  final root = Platform.environment['FLUTTER_ROOT'];
+  if (root == null) return null;
+  final dart = p.join(root, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
+  return File(dart).existsSync() ? dart : null;
+}
+
+String? _dartSkipReason() {
+  if (!Platform.isLinux) return 'The Linux runner builds on Linux only.';
+  if (_dartExecutable() == null) {
+    return "Needs the Flutter SDK's Dart VM (FLUTTER_ROOT).";
+  }
+  return null;
+}
+
+String _hex(List<int> bytes) =>
+    bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+
+/// [byte] as a `printf %b` octal escape.
+String _octal(int byte) => '\\0${byte.toRadixString(8).padLeft(3, '0')}';
 
 /// The spellings: every one the review found, and the edges of each rule.
 List<_Start> _starts() => [
@@ -140,12 +278,17 @@ final class _Start {
     this.home,
     this.userProfile,
     this.currentDirectory = '/home/u',
+    this.raw = const {},
   });
 
   final String? configured;
   final String? home;
   final String? userProfile;
   final String currentDirectory;
+
+  /// Variables the runner gets as these bytes, which a Dart string cannot
+  /// carry. Their fields above hold what Dart makes of the bytes.
+  final Map<String, List<int>> raw;
 
   Map<String, String> get environment => {
     'TOPIAFORGE_DATA_ROOT': ?configured,
@@ -166,14 +309,26 @@ final class _Start {
   );
 
   List<String> get arguments => [
-    for (final value in [configured, home, userProfile, currentDirectory])
-      value == null ? '-' : '=$value',
+    for (final (name, value) in _variables)
+      if (raw[name] case final bytes?)
+        'x${_hex(bytes)}'
+      else
+        value == null ? '-' : '=$value',
+    '=$currentDirectory',
+  ];
+
+  List<(String, String?)> get _variables => [
+    ('TOPIAFORGE_DATA_ROOT', configured),
+    ('HOME', home),
+    ('USERPROFILE', userProfile),
   ];
 
   @override
-  String toString() =>
-      'TOPIAFORGE_DATA_ROOT=${_show(configured)} HOME=${_show(home)} '
-      'USERPROFILE=${_show(userProfile)} cwd=$currentDirectory';
+  String toString() => [
+    for (final (name, value) in _variables)
+      '$name=${raw[name] == null ? _show(value) : 'bytes ${_hex(raw[name]!)}'}',
+    'cwd=$currentDirectory',
+  ].join(' ');
 
   /// [value] quoted, with anything but printable ASCII as `\u{...}`.
   static String _show(String? value) {

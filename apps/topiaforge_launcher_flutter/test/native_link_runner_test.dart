@@ -162,6 +162,17 @@ void main() {
     ]) {
       expect(rootId, contains(unit), reason: unit);
     }
+    // Every variable is read as Dart decodes it, not by GLib's UTF-8 rules,
+    // which refuse an encoded surrogate that Dart keeps.
+    expect(rootId, isNot(contains('g_utf8_validate')));
+    for (final call in [
+      'dart_trimmed(configured)',
+      'dart_text(home)',
+      'dart_text(user_profile)',
+      'dart_text(current_directory)',
+    ]) {
+      expect(rootId, contains(call), reason: call);
+    }
     expect(rootId, contains('strcmp(key, fallback) == 0'));
     expect(
       read(['linux', 'runner', 'CMakeLists.txt']),
