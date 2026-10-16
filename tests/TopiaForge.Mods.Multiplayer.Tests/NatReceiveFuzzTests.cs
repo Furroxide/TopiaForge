@@ -120,7 +120,7 @@ internal static class NatReceiveFuzzTests
     private static List<byte[]> Corpus(NatScenario scenario, NatPeerNode host, byte[] check, TransportPath relayServer)
     {
         var corpus = new List<byte[]> { check };
-        host.Agent.Relay!.Permit(IPAddress.Parse("198.51.100.77"), scenario.Network.Now);
+        host.Agent.Relay!.Permit(IPAddress.Parse("198.51.100.77"), "fuzz", scenario.Network.Now);
         host.Agent.Turn(host.Stack, scenario.Network.Now);
         var requests = new List<StunMessage>();
         while (host.Agent.TryDequeueDatagram(out var queued))

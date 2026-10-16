@@ -409,6 +409,13 @@ internal static class Program
             NatRelayTargetTests.ARelayLeavesAnAddressThatWentSilent();
             NatRelayTargetTests.AnAllocationLeftOnTheFiveTupleSendsTheNextElsewhere();
             NatRelayTargetTests.RefusedCredentialsAreMintedWithinTheLimits();
+            NatTableQuotaTests.AFloodOfCandidatesFromOnePeerLeavesRoomForHonestJoiners();
+            NatTableQuotaTests.ASprayFromManyPortsLeavesRoomForHonestJoiners();
+            NatTableQuotaTests.ChurnAcrossCreditCyclesKeepsAdmittingJoiners();
+            NatTableQuotaTests.OnePeersFloodReplacesOnlyItsOwnPermissions();
+            NatTableQuotaTests.ForgottenPermissionsAreReclaimedOnlyAfterTheyExpire();
+            NatTableQuotaTests.UnsolicitedPortsAreCappedButSolicitedPortsAreNot();
+            NatTableQuotaTests.AChannelNumberIsNotReboundBeforeItsGuard();
             FuzzLedger.Print();
             SystemChannelTests.SystemMessagesTravelBothWaysInOrder();
             SystemChannelTests.MessagesFromAnEarlierSessionAreDropped();

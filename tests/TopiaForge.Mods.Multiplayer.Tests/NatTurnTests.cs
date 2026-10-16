@@ -160,7 +160,7 @@ internal static class NatTurnTests
         harness.Start();
         harness.RunFor(1_000_000);
         harness.RunFor(100_000_000);
-        harness.Client.Permit(Peer.Address, harness.Now);
+        harness.Client.Permit(Peer.Address, "peer", harness.Now);
         harness.RunFor(1_000_000);
         That(harness.Server.StaleNonces == 1 && harness.Client.Statistics.StaleNonceRetries == 1, "the stale nonce draws a 438 and one retry");
         That(harness.Client.IsPermitted(Peer.Address), "and the retry installs the permission");
@@ -235,7 +235,7 @@ internal static class NatTurnTests
         var harness = new TurnHarness(9);
         harness.Start();
         harness.RunFor(1_000_000);
-        harness.Client.Permit(Peer.Address, harness.Now);
+        harness.Client.Permit(Peer.Address, "peer", harness.Now);
         harness.RunFor(1_000_000);
         var path = harness.Client.PathTo(Peer);
         That(path.Kind == TransportPathKind.Relayed && TurnRelayPath.TryParse(path, out var allocation, out var named) && allocation == 1 && named.Equals(Peer),

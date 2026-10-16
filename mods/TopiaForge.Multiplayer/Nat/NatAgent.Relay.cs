@@ -75,10 +75,13 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <summary>Gets whether a TURN relay may send to <paramref name="address"/>: a public address, or loopback in single-machine tests.</summary>
         internal bool RelayablePeer(IPAddress address) => NatAddresses.IsPublic(address) || (options.AcceptLoopback && IPAddress.IsLoopback(address));
 
-        /// <summary>Asks the current allocation to let <paramref name="candidate"/> reach this side.</summary>
-        internal void PermitRemote(IceCandidate candidate, long now)
+        /// <summary>
+        /// Asks the current allocation to let <paramref name="candidate"/> reach this side. <paramref name="scope"/> is
+        /// the remote peer the candidate came from, so one peer's candidates cannot fill the allocation's table.
+        /// </summary>
+        internal void PermitRemote(IceCandidate candidate, string? scope, long now)
         {
-            if (relay != null && relay.State == TurnAllocationState.Ready && RelayablePeer(candidate.EndPoint.Address)) relay.Permit(candidate.EndPoint.Address, now);
+            if (relay != null && relay.State == TurnAllocationState.Ready && RelayablePeer(candidate.EndPoint.Address)) relay.Permit(candidate.EndPoint.Address, scope, now);
         }
 
         /// <summary>Puts the next allocation in place under <paramref name="set"/>'s credential; it starts at <paramref name="startAt"/>, once no release on its 5-tuple is settling.</summary>
@@ -106,7 +109,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             Report(NatDiagnosticKind.RelayReady, "The relay is ready.");
             foreach (var session in sessions)
             {
-                foreach (var remote in session.Checker.RemoteCandidates) PermitRemote(remote, now);
+                foreach (var remote in session.Checker.RemoteCandidates) PermitRemote(remote, session.PeerId, now);
                 session.AddRelayBase(relayBase, relayCandidate, now);
             }
         }

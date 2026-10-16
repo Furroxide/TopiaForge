@@ -175,7 +175,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
         internal void AddRemote(SignalCandidate signaled, long now)
         {
             if (Checker.Remote == null || !agent.TryAccept(signaled, out var candidate)) return;
-            if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, now);
+            if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, PeerId, now);
         }
 
         /// <summary>A new allocation came up: it becomes a base here, and the relay candidate goes to the remote once described.</summary>
@@ -302,7 +302,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             foreach (var signaled in candidates)
             {
                 if (!agent.TryAccept(signaled, out var candidate)) continue;
-                if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, now);
+                if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, PeerId, now);
             }
 
             if (State == NatSessionState.Describing) State = NatSessionState.Checking;

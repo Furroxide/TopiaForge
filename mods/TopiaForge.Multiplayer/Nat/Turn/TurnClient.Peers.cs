@@ -40,11 +40,14 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         /// <summary>Gets how many channels are bound or binding.</summary>
         internal int ChannelCount { get; private set; }
 
-        /// <summary>Asks for a permission for <paramref name="address"/> and keeps it fresh until <see cref="Forget"/>.</summary>
-        internal void Permit(IPAddress address, long now)
+        /// <summary>
+        /// Asks for a permission for <paramref name="address"/> and keeps it fresh until <see cref="Forget"/>.
+        /// <paramref name="scope"/> names the remote peer whose candidate asked for it, so no one peer fills the table.
+        /// </summary>
+        internal void Permit(IPAddress address, string? scope, long now)
         {
             if (address == null) throw new ArgumentNullException(nameof(address));
-            var permission = PermissionFor(NatAddresses.Unmap(address), true);
+            var permission = PermissionFor(NatAddresses.Unmap(address), scope, true, now);
             if (permission != null) permission.Wanted = true;
         }
 
@@ -77,7 +80,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         internal int Wrap(TransportPath path, byte[] data, int offset, int count, byte[] output, long now)
         {
             Peer? peer = null;
-            if (State != TurnAllocationState.Ready || !TryGetPeer(path, true, now, out peer) || peer.Permission.State != PermissionState.Installed)
+            if (State != TurnAllocationState.Ready || !TryGetPeer(path, true, true, now, out peer) || peer.Permission.State != PermissionState.Installed)
             {
                 // A peer without its permission yet asks for one; the datagram is lost, as on any network, and resent.
                 if (peer != null) peer.Permission.Wanted = true;
@@ -114,6 +117,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             var peer = peersByChannel[channel - ChannelData.FirstChannel];
             if (peer == null || !peer.AcceptsChannelData(now)) return false;
             Statistics.ChannelDataReceived++;
+            peer.LastUsedAt = now;
             path = peer.Path;
             return true;
         }
@@ -141,32 +145,42 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
                 var address = new byte[size];
                 Buffer.BlockCopy(peerScratch, 0, address, 0, size);
                 var from = new IPEndPoint(NatAddresses.Unmap(new IPAddress(address)), port);
-                if (!IsPermitted(from.Address) || !TryGetPeer(TurnRelayPath.For(Allocation, from), true, now, out peer)) return false;
+                if (!IsPermitted(from.Address) || !TryGetPeer(TurnRelayPath.For(Allocation, from), true, false, now, out peer)) return false;
             }
 
             Statistics.DataIndicationsReceived++;
+            peer.LastUsedAt = now;
             if (peer.ChannelState == ChannelState.None && now >= peer.ChannelRetryAt) Bind(peer, now);
             path = peer.Path;
             return true;
         }
 
-        private Permission? PermissionFor(IPAddress address, bool create)
+        private Permission? PermissionFor(IPAddress address, string? scope, bool create, long now)
         {
             if (permissions.TryGetValue(address, out var permission)) return permission;
-            if (!create || permissions.Count >= MaximumPermissions) return null;
-            permission = new Permission(address);
+            if (!create || !MakePermissionRoom(scope, now)) return null;
+            permission = new Permission(address) { Scope = scope, Order = permissionOrder++ };
             permissions.Add(address, permission);
             return permission;
         }
 
-        private bool TryGetPeer(TransportPath path, bool create, long now, out Peer peer)
+        private bool TryGetPeer(TransportPath path, bool create, bool solicited, long now, out Peer peer)
         {
-            if (peersByPath.TryGetValue(path, out peer!)) return true;
-            if (!create || peersByPath.Count >= MaximumPeers || !TurnRelayPath.TryParse(path, out var allocation, out var endpoint) || allocation != Allocation) return false;
-            if (endpoint.Port == 0) return false;
-            var permission = PermissionFor(NatAddresses.Unmap(endpoint.Address), true);
+            if (peersByPath.TryGetValue(path, out peer!))
+            {
+                // A path this side now sends to is solicited for good, so inbound data on it no longer counts as a spray.
+                if (solicited) peer.Solicited = true;
+                return true;
+            }
+
+            if (!create || !TurnRelayPath.TryParse(path, out var allocation, out var endpoint) || allocation != Allocation) return false;
+            if (endpoint.Port == 0 || !MakePeerRoom(endpoint, solicited, now)) return false;
+
+            // A peer-path's address was permitted before any datagram reached it, so this finds the existing permission;
+            // its scope lives on the permission, so the per-peer cap is enforced there, not again here.
+            var permission = PermissionFor(NatAddresses.Unmap(endpoint.Address), null, true, now);
             if (permission == null) return false;
-            peer = new Peer(endpoint, path, permission) { LastUsedAt = now };
+            peer = new Peer(endpoint, path, permission) { LastUsedAt = now, Solicited = solicited };
             peersByPath.Add(path, peer);
             peersByKey[PeerKey.From(endpoint)] = peer;
             return true;
@@ -176,8 +190,8 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         {
             if (peer.Channel == 0)
             {
-                if (nextChannel > ChannelData.LastChannel) return;
-                peer.Channel = (ushort)nextChannel++;
+                if (!TryAcquireChannel(now, out var number)) return;
+                peer.Channel = number;
                 peersByChannel[peer.Channel - ChannelData.FirstChannel] = peer;
                 ChannelCount++;
             }
@@ -357,6 +371,10 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             peersByKey.Clear();
             permissions.Clear();
             Array.Clear(peersByChannel, 0, peersByChannel.Length);
+            Array.Clear(channelFreeAt, 0, channelFreeAt.Length);
+            nextChannel = ChannelData.FirstChannel;
+            ChannelCount = 0;
+            permissionOrder = 0;
         }
 
         private enum PermissionState
@@ -379,10 +397,20 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         {
             internal Permission(IPAddress address)
             {
+                Address = address;
                 AddressBytes = address.GetAddressBytes();
             }
 
+            /// <summary>Gets the permitted address, the key this permission is held under.</summary>
+            internal IPAddress Address { get; }
+
             internal byte[] AddressBytes { get; }
+
+            /// <summary>Gets or sets the remote peer whose candidate caused this permission; null for the local side.</summary>
+            internal string? Scope { get; set; }
+
+            /// <summary>Gets or sets when this permission was installed, in this allocation's order, so the oldest can go first.</summary>
+            internal long Order { get; set; }
 
             internal bool Wanted { get; set; }
 
@@ -417,6 +445,9 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             internal Permission Permission { get; }
 
             internal byte[] AddressBytes { get; }
+
+            /// <summary>Gets or sets whether this side ever sent a check or datagram to this port, so inbound data on it is not a spray.</summary>
+            internal bool Solicited { get; set; }
 
             internal ushort Channel { get; set; }
 

@@ -63,7 +63,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
             // A peer-reflexive address heard through the relay already holds a permission there; one heard directly may
             // be asked to use the relay later, so the current allocation lets it in too.
-            if (checker.RemoteCandidates.Count > known) PermitRemote(checker.RemoteCandidates[checker.RemoteCandidates.Count - 1], now);
+            if (checker.RemoteCandidates.Count > known) PermitRemote(checker.RemoteCandidates[checker.RemoteCandidates.Count - 1], session.PeerId, now);
             session.Touch(now);
         }
     }
