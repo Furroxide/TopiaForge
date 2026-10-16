@@ -3,10 +3,13 @@
 ///
 /// Each scanner replaces one backtracking [RegExp] and returns exactly what
 /// that pattern matched, including which occurrence wins, so well-formed
-/// files read the same. On malformed files those patterns took quadratic or
-/// cubic time; these scanners examine each code unit a bounded number of
-/// times. `test/linear_text_scan_test.dart` checks each scanner against the
-/// pattern it replaced.
+/// files read the same. [firstPackageReference] is the one exception: it
+/// ends a self-closing item at its own `/>`, where its pattern let the item
+/// run on to a later closing tag. On malformed files those patterns took
+/// quadratic or cubic time; these scanners examine each code unit a bounded
+/// number of times. `test/linear_text_scan_test.dart` checks each scanner
+/// against the pattern it replaced, and [firstPackageReference] against the
+/// corrected pattern.
 library;
 
 const _quote = 0x22;
@@ -115,12 +118,15 @@ String? firstElementText(String text, String name) {
 }
 
 /// The bounds of the first `PackageReference` item for [package], as
-/// `<PackageReference\s+Include=["']package["'][^>]*(?:/>|>.*?</PackageReference>)`
-/// matched it with `dotAll`, or null.
+/// `<PackageReference\s+Include=["']package["'][^>]*?(?:/>|>.*?</PackageReference>)`
+/// matches it with `dotAll`, or null.
 ///
-/// Like that pattern, a self-closing item runs on to the next
-/// `</PackageReference>` when one follows anywhere later in [text]. [package]
-/// is a NuGet id, matched literally; NuGet ids never contain `<` or `>`.
+/// A self-closing item ends at its own `/>`, and an element item at the
+/// first `</PackageReference>` after its start tag. The pattern this
+/// replaced had a greedy `[^>]*`, which let a self-closing item run on to
+/// the next `</PackageReference>` anywhere later in [text]. Like both
+/// patterns, a start tag ends at its first `>`. [package] is a NuGet id,
+/// matched literally; NuGet ids never contain `<` or `>`.
 ({int start, int end})? firstPackageReference(String text, String package) {
   const open = '<PackageReference';
   const close = '</PackageReference>';
@@ -135,15 +141,16 @@ String? firstElementText(String text, String name) {
     final tagEnd = text.indexOf('>', attributes);
     // Every later item needs a `>` too, so a missing one ends the search.
     if (tagEnd < 0) return null;
+    if (tagEnd > attributes && text.codeUnitAt(tagEnd - 1) == _slash) {
+      return (start: start, end: tagEnd + 1);
+    }
     if (!closeMissing) {
       final closeStart = text.indexOf(close, tagEnd + 1);
       if (closeStart >= 0) {
         return (start: start, end: closeStart + close.length);
       }
+      // No later element item can close either.
       closeMissing = true;
-    }
-    if (tagEnd > attributes && text.codeUnitAt(tagEnd - 1) == _slash) {
-      return (start: start, end: tagEnd + 1);
     }
     // An item that opens before [tagEnd] shares its `>`, so it fails the
     // same way.
