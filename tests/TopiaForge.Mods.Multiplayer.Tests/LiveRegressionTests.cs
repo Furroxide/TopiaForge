@@ -26,7 +26,8 @@ internal static class LiveRegressionTests
         var stranger = rig.AddClient("stranger", new TestContent { Presents = new byte[] { 9 } });
         var refused = rig.Join(stranger, new JoinSettings("Stranger"));
         That(rig.Run(() => refused.Phase == JoinPhase.Ended) && refused.Failure == LiveFailure.Rejected && refused.RejectionCode == AdmissionCode.Content &&
-             refused.RejectionProblems.SequenceEqual(new[] { "Unknown content." }) && refused.Detail == "Your packages do not match this session's.",
+             refused.RejectionProblems.SequenceEqual(new[] { "Unknown content." }) && refused.HostMessage == "Your packages do not match this session's." &&
+             refused.Detail == "This game's packages do not match the session's.",
             "a content refusal reaches the player with its code and every problem (" + refused.RejectionCode + ": " + string.Join(", ", refused.RejectionProblems) + ")");
 
         rig.HostContent.Verdict = ContentAdmission.Refused(new[] { "This session runs TopiaForge 0.3.", "Zombies 0.2.0 is missing." }, AdmissionCode.Protocol);

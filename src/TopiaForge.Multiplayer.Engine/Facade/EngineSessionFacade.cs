@@ -117,8 +117,7 @@ namespace TopiaForge.Multiplayer.Engine
         public bool TryGetNetworkObjectId(IEntity entity, out NetworkObjectId id)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
-            id = default;
-            return false;
+            return engine.TryGetNetworkObjectId(entity, out id);
         }
 
         public OperationResult<IPresentationEventRegistration> RegisterPresentation<TEvent>(PresentationEventDefinition<TEvent> definition)
@@ -151,23 +150,12 @@ namespace TopiaForge.Multiplayer.Engine
             return OwnSubscription(engine.SubscribeTick(handler));
         }
 
-        public bool TryGetEntity(NetworkObjectId id, out IEntity? entity)
-        {
-            entity = null;
-            return false;
-        }
+        // Entities and avatars come from the runtime's sources (IInternalMultiplayerControl); until one is set, none exists.
+        public bool TryGetEntity(NetworkObjectId id, out IEntity? entity) => engine.TryGetEntity(id, out entity);
 
-        public bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar)
-        {
-            avatar = null;
-            return false;
-        }
+        public bool TryGetAvatar(ParticipantId participantId, out IEntity? avatar) => engine.TryGetAvatar(participantId, out avatar);
 
-        public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose)
-        {
-            pose = default;
-            return false;
-        }
+        public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose) => engine.TryGetPose(participantId, out pose);
 
         /// <summary>Retires the owner's objects and disposes every registration and subscription made through this facade.</summary>
         public void Dispose()

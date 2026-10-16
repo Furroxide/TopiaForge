@@ -57,6 +57,12 @@ namespace TopiaForge.Multiplayer.Engine
         internal bool RecordKept;
 
         internal byte[] Report = Array.Empty<byte>();
+
+        /// <summary>
+        /// The connection's join generation: a number the host gives each accepted connection, so a returning player's new
+        /// connection never shares system-channel traffic with the one it replaced.
+        /// </summary>
+        internal ulong Generation;
     }
 
     internal sealed class JoinRejectedMessage
@@ -128,6 +134,7 @@ namespace TopiaForge.Multiplayer.Engine
             body.WriteVarUInt(message.NextSequence);
             body.WriteBool(message.RecordKept);
             body.WriteBytes(message.Report);
+            body.WriteVarUInt(message.Generation);
             frame.WriteEnvelope(MessageType.JoinAccepted, body);
         }
 
@@ -144,7 +151,8 @@ namespace TopiaForge.Multiplayer.Engine
                 StepRateHz = (int)reader.ReadVarUInt(1000),
                 NextSequence = reader.ReadVarUInt(),
                 RecordKept = reader.ReadBool(),
-                Report = reader.ReadBytes(ProtocolLimits.MaximumOpaqueBytes)
+                Report = reader.ReadBytes(ProtocolLimits.MaximumOpaqueBytes),
+                Generation = reader.ReadVarUInt()
             };
             if (message.StepRateHz < 1) throw new ProtocolException("The host announced a step rate of zero.");
             return message;

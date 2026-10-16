@@ -488,7 +488,7 @@ host is up, so any failure before that leaves the player's own session untouched
 | AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
 | PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |
 | Connecting | The transport connects with the descriptor's transport key pinned. Once the link is up, the engine switches to the host's session and sends the join with a proof bound to this link. |
-| Synchronizing, InSession | The engine joins and plays. The host has two minutes to admit the player and send the session. A link lost before the first Ready ends the join, back in solo play. |
+| Synchronizing, InSession | The engine joins and plays. The host has two minutes to admit the player and send the session, and two more for each replacement that asks for a new snapshot; after that, the runtime's readiness holds may keep the player waiting a minute without progress and five minutes from the first hold, and the player waits seven minutes in all, however often the host replaces the session, until it has been Ready. A session the host replaces later is synchronized again within the same bounds. A link lost before the first Ready ends the join, back in solo play. |
 | Reconnecting | A link lost in session is retried every two seconds for 30 seconds, each time with a new proof for the new link; a retry whose link drops before Ready keeps the same window. The host keeps the player's place for its grace period, so the player comes back as the same participant. |
 | Ended | The join failed or the session ended; the process is in solo play again. |
 
@@ -508,6 +508,9 @@ host is up, so any failure before that leaves the player's own session untouched
   host's admission report, a host that never answered (a timeout, never mistaken for a failed proof), a network that
   could not open, or the connection lost after the reconnect window. The password key is wiped however the join
   ends, a key still being derived included.
+- **The host's words are kept apart.** `Detail` is always this game's own text; what the host said, such as a kick
+  message, is `HostMessage`, which may hold anything and is never logged. A refused descriptor request is described
+  from its status, never by repeating what the host sent. The developer switch logs the failure's name only.
 
 ## 21. Persistence
 
@@ -549,6 +552,9 @@ These choices differ from the plan:
 
 - **Resume tokens** are replaced by identity-keyed resume. The host's engine already recognises a returning transport
   key within its grace period, and that key is proved by the handshake, so a token would add nothing.
-- **Content** goes through `ILiveSessionContent`. Until WS3 supplies the runtime's content descriptors,
-  `ProviderOnlyContent` stands in: no packages, nothing presented, everyone admitted, always ready.
-- **Driving it.** The developer switch stands in for the interface until WS5.
+- **Content** goes through `ILiveSessionContent`. `RuntimeContent` implements it over the runtime attached through the
+  internal control: the host's packages from the runtime's content descriptors, admission through the runtime's
+  planner, and the joining player's own check. Without an attached runtime nothing is announced and nobody is admitted.
+  [MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md) records it.
+- **Driving it.** The developer switch stands in for the interface until WS5, which drives live sessions through the
+  internal control instead.

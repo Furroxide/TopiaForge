@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Multiplayer.Engine
 {
@@ -44,6 +45,14 @@ namespace TopiaForge.Multiplayer.Engine
         /// </summary>
         internal long JoinRequestTimeoutMicros { get; set; } = 10_000_000;
 
+        /// <summary>
+        /// Gets or sets how long a host waits for a player to acknowledge a snapshot, from the join's acceptance or the
+        /// session's replacement, before it ends the connection as timed out:
+        /// <see cref="InternalReadinessLimits.HostSeconds"/>. That is the joining player's whole allowance, its wait for the
+        /// snapshot and its holds, which it counts from link-up, and a minute more, so an honest player always gives up first.
+        /// </summary>
+        internal long ReadyTimeoutMicros { get; set; } = InternalReadinessLimits.HostSeconds * 1_000_000L;
+
         /// <summary>Gets or sets the most participants a host admits, including its own player.</summary>
         internal int MaximumParticipants { get; set; } = 16;
 
@@ -82,6 +91,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (MaximumCatchUpSteps < 1) throw new ArgumentOutOfRangeException(nameof(MaximumCatchUpSteps));
             if (ParticipantGraceMicros < 0) throw new ArgumentOutOfRangeException(nameof(ParticipantGraceMicros));
             if (ClockSyncIntervalMicros < 0) throw new ArgumentOutOfRangeException(nameof(ClockSyncIntervalMicros));
+            if (ReadyTimeoutMicros < 1) throw new ArgumentOutOfRangeException(nameof(ReadyTimeoutMicros));
             if (MaximumParticipants < 1 || MaximumParticipants > ProtocolLimits.MaximumParticipants)
             {
                 throw new ArgumentOutOfRangeException(nameof(MaximumParticipants));

@@ -18,5 +18,16 @@
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
     <!-- The compile-check engine assembly grants this harness its internals for the white-box tests. -->
     <ProjectReference Include="..\..\src\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.csproj" />
+    <!-- ModManager's multiplayer composition root is Unity-free; compiling it here lets the real runtime host and
+         admission planner drive real providers over the virtual network. -->
+    <ProjectReference Include="..\..\src\TopiaForge.ModManager.Core\TopiaForge.ModManager.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntime.cs" Link="Runtime\MultiplayerRuntime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntimeHost.cs" Link="Runtime\MultiplayerRuntimeHost.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentInventory.cs" Link="Runtime\MultiplayerContentInventory.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentAdmission.cs" Link="Runtime\MultiplayerContentAdmission.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerDiagnosticRedactor.cs" Link="Runtime\MultiplayerDiagnosticRedactor.cs" />
   </ItemGroup>
 </Project>

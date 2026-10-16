@@ -6,7 +6,7 @@ using UnityEngine;
 namespace TopiaForge.ModManager
 {
     /// <summary>Unity-backed manager-owned implementation of the safe V1 gameplay contracts.</summary>
-    internal sealed class CoreGameplayServices : IRuntimeGameplayHost
+    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform
     {
         private readonly UnityInputRegistry input = new UnityInputRegistry();
         private readonly UnityEntityRegistry entities = new UnityEntityRegistry();
@@ -39,6 +39,21 @@ namespace TopiaForge.ModManager
 
         public event Action<GameTimeSample>? FixedUpdate;
         public event Action<GameTimeSample>? LateUpdate;
+
+        /// <summary>Gets or sets Unity's <c>Application.runInBackground</c>; multiplayer keeps it on while online.</summary>
+        public bool RunInBackground
+        {
+            get
+            {
+                UnityMainThreadGuard.AssertCurrent();
+                return Application.runInBackground;
+            }
+            set
+            {
+                UnityMainThreadGuard.AssertCurrent();
+                if (!disposed) Application.runInBackground = value;
+            }
+        }
 
         public GameplayContextServices Create(
             string ownerModId,

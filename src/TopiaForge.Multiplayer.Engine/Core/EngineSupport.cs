@@ -83,6 +83,54 @@ namespace TopiaForge.Multiplayer.Engine
         }
     }
 
+    /// <summary>
+    /// A token bucket in engine microseconds: it starts full at <c>capacity</c> tokens and refills at <c>ratePerSecond</c>.
+    /// Integer arithmetic in millionths of a token keeps it exact on virtual and real time alike.
+    /// </summary>
+    internal sealed class TokenBucket
+    {
+        private const long Token = 1_000_000;
+        private readonly long capacity;
+        private readonly long ratePerSecond;
+        private long tokens;
+        private long lastMicros;
+
+        internal TokenBucket(int capacity, int ratePerSecond, long nowMicros)
+        {
+            if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
+            if (ratePerSecond < 1) throw new ArgumentOutOfRangeException(nameof(ratePerSecond));
+            this.capacity = capacity * Token;
+            this.ratePerSecond = ratePerSecond;
+            tokens = this.capacity;
+            lastMicros = nowMicros;
+        }
+
+        /// <summary>Returns whether a token is available now, without taking it.</summary>
+        internal bool CanTake(long nowMicros)
+        {
+            Refill(nowMicros);
+            return tokens >= Token;
+        }
+
+        /// <summary>Takes one token, or returns false when none is left.</summary>
+        internal bool TryTake(long nowMicros)
+        {
+            if (!CanTake(nowMicros)) return false;
+            tokens -= Token;
+            return true;
+        }
+
+        private void Refill(long nowMicros)
+        {
+            var elapsed = nowMicros - lastMicros;
+            if (elapsed <= 0) return;
+            lastMicros = nowMicros;
+
+            // One token a second is one millionth of a token a microsecond, so the gain is the elapsed time times the rate.
+            tokens = elapsed >= capacity / ratePerSecond ? capacity : Math.Min(capacity, tokens + (elapsed * ratePerSecond));
+        }
+    }
+
     /// <summary>Codec calls with bound checks and exception capture. Stored bytes are never handed to a codec directly.</summary>
     internal static class EngineCodec
     {

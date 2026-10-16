@@ -323,4 +323,15 @@
     <Compile Include="../../src/TopiaForge.ModManager/NativeWorldReflection.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/LaunchDiscoveryGate.cs" />
   </ItemGroup>
+
+  <!-- The multiplayer composition root and runtime host are Unity-free; compiling them here unit-tests them and keeps
+       them that way. The fake control is shared with the ModRuntime harness. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntime.cs" Link="Runtime/Multiplayer/MultiplayerRuntime.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntimeHost.cs" Link="Runtime/Multiplayer/MultiplayerRuntimeHost.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentInventory.cs" Link="Runtime/Multiplayer/MultiplayerContentInventory.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentAdmission.cs" Link="Runtime/Multiplayer/MultiplayerContentAdmission.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerDiagnosticRedactor.cs" Link="Runtime/Multiplayer/MultiplayerDiagnosticRedactor.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/FakeMultiplayerControl.cs" Link="Multiplayer/FakeMultiplayerControl.cs" />
+  </ItemGroup>
 </Project>
