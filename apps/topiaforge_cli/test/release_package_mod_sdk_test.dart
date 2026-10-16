@@ -331,9 +331,11 @@ void main() {
       }
       expect(packagesToInstall, hasLength(templates.length));
       for (final package in [...runtimePackages, ...packagesToInstall]) {
+        // Without --game-dir, install validates every game discovery finds,
+        // including a real one under the host's LOCALAPPDATA.
         await _runPackagedCli(
           relocatedCli,
-          ['install', package],
+          ['install', '--game-dir', fakeGame.path, package],
           workingDirectory: relocatedRoot.path,
           environment: environment,
         );
