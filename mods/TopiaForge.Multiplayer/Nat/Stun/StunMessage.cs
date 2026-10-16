@@ -141,6 +141,76 @@ namespace TopiaForge.Multiplayer.NatTraversal.Stun
             return true;
         }
 
+        /// <summary>Gets whether a datagram's first two bytes make it a Data indication, the type a TURN server relays data in.</summary>
+        internal static bool IsDataIndication(byte[] buffer, int offset, int count) =>
+            buffer != null && offset >= 0 && count >= HeaderSize && offset <= buffer.Length - count && buffer[offset] == 0x00 && buffer[offset + 1] == 0x17;
+
+        /// <summary>
+        /// Reads a Data indication where it lies, copying and allocating nothing: the XOR-PEER-ADDRESS, unmasked into
+        /// <paramref name="address"/> (16 bytes; an IPv4 address fills the first four), its port, and where the DATA
+        /// value lies in <paramref name="buffer"/>. It checks what <see cref="TryParse"/> checks: the header, every
+        /// attribute's bounds and padding, at most 32 attributes and 1,500 bytes, and FINGERPRINT when present. An
+        /// indication with an unknown comprehension-required attribute is refused, as RFC 8489 discards it. Never throws.
+        /// </summary>
+        internal static bool TryReadDataIndication(byte[]? buffer, int offset, int count, byte[] address, out int addressSize, out int port, out int dataOffset, out int dataLength)
+        {
+            addressSize = 0;
+            port = 0;
+            dataOffset = 0;
+            dataLength = 0;
+            if (address == null || address.Length < 16 || !IsDataIndication(buffer!, offset, count) || count > MaximumBytes) return false;
+            var length = (buffer![offset + 2] << 8) | buffer[offset + 3];
+            if (length != count - HeaderSize || (length & 3) != 0 || StunTransactionId.ReadUInt32(buffer, offset + 4) != MagicCookie) return false;
+            var end = offset + count;
+            var position = offset + HeaderSize;
+            var attributes = 0;
+            var fingerprint = false;
+            var afterIntegrity = false;
+            var peerFound = false;
+            var dataFound = false;
+            while (position < end)
+            {
+                if (fingerprint || position + 4 > end) return false;
+                var attribute = (ushort)((buffer[position] << 8) | buffer[position + 1]);
+                var valueLength = (buffer[position + 2] << 8) | buffer[position + 3];
+                var padded = (valueLength + 3) & ~3;
+                if (padded > end - position - 4) return false;
+                if (attribute == StunAttribute.Fingerprint)
+                {
+                    if (valueLength != 4) return false;
+                    var expected = StunCrc32.Compute(buffer, offset, position - offset) ^ FingerprintXor;
+                    if (StunTransactionId.ReadUInt32(buffer, position + 4) != expected) return false;
+                    fingerprint = true;
+                }
+                else if (attribute == StunAttribute.MessageIntegrity || attribute == StunAttribute.MessageIntegritySha256)
+                {
+                    // An indication from the server carries no integrity; whatever follows one is outside it and ignored.
+                    var valid = attribute == StunAttribute.MessageIntegrity ? valueLength == IntegritySize : valueLength >= 16 && valueLength <= 32 && (valueLength & 3) == 0;
+                    if (!valid) return false;
+                    afterIntegrity = true;
+                }
+                else if (!afterIntegrity)
+                {
+                    if (++attributes > MaximumAttributes || StunAttribute.IsUnknownRequired(attribute)) return false;
+                    if (attribute == StunAttribute.XorPeerAddress && !peerFound)
+                    {
+                        if (!TryUnmaskAddress(buffer, offset, position + 4, valueLength, address, out addressSize, out port)) return false;
+                        peerFound = true;
+                    }
+                    else if (attribute == StunAttribute.Data && !dataFound)
+                    {
+                        dataOffset = position + 4;
+                        dataLength = valueLength;
+                        dataFound = true;
+                    }
+                }
+
+                position += 4 + padded;
+            }
+
+            return peerFound && dataFound && port != 0;
+        }
+
         /// <summary>Checks a short-term or long-term MESSAGE-INTEGRITY (HMAC-SHA1) in constant time.</summary>
         internal bool VerifyIntegrity(byte[] key)
         {
@@ -282,6 +352,18 @@ namespace TopiaForge.Multiplayer.NatTraversal.Stun
             if (!TryGetValue(StunAttribute.UnknownAttributes, out var offset, out var length) || length == 0 || (length & 1) != 0 || length > 32) return false;
             types = new ushort[length / 2];
             for (var index = 0; index < types.Length; index++) types[index] = (ushort)((bytes[offset + (2 * index)] << 8) | bytes[offset + (2 * index) + 1]);
+            return true;
+        }
+
+        /// <summary>Unmasks an XOR address value in place: 4 or 16 address bytes into <paramref name="address"/>, and the port.</summary>
+        private static bool TryUnmaskAddress(byte[] buffer, int message, int value, int length, byte[] address, out int size, out int port)
+        {
+            var family = buffer[value + 1];
+            size = family == 1 ? 4 : family == 2 ? 16 : 0;
+            port = 0;
+            if (size == 0 || length != 4 + size) return false;
+            port = ((buffer[value + 2] << 8) | buffer[value + 3]) ^ (int)(MagicCookie >> 16);
+            for (var index = 0; index < size; index++) address[index] = (byte)(buffer[value + 4 + index] ^ buffer[message + 4 + index]);
             return true;
         }
 

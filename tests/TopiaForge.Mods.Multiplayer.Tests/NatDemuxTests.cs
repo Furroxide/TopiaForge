@@ -85,43 +85,18 @@ internal static class NatDemuxTests
     {
         // A session that stays on the relay. Whichever side's connection leaves through its own allocation receives the
         // other's transport datagrams as ChannelData from its TURN server: that side's hook is the one measured.
-        var (scenario, host, joiner, joinerLink, hostLink) = NatMatrixTests.Session(520, NatBehaviour.Symmetric, NatBehaviour.Symmetric);
-        That(scenario.Exchange(joinerLink, hostLink, 1), "frames flow");
-        scenario.Network.RunFor(1_000_000);
-        var side = new[] { host, joiner }.Single(peer => peer.Agent.Sessions.Any(session => session.Current != null && session.Current.Local.IsRelay));
-        var router = scenario.Router.Internet.Nats.Values.First(nat => nat.Name == (ReferenceEquals(side, host) ? "host router" : "joiner router")).PublicAddress;
-        byte[]? captured = null;
-        scenario.Network.ObservePath = (from, to, bytes) =>
-        {
-            if (captured != null || from != scenario.TurnNode || !UdpPaths.TryGetEndPoint(to, out var target) || !NatAddresses.SameAddress(target.Address, router)) return;
-            // A copy: the receiving agent unwraps the delivered array in place.
-            if (bytes.Length > 40 && bytes[0] >= 0x40 && bytes[0] <= 0x4F && bytes[4] == PacketType.Protected) captured = (byte[])bytes.Clone();
-        };
-        That(scenario.Exchange(joinerLink, hostLink, 2), "frames keep flowing");
-        scenario.Network.RunFor(3_000_000);
-        scenario.Network.ObservePath = null;
-        That(captured != null, "a relayed transport datagram was seen on the wire as ChannelData");
-        var server = side.Agent.Relay!.Server;
-        var relayedPath = side.Agent.Sessions.Single(session => session.Current != null).Current!.Path;
-        var inner = new LoopingSocket(captured!, server);
-        var socket = new NatDatagramSocket(inner, side.Agent, () => scenario.Network.Now);
-        var buffer = new byte[TransportOptions.MaximumDatagramBytes];
-        var payload = new byte[600];
-        payload[0] = PacketType.Protected;
-        for (var warm = 0; warm < 200; warm++) Cycle(socket, buffer, relayedPath, payload);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var relayed = 0;
-        for (var round = 0; round < 20_000; round++) relayed += Cycle(socket, buffer, relayedPath, payload) ? 1 : 0;
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var relayedSide = RelayedSide(520, false);
+        var (scenario, side) = (relayedSide.Scenario, relayedSide.Side);
+        var (relayed, sent, wrapped, allocated) = MeasureHook(relayedSide, false);
         That(relayed == 20_000, "every replayed ChannelData came out as a relayed transport datagram (" + relayed + ")");
-        That(inner.Sent == 20_200 && inner.LastSentChannel, "and every relayed send went out as ChannelData");
+        That(sent == 20_200 && wrapped, "and every relayed send went out as ChannelData");
         That(allocated == 0, "the hook allocates nothing in the steady state (" + allocated + " bytes)");
 
         // Each datagram wakes the network thread, which turns the agent and asks for its next timer: with nothing due,
         // that allocates nothing either.
         var now = scenario.Network.Now;
         for (var warm = 0; warm < 10; warm++) side.Agent.Turn(side.Stack, now);
-        before = GC.GetAllocatedBytesForCurrentThread();
+        var before = GC.GetAllocatedBytesForCurrentThread();
         for (var round = 0; round < 20_000; round++)
         {
             side.Agent.Turn(side.Stack, now);
@@ -139,19 +114,100 @@ internal static class NatDemuxTests
             before = GC.GetAllocatedBytesForCurrentThread();
             side.Agent.Turn(side.Stack, at);
             allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            var sent = false;
+            var any = false;
             while (side.Agent.TryDequeueDatagram(out var datagram))
             {
-                sent = true;
+                any = true;
                 side.Agent.Release(datagram);
             }
 
-            if (sent) continue;
+            if (any) continue;
             quietTicks++;
             That(allocated == 0, "a route tick that sends nothing allocates nothing (" + allocated + " bytes at tick " + tick + ")");
         }
 
         That(quietTicks >= 20, "most route ticks send nothing (" + quietTicks + " of 25)");
+    }
+
+    internal static void TheIndicationFallbackAllocatesNothing()
+    {
+        // With every channel bind refused, relayed data travels as Send and Data indications, the fallback the design
+        // declares. Each Data indication is read where it lies and its peer found by address, so it allocates nothing.
+        var relayedSide = RelayedSide(521, true);
+        var statistics = relayedSide.Side.Agent.Relay!.Statistics;
+        That(statistics.DataIndicationsReceived > 0 && statistics.ChannelDataReceived == 0, "data arrives as Data indications (" + statistics.DataIndicationsReceived + ")");
+        var (relayed, sent, wrapped, allocated) = MeasureHook(relayedSide, true);
+        That(relayed == 20_000, "every replayed Data indication came out as a relayed transport datagram (" + relayed + ")");
+        That(sent == 20_200 && wrapped, "and every relayed send went out as a Send indication");
+        That(allocated == 0, "the fallback allocates nothing in the steady state either (" + allocated + " bytes)");
+    }
+
+    /// <summary>A session that stays on the relay, the side whose connection leaves through its own allocation, and that side's router.</summary>
+    private static (NatScenario Scenario, NatPeerNode Side, IPAddress Router, NetworkLink JoinerLink, NetworkLink HostLink) RelayedSide(int seed, bool refuseChannels)
+    {
+        var (scenario, host, joiner, joinerLink, hostLink) = NatMatrixTests.Session(seed, NatBehaviour.Symmetric, NatBehaviour.Symmetric,
+            configure: setup => setup.Turn.RefuseChannelBinds = refuseChannels);
+        That(scenario.Exchange(joinerLink, hostLink, 1), "frames flow");
+        scenario.Network.RunFor(1_000_000);
+        That(scenario.Exchange(joinerLink, hostLink, 2), "frames keep flowing");
+        var side = new[] { host, joiner }.Single(peer => peer.Agent.Sessions.Any(session => session.Current != null && session.Current.Local.IsRelay));
+        var name = ReferenceEquals(side, host) ? "host router" : "joiner router";
+        var router = scenario.Router.Internet.Nats.Values.First(nat => nat.Name == name).PublicAddress;
+        return (scenario, side, router, joinerLink, hostLink);
+    }
+
+    /// <summary>
+    /// Captures one relayed transport datagram on its way from the TURN server to the measured side, as ChannelData or as
+    /// a Data indication, then replays it through the socket hook 20,000 times while sending as often, and measures.
+    /// </summary>
+    private static (int Relayed, int Sent, bool Wrapped, long Allocated) MeasureHook(
+        (NatScenario Scenario, NatPeerNode Side, IPAddress Router, NetworkLink JoinerLink, NetworkLink HostLink) relayedSide, bool indications)
+    {
+        var (scenario, side, router, joinerLink, hostLink) = relayedSide;
+        byte[]? captured = null;
+        scenario.Network.ObservePath = (from, to, bytes) =>
+        {
+            if (captured != null || from != scenario.TurnNode || !UdpPaths.TryGetEndPoint(to, out var target) || !NatAddresses.SameAddress(target.Address, router)) return;
+
+            // A copy: the receiving agent unwraps the delivered array in place.
+            var wanted = indications ? CarriesProtected(bytes) : bytes.Length > 40 && bytes[0] >= 0x40 && bytes[0] <= 0x4F && bytes[4] == PacketType.Protected;
+            if (wanted) captured = (byte[])bytes.Clone();
+        };
+        That(scenario.Exchange(joinerLink, hostLink, 3), "frames keep flowing while the wire is watched");
+        scenario.Network.RunFor(3_000_000);
+        scenario.Network.ObservePath = null;
+        That(captured != null, "a relayed transport datagram was seen on the wire");
+        var server = side.Agent.Relay!.Server;
+        var relayedPath = side.Agent.Sessions.Single(session => session.Current != null).Current!.Path;
+        var inner = new LoopingSocket(captured!, server);
+        var socket = new NatDatagramSocket(inner, side.Agent, () => scenario.Network.Now);
+        var buffer = new byte[TransportOptions.MaximumDatagramBytes];
+        var payload = new byte[600];
+        payload[0] = PacketType.Protected;
+        Replay(socket, buffer, relayedPath, payload, 200);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var relayed = Replay(socket, buffer, relayedPath, payload, 20_000);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        return (relayed, inner.Sent, indications ? inner.LastSentIndication : inner.LastSentChannel, allocated);
+    }
+
+    /// <summary>
+    /// The measured loop, compiled fully optimized from the start: a loop the runtime first runs unoptimized is moved to
+    /// optimized code part way through, and that one-time move must not count as the hook allocating.
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static int Replay(NatDatagramSocket socket, byte[] buffer, TransportPath relayedPath, byte[] payload, int rounds)
+    {
+        var relayed = 0;
+        for (var round = 0; round < rounds; round++) relayed += Cycle(socket, buffer, relayedPath, payload) ? 1 : 0;
+        return relayed;
+    }
+
+    /// <summary>Gets whether a datagram is a Data indication carrying a protected transport packet.</summary>
+    private static bool CarriesProtected(byte[] bytes)
+    {
+        var address = new byte[16];
+        return StunMessage.TryReadDataIndication(bytes, 0, bytes.Length, address, out _, out _, out var offset, out var length) && length > 20 && bytes[offset] == PacketType.Protected;
     }
 
     private static bool Cycle(NatDatagramSocket socket, byte[] buffer, TransportPath relayedPath, byte[] payload)
@@ -177,6 +233,8 @@ internal static class NatDemuxTests
 
         internal bool LastSentChannel { get; private set; }
 
+        internal bool LastSentIndication { get; private set; }
+
         public int LocalPort => 27250;
 
         public bool WaitReadable(long timeoutMicros) => true;
@@ -193,6 +251,7 @@ internal static class NatDemuxTests
         {
             Sent++;
             LastSentChannel = buffer[offset] >= 0x40 && buffer[offset] <= 0x4F && to.Equals(path);
+            LastSentIndication = buffer[offset] == 0x00 && buffer[offset + 1] == 0x16 && to.Equals(path);
         }
 
         public void Dispose()

@@ -9,8 +9,11 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// <summary>
     /// Signaling. A joiner offers once gathering has settled and the host is online, then takes the host's answer,
     /// trickled candidates and punch. A host answers each offer with fresh credentials per peer and asks for a punch.
-    /// Every candidate that leaves goes through <see cref="NatPrivacy"/>. A peer's socket lasts fifteen minutes, so it
-    /// is opened again when its lifetime ends or the connection drops, with backoff, while the session still needs it.
+    /// Every candidate that leaves goes through <see cref="NatPrivacy"/>. The room counts every open peer socket against
+    /// its places (ControlPlaneApi.md, section 8.4), so a joiner closes its socket once its connection is up and opens it
+    /// again only when it has something to say: while its relay changes, so the new relay candidate reaches the host,
+    /// or once its path is lost, until a new one validates. The host keeps its socket, and sends a returning peer its
+    /// candidates again, since whatever it trickled while that peer's socket was closed went nowhere.
     /// </summary>
     internal sealed partial class NatAgent
     {
@@ -20,6 +23,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private const int ReconnectsPerWindow = 6;
         private const long ReconnectWindowMicros = 600_000_000;
 
+        /// <summary>How soon a connected joiner may open its socket again after the last time it did.</summary>
+        private const long ReopenSpacingMicros = 1_000_000;
+
         private readonly Dictionary<string, bool> relayOnlyPeers = new Dictionary<string, bool>(StringComparer.Ordinal);
         private ISignalingClient? signaling;
         private long reconnectAt = long.MaxValue;
@@ -27,19 +33,40 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private long reconnectWindowStart;
         private int reconnectsInWindow;
         private bool signalingDone;
+        private bool signalingParked;
+        private long lastOpenedAt = long.MinValue / 2;
         private int withheldByService;
         private NatJoinStage lastJoinStage = NatJoinStage.Idle;
         private NatFailure lastJoinFailure = NatFailure.None;
 
+        private enum SignalingNeed
+        {
+            /// <summary>Nothing more will ever be said: the session ended.</summary>
+            Done,
+
+            /// <summary>A connected joiner with nothing to say: its socket stays closed.</summary>
+            Idle,
+
+            Needed
+        }
+
         /// <summary>Gets how many frames could not be queued for the service.</summary>
         internal int SignalsDropped { get; private set; }
 
+        /// <summary>Gets how many signaling sockets this agent opened, counting every reopening.</summary>
+        internal int SignalingOpens { get; private set; }
+
+        /// <summary>Gets whether a signaling socket is open or opening now.</summary>
+        internal bool SignalingOpen => signaling != null && signaling.State != SignalingState.Closed;
+
         /// <summary>Starts a join: gathering, signaling, checks, then a connection over the best pair, filling in <paramref name="attempt"/>.</summary>
-        internal void StartJoin(NatSessionPlan sessionPlan, ConnectAttempt attempt, byte[]? expectedKey, long now)
+        /// <param name="relayOnly">Whether the stack the join runs on is relay-only; the join then is too, whatever the agent's option.</param>
+        internal void StartJoin(NatSessionPlan sessionPlan, ConnectAttempt attempt, byte[]? expectedKey, long now, bool relayOnly = false)
         {
             if (sessionPlan == null) throw new ArgumentNullException(nameof(sessionPlan));
             if (attempt == null) throw new ArgumentNullException(nameof(attempt));
             if (disposed || Role != NatRole.None) throw new InvalidOperationException("The NAT layer is already running a session.");
+            forcedRelayOnly = relayOnly;
             Role = NatRole.Joiner;
             currentTime = now;
             BeginGathering(sessionPlan, now);
@@ -50,10 +77,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
         }
 
         /// <summary>Starts hosting: gathering and signaling; each peer's offer then gets an answer and its own checks.</summary>
-        internal void StartHost(NatSessionPlan sessionPlan, long now)
+        /// <param name="relayOnly">Whether the stack the host runs on is relay-only; hosting then is too, whatever the agent's option.</param>
+        internal void StartHost(NatSessionPlan sessionPlan, long now, bool relayOnly = false)
         {
             if (sessionPlan == null) throw new ArgumentNullException(nameof(sessionPlan));
             if (disposed || Role != NatRole.None) throw new InvalidOperationException("The NAT layer is already running a session.");
+            forcedRelayOnly = relayOnly;
             Role = NatRole.Host;
             currentTime = now;
             BeginGathering(sessionPlan, now);
@@ -68,10 +97,10 @@ namespace TopiaForge.Multiplayer.NatTraversal
         }
 
         /// <summary>The candidates this side may signal now: the privacy gate over everything it gathered.</summary>
-        internal IReadOnlyList<SignalCandidate> SignalableCandidates() => NatPrivacy.Signalable(LocalCandidates(), options.RelayOnly, options.AcceptLoopback);
+        internal IReadOnlyList<SignalCandidate> SignalableCandidates() => NatPrivacy.Signalable(LocalCandidates(), RelayOnly, options.AcceptLoopback);
 
         /// <summary>Gets whether one candidate may be trickled.</summary>
-        internal bool MaySignal(IceCandidate candidate) => NatPrivacy.MaySignal(candidate, options.RelayOnly, options.AcceptLoopback);
+        internal bool MaySignal(IceCandidate candidate) => NatPrivacy.MaySignal(candidate, RelayOnly, options.AcceptLoopback);
 
         /// <summary>Converts a signaled candidate into one this side will check: a canonical, usable address.</summary>
         internal bool TryAccept(SignalCandidate signaled, out IceCandidate candidate)
@@ -87,6 +116,17 @@ namespace TopiaForge.Multiplayer.NatTraversal
         {
             lastJoinStage = stage;
             lastJoinFailure = failure;
+        }
+
+        /// <summary>Gets the join's session while it runs; null for a host, or once the join has ended.</summary>
+        private NatSession? LiveJoin()
+        {
+            foreach (var session in sessions)
+            {
+                if (session.IsJoin && session.State != NatSessionState.Ended && session.State != NatSessionState.Failed) return session;
+            }
+
+            return null;
         }
 
         private NatSession CreateSession(string? peer, bool controlling, long now)
@@ -112,6 +152,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private void OpenSignaling(long now)
         {
             reconnectAt = long.MaxValue;
+            lastOpenedAt = now;
+            SignalingOpens++;
             try
             {
                 signaling = plan!.OpenSignaling();
@@ -123,11 +165,45 @@ namespace TopiaForge.Multiplayer.NatTraversal
             }
         }
 
+        /// <summary>
+        /// Gets what signaling is for now. A host always needs it. A joiner needs it until its connection is up, while
+        /// its relay changes, and while its connection is stalled; once none of that holds it has nothing to say.
+        /// </summary>
+        private SignalingNeed NeedNow(long now)
+        {
+            if (Role == NatRole.Host) return SignalingNeed.Needed;
+            var join = Role == NatRole.Joiner ? LiveJoin() : null;
+            if (join == null) return SignalingNeed.Done;
+            if (join.State != NatSessionState.Connected || join.PathTrouble || RelayChanging(now)) return SignalingNeed.Needed;
+            return SignalingNeed.Idle;
+        }
+
         private void PollSignaling(long now)
         {
+            if (signalingDone) return;
+            var need = NeedNow(now);
+            if (need == SignalingNeed.Done)
+            {
+                // The join ended: whatever it queued (its goodbye) goes, and signaling is over.
+                CloseSignaling();
+                return;
+            }
+
             if (signaling == null)
             {
-                if (now >= reconnectAt) OpenSignaling(now);
+                // A connected joiner with nothing to say stays closed. One that needs its socket opens it once its backoff
+                // and spacing allow. Opening for a change of relay is never held back further: the new relay candidate
+                // must reach the host, and changes come no faster than credentials expire. Any other reopening counts
+                // toward the reconnection window.
+                if (need == SignalingNeed.Idle)
+                {
+                    signalingParked = true;
+                    return;
+                }
+
+                if (now < reconnectAt || (signalingParked && !RelayChanging(now) && !WindowAllows(now))) return;
+                signalingParked = false;
+                OpenSignaling(now);
                 return;
             }
 
@@ -138,33 +214,86 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 signaling.Dispose();
                 signaling = null;
                 OnSignalingLost(reason, now);
+                return;
             }
+
+            // A connected joiner with nothing to say closes its socket: the room counts it against its places.
+            if (need == SignalingNeed.Idle && signaling.State == SignalingState.Open) Park();
         }
 
-        /// <summary>
-        /// A socket closed. A peer whose socket reached its lifetime, or lost the connection, opens another while its
-        /// session still needs signaling; a replaced socket, an ended host session or a refused upgrade does not.
-        /// </summary>
-        private void OnSignalingLost(SignalingCloseReason reason, long now)
+        /// <summary>Closes a connected joiner's socket until it is needed again; the frames already queued go first.</summary>
+        private void Park()
         {
-            Report(NatDiagnosticKind.SignalingClosed, "The signaling socket closed.");
-            var retry = !signalingDone && (reason == SignalingCloseReason.Expired || reason == SignalingCloseReason.Unreachable || reason == SignalingCloseReason.RateLimited);
-            if (retry && now - reconnectWindowStart > ReconnectWindowMicros)
+            signaling!.Close();
+            signaling = null;
+            signalingParked = true;
+            reconnectAt = lastOpenedAt + ReopenSpacingMicros;
+            Report(NatDiagnosticKind.SignalingParked, "The signaling socket closed until it is needed again.");
+        }
+
+        /// <summary>Takes a place in the reconnection window: six openings in ten minutes; false, and the next turn waits for the window, once they are used.</summary>
+        private bool WindowAllows(long now)
+        {
+            if (now - reconnectWindowStart > ReconnectWindowMicros)
             {
                 reconnectWindowStart = now;
                 reconnectsInWindow = 0;
             }
 
-            if (retry && reconnectsInWindow < ReconnectsPerWindow)
+            if (reconnectsInWindow >= ReconnectsPerWindow)
             {
-                reconnectsInWindow++;
-                reconnectAt = now + (reason == SignalingCloseReason.Expired ? 0 : reconnectDelay);
+                reconnectAt = reconnectWindowStart + ReconnectWindowMicros + 1;
+                return false;
+            }
+
+            reconnectsInWindow++;
+            return true;
+        }
+
+        /// <summary>
+        /// A socket closed. One whose lifetime ended, whose connection broke or that was rate limited is opened again
+        /// while it is still needed, with backoff, at most six times in ten minutes. A connected joiner does not depend
+        /// on signaling, so it never gives up on it: it parks, and opens again once it needs to and its backoff allows,
+        /// even after a refused upgrade, since a full room refuses it too. A replaced socket, an ended session, a
+        /// withdrawn ticket or a goodbye is final, and so is a refused upgrade before the connection is up.
+        /// </summary>
+        private void OnSignalingLost(SignalingCloseReason reason, long now)
+        {
+            Report(NatDiagnosticKind.SignalingClosed, "The signaling socket closed.");
+            if (signalingDone) return;
+            var need = NeedNow(now);
+            var connected = Role == NatRole.Joiner && LiveJoin()?.State == NatSessionState.Connected;
+            var retry = need != SignalingNeed.Done &&
+                        (reason == SignalingCloseReason.Expired || reason == SignalingCloseReason.Unreachable || reason == SignalingCloseReason.RateLimited ||
+                         (reason == SignalingCloseReason.Refused && connected));
+            if (retry)
+            {
+                var delay = reason == SignalingCloseReason.Expired ? 0 : reconnectDelay;
                 if (reason != SignalingCloseReason.Expired) reconnectDelay = Math.Min(reconnectDelay * 2, ReconnectLongestMicros);
-                return;
+                if (connected)
+                {
+                    signalingParked = true;
+                    reconnectAt = now + delay;
+                    return;
+                }
+
+                if (now - reconnectWindowStart > ReconnectWindowMicros)
+                {
+                    reconnectWindowStart = now;
+                    reconnectsInWindow = 0;
+                }
+
+                if (reconnectsInWindow < ReconnectsPerWindow)
+                {
+                    reconnectsInWindow++;
+                    reconnectAt = now + delay;
+                    return;
+                }
             }
 
             signalingDone = true;
-            var failure = reason == SignalingCloseReason.SessionEnded ? NatFailure.HostEnded : NatFailure.SignalingFailed;
+            var failure = reason == SignalingCloseReason.SessionEnded ? NatFailure.HostEnded :
+                reason == SignalingCloseReason.Revoked ? NatFailure.TicketRevoked : NatFailure.SignalingFailed;
             foreach (var session in sessions) session.OnSignalingGone(failure, now);
         }
 
@@ -182,6 +311,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
                     break;
                 case SignalType.Joined:
                     if (Role == NatRole.Host && message.Peer != null && relayOnlyPeers.Count < MaximumSessions * 2) relayOnlyPeers[message.Peer] = message.RelayOnly;
+
+                    // A peer back in the room missed what was trickled while its socket was closed: it hears it again.
+                    target?.OnRejoined(now);
                     break;
                 case SignalType.Left:
                     if (Role == NatRole.Host && message.Peer != null) relayOnlyPeers.Remove(message.Peer);
@@ -216,16 +348,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <summary>Gets the session a frame is for: the join for a joiner, the named peer's for a host.</summary>
         private NatSession? Target(SignalMessage message)
         {
-            if (Role == NatRole.Joiner)
-            {
-                foreach (var session in sessions)
-                {
-                    if (session.IsJoin && session.State != NatSessionState.Ended && session.State != NatSessionState.Failed) return session;
-                }
-
-                return null;
-            }
-
+            if (Role == NatRole.Joiner) return LiveJoin();
             if (message.Peer == null) return null;
             foreach (var session in sessions)
             {
@@ -256,11 +379,18 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private void CloseSignaling()
         {
             signalingDone = true;
+            signalingParked = false;
             reconnectAt = long.MaxValue;
             signaling?.Close();
             signaling = null;
         }
 
-        private long SignalingTimeout() => signaling == null && reconnectAt != long.MaxValue ? reconnectAt : long.MaxValue;
+        /// <summary>When signaling next needs a turn: a reconnection, or a parked joiner's backoff running out while it needs the socket.</summary>
+        private long SignalingTimeout()
+        {
+            if (signalingDone || signaling != null) return long.MaxValue;
+            if (signalingParked && NeedNow(currentTime) != SignalingNeed.Needed) return long.MaxValue;
+            return reconnectAt;
+        }
     }
 }

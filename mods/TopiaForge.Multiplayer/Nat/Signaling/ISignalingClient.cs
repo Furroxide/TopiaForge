@@ -36,7 +36,10 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
         Refused = 7,
 
         /// <summary>The service could not be reached, or the connection broke.</summary>
-        Unreachable = 8
+        Unreachable = 8,
+
+        /// <summary>The peer's ticket stopped holding (4403): its invite was withdrawn or expired, or the server stopped being public.</summary>
+        Revoked = 9
     }
 
     /// <summary>

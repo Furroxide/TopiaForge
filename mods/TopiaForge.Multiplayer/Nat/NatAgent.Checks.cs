@@ -40,7 +40,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             {
                 arrival = BaseNumbered(allocation);
             }
-            else if (!options.RelayOnly && UdpPaths.TryGetEndPoint(from, out var direct))
+            else if (!RelayOnly && UdpPaths.TryGetEndPoint(from, out var direct))
             {
                 source = new IPEndPoint(NatAddresses.Unmap(direct.Address), direct.Port);
                 arrival = socketBase;
@@ -50,7 +50,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 return;
             }
 
-            if (arrival == null || session.State == NatSessionState.Ended || session.State == NatSessionState.Failed) return;
+            // An answer names the source's port, so a check from port 0 (which nothing genuine sends from) gets none.
+            if (arrival == null || source.Port == 0 || session.State == NatSessionState.Ended || session.State == NatSessionState.Failed) return;
             writer.Begin(scratch, StunMethod.Binding, StunClass.Success, request.TransactionId);
             writer.AddAddress(StunAttribute.XorMappedAddress, source);
             var length = writer.Finish(checker.Local.Key, true);

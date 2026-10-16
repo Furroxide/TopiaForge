@@ -67,7 +67,7 @@ internal static class LiveSessionFailureTests
     {
         var network = new VirtualDatagramNetwork(142);
         var host = new NetworkStack(
-            new TransportEndpoint(TransportPair.Key(142, 1), new TransportOptions { Random = new SeededTransportRandom(1420) }, network.Now),
+            new TransportEndpoint(TransportPair.Key(142, 1), new TransportOptions { Random = new SeededTransportRandom(1420), RelayOnly = false }, network.Now),
             maximumLinksPerSource: 2,
             sourceOf: _ => "one household");
         var hostNode = network.AddStack("host", host);
@@ -75,7 +75,7 @@ internal static class LiveSessionFailureTests
         var attempts = new List<ConnectAttempt>();
         for (var index = 0; index < 3; index++)
         {
-            var client = new NetworkStack(new TransportEndpoint(TransportPair.Key(142, 10 + index), new TransportOptions { Random = new SeededTransportRandom(1421 + index) }, network.Now));
+            var client = new NetworkStack(new TransportEndpoint(TransportPair.Key(142, 10 + index), new TransportOptions { Random = new SeededTransportRandom(1421 + index), RelayOnly = false }, network.Now));
             network.AddStack("client-" + index, client);
             var attempt = new ConnectAttempt();
             client.Connect(attempt, VirtualDatagramNetwork.PathTo(hostNode), hostKey, network.Now);

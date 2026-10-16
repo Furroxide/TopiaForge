@@ -14,6 +14,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// </summary>
     internal sealed partial class NatSession
     {
+        private static readonly System.Predicate<TransportPath> AnyPath = _ => true;
+
         private void PollJoin(NetworkStack stack, long now)
         {
             if (attempt == null) return;
@@ -55,6 +57,16 @@ namespace TopiaForge.Multiplayer.NatTraversal
             if (attempt.State != ConnectAttemptState.Established) return;
             State = NatSessionState.Connected;
             if (attempt.Link != null && attempt.Link.IsClosed) End(NatFailure.None, now, true);
+        }
+
+        /// <summary>
+        /// Gets whether the join's connection has stalled, or gone, on whatever path the transport has it: a joiner's
+        /// endpoint carries that one connection, so this needs no pair, and a path the transport moved to itself counts.
+        /// </summary>
+        private static bool JoinStalled(NetworkStack stack)
+        {
+            var usage = stack.Endpoint.UsageWhere(AnyPath);
+            return usage.Connections == 0 || usage.Stalled > 0;
         }
 
         /// <summary>A host's session ends when its peer never connected, or its connection has been gone a while.</summary>
@@ -162,6 +174,17 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private void Probe(NetworkStack stack, CandidatePair from, CandidatePair? to, long now)
         {
             if (to == null || ReferenceEquals(to, from) || now - to.LastProbeAt < ProbeSpacingMicros) return;
+
+            // A pair that twice failed to take the connection is checked again before it is tried a third time: a path
+            // that died since its last answer, such as one through a relay the remote released, fails, and the next is tried.
+            if (to.Probes >= UpgradeProbesPerPair && to.AnsweredAt <= to.LastProbeAt)
+            {
+                Checker.Recheck(to, now);
+                to.LastProbeAt = now;
+                return;
+            }
+
+            if (to.AnsweredAt > to.LastProbeAt) to.Probes = 0;
             to.Probes++;
             to.LastProbeAt = now;
             stack.Endpoint.ProbeConnections(from.Path, to.Path, now);
@@ -180,7 +203,10 @@ namespace TopiaForge.Multiplayer.NatTraversal
             }
         }
 
-        /// <summary>The best succeeded pair of a kind, off retiring bases, other than <paramref name="except"/>.</summary>
+        /// <summary>
+        /// The best succeeded pair of a kind, off retiring bases and the remote's replaced relay candidates, other than
+        /// <paramref name="except"/>: nothing moves onto an allocation either side is giving up.
+        /// </summary>
         private CandidatePair? Best(bool relayed, bool offRetiring, CandidatePair? except = null)
         {
             CandidatePair? best = null;
@@ -189,6 +215,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 var pair = Checker.Pairs[index];
                 if (pair.State != CandidatePairState.Succeeded || pair.IsRelayed != relayed || ReferenceEquals(pair, except)) continue;
                 if (pair.Local.Retiring && (offRetiring || relayed)) continue;
+                if (Checker.IsSuperseded(pair.Remote)) continue;
                 if (best == null || (relayed ? RelayedBefore(pair, best) : pair.Priority > best.Priority)) best = pair;
             }
 

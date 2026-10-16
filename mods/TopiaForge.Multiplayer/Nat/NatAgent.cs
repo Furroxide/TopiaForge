@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using TopiaForge.Multiplayer.Network;
+using TopiaForge.Multiplayer.NatTraversal.PortMapping;
 using TopiaForge.Multiplayer.NatTraversal.Stun;
 using TopiaForge.Multiplayer.NatTraversal.Turn;
 using TopiaForge.Multiplayer.Transport;
@@ -65,7 +68,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// wraps transport datagrams bound for relayed paths, and moves connections between paths through the transport's
     /// own validation. Whoever owns the socket (the network thread, or the virtual network in tests) hands it datagrams
     /// and the time, sends what it yields, and calls <see cref="Turn"/> once per turn. An agent with no session started
-    /// contacts nothing at all.
+    /// contacts nothing at all, and nothing a peer or server sends makes it throw.
     /// </summary>
     internal sealed partial class NatAgent : IDisposable
     {
@@ -83,7 +86,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private readonly object gate = new object();
         private readonly List<ConnectAttempt> adopted = new List<ConnectAttempt>();
         private NatStatus status = NatStatus.Idle;
+        private PortMapper? portMapper;
         private long currentTime;
+        private bool forcedRelayOnly;
         private bool disposed;
 
         internal NatAgent(NatAgentOptions options)
@@ -97,6 +102,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         internal NatRole Role { get; private set; }
 
+        /// <summary>
+        /// Gets whether this session is relay-only: the agent's own option, or the transport's when the session started
+        /// on a relay-only stack. Either one hides the player; neither can expose a player the other hides.
+        /// </summary>
+        internal bool RelayOnly => options.RelayOnly || forcedRelayOnly;
+
         /// <summary>Gets the latest status. The main thread may read it at any time.</summary>
         internal NatStatus Status => Volatile.Read(ref status);
 
@@ -107,10 +118,14 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <summary>Gets how many datagrams this agent dropped because its own queue was full.</summary>
         internal long Overflow { get; private set; }
 
+        /// <summary>Gets the port mapping of a host that shows its address; off for everything else.</summary>
+        internal PortMappingState PortMapping => portMapper?.State ?? PortMappingState.Off;
+
         /// <summary>
         /// Takes one datagram from the socket. Transport datagrams pass straight through. STUN is answered or matched
         /// here; ChannelData and Data indications from this side's TURN server are unwrapped, and their contents go to the
-        /// transport from the relayed path, or back through here when they are STUN themselves. Never throws on input.
+        /// transport from the relayed path, or back through here when they are STUN themselves. A datagram from a source
+        /// that cannot send (port 0, an unspecified, multicast or broadcast address) is dropped first. Never throws on input.
         /// </summary>
         internal NatReceiveResult Receive(TransportPath from, byte[] buffer, int offset, int count, long now, out TransportPath relayed, out int innerOffset, out int innerCount)
         {
@@ -118,14 +133,23 @@ namespace TopiaForge.Multiplayer.NatTraversal
             innerOffset = offset;
             innerCount = count;
             if (from == null || buffer == null || count <= 0 || offset < 0 || offset > buffer.Length - count) return NatReceiveResult.Dropped;
+            if (!NatAddresses.IsPlausibleSource(from)) return NatReceiveResult.Dropped;
             var kind = NatDemux.Classify(buffer[offset]);
             if (kind == NatDatagramKind.Transport) return NatReceiveResult.Transport;
-            if (disposed || Role == NatRole.None) return NatReceiveResult.Dropped;
+            if (disposed) return NatReceiveResult.Dropped;
+            if (Role == NatRole.None) return Draining(kind, from, buffer, offset, count, now);
             currentTime = now;
             var relay = RelayAt(from);
             if (kind == NatDatagramKind.ChannelData)
             {
-                if (relay == null || !relay.TryUnwrap(buffer, offset, count, out var path, out var dataOffset, out var dataLength) || dataLength == 0) return NatReceiveResult.Dropped;
+                if (relay == null || !relay.TryUnwrap(buffer, offset, count, now, out var path, out var dataOffset, out var dataLength) || dataLength == 0) return NatReceiveResult.Dropped;
+                return Inner(path, buffer, dataOffset, dataLength, buffer, offset, now, out relayed, out innerOffset, out innerCount);
+            }
+
+            // A peer's data through the relay, when no channel carries it: read in place, so the fallback allocates nothing.
+            if (relay != null && StunMessage.IsDataIndication(buffer, offset, count))
+            {
+                if (!relay.TryReadData(buffer, offset, count, now, out var path, out var dataOffset, out var dataLength) || dataLength == 0) return NatReceiveResult.Dropped;
                 return Inner(path, buffer, dataOffset, dataLength, buffer, offset, now, out relayed, out innerOffset, out innerCount);
             }
 
@@ -134,12 +158,6 @@ namespace TopiaForge.Multiplayer.NatTraversal
             {
                 OnStun(from, message, now);
                 return NatReceiveResult.Consumed;
-            }
-
-            if (message.Method == StunMethod.Data && message.Class == StunClass.Indication)
-            {
-                if (!relay.TryReadData(message, now, out var path, out var dataOffset, out var dataLength) || dataLength == 0) return NatReceiveResult.Dropped;
-                return Inner(path, message.Bytes, dataOffset, dataLength, buffer, offset, now, out relayed, out innerOffset, out innerCount);
             }
 
             if (message.Class == StunClass.Success || message.Class == StunClass.Error) stun.TryComplete(message, from, now);
@@ -166,7 +184,17 @@ namespace TopiaForge.Multiplayer.NatTraversal
         internal void Turn(NetworkStack stack, long now)
         {
             if (stack == null) throw new ArgumentNullException(nameof(stack));
-            if (disposed || Role == NatRole.None) return;
+            if (disposed) return;
+            if (Role == NatRole.None)
+            {
+                // Stopped: only releases still settling run, and only until they do.
+                if (!ReleasesInFlight()) return;
+                currentTime = now;
+                stun.Poll(now);
+                PollReleases();
+                return;
+            }
+
             currentTime = now;
             PollGathering(now);
             PollSignaling(now);
@@ -180,7 +208,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         internal long NextTimeoutMicros()
         {
-            if (disposed || Role == NatRole.None) return long.MaxValue;
+            if (disposed) return long.MaxValue;
+            if (Role == NatRole.None) return ReleasesInFlight() ? stun.NextTimeoutMicros() : long.MaxValue;
             var next = Math.Min(stun.NextTimeoutMicros(), GatheringTimeout());
             next = Math.Min(next, RelayTimeout());
             next = Math.Min(next, SignalingTimeout());
@@ -206,16 +235,34 @@ namespace TopiaForge.Multiplayer.NatTraversal
             if (datagram.Buffer != null && datagram.Buffer.Length == StunMessage.MaximumBytes && pool.Count < 64) pool.Push(datagram.Buffer);
         }
 
-        /// <summary>Ends every session with a goodbye, closes signaling and releases the relay. What it queues still needs sending.</summary>
+        /// <summary>
+        /// Ends every session with a goodbye, closes signaling, stops the port mapping and releases the relay. What it
+        /// queues still needs sending; the releases retransmit until the server answers, for as long as turns still run.
+        /// </summary>
         internal void Stop(long now)
         {
             if (disposed || Role == NatRole.None) return;
             currentTime = now;
             foreach (var session in sessions) session.End(NatFailure.Cancelled, now, true);
             CloseSignaling();
+            StopPortMapping();
+            if (bindingOwner != null) stun.CancelAll(bindingOwner);
             ReleaseRelays(now);
             Role = NatRole.None;
             Publish();
+        }
+
+        /// <summary>
+        /// Starts mapping the game port for a host that is hosting and shows its address. The mapping is the agent's from
+        /// here: <see cref="Stop"/> and <see cref="Dispose"/> delete it, however hosting ends.
+        /// </summary>
+        internal void MapPort(PortMapper mapper, int port, Action<IPEndPoint> mapped)
+        {
+            if (mapper == null) throw new ArgumentNullException(nameof(mapper));
+            if (mapped == null) throw new ArgumentNullException(nameof(mapped));
+            if (disposed || Role != NatRole.Host || RelayOnly || portMapper != null || port < 1 || port > 65535) return;
+            portMapper = mapper;
+            mapper.Start(port, mapped);
         }
 
         /// <summary>
@@ -242,6 +289,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
         {
             if (disposed) return;
             Stop(currentTime);
+            StopPortMapping();
             ConnectAttempt[] attempts;
             lock (gate)
             {
@@ -286,10 +334,18 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 return;
             }
 
-            if (options.RelayOnly && RelayAt(destination) == null) return;
+            if (RelayOnly && !IsRelayServer(destination)) return;
             var copy = Rent();
             Buffer.BlockCopy(bytes, 0, copy, 0, length);
             Enqueue(destination, copy, length);
+        }
+
+        /// <summary>A stopped agent hears only the answers to its releases; anything else is dropped, as by an agent never started.</summary>
+        private NatReceiveResult Draining(NatDatagramKind kind, TransportPath from, byte[] buffer, int offset, int count, long now)
+        {
+            if (kind != NatDatagramKind.Stun || !ReleasesInFlight() || !StunMessage.TryParse(buffer, offset, count, out var message)) return NatReceiveResult.Dropped;
+            if (message.Class == StunClass.Success || message.Class == StunClass.Error) stun.TryComplete(message, from, now);
+            return NatReceiveResult.Consumed;
         }
 
         private NatReceiveResult Inner(TransportPath path, byte[] source, int dataOffset, int dataLength, byte[] buffer, int offset, long now,
@@ -333,6 +389,16 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         private byte[] Rent() => pool.Count > 0 ? pool.Pop() : new byte[StunMessage.MaximumBytes];
 
+        private void StopPortMapping()
+        {
+            var mapper = portMapper;
+            portMapper = null;
+            if (mapper == null) return;
+
+            // Deleting the mapping runs on a pool thread; its outcome is best effort, and a failure is observed, never read.
+            mapper.Stop().ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        }
+
         private void ExpireSessions(long now)
         {
             for (var index = sessions.Count - 1; index >= 0; index--)
@@ -364,7 +430,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             var stage = join?.Stage ?? (Role == NatRole.Joiner ? lastJoinStage : NatJoinStage.Idle);
             var failure = join?.Failure ?? (Role == NatRole.Joiner ? lastJoinFailure : NatFailure.None);
             var route = join?.Route ?? NatRoute.None;
-            var relayReady = relay != null && relay.State == TurnAllocationState.Ready;
+            var relayReady = RelayUp;
             var current = Volatile.Read(ref status);
             if (current.Gathering == gatheringOutcome && current.Stage == stage && current.Failure == failure && current.Route == route &&
                 current.RelayReady == relayReady && current.Sessions == live && current.DirectSessions == direct &&

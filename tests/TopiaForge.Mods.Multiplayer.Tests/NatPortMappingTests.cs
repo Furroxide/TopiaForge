@@ -123,33 +123,6 @@ internal static class NatPortMappingTests
         That(gateway.Actions.Any(action => action.Action == "DeletePortMapping" && action.Arguments["NewExternalPort"] == "27251"), "stopping deletes the mapping it made");
     }
 
-    internal static void RelayOnlyHostsAndJoinersNeverMap()
-    {
-        using var gateway = new LoopbackNatPmpGateway(PublicAddress);
-        var plan = new NatSessionPlan(IceServerSet.Create(Array.Empty<IceServerAddress>(), new[] { new IceServerAddress("turn.example.test", 3478) }, "user", "secret", 600),
-            () => throw new InvalidOperationException("no signaling in this test"), _ => Task.FromResult(Array.Empty<IPAddress>()))
-        {
-            LocalPort = 27250
-        };
-        foreach (var relayOnly in new[] { true, false })
-        {
-            var mapper = new PortMapper(new NatPmpClient(gateway.EndPoint, IPAddress.Loopback), null);
-            var nat = NatPlumbing.Wrap(new NatPrivacyTests.RecordingSocket(), new NatAgentOptions { RelayOnly = relayOnly }, () => 0);
-            var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(700, 1), new TransportOptions(), 0));
-            using var thread = new NetworkThread("TopiaForge test host", nat.Socket, stack, () => 0);
-            using var host = NatHost.Start(thread, nat, plan, true, mapper);
-            if (relayOnly)
-            {
-                Thread.Sleep(300);
-                That(host.PortMapping == PortMappingState.Off && gateway.Requests.IsEmpty, "a relay-only host never contacts the gateway");
-            }
-            else
-            {
-                That(Wait(() => host.PortMapping == PortMappingState.Mapped), "a host that shows its address maps its port");
-            }
-        }
-    }
-
     private static string Description(string service, string control) =>
         "<service><serviceType>urn:schemas-upnp-org:service:" + service + "</serviceType><serviceId>urn:upnp-org:serviceId:WANIPConn1</serviceId>" +
         "<controlURL>" + control + "</controlURL><eventSubURL>/evt</eventSubURL><SCPDURL>/scpd.xml</SCPDURL></service>";

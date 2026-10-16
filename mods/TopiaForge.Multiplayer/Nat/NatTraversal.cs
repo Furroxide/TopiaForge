@@ -1,5 +1,4 @@
 using System;
-using System.Net;
 using TopiaForge.Multiplayer.Network;
 using TopiaForge.Multiplayer.NatTraversal.PortMapping;
 
@@ -39,11 +38,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
             var key = expectedHostKey == null ? null : (byte[])expectedHostKey.Clone();
             var agent = nat.Agent;
             agent.Adopt(attempt);
-            network.Post((_, now) =>
+            network.Post((stack, now) =>
             {
                 try
                 {
-                    agent.StartJoin(plan, attempt, key, now);
+                    // Relay-only when the agent or the transport says so: the two can only disagree toward hiding.
+                    agent.StartJoin(plan, attempt, key, now, stack.Endpoint.Options.RelayOnly);
                 }
                 catch (InvalidOperationException)
                 {
@@ -64,7 +64,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// <summary>
     /// What a host flow calls once it has registered with the control plane: peers that join through signaling then reach
     /// this host's transport as ordinary inbound links, on whatever path the NAT layer found. A host that is not relay-only
-    /// also maps its port on the router, best effort, for as long as it hosts.
+    /// also maps its port on the router, best effort, for as long as it hosts: the mapping starts once hosting has started
+    /// on the network thread, and the agent deletes it when it stops, however that happens.
     /// </summary>
     internal sealed class NatHost : IDisposable
     {
@@ -92,26 +93,24 @@ namespace TopiaForge.Multiplayer.NatTraversal
             if (nat == null) throw new ArgumentNullException(nameof(nat));
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             var agent = nat.Agent;
-            network.Post((_, now) =>
+            var candidate = mapPorts && !agent.Options.RelayOnly && plan.LocalPort > 0 ? mapper ?? PortMapper.CreateDefault() : null;
+            network.Post((stack, now) =>
             {
                 try
                 {
-                    agent.StartHost(plan, now);
+                    // Relay-only when the agent or the transport says so: the two can only disagree toward hiding.
+                    agent.StartHost(plan, now, stack.Endpoint.Options.RelayOnly);
                 }
                 catch (InvalidOperationException)
                 {
-                    // Already running a session: the earlier one stands.
+                    // Already running a session: the earlier one stands, and this one maps nothing.
+                    return;
                 }
+
+                if (candidate != null) agent.MapPort(candidate, plan.LocalPort, endpoint => network.Post((_, at) => agent.AddMappedCandidate(endpoint, at)));
             });
 
-            PortMapper? active = null;
-            if (mapPorts && !agent.Options.RelayOnly && plan.LocalPort > 0)
-            {
-                active = mapper ?? PortMapper.CreateDefault();
-                active.Start(plan.LocalPort, endpoint => network.Post((_, now) => agent.AddMappedCandidate(endpoint, now)));
-            }
-
-            return new NatHost(network, agent, active);
+            return new NatHost(network, agent, candidate);
         }
 
         /// <summary>Stops hosting through the NAT layer: goodbyes, relay release, and the port mappings are deleted.</summary>
@@ -119,7 +118,6 @@ namespace TopiaForge.Multiplayer.NatTraversal
         {
             if (System.Threading.Interlocked.Exchange(ref stopped, 1) != 0) return;
             network.Post((_, now) => agent.Stop(now));
-            mapper?.Stop();
         }
     }
 }

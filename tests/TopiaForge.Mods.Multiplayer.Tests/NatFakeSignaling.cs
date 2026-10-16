@@ -14,12 +14,16 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// service sends them, forwarding with the peer id added for the host and removed for peers, error frames, close codes
 /// and a peer lifetime. It reads what clients send as strictly as the service does. The service strips non-relay
 /// candidates from relay-only sides; <see cref="Strip"/> turns that off, so a test can prove the client withholds on its own.
-/// Every frame a client sent is kept as text.
+/// It keeps the room's limits when a test sets them (section 8.4): <see cref="Places"/> peer sockets, and at most
+/// <see cref="PerPrefix"/> from one address prefix and never more than half. A host's goodbye keeps that peer's ticket
+/// out for good, whether or not the peer is still there, and is never answered. Every frame a client sent is kept as text.
 /// </summary>
 internal sealed class FakeSignalingService : IVirtualAttachment
 {
     private readonly List<(long At, long Order, Action Run)> due = new();
     private readonly Dictionary<string, FakeSignalingClient> peers = new(StringComparer.Ordinal);
+    private readonly HashSet<string> admitted = new(StringComparer.Ordinal);
+    private readonly HashSet<string> barred = new(StringComparer.Ordinal);
     private FakeSignalingClient? host;
     private long order;
 
@@ -41,6 +45,12 @@ internal sealed class FakeSignalingService : IVirtualAttachment
 
     internal bool HostRelayOnly { get; private set; }
 
+    /// <summary>Gets or sets how many peer sockets the room holds: <c>maxPlayers + 2</c> on the service.</summary>
+    internal int Places { get; set; } = int.MaxValue;
+
+    /// <summary>Gets or sets how many of them one /24 or /56 may hold: four on the service, and never more than half the places.</summary>
+    internal int PerPrefix { get; set; } = int.MaxValue;
+
     /// <summary>Gets every frame clients sent, with the side that sent it.</summary>
     internal List<(SignalRole Role, string? Peer, string Frame)> Sent { get; } = new();
 
@@ -56,19 +66,46 @@ internal sealed class FakeSignalingService : IVirtualAttachment
 
     internal int Invalid { get; private set; }
 
+    /// <summary>Gets how many peer upgrades the room refused: full, a prefix's share taken, or a ticket barred.</summary>
+    internal int Refusals { get; private set; }
+
+    /// <summary>Gets how many peer sockets are open now, and the most there ever were, in all and from one prefix.</summary>
+    internal int OpenPeerSockets
+    {
+        get
+        {
+            lock (Gate) return peers.Count;
+        }
+    }
+
+    internal int MostPeerSockets { get; private set; }
+
+    internal int MostFromOnePrefix { get; private set; }
+
     internal FakeSignalingClient ConnectHost(bool relayOnly)
     {
         lock (Gate) return OpenHost(relayOnly);
     }
 
-    internal FakeSignalingClient ConnectPeer(string peerId, bool relayOnly)
+    /// <param name="prefix">The address prefix, a /24 or /56, the peer reaches the service from; the room counts sockets by it.</param>
+    internal FakeSignalingClient ConnectPeer(string peerId, bool relayOnly, string prefix = "")
     {
-        lock (Gate) return OpenPeer(peerId, relayOnly);
+        lock (Gate) return OpenPeer(peerId, relayOnly, prefix);
+    }
+
+    /// <summary>Withdraws a peer's ticket, as when its invite is withdrawn: its socket closes with 4403 and it cannot come back.</summary>
+    internal void Revoke(string peerId)
+    {
+        lock (Gate)
+        {
+            barred.Add(peerId);
+            if (peers.TryGetValue(peerId, out var peer)) peer.CloseBy(4403);
+        }
     }
 
     private FakeSignalingClient OpenHost(bool relayOnly)
     {
-        var client = new FakeSignalingClient(this, SignalRole.Host, null, relayOnly);
+        var client = new FakeSignalingClient(this, SignalRole.Host, null, relayOnly, string.Empty);
         HostConnections++;
         Later(() =>
         {
@@ -82,14 +119,28 @@ internal sealed class FakeSignalingService : IVirtualAttachment
         return client;
     }
 
-    private FakeSignalingClient OpenPeer(string peerId, bool relayOnly)
+    private FakeSignalingClient OpenPeer(string peerId, bool relayOnly, string prefix)
     {
-        var client = new FakeSignalingClient(this, SignalRole.Peer, peerId, relayOnly);
+        var client = new FakeSignalingClient(this, SignalRole.Peer, peerId, relayOnly, prefix);
         PeerConnections++;
         Later(() =>
         {
-            if (peers.TryGetValue(peerId, out var older)) older.CloseBy(4409);
+            // A newer socket for the same ticket replaces the older one, so the older one's place does not count.
+            peers.TryGetValue(peerId, out var older);
+            var others = peers.Values.Where(peer => !ReferenceEquals(peer, older)).ToList();
+            var share = Math.Min(PerPrefix, Places / 2);
+            if (barred.Contains(peerId) || others.Count >= Places || others.Count(peer => peer.Prefix == prefix) >= share)
+            {
+                Refusals++;
+                client.Refuse();
+                return;
+            }
+
+            older?.CloseBy(4409);
             peers[peerId] = client;
+            admitted.Add(peerId);
+            MostPeerSockets = Math.Max(MostPeerSockets, peers.Count);
+            MostFromOnePrefix = Math.Max(MostFromOnePrefix, peers.Values.Count(peer => peer.Prefix == prefix));
             client.Open();
             client.Deliver(new SignalMessage(SignalType.Welcome) { Role = SignalRole.Peer, Peer = peerId, Online = host != null, RelayOnly = HostRelayOnly });
             host?.Deliver(new SignalMessage(SignalType.Joined) { Peer = peerId, RelayOnly = relayOnly });
@@ -197,6 +248,17 @@ internal sealed class FakeSignalingService : IVirtualAttachment
         }
 
         FakeSignalingClient? target = addressed ? (peers.TryGetValue(message.Peer!, out var peer) ? peer : null) : host;
+        if (addressed && message.Type == SignalType.Bye)
+        {
+            // A host's goodbye bars the peer's ticket whether or not its socket is open, and is never answered; one for a
+            // peer the room never admitted changes nothing.
+            if (!admitted.Contains(message.Peer!)) return;
+            barred.Add(message.Peer!);
+            target?.Deliver(new SignalMessage(SignalType.Bye) { Reason = message.Reason });
+            target?.CloseBy(1000);
+            return;
+        }
+
         if (target == null)
         {
             from.Deliver(new SignalMessage(SignalType.Error) { Error = addressed ? SignalErrorCode.UnknownPeer : SignalErrorCode.HostOffline });
@@ -222,7 +284,7 @@ internal sealed class FakeSignalingService : IVirtualAttachment
             Reason = message.Reason
         };
         target.Deliver(forwarded);
-        if (message.Type == SignalType.Bye) (addressed ? target : from).CloseBy(1000);
+        if (message.Type == SignalType.Bye) from.CloseBy(1000);
     }
 
     private static bool Relayable(SignalCandidate candidate) =>
@@ -240,12 +302,13 @@ internal sealed class FakeSignalingClient : ISignalingClient
     private readonly Queue<SignalMessage> inbound = new();
     private int state = (int)SignalingState.Connecting;
 
-    internal FakeSignalingClient(FakeSignalingService service, SignalRole role, string? peerId, bool relayOnly)
+    internal FakeSignalingClient(FakeSignalingService service, SignalRole role, string? peerId, bool relayOnly, string prefix)
     {
         this.service = service;
         Role = role;
         PeerId = peerId;
         RelayOnly = relayOnly;
+        Prefix = prefix;
     }
 
     internal SignalRole Role { get; }
@@ -253,6 +316,9 @@ internal sealed class FakeSignalingClient : ISignalingClient
     internal string? PeerId { get; }
 
     internal bool RelayOnly { get; }
+
+    /// <summary>Gets the address prefix the room counts this socket under.</summary>
+    internal string Prefix { get; }
 
     public SignalingState State => (SignalingState)state;
 
@@ -286,6 +352,14 @@ internal sealed class FakeSignalingClient : ISignalingClient
         if (State == SignalingState.Connecting) state = (int)SignalingState.Open;
     }
 
+    /// <summary>The upgrade was refused with an error response, so the socket never opened.</summary>
+    internal void Refuse()
+    {
+        if (State == SignalingState.Closed) return;
+        state = (int)SignalingState.Closed;
+        CloseReason = SignalingCloseReason.Refused;
+    }
+
     /// <summary>Delivers a frame the way the wire would: encoded by the service, decoded by the client's codec.</summary>
     internal void Deliver(SignalMessage message)
     {
@@ -308,6 +382,7 @@ internal sealed class FakeSignalingClient : ISignalingClient
         CloseReason = code switch
         {
             1000 => SignalingCloseReason.Normal,
+            4403 => SignalingCloseReason.Revoked,
             4409 => SignalingCloseReason.Replaced,
             4410 => SignalingCloseReason.SessionEnded,
             4411 => SignalingCloseReason.Expired,

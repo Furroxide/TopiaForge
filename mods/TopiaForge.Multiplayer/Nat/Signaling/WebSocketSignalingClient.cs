@@ -286,6 +286,8 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
                     return SignalingCloseReason.Expired;
                 case 4408:
                     return SignalingCloseReason.RateLimited;
+                case 4403:
+                    return SignalingCloseReason.Revoked;
                 case 4400:
                 case 1003:
                 case 1009:

@@ -181,6 +181,12 @@ internal sealed class NatRouter : IVirtualRouter
 
     internal int Undeliverable { get; private set; }
 
+    /// <summary>Gets or sets a filter that loses datagrams by the address they were sent to, as a network blocking one port would.</summary>
+    internal Func<IPEndPoint, bool>? Blackhole { get; set; }
+
+    /// <summary>Gets how many datagrams <see cref="Blackhole"/> lost.</summary>
+    internal int Blackholed { get; private set; }
+
     internal void Place(VirtualNode node, SimulatedSite site, IPEndPoint address)
     {
         homes[node] = (site, address);
@@ -199,6 +205,12 @@ internal sealed class NatRouter : IVirtualRouter
 
         var at = source != null && UdpPaths.TryGetEndPoint(source, out var claimed) ? Plain(claimed) : home.Address;
         var to = Plain(target);
+        if (Blackhole != null && Blackhole(to))
+        {
+            Blackholed++;
+            return Lose();
+        }
+
         var site = home.Site;
         SimulatedNat? cameThrough = null;
         for (var hop = 0; hop < MaximumHops; hop++)

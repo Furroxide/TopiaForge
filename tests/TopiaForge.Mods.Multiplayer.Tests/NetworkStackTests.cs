@@ -240,7 +240,7 @@ internal static class NetworkStackTests
         That(hidden.Network.RunUntil(() => lan.State == ConnectAttemptState.Established, 5_000_000), "but still joins on the LAN");
 
         // An endpoint at its connection limit, or a stack already disposed, fails the attempt instead of throwing.
-        var options = new TransportOptions { Random = new SeededTransportRandom(345), MaximumConnections = 1 };
+        var options = new TransportOptions { Random = new SeededTransportRandom(345), MaximumConnections = 1, RelayOnly = false };
         var small = new NetworkStack(new TransportEndpoint(TransportPair.Key(115, 9), options, rig.Network.Now));
         rig.Network.AddStack("small", small);
         var first = new ConnectAttempt();

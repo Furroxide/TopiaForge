@@ -1,6 +1,6 @@
 # Multiplayer NAT traversal — design record
 
-Status: Implementing (WS7 of the live-multiplayer plan, game-side connectivity) · Date: 2026-10-14 · Owner: multiplayer
+Status: Implementing (WS7 of the live-multiplayer plan, game-side connectivity) · Date: 2026-10-16 · Owner: multiplayer
 
 This records how two players reach each other across the Internet: STUN, a TURN relay, connectivity checks on the
 game's own socket, signaling through the control plane, and best-effort port mapping. The transport it carries is
@@ -46,25 +46,34 @@ against both this split and the transport's own `PacketType.IsForeign`, and chec
 **The hook.** The network thread needs no change. The flows build it on a `NatDatagramSocket` wrapped round the game
 socket, and attach a `NatNetworkService`:
 
-- **Reading.** Each read takes one datagram. Transport datagrams pass through. STUN and ChannelData go to the agent,
-  and the thread sees a dropped datagram, so they count against its turn. ChannelData or a Data indication from this
-  side's TURN server is unwrapped. Its contents go to the transport from a relayed path, or back through the agent
-  when they are STUN themselves.
+- **Reading.** Each read takes one datagram. A datagram from a source nothing genuine sends from is dropped first:
+  port 0, or an unspecified, "this network", multicast, reserved or broadcast address. Transport datagrams pass
+  through. STUN and ChannelData go to the agent, and the thread sees a dropped datagram, so they count against its
+  turn. ChannelData or a Data indication from this side's TURN server is unwrapped. Its contents go to the transport
+  from a relayed path, or back through the agent when they are STUN themselves.
 - **Writing.** A send to a relayed path is wrapped for the TURN server; any other send goes straight out.
 - **Size.** The hook reads into its own 2,048-byte buffer, since a Data indication carrying a full 1,200-byte transport
   datagram is about 1,250 bytes. What reaches the transport is never larger than 1,200 bytes.
-- **Allocation.** Over a bound channel, neither direction allocates. A test replays a captured ChannelData datagram
-  and sends 20,000 times each way and measures zero bytes. The same test measures zero bytes for 20,000 turns with
-  nothing due, and for each route tick that sends nothing. The status object is replaced only when a field changes.
+- **Nothing throws.** No datagram, source or answer makes the receive path throw, since a faulted network-thread turn
+  counts toward stopping the thread. A seeded test sends 20,000 hostile and edge-case datagrams through the hook:
+  checks from port 0 and other unsendable sources, answers forged for real transactions with the longest nonce,
+  Data indications naming port 0, IPv6 or no family, ChannelData on every kind of channel, and random bytes.
+- **Allocation.** Neither direction allocates, over a bound channel or through the fallback of Send and Data
+  indications. A Data indication is read where it lies, and its peer is found by its address bytes. A test replays a
+  captured datagram of each kind and sends 20,000 times each way, and measures zero bytes. The same test measures
+  zero bytes for 20,000 turns with nothing due, and for each route tick that sends nothing. The status object is
+  replaced only when a field changes.
 
 **Relayed paths.** A peer reached through this side's own allocation is a `TransportPathKind.Relayed` path, which
 relay-only allows. Its 23-byte key is a type byte (2), the allocation's number (4 bytes), the peer's address as the
 relay sees it, in IPv6 form (16), and its port (2). UDP paths use type 1, so the two never collide. The allocation
 number keeps one peer reached through two allocations, as during a rotation, on two paths.
 
-**Transport hooks.** The NAT layer asks the endpoint three things, all by path, so it never holds a connection:
+**Transport hooks.** The NAT layer asks the endpoint four things, all by path, so it never holds a connection:
 
 - `UsageOf(path)` counts the connections on a path, stalled and validating ones included;
+- `UsageWhere(predicate)` counts them the same way across every path that matches, as a joiner does for its one
+  connection, wherever the transport has it;
 - `CountConnections(predicate)` counts those whose path matches, such as every path through one allocation;
 - `ProbeConnections(from, to)` asks the connections on one path to validate another.
 
@@ -89,13 +98,17 @@ loop sends 20,000 mutated and random datagrams through every accessor. RFC 5769'
 short-term integrity checks, both XOR-MAPPED-ADDRESS families, and the long-term key. The writer reproduces the
 long-term sample byte for byte.
 
+A Data indication, the one message that arrives with every relayed datagram once channels are refused, has a reader
+of its own that checks the same things where the datagram lies, copying and allocating nothing. It also refuses one
+with an unknown comprehension-required attribute, as RFC 8489 discards such an indication.
+
 `StunClient` runs transactions sans-I/O. A response matches by transaction id and by the path the request went to,
 and only once its owner accepts it, typically after checking integrity. A response it refuses is dropped, and the
 request keeps retransmitting as though nothing came. At most 256 run at once.
 
 | Timing | Initial RTO | Transmissions | Final wait | Settled by |
 | --- | --- | --- | --- | --- |
-| Gathering (Binding, Allocate) | 500 ms | 4 | 4 RTO | 5.5 s |
+| Gathering (Binding, Allocate) and releases | 500 ms | 4 | 4 RTO | 5.5 s |
 | Live TURN requests | 500 ms | 6 | 16 RTO | 23.5 s |
 | Connectivity checks | 250 ms | 5 | 4 RTO | 4.75 s |
 | RFC 8489 default, for reference | 500 ms | 7 | 16 RTO | 39.5 s |
@@ -113,13 +126,18 @@ request keeps retransmitting as though nothing came. At most 256 run at once.
   integrity: 401 and 438 do by design, and only an on-path attacker who already sees the transaction id could forge
   one.
 - **Failures.** Each names its cause: timeout, unauthorized, forbidden, allocation mismatch (437), quota (486),
-  capacity (508), unsupported, server error, or malformed. None names an address.
+  capacity (508), unsupported, server error, or malformed. None names an address. A 437 to any request on a live
+  allocation means the server holds none on this 5-tuple any more, so the allocation is lost and replaced (see
+  **Recovery** below).
+- **Requests always fit.** A request that cannot fit a datagram is never sent, so no realm or nonce a server picks can
+  make the client throw. A permission request carries as many addresses as fit beside the credential, the realm and
+  the nonce, at most eight, so the longest of each still leaves room for one.
 
 | Lifetime | Server keeps it | Client renews it |
 | --- | --- | --- |
 | Allocation | Its LIFETIME, 600 s by default, clamped to 30–3,600 s | A minute before it lapses |
 | Permission (one per peer address) | 300 s | Every 240 s while wanted, up to eight per request |
-| Channel binding (one per peer address and port) | 600 s | Every 480 s |
+| Channel binding (one per peer address and port) | 600 s | Every 480 s; an unanswered refresh again five seconds later, with the same number |
 | The NAT mapping in front of the client | Varies | A Binding indication after 15 quiet seconds |
 
 - **Channels.** Numbers come from `0x4000`–`0x4FFF`, in order, and are never reused within an allocation. That range
@@ -127,9 +145,17 @@ request keeps retransmitting as though nothing came. At most 256 run at once.
 - **Before a binding.** A peer is bound the first time it is sent to or heard from. Data waits for the binding's answer
   and goes as Send indications meanwhile. Nothing goes to a peer without an installed permission. A permission stays
   usable while its refresh is in flight. One that keeps failing lapses on both sides together.
+- **Lost answers.** A server refreshes a binding whether or not its answer arrives, so ChannelData on a peer's number
+  is accepted for ten minutes after the last bind request for it, answered or not. Data keeps leaving as ChannelData
+  until ten minutes after the last answered bind, while the refresh is tried again with the same number; a binding
+  that lapsed is bound again, with the same number, by the next datagram.
 - **Refusals.** A refused batch of permissions is retried one address per request, so one forbidden peer cannot block
-  the rest. A refused binding leaves that peer on Send indications.
-- **Release.** Stopping sends a zero-lifetime Refresh, once.
+  the rest. A refused binding leaves that peer on Send indications. A refused refresh keeps the binding the server
+  already holds until it lapses, then data falls back to Send indications.
+- **Release.** Releasing is a transaction of its own: the zero-lifetime Refresh retransmits until the server answers,
+  for at most 5.5 seconds, and a 437 answer settles it too, since it says nothing is left. A client that never
+  allocated has nothing to release. Nothing allocates on a 5-tuple until a release there has settled. A release that
+  nobody answered is remembered, and sent again when the next Allocate on its 5-tuple meets a 437.
 
 **Credentials from the control plane.** `IceServerSet` parses `POST /v1/turn/credentials` in Cloudflare's `iceServers`
 shape:
@@ -140,17 +166,41 @@ shape:
 - **Bounds.** Members the client does not know are ignored. The answer is at most 16 KiB, with at most eight servers
   and 16 URLs each.
 
-**Rotation.** Credentials last ten minutes, and their expiry ends the allocation (`ControlPlaneApi.md`, section 7). The
-agent mints the next one 90 seconds before:
+**Server addresses.** Each TURN server's own name is looked up, once per distinct name, and the agent tries the
+addresses in a fixed order: the address family that last worked first (IPv4 before anything has), then the other;
+within a family the set's servers in the control plane's order, each with its own name's addresses, at most four.
 
-- **Make before break.** When the set offers another UDP server address, a second port or another resolved address,
-  the new allocation comes up there while the old one carries on.
-- **Break before make.** With one address there can be only one allocation per 5-tuple, so the old one is released
-  first and the new one starts 500 ms later, after the release has reached the server.
+**Rotation.** Credentials last ten minutes, and their expiry ends the allocation (`ControlPlaneApi.md`, section 7). The
+agent mints the next one 90 seconds before, and again whenever the relay is down, since an allocation can only come
+back with a credential that still works. A failed mint is tried again after 15 seconds, doubling to five minutes, or
+to 30 seconds while a rotation is due.
+
+- **Make before break.** When the set offers another server address of the family in use, another port or another
+  resolved address, the new allocation comes up there while the old one carries on. An address that failed this way
+  is left alone for 30 minutes, so a port that many networks block, as many block Cloudflare's 53, costs one try.
+- **Falling back.** If that new allocation fails, the rotation falls back to the address that worked: the old
+  allocation there is released, and the new one takes its 5-tuple as soon as the release settles.
+- **Break before make.** With no other address of that family, the old allocation is released first, and the new one
+  starts on the same 5-tuple once the release has settled.
 - **Moving over.** Either way, the new relay candidate is trickled to every session. Each connection on the old
   allocation moves once a pair through the new one has answered.
-- **Cleaning up.** The old allocation is released once no connection runs through it. Its pairs, and the remote relay
-  candidates the remote replaced, are forgotten a while later, so a long session's pairs stay bounded.
+- **Cleaning up.** The old allocation is released once no connection runs through it, and at the latest five seconds
+  before its credential expires. Its pairs, and the remote relay candidates the remote replaced, are forgotten a while
+  later, so a long session's pairs stay bounded.
+
+**Recovery.** A relay that is wanted but not ready always has its next attempt scheduled, on the host for as long as it
+hosts and on a joiner until its join ends:
+
+- **When.** After a failure the next attempt waits one second, doubling to 30, and the wait starts again from one
+  second once an allocation comes up. A fallback from a rotation waits only for its release.
+- **Where.** On the server address that last worked. Before any has, on the same address after an answer, and on the
+  next one after silence, since an address that never answers may be one the network blocks.
+- **What first.** An allocation that came up and was lost is released before anything else, since the server may still
+  hold its 5-tuple.
+- **Credentials.** One the server refused (401) is not tried again: a fresh one is minted at once, and without a way to
+  mint, the relay stays down.
+- **Gathering.** It waits for a retry that starts before its deadline, and stops waiting once an attempt has met
+  silence with nothing heard at all.
 
 ## 5. Candidates and gathering
 
@@ -174,7 +224,8 @@ plane's own transcript.
 | RelayUnavailable | Something answered, but the relay did not come up |
 | UdpBlocked | No STUN or TURN server answered at all, so the network blocks UDP or the servers are unreachable |
 
-Relay-only gathers the allocation alone (section 9).
+A relay that did not come up keeps being tried after gathering (section 4, **Recovery**), and the outcome turns
+Complete once it does. Relay-only gathers the allocation alone (section 9).
 
 ## 6. Connectivity checks
 
@@ -195,7 +246,9 @@ transport's path validation.
   8445 pair priority. Ordinary checks go out one every 50 ms, and only after the punch.
 - **Triggered checks.** A verified check from the remote triggers one back on its pair at once, even before the punch.
   That is what opens both NATs when the two sides check together. An unknown source becomes a peer-reflexive
-  candidate, paired only with the base it arrived on.
+  candidate, paired only with the base it arrived on. When the remote later signals that address, the candidate takes
+  the signaled kind: a remote's new relay candidate, first heard as a check from its new allocation, then replaces the
+  remote's older relay candidates as any new relay candidate does.
 - **Answering.** A check gets an answer only when it carries:
   - FINGERPRINT;
   - a username naming one of this side's sessions and that session's remote fragment;
@@ -229,6 +282,11 @@ answers there.
   for three seconds) or loses consent.
 - **Rotate.** The side whose allocation is being replaced moves the connections on it to the best pair that does not
   use it.
+- **Never onto what is going.** No move targets a pair through an allocation either side is replacing: this side's
+  retiring base, or a remote relay candidate the remote has replaced.
+- **Trying again.** A pair that twice failed to take a connection is checked again before a third try. A path that
+  died since its last answer, such as one through a relay the remote released, then fails its check, and the next
+  best pair is tried; one that answers is tried again.
 
 The route is evaluated every 200 ms. The status reports it as relayed or direct, never as an address.
 
@@ -236,8 +294,10 @@ The route is evaluated every 200 ms. The status reports it as relayed or direct,
 
 `SignalCodec` speaks the grammar in `ControlPlaneApi.md`, section 8.
 
-- **Writing.** Frames this side sends have exactly the members the service expects. They match the service's recorded
-  transcript byte for byte, and the shared fixture is replayed too once it is in the tree.
+- **Writing.** Frames this side sends have exactly the members the service expects. The tests replay the service's
+  own recorded transcript, `tests/fixtures/multiplayer/control-plane/signaling.json`: every frame a client sends is
+  written back byte for byte, also from a message built afresh, and every frame the service sends reads. The relay
+  credentials the service recorded in `exchanges.json` parse too.
 - **Reading.** Frames from the service must carry their members with valid values; members the service may add later
   are ignored. A strict mode reads client frames as the service does, for the tests' fake room.
 - **Candidates.** An address must be in its canonical text: dotted IPv4, RFC 5952 IPv6, a mapped address as IPv4.
@@ -261,15 +321,37 @@ The route is evaluated every 200 ms. The status reports it as relayed or direct,
 | No answer within 10 s of the offer | `NoAnswer` |
 | No usable pair within 10 s of the checks starting, or the handshake over it failed | `NoRoute` |
 | The service ended the host's session, or the host said goodbye | `HostEnded` |
+| The service stopped honouring the ticket (4403): its invite was withdrawn or expired, or the server stopped being public | `TicketRevoked` |
 | The socket could not be opened or kept | `SignalingFailed` |
 
 **A host.** Each offer gets a session with fresh credentials, an answer once gathering has settled, and a punch of 250
-ms. A session whose peer never connected, or whose connection has been gone 30 seconds, ends.
+ms. A session whose peer never connected, or whose connection has been gone 30 seconds, ends. The host keeps its
+socket for as long as it hosts. It says goodbye to its peers only when it stops, and a host's goodbye keeps that
+peer's ticket out of the room for the rest of the session (`ControlPlaneApi.md`, section 8.4).
+
+**A joiner's socket.** The room counts every open peer socket against `maxPlayers + 2` places, and at most four from
+one /24 or /56, so a joiner closes its socket once its connection is up and opens it again only when it has something
+to say:
+
+- **While its relay changes**: from the moment it starts minting a fresh credential, or loses its allocation, until the
+  new allocation is up and every connection has moved off the old one, for at most two minutes. Its new relay
+  candidate is trickled while the socket is open. A relay that comes back later is gathered with the socket closed,
+  and the host hears of it when the socket next opens.
+- **While its connection stalls**: no authenticated packet for three seconds, on whatever path the transport has it,
+  until one arrives again.
+
+It opens it at most once a second. Reopening for a change of relay is not limited further, since changes come no
+faster than credentials expire; any other reopening counts toward the window below. Closing sends whatever is queued
+first, so a candidate trickled just before still reaches the host. Coming back, the joiner trickles its candidates
+again, and the host, told by `joined`, sends its own again, since anything trickled while the socket was closed went
+nowhere.
 
 **Reconnection.** A peer's socket lives at most fifteen minutes, so it is opened again when its lifetime ends (4411),
 at once, and after a lost connection or a rate limit, with backoff from one second doubling to 30, at most six times in
-ten minutes. A replaced socket (4409), an ended session (4410) or a refused upgrade is final. The host keeps a peer's
-session across its reconnections, since the peer id comes from the ticket.
+ten minutes. A replaced socket (4409), an ended session (4410), a withdrawn ticket (4403) or a goodbye is final. A
+refused upgrade is final before the connection is up; once it is up, the joiner tries again later, since a full room
+refuses an upgrade too and the client cannot tell the refusals apart. The host keeps a peer's session across its
+reconnections, since the peer id comes from the ticket.
 
 **The WebSocket client.** `WebSocketSignalingClient` opens `GET /v1/signal/{serverId}`:
 
@@ -278,7 +360,9 @@ session across its reconnections, since the peer id comes from the ticket.
 - **Credential.** The host token or join ticket travels in the `Authorization` header, never in the URL.
 - **Loops.** Its own receive and send loops run apart from the agent. Both queues are bounded at 256 frames.
 - **Frames.** A binary frame, or one over 8 KiB, closes the socket. Every failure becomes a close reason, never an
-  exception or a message.
+  exception or a message: section 8.4's codes map to normal (1000), invalid (1003, 1009, 4400), withdrawn (4403), rate
+  limited (4408), replaced (4409), session ended (4410) and expired (4411); a refused upgrade, whatever its status, is
+  refused.
 
 The game's Mono runs `ClientWebSocket` over TLS 1.2 (`MultiplayerMonoSpike.md`, section 2), but that was measured
 against two public echo servers, not yet against the control plane's Worker. Everything outside this one class
@@ -290,7 +374,12 @@ The hard rule: no candidate, peer or observed address reaches mod code, `Multipl
 diagnostics or exceptions.
 
 **Relay-only** is the player's Hide my IP, which stays on unless the player allows a direct connection for one
-session (`MultiplayerPrivacyText.md`). It holds in layers, and each layer has its own test. A relay-only agent:
+session (`MultiplayerPrivacyText.md`). Direct play is never a silent default: `NatAgentOptions.RelayOnly` and the
+transport's `TransportOptions.RelayOnly` are both on unless a caller turns them off for a player who chose direct play,
+and a session that starts on a relay-only stack is relay-only whatever the agent's own option says. A test builds both
+players from default options behind cone NATs that would otherwise go direct at once: neither looks up the STUN server,
+gathers a host or server-reflexive candidate, or sends anywhere but its relay. Relay-only holds in layers, and each
+layer has its own test. A relay-only agent:
 
 - never lists this machine's addresses and never asks a STUN server anything, so it holds no host or server-reflexive
   candidate at all;
@@ -321,12 +410,16 @@ status, diagnostic, exception and printed object, and finds no address in any te
 public.
 
 **No control plane, no contact.** An agent never started answers no STUN, unwraps nothing, sends nothing and waits
-for nothing. Starting one needs a session plan, and only the control plane's answers can build one. Port mapping
-starts only from a host session.
+for nothing. Starting one needs a session plan, and only the control plane's answers can build one. A stopped agent
+hears only the answers to its releases, and only while they are in flight. Port mapping starts only once hosting has.
 
 ## 10. Port mapping
 
-Best effort, only while hosting, and never for a relay-only host:
+Best effort, only while hosting, and never for a relay-only host. The mapping belongs to hosting, not to the wrapper
+that asked for it: `NatHost` starts it from the command that starts hosting on the network thread, once `StartHost`
+has returned, and only if that host shows its address; the agent's `Stop` and `Dispose` delete it, so stopping the
+network deletes it as surely as disposing the host does. A network thread that never ran, or a start that threw,
+maps nothing.
 
 - **Protocols.** NAT-PMP (RFC 6886) first, against the default IPv4 gateway. UPnP IGD otherwise: an SSDP search, the
   device description, and the WAN connection service's actions.
@@ -339,7 +432,8 @@ Best effort, only while hosting, and never for a relay-only host:
 - **UPnP: only the LAN gateway counts.**
   - An SSDP answer must come from a LAN address, and its LOCATION must name that same address over plain HTTP.
   - The control URL must stay on that host and port.
-  - The description is read with DTDs refused and no external resolution.
+  - The description is read with DTDs refused and no external resolution, in whatever order a service lists its
+    children, pretty-printed or not: a test reads all 120 orders both ways.
   - HTTP is a small client of its own, with no proxy, no redirect and a timeout on every step, so a LAN request can
     never leave the LAN.
 - **UPnP: refusals.** A gateway that grants only permanent mappings (725) gets one, deleted all the same. A conflict
@@ -353,9 +447,9 @@ The flows reach the network through `INetworkFactory` and `INetworkControl`. A N
 thread on the NAT layer's socket; the flows then start a session with a plan made from the control plane's answers.
 
 ```csharp
-// INetworkFactory.Start(port, stack), NAT-aware:
+// INetworkFactory.Start(port, stack), NAT-aware. Both options are relay-only unless the player chose direct play:
 var nat = NatPlumbing.Wrap(new UdpSocketDriver(port), new NatAgentOptions { RelayOnly = !settings.AllowDirect }, clock);
-var thread = new NetworkThread(name, nat.Socket, stack, clock);   // the stack's TransportOptions.RelayOnly matches
+var thread = new NetworkThread(name, nat.Socket, stack, clock);   // stack built with TransportOptions.RelayOnly = !settings.AllowDirect
 thread.Attach(nat.Service);
 thread.Start();
 INetworkControl network = thread;
@@ -377,14 +471,20 @@ using var host = NatHost.Start(network, nat, plan, mapPorts: settings.AllowDirec
 - `NatJoin.Attempt` fills in exactly as `INetworkControl.Connect` does: it becomes established with its link, or it
   fails. `NatJoin.Status.Failure` then says why, in the words of section 8's table.
 - `NatHost.Status` counts sessions, direct and relayed. `NatHost.PortMapping` says whether the port is mapped.
-- Disposing either sends goodbyes and releases the relay. Stopping the network does the same for whatever is still
-  running.
+- Either goes relay-only when the agent's option or the stack's `TransportOptions.RelayOnly` says so, so the two can
+  only ever disagree toward hiding the player.
+- Disposing either sends goodbyes, deletes the port mapping and releases the relay; the releases retransmit until the
+  server answers while the network still runs. Stopping the network does the same for whatever is still running.
+  A host's goodbyes keep its peers' tickets out of the room for the rest of the registration, so a host restarts
+  `NatHost` within one registration only if its peers can take new tickets.
 
 What the flows still own:
 
-- minting credentials with the join ticket or host token;
+- building both option types from the player's choice, `RelayOnly = !settings.AllowDirect`, never from a default;
+- minting credentials with the join ticket or host token, at the start and whenever `Renew` asks, including while the
+  relay is down; a mint that fails returns null and is asked again later;
 - listing local addresses;
-- turning each `NatFailure` into player-facing words;
+- turning each `NatFailure` into player-facing words, `TicketRevoked` included, which needs a new ticket;
 - the rule that a link from the server browser or an invite uses this layer, while LAN and direct links connect as
   before.
 
@@ -394,13 +494,17 @@ What the flows still own:
 | --- | --- |
 | `NatStunTests` | RFC 5769's samples, tampering, hostile datagrams, nothing behind integrity, transaction timing and matching |
 | `NatTurnTests` | The 401 and 438 flows, failures by cause, forged answers, 25 minutes of permissions, channels and refreshes probed every five seconds, data before a binding, release, keepalives, the `iceServers` shape |
-| `NatDemuxTests` | The first-byte split across all 256 values and a live session, the socket hook's three branches, zero allocation through a bound channel, in idle turns and in quiet route ticks |
+| `NatTurnRecoveryTests` | A channel whose six refresh answers are lost keeps delivering all 120 datagrams and is refreshed again with its own number, one whose answers are all lost past its lapse still takes the ChannelData the server relays, a refused refresh loses nothing, releases retransmit and go again after silence, a 437 marks a vanished allocation, and the longest realm, nonce and credential never overflow a request |
+| `NatRelayRecoveryTests` | Relay-only sessions with 150-second credentials surviving a second port that answers late or never, a lost release, a release lost entirely (437), a refused first allocation, minting while the relay is down, the family that worked, with a second port and without, each server's own name, and half an hour of repeated outages |
+| `NatDemuxTests` | The first-byte split across all 256 values and a live session, the socket hook's three branches, zero allocation through a bound channel and through the indication fallback, in idle turns and in quiet route ticks |
+| `NatReceiveFuzzTests` | An authentic check from port 0, every source that cannot send, and 20,000 hostile datagrams through the socket hook, none of which throws; the session carries on |
 | `NatIceTests` | Priorities, credentials, the check format, answers under the wrong password, triggered and peer-reflexive checks and their bounds, consent timing, what the agent answers |
 | `NatMatrixTests` | The NAT matrix below, fallback when a direct path breaks, and relayed sessions outliving seven credential rotations both ways |
-| `NatPrivacyTests` | Relay-only with the service's stripping off, the privacy gate and relay-only gathering on their own, the leak probe, the status's types, no contact without a plan |
-| `NatSignalingTests` | The control plane's transcript byte for byte, strict and bounded reading, the WebSocket client's upgrade, frames, close codes and abuse against a loopback server |
-| `NatPortMappingTests` | NAT-PMP frames, mapping, renewal and deletion, a forged answer from another port, unusable gateways, UPnP validation and leases, no mapping for relay-only hosts |
-| `NatSessionTests` | Reconnecting after a socket's lifetime, each join failure, the service's notice and error frames, one host with three peers |
+| `NatPrivacyTests` | Relay-only with the service's stripping off, default options that never go direct, the privacy gate and relay-only gathering on their own, the leak probe, the status's types, no contact without a plan |
+| `NatSignalingTests` | The control plane's shared transcript byte for byte, its recorded relay credentials, strict and bounded reading, the WebSocket client's upgrade, frames, close codes and abuse against a loopback server |
+| `NatPortMappingTests` | NAT-PMP frames, mapping, renewal and deletion, a forged answer from another port, unusable gateways, UPnP validation and leases |
+| `NatPortMappingLifecycleTests` | Mapping only once hosting runs, never for a relay-only agent or stack, a network that never started or a start that threw, deletion when the network stops; a join on a relay-only stack; UPnP descriptions in every order, pretty-printed and minified |
+| `NatSessionTests` | Reconnecting after a socket's lifetime, a joiner closing its socket once connected and reopening only around a rotation or a stall, a host's rotations reaching a joiner whose socket is closed on relays that share no address, a joiner saying again what it gathered with its socket closed, a connected joiner coming back after a full room refused it, five joiners from one /24 within the room's limits for twenty minutes of rotations, each join failure, the service's notice and error frames, one host with three peers |
 | `NatSocketTests` | Two real network threads on the socket hook over the game's UDP driver bound to loopback, joining through a relay and releasing it |
 
 **The NAT simulator.** It runs over `VirtualDatagramNetwork`, which gained attachments, a router and a configurable
@@ -411,8 +515,11 @@ datagram limit. Sites and NAT boxes model RFC 4787's mapping and filtering behav
 - hairpinning, allowed only where configured;
 - blocked UDP.
 
-A fake STUN and TURN server enforces the lifetimes a real one does. Its knobs fail requests, forbid peers, end
-credentials and silence it. The fake signaling room behaves as the service's.
+A fake STUN and TURN server enforces the lifetimes a real one does. Its knobs fail requests, refuse the next
+allocations or every channel bind, lose requests on their way in, forget every allocation, forbid peers, end
+credentials, give every allocation a relayed address of its own, and silence it. The router can lose everything sent to one address and port, as a network blocking a port
+does. The fake signaling room behaves as the service's, with its places, its per-prefix share, a host's goodbyes and
+withdrawn tickets.
 
 | Host | Joiner | Result |
 | --- | --- | --- |
@@ -439,7 +546,25 @@ relay.
 - the privacy gate, relay-only gathering, and the relay-only send guard;
 - permission renewal, channel renewal, and the 438 retry;
 - triggered checks, the upgrade, the consent lapse, and pruning across rotations;
-- a status replaced on every turn, and a route tick that enumerates the pairs through the read-only interface.
+- a status replaced on every turn, and a route tick that enumerates the pairs through the read-only interface;
+- recovery: allocating again after a loss, a rotation's fallback, retransmitted releases, waiting for a release to
+  settle, the second release after a 437, a 437 to any request, and minting while the relay is down, with and
+  without the renewal timer following the same rule;
+- server addresses: the family order, make before break keeping the family, and each server's own name;
+- channels and permissions: retrying an unanswered refresh, taking ChannelData after lost answers, and batches sized
+  to the nonce;
+- signaling: closing once connected, the host's and the joiner's re-trickle on a rejoin, reopening around a change of
+  relay and after a stall, asking again after a refused upgrade, openings for a change of relay outside the
+  reconnection window, close code 4403, and `TicketRevoked`;
+- the indication fallback's in-place lookup;
+- mapping only once hosting runs, and deletion on `Stop` and `Dispose`;
+- dropping sources that cannot send, alone and with the check handler's own port-0 guard, which brings back the
+  reviewed exception;
+- the UPnP reader's position after an element's content;
+- both relay-only defaults, and a relay-only stack making its session relay-only;
+- route keeping: promoting a peer-reflexive candidate the remote signals, and skipping superseded relay candidates
+  together with checking a pair again before a third probe. Each of the last two survives alone, since either keeps
+  a connection off a relay the remote released.
 
 ## 13. Limits and later work
 
@@ -449,12 +574,26 @@ relay.
 - **Unverified against Cloudflare's TURN service:**
   - channel bindings;
   - what credential expiry does to a live allocation;
-  - relaying between two of its own allocations, which a session with both sides relay-only needs.
+  - relaying between two of its own allocations, which a session with both sides relay-only needs;
+  - whether it answers a release, and a retransmitted one, as the fake server does (success, then 437), and whether
+    a lost release leaves the 5-tuple taken until the allocation lapses;
+  - whether port 53 or a second address is offered for UDP at all: the recorded credentials offer only port 3478, so a
+    rotation there always breaks before it makes;
+  - whether a new allocation's relayed address keeps the old one's IP, which a host's rotation relies on to reach a
+    joiner whose signaling is closed (below).
 
   The design follows the RFCs and the control plane's contract, and falls back to Send indications if bindings are
   refused.
-- **Rotation needs signaling.** A new relay candidate reaches the remote over signaling. A session whose signaling
-  stays down past a credential's lifetime keeps only its direct path.
+- **Rotation needs signaling, or a shared relay address.** A new relay candidate reaches the remote over signaling,
+  and a connected joiner keeps its socket closed except around its own rotations and stalls. A host's new relay
+  candidate therefore reaches such a joiner only through a check from the host's new allocation, which the joiner's
+  relay admits only if it already permits that IP, as it does when the new relayed address keeps the old one's IP.
+  Otherwise the joiner learns it when its path stalls, by reopening its socket, which the host answers by re-sending its
+  candidates: the connection stalls for a few seconds once per host rotation. A session whose signaling stays down past
+  a credential's lifetime keeps only its direct path.
+- **A vanished allocation is noticed at its next request.** If the server forgets an allocation (a restart, or an
+  anycast route moving the 5-tuple), the client learns it from the 437 to its next permission, channel or allocation
+  refresh, up to four minutes later, not from the stalled connection. A relay-only connection on it dies first.
 - **Migration races.** Both sides of a connection follow a peer that moved, so in-flight packets on the old path can
   briefly pull it back. The transport cancels such a check when newer packets arrive on the current path, and every
   deterministic run converges. A real-socket run under heavy load can take longer.

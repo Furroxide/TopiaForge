@@ -100,6 +100,9 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
 
         internal long LastProbeAt { get; set; }
 
+        /// <summary>Gets or sets when a check on the pair was last answered, consent checks included.</summary>
+        internal long AnsweredAt { get; set; }
+
         internal bool IsRelayed => Local.IsRelay || Remote.Kind == IceCandidateKind.Relayed;
 
         /// <summary>Gets the pair's route as both sides see it, which is why the side that hosts must be named.</summary>
