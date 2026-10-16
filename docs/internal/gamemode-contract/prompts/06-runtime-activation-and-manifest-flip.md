@@ -103,7 +103,7 @@ using `RuntimeSessionSelection` before `Load`.
 - Before C# generated-package acceptance, restore the tracked CLI dependency graph
   with Dart **3.12.2**: run `dart pub get --enforce-lockfile` from
   `apps/topiaforge_cli`. On this Windows host invoke
-  `C:\Users\player\fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe`
+  `%USERPROFILE%\fvm\versions\3.44.6\bin\cache\dart-sdk\bin\dart.exe`
   explicitly. The C# helper passes that application's `.dart_tool/package_config.json`,
   which resolves `launcher_data` and `launcher_domain` as local packages. The data
   package's ignored lockfile is not a reproducible CI prerequisite. Keep CI lock
