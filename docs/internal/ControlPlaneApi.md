@@ -335,11 +335,12 @@ another interface's or those of the other address family, stay back only if they
 The guarantee is therefore only as narrow as that list: one wider than the provider's relay allocations lets through
 any address of the side's that falls inside it, and nothing in the service can notice.
 
-**The shipped list is unchecked.** The value in `services/control-plane/wrangler.toml` was written down from memory as
-Cloudflare's published address list. Nobody has compared it with that list or with Cloudflare's Realtime TURN
-documentation, nobody has confirmed that Realtime TURN allocates relay addresses from it, and it may be far wider than
-relay needs. The maintainer must check it against both, and correct it by pull request, before deploying
-(ControlPlaneOperations.md, section 4.1). The relay-only join in the first staging session catches a missing block,
+**The shipped list was checked on 2026-10-16.** The value in `services/control-plane/wrangler.toml` equals
+Cloudflare's published address lists (https://www.cloudflare.com/ips-v4 and https://www.cloudflare.com/ips-v6).
+Realtime TURN's documentation names no narrower range for relay allocations, and its FAQ says it issues IPv4 relay
+addresses only, so the IPv6 blocks never match a genuine relay candidate. The list is therefore wider than relay needs:
+it covers every address Cloudflare publishes for its network. ControlPlaneOperations.md, section 4.1, says how to
+repeat the check. The relay-only join in the first staging session catches a missing block,
 but it cannot catch a list that is too wide: a wider list passes the same join without any sign. Even a missing block
 shows only for the relay addresses that one join was given.
 
