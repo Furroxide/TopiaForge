@@ -91,10 +91,17 @@ extension LauncherSessionLinkActions on LauncherBloc {
   ) async {
     final handling = _sessionLinkHandling;
     if (handling == null) return;
-    final status = await handling.start();
-    emit(
-      state.copyWith(
-        multiplayer: state.multiplayer.copyWith(linkHandling: status),
+    // Registering can take seconds (xdg-mime has a 10-second bound per
+    // call), so it runs beside the event lane and reports back.
+    unawaited(
+      handling.start().then(
+        (status) {
+          if (!isClosed) {
+            add(SessionLinkHandlingUpdated(status, announce: false));
+          }
+        },
+        // start() throws only when it was already started.
+        onError: (Object _) {},
       ),
     );
   }
@@ -133,10 +140,15 @@ extension LauncherSessionLinkActions on LauncherBloc {
     Emitter<LauncherState> emit,
   ) async {
     final status = event.status;
+    final multiplayer = state.multiplayer.copyWith(linkHandling: status);
+    if (!event.announce) {
+      emit(state.copyWith(multiplayer: multiplayer));
+      return;
+    }
     final failed = status.registration == SessionLinkRegistration.failed;
     emit(
       state.copyWith(
-        multiplayer: state.multiplayer.copyWith(linkHandling: status),
+        multiplayer: multiplayer,
         statusMessage: _linkHandlingMessage(status),
         statusSeverity: failed ? IssueSeverity.warning : IssueSeverity.info,
       ),

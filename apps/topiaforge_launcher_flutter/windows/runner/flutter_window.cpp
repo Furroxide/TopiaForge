@@ -113,6 +113,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  // Give up the scope first: from here on a later start claims it instead
+  // of handing its link to a launcher that can no longer show it.
+  single_instance_.Release();
   single_instance_.SetHandlers(nullptr, nullptr);
   instance_channel_ = nullptr;
   if (flutter_controller_) {
@@ -178,6 +181,9 @@ void FlutterWindow::HandleInstanceCall(
     result->Success(flutter::EncodableValue(single_instance_.HandOff(wide)));
   } else if (method == "ready") {
     single_instance_.SetReady();
+    result->Success();
+  } else if (method == "release") {
+    single_instance_.Release();
     result->Success();
   } else {
     result->NotImplemented();

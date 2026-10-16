@@ -35,6 +35,49 @@ void main() {
     }
   });
 
+  test(
+    'a launcher on its own data root never touches the registration',
+    () async {
+      final scratch = await Directory.systemTemp.createTemp(
+        'topiaforge-own-root-',
+      );
+      addTearDown(() => scratch.delete(recursive: true));
+
+      final registrar = platformSessionLinkRegistrar(
+        executable: Platform.isWindows
+            ? r'C:\TopiaForge\launcher\topiaforge_launcher.exe'
+            : '/opt/topiaforge/launcher/topiaforge_launcher',
+        dataRoot: scratch.path,
+      );
+
+      if (Platform.isMacOS) {
+        expect(registrar, isA<BundleSessionLinkRegistrar>());
+        return;
+      }
+      expect(registrar, isA<OwnDataRootSessionLinkRegistrar>());
+      for (final result in [
+        await registrar.register(),
+        await registrar.unregister(),
+      ]) {
+        expect(result.registration, SessionLinkRegistration.unsupported);
+        expect(result.detail, contains('own data root'));
+      }
+    },
+  );
+
+  test('the launcher on the default data root registers', () {
+    final registrar = platformSessionLinkRegistrar(
+      dataRoot: resolveTopiaForgeDataRoot(
+        environment: {...Platform.environment}..remove('TOPIAFORGE_DATA_ROOT'),
+      ),
+    );
+    if (Platform.isWindows) {
+      expect(registrar, isA<WindowsSessionLinkRegistrar>());
+    } else if (Platform.isLinux) {
+      expect(registrar, isA<LinuxSessionLinkRegistrar>());
+    }
+  });
+
   test('macOS leaves the bundle registration to the system', () async {
     const registrar = BundleSessionLinkRegistrar();
     for (final result in [

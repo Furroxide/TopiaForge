@@ -112,15 +112,70 @@ std::optional<std::string> ExactUtf8(const wchar_t* text, size_t length) {
 }  // namespace
 
 SingleInstance::~SingleInstance() {
+  Release();
+}
+
+void SingleInstance::Release() {
+  // Win32Window::Create runs OnDestroy before the window exists, when there
+  // is nothing to give up yet; that must not stop the claim that follows.
+  if (window_ == nullptr && mutex_ == nullptr) {
+    return;
+  }
+  released_ = true;
+  held_.reset();
   if (window_ != nullptr) {
     ::DestroyWindow(window_);
+    window_ = nullptr;
   }
   if (owns_mutex_) {
     ::ReleaseMutex(mutex_);
+    owns_mutex_ = false;
   }
   if (mutex_ != nullptr) {
     ::CloseHandle(mutex_);
+    mutex_ = nullptr;
   }
+}
+
+// static
+std::optional<std::wstring> SingleInstance::LinkFromCommandLine(
+    const wchar_t* command_line) {
+  if (command_line == nullptr) {
+    return std::nullopt;
+  }
+  // The program name ends where CommandLineToArgvW ends it: at the closing
+  // quote when it starts with one, otherwise at the first space or tab.
+  const wchar_t* cursor = command_line;
+  if (*cursor == L'"') {
+    ++cursor;
+    while (*cursor != L'\0' && *cursor != L'"') {
+      ++cursor;
+    }
+    if (*cursor == L'"') {
+      ++cursor;
+    }
+  } else {
+    while (*cursor != L'\0' && *cursor != L' ' && *cursor != L'\t') {
+      ++cursor;
+    }
+  }
+  while (*cursor == L' ' || *cursor == L'\t') {
+    ++cursor;
+  }
+  std::wstring link(cursor);
+  while (!link.empty() && (link.back() == L' ' || link.back() == L'\t')) {
+    link.pop_back();
+  }
+  if (!link.empty() && link.front() == L'"') {
+    link.erase(0, 1);
+    if (!link.empty() && link.back() == L'"') {
+      link.pop_back();
+    }
+  }
+  if (!HasSessionLinkScheme(link.c_str(), link.size())) {
+    return std::nullopt;
+  }
+  return link;
 }
 
 bool SingleInstance::HasSessionLinkScheme(const wchar_t* text, size_t length) {
@@ -140,6 +195,9 @@ bool SingleInstance::HasSessionLinkScheme(const wchar_t* text, size_t length) {
 }
 
 SingleInstance::Claim SingleInstance::TryClaim(const std::wstring& scope) {
+  if (released_) {
+    return Claim::kUnavailable;
+  }
   if (window_ != nullptr) {
     return Claim::kPrimary;
   }
@@ -182,7 +240,7 @@ SingleInstance::Claim SingleInstance::TryClaim(const std::wstring& scope) {
 }
 
 bool SingleInstance::HandOff(const std::optional<std::wstring>& link) {
-  if (name_.empty() || window_ != nullptr) {
+  if (released_ || name_.empty() || window_ != nullptr) {
     return false;
   }
   const HWND owner = FindOwner();
@@ -267,7 +325,8 @@ LRESULT CALLBACK SingleInstance::WindowProc(HWND window,
 
 bool SingleInstance::Receive(const COPYDATASTRUCT& data) {
   if (data.dwData == kActivateMessage) {
-    if (data.cbData != 0) {
+    if (data.cbData != 0 || released_ || main_window_ == nullptr ||
+        !::IsWindow(main_window_)) {
       return false;
     }
     BringForward();
@@ -284,27 +343,37 @@ bool SingleInstance::Receive(const COPYDATASTRUCT& data) {
   if (!HasSessionLinkScheme(text, length)) {
     return false;
   }
+  bool delivered = false;
   if (length > kMaximumLinkLength) {
-    Deliver(Delivery{true, "tooLong"});
+    delivered = Deliver(Delivery{true, "tooLong"});
   } else if (std::optional<std::string> link = ExactUtf8(text, length)) {
-    Deliver(Delivery{false, std::move(*link)});
+    delivered = Deliver(Delivery{false, std::move(*link)});
   } else {
-    Deliver(Delivery{true, "invalid"});
+    delivered = Deliver(Delivery{true, "invalid"});
   }
-  BringForward();
-  return true;
+  if (delivered) {
+    BringForward();
+  }
+  // FALSE tells the sender nothing took the link, so it claims the scope
+  // itself rather than losing the link.
+  return delivered;
 }
 
-void SingleInstance::Deliver(Delivery delivery) {
+bool SingleInstance::Deliver(Delivery delivery) {
+  if (released_) {
+    return false;
+  }
   if (!ready_) {
     // Until Dart listens, the newest link replaces the one held.
     held_ = std::move(delivery);
-    return;
+    return true;
   }
   const Handler& handler = delivery.refused ? on_refusal_ : on_link_;
-  if (handler) {
-    handler(delivery.value);
+  if (!handler) {
+    return false;
   }
+  handler(delivery.value);
+  return true;
 }
 
 void SingleInstance::BringForward() const {

@@ -53,42 +53,38 @@ static gboolean has_session_link_scheme(const gchar* text) {
   return TRUE;
 }
 
-static gboolean is_update_health_option(const gchar* argument) {
-  return g_strcmp0(argument, kUpdateHealthNonce) == 0 ||
-         g_strcmp0(argument, kUpdateHealthFile) == 0;
-}
-
-static gboolean is_update_health_start(gchar** arguments) {
-  for (gchar** argument = arguments; argument != nullptr && *argument != nullptr;
-       argument++) {
-    if (is_update_health_option(*argument)) {
-      return TRUE;
+static gboolean is_nonce(const gchar* text) {
+  size_t length = 0;
+  for (; text[length] != '\0'; length++) {
+    const char unit = text[length];
+    if (!((unit >= '0' && unit <= '9') || (unit >= 'a' && unit <= 'f'))) {
+      return FALSE;
     }
   }
-  return FALSE;
+  return length == 64;
 }
 
-// The session link on a command line, after the binary name: the last
-// argument with the topiaforge: scheme, apart from the update health options'
-// values. The same rule as sessionLinkArgument in Dart.
+// Whether |arguments| are exactly what the update helper starts a launcher
+// with: the binary, the nonce option, a nonce of 64 lowercase hexadecimal
+// characters, the file option and a path, and nothing else. The same rule as
+// isUpdateHealthStart in Dart.
+static gboolean is_update_health_start(gchar** arguments) {
+  return arguments != nullptr && g_strv_length(arguments) == 5 &&
+         g_strcmp0(arguments[1], kUpdateHealthNonce) == 0 &&
+         is_nonce(arguments[2]) &&
+         g_strcmp0(arguments[3], kUpdateHealthFile) == 0 &&
+         arguments[4][0] != '\0';
+}
+
+// The link of a link start: its first argument after the binary name, when
+// that has the topiaforge: scheme. Every other argument of a link start is
+// ignored. The same rule as sessionLinkArgument in Dart.
 static const gchar* session_link_argument(gchar** arguments) {
-  if (arguments == nullptr || arguments[0] == nullptr) {
+  if (arguments == nullptr || arguments[0] == nullptr ||
+      arguments[1] == nullptr || !has_session_link_scheme(arguments[1])) {
     return nullptr;
   }
-  const gchar* link = nullptr;
-  for (gchar** argument = arguments + 1; *argument != nullptr; argument++) {
-    if (is_update_health_option(*argument)) {
-      if (argument[1] == nullptr) {
-        break;
-      }
-      argument++;
-      continue;
-    }
-    if (has_session_link_scheme(*argument)) {
-      link = *argument;
-    }
-  }
-  return link;
+  return arguments[1];
 }
 
 static void send_to_dart(MyApplication* self,
@@ -340,10 +336,26 @@ static void my_application_class_init(MyApplicationClass* klass) {
 
 static void my_application_init(MyApplication* self) {}
 
-// The application id names one launcher per data root. A launcher started
-// with its own TOPIAFORGE_DATA_ROOT gets an id of its own, so launchers with
-// different data roots never take each other's links. Inside a snap the id
-// stays the one its D-Bus slot declares.
+// The data root a launcher gets without TOPIAFORGE_DATA_ROOT, as
+// resolveTopiaForgeDataRoot in Dart resolves it on Linux.
+static gchar* default_data_root() {
+  const gchar* home = g_getenv("HOME");
+  if (home == nullptr) {
+    home = g_getenv("USERPROFILE");
+  }
+  g_autofree gchar* current = nullptr;
+  if (home == nullptr) {
+    current = g_get_current_dir();
+    home = current;
+  }
+  g_autofree gchar* root = g_build_filename(home, ".topiaforge_launcher", nullptr);
+  return g_canonicalize_filename(root, nullptr);
+}
+
+// The application id names one launcher per data root. The default data root
+// keeps the plain id, however it is spelled; any other root gets an id of its
+// own, so launchers with different data roots never take each other's links.
+// Inside a snap the id stays the one its D-Bus slot declares.
 static gchar* application_id() {
   const gchar* configured = g_getenv("TOPIAFORGE_DATA_ROOT");
   if (configured == nullptr || g_getenv("SNAP") != nullptr) {
@@ -354,6 +366,10 @@ static gchar* application_id() {
     return g_strdup(APPLICATION_ID);
   }
   g_autofree gchar* absolute = g_canonicalize_filename(root, nullptr);
+  g_autofree gchar* fallback = default_data_root();
+  if (g_strcmp0(absolute, fallback) == 0) {
+    return g_strdup(APPLICATION_ID);
+  }
   g_autofree gchar* digest =
       g_compute_checksum_for_string(G_CHECKSUM_SHA256, absolute, -1);
   return g_strdup_printf("%s.r%.16s", APPLICATION_ID, digest);

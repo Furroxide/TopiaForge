@@ -2,19 +2,32 @@ import 'dart:io';
 
 import 'package:launcher_domain/launcher_domain.dart';
 
+import '../data_root.dart';
 import 'linux_session_link_registrar.dart';
 import 'windows_session_link_registrar.dart';
 
-/// The registrar for this platform: the current user's registry on Windows,
+/// The registrar for this launcher: the current user's registry on Windows,
 /// a desktop entry on Linux, and the application bundle on macOS. It names
 /// [executable], by default the running launcher.
-SessionLinkRegistrar platformSessionLinkRegistrar({String? executable}) {
+///
+/// A launcher on a data root other than the default one leaves the system
+/// registration alone. The system starts the handler with the opener's
+/// environment, so a link would reach the default data root rather than this
+/// one; and test, acceptance and release runs, which use their own data
+/// roots, must never take the player's registration.
+SessionLinkRegistrar platformSessionLinkRegistrar({
+  String? executable,
+  String? dataRoot,
+}) {
+  if (Platform.isMacOS) return const BundleSessionLinkRegistrar();
+  if (dataRoot != null && !isDefaultTopiaForgeDataRoot(dataRoot)) {
+    return const OwnDataRootSessionLinkRegistrar();
+  }
   final launcher = executable ?? Platform.resolvedExecutable;
   if (Platform.isWindows) {
     return WindowsSessionLinkRegistrar(executable: launcher);
   }
   if (Platform.isLinux) return LinuxSessionLinkRegistrar(executable: launcher);
-  if (Platform.isMacOS) return const BundleSessionLinkRegistrar();
   return const UnsupportedSessionLinkRegistrar();
 }
 
@@ -28,6 +41,26 @@ final class BundleSessionLinkRegistrar implements SessionLinkRegistrar {
     detail:
         'macOS registers topiaforge:// links from the application bundle, so '
         'this setting cannot remove the registration.',
+  );
+
+  @override
+  Future<SessionLinkRegistrationResult> register() async => _result;
+
+  @override
+  Future<SessionLinkRegistrationResult> unregister() async => _result;
+}
+
+/// A launcher started with its own `TOPIAFORGE_DATA_ROOT`. It neither writes
+/// nor removes the system registration.
+final class OwnDataRootSessionLinkRegistrar implements SessionLinkRegistrar {
+  const OwnDataRootSessionLinkRegistrar();
+
+  static const _result = SessionLinkRegistrationResult(
+    SessionLinkRegistration.unsupported,
+    detail:
+        'This launcher runs on its own data root, so it leaves the '
+        'topiaforge:// registration alone: the system would open links with '
+        'the default data root.',
   );
 
   @override

@@ -37,9 +37,13 @@ final class SessionLinkHandlingChanged extends MultiplayerEvent {
   final bool enabled;
 }
 
-/// The registration followed a change of the setting.
+/// The registration followed the setting: at start, or after a change.
 final class SessionLinkHandlingUpdated extends MultiplayerEvent {
-  const SessionLinkHandlingUpdated(this.status);
+  const SessionLinkHandlingUpdated(this.status, {this.announce = true});
 
   final SessionLinkHandlingStatus status;
+
+  /// Whether the status bar says what happened. The start's registration
+  /// stays quiet.
+  final bool announce;
 }

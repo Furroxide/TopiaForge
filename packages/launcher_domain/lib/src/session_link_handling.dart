@@ -46,8 +46,9 @@ enum SessionLinkRegistration {
   /// registration and the launcher neither writes nor removes it (macOS).
   managedBySystem,
 
-  /// This platform or package cannot register at run time, as inside a snap
-  /// or Flatpak sandbox.
+  /// This launcher does not register at run time: a snap or Flatpak
+  /// sandbox, a launcher on its own data root, or a platform without
+  /// registration.
   unsupported,
 
   /// The setting or the registration could not be read or written; the

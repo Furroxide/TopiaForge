@@ -11,30 +11,75 @@ typedef UpdateHealthFrameScheduler = void Function(FrameCallback callback);
 const updateHealthNonceOption = '--topiaforge-update-health-nonce';
 const updateHealthFileOption = '--topiaforge-update-health-file';
 
-/// Whether [arguments] start a launcher for an update health check. Such a
-/// start never hands over to another launcher: the update helper is waiting
-/// for this process to report, and rolls the update back if it does not.
-bool isUpdateHealthStart(List<String> arguments) =>
-    arguments.contains(updateHealthNonceOption) ||
-    arguments.contains(updateHealthFileOption);
+final _nonceShape = RegExp(r'^[0-9a-f]{64}$');
 
-void scheduleUpdateHealthHandshake(
+/// Whether [arguments] are exactly what the update helper starts a launcher
+/// with: the nonce option, a nonce of 64 lowercase hexadecimal characters,
+/// the file option and a path, in that order and nothing else.
+///
+/// Only such a start is a health check. It never hands over to another
+/// launcher, because the helper waits for its marker and rolls the update
+/// back without it.
+bool isUpdateHealthStart(List<String> arguments) =>
+    arguments.length == 4 &&
+    arguments[0] == updateHealthNonceOption &&
+    _nonceShape.hasMatch(arguments[1]) &&
+    arguments[2] == updateHealthFileOption &&
+    arguments[3].isNotEmpty;
+
+/// An update health check, read and checked before the launcher claims its
+/// data root.
+final class UpdateHealthRequest {
+  const UpdateHealthRequest._(this.nonce, this.markerPath, this._allowedRoot);
+
+  final String nonce;
+  final String markerPath;
+  final String _allowedRoot;
+
+  /// Writes the health marker after the first frame.
+  void schedule({UpdateHealthFrameScheduler? frameScheduler}) {
+    final scheduleFrame =
+        frameScheduler ?? WidgetsBinding.instance.addPostFrameCallback;
+    scheduleFrame((_) {
+      _requireSafeHealthParents(markerPath, _allowedRoot);
+      if (FileSystemEntity.typeSync(markerPath, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        throw StateError('Launcher update health marker already exists.');
+      }
+      final marker = File(markerPath);
+      final temporary = File('$markerPath.tmp-$pid');
+      if (FileSystemEntity.typeSync(temporary.path, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        throw StateError('Launcher update health temporary path is unsafe.');
+      }
+      temporary.createSync(exclusive: true);
+      temporary.writeAsStringSync(
+        '${jsonEncode({'formatVersion': 1, 'nonce': nonce, 'healthy': true, 'processId': pid, 'reportedAtUtc': DateTime.now().toUtc().toIso8601String()})}\n',
+        flush: true,
+      );
+      temporary.renameSync(marker.path);
+    });
+  }
+}
+
+/// Reads the update health check in [arguments], or null when they name no
+/// health option at all. Throws [StateError] when they name one in any shape
+/// but [isUpdateHealthStart]'s, or point the marker anywhere unsafe.
+UpdateHealthRequest? readUpdateHealthRequest(
   List<String> arguments, {
   required String dataRoot,
-  UpdateHealthFrameScheduler? frameScheduler,
 }) {
-  final nonce = _option(arguments, updateHealthNonceOption);
-  final path = _option(arguments, updateHealthFileOption);
-  if (nonce == null && path == null) return;
-  if (nonce == null ||
-      path == null ||
-      !RegExp(r'^[0-9a-f]{64}$').hasMatch(nonce)) {
+  if (!arguments.contains(updateHealthNonceOption) &&
+      !arguments.contains(updateHealthFileOption)) {
+    return null;
+  }
+  if (!isUpdateHealthStart(arguments)) {
     throw StateError('Launcher update health arguments are invalid.');
   }
   final allowedRoot = p.normalize(
     p.absolute(p.join(dataRoot, 'updates', 'transactions')),
   );
-  final markerPath = p.normalize(p.absolute(path));
+  final markerPath = p.normalize(p.absolute(arguments[3]));
   if (!p.isWithin(allowedRoot, markerPath) ||
       p.basename(markerPath) != 'health.json' ||
       !RegExp(r'^[0-9a-f]{32}$').hasMatch(p.basename(p.dirname(markerPath))) ||
@@ -43,27 +88,20 @@ void scheduleUpdateHealthHandshake(
     throw StateError('Launcher update health marker path is unsafe.');
   }
   _requireSafeHealthParents(markerPath, allowedRoot);
-  final scheduleFrame =
-      frameScheduler ?? WidgetsBinding.instance.addPostFrameCallback;
-  scheduleFrame((_) {
-    _requireSafeHealthParents(markerPath, allowedRoot);
-    if (FileSystemEntity.typeSync(markerPath, followLinks: false) !=
-        FileSystemEntityType.notFound) {
-      throw StateError('Launcher update health marker already exists.');
-    }
-    final marker = File(markerPath);
-    final temporary = File('$markerPath.tmp-$pid');
-    if (FileSystemEntity.typeSync(temporary.path, followLinks: false) !=
-        FileSystemEntityType.notFound) {
-      throw StateError('Launcher update health temporary path is unsafe.');
-    }
-    temporary.createSync(exclusive: true);
-    temporary.writeAsStringSync(
-      '${jsonEncode({'formatVersion': 1, 'nonce': nonce, 'healthy': true, 'processId': pid, 'reportedAtUtc': DateTime.now().toUtc().toIso8601String()})}\n',
-      flush: true,
-    );
-    temporary.renameSync(marker.path);
-  });
+  return UpdateHealthRequest._(arguments[1], markerPath, allowedRoot);
+}
+
+/// Reads the update health check in [arguments], when there is one, and
+/// writes its marker after the first frame.
+void scheduleUpdateHealthHandshake(
+  List<String> arguments, {
+  required String dataRoot,
+  UpdateHealthFrameScheduler? frameScheduler,
+}) {
+  readUpdateHealthRequest(
+    arguments,
+    dataRoot: dataRoot,
+  )?.schedule(frameScheduler: frameScheduler);
 }
 
 void _requireSafeHealthParents(String markerPath, String allowedRoot) {
@@ -80,17 +118,4 @@ void _requireSafeHealthParents(String markerPath, String allowedRoot) {
       FileSystemEntityType.directory) {
     throw StateError('Launcher update transaction storage is unsafe.');
   }
-}
-
-String? _option(List<String> arguments, String name) {
-  final matches = <String>[];
-  for (var index = 0; index < arguments.length; index++) {
-    if (arguments[index] == name && index + 1 < arguments.length) {
-      matches.add(arguments[index + 1]);
-    }
-  }
-  if (matches.length > 1) {
-    throw StateError('Launcher update health option is duplicated.');
-  }
-  return matches.firstOrNull;
 }
