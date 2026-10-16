@@ -193,6 +193,11 @@ namespace TopiaForge.ModManager.Tests
                 MultiplayerAdmissionParityTests.Run();
                 return 0;
             }
+            if (args.Length == 1 && string.Equals(args[0], "--multiplayer-replication", StringComparison.Ordinal))
+            {
+                MultiplayerReplicationModelTests.Run();
+                return 0;
+            }
             if (args.Length == 1 && string.Equals(args[0], "--manifest-v6", StringComparison.Ordinal))
             {
                 var manifestRoot = Path.Combine(
@@ -349,6 +354,7 @@ namespace TopiaForge.ModManager.Tests
                 MultiplayerContractLockBoundaryTests.Run(root);
                 MultiplayerAdmissionTests.Run();
                 MultiplayerAdmissionParityTests.Run();
+                MultiplayerReplicationModelTests.Run();
                 FirstPartyManifestTests.Run();
                 FirstPartyConfigTests.Run();
                 ModAssemblyResolutionCatalogTests.Run(root);
