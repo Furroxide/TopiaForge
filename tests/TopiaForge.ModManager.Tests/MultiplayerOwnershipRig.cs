@@ -6,9 +6,11 @@ namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
     /// One body's host machine and its players on a virtual clock, linked as the runtime's ordered system channel links
-    /// them: each direction is a queue with a fixed one-way delay, in order, losing nothing. The host handles each message
-    /// as it arrives, answers a request at once, limits grabs as the default request policy does, polls once a frame,
-    /// and announces every change of owner to every player at the end of the frame.
+    /// them: each direction is a queue with a fixed one-way delay, in order, losing nothing while the link lasts. The host
+    /// handles each message as it arrives, answers a request at once with its number, limits grabs as the default
+    /// request policy does, polls once a frame, and announces every change of owner to every connected player at the end
+    /// of the frame. A link can close, losing what is in flight both ways, and come back with the world baseline; and the
+    /// host's inbox can drop a player's requests, as a channel past its bounds does, without the player knowing.
     /// </summary>
     internal sealed class OwnershipRig
     {
@@ -19,6 +21,8 @@ namespace TopiaForge.ModManager.Tests
         private readonly List<RigPlayer> players = new List<RigPlayer>();
         private readonly List<RigReply> announcements = new List<RigReply>();
         private readonly PlayerRequestLimiter limiter = new PlayerRequestLimiter(PermissionPolicy.Default);
+        private readonly Dictionary<int, int> droppedRequests = new Dictionary<int, int>();
+        private readonly Dictionary<int, long> cooldownsBefore = new Dictionary<int, long>();
 
         public OwnershipRig(OwnershipPolicy? policy = null)
         {
@@ -32,13 +36,32 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Who won each new hold, in order: grants that changed the epoch, steals included.</summary>
         public List<int> Grantees { get; } = new List<int>();
 
+        /// <summary>When each of <see cref="Grantees"/> won its hold.</summary>
+        public List<long> GrantTimes { get; } = new List<long>();
+
+        /// <summary>
+        /// Whether a closed link only reclaims the body, as the delivery contract once said, instead of
+        /// <see cref="OwnershipStateMachine.LinkClosed"/>; for showing what that let a griefer do.
+        /// </summary>
+        public bool LinkCloseOnlyReclaims { get; set; }
+
         /// <summary>Every reclaim the host made, with the participant it took the body from.</summary>
         public List<(int Participant, OwnershipReclaimReason Reason)> Reclaims { get; } = new List<(int, OwnershipReclaimReason)>();
 
-        /// <summary>The participants that were made to yield, each time the cooldown moved to someone.</summary>
+        /// <summary>The participants that were made to yield, each time a cooldown started.</summary>
         public List<int> Yields { get; } = new List<int>();
 
-        public void Add(RigPlayer player) => players.Add(player);
+        /// <summary>How many requests the host's inbox dropped.</summary>
+        public int DroppedRequests { get; private set; }
+
+        public void Add(RigPlayer player)
+        {
+            players.Add(player);
+            player.Rig = this;
+        }
+
+        /// <summary>The host's inbox drops the player's next <paramref name="count"/> requests, and nobody tells the player.</summary>
+        public void DropRequests(RigPlayer player, int count) => droppedRequests[player.Participant] = count;
 
         /// <summary>Runs until <paramref name="untilMicros"/>, a millisecond at a time.</summary>
         public void Run(long untilMicros)
@@ -54,6 +77,26 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        /// <summary>
+        /// The player's link closes: what is in flight both ways is lost, and the host takes back a body the player
+        /// holds, as the delivery contract says.
+        /// </summary>
+        public void CloseLink(RigPlayer player)
+        {
+            player.Disconnect();
+            var participant = player.Participant;
+            Remember();
+            if (!LinkCloseOnlyReclaims) Note(Host.LinkClosed(participant, Now), participant);
+            else if (Host.State != OwnershipState.Server && Host.Owner.Participant == participant) Note(Host.Reclaim(), participant);
+        }
+
+        /// <summary>The player comes back on a new link, and the runtime gives it the body's owner and epoch from the baseline.</summary>
+        public void Rejoin(RigPlayer player)
+        {
+            player.Reconnect();
+            player.Reply(RigReply.Changed(Host.Owner, Host.Epoch), Now);
+        }
+
         private void HandleArrivals(RigPlayer player)
         {
             while (player.TryTakeArrived(Now, out var message)) Handle(player, message);
@@ -62,23 +105,34 @@ namespace TopiaForge.ModManager.Tests
         private void Handle(RigPlayer player, RigMessage message)
         {
             var participant = player.Participant;
-            var yielding = Host.YieldingParticipant;
-            var yieldUntil = Host.YieldUntilMicros;
+            Remember();
             OwnershipOutcome outcome;
             switch (message.Kind)
             {
                 case RigMessageKind.Request:
+                    if (droppedRequests.TryGetValue(participant, out var drops) && drops > 0)
+                    {
+                        droppedRequests[participant] = drops - 1;
+                        DroppedRequests++;
+                        return;
+                    }
+
                     var permission = limiter.Evaluate(participant, false, NetRequestKind.MotionGrab, NetTargetRelation.Server, 0, Now);
                     if (permission != NetPermission.Allowed)
                     {
-                        player.Reply(RigReply.Refused(Host.Epoch, Host.Owner), Now);
+                        player.Reply(RigReply.Refused(message.Number, Host.Epoch, Host.Owner), Now);
                         return;
                     }
 
                     outcome = Host.Request(participant, message.Epoch, message.Body, message.Avatar, Now);
                     var granted = outcome.Result == OwnershipResult.Granted || outcome.Result == OwnershipResult.AlreadyOwned;
-                    player.Reply(granted ? RigReply.Granted(outcome.Epoch) : RigReply.Refused(outcome.Epoch, outcome.Owner), Now);
-                    if (outcome.Result == OwnershipResult.Granted && outcome.EpochChanged) Grantees.Add(participant);
+                    player.Reply(granted ? RigReply.Granted(message.Number, outcome.Epoch) : RigReply.Refused(message.Number, outcome.Epoch, outcome.Owner), Now);
+                    if (outcome.Result == OwnershipResult.Granted && outcome.EpochChanged)
+                    {
+                        Grantees.Add(participant);
+                        GrantTimes.Add(Now);
+                    }
+
                     break;
                 case RigMessageKind.Sample:
                     outcome = Host.Stream(participant, message.Epoch, message.Body, message.Avatar, Now);
@@ -91,15 +145,14 @@ namespace TopiaForge.ModManager.Tests
                     break;
             }
 
-            Note(outcome, participant, yielding, yieldUntil);
+            Note(outcome, participant);
         }
 
         private void EndFrame()
         {
             var owner = Host.Owner.Participant;
-            var yielding = Host.YieldingParticipant;
-            var yieldUntil = Host.YieldUntilMicros;
-            Note(Host.Poll(Now), owner, yielding, yieldUntil);
+            Remember();
+            Note(Host.Poll(Now), owner);
             foreach (var announcement in announcements)
             {
                 foreach (var player in players) player.Reply(announcement, Now);
@@ -108,7 +161,13 @@ namespace TopiaForge.ModManager.Tests
             announcements.Clear();
         }
 
-        private void Note(OwnershipOutcome outcome, int sender, int yieldingBefore, long yieldUntilBefore)
+        /// <summary>Notes every player's cooldown before an event, so the event's yields can be told apart.</summary>
+        private void Remember()
+        {
+            foreach (var player in players) cooldownsBefore[player.Participant] = Host.CooldownOf(player.Participant).UntilMicros;
+        }
+
+        private void Note(OwnershipOutcome outcome, int sender)
         {
             if (outcome.EpochChanged) announcements.Add(RigReply.Changed(outcome.Owner, outcome.Epoch));
             if (outcome.Result == OwnershipResult.Reclaimed || outcome.Result == OwnershipResult.Rejected)
@@ -116,9 +175,9 @@ namespace TopiaForge.ModManager.Tests
                 Reclaims.Add((sender, outcome.ReclaimReason));
             }
 
-            if (Host.YieldingParticipant != 0 && (Host.YieldingParticipant != yieldingBefore || Host.YieldUntilMicros != yieldUntilBefore))
+            foreach (var player in players)
             {
-                Yields.Add(Host.YieldingParticipant);
+                if (Host.CooldownOf(player.Participant).UntilMicros > cooldownsBefore[player.Participant]) Yields.Add(player.Participant);
             }
         }
     }
@@ -131,15 +190,18 @@ namespace TopiaForge.ModManager.Tests
         Handback
     }
 
-    /// <summary>A message to the host: the epoch it names, and the body's and the sender's avatar's positions.</summary>
+    /// <summary>
+    /// A message to the host: the epoch it names, a request's number, and the body's and the sender's avatar's positions.
+    /// </summary>
     internal readonly struct RigMessage
     {
-        public RigMessage(RigMessageKind kind, uint epoch, NetQuantizedPosition body, NetQuantizedPosition avatar)
+        public RigMessage(RigMessageKind kind, uint epoch, NetQuantizedPosition body, NetQuantizedPosition avatar, uint number = 0)
         {
             Kind = kind;
             Epoch = epoch;
             Body = body;
             Avatar = avatar;
+            Number = number;
         }
 
         public RigMessageKind Kind { get; }
@@ -150,16 +212,22 @@ namespace TopiaForge.ModManager.Tests
 
         public NetQuantizedPosition Avatar { get; }
 
+        public uint Number { get; }
+
         public static RigMessage Of(RigMessageKind kind, uint epoch) => new RigMessage(kind, epoch, OwnershipRig.Near, OwnershipRig.Near);
+
+        public static RigMessage Of(OwnershipRequest request) =>
+            new RigMessage(RigMessageKind.Request, request.Epoch, OwnershipRig.Near, OwnershipRig.Near, request.Number);
     }
 
-    /// <summary>A reply from the host: an answer to the oldest request, or an announcement of a new owner.</summary>
+    /// <summary>A reply from the host: an answer to the request it names, or an announcement of a new owner.</summary>
     internal readonly struct RigReply
     {
-        private RigReply(bool isAnswer, bool granted, uint epoch, NetOwner owner)
+        private RigReply(bool isAnswer, bool granted, uint number, uint epoch, NetOwner owner)
         {
             IsAnswer = isAnswer;
             IsGranted = granted;
+            Number = number;
             Epoch = epoch;
             Owner = owner;
         }
@@ -168,28 +236,32 @@ namespace TopiaForge.ModManager.Tests
 
         public bool IsGranted { get; }
 
+        /// <summary>The number of the request an answer settles.</summary>
+        public uint Number { get; }
+
         public uint Epoch { get; }
 
         public NetOwner Owner { get; }
 
-        public static RigReply Granted(uint epoch) => new RigReply(true, true, epoch, default);
+        public static RigReply Granted(uint number, uint epoch) => new RigReply(true, true, number, epoch, default);
 
-        public static RigReply Refused(uint epoch, NetOwner owner) => new RigReply(true, false, epoch, owner);
+        public static RigReply Refused(uint number, uint epoch, NetOwner owner) => new RigReply(true, false, number, epoch, owner);
 
-        public static RigReply Changed(NetOwner owner, uint epoch) => new RigReply(false, false, epoch, owner);
+        public static RigReply Changed(NetOwner owner, uint epoch) => new RigReply(false, false, 0, epoch, owner);
 
         /// <summary>Hands the reply to a claim as the runtime would.</summary>
         public void DeliverTo(OwnershipClaim claim)
         {
             if (!IsAnswer) claim.OnOwnerChanged(Owner, Epoch);
-            else if (IsGranted) claim.OnGranted(Epoch);
-            else claim.OnRefused(Epoch, Owner);
+            else if (IsGranted) claim.OnGranted(Number, Epoch);
+            else claim.OnRefused(Number, Epoch, Owner);
         }
     }
 
     /// <summary>
     /// A player on the rig: its link's two ordered queues, each with the same one-way delay, and its own behaviour, which
-    /// receives the host's replies in order and acts once a step.
+    /// receives the host's replies in order and acts once a step. A closed link loses what is in flight both ways and
+    /// carries nothing until the player rejoins.
     /// </summary>
     internal abstract class RigPlayer
     {
@@ -207,13 +279,23 @@ namespace TopiaForge.ModManager.Tests
             OneWayMicros = roundTripMicros / 2;
         }
 
+        public OwnershipRig Rig { get; set; } = null!;
+
         public int Participant { get; }
 
         public long OneWayMicros { get; }
 
-        public void Send(RigMessage message, long now) => toHost.Enqueue((now + OneWayMicros, message));
+        public bool Connected { get; private set; } = true;
 
-        public void Reply(RigReply reply, long now) => toPlayer.Enqueue((now + OneWayMicros, reply));
+        public void Send(RigMessage message, long now)
+        {
+            if (Connected) toHost.Enqueue((now + OneWayMicros, message));
+        }
+
+        public void Reply(RigReply reply, long now)
+        {
+            if (Connected) toPlayer.Enqueue((now + OneWayMicros, reply));
+        }
 
         public bool TryTakeArrived(long now, out RigMessage message)
         {
@@ -232,6 +314,16 @@ namespace TopiaForge.ModManager.Tests
             while (toPlayer.Count > 0 && toPlayer.Peek().At <= now) Receive(toPlayer.Dequeue().Reply, now);
         }
 
+        /// <summary>The link closes: whatever is in flight either way is gone.</summary>
+        public virtual void Disconnect()
+        {
+            Connected = false;
+            toHost.Clear();
+            toPlayer.Clear();
+        }
+
+        public virtual void Reconnect() => Connected = true;
+
         public abstract void Act(long now);
 
         protected abstract void Receive(RigReply reply, long now);
@@ -239,7 +331,8 @@ namespace TopiaForge.ModManager.Tests
 
     /// <summary>
     /// A player who uses an <see cref="OwnershipClaim"/>: it grabs whenever it does not hold the body, streams at 30 Hz
-    /// while it simulates, throws after holding for a while, and hands back when its window closes.
+    /// while it simulates, throws after holding for a while, and hands back when its window closes. It polls its claim
+    /// every step and resets it when its link closes or comes back, as the delivery contract says.
     /// </summary>
     internal sealed class ClaimPlayer : RigPlayer
     {
@@ -269,9 +362,10 @@ namespace TopiaForge.ModManager.Tests
 
         public override void Act(long now)
         {
-            if (Claim.State == OwnershipState.Server && now >= GrabFromMicros && (GrabsAgain || ConfirmedHolds == 0) && Claim.Grab(out var epoch))
+            Claim.Poll(now);
+            if (Claim.State == OwnershipState.Server && now >= GrabFromMicros && (GrabsAgain || ConfirmedHolds == 0) && Claim.Grab(now, out var request))
             {
-                Send(RigMessage.Of(RigMessageKind.Request, epoch), now);
+                Send(RigMessage.Of(request), now);
                 nextSample = now;
             }
 
@@ -293,6 +387,18 @@ namespace TopiaForge.ModManager.Tests
             }
 
             if (!Claim.IsSimulating) holdingSince = -1;
+        }
+
+        public override void Disconnect()
+        {
+            base.Disconnect();
+            Claim.Reset(OwnershipClaimRecovery.LinkClosed);
+        }
+
+        public override void Reconnect()
+        {
+            base.Reconnect();
+            Claim.Reset(OwnershipClaimRecovery.Reconnected);
         }
 
         protected override void Receive(RigReply reply, long now)

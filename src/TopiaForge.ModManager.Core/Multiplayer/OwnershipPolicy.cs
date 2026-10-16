@@ -58,7 +58,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// The requester recently went quiet holding this body, or let go of it while another player in range wanted
-        /// it, so other players go first until its cooldown ends.
+        /// it, so other players go first until its own cooldown ends.
         /// </summary>
         Yielding = 12
     }
@@ -73,6 +73,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>The release window ended and no hand-back came within the silence timeout.</summary>
         HandbackTimeout = 2,
 
+        /// <summary>The owner's link closed, or it left the session.</summary>
         Disconnected = 3,
 
         /// <summary>A sample or hand-back moved too fast, or a sample, hand-back or throw held the body out of range.</summary>
@@ -122,6 +123,70 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             Result + "(" + ReclaimReason + ") " + State + " " + Owner + " @" + Epoch + (EpochChanged ? " changed" : string.Empty);
     }
 
+    /// <summary>
+    /// A request a client's claim sends: the number the host's answer must echo, and the epoch the request names.
+    /// Numbers count up per claim, across resets, so an answer to a request the claim gave up on is told apart.
+    /// </summary>
+    internal readonly struct OwnershipRequest
+    {
+        public OwnershipRequest(uint number, uint epoch)
+        {
+            Number = number;
+            Epoch = epoch;
+        }
+
+        public uint Number { get; }
+
+        public uint Epoch { get; }
+
+        public override string ToString() => "#" + Number + "@" + Epoch;
+    }
+
+    /// <summary>Why a client's claim last stopped waiting for what it had sent.</summary>
+    internal enum OwnershipClaimRecovery
+    {
+        None = 0,
+
+        /// <summary>A request went unanswered for the answer timeout, so the claim took it as lost.</summary>
+        AnswerTimeout = 1,
+
+        /// <summary>An answer named a later request, so the requests before it never reached the host.</summary>
+        AnswerSkipped = 2,
+
+        /// <summary>The runtime reset the claim because the link to the host closed.</summary>
+        LinkClosed = 3,
+
+        /// <summary>The runtime reset the claim because the client reconnected or rejoined.</summary>
+        Reconnected = 4,
+
+        /// <summary>The runtime reset the claim because the session was replaced or ended.</summary>
+        SessionReplaced = 5,
+
+        /// <summary>The runtime reset the claim because the client's own channel dropped a message from the host.</summary>
+        ChannelDropped = 6
+    }
+
+    /// <summary>One participant's cooldown on a body: until when it is refused, and how long its last strike was.</summary>
+    internal readonly struct YieldCooldown
+    {
+        public YieldCooldown(long untilMicros, long strikeMicros)
+        {
+            UntilMicros = untilMicros;
+            StrikeMicros = strikeMicros;
+        }
+
+        /// <summary>When the participant may take the body again; zero if it never had to yield.</summary>
+        public long UntilMicros { get; }
+
+        /// <summary>
+        /// How long the cooldown of its last strike was, which its next strike within the cap after its last cooldown
+        /// ended doubles; zero if it never struck.
+        /// </summary>
+        public long StrikeMicros { get; }
+
+        public override string ToString() => UntilMicros + " (" + StrikeMicros + ")";
+    }
+
     /// <summary>The state an owner hands back when its release window ends.</summary>
     internal readonly struct MotionHandback
     {
@@ -156,6 +221,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public const int DefaultMaximumAngularSpeedRadiansPerSecond = 64;
         public const long DefaultFirstSampleTimeoutMicros = 250_000;
         public const long DefaultYieldCooldownMicros = 1_000_000;
+        public const long DefaultMaximumYieldCooldownMicros = 8_000_000;
+        public const int DefaultMaximumParticipants = 16;
+        public const long DefaultAnswerTimeoutMicros = 2_000_000;
 
         public OwnershipPolicy(
             long releaseWindowMicros = DefaultReleaseWindowMicros,
@@ -166,7 +234,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             int toleranceUnits = DefaultToleranceUnits,
             int maximumAngularSpeedRadiansPerSecond = DefaultMaximumAngularSpeedRadiansPerSecond,
             long firstSampleTimeoutMicros = DefaultFirstSampleTimeoutMicros,
-            long yieldCooldownMicros = DefaultYieldCooldownMicros)
+            long yieldCooldownMicros = DefaultYieldCooldownMicros,
+            long maximumYieldCooldownMicros = DefaultMaximumYieldCooldownMicros,
+            int maximumParticipants = DefaultMaximumParticipants,
+            long answerTimeoutMicros = DefaultAnswerTimeoutMicros)
         {
             Require(releaseWindowMicros, 1, 60_000_000, nameof(releaseWindowMicros));
             Require(silenceTimeoutMicros, 1, 60_000_000, nameof(silenceTimeoutMicros));
@@ -177,6 +248,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             Require(maximumAngularSpeedRadiansPerSecond, 1, 1_000, nameof(maximumAngularSpeedRadiansPerSecond));
             Require(firstSampleTimeoutMicros, 1, 60_000_000, nameof(firstSampleTimeoutMicros));
             Require(yieldCooldownMicros, 0, 60_000_000, nameof(yieldCooldownMicros));
+            Require(maximumYieldCooldownMicros, yieldCooldownMicros, 60_000_000, nameof(maximumYieldCooldownMicros));
+            Require(maximumParticipants, 1, 256, nameof(maximumParticipants));
+            Require(answerTimeoutMicros, 1, 60_000_000, nameof(answerTimeoutMicros));
             ReleaseWindowMicros = releaseWindowMicros;
             SilenceTimeoutMicros = silenceTimeoutMicros;
             MaximumSpeedMetersPerSecond = maximumSpeedMetersPerSecond;
@@ -186,6 +260,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             MaximumAngularSpeedRadiansPerSecond = maximumAngularSpeedRadiansPerSecond;
             FirstSampleTimeoutMicros = firstSampleTimeoutMicros;
             YieldCooldownMicros = yieldCooldownMicros;
+            MaximumYieldCooldownMicros = maximumYieldCooldownMicros;
+            MaximumParticipants = maximumParticipants;
+            AnswerTimeoutMicros = answerTimeoutMicros;
             SpeedUnitsPerSecond = (long)maximumSpeedMetersPerSecond * NetQuantization.PositionUnitsPerMeter;
             BurstCreditUnits = SpeedUnitsPerSecond * speedBurstMicros / 1_000_000 + toleranceUnits;
             var rangeUnits = (long)maximumHoldRangeMeters * NetQuantization.PositionUnitsPerMeter + toleranceUnits;
@@ -196,6 +273,13 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>How long a thrower keeps simulating its throw before handing it back.</summary>
         public long ReleaseWindowMicros { get; }
+
+        /// <summary>
+        /// Letting go of a hold shorter than this is a strike: half the release window. A client's claim holds a body at
+        /// least the whole window, since it hands back only when its window closes; the other half allows for the grab
+        /// reaching the host later than the hand-back does, after a retransmission.
+        /// </summary>
+        public long ShortHoldMicros => ReleaseWindowMicros / 2;
 
         /// <summary>How long an owner may send nothing before the host reclaims the body.</summary>
         public long SilenceTimeoutMicros { get; }
@@ -208,11 +292,33 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         public long FirstSampleTimeoutMicros { get; }
 
         /// <summary>
-        /// How long a participant that lost the body by going quiet (no first sample, silence or no hand-back), or let
-        /// go of it while another player in range wanted it, is refused it, so another player's request wins first. It
-        /// is also how long after an uncontested release a stale request still counts. Zero turns yielding off.
+        /// How long a participant that lost the body by going quiet (no first sample, silence, no hand-back, or a closed
+        /// link before its first sample), or let go of it while another player in range wanted it, is refused it, so
+        /// another player's request wins first. It is also how long after an uncontested release a stale request still
+        /// counts. Zero turns yielding off.
         /// </summary>
         public long YieldCooldownMicros { get; }
+
+        /// <summary>
+        /// The longest cooldown, and how long after its last cooldown ended a participant's strikes are remembered. A
+        /// strike (going quiet, failing validation, or letting go of a hold shorter than <see cref="ShortHoldMicros"/>)
+        /// within that time doubles the participant's last strike, up to this; taking turns always costs the base
+        /// cooldown.
+        /// </summary>
+        public long MaximumYieldCooldownMicros { get; }
+
+        /// <summary>
+        /// The highest participant slot the machine accepts. The runtime's slots are dense, so this is the session's
+        /// largest participant count; it bounds the cooldown table, one entry per slot.
+        /// </summary>
+        public int MaximumParticipants { get; }
+
+        /// <summary>
+        /// How long a client's claim waits for the host to answer a request before it takes the request as lost. The
+        /// system channels drop messages past their bounds without telling the sender, so an answer can be missing on a
+        /// link that stays open.
+        /// </summary>
+        public long AnswerTimeoutMicros { get; }
 
         public int MaximumSpeedMetersPerSecond { get; }
 

@@ -1,6 +1,6 @@
 # Multiplayer replication model — design record
 
-Status: Implementing (WS3.1, WS3.4, WS3.5 and WS3.12 of the live-multiplayer plan) · Date: 2026-10-15 · Owner: multiplayer
+Status: Implementing (WS3.1, WS3.4, WS3.5 and WS3.12 of the live-multiplayer plan) · Date: 2026-10-16 · Owner: multiplayer
 
 This records the Unity-free rules and data structures that automatic replication is built on: realms and network
 classes, the execution model's routing tables, the entity table, transform quantization, snapshot interpolation,
@@ -148,13 +148,16 @@ and each relies on the runtime clearing a leaver before its slot goes to anyone 
 
 - `NetworkEntityTable`: remove or reassign the entities `CollectOwnedBy` reports for the leaver.
 - `OwnershipStateMachine`: call `Disconnect` on every body's machine. It reclaims a body the leaver holds and forgets the
-  leaver's yield cooldown and last release.
+  leaver's cooldown, strike and last release.
 - `PlayerRequestLimiter`: call `Forget`, so the newcomer starts with full buckets.
 
 Otherwise the newcomer inherits the leaver's spawns, held body, cooldown or spent buckets. The per-client
 `RelevancySet` and `ReplicationScheduler` are discarded with the client. A participant whose link closes has not left
-yet: the engine keeps its id, and so its slot, for a 30 s grace period. Until it leaves for good the runtime only
-reclaims the bodies it holds, as the [delivery contract](#delivery-contract) says.
+yet: the engine keeps its id, and so its slot, for a 30 s grace period. Until it leaves for good the runtime calls only
+`LinkClosed` for it, which takes back the bodies it holds and keeps its cooldowns, as the
+[delivery contract](#delivery-contract) says. The machine accepts slots from 1 to the policy's `MaximumParticipants`
+(16 by default, the plan's largest session) and keeps one cooldown entry per slot, so its cooldown table is bounded by
+the participant count.
 
 ## Quantization and wire format (WS3.5)
 
@@ -200,7 +203,7 @@ then, if set, velocity x, y, z (11 bits each, stored as `units + 1024`). That is
 | --- | --- |
 | Capacity | 20 samples, for streams of up to 30 Hz |
 | Delay | the longer of the interval and the largest buffered gap, plus 3 × jitter, clamped to 80-350 ms |
-| Playback rate | 0.9× to 1.1× real time; up to 2× while the render lags the sender's clock by more than 400 ms (the cap plus a 50 ms dead band), down to 0.5× while it is closer to that clock than the 80 ms floor |
+| Playback rate | 0.9× to 1.1× real time; up to 2× while the render lags the sender's clock by more than 400 ms (the cap plus a 50 ms dead band), down to 0.5× while it is closer to that clock than 60 ms (the 80 ms floor less a 20 ms dead band) |
 | Extrapolation cap | 250 ms past the newest sample |
 | Timeline discontinuity | 1 s |
 
@@ -247,17 +250,20 @@ Two corrections bound how far the render drifts from the sender's clock as estim
   step under the 1 s reset, a first sample that arrived late, or a fall in latency moves the offset estimate forward
   faster than 1.1× can follow. Inside the band the render catches up at the normal 1.1× at most, because under heavy
   jitter the offset estimate wanders around the cap and chasing it buys nothing.
-- *Fall-back.* While the render is closer to that clock than the 80 ms floor, the slew grows by one percent for each
-  millisecond below the floor, up to 50%, so playback slows to as little as half real time. A rise in latency moves
-  the offset estimate back faster than 0.9× can follow, and below the floor the render soon passes the newest sample.
+- *Fall-back.* While the render is closer to that clock than the 80 ms floor less a 20 ms dead band, 60 ms, the slew
+  grows by one percent for each millisecond below 60 ms, up to 50%, so playback slows to as little as half real time.
+  A rise in latency moves the offset estimate back faster than 0.9× can follow, and below the floor the render soon
+  passes the newest sample. Inside the band the render falls back at the normal 0.9× at most, because a stream whose
+  target sits at the floor, as light jitter at 20 to 30 Hz leaves it, keeps the offset estimate's noise around the
+  floor.
 
 The gain is proportional, so a small excursion is corrected gently and a large one quickly, and the slew is back to
 10% once the render is within bounds. Neither correction moves the render clock in a jump. The render time never moves
 backwards between resets: a local clock that steps back holds it, and the playback offset follows. `CurrentDelayMicros`
-reports `offset - playbackOffset`, the delay the last frame rendered at. It follows the target. It can sit up to the
-dead band past the cap without the render speeding up, go further while the render catches up, and dip below the floor
-while it falls back: the first late sample of a latency rise moves the offset estimate at once, which no bounded slew
-can absorb in the same frame.
+reports `offset - playbackOffset`, the delay the last frame rendered at. It follows the target. It can sit up to either
+dead band past the cap or under the floor without the render changing speed, go further while the render catches up
+or falls back, and dip a little further still: the first late sample of a latency rise moves the offset estimate at
+once, which no bounded slew can absorb in the same frame.
 
 **Samples:**
 
@@ -330,6 +336,7 @@ serial-number order across the wrap, so that it can ignore a report older than o
 | `Stream` | `NotOwner` | Validated, with the range check | `NotOwner` | Validated, no range check | `NotOwner` |
 | `BeginRelease` | `NotOwner` | `Releasing` if the body is in range of the holder: the window opens | `NotOwner` | `Releasing`, deadline kept | `NotOwner` |
 | `Handback` | `NotOwner` | Validated, then `HandedBack`, epoch + 1 | `NotOwner` | Validated, then `HandedBack`, epoch + 1 | `NotOwner` |
+| `LinkClosed` | `NoChange` | `Reclaimed` (`Disconnected`), epoch + 1 | `NoChange` | `Reclaimed` (`Disconnected`), epoch + 1 | `NoChange` |
 
 A request checks the epoch, then the range, then yielding. One from beyond the hold range is `OutOfRange`, and one from
 a yielding participant is `Yielding`; like `Denied` and `StaleEpoch`, they change nothing about the hold, though a stale
@@ -367,45 +374,74 @@ it grabs, so a grant that hears nothing that long is abandoned: `Poll` reclaims 
 1 s silence timeout. A sample that arrived before the grant was refused as stale and does not count, and neither does a
 throw.
 
-**Yielding.** An owner that loses the body by going quiet (no first sample, silence, or no hand-back) yields it for 1 s:
-its requests for that body are `Yielding` until the cooldown ends, so another player's request wins first. Before,
-a participant could take the body back straight after every reclaim without ever streaming it, and the players beside
-it never got it. Letting go and grabbing again would do the same, so two more cases yield:
+**Yielding.** An owner that loses the body by going quiet (no first sample, silence, or no hand-back) yields it: its
+requests for that body are `Yielding` until its cooldown ends, so another player's request wins first. Before, a
+participant could take the body back straight after every reclaim without ever streaming it, and the players beside it
+never got it. Letting go and grabbing again would do the same, so more cases yield:
 
-- A hand-back before the first sample, which is going quiet by another route.
-- The end of a *contested* hold by a hand-back or a failed validation. A hold is contested once another participant
-  within the hold range asks for the body and is denied, even one that is yielding itself. A request from out of range
-  does not count, so a player far away cannot make a holder wait.
+- A hand-back or a closed link before the first sample, which is going quiet by another route.
+- The end of a *contested* hold by a hand-back, a failed validation or a closed link. A hold is contested once another
+  participant within the hold range asks for the body and is denied, even one that is yielding itself, so a holder
+  cannot hand back and grab again for the whole of another player's cooldown. A request from out of range does not
+  count, so a player far away cannot make a holder wait.
 - The end of a hold too short to contest. A grab, a sample and a hand-back that arrive together (or a grab and a sample
   rejected on purpose) end a hold before any other request can reach it while the body is held. The host remembers who
-  last ended an uncontested hold by a hand-back or a failed validation, and when (`LastReleaser`,
+  last ended an uncontested hold by a hand-back, a failed validation or a closed link, and when (`LastReleaser`,
   `LastReleaseMicros`), until the body is granted again. A request for the free body that names another epoch, from
-  another participant within the hold range, within the cooldown after that release, is one the hold made stale: the
-  releaser yields for the cooldown from then, at most once per release.
+  another participant within the hold range, within 1 s after that release, is one the hold made stale: the releaser
+  yields from then, at most once per release.
 
-A grant to the yielding participant after its cooldown clears the cooldown, and so does `Disconnect`, which also
-forgets the participant's release. Only the participant that last yielded is remembered, so when the owner of a
-contested hold yields, the player it kept waiting is free to take the body. A disconnect, a host reclaim, and the end
-of an uncontested hold by a hand-back after streaming or by a failed validation make nobody yield, unless a request
-that hold made stale arrives within the cooldown.
+**Cooldowns.** Every participant has its own cooldown, one entry per slot, so one participant's yield never frees
+another. A yield is a *strike* when the participant earned it itself:
+
+- going quiet: no first sample, silence, no hand-back, or a hand-back or closed link before the first sample;
+- failing validation;
+- letting go, by a hand-back or a closed link, before the hold has lasted half the 1 s release window
+  (`ShortHoldMicros`). A client's claim never does that: it holds a body the whole window, since it hands back only when
+  its window closes, and the other half allows for its grab reaching the host late, after a retransmission, while its
+  hand-back does not.
+
+A strike costs 1 s, or twice the participant's last strike, at most 8 s (`MaximumYieldCooldownMicros`), when it comes
+within 8 s after the participant's last cooldown ended. So a participant that keeps going quiet yields for 1, 2, 4 and
+then 8 s, and one that behaves for 8 s after a cooldown starts again at 1 s. Any other yield is *taking turns*:
+letting go of a hold that lasted at least half the release window, because another player contested it or a request it
+made stale arrived. Taking turns costs 1 s and leaves the last strike as it was. Contests and late requests come from other
+players, who could send them on purpose, so they never escalate anyone; going quiet, failing validation and letting go
+early are the participant's own doing. `LastReleaseStrikes` says whether a late request after the remembered release
+would make its yield a strike.
+
+A grant clears nothing: the cooldown is over by then, and the strike is remembered for the next one. `LinkClosed`
+keeps every cooldown and release, so a quick rejoin clears nothing; `Disconnect` forgets the participant's cooldown,
+strike and release. A host reclaim makes nobody yield, and neither does the end of an uncontested hold that lasted the
+release window by a hand-back after streaming or by a closed link, unless a request that hold made stale arrives
+within the second after it.
 
 **Reclaim.** `Poll` reclaims from a new owner that sent no first sample in time (`NoFirstSample`), from an owner that has
 sent nothing for more than 1 s (`Silence`), or from one that has not handed back more than 1 s after its window closed
-(`HandbackTimeout`), even if it is still streaming. `Disconnect` reclaims at once. The host can `Reclaim` for its own
-reasons, such as a despawn. Every reclaim increments the epoch.
+(`HandbackTimeout`), even if it is still streaming. `LinkClosed` reclaims at once from a participant whose link closed,
+and `Disconnect` from one that left for good; both report `Disconnected`. The host can `Reclaim` for its own reasons,
+such as a despawn. Every reclaim increments the epoch.
 
 **Client view.** `OwnershipClaim` keeps what the host holds for its client as far as the host's answers have confirmed
 it, plus the messages the client sent that no answer covers yet: its requests, and the throws and hand-backs between
 them. Its `State` is the confirmed state with those messages replayed on top, each request predicted granted unless a
 report says the host has moved past the epoch it names other than by granting it.
 
-- Only an answer settles a request, the oldest one due. The throws and hand-backs sent before that request are applied
-  first, as the host applied them, epoch check included; then the answer itself. A grant means the host holds the body
-  for the client under the answer's epoch, and a refusal changes nothing on the host. Once no answer is due, the
-  messages after the last request take effect as well, so the release window settles only on the last answer.
+- Every request has a number, counting up per claim and across resets, which `Grab` returns with the epoch it names
+  (`OwnershipRequest`). Only an answer settles a request: the one whose number it echoes. The throws and hand-backs sent
+  before that request are applied first, as the host applied them, epoch check included; an earlier request that no
+  answer named never reached the host, and settles as having changed nothing (`AnswerSkipped`); then the answer itself.
+  A grant means the host holds the body for the client under the answer's epoch, and a refusal changes nothing on the
+  host. Once no answer is due, the messages after the last request take effect as well, so the release window settles
+  only on the last answer.
 - An announcement records the owner and epoch and settles nothing, even one naming the client: the host may announce a
   grant before its answer, after it, after later answers, or not at all. A refusal records the owner and epoch it names
   too.
+- `Poll`, called once a frame, takes a request unanswered for 2 s (`AnswerTimeoutMicros`) as lost (`AnswerTimeout`), as
+  if a later answer had skipped it: a lost grab stops simulating and the player may grab again. An answer to a request
+  the claim no longer holds, because it took the request as lost or was reset since, settles nothing. It is recorded
+  like an announcement, and a grant among such answers is taken as the hold the host confirmed, so a body the host gave
+  this client is never left unstreamed. `LastRecovery` and `LostRequests` record why the claim last stopped waiting.
 - The claim never takes an epoch older than the newest it has heard, compared in serial-number order so the wrap is
   harmless, and any newer epoch ends the hold it had confirmed: a reclaim, a steal or the server taking a hand-back
   stops local simulation.
@@ -415,7 +451,8 @@ report says the host has moved past the epoch it names other than by granting it
 - A grab of a body the client does not hold waits until no answer is due, because an answer in flight may change the
   epoch the request must name. A catch of the client's own throw does not wait, but no more than 16 requests may be
   outstanding.
-- `Reset` forgets whatever no answer will cover once the stream of replies breaks; see the delivery contract below.
+- `Reset(reason)` forgets whatever no answer will cover once the stream of replies breaks; see the delivery contract
+  below.
 
 So a catch refused behind a pending grab resumes the release window with the deadline the host kept, two catches in
 one round trip settle where the host is, whichever is refused, and an announcement between two answers settles neither.
@@ -425,49 +462,129 @@ against the host machine and require the two to agree, epoch included, whenever 
 
 - an exhaustive one over every sequence of up to five events inside one round trip (Alice's grabs, catches, throws and
   hand-backs, Bob's grabs, throws and hand-backs, and polls), with the replies in every order that keeps answers in
-  order and announcements in order, and Alice's own grants also unannounced: 175,131 orders of 66,429 sequences;
-- a lockstep sweep over 400 seeds with random delays, steals and failed validations, where the host announces each
-  change at once or at the end of its frame, in full or only the newest, or leaves Alice's grant to its answer: 40,741
-  comparisons, 6,173 of them inside a release window.
+  order and announcements in order, and Alice's own grants also unannounced: 175,131 orders of 66,429 sequences. It
+  plays the same sequences again with the host's inbox losing each of Alice's first three requests in turn, where the
+  claim must agree once the answer timeout has passed: 63,078 orders of 51,318 sequences, 5,992 of them recovered by a
+  later answer and 57,086 by the timeout;
+- a lockstep sweep over 600 seeds with random delays, steals and failed validations, where the host announces each
+  change at once or at the end of its frame, in full or only the newest, or leaves Alice's grant to its answer: 68,090
+  comparisons, 9,759 of them inside a release window.
 
 ### Delivery contract
 
 The claim agrees with the host only if its messages travel as follows. The runtime's `WorldReplication` system channel
-provides this; nothing else in the engine does.
+provides the order; request numbers, the answer timeout and the resets below cover what it cannot promise.
 
-- **One ordered channel, both ways.** A client's requests, throws and hand-backs for a body reach the host in the order
-  sent, and the host's answers and announcements for it reach the client in the order the host sent them, with
-  nothing lost while the link lasts. System channels give that: their messages ride the session channel, reliable and
-  ordered with the session's own traffic, on the epoch-stamped `0x20` envelope. Samples may share the channel or take
-  an unreliable lane, since the claim does not model them.
+- **One ordered channel, both ways, for everything but samples.** A client's requests, throws and hand-backs for a body
+  reach the host in the order sent, and the host's answers and announcements for it reach the client in the order the
+  host sent them. System channels give that: their messages ride the session channel, reliable and ordered with the
+  session's own traffic, on the epoch-stamped `0x20` envelope.
+- **Samples never travel on it.** They take the unreliable, sequenced Realtime lane, which the transport holds to each
+  connection's own share (64 kbit/s) and where an older sample arriving after a newer one is dropped. So neither a
+  sender's samples, 30 a second for a held body, nor a stalled host can push a request, throw or hand-back past the
+  channel's bounds. A sample that is lost, or that overtakes its request, costs nothing: the machine refuses it as stale
+  or spends a little more distance budget on the next one, and the 250 ms first-sample deadline spans seven samples at
+  30 Hz.
 - **Never through replicated object state.** Object and state replication coalesce changes and flush them ahead of the
   results queued before them. A claim fed from replicated object state therefore hears the newest owner before the
   answer to an older request: in the verification its epoch went from 2 back to 1, and its next grab was refused.
-- **Answers settle; announcements inform.** The host answers each request exactly once, when it handles it, with
-  `OnGranted` (granted, or already the requester's) or `OnRefused`, including a refusal by the request limiter. It
-  announces every change of owner to every client at any later point: at once, at the end of its frame, or only the
-  newest of a frame. It may leave a requester's own grant to the answer. FIFO delivery does not keep an announcement
-  next to the answer it goes with, which is why only answers settle requests.
+- **Answers settle; announcements inform.** Every request carries its number, and the host answers each request it
+  handles exactly once, when it handles it, echoing the number, with `OnGranted` (granted, or already the requester's)
+  or `OnRefused`, including a refusal by the request limiter. It announces every change of owner to every client at any
+  later point: at once, at the end of its frame, or only the newest of a frame. It may leave a requester's own grant to
+  the answer. FIFO delivery does not keep an announcement next to the answer it goes with, which is why only answers
+  settle requests.
 - **Epochs never move backwards** in the claim, as above, so a late or misordered report cannot undo a newer one.
+- **A request can vanish on an open link.** A system channel drops new messages past its bounds (1,024 messages or
+  1 MiB waiting; per sender once the channels budget each sender) and tells nobody: one dropped grab left a claim
+  `Requested`, simulating and unable to grab, for good. Now the claim recovers by itself: a later answer shows the
+  request lost at once, and otherwise `Poll` takes it as lost after 2 s. A lost catch usually costs the hold, because
+  the host's hand-back timeout, a second after the window closes, comes first: the host takes the body back, the thrower
+  yields, and the timeout then frees the claim. A shorter `AnswerTimeoutMicros` keeps the window instead, at the price
+  of giving up on answers that are only slow.
+- **What the runtime does when its channel statistics show a drop.** Each side reads its `WorldReplication` statistics
+  after draining the channel every frame.
+  - *On a client*, a drop may have taken an answer or an announcement, which the order alone cannot reveal, so the
+    runtime resets every claim with `ChannelDropped`. That reset keeps the epoch guard, since the session goes on, and
+    the next report or refusal brings the current epoch.
+  - *On the host*, the runtime cannot answer a request it never received, and does not guess which one it lost: the
+    requester recovers by itself, as above. A lost throw, sample or hand-back reads to the machine as a throw that never
+    came, a gap in the samples or a late hand-back, which validation and the timeouts already handle. The host counts
+    the drops for its diagnostics, without addresses. Once the channels budget each sender, a drop names its sender,
+    and a sender that keeps overflowing its own budget is flooding, which the host's moderation can act on.
 - **When the order breaks, the runtime resets the claim.** The engine drops what is in flight when a link closes, each
   side's system channels drop what they hold when the session is replaced or ends, and the host drops a client message
-  stamped with an earlier session epoch. Any of these can lose an answer, and without a reset one lost answer leaves
-  the claim `Requested`, simulating and unable to grab. The runtime calls `OwnershipClaim.Reset` on every claim:
-  - when the link to the host closes;
-  - when the client reconnects or rejoins, before it handles anything from the new link;
-  - when the session is replaced or ends;
-  - when the channel's statistics show a message dropped while the session goes on, for example an inbox past its
-    bounds.
+  stamped with an earlier session epoch. The runtime calls `OwnershipClaim.Reset` on every claim, with the reason:
+  - `LinkClosed` when the link to the host closes;
+  - `Reconnected` when the client reconnects or rejoins, before it handles anything from the new link;
+  - `SessionReplaced` when the session is replaced or ends;
+  - `ChannelDropped` when its own channel's statistics show a message dropped while the session goes on.
 
-  A link that stalls and recovers (`Reconnecting`, then joined again) loses nothing and needs no reset. After a reset
-  the claim simulates nothing, has nothing outstanding, names its last known epoch until it hears a report, and takes
-  the next report whatever its epoch, because a replaced session counts from zero again. The runtime then gives it the
-  body's owner and epoch from the world baseline, as an announcement.
-- **The host's side.** When a participant's link closes, the host takes back the bodies it holds at once: `Reclaim` on
-  each machine whose `Owner` is that participant. The engine keeps the participant, and its slot, for a 30 s grace
-  period, so its cooldown and release stay; a quick reconnect must not clear a yield. `Disconnect` comes once the
-  participant has left for good, before its slot is reused (see [participant slots](#participant-slots)). The host's
-  channel cannot tell whose message it dropped past its bounds, so the host drains it every frame and keeps under them.
+  A link that stalls and recovers (`Reconnecting`, then joined again) loses nothing and needs no reset; an answer the
+  stall holds up past the answer timeout arrives late and settles nothing it should not. After a reset
+  the claim simulates nothing, has nothing outstanding and names its last known epoch until it hears a report. Across
+  links and sessions it takes the next report whatever its epoch, because a replaced session counts from zero again;
+  the runtime then gives it the body's owner and epoch from the world baseline, as an announcement. Request numbers
+  count on, so an answer from before the reset settles nothing.
+- **The host's side.** When a participant's link closes, the host calls `LinkClosed(participant, now)` on every
+  machine. A body the participant holds goes back to the server at once; the participant yields if the hold had no
+  first sample yet or was contested, and otherwise the hold is remembered as a release, as a hand-back would be. The
+  engine keeps the participant, and its slot, for a 30 s grace period, so its cooldowns and release stay: a quick
+  rejoin clears nothing. Calling `Reclaim` instead, as this contract first said, made nobody yield, so a player that
+  grabbed, never streamed, dropped its link and rejoined kept the body from everyone at round trips of 100 ms and more.
+  `Disconnect` comes once the participant has left for good, before its slot is reused (see
+  [participant slots](#participant-slots)).
+
+### Limits
+
+Ownership is a first-grab-wins lease, and some ways of keeping a body from others cannot be told apart from holding
+it. The model bounds the ways that involve not holding it properly; the rest are for the host's moderation.
+
+**Bounded.** Each of these makes the player yield, every participant has its own cooldown, and strikes double up to 8 s:
+
+- *Going quiet:* a grab with no first sample (250 ms), one sample and then silence (1 s), a throw never handed back (a
+  second after the window), or a hand-back or closed link before the first sample.
+- *Letting go and grabbing again:* a hold another player in range was refused ends in a yield, and letting go of a hold
+  shorter than half the release window is a strike, whether a contest or a late request catches it.
+- *Holds too short to contest:* a grab, a sample and a hand-back in one burst, or a grab and a rejected sample. The
+  other player's late request makes the griefer yield.
+- *Dropping the link:* a closed link ends a quiet or contested hold as going quiet does, and the cooldown outlasts the
+  rejoin.
+- *Taking turns at griefing:* no player's yield frees another, and each one's repeated strikes cost it more.
+- *Reach, speed and floods:* grabs, steals, catches and throws only from within 100 m; the distance budget; five grabs a
+  second per player; 16 outstanding requests per claim; and the channels' bounds.
+
+The tests hold these against an honest player using a real claim behind round trips of 50 to 500 ms. One griefer, in
+each of the five quiet and short-hold loops: the honest player wins one of the first three grants and at least four in
+10 s, and the griefer never wins more than one grant in a row plus one for each 200 ms of the honest player's round
+trip. Two griefers taking turns, in each loop: the honest player holds the body within 6 s and at least five times in
+20 s, where one shared cooldown let them win every grant. Three or four griefers taking turns, in each loop: at least
+ten grants in a minute. One or two griefers dropping their links: at least four of its grants in 10 s. In every case
+the honest player never strikes; each of its yields is taking turns.
+
+**Not bounded.**
+
+- *Holding properly.* A player that keeps streaming a body holds it for as long as it likes. The first grab wins; that
+  is the rule, not a gap in it.
+- *Colluding or taking turns.* Players can pass a body between them, throwing and stealing it or holding it in turn,
+  and nobody yields, since each hold is a real one. Two honest players taking turns legitimately look the same.
+- *Enough griefers.* A quiet hold ends within about 2 s of its holder stopping (a throw streamed through its window but
+  never handed back), and a player that keeps striking yields 8 s each time. A team that can cover the cap between them,
+  five or more taking turns at such holds, can still keep a body from the rest.
+- *Turns on demand.* Any player in range can make a releaser or a holder take turns, by a late request or a denied grab,
+  and so cost it a second. It cannot make anyone strike.
+- *The host.* The host's own player is canonical and never limited.
+
+**The remedy** is the host's moderation, already in the engine: a kick ends a player's session, and a ban refuses its
+identity from then on (see [MultiplayerLiveSessions.md](MultiplayerLiveSessions.md#18-hosting)). The model gives the host
+what it needs to spot a griefer, which the runtime should count per participant in the host's diagnostics, without
+addresses:
+
+- reclaim reasons by participant: `NoFirstSample`, `Silence`, `HandbackTimeout`, `ValidationFailed` and `Disconnected`;
+- cooldowns and strikes (`CooldownOf`): a player whose strike sits at the 8 s cap keeps going quiet or letting go
+  early, while in every griefing test the honest player's stays at zero;
+- request-limiter refusals (`RateLimited`, `NotPermitted`, `QuotaExceeded`);
+- channel drops by sender, once the channels count them that way.
 
 ## Scene object keys (WS3.5)
 
@@ -566,15 +683,19 @@ The Unity side is expected to use the model like this:
   `ReplicationScheduler.Schedule` over the relevant entities, then `NetQuantization.WriteTransform` for the chosen ones.
 - **Client:** mirror spawns into a `NetworkEntityTable`, treating any refused `TryAdd` as a bad announcement. Feed each
   replica's `SnapshotInterpolationBuffer` as samples arrive, and sample it once a frame before mods run.
-- **Motion leases:** the host keeps an `OwnershipStateMachine` per body that has been grabbed, passes the requester's or
-  holder's avatar position to `Request`, `Stream`, `BeginRelease` and `Handback`, calls `Poll` every tick, answers every
-  request once and announces every change of owner. Each client keeps an `OwnershipClaim` for bodies its player grabs.
-  Both sides send and take all of this on the `WorldReplication` system channel, never through replicated object
-  state, and the client resets its claims whenever that channel's order breaks: see the
+- **Motion leases:** the host keeps an `OwnershipStateMachine` per body that has been grabbed, with the session's
+  largest participant count as the policy's `MaximumParticipants`, passes the requester's or holder's avatar position to
+  `Request`, `Stream`, `BeginRelease` and `Handback`, calls `Poll` every tick, answers every request once with its
+  number, and announces every change of owner. Each client keeps an `OwnershipClaim` for bodies its player grabs, sends
+  the number `Grab` gives it with each request, and calls the claim's `Poll` once a frame. Requests, throws, hand-backs,
+  answers and announcements travel on the `WorldReplication` system channel and samples on the unreliable lane, never
+  through replicated object state, and the client resets its claims whenever that channel's order breaks: see the
   [delivery contract](#delivery-contract).
 - **Requests:** check every forwarded request with `PlayerRequestLimiter.Evaluate` before running it.
-- **Leaving players:** when a link closes, reclaim the bodies its participant holds; before a slot is reused, clear it
-  as [Participant slots](#participant-slots) describes.
+- **Leaving players:** when a link closes, call `LinkClosed` for its participant on every machine; before a slot is
+  reused, clear it as [Participant slots](#participant-slots) describes.
+- **Diagnostics:** count reclaim reasons, cooldowns and strikes, limiter refusals and channel drops per participant, so
+  the host can spot a griefer (see [Limits](#limits)), and a client's claim recoveries (`LastRecovery`, `LostRequests`).
 - **Scene and spawns:** build a `SceneObjectKeyCensus` when the world loads or is promoted, and place joining players
   with `SpawnSlotPlanner`.
 - **Presentation:** route UI and audio with `PresentationRoutingPolicy` and the calling context's profile, keep one
@@ -592,16 +713,18 @@ holds a vector file that neither replays:
 - `scheduler.json`: five scenarios, every tick's choices and the credit left.
 - `token-bucket.json`: take decisions, including time running backwards.
 - `ownership.json`: the hold range, quiet owners yielding, contested holds yielding, short holds yielding to stale
-  requests, and 300 seeded events, each call's outcome with the machine's credit, cooldown and first-sample state,
-  whether the hold is contested, and the remembered release.
+  requests, every participant keeping its own cooldown, strikes doubling up to the cap with the edge of their memory,
+  letting go early striking while taking turns does not, closed links, and 300 seeded events that include closed
+  links. Each call's outcome comes with the machine's credit, every participant's cooldown and last strike, the
+  first-sample state, whether the hold is contested, and the remembered release with whether it would strike.
 - `interpolation.json`: a late sample, an uneven cadence, jitter with a duplicate, stale samples and a timeline reset,
   a 900 ms timeline step, latency falling from 950 to 50 ms and rising from 50 to 950 ms, a 300 ms fall at 20 Hz that
   stays inside the dead band, and a resend older than the full buffer followed by a 100 ms rise at 30 Hz that falls
-  back below the floor. Each arrival's result is recorded, and each frame's render time, mode, position, target delay
-  and playback offset. Between them the scenarios reach every rule for a stale sample.
+  back past the fall-back's dead band. Each arrival's result is recorded, and each frame's render time, mode, position,
+  target delay and playback offset. Between them the scenarios reach every rule for a stale sample.
 
-The client's `OwnershipClaim` has no vectors: it does no arithmetic of its own, and the exhaustive orderings and the
-lockstep sweep check it against the host machine, which the vectors pin.
+The client's `OwnershipClaim` has no vectors: it does no arithmetic of its own, and the exhaustive orderings, with and
+without a lost request, and the lockstep sweep check it against the host machine, which the vectors pin.
 
 Floats are written as float32 bit patterns and doubles as float64 ones. Regenerate with
 `python -I tests/fixtures/multiplayer/replication/generate.py .` from the repository root; a diff after regenerating
@@ -633,7 +756,7 @@ means a format or a rule changed.
 - **Playback rate.** The 0.9× to 1.1× bound applies to the playback offset as a whole, not just to the delay, because
   the offset estimate used to move the render clock without limit: playback ranged from a standstill to 2.06 times
   real time in the rough-network test. The price is a slower response when jitter starts: rendering no longer stops to
-  wait, so more frames extrapolate at the onset (56 rather than 27 of 2,397 in that test), never further than before.
+  wait, so more frames extrapolate at the onset (60 rather than 27 of 2,397 in that test), never further than before.
 - **Catch-up and fall-back.** A move of the sender's clock larger than that slew can follow is corrected at a bounded
   rate rather than in a jump. Before, a full buffer held its render at the oldest sample instead, so the render clock
   jumped whenever that sample left. At 10 Hz with 50 ms of transit and 60 Hz frames, one frame ran 17.2 times real
@@ -646,8 +769,8 @@ means a format or a rule changed.
   chosen: a re-anchor moves the replica in one frame, which is the jump being removed. The fall-back goes beyond the
   review. Without it, a rise in latency from 50 to 950 ms left the render ahead of the samples, extrapolating, for 536
   frames, nine seconds and more; once it started where the render passed the sender's clock, 231 frames; now that it
-  starts at the 80 ms floor, 183. The 2× and 0.5× limits and the one percent per millisecond gain are this record's
-  choices. A full buffer keeps the render's segment rather than its oldest sample, because dropping a sample the render
+  starts 20 ms under the 80 ms floor, 195. The 2× and 0.5× limits and the one percent per millisecond gain are this
+  record's choices. A full buffer keeps the render's segment rather than its oldest sample, because dropping a sample the render
   is between moved the replica as well.
 - **Catch-up dead band.** Catching up as soon as the delay passed the cap chased noise. Under heavy jitter the target
   sits at the cap, and the offset estimate, an average with gain 1/8, wanders around it. With 250 ms of uniform jitter
@@ -664,12 +787,19 @@ means a format or a rule changed.
   - with 800 ms, more than the cap can hide, catching up is genuine, and 4 to 7% of frames run faster than 1.1×.
 
   The price is that under heavy jitter the delay sits up to the band past the cap, where it used to be chased.
-- **Fall-back floor.** The fall-back used to start only once the render had passed the estimated sender clock, so after
-  a latency rise the delay could sit under the 80 ms floor at 0.9×. A rise from 50 to 150 ms at 30 Hz took it to 38 ms,
-  with 20 frames extrapolated. Below the floor the render now falls back faster: the same rise dips to 66 ms for 26
-  frames, slowing to 0.72×, and 10 frames extrapolate. It cannot stay at the floor: the first late sample moves the
-  offset estimate 12.5 ms at once, and the estimate then falls faster than 0.9× can follow. A steeper gain kept the dip
-  to 76 ms but hit 0.5× at once; the floor and the one percent per millisecond gain match the catch-up's.
+- **Fall-back dead band.** The fall-back used to start only once the render had passed the estimated sender clock, so
+  after a latency rise the delay could sit under the 80 ms floor at 0.9×. A rise from 50 to 150 ms at 30 Hz took it to
+  38 ms, with 20 frames extrapolated. Falling back faster from the floor itself kept that dip to 66 ms, but it chased
+  noise, as catching up from the cap had: light jitter at 20 and 30 Hz pins the target at the floor, and the offset
+  estimate wanders a few milliseconds either side of it. Over five 60 s seeds, once settled, 30 Hz with 40 ms of jitter
+  ran 901 of 17,100 frames slower than 0.9×, down to 0.87×; with 30 and 50 ms, 523 and 500; 20 Hz with 30 ms, 296. So
+  falling back faster now waits for the floor less a 20 ms dead band, and its gain counts from there. None of those
+  streams has a frame outside 0.9× to 1.1×, and the rough-network test, which fell back for 12 frames at down to 0.78×,
+  now dips to 64 ms and stays inside them too. The price is a deeper dip after a genuine rise: 50 to 150 ms at 30 Hz
+  dips to 52 ms, ends 44 frames under the floor within 0.72 s, and 14 frames extrapolate; at 20 Hz, 56 ms, 49 frames
+  and 23. It cannot stay at the floor: the first late sample moves the offset estimate 12.5 ms at once, and the
+  estimate then falls faster than 0.9× can follow. A steeper gain kept the dip to 76 ms but hit 0.5× at once; the one
+  percent per millisecond gain matches the catch-up's.
 - **Capacity.** The plan gives 8 samples. At 30 Hz, the held-body rate, eight span 233 ms, less than the 350 ms cap, so a
   full buffer dropped samples the render had not reached and the render cut straight across them. A body circling 5 m
   out, one turn every 2 s, under 300 ms of jitter rendered 132 mm off its path on average and 670 mm at worst, where the
@@ -686,8 +816,10 @@ means a format or a rule changed.
   re-arms it.
 - **Ownership numbers.** Silence and hand-back timeouts are 1 s; speed is 64 m/s with a 250 ms burst; hold range is
   100 m, the Gravity Gun's largest configurable hold distance. A new owner's first sample is due within 250 ms, about
-  seven samples at 30 Hz, and an owner that went quiet yields for 1 s. The release window lifts the range check but not
-  the speed budget, and a throw must start within range.
+  seven samples at 30 Hz. A cooldown is 1 s, and strikes double it up to 8 s, which is also how long after a cooldown
+  ends a strike is remembered. A claim gives up on an answer after 2 s. The machine takes slots up to 16, the plan's
+  largest session. The release window lifts the range check but not the speed budget, and a throw must start within
+  range.
 - **Quiet owners yield after silence too.** The reported problem was a participant re-taking a body straight after each
   reclaim without ever streaming it. Yielding after a grant that lapses without a first sample stops that, but one
   sample per grant would then hold a body just as well, so yielding also follows a silence or hand-back timeout. It is
@@ -698,11 +830,11 @@ means a format or a rule changed.
   rejected on purpose. So a hand-back before the first sample counts as going quiet, and a hold that another player
   within range was refused yields when it ends with a hand-back or a failed validation; in each of those loops the
   griefer now never wins twice in a row. A request from out of range does not contest, so nobody can make a holder
-  wait from afar. A denied request from a yielding participant does: only the last participant to yield is remembered,
-  so the holder's yield frees the player it kept waiting. Leaving such requests out let a holder hand back and grab
-  again uncontested for the whole of the other player's cooldown, up to 20 grants in a row. A streamed hold nobody else
-  asked for ends without a cooldown, so a player can put down a body nobody wants and pick it up again. Two players
-  taking turns can still keep a body from a third, as two players taking turns to hold it legitimately can.
+  wait from afar. A denied request from a yielding participant does contest: leaving such requests out let a holder
+  hand back and grab again uncontested for the whole of the other player's cooldown, up to 20 grants in a row. A
+  streamed hold nobody else asked for ends without a cooldown, so a player can put down a body nobody wants and pick it
+  up again. Two players taking turns can still keep a body from a third, as two players taking turns to hold it
+  legitimately can; see [Limits](#limits).
 - **Holds too short to contest yield too.** Those loops were tested with an honest player that named the host's live
   epoch, which a real client cannot know. With a real claim behind a 200 ms round trip or more, a griefer sending a
   grab, a sample and a hand-back together every 200 ms (within the limit of five grabs a second) won 50 of 50 grants.
@@ -716,6 +848,37 @@ means a format or a rule changed.
   A grab from out of range, or the releaser's own, does not count. Each release makes its owner yield at most once, from
   the stale request rather than from the release, so the honest player's retry, a round trip later, still finds the
   body free.
+- **Every participant has its own cooldown.** One cooldown slot, which each new yield took over, let two griefers free
+  each other. Two griefers bursting 100 ms apart, 20 ms from the host, never streaming, won 34 of 34 grants in 10 s at
+  every round trip from 50 to 500 ms; sending one sample a grant, 10 of 10; and a grab, a sample and a hand-back, 300
+  of 300 over a minute at 200 ms and more. The machine now keeps one entry per participant slot, so the table is
+  bounded by the participant count, and one participant's yield never frees another.
+- **Strikes double; taking turns does not.** Separate cooldowns alone left two griefers sending one sample a grant
+  holding the body between them: each holds it for the silence timeout, and the other's 1 s cooldown is always over by
+  then. So repeats cost more. But the honest player in those tests yields after nearly every hold too, because the
+  griefers' denied grabs contest it, and contests and late requests can be sent on purpose by anyone in range: doubling
+  those would let a griefer drive an honest player's cooldown up. So only a participant's own failures are strikes:
+  going quiet, failing validation, and letting go before the hold has lasted half the release window, which no claim
+  does. The whole window would be the claim's own minimum; a retransmitted grab reaches the host up to a few hundred
+  milliseconds late while the hand-back may not, so half of it is the line. The first rule tried doubled a repeat
+  within as long again as the last cooldown; it missed the one-sample griefers, whose holds outlast a second, and still
+  gave them every grant. Remembering a strike for the 8 s cap catches them. Now two griefers in every loop give the
+  honest player the body within 6 s and at least five times in 20 s at every round trip, and without the doubling two
+  one-sample griefers keep it. The honest player never strikes in any of these tests. The 8 s cap bounds what a player
+  loses to a run of genuine lapses.
+- **A closed link ends a hold as going quiet or letting go would.** The contract had the host call `Reclaim` when a
+  link closed, which makes nobody yield. A griefer that grabbed, never streamed, dropped its link 200 ms later and
+  rejoined 50 ms after that kept the body from the honest player at every round trip from 100 to 500 ms: 0 of 39
+  grants in 10 s. `LinkClosed` yields for a hold with no first sample or a contested one, and remembers any other as a
+  release, so a request it made stale can still make it yield. Against one or two such griefers the honest player now
+  gets at least four grants in 10 s, and with one it wins one of the first three.
+- **Requests are numbered, and a claim gives up on a lost one.** The runtime's system channels drop new messages past
+  their bounds without telling the sender, and one dropped grab left a claim `Requested`, simulating and unable to grab,
+  30 s later and for good. A timeout alone would let an answer that was only slow settle the request sent after it, so
+  every request carries a number the host's answer echoes. A late answer then settles nothing, a grant among them is
+  taken as the host's hold, and an answer to a later request shows a lost one at once. The 2 s timeout is long for any
+  playable round trip, and too long to save a lost catch, which the host's hand-back timeout reclaims first;
+  `AnswerTimeoutMicros` can be shortened for that.
 - **Client claim.** The review asked that answers be matched to requests and that the release window settle only on
   the last answer. The claim also replays the throws and hand-backs sent before each answer as the host applied them,
   because a lockstep sweep against the host found one more way to disagree with it: a grant that arrived after a
@@ -728,7 +891,9 @@ means a format or a rule changed.
   at once and announces at the end of its frame can deliver Granted, Refused, OwnerChanged, Refused, and the claim then
   let the announcement settle the second catch. So only answers settle requests now. It also found the three gaps the
   delivery contract closes: a claim fed from replicated object state took an epoch back, a closed link stranded a
-  request forever, and nothing said when to start again. Hence the epoch guard, `Reset`, and the contract itself.
+  request forever, and nothing said when to start again. Hence the epoch guard, `Reset`, and the contract itself. The
+  fourth found the gap the contract could not close by itself: a request dropped on a link that stays open. Hence the
+  request numbers and the answer timeout above.
 - **Steals.** "First grab wins" applies to a held body. A body in its thrower's release window can be caught by another
   player, which the plan's ownership tests call a steal; the thrower can also catch its own throw without an epoch
   change. A grab of a held body is simulated like a grab of a free one. For one round it was sent unsimulated, so a

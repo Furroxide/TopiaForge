@@ -9,8 +9,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// the local time, moves toward the offset estimate minus that delay by at most 10% of elapsed time, so playback
     /// runs between 0.9 and 1.1 times real time. When the render lags the estimated sender clock by more than the cap
     /// plus a dead band it catches up faster, at up to twice real time, and when it comes closer to that clock than the
-    /// 80 ms floor it falls back faster, at down to half real time. A full buffer keeps the samples the render is
-    /// between, so the render clock never jumps to stay inside it. All bookkeeping is integer microseconds.
+    /// 80 ms floor less a dead band it falls back faster, at down to half real time. A full buffer keeps the samples the
+    /// render is between, so the render clock never jumps to stay inside it. All bookkeeping is integer microseconds.
     /// </summary>
     internal sealed class SnapshotInterpolationBuffer
     {
@@ -50,7 +50,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// </summary>
         public const long CatchUpDeadBandMicros = 50_000;
 
-        /// <summary>Each this many microseconds of lag beyond the dead band, or below the floor, add one percent to the slew.</summary>
+        /// <summary>
+        /// How far below the floor the delay may go before falling back speeds up. A stream whose target sits at the
+        /// floor, as light jitter at 20 to 30 Hz leaves it, keeps the offset estimate's noise around the floor, and
+        /// falling back at the floor itself slowed such streams below 0.9 times real time.
+        /// </summary>
+        public const long FallBackDeadBandMicros = 20_000;
+
+        /// <summary>Each this many microseconds of lag beyond a dead band add one percent to the slew.</summary>
         public const long CorrectionMicrosPerPercent = 1_000;
 
         public const long DefaultNominalIntervalMicros = 100_000;
@@ -60,6 +67,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>The delay beyond which catching up speeds up: the cap plus the dead band.</summary>
         private const long CatchUpFromMicros = MaximumDelayMicros + CatchUpDeadBandMicros;
+
+        /// <summary>The delay below which falling back speeds up: the floor less its dead band.</summary>
+        private const long FallBackFromMicros = MinimumDelayMicros - FallBackDeadBandMicros;
 
         private readonly NetTransformSample[] samples = new NetTransformSample[Capacity];
 
@@ -248,10 +258,11 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// How fast the playback offset may move, as a percentage of elapsed time. Normally 10%. While the delay the
-        /// render is at exceeds the cap plus the dead band, one percent more per millisecond beyond them, up to 100%
-        /// (twice real time); while it is below the 80 ms floor, one percent more per millisecond below it, up to 50%
-        /// (half real time). The gain is proportional, so small excursions are corrected gently and large ones quickly,
-        /// and noise in the offset estimate inside the dead band never speeds playback past 1.1 times real time.
+        /// render is at exceeds the cap plus its dead band, one percent more per millisecond beyond them, up to 100%
+        /// (twice real time); while it is more than its dead band below the 80 ms floor, one percent more per
+        /// millisecond below that, up to 50% (half real time). The gain is proportional, so small excursions are
+        /// corrected gently and large ones quickly, and noise in the offset estimate inside either dead band never moves
+        /// playback outside 0.9 to 1.1 times real time.
         /// </summary>
         internal long SlewPercent()
         {
@@ -261,9 +272,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 return Math.Min(CatchUpSlewPercent, PlaybackSlewPercent + (delay - CatchUpFromMicros) / CorrectionMicrosPerPercent);
             }
 
-            if (delay < MinimumDelayMicros)
+            if (delay < FallBackFromMicros)
             {
-                return Math.Min(FallBackSlewPercent, PlaybackSlewPercent + (MinimumDelayMicros - delay) / CorrectionMicrosPerPercent);
+                return Math.Min(FallBackSlewPercent, PlaybackSlewPercent + (FallBackFromMicros - delay) / CorrectionMicrosPerPercent);
             }
 
             return PlaybackSlewPercent;

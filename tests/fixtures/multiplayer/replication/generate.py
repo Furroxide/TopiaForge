@@ -495,6 +495,7 @@ PLAYBACK_SLEW_PERCENT = 10
 CATCH_UP_SLEW_PERCENT = 100
 FALL_BACK_SLEW_PERCENT = 50
 CATCH_UP_DEAD_BAND = 50_000
+FALL_BACK_DEAD_BAND = 20_000
 CORRECTION_MICROS_PER_PERCENT = 1_000
 
 
@@ -598,15 +599,17 @@ class InterpolationBuffer:
         return 2 if self.last_render < self.samples[1][0] else 0
 
     def slew_percent(self):
-        # Catch up beyond the cap plus the dead band, fall back below the floor; the gain counts from those edges.
+        # Catch up beyond the cap plus its dead band, fall back below the floor less its dead band; the gain counts
+        # from those edges.
         delay = self.offset() - self.playback
         catch_up_from = MAX_DELAY + CATCH_UP_DEAD_BAND
+        fall_back_from = MIN_DELAY - FALL_BACK_DEAD_BAND
         if delay > catch_up_from:
             return min(CATCH_UP_SLEW_PERCENT,
                        PLAYBACK_SLEW_PERCENT + (delay - catch_up_from) // CORRECTION_MICROS_PER_PERCENT)
-        if delay < MIN_DELAY:
+        if delay < fall_back_from:
             return min(FALL_BACK_SLEW_PERCENT,
-                       PLAYBACK_SLEW_PERCENT + (MIN_DELAY - delay) // CORRECTION_MICROS_PER_PERCENT)
+                       PLAYBACK_SLEW_PERCENT + (fall_back_from - delay) // CORRECTION_MICROS_PER_PERCENT)
         return PLAYBACK_SLEW_PERCENT
 
     def sample(self, now):
@@ -754,11 +757,11 @@ write("interpolation.json", {
              "sample), plus three jitters, clamped to 80-350 ms. The playback offset (render time minus local time) "
              "moves toward offset minus delay by at most 10% of elapsed local time; while offset minus playback offset "
              "exceeds 400 ms (the 350 ms cap plus a 50 ms dead band), one percent more per millisecond beyond 400 ms, "
-             "up to 100%; while it is below the 80 ms floor, one percent more per millisecond below it, up to 50%. The "
-             "render time is then floored at the last render time, and the playback offset follows it. A full buffer "
-             "of 20 drops its oldest sample, the next one if the render holds the oldest, or the third if the render "
-             "is between the oldest two. Samples arriving together go in by server time. Y and z are zero and "
-             "rotations identity.",
+             "up to 100%; while it is below 60 ms (the 80 ms floor less a 20 ms dead band), one percent more per "
+             "millisecond below 60 ms, up to 50%. The render time is then floored at the last render time, and the "
+             "playback offset follows it. A full buffer of 20 drops its oldest sample, the next one if the render holds "
+             "the oldest, or the third if the render is between the oldest two. Samples arriving together go in by "
+             "server time. Y and z are zero and rotations identity.",
     "capacity": CAPACITY,
     "scenarios": [
         interpolation_scenario("a late sample never pauses playback", late_sample, 5),
@@ -785,6 +788,7 @@ BURST_CREDIT = SPEED_UNITS_PER_SECOND * SPEED_BURST // 1_000_000 + TOLERANCE
 HOLD_RANGE = 100 * POSITION_UNITS + TOLERANCE
 FIRST_SAMPLE_TIMEOUT = 250_000
 YIELD_COOLDOWN = 1_000_000
+MAXIMUM_YIELD_COOLDOWN = 8_000_000
 MAXIMUM_SPEED = 64
 MAXIMUM_ANGULAR_SPEED = 64
 
@@ -820,11 +824,12 @@ class OwnershipMachine:
         self.last_validated_micros = 0
         self.awaiting = False
         self.first_deadline = 0
-        self.yielding = 0
-        self.yield_until = 0
+        self.granted_at = 0
+        self.cooldowns = {}  # participant -> [until, length of its last strike]
         self.contested = False
         self.last_releaser = 0
         self.last_release = 0
+        self.last_release_strikes = False
 
     def report(self, result, reason="None", changed=False):
         return [result, reason, self.state, self.owner, self.epoch, changed]
@@ -833,7 +838,10 @@ class OwnershipMachine:
         return distance_squared(body, avatar) <= HOLD_RANGE * HOLD_RANGE
 
     def is_yielding(self, participant, now):
-        return participant == self.yielding and participant != 0 and now < self.yield_until
+        return participant in self.cooldowns and now < self.cooldowns[participant][0]
+
+    def cooldown_list(self):
+        return [[participant, until, length] for participant, (until, length) in sorted(self.cooldowns.items())]
 
     def request(self, participant, observed, body, avatar, now):
         if self.state == "Server":
@@ -876,7 +884,7 @@ class OwnershipMachine:
             return self.report(refusal)
         held = self.state == "Owned"
         if (held and not self.in_range(position, holder)) or not self.spend(position, now):
-            return self.take_back("ValidationFailed", "Rejected", now, self.contested)
+            return self.take_back("ValidationFailed", "Rejected", now, self.contested, True)
         self.awaiting = False
         self.last_stream = max(self.last_stream, now)
         return self.report("Accepted")
@@ -888,7 +896,7 @@ class OwnershipMachine:
         if self.state == "ReleaseWindow":
             return self.report("Releasing")
         if not self.in_range(self.last_validated, holder):
-            return self.take_back("ValidationFailed", "Rejected", now, self.contested)
+            return self.take_back("ValidationFailed", "Rejected", now, self.contested, True)
         self.state = "ReleaseWindow"
         self.release_deadline = now + RELEASE_WINDOW
         self.last_stream = max(self.last_stream, now)
@@ -900,35 +908,38 @@ class OwnershipMachine:
             return self.report(refusal), None
         held = self.state == "Owned"
         if (held and not self.in_range(position, holder)) or not self.spend(position, now):
-            return self.take_back("ValidationFailed", "Rejected", now, self.contested), None
+            return self.take_back("ValidationFailed", "Rejected", now, self.contested, True), None
         accepted = clamp_magnitude(linear, MAXIMUM_SPEED), clamp_magnitude(angular, MAXIMUM_ANGULAR_SPEED)
-        return self.take_back("None", "HandedBack", now, self.awaiting or self.contested), accepted
+        return self.take_back("None", "HandedBack", now, self.awaiting or self.contested, True), accepted
 
-    def disconnect(self, participant):
-        if self.yielding == participant:
-            self.yielding = 0
-            self.yield_until = 0
-        if self.last_releaser == participant:
-            self.last_releaser = 0
-            self.last_release = 0
+    def link_closed(self, participant, now):
+        # The participant may rejoin: a quiet or contested hold yields, any other is remembered as a release.
         if self.state == "Server" or self.owner != participant:
             return self.report("NoChange")
-        return self.take_back("Disconnected", "Reclaimed", 0, False)
+        return self.take_back("Disconnected", "Reclaimed", now, self.awaiting or self.contested, True)
+
+    def disconnect(self, participant):
+        self.cooldowns.pop(participant, None)
+        if self.last_releaser == participant:
+            self.clear_release()
+        if self.state == "Server" or self.owner != participant:
+            return self.report("NoChange")
+        return self.take_back("Disconnected", "Reclaimed", 0, False, False)
 
     def reclaim(self):
         if self.state == "Server":
             return self.report("NoChange")
-        return self.take_back("Host", "Reclaimed", 0, False)
+        return self.take_back("Host", "Reclaimed", 0, False, False)
 
     def poll(self, now):
         if self.state == "Server":
             return self.report("NoChange")
         if self.awaiting and now > self.first_deadline:
-            return self.take_back("NoFirstSample", "Reclaimed", now, True)
+            return self.take_back("NoFirstSample", "Reclaimed", now, True, False)
         if self.state == "ReleaseWindow" and now - self.release_deadline > SILENCE_TIMEOUT:
-            return self.take_back("HandbackTimeout", "Reclaimed", now, True)
+            return self.take_back("HandbackTimeout", "Reclaimed", now, True, False)
         if now - self.last_stream > SILENCE_TIMEOUT:
-            return self.take_back("Silence", "Reclaimed", now, True)
+            return self.take_back("Silence", "Reclaimed", now, True, False)
         return self.report("NoChange")
 
     def grant(self, participant, body, now):
@@ -938,26 +949,37 @@ class OwnershipMachine:
         self.last_validated = body
         self.last_stream = now
         self.last_validated_micros = now
+        self.granted_at = now
         self.credit = BURST_CREDIT
         self.awaiting = True
         self.first_deadline = now + FIRST_SAMPLE_TIMEOUT
         self.contested = False
+        self.clear_release()
+        return self.report("Granted", "None", True)
+
+    def clear_release(self):
         self.last_releaser = 0
         self.last_release = 0
-        if self.yielding == participant:
-            self.yielding = 0
-            self.yield_until = 0
-        return self.report("Granted", "None", True)
+        self.last_release_strikes = False
 
     def yield_after_race(self, participant, now):
         if self.last_releaser == 0 or self.last_releaser == participant:
             return
         if now - self.last_release >= YIELD_COOLDOWN:
             return
-        self.yielding = self.last_releaser
-        self.yield_until = now + YIELD_COOLDOWN
-        self.last_releaser = 0
-        self.last_release = 0
+        self.make_yield(self.last_releaser, now, self.last_release_strikes)
+        self.clear_release()
+
+    def make_yield(self, participant, now, strike):
+        # Taking turns costs the base cooldown. A strike within the cap after the participant's last cooldown ended
+        # doubles its last strike, up to the cap; any other strike costs the base.
+        until, last = self.cooldowns.get(participant, (0, 0))
+        length = YIELD_COOLDOWN
+        if strike:
+            if last > 0 and now < until + MAXIMUM_YIELD_COOLDOWN:
+                length = min(MAXIMUM_YIELD_COOLDOWN, 2 * last)
+            last = length
+        self.cooldowns[participant] = [now + length, last]
 
     def spend(self, position, now):
         if now > self.last_validated_micros:
@@ -971,16 +993,20 @@ class OwnershipMachine:
         self.last_validated = position
         return True
 
-    def take_back(self, reason, result, now, make_yield):
+    def take_back(self, reason, result, now, make_yield, remember):
         participant = self.owner
+        # Going quiet and failing validation are strikes; so is letting go before the first sample, or before the hold
+        # has lasted half the release window.
+        let_go = reason in ("None", "Disconnected")
+        strike = not let_go or self.awaiting or now - self.granted_at < RELEASE_WINDOW // 2
         self.to_server()
         if make_yield:
-            self.yielding = participant
-            self.yield_until = now + YIELD_COOLDOWN
-        elif reason in ("None", "ValidationFailed"):
-            # Let go, or refused, with nobody waiting: remembered in case a request this hold made stale arrives.
+            self.make_yield(participant, now, strike)
+        elif remember:
+            # Let go, refused or cut off with nobody waiting: remembered in case a request this hold made stale arrives.
             self.last_releaser = participant
             self.last_release = now
+            self.last_release_strikes = strike
         return self.report(result, reason, True)
 
     def to_server(self):
@@ -1010,6 +1036,8 @@ def ownership_scenario(name, calls, initial_epoch=0):
         elif operation == "release":
             participant, epoch, holder, now = arguments
             outcome = machine.release(participant, epoch, tuple(holder), now)
+        elif operation == "linkClosed":
+            outcome = machine.link_closed(arguments[0], arguments[1])
         elif operation == "disconnect":
             outcome = machine.disconnect(arguments[0])
         elif operation == "reclaim":
@@ -1017,8 +1045,8 @@ def ownership_scenario(name, calls, initial_epoch=0):
         else:
             outcome = machine.poll(arguments[0])
         step = {"call": [operation] + list(arguments),
-                "outcome": outcome + [machine.credit, machine.yielding, machine.yield_until, machine.awaiting,
-                                      machine.contested, machine.last_releaser, machine.last_release]}
+                "outcome": outcome + [machine.credit, machine.cooldown_list(), machine.awaiting, machine.contested,
+                                      machine.last_releaser, machine.last_release, machine.last_release_strikes]}
         if accepted is not None:
             step["accepted"] = [[hex32(v) for v in accepted[0]], [hex32(v) for v in accepted[1]]]
         steps.append(step)
@@ -1153,6 +1181,126 @@ short_holds = [
     ["request", 2, 15, O, O, 1_450_000],
 ]
 
+# Two quiet owners take turns: each yields for its own cooldown, so one's yield never frees the other.
+own_cooldowns = [
+    ["request", 2, 0, O, O, 0],
+    ["poll", 250_001],
+    ["request", 3, 2, O, O, 300_000],
+    ["poll", 550_001],
+    ["request", 2, 4, O, O, 600_000],
+    ["request", 3, 4, O, O, 610_000],
+    ["request", 1, 4, O, O, 620_000],
+    ["stream", 1, 5, O, O, 640_000],
+    ["request", 2, 5, O, O, 650_000],
+    ["handback", 1, 5, O, NONE, NONE, O, 700_000],
+    ["request", 2, 6, O, O, 710_000],
+    ["request", 1, 6, O, O, 720_000],
+    ["request", 2, 6, O, O, 1_250_001],
+    ["request", 3, 7, O, O, 1_300_000],
+    ["poll", 1_500_002],
+    ["request", 3, 8, O, O, 1_550_001],
+    ["stream", 3, 9, O, O, 1_560_000],
+]
+
+# A participant that keeps going quiet strikes again and again: 1, 2, 4 and 8 s, then 8 s again. Taking turns in
+# between costs the base cooldown and leaves its strike alone. A strike within 8 s after the last cooldown ended
+# doubles: participant 3 lapses one microsecond before that point, participant 1 exactly at it and starts at 1 s again.
+doubling = [
+    ["request", 2, 0, O, O, 0],
+    ["poll", 250_001],
+    ["request", 2, 2, O, O, 1_250_001],
+    ["poll", 1_500_002],
+    ["request", 2, 4, O, O, 3_500_002],
+    ["poll", 3_750_003],
+    ["request", 2, 6, O, O, 7_750_003],
+    ["poll", 8_000_004],
+    ["request", 2, 8, O, O, 16_000_003],
+    ["request", 2, 8, O, O, 16_000_004],
+    ["poll", 16_250_005],
+    ["request", 2, 10, O, O, 24_250_005],
+    ["stream", 2, 11, O, O, 24_260_000],
+    ["request", 3, 11, O, O, 24_265_000],
+    ["release", 2, 11, O, 24_270_000],
+    ["handback", 2, 11, O, NONE, NONE, O, 25_270_000],
+    ["request", 2, 12, O, O, 26_270_000],
+    ["poll", 26_520_001],
+    ["request", 3, 14, O, O, 40_000_000],
+    ["poll", 40_250_001],
+    ["request", 3, 16, O, O, 48_999_999],
+    ["poll", 49_250_000],
+    ["request", 1, 18, O, O, 50_000_000],
+    ["poll", 50_250_001],
+    ["request", 1, 20, O, O, 59_000_000],
+    ["poll", 59_250_001],
+]
+
+# Letting go before the hold has lasted half the release window is a strike when it is raced or contested; a hold that
+# long, raced or contested, is taking turns, which costs the base cooldown and leaves the strike alone. The last two
+# holds last 700 ms, taking turns, and one microsecond under 500 ms, a strike.
+turns = [
+    ["request", 2, 0, O, O, 0],
+    ["stream", 2, 1, O, O, 0],
+    ["handback", 2, 1, O, NONE, NONE, O, 0],
+    ["request", 3, 1, O, O, 10_000],
+    ["request", 2, 2, O, O, 1_010_000],
+    ["stream", 2, 3, O, O, 1_010_000],
+    ["handback", 2, 3, O, NONE, NONE, O, 1_010_000],
+    ["request", 3, 3, O, O, 1_020_000],
+    ["request", 1, 4, O, O, 1_030_000],
+    ["stream", 1, 5, O, O, 1_040_000],
+    ["release", 1, 5, O, 1_050_000],
+    ["handback", 1, 5, O, NONE, NONE, O, 2_050_000],
+    ["request", 3, 5, O, O, 2_060_000],
+    ["request", 1, 6, O, O, 2_070_000],
+    ["request", 3, 6, O, O, 2_080_000],
+    ["stream", 3, 7, O, O, 2_090_000],
+    ["request", 2, 7, O, O, 3_100_000],
+    ["release", 3, 7, O, 3_100_000],
+    ["handback", 3, 7, O, NONE, NONE, O, 3_110_000],
+    ["request", 2, 8, O, O, 3_120_000],
+    ["stream", 2, 9, O, O, 3_130_000],
+    ["request", 1, 9, O, O, 3_140_000],
+    ["handback", 2, 9, O, NONE, NONE, O, 3_200_000],
+    ["request", 1, 10, O, O, 3_210_000],
+    ["stream", 1, 11, [20 * POSITION_UNITS, 0, 0], O, 3_220_000],
+    ["request", 3, 12, O, O, 4_110_000],
+    ["stream", 3, 13, O, O, 4_120_000],
+    ["linkClosed", 3, 4_130_000],
+    ["request", 1, 13, O, O, 4_140_000],
+    ["request", 1, 14, O, O, 5_000_000],
+    ["stream", 1, 15, O, O, 5_010_000],
+    ["handback", 1, 15, O, NONE, NONE, O, 5_700_000],
+    ["request", 2, 15, O, O, 5_710_000],
+    ["request", 3, 16, O, O, 5_800_000],
+    ["stream", 3, 17, O, O, 5_810_000],
+    ["handback", 3, 17, O, NONE, NONE, O, 6_299_999],
+    ["request", 1, 17, O, O, 6_310_000],
+]
+
+# A closed link ends a quiet or contested hold as going quiet does, and any other as an uncontested hand-back does;
+# a participant that is not holding the body keeps its cooldown and release until it leaves for good.
+link_closes = [
+    ["request", 2, 0, O, O, 0],
+    ["linkClosed", 2, 100_000],
+    ["request", 2, 2, O, O, 150_000],
+    ["request", 3, 2, O, O, 160_000],
+    ["stream", 3, 3, O, O, 170_000],
+    ["request", 1, 3, O, O, 180_000],
+    ["linkClosed", 3, 190_000],
+    ["request", 1, 4, O, O, 200_000],
+    ["stream", 1, 5, O, O, 210_000],
+    ["release", 1, 5, O, 215_000],
+    ["linkClosed", 1, 220_000],
+    ["linkClosed", 1, 230_000],
+    ["request", 2, 5, O, O, 240_000],
+    ["request", 1, 6, O, O, 250_000],
+    ["linkClosed", 3, 260_000],
+    ["disconnect", 3],
+    ["request", 3, 6, O, O, 270_000],
+    ["linkClosed", 2, 280_000],
+    ["request", 2, 7, O, O, 1_100_001],
+]
+
 ownership_rng = random.Random(97)
 random_calls = []
 shadow = OwnershipMachine()
@@ -1163,8 +1311,11 @@ for _ in range(300):
     epoch = (shadow.epoch - 1) & 0xFFFFFFFF if ownership_rng.randrange(4) == 0 else shadow.epoch
     position = [ownership_rng.randrange(-3 * POSITION_UNITS, 3 * POSITION_UNITS), 0, 0]
     avatar = [ownership_rng.randrange(-110 * POSITION_UNITS, 110 * POSITION_UNITS), 0, 0]
-    kind = ownership_rng.randrange(7)
-    if kind == 0:
+    kind = ownership_rng.randrange(8)
+    if kind == 6:
+        call = ["linkClosed", participant, clock]
+        shadow.link_closed(participant, clock)
+    elif kind == 0:
         call = ["request", participant, epoch, position, avatar, clock]
         shadow.request(participant, epoch, tuple(position), tuple(avatar), clock)
     elif kind in (1, 2):
@@ -1188,27 +1339,39 @@ write("ownership.json", {
     "schema": 1,
     "about": "OwnershipStateMachine with the default policy, replayed call by call. Positions are 1/512 m grid units "
              "and velocities float32 bits. Each outcome is the result, reclaim reason, state, owner slot (0 is the "
-             "server), epoch and whether it changed, then the machine's distance credit, yielding participant, yield "
-             "deadline and whether a first sample is still owed. A grab, steal or catch needs the requester's avatar "
-             "within the hold range of the body; a throw needs the body's last validated position within it of the "
-             "holder; a grant with no sample by its deadline, a silent owner and a missing hand-back are reclaimed and "
-             "make that participant yield for the cooldown, and so does a hand-back before the first sample. A request "
-             "from another participant within the hold range, denied while the body is held, contests the hold; the "
-             "owner of a contested hold yields once it hands back or fails validation, replacing any earlier cooldown. "
-             "Every grant, a steal included, starts an uncontested hold. An uncontested hold that ends by a hand-back "
-             "or a failed validation is remembered with its time until the body is granted or reclaimed; a request "
-             "naming another epoch while the body is free, from another participant within the hold range, within "
-             "the cooldown after that release, makes the releaser yield for the cooldown from then, once. A "
-             "disconnect forgets the participant's cooldown and release. The last three outcome fields are whether "
-             "the current hold is contested, the remembered releaser (0 for none) and its release time.",
+             "server), epoch and whether it changed, then the machine's distance credit, its cooldowns as "
+             "[participant, until, length of the last strike] in participant order, and whether a first sample is "
+             "still owed. A grab, steal or catch needs the requester's avatar within the hold range of the body; a "
+             "throw needs the body's last validated position within it of the holder; a grant with no sample by its "
+             "deadline, a silent owner and a missing hand-back are reclaimed and make that participant yield, and so "
+             "does a hand-back before the first sample. A request from another participant within the hold range, "
+             "denied while the body is held, contests the hold; the owner of a contested hold yields once it hands "
+             "back or fails validation. A closed link reclaims the participant's hold: it yields if the hold had no "
+             "first sample or was contested, and the hold is otherwise remembered as a release. Every participant "
+             "has its own cooldown. Going quiet, failing validation, and letting go (a hand-back or a closed link) "
+             "before the first sample or before the hold has lasted half the 1 s release window are strikes; a strike "
+             "within 8 s after the participant's last cooldown ended costs twice its last strike, at most 8 s, and "
+             "any other strike 1 s. Any other yield is taking turns and costs 1 s, leaving the last strike as it "
+             "was. Every grant, a steal included, starts an uncontested hold. An uncontested hold that ends by a "
+             "hand-back, a failed validation or a closed link is remembered with its time, and whether yielding for "
+             "it would be a strike, until the body is granted or reclaimed; a request naming another epoch while "
+             "the body is free, from another participant within the hold range, within 1 s after that release, "
+             "makes the releaser yield from then, once. A disconnect forgets the participant's cooldown and release. "
+             "The last four outcome fields are whether the current hold is contested, the remembered releaser (0 "
+             "for none), its release time and whether yielding for that release would be a strike.",
     "policy": {"holdRangeUnits": HOLD_RANGE, "burstCreditUnits": BURST_CREDIT,
                "firstSampleTimeoutMicros": FIRST_SAMPLE_TIMEOUT, "yieldCooldownMicros": YIELD_COOLDOWN,
-               "silenceTimeoutMicros": SILENCE_TIMEOUT, "releaseWindowMicros": RELEASE_WINDOW},
+               "maximumYieldCooldownMicros": MAXIMUM_YIELD_COOLDOWN, "silenceTimeoutMicros": SILENCE_TIMEOUT,
+               "releaseWindowMicros": RELEASE_WINDOW},
     "scenarios": [
         ownership_scenario("the hold range", hold_range),
         ownership_scenario("quiet owners yield", quiet_owners),
         ownership_scenario("contested holds yield", contested_holds),
         ownership_scenario("short holds yield to stale requests", short_holds),
+        ownership_scenario("every participant keeps its own cooldown", own_cooldowns),
+        ownership_scenario("strikes double the cooldown up to the cap", doubling),
+        ownership_scenario("letting go early strikes, taking turns does not", turns),
+        ownership_scenario("a closed link yields like a quiet or contested hold", link_closes),
         ownership_scenario("seeded events", random_calls),
     ],
 }, compact_depth=4)

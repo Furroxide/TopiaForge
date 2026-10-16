@@ -22,14 +22,39 @@ namespace TopiaForge.ModManager.Tests
         private const double Radius = 5.0;
         private const double TurnSeconds = 2.0;
         private const long CatchUpFrom = SnapshotInterpolationBuffer.MaximumDelayMicros + SnapshotInterpolationBuffer.CatchUpDeadBandMicros;
+        private const long FallBackFrom = SnapshotInterpolationBuffer.MinimumDelayMicros - SnapshotInterpolationBuffer.FallBackDeadBandMicros;
 
         public static void Run()
         {
+            LightJitterAtTheFloorNeverSlowsPlayback();
             JitterInsideTheDeadBandNeverSpeedsUp();
             HeavierJitterCatchesUpRarelyAndGently();
             ACurveStaysOnItsPathUnderHeavyJitter();
             TheCapacityCoversTheCapAtTheFastestStream();
             Console.WriteLine("MultiplayerInterpolationJitterTests passed.");
+        }
+
+        private static void LightJitterAtTheFloorNeverSlowsPlayback()
+        {
+            // 30 to 50 ms of extra transit at 20 and 30 Hz holds the target at the 80 ms floor, and the offset estimate's
+            // noise moves the delay a few milliseconds either side of it. Falling back from the floor itself turned that
+            // noise into slow playback: with 40 ms of jitter at 30 Hz, 901 of 17,100 settled frames ran slower than 0.9
+            // times real time, down to 0.87. With the fall-back's dead band no frame leaves 0.9 to 1.1 times real time,
+            // and once settled none needs more than the normal slew.
+            foreach (var hertz in new[] { 20, 30 })
+            {
+                foreach (var jitter in new[] { 30_000L, 40_000L, 50_000L })
+                {
+                    var name = jitter / 1_000 + " ms of jitter at " + hertz + " Hz";
+                    var totals = Jittered(hertz, jitter, name);
+                    Equal(0, totals.SlowFrames, name + ": no frame ran slower than 0.9 times real time");
+                    True(totals.Slowest >= 0.9, name + ": the slowest frame ran at " + Format(totals.Slowest));
+                    Equal(0, totals.FastFrames, name + ": and none faster than 1.1");
+                    Equal(0, totals.SteadyCorrections, name + ": once settled, no frame needed more than the normal slew");
+                    True(totals.SteadySmallestDelay < SnapshotInterpolationBuffer.MinimumDelayMicros && totals.SteadySmallestDelay >= FallBackFrom,
+                        name + ": the delay dipped under the floor but stayed inside the dead band, at least " + totals.SteadySmallestDelay);
+                }
+            }
         }
 
         private static void JitterInsideTheDeadBandNeverSpeedsUp()
@@ -135,7 +160,7 @@ namespace TopiaForge.ModManager.Tests
 
                     var delayBefore = buffer.CurrentDelayMicros;
                     if (!rate.Sample(buffer, now, out _) || now < Settled) continue;
-                    if (delayBefore > CatchUpFrom || delayBefore < SnapshotInterpolationBuffer.MinimumDelayMicros) totals.SteadyCorrections++;
+                    if (delayBefore > CatchUpFrom || delayBefore < FallBackFrom) totals.SteadyCorrections++;
                     totals.SteadySmallestDelay = Math.Min(totals.SteadySmallestDelay, buffer.CurrentDelayMicros);
                     totals.SteadyLargestDelay = Math.Max(totals.SteadyLargestDelay, buffer.CurrentDelayMicros);
                 }
@@ -198,6 +223,10 @@ namespace TopiaForge.ModManager.Tests
 
             public double Fastest { get; private set; }
 
+            public int SlowFrames { get; private set; }
+
+            public double Slowest { get; private set; } = double.MaxValue;
+
             public int SteadyCorrections { get; set; }
 
             public long SteadyLargestDelay { get; set; } = long.MinValue;
@@ -209,6 +238,8 @@ namespace TopiaForge.ModManager.Tests
                 Frames += rate.Frames;
                 FastFrames += rate.FastFrames;
                 Fastest = Math.Max(Fastest, rate.FastestRatio);
+                SlowFrames += rate.SlowFrames;
+                Slowest = Math.Min(Slowest, rate.SlowestRatio);
             }
         }
 

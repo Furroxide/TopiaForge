@@ -16,15 +16,21 @@ namespace TopiaForge.ModManager.Core.Multiplayer
     /// </para>
     /// <para>
     /// The delivery contract: requests, throws and hand-backs reach the host in the order sent, and the host's answers
-    /// and announcements reach the claim in the order the host sent them, on one ordered channel that loses nothing
-    /// while the link lasts. The host answers every request exactly once, with <see cref="OnGranted"/> or
-    /// <see cref="OnRefused"/>, as it handles the request. It announces every change of owner with
-    /// <see cref="OnOwnerChanged"/> at any later point, or only the newest owner of a frame, and may leave a
-    /// requester's own grant to its answer. Only an answer settles a request, the oldest one due: the throws and
-    /// hand-backs sent before it take effect first, as the host applied them, epoch checks included. An announcement
-    /// records the owner and epoch and settles nothing. The claim never takes an epoch older than one it has heard, and
-    /// any newer epoch ends the hold it had confirmed. When the order breaks, because the link closed, the client
-    /// reconnected or the session was replaced, the runtime calls <see cref="Reset"/>.
+    /// and announcements reach the claim in the order the host sent them, on one ordered channel. Every request carries
+    /// its number, and the host answers each request it receives exactly once, as it handles it, echoing that number,
+    /// with <see cref="OnGranted"/> or <see cref="OnRefused"/>. It announces every change of owner with
+    /// <see cref="OnOwnerChanged"/> at any later point, or only the newest owner of a frame, and may leave a requester's
+    /// own grant to its answer. Only an answer settles a request, the one it names: the throws and hand-backs sent
+    /// before it take effect first, as the host applied them, epoch checks included, and any request before it, which
+    /// no answer named, never reached the host. An announcement records the owner and epoch and settles nothing. The
+    /// claim never takes an epoch older than one it has heard, and any newer epoch ends the hold it had confirmed.
+    /// </para>
+    /// <para>
+    /// The channel may drop a request without telling this client, so <see cref="Poll"/> takes a request unanswered for
+    /// the answer timeout as lost. An answer that arrives for a request the claim no longer holds is recorded like an
+    /// announcement, and a grant among them is taken as a hold the host confirmed. When the order breaks, because the
+    /// link closed, the client reconnected, the session was replaced or this client's own channel dropped a message,
+    /// the runtime calls <see cref="Reset"/>.
     /// </para>
     /// </remarks>
     internal sealed class OwnershipClaim
@@ -42,6 +48,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private long confirmedDeadlineMicros;
         private int outstandingRequests;
         private uint streamEpoch;
+        private uint nextRequestNumber;
         private bool heard;
 
         public OwnershipClaim(int localParticipant, OwnershipPolicy? policy = null, uint knownEpoch = 0)
@@ -66,7 +73,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// The epoch in the newest report the claim has heard, which a grab names. It never moves backwards, except that
-        /// the first report after construction or <see cref="Reset"/> is taken whatever its epoch.
+        /// the first report after construction or a <see cref="Reset"/> across links or sessions is taken whatever its
+        /// epoch.
         /// </summary>
         public uint Epoch { get; private set; }
 
@@ -87,21 +95,31 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// </summary>
         public uint StreamEpoch => streamEpoch;
 
+        /// <summary>Why the claim last stopped waiting for something it had sent, for diagnostics.</summary>
+        public OwnershipClaimRecovery LastRecovery { get; private set; }
+
+        /// <summary>How many requests the claim has taken as lost: unanswered for the answer timeout, or skipped.</summary>
+        public int LostRequests { get; private set; }
+
         /// <summary>
-        /// The local player grabs. Returns true when a request must be sent, naming <paramref name="requestEpoch"/>.
-        /// Grabbing one's own throw during its release window takes it back under the epoch it is already owned by,
-        /// while at most <see cref="MaximumOutstandingRequests"/> answers are due. A grab of a body this client does not
-        /// hold is simulated at once, whoever holds it now: the host grants a held body only once its owner has thrown
-        /// it, which the client cannot see, and a steal's first sample must reach the host before the first-sample
-        /// deadline. Such a grab is not sent while an answer is due, since that answer may change the epoch it must name.
+        /// The local player grabs. Returns true when <paramref name="request"/> must be sent, naming its epoch and
+        /// number. Grabbing one's own throw during its release window takes it back under the epoch it is already owned
+        /// by, while at most <see cref="MaximumOutstandingRequests"/> answers are due. A grab of a body this client does
+        /// not hold is simulated at once, whoever holds it now: the host grants a held body only once its owner has
+        /// thrown it, which the client cannot see, and a steal's first sample must reach the host before the
+        /// first-sample deadline. Such a grab is not sent while an answer is due, since that answer may change the epoch
+        /// it must name.
         /// </summary>
-        public bool Grab(out uint requestEpoch)
+        public bool Grab(long nowMicros, out OwnershipRequest request)
         {
+            RequireTime(nowMicros);
+            request = default;
             var fresh = State == OwnershipState.Server;
-            requestEpoch = fresh ? Epoch : streamEpoch;
             if (fresh ? outstandingRequests > 0 : State != OwnershipState.ReleaseWindow) return false;
             if (outstandingRequests >= MaximumOutstandingRequests) return false;
-            unanswered.Add(new Message(MessageKind.Request, requestEpoch, 0));
+            request = new OwnershipRequest(nextRequestNumber, fresh ? Epoch : streamEpoch);
+            nextRequestNumber = unchecked(nextRequestNumber + 1);
+            unanswered.Add(new Message(MessageKind.Request, request.Epoch, nowMicros, request.Number));
             outstandingRequests++;
             Predict();
             return true;
@@ -113,9 +131,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// </summary>
         public bool BeginRelease(long nowMicros)
         {
-            if (nowMicros < 0) throw new ArgumentOutOfRangeException(nameof(nowMicros));
+            RequireTime(nowMicros);
             if (State != OwnershipState.Owned && State != OwnershipState.Requested) return false;
-            Send(new Message(MessageKind.Throw, streamEpoch, nowMicros + policy.ReleaseWindowMicros));
+            Send(new Message(MessageKind.Throw, streamEpoch, nowMicros + policy.ReleaseWindowMicros, 0));
             return true;
         }
 
@@ -127,29 +145,51 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         {
             epoch = streamEpoch;
             if (!IsHandbackDue(nowMicros)) return false;
-            Send(new Message(MessageKind.Handback, epoch, 0));
+            Send(new Message(MessageKind.Handback, epoch, 0, 0));
             return true;
         }
 
         /// <summary>
-        /// The host's answer to the oldest outstanding request: it granted it, or reported the body already this
-        /// client's, under <paramref name="epoch"/>.
+        /// The host's answer to request <paramref name="requestNumber"/>: it granted it, or reported the body already
+        /// this client's, under <paramref name="epoch"/>.
         /// </summary>
-        public void OnGranted(uint epoch)
+        public void OnGranted(uint requestNumber, uint epoch)
         {
-            Record(epoch, self);
-            Settle(true, epoch);
+            var newest = Record(epoch, self);
+            var index = IndexOfRequest(requestNumber);
+            if (index >= 0)
+            {
+                SettleThrough(index, true, epoch);
+                return;
+            }
+
+            // A request the claim gave up on was granted after all: the host holds the body for this client now.
+            if (newest && (confirmed == OwnershipState.Server || IsOlder(confirmedEpoch, epoch)))
+            {
+                confirmed = OwnershipState.Owned;
+                confirmedEpoch = epoch;
+            }
+
+            Predict();
         }
 
         /// <summary>
-        /// The host's answer to the oldest outstanding request: another participant holds the body, the requester is out
-        /// of range, yielding or limited, or the request named an old epoch. A refusal changes nothing on the host, so it
-        /// settles the request and records the owner and epoch it names.
+        /// The host's answer to request <paramref name="requestNumber"/>: another participant holds the body, the
+        /// requester is out of range, yielding or limited, or the request named an old epoch. A refusal changes nothing
+        /// on the host, so it settles the request and records the owner and epoch it names.
         /// </summary>
-        public void OnRefused(uint epoch, NetOwner owner)
+        public void OnRefused(uint requestNumber, uint epoch, NetOwner owner)
         {
             Record(epoch, owner);
-            Settle(false, 0);
+            var index = IndexOfRequest(requestNumber);
+            if (index >= 0)
+            {
+                SettleThrough(index, false, 0);
+                return;
+            }
+
+            EndSupersededHold();
+            Predict();
         }
 
         /// <summary>
@@ -166,57 +206,133 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         }
 
         /// <summary>
-        /// Forgets every message no answer covers and the hold the host confirmed, because their answers will never come:
-        /// the link closed, the client reconnected, or the session was replaced. The claim stops simulating and may grab
-        /// again at once. It names its last known epoch until it hears a report, and takes the next one whatever its
-        /// epoch, since a replaced session counts again.
+        /// Takes every request unanswered for longer than the answer timeout as lost, oldest first, as if a later answer
+        /// had skipped it: the throws and hand-backs sent before it take effect as the host applied them, and a lost grab
+        /// stops simulating. The channel can drop a request without telling this client, and without this the claim
+        /// would wait for its answer forever. Call it once a frame. Returns whether a request was lost.
         /// </summary>
-        public void Reset()
+        public bool Poll(long nowMicros)
         {
+            RequireTime(nowMicros);
+            var lost = false;
+            while (outstandingRequests > 0)
+            {
+                var index = IndexOfRequest(null);
+                if (nowMicros - unanswered[index].TimeMicros <= policy.AnswerTimeoutMicros) break;
+                RemoveThrough(index);
+                LostRequests++;
+                LastRecovery = OwnershipClaimRecovery.AnswerTimeout;
+                lost = true;
+            }
+
+            if (lost)
+            {
+                EndSupersededHold();
+                ApplyIfNothingOutstanding();
+                Predict();
+            }
+
+            return lost;
+        }
+
+        /// <summary>
+        /// Forgets every message no answer covers and the hold the host confirmed, because the order of what arrives no
+        /// longer says what the host did: the link closed, the client reconnected, the session was replaced, or this
+        /// client's own channel dropped a message from the host. The claim stops simulating and may grab again at once,
+        /// naming its last known epoch until it hears a report. Across links and sessions it takes the next report
+        /// whatever its epoch, since a replaced session counts again; after a drop within the session it keeps refusing
+        /// older ones. Request numbers count on, so a late answer to a forgotten request settles nothing.
+        /// </summary>
+        public void Reset(OwnershipClaimRecovery reason)
+        {
+            if (reason < OwnershipClaimRecovery.LinkClosed || reason > OwnershipClaimRecovery.ChannelDropped)
+            {
+                throw new ArgumentOutOfRangeException(nameof(reason));
+            }
+
             unanswered.Clear();
             outstandingRequests = 0;
             confirmed = OwnershipState.Server;
             confirmedDeadlineMicros = 0;
-            heard = false;
+            if (reason != OwnershipClaimRecovery.ChannelDropped) heard = false;
             if (KnownOwner.Equals(self)) KnownOwner = NetOwner.Server;
+            LastRecovery = reason;
             Predict();
         }
 
         /// <summary>Whether <paramref name="epoch"/> comes before <paramref name="than"/>, counting across the wrap.</summary>
         private static bool IsOlder(uint epoch, uint than) => unchecked((int)(epoch - than)) < 0;
 
-        /// <summary>Takes a report's owner and epoch, unless the claim has already heard a newer epoch.</summary>
-        private void Record(uint epoch, NetOwner owner)
+        private static void RequireTime(long nowMicros)
         {
-            if (heard && IsOlder(epoch, Epoch)) return;
-            Epoch = epoch;
-            KnownOwner = owner;
-            heard = true;
+            if (nowMicros < 0) throw new ArgumentOutOfRangeException(nameof(nowMicros));
         }
 
         /// <summary>
-        /// Settles the oldest request: the messages sent before it take effect, then the answer. With no answer left
-        /// due, the messages after the last request take effect too, so the release window settles on the last answer.
+        /// Takes a report's owner and epoch, unless the claim has already heard a newer epoch. Returns whether it did.
         /// </summary>
-        private void Settle(bool granted, uint epoch)
+        private bool Record(uint epoch, NetOwner owner)
         {
-            var index = 0;
-            while (index < unanswered.Count && unanswered[index].Kind != MessageKind.Request) index++;
-            if (index < unanswered.Count)
+            if (heard && IsOlder(epoch, Epoch)) return false;
+            Epoch = epoch;
+            KnownOwner = owner;
+            heard = true;
+            return true;
+        }
+
+        /// <summary>The index of the request with this number, or of the oldest request when the number is null; else -1.</summary>
+        private int IndexOfRequest(uint? number)
+        {
+            for (var index = 0; index < unanswered.Count; index++)
             {
-                for (var applied = 0; applied < index; applied++) Apply(unanswered[applied]);
-                unanswered.RemoveRange(0, index + 1);
-                outstandingRequests--;
-                if (granted)
-                {
-                    confirmed = OwnershipState.Owned;
-                    confirmedEpoch = epoch;
-                }
+                var message = unanswered[index];
+                if (message.Kind == MessageKind.Request && (number == null || message.Number == number.Value)) return index;
+            }
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Settles the request at <paramref name="index"/> with its answer: the messages sent before it take effect, and
+        /// any request among them, which no answer named, never reached the host. With no answer left due, the messages
+        /// after the last request take effect too, so the release window settles on the last answer.
+        /// </summary>
+        private void SettleThrough(int index, bool granted, uint epoch)
+        {
+            RemoveThrough(index);
+            if (granted)
+            {
+                confirmed = OwnershipState.Owned;
+                confirmedEpoch = epoch;
             }
 
             EndSupersededHold();
             ApplyIfNothingOutstanding();
             Predict();
+        }
+
+        /// <summary>
+        /// Removes the messages up to and including the request at <paramref name="index"/>. The throws and hand-backs
+        /// before it take effect as the host applied them, and the requests before it, which no answer named, are lost.
+        /// </summary>
+        private void RemoveThrough(int index)
+        {
+            for (var position = 0; position < index; position++)
+            {
+                var message = unanswered[position];
+                if (message.Kind != MessageKind.Request)
+                {
+                    Apply(message);
+                    continue;
+                }
+
+                outstandingRequests--;
+                LostRequests++;
+                LastRecovery = OwnershipClaimRecovery.AnswerSkipped;
+            }
+
+            unanswered.RemoveRange(0, index + 1);
+            outstandingRequests--;
         }
 
         /// <summary>A throw or hand-back takes effect at once unless an answer sent before it is still due.</summary>
@@ -256,7 +372,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             else if (message.Kind == MessageKind.Throw && confirmed == OwnershipState.Owned)
             {
                 confirmed = OwnershipState.ReleaseWindow;
-                confirmedDeadlineMicros = message.DeadlineMicros;
+                confirmedDeadlineMicros = message.TimeMicros;
             }
         }
 
@@ -297,7 +413,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                         if (state == OwnershipState.Owned && message.Epoch == epoch)
                         {
                             state = OwnershipState.ReleaseWindow;
-                            deadline = message.DeadlineMicros;
+                            deadline = message.TimeMicros;
                         }
 
                         break;
@@ -325,21 +441,28 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         private bool MayBeGranted(uint requestEpoch) =>
             requestEpoch == Epoch || (KnownOwner.Equals(self) && Epoch == unchecked(requestEpoch + 1));
 
-        /// <summary>A message sent to the host under an epoch: a request, a throw with its release deadline, or a hand-back.</summary>
+        /// <summary>
+        /// A message sent to the host under an epoch: a request with its number and the time it was sent, a throw with
+        /// its release deadline, or a hand-back.
+        /// </summary>
         private readonly struct Message
         {
-            public Message(MessageKind kind, uint epoch, long deadlineMicros)
+            public Message(MessageKind kind, uint epoch, long timeMicros, uint number)
             {
                 Kind = kind;
                 Epoch = epoch;
-                DeadlineMicros = deadlineMicros;
+                TimeMicros = timeMicros;
+                Number = number;
             }
 
             public MessageKind Kind { get; }
 
             public uint Epoch { get; }
 
-            public long DeadlineMicros { get; }
+            /// <summary>When a request was sent, or when a throw's release window closes.</summary>
+            public long TimeMicros { get; }
+
+            public uint Number { get; }
         }
     }
 }

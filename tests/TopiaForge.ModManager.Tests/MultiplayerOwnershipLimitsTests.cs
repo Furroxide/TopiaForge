@@ -78,8 +78,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var host = Granted(Alice, Origin, 0);
             var alice = new OwnershipClaim(Alice);
-            alice.Grab(out _);
-            alice.OnGranted(1);
+            alice.Grab(0, out var grab);
+            alice.OnGranted(grab.Number, 1);
             Equal(OwnershipResult.Accepted, host.Stream(Alice, 1, Origin, Origin, 10_000).Result, "first sample");
             True(alice.BeginRelease(100_000), "throw");
             Equal(OwnershipResult.Releasing, host.BeginRelease(Alice, 1, Origin, 100_000).Result, "the host opens the window");
@@ -93,15 +93,15 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var thrower = new NetQuantizedPosition(-90 * Unit, 0, 0);
-            True(alice.Grab(out var catchEpoch) && catchEpoch == 1 && alice.State == OwnershipState.Owned, "the thrower tries to catch it");
-            var refused = host.Request(Alice, catchEpoch, body, thrower, 1_000_000);
+            True(alice.Grab(1_000_000, out var catchGrab) && catchGrab.Epoch == 1 && alice.State == OwnershipState.Owned, "the thrower tries to catch it");
+            var refused = host.Request(Alice, catchGrab.Epoch, body, thrower, 1_000_000);
             True(refused.Result == OwnershipResult.OutOfRange && refused.Owner.Equals(NetOwner.ForParticipant(Alice)), "117 m apart");
             Equal(OwnershipState.ReleaseWindow, host.State, "the host keeps the throw going");
 
             // A second throw before the answer opens nothing new on the host, so the client goes back to the first deadline.
             True(alice.BeginRelease(1_050_000), "a second throw before the answer");
             Equal(OwnershipResult.Releasing, host.BeginRelease(Alice, 1, thrower, 1_050_000).Result, "the host keeps the first window");
-            alice.OnRefused(refused.Epoch, refused.Owner);
+            alice.OnRefused(catchGrab.Number, refused.Epoch, refused.Owner);
             True(alice.State == OwnershipState.ReleaseWindow && alice.ReleaseDeadlineMicros == 1_100_000, "the client resumes the window with its deadline");
             True(alice.IsSimulating && !alice.GrantPending, "and keeps simulating");
             True(alice.TryCompleteHandback(1_100_000, out var handbackEpoch) && handbackEpoch == 1, "then hands back on time");
@@ -110,9 +110,9 @@ namespace TopiaForge.ModManager.Tests
 
             // Without a pending catch, a refusal that names the owner still changes nothing.
             var bob = new OwnershipClaim(Bob);
-            bob.Grab(out _);
-            bob.OnGranted(1);
-            bob.OnRefused(1, NetOwner.ForParticipant(Bob));
+            bob.Grab(0, out var bobGrab);
+            bob.OnGranted(bobGrab.Number, 1);
+            bob.OnRefused(bobGrab.Number, 1, NetOwner.ForParticipant(Bob));
             Equal(OwnershipState.Owned, bob.State, "an owner's refused duplicate request");
         }
 
@@ -128,7 +128,8 @@ namespace TopiaForge.ModManager.Tests
             True(far.EpochChanged && host.State == OwnershipState.Server && host.Owner.IsServer, "the host reclaims the body");
             Equal(Origin, host.LastValidatedPosition, "at its last valid position");
             Equal(OwnershipResult.StaleEpoch, host.Stream(Alice, 1, new NetQuantizedPosition(Unit, 0, 0), away, 30_000).Result, "later samples are stale");
-            Equal(0, host.YieldingParticipant, "validation failures do not make the owner yield");
+            True(!host.IsYielding(Alice, 30_000) && host.CooldownOf(Alice).UntilMicros == 0, "a validation failure nobody contested makes nobody yield");
+            True(host.LastReleaser == Alice && host.LastReleaseStrikes, "but it is remembered, as a strike if a late request raced it");
 
             var past = Granted(Alice, Origin, 0);
             Equal(OwnershipResult.Rejected, past.BeginRelease(Alice, 1, PastReach, 10_000).Result, "one unit past the hold range");
@@ -175,7 +176,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var host = Granted(Alice, Origin, 0);
             host.Poll(250_001);
-            True(host.YieldingParticipant == Alice && host.YieldUntilMicros == 1_250_001, "the lapsed owner yields for a second");
+            var lapse = host.CooldownOf(Alice);
+            True(lapse.UntilMicros == 1_250_001 && lapse.StrikeMicros == 1_000_000, "the lapsed owner yields for a second, a strike");
             True(host.IsYielding(Alice, 250_001) && !host.IsYielding(Bob, 250_001), "only the lapsed owner");
             var again = host.Request(Alice, host.Epoch, Origin, Origin, 300_000);
             True(again.Result == OwnershipResult.Yielding && !again.EpochChanged && host.State == OwnershipState.Server, "it cannot take the body straight back");
@@ -186,7 +188,7 @@ namespace TopiaForge.ModManager.Tests
             cooled.Poll(250_001);
             Equal(OwnershipResult.Yielding, cooled.Request(Alice, 2, Origin, Origin, 1_250_000).Result, "one microsecond before the cooldown ends");
             Equal(OwnershipResult.Granted, cooled.Request(Alice, 2, Origin, Origin, 1_250_001).Result, "and when it ends, nobody else having asked");
-            Equal(0, cooled.YieldingParticipant, "the new grant clears the cooldown");
+            True(!cooled.IsYielding(Alice, 1_250_001) && cooled.CooldownOf(Alice).StrikeMicros == 1_000_000, "the strike is remembered for the next one");
 
             // Yielding also follows silence and a missing hand-back, so one sample a grant is not a way round it.
             var silent = Granted(Alice, Origin, 0);
@@ -219,21 +221,22 @@ namespace TopiaForge.ModManager.Tests
             Equal(OwnershipResult.Granted, host.Request(Alice, 0, Origin, Origin, 0).Result, "grab");
             Equal(OwnershipResult.Accepted, host.Stream(Alice, 1, Origin, Origin, 0).Result, "sample");
             Equal(OwnershipResult.HandedBack, host.Handback(Alice, 1, Rest, Origin, 0, out _).Result, "hand-back");
-            True(!host.Contested && host.YieldingParticipant == 0, "nothing contested the hold");
+            True(!host.Contested && !host.IsYielding(Alice, 0), "nothing contested the hold");
             True(host.LastReleaser == Alice && host.LastReleaseMicros == 0, "so the host remembers who let go, and when");
+            True(host.LastReleaseStrikes, "a hold shorter than half the release window would be a strike");
 
             // Neither Alice's own stale grab nor one from out of range counts.
             Equal(OwnershipResult.StaleEpoch, host.Request(Alice, 0, Origin, Origin, 10_000).Result, "Alice's own stale grab");
             Equal(OwnershipResult.StaleEpoch, host.Request(Bob, 1, Origin, PastReach, 20_000).Result, "Bob's from out of range");
-            Equal(0, host.YieldingParticipant, "make nobody yield");
+            True(host.CooldownOf(Alice).UntilMicros == 0 && host.CooldownOf(Bob).UntilMicros == 0, "make nobody yield");
 
             // Bob asked under the epoch of the hold he never saw: Alice yields from now, once, and Bob's retry wins.
             var stale = host.Request(Bob, 1, Origin, Origin, 30_000);
             True(stale.Result == OwnershipResult.StaleEpoch && stale.Epoch == 2 && !stale.EpochChanged, "Bob's stale grab is refused");
-            True(host.YieldingParticipant == Alice && host.YieldUntilMicros == 1_030_000, "and Alice yields for the cooldown");
+            True(host.IsYielding(Alice, 30_000) && host.CooldownOf(Alice).UntilMicros == 1_030_000, "and Alice yields for the cooldown");
             Equal(0, host.LastReleaser, "each release makes its owner yield at most once");
             host.Request(Bob, 1, Origin, Origin, 40_000);
-            Equal(1_030_000L, host.YieldUntilMicros, "a second stale grab does not extend it");
+            Equal(1_030_000L, host.CooldownOf(Alice).UntilMicros, "a second stale grab does not extend it");
             Equal(OwnershipResult.Yielding, host.Request(Alice, 2, Origin, Origin, 50_000).Result, "Alice cannot take it back");
             Equal(OwnershipResult.Granted, host.Request(Bob, 2, Origin, Origin, 60_000).Result, "Bob's retry wins");
 
@@ -243,7 +246,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 var edge = ShortHold(Alice, 100_000);
                 edge.Request(Bob, 0, Origin, Origin, 100_000 + late);
-                Equal(yields ? Alice : 0, edge.YieldingParticipant, "a stale grab " + late + " us after the release");
+                Equal(yields, edge.IsYielding(Alice, 100_000 + late), "a stale grab " + late + " us after the release");
             }
 
             // A sample rejected on purpose ends a hold as abruptly, and counts the same.
@@ -252,7 +255,7 @@ namespace TopiaForge.ModManager.Tests
             Equal(OwnershipResult.Rejected, rejected.Stream(Alice, 1, new NetQuantizedPosition(20 * Unit, 0, 0), Origin, 0).Result, "a rejected sample");
             Equal(Alice, rejected.LastReleaser, "is remembered");
             rejected.Request(Bob, 1, Origin, Origin, 500_000);
-            Equal(Alice, rejected.YieldingParticipant, "and yields to a stale grab");
+            True(rejected.IsYielding(Alice, 500_000), "and yields to a stale grab");
 
             // A grant, a host reclaim and a disconnect leave nobody to blame.
             var granted = ShortHold(Alice, 0);
@@ -260,11 +263,11 @@ namespace TopiaForge.ModManager.Tests
             Equal(0, granted.LastReleaser, "a grant forgets the release");
             granted.Reclaim();
             granted.Request(Alice, 3, Origin, Origin, 20_000);
-            True(granted.LastReleaser == 0 && granted.YieldingParticipant == 0, "and a host reclaim is nobody's release");
+            True(granted.LastReleaser == 0 && !granted.IsYielding(Alice, 20_000) && !granted.IsYielding(Bob, 20_000), "and a host reclaim is nobody's release");
             var departed = ShortHold(Alice, 0);
             departed.Disconnect(Alice);
             departed.Request(Bob, 0, Origin, Origin, 10_000);
-            True(departed.LastReleaser == 0 && departed.YieldingParticipant == 0, "a disconnect forgets the release");
+            True(departed.LastReleaser == 0 && departed.CooldownOf(Alice).UntilMicros == 0, "a disconnect forgets the release");
 
             // Putting a body down that nobody asked for still costs nothing: picking it up again under the epoch the
             // hand-back made is granted at once.
@@ -273,7 +276,7 @@ namespace TopiaForge.ModManager.Tests
             putDown.Stream(Alice, 1, Origin, Origin, 33_333);
             putDown.Handback(Alice, 1, Rest, Origin, 500_000, out _);
             Equal(OwnershipResult.Granted, putDown.Request(Alice, 2, Origin, Origin, 510_000).Result, "an uncontested set-down and pick-up");
-            Equal(0, putDown.YieldingParticipant, "with no cooldown");
+            Equal(0L, putDown.CooldownOf(Alice).UntilMicros, "with no cooldown");
         }
 
         /// <summary>A grab, a sample and a hand-back by <paramref name="participant"/>, all at <paramref name="nowMicros"/>.</summary>
@@ -290,17 +293,17 @@ namespace TopiaForge.ModManager.Tests
         {
             var host = Granted(Alice, Origin, 0);
             host.Poll(250_001);
-            Equal(Alice, host.YieldingParticipant, "the leaver was yielding");
+            True(host.IsYielding(Alice, 250_001), "the leaver was yielding");
             Equal(OwnershipResult.NoChange, host.Disconnect(Bob).Result, "another player leaving");
-            Equal(Alice, host.YieldingParticipant, "keeps the leaver's cooldown");
+            True(host.IsYielding(Alice, 250_001), "keeps the leaver's cooldown");
             Equal(OwnershipResult.NoChange, host.Disconnect(Alice).Result, "the leaver owned nothing");
-            True(host.YieldingParticipant == 0 && !host.IsYielding(Alice, 300_000), "its cooldown is forgotten");
+            True(host.CooldownOf(Alice).UntilMicros == 0 && host.CooldownOf(Alice).StrikeMicros == 0, "its cooldown and strike are forgotten");
             Equal(OwnershipResult.Granted, host.Request(Alice, host.Epoch, Origin, Origin, 300_000).Result, "a newcomer in the same slot can grab at once");
 
             var owned = Granted(Alice, Origin, 0);
             var gone = owned.Disconnect(Alice);
             True(gone.Result == OwnershipResult.Reclaimed && gone.ReclaimReason == OwnershipReclaimReason.Disconnected, "an owner leaving");
-            Equal(0, owned.YieldingParticipant, "leaves no cooldown behind");
+            Equal(0L, owned.CooldownOf(Alice).UntilMicros, "leaves no cooldown behind");
         }
 
         private static void ValidatesThePolicy()
@@ -310,6 +313,18 @@ namespace TopiaForge.ModManager.Tests
             Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(firstSampleTimeoutMicros: 0), "first-sample deadline zero");
             Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(yieldCooldownMicros: -1), "negative cooldown");
             Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(yieldCooldownMicros: 60_000_001), "cooldown too long");
+            Equal(8_000_000L, OwnershipPolicy.Default.MaximumYieldCooldownMicros, "longest cooldown");
+            Equal(16, OwnershipPolicy.Default.MaximumParticipants, "participant slots");
+            Equal(2_000_000L, OwnershipPolicy.Default.AnswerTimeoutMicros, "answer timeout");
+            Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(maximumYieldCooldownMicros: 999_999), "a cap below the base cooldown");
+            Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(maximumYieldCooldownMicros: 60_000_001), "a cap too long");
+            Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(maximumParticipants: 0), "no participant slots");
+            Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(maximumParticipants: 257), "too many participant slots");
+            Throws<ArgumentOutOfRangeException>(() => new OwnershipPolicy(answerTimeoutMicros: 0), "no answer timeout");
+            var slots = new OwnershipStateMachine(new OwnershipPolicy(maximumParticipants: 4));
+            Throws<ArgumentOutOfRangeException>(() => slots.Request(5, 0, Origin, Origin, 0), "a slot past the policy's participants");
+            Throws<ArgumentOutOfRangeException>(() => slots.LinkClosed(0, 0), "slot zero is the server");
+            Equal(OwnershipResult.Granted, slots.Request(4, 0, Origin, Origin, 0).Result, "the last slot");
 
             // A first-sample deadline past the silence timeout is harmless: silence reclaims first.
             var slow = new OwnershipStateMachine(new OwnershipPolicy(firstSampleTimeoutMicros: 5_000_000));

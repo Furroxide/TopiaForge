@@ -29,6 +29,7 @@ namespace TopiaForge.ModManager.Tests
             Equal(policy["burstCreditUnits"]!.GetValue<long>(), defaults.BurstCreditUnits, "the vectors' burst credit");
             Equal(policy["firstSampleTimeoutMicros"]!.GetValue<long>(), defaults.FirstSampleTimeoutMicros, "the vectors' first-sample deadline");
             Equal(policy["yieldCooldownMicros"]!.GetValue<long>(), defaults.YieldCooldownMicros, "the vectors' cooldown");
+            Equal(policy["maximumYieldCooldownMicros"]!.GetValue<long>(), defaults.MaximumYieldCooldownMicros, "the vectors' longest cooldown");
             Equal(policy["silenceTimeoutMicros"]!.GetValue<long>(), defaults.SilenceTimeoutMicros, "the vectors' silence timeout");
             Equal(policy["releaseWindowMicros"]!.GetValue<long>(), defaults.ReleaseWindowMicros, "the vectors' release window");
 
@@ -59,6 +60,9 @@ namespace TopiaForge.ModManager.Tests
                             var handback = new MotionHandback(Position(call[3]), Vector(call[4]), Vector(call[5]));
                             outcome = host.Handback(Int(call[1]), UInt(call[2]), handback, Position(call[6]), Long(call[7]), out accepted);
                             break;
+                        case "linkClosed":
+                            outcome = host.LinkClosed(Int(call[1]), Long(call[2]));
+                            break;
                         case "disconnect":
                             outcome = host.Disconnect(Int(call[1]));
                             break;
@@ -81,12 +85,12 @@ namespace TopiaForge.ModManager.Tests
                     Equal(expected[4]!.GetValue<uint>(), outcome.Epoch, where + ": epoch");
                     Equal(expected[5]!.GetValue<bool>(), outcome.EpochChanged, where + ": epoch changed");
                     Equal(expected[6]!.GetValue<long>(), host.DistanceCreditUnits, where + ": credit");
-                    Equal(expected[7]!.GetValue<int>(), host.YieldingParticipant, where + ": yielding participant");
-                    Equal(expected[8]!.GetValue<long>(), host.YieldUntilMicros, where + ": yield deadline");
-                    Equal(expected[9]!.GetValue<bool>(), host.AwaitingFirstSample, where + ": first sample owed");
-                    Equal(expected[10]!.GetValue<bool>(), host.Contested, where + ": hold contested");
-                    Equal(expected[11]!.GetValue<int>(), host.LastReleaser, where + ": last releaser");
-                    Equal(expected[12]!.GetValue<long>(), host.LastReleaseMicros, where + ": release time");
+                    Equal(expected[7]!.ToJsonString(), Cooldowns(host), where + ": cooldowns");
+                    Equal(expected[8]!.GetValue<bool>(), host.AwaitingFirstSample, where + ": first sample owed");
+                    Equal(expected[9]!.GetValue<bool>(), host.Contested, where + ": hold contested");
+                    Equal(expected[10]!.GetValue<int>(), host.LastReleaser, where + ": last releaser");
+                    Equal(expected[11]!.GetValue<long>(), host.LastReleaseMicros, where + ": release time");
+                    Equal(expected[12]!.GetValue<bool>(), host.LastReleaseStrikes, where + ": release strikes");
                     if (step["accepted"] is JsonArray velocities)
                     {
                         Equal(VectorBits(velocities[0]!), VectorBits(accepted.LinearVelocity), where + ": accepted linear velocity");
@@ -147,6 +151,19 @@ namespace TopiaForge.ModManager.Tests
             }
 
             return count;
+        }
+
+        /// <summary>The machine's cooldowns as the vectors write them: [participant, until, last strike], in participant order.</summary>
+        private static string Cooldowns(OwnershipStateMachine host)
+        {
+            var list = new JsonArray();
+            for (var participant = 1; participant <= host.Policy.MaximumParticipants; participant++)
+            {
+                var cooldown = host.CooldownOf(participant);
+                if (cooldown.UntilMicros > 0) list.Add(new JsonArray(participant, cooldown.UntilMicros, cooldown.StrikeMicros));
+            }
+
+            return list.ToJsonString();
         }
 
         private static int Int(JsonNode? node) => node!.GetValue<int>();
