@@ -90,6 +90,9 @@ internal sealed class FakeTurnServer
     /// <summary>Gets the error codes the next authenticated Allocates meet, one each, before any are granted.</summary>
     internal Queue<int> AllocateErrors { get; } = new();
 
+    /// <summary>Gets or sets whether the server can verify no credential at all, as with a misconfigured key: every authenticated request meets a 401.</summary>
+    internal bool RefuseEveryCredential { get; set; }
+
     /// <summary>Gets or sets whether every ChannelBind is refused, so data travels as Send and Data indications.</summary>
     internal bool RefuseChannelBinds { get; set; }
 
@@ -252,6 +255,15 @@ internal sealed class FakeTurnServer
 
         if (message.Class != StunClass.Request) return;
         if (!Authenticate(message, from, serverSide, now, out var key, out var user)) return;
+
+        // Requests on an allocation must carry the credential that made it (RFC 8656, section 5): another one, as a
+        // restarted process would have, can neither refresh nor release an allocation it did not make.
+        if (allocation != null && message.Method != StunMethod.Allocate && allocation.User != user)
+        {
+            Error(message, from, serverSide, 441, key, false);
+            return;
+        }
+
         switch (message.Method)
         {
             case StunMethod.Allocate:
@@ -280,7 +292,7 @@ internal sealed class FakeTurnServer
             return false;
         }
 
-        if (!message.TryGetText(StunAttribute.Username, 513, out var name) || !Users.TryGetValue(name, out var account) || account.ExpiresAt <= now ||
+        if (RefuseEveryCredential || !message.TryGetText(StunAttribute.Username, 513, out var name) || !Users.TryGetValue(name, out var account) || account.ExpiresAt <= now ||
             !message.TryGetText(StunAttribute.Realm, 763, out var realm) || realm != Realm ||
             !message.TryGetText(StunAttribute.Nonce, 763, out var nonce))
         {

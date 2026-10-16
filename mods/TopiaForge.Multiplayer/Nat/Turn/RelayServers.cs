@@ -50,6 +50,12 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 
         internal IceServerSet Set { get; }
 
+        /// <summary>Lets go of the lookups: whichever fail later are observed, never read.</summary>
+        internal void Abandon()
+        {
+            foreach (var lookup in lookups) NatAgent.Abandon(lookup);
+        }
+
         /// <summary>Gets whether every lookup has finished, one way or the other.</summary>
         internal bool IsCompleted
         {

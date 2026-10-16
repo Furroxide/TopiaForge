@@ -82,6 +82,15 @@ internal sealed class NatScenario
     /// <summary>Gets how many relay credentials were minted, the first one of every plan included.</summary>
     internal int Mints => credentials;
 
+    /// <summary>Gets when each credential was minted, on the virtual clock, the first one of every plan included.</summary>
+    internal List<long> MintedAt { get; } = new();
+
+    /// <summary>Ends every credential minted so far now, as a revocation does: the server refuses each from here on.</summary>
+    internal void RevokeCredentials()
+    {
+        foreach (var name in Turn.Users.Keys.ToList()) Turn.Users[name] = (Turn.Users[name].Password, Network.Now);
+    }
+
     /// <summary>
     /// Gives every allocation a relayed address of its own, 203.0.113.100 and on, as a relay service may: a permission for
     /// one of a peer's relays then never admits the next, so only signaling can introduce it.
@@ -186,6 +195,7 @@ internal sealed class NatScenario
     private IceServerSet Credentials()
     {
         var name = "topiaforge-" + (++credentials).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        MintedAt.Add(Network.Now);
         Turn.Users[name] = ("relay-secret-" + credentials, Network.Now + (TtlSeconds * 1_000_000L));
         var turn = new List<IceServerAddress> { new(TurnHost, 3478) };
         if (SecondTurnPort) turn.Add(new IceServerAddress(TurnHost, 3479));

@@ -1,6 +1,6 @@
 # Multiplayer NAT traversal — design record
 
-Status: Implementing (WS7 of the live-multiplayer plan, game-side connectivity) · Date: 2026-10-16 · Owner: multiplayer
+Status: Implementing (WS7 of the live-multiplayer plan, game-side connectivity) · Date: 2026-10-17 · Owner: multiplayer
 
 This records how two players reach each other across the Internet: STUN, a TURN relay, connectivity checks on the
 game's own socket, signaling through the control plane, and best-effort port mapping. The transport it carries is
@@ -193,12 +193,22 @@ hosts and on a joiner until its join ends:
 
 - **When.** After a failure the next attempt waits one second, doubling to 30, and the wait starts again from one
   second once an allocation comes up. A fallback from a rotation waits only for its release.
-- **Where.** On the server address that last worked. Before any has, on the same address after an answer, and on the
-  next one after silence, since an address that never answers may be one the network blocks.
+- **Where.** On the server address that last worked, unless its last request met silence: the network may now block
+  it, so it is left alone for 30 minutes and the next address in order is tried. Before any has worked, on the same
+  address after an answer, and on the next one after silence. When every address has failed lately, the next in
+  order, so the attempts go round them all.
 - **What first.** An allocation that came up and was lost is released before anything else, since the server may still
   hold its 5-tuple.
-- **Credentials.** One the server refused (401) is not tried again: a fresh one is minted at once, and without a way to
-  mint, the relay stays down.
+- **A 5-tuple someone else holds.** An Allocate that meets a 437 where this agent remembers no release of its own, as
+  when a run that crashed left its allocation behind, cannot free it: the credential that made it is gone. Every
+  allocation shares the game's socket, whose local port never changes, so the next attempt takes another 5-tuple by
+  going to another server address or port, and that one is left alone for 30 minutes. With a single address, as the
+  recorded credentials offer, the relay waits for the old allocation to lapse.
+- **Credentials.** One the server refused (401) is not tried again. The first refusal after an allocation worked mints a
+  fresh one at once, as when a credential is revoked. After that, as with a misconfigured key, the next mint waits 15
+  seconds, doubling to five minutes, and only an allocation that comes up starts it over: at most about 17 mints in an
+  hour and three in any minute, inside the control plane's 20 and five for each prefix. Without a way to mint, the
+  relay stays down.
 - **Gathering.** It waits for a retry that starts before its deadline, and stops waiting once an attempt has met
   silence with nothing heard at all.
 
@@ -340,18 +350,20 @@ to say:
 - **While its connection stalls**: no authenticated packet for three seconds, on whatever path the transport has it,
   until one arrives again.
 
-It opens it at most once a second. Reopening for a change of relay is not limited further, since changes come no
-faster than credentials expire; any other reopening counts toward the window below. Closing sends whatever is queued
-first, so a candidate trickled just before still reaches the host. Coming back, the joiner trickles its candidates
-again, and the host, told by `joined`, sends its own again, since anything trickled while the socket was closed went
-nowhere.
+It opens it at most once a second, and with backoff after an opening that failed, but nothing else holds it back,
+whether its own relay changes or its path through the host's relay stalls: its connection lives on it, and both come
+no faster than credentials expire and networks drop, far inside the service's 30 upgrades a minute and 240 an hour
+for each prefix. Closing sends whatever is queued first, so a candidate trickled just before still reaches the host.
+Coming back, the joiner trickles its candidates again, and the host, told by `joined`, sends its own again, since
+anything trickled while the socket was closed went nowhere.
 
 **Reconnection.** A peer's socket lives at most fifteen minutes, so it is opened again when its lifetime ends (4411),
-at once, and after a lost connection or a rate limit, with backoff from one second doubling to 30, at most six times in
-ten minutes. A replaced socket (4409), an ended session (4410), a withdrawn ticket (4403) or a goodbye is final. A
-refused upgrade is final before the connection is up; once it is up, the joiner tries again later, since a full room
-refuses an upgrade too and the client cannot tell the refusals apart. The host keeps a peer's session across its
-reconnections, since the peer id comes from the ticket.
+at once, and after a lost connection or a rate limit, with backoff from one second doubling to 30: for the host or a
+joiner still connecting, at most six times in ten minutes, and for a connected joiner whenever it needs the socket. A
+replaced socket (4409), an ended session (4410), a withdrawn ticket (4403) or a goodbye is final. A refused upgrade is
+final before the connection is up; once it is up, the joiner tries again later, since a full room refuses an upgrade
+too and the client cannot tell the refusals apart. The host keeps a peer's session across its reconnections, since the
+peer id comes from the ticket.
 
 **The WebSocket client.** `WebSocketSignalingClient` opens `GET /v1/signal/{serverId}`:
 
@@ -477,6 +489,9 @@ using var host = NatHost.Start(network, nat, plan, mapPorts: settings.AllowDirec
   server answers while the network still runs. Stopping the network does the same for whatever is still running.
   A host's goodbyes keep its peers' tickets out of the room for the rest of the registration, so a host restarts
   `NatHost` within one registration only if its peers can take new tickets.
+- Every session starts afresh on the agent: its signaling, gathering, relay targets, backoffs and credentials. A host
+  may stop and host again, and a player may join again, on the same agent and socket; only releases still settling
+  carry over, since the next allocation on their 5-tuple waits for them.
 
 What the flows still own:
 
@@ -506,6 +521,9 @@ What the flows still own:
 | `NatPortMappingLifecycleTests` | Mapping only once hosting runs, never for a relay-only agent or stack, a network that never started or a start that threw, deletion when the network stops; a join on a relay-only stack; UPnP descriptions in every order, pretty-printed and minified |
 | `NatSessionTests` | Reconnecting after a socket's lifetime, a joiner closing its socket once connected and reopening only around a rotation or a stall, a host's rotations reaching a joiner whose socket is closed on relays that share no address, a joiner saying again what it gathered with its socket closed, a connected joiner coming back after a full room refused it, five joiners from one /24 within the room's limits for twenty minutes of rotations, each join failure, the service's notice and error frames, one host with three peers |
 | `NatSocketTests` | Two real network threads on the socket hook over the game's UDP driver bound to loopback, joining through a relay and releasing it |
+| `NatRestartTests` | A host that stopped and hosts again on the same agent answering the next joiner, relay-only and direct, and a player joining again on the same agent |
+| `NatLongSessionTests` | On relays that give every allocation an address of its own: a joiner whose network drops for four seconds every 110 seconds for 35 minutes of rotations on one TURN port, and five joiners through half an hour of 150-second credentials, all staying connected |
+| `NatRelayTargetTests` | A relay leaving an address that went silent for the one that came back, an allocation a crashed run left on the 5-tuple sending the next to another port, and credentials refused right after a working allocation (minted again at once) or for an hour (within five a minute and twenty an hour) |
 
 **The NAT simulator.** It runs over `VirtualDatagramNetwork`, which gained attachments, a router and a configurable
 datagram limit. Sites and NAT boxes model RFC 4787's mapping and filtering behaviours:
@@ -517,9 +535,10 @@ datagram limit. Sites and NAT boxes model RFC 4787's mapping and filtering behav
 
 A fake STUN and TURN server enforces the lifetimes a real one does. Its knobs fail requests, refuse the next
 allocations or every channel bind, lose requests on their way in, forget every allocation, forbid peers, end
-credentials, give every allocation a relayed address of its own, and silence it. The router can lose everything sent to one address and port, as a network blocking a port
-does. The fake signaling room behaves as the service's, with its places, its per-prefix share, a host's goodbyes and
-withdrawn tickets.
+credentials, refuse every credential as a misconfigured key does, give every allocation a relayed address of its
+own, and silence it. It answers a request on an allocation with 441 unless it carries the credential that made it.
+The router can lose everything sent to one address and port, as a network blocking a port does. The fake signaling
+room behaves as the service's, with its places, its per-prefix share, a host's goodbyes and withdrawn tickets.
 
 | Host | Joiner | Result |
 | --- | --- | --- |
@@ -554,8 +573,15 @@ relay.
 - channels and permissions: retrying an unanswered refresh, taking ChannelData after lost answers, and batches sized
   to the nonce;
 - signaling: closing once connected, the host's and the joiner's re-trickle on a rejoin, reopening around a change of
-  relay and after a stall, asking again after a refused upgrade, openings for a change of relay outside the
-  reconnection window, close code 4403, and `TicketRevoked`;
+  relay and after a stall, asking again after a refused upgrade, close code 4403, and `TicketRevoked`;
+- a connected joiner's reopenings held back by the reconnection window, with the window's end kept in the backoff
+  deadline as it was, and in a field of its own while stalls still count against it;
+- restarts: a stopped session's signaling staying done, nothing reset when a session starts, and gathering staying
+  settled from the session before;
+- refused credentials: minting at once after every refusal, a working allocation not starting the backoff over, and
+  each fresh credential starting it over;
+- server addresses that stopped answering: going back to the one that last worked whatever happened there, and a
+  timeout not marking an address; and a 5-tuple an allocation left by a crash holds, retried in place;
 - the indication fallback's in-place lookup;
 - mapping only once hosting runs, and deletion on `Stop` and `Dispose`;
 - dropping sources that cannot send, alone and with the check handler's own port-0 guard, which brings back the
@@ -591,6 +617,11 @@ relay.
   Otherwise the joiner learns it when its path stalls, by reopening its socket, which the host answers by re-sending its
   candidates: the connection stalls for a few seconds once per host rotation. A session whose signaling stays down past
   a credential's lifetime keeps only its direct path.
+- **A crashed run's allocation holds its 5-tuple.** The game's socket keeps its port, so after a crash the relay moves
+  to another server address or port; with only one, as the recorded credentials offer, it waits for that allocation
+  to lapse, up to its lifetime.
+- **An address that went silent once is left alone for 30 minutes.** A brief outage on one port therefore turns that
+  port's rotations into break before make until it has passed.
 - **A vanished allocation is noticed at its next request.** If the server forgets an allocation (a restart, or an
   anycast route moving the 5-tuple), the client learns it from the 437 to its next permission, channel or allocation
   refresh, up to four minutes later, not from the stalled connection. A relay-only connection on it dies first.

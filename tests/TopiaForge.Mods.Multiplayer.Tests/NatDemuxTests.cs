@@ -95,14 +95,9 @@ internal static class NatDemuxTests
         // Each datagram wakes the network thread, which turns the agent and asks for its next timer: with nothing due,
         // that allocates nothing either.
         var now = scenario.Network.Now;
-        for (var warm = 0; warm < 10; warm++) side.Agent.Turn(side.Stack, now);
+        IdleTurns(side, now, 200);
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var round = 0; round < 20_000; round++)
-        {
-            side.Agent.Turn(side.Stack, now);
-            side.Agent.NextTimeoutMicros();
-        }
-
+        IdleTurns(side, now, 20_000);
         allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         That(allocated == 0, "a turn with nothing due allocates nothing (" + allocated + " bytes)");
 
@@ -201,6 +196,17 @@ internal static class NatDemuxTests
         var relayed = 0;
         for (var round = 0; round < rounds; round++) relayed += Cycle(socket, buffer, relayedPath, payload) ? 1 : 0;
         return relayed;
+    }
+
+    /// <summary>Turns an agent with nothing due and asks for its next timer, compiled fully optimized from the start, as <see cref="Replay"/> is.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static void IdleTurns(NatPeerNode side, long now, int rounds)
+    {
+        for (var round = 0; round < rounds; round++)
+        {
+            side.Agent.Turn(side.Stack, now);
+            side.Agent.NextTimeoutMicros();
+        }
     }
 
     /// <summary>Gets whether a datagram is a Data indication carrying a protected transport packet.</summary>
