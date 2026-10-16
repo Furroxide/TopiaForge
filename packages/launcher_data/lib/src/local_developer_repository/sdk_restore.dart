@@ -334,9 +334,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
           label: 'SDK project',
         ),
       );
-      final targetFramework = RegExp(
-        r'<TargetFramework>\s*([^<]+?)\s*</TargetFramework>',
-      ).firstMatch(text)?.group(1);
+      final targetFramework = firstElementText(text, 'TargetFramework');
       if (targetFramework == null) {
         throw StateError('$name does not declare a TargetFramework.');
       }
@@ -371,10 +369,8 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       ),
     );
     for (final property in const ['PackageVersion', 'Version']) {
-      final match = RegExp(
-        '<$property>\\s*([^<]+?)\\s*</$property>',
-      ).firstMatch(text);
-      if (match != null) return match.group(1)!.trim();
+      final version = firstElementText(text, property);
+      if (version != null) return version.trim();
     }
     throw StateError('SDK project has no Version or PackageVersion.');
   }

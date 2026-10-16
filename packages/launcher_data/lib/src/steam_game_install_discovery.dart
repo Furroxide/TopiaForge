@@ -150,9 +150,8 @@ class SteamGameInstallDiscoveryAdapter implements GameInstallDiscoveryAdapter {
   }
 
   Iterable<(String, String)> _parsePairs(String value) sync* {
-    final pattern = RegExp(r'"((?:\\.|[^"\\])*)"\s*"((?:\\.|[^"\\])*)"');
-    for (final match in pattern.allMatches(value)) {
-      yield (_decodeVdf(match.group(1)!), _decodeVdf(match.group(2)!));
+    for (final (key, item) in vdfQuotedPairs(value)) {
+      yield (_decodeVdf(key), _decodeVdf(item));
     }
   }
 

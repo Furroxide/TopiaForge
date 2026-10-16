@@ -305,11 +305,9 @@ ${references.join('\n')}
             label: 'Directory.Build.local.props',
           ),
         );
-        final match = RegExp(
-          r'<RobotopiaManagedDir>\s*([^<]+?)\s*</RobotopiaManagedDir>',
-        ).firstMatch(text);
-        if (match != null && Directory(match.group(1)!).existsSync()) {
-          return Directory(match.group(1)!).absolute.path;
+        final managed = firstElementText(text, 'RobotopiaManagedDir');
+        if (managed != null && Directory(managed).existsSync()) {
+          return Directory(managed).absolute.path;
         }
       } on Object {
         // Source checkouts without local configuration remain safe-only.
