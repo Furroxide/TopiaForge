@@ -10,6 +10,8 @@ namespace TopiaForge.ModManager.Tests
     {
         public static void Run()
         {
+            TestStopBeforeStartAndDisposedRunner();
+            TestStopCancelsPendingAndQueuedWork();
             TestScaledDelayAndTypedCondition();
             TestRepeatAndFrameBudget();
             TestDelayCompletionOrder();
@@ -18,6 +20,54 @@ namespace TopiaForge.ModManager.Tests
             TestRuntimeExceptionFailsRunner();
             TestGlobalCreatorMultiplayerPolicy();
             Console.WriteLine("Creator event graph runner tests passed.");
+        }
+
+        private static void TestStopBeforeStartAndDisposedRunner()
+        {
+            var runtime = new FakeRuntime();
+            var runner = new CreatorEventGraphRunner(Project(new[]
+            {
+                Node("start", CreatorGraphNodeKind.ProjectStart),
+                Node("action", CreatorGraphNodeKind.ShowToast, ("text", "started"))
+            }, new[] { Edge("start", "fired", "action") }), runtime);
+            runner.Stop();
+            runner.Stop();
+            runner.Update(100f);
+            Assert(runtime.Executed.Count == 0 && !runner.Fire(CreatorGraphNodeKind.ProjectStart).Succeeded,
+                "Stop before Start is idempotent and rejects trigger delivery without executing work");
+            Assert(runner.Start().Succeeded && runtime.Executed.Count == 1,
+                "Stop before Start must not dispose an otherwise unused runner");
+            runner.Dispose();
+            runner.Dispose();
+            Assert(!runner.Start().Succeeded && !runner.Fire(CreatorGraphNodeKind.ProjectStart).Succeeded,
+                "disposed runners reject reuse and late trigger delivery");
+        }
+
+        private static void TestStopCancelsPendingAndQueuedWork()
+        {
+            var runtime = new FakeRuntime();
+            using var runner = new CreatorEventGraphRunner(Project(new[]
+            {
+                Node("start", CreatorGraphNodeKind.ProjectStart),
+                Node("a-delay", CreatorGraphNodeKind.Delay, ("seconds", "1")),
+                Node("b-repeat", CreatorGraphNodeKind.Repeat, ("value", "100")),
+                Node("action", CreatorGraphNodeKind.ShowToast, ("text", "queued")),
+                Node("delayed", CreatorGraphNodeKind.ShowToast, ("text", "delayed"))
+            }, new[]
+            {
+                Edge("start", "fired", "a-delay"), Edge("start", "fired", "b-repeat"),
+                Edge("a-delay", "done", "delayed"), Edge("b-repeat", "each", "action")
+            }), runtime);
+            Assert(runner.Start().Succeeded && runtime.Executed.Count == 62,
+                "fixture must contain one pending delay and queued work beyond its initial frame budget");
+            runner.Stop();
+            runner.Update(2f);
+            Assert(runtime.Executed.Count == 62 && runner.TotalSteps == 0,
+                "Stop cancels both delayed and frame-budgeted work immediately");
+            Assert(runner.Start().Succeeded, "a clean restart is supported");
+            runner.Update(1f);
+            Assert(runtime.Executed.Count == 163 && runtime.Executed.FindAll(id => id == "delayed").Count == 1,
+                "restart must execute only new-run work, never cancelled delays or queued actions");
         }
 
         private static void TestScaledDelayAndTypedCondition()

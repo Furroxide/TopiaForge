@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.GameBridge;
 using UnityEngine;
 
 namespace TopiaForge.ModManager
@@ -66,7 +67,6 @@ namespace TopiaForge.ModManager
                 }
                 catch (ObjectDisposedException)
                 {
-                    lease.Dispose();
                     return OperationResult<IPlayerControlLease>.Failure(
                         ModErrorCode.Cancelled,
                         "The mod stopped before player control could be acquired.");
@@ -155,20 +155,12 @@ namespace TopiaForge.ModManager
 
             try
             {
-                var method = component.GetType().GetMethods(
-                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                    .FirstOrDefault(candidate =>
-                    {
-                        if (!string.Equals(candidate.Name, "ChangeHealth", StringComparison.Ordinal))
-                        {
-                            return false;
-                        }
-
-                        var parameters = candidate.GetParameters();
-                        return parameters.Length == 2
-                            && parameters[0].ParameterType == typeof(float)
-                            && parameters[1].ParameterType == typeof(string);
-                    });
+                var method = NativeDamageSource.Select(
+                    component.GetType(),
+                    "ChangeHealth",
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    typeof(GameObject),
+                    typeof(float));
                 if (method == null)
                 {
                     return OperationResult<PlayerHealthSnapshot>.Failure(
@@ -176,7 +168,7 @@ namespace TopiaForge.ModManager
                         "The current game build does not expose the supported player-health operation.");
                 }
 
-                method.Invoke(component, new object[] { delta, source });
+                method.Invoke(component, new[] { delta, NativeDamageSource.Argument(method, source) });
                 return TryGetHealth(out var health) && health != null
                     ? OperationResult<PlayerHealthSnapshot>.Success(health)
                     : OperationResult<PlayerHealthSnapshot>.Failure(

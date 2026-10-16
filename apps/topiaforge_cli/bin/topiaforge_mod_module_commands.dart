@@ -17,10 +17,6 @@ const _sdkModules = <String, _SdkModule>{
     packageId: 'TopiaForge.Mods.RobotKit',
     runtimeDependency: 'io.github.furroxide.topiaforge.robotkit',
   ),
-  'ugc': _SdkModule(
-    packageId: 'TopiaForge.Mods.Ugc',
-    runtimeDependency: 'io.github.furroxide.topiaforge.ugc.livesync',
-  ),
   'worlds': _SdkModule(
     packageId: 'TopiaForge.Mods.Worlds',
     runtimeDependency: 'io.github.furroxide.topiaforge.worlds',

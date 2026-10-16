@@ -58,7 +58,17 @@ namespace TopiaForge.Performance.Appliers
             {
                 sentryQuiet = config.SentryQuiet || config.DisableSentry;
                 sentryDisable = config.DisableSentry;
-                PatchPostfix("SentryRuntimeConfiguration", "Configure", null, nameof(SentryConfigurePostfix));
+                // The postfix binds Configure's 'options' argument, so bind exactly Configure(SentryUnityOptions).
+                var sentryOptions = AccessTools.TypeByName("Sentry.Unity.SentryUnityOptions");
+                if (sentryOptions == null)
+                {
+                    logger.Warn("Performance: game type 'Sentry.Unity.SentryUnityOptions' not found; that lever is inactive.");
+                }
+                else
+                {
+                    PatchPostfix("SentryRuntimeConfiguration", "Configure", new[] { sentryOptions },
+                        nameof(SentryConfigurePostfix));
+                }
             }
 
             if (config.DisablePosthog)

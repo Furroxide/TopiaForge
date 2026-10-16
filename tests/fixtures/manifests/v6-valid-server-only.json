@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-server-only",
+  "displayName": "V6 Server-only Fixture",
+  "version": "1.0.0",
+  "author": { "name": "TopiaForge Tests" },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V5ServerMod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "multiplayer": { "mode": "server-only" }
+}

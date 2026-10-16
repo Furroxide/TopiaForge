@@ -39,9 +39,10 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
         'topiaforge.world.json must use schemaVersion 2.',
       );
     }
-    if (config.worldId.isNotEmpty && !ModManifest.isValidId(config.worldId)) {
+    if (config.worldId.isNotEmpty &&
+        !ModContributions.isValidDeclarationId(config.worldId)) {
       throw const FormatException(
-        'topiaforge.world.json worldId must use the safe TopiaForge id format.',
+        'topiaforge.world.json worldId must use the safe TopiaForge declaration id format.',
       );
     }
     return config;
@@ -60,9 +61,10 @@ extension LocalDeveloperWorldAuthoring on LocalDeveloperRepository {
         'topiaforge.world.json must use schemaVersion 2.',
       );
     }
-    if (config.worldId.isNotEmpty && !ModManifest.isValidId(config.worldId)) {
+    if (config.worldId.isNotEmpty &&
+        !ModContributions.isValidDeclarationId(config.worldId)) {
       throw const FormatException(
-        'topiaforge.world.json worldId must use the safe TopiaForge id format.',
+        'topiaforge.world.json worldId must use the safe TopiaForge declaration id format.',
       );
     }
     _writeDeveloperTextAtomic(

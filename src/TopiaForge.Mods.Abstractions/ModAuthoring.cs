@@ -86,7 +86,9 @@ namespace TopiaForge.Mods
         /// Tracks a disposable resource and returns a lease that can release it early. Disposing the lease removes
         /// the resource from lifetime cleanup and disposes the resource exactly once.
         /// </summary>
-        /// <param name="resource">The resource to own.</param>
+        /// <remarks>Ownership transfers even when tracking rejects a stopped lifetime. Rejected cleanup may wait for
+        /// the host thread and active work to drain; callers must not dispose the resource again after rejection.</remarks>
+        /// <param name="resource">The resource to own, including when shutdown rejects registration.</param>
         /// <returns>An idempotent lease for early release.</returns>
         IDisposable Track(IDisposable resource);
 

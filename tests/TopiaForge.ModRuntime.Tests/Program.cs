@@ -14,12 +14,27 @@ namespace TopiaForge.ModRuntime.Tests
     {
         private const string FixtureAssembly = "TopiaForge.ValidTestMod.dll";
 
-        private static int Main()
+        private static int Main(string[] args)
         {
-            var root = Path.Combine(Path.GetTempPath(), "TopiaForgeModRuntimeTests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
+            if (args.Length > 0)
+                return args.Length != 2 ? 2 : args[0] == "--binding-case" ? RunBindingCase(args[1])
+                    : args[0] == "--generated-binding-case" ? RunGeneratedBindingCase(args[1])
+                    : args[0] == "--malformed-selection-case" ? RunMalformedSelectionCase(args[1]) : 2;
+            TestProductionBindingsInFreshProcesses();
+            TestGeneratedPackagesInFreshProcesses();
+            TestMalformedSelectionInFreshProcesses();
+            var root = Directory.CreateTempSubdirectory("TopiaForgeModRuntimeTests-").FullName;
             try
             {
+                TestDuplicateSelectionKeepsHealthyRuntime(root);
+                TestShutdownAlwaysWaitsForNativeDrain(root);
+                RuntimeShutdownCompletionTests.Run();
+                TestSessionSceneObserverUsesNormalizedEvents(root);
+                TestPartialLoadLoggingFailureDoesNotBlockNextPackage(root);
+                TestPartialLoadCancelsBeforeCleanup(root);
+                TestShutdownCancelsBeforeCallbacks(root);
+                TestShutdownWaitsForSessionDrain(root);
+                TestShutdownAttemptsCleanupAfterLoggingAndHostFailures(root);
                 TestNormalLifecycleAndSubscriberIsolation(root);
                 TestModEventDispatch(root);
                 TestInitialSceneReplayAndDeduplication(root);
@@ -62,33 +77,33 @@ namespace TopiaForge.ModRuntime.Tests
             return reference;
         }
 
-        private static Fixture NewFixture(string root, string name, string entryType)
+        private static Fixture NewFixture(string root, string name, string entryType, string assemblyName = FixtureAssembly)
         {
             var testRoot = Path.Combine(root, name);
             var packagePath = Path.Combine(testRoot, "package");
             Directory.CreateDirectory(packagePath);
             File.Copy(
-                Path.Combine(AppContext.BaseDirectory, FixtureAssembly),
-                Path.Combine(packagePath, FixtureAssembly),
+                Path.Combine(AppContext.BaseDirectory, assemblyName),
+                Path.Combine(packagePath, assemblyName),
                 true);
             var tracePath = Path.Combine(testRoot, "trace.txt");
             Environment.SetEnvironmentVariable("TOPIAFORGE_RUNTIME_TEST_TRACE", tracePath);
             var manifest = new ModManifest
             {
-                SchemaVersion = 5,
+                SchemaVersion = 6,
                 Id = "tests." + name,
                 Name = "Runtime " + name,
                 Version = "1.0.0",
-                EntryAssembly = FixtureAssembly,
+                EntryAssembly = assemblyName,
                 EntryType = entryType,
                 SupportedGameVersionRange = "*",
-                SupportedLoaderVersionRange = ">=1.0.0-rc.1 <2.0.0",
-                SupportedSdkVersionRange = ">=1.0.0-rc.1 <2.0.0"
+                SupportedLoaderVersionRange = ">=0.1.0-rc.1 <0.2.0",
+                SupportedSdkVersionRange = ">=0.1.0-rc.1 <0.2.0"
             };
             JsonUtil.SaveFile(
                 Path.Combine(packagePath, PackageInstallReceipt.FileName),
                 PackageInstallReceipt.Create(
-                    Path.Combine(packagePath, FixtureAssembly),
+                    Path.Combine(packagePath, assemblyName),
                     packagePath,
                     manifest));
             var package = new ModPackage(
@@ -237,12 +252,17 @@ namespace TopiaForge.ModRuntime.Tests
         private sealed class CapturedRuntimeLogger : IModRuntimeLogger
         {
             public List<string> Errors { get; } = new List<string>();
+            public bool ThrowOnError { get; set; }
 
             public IModLogger ForMod(string modId) => new CapturedModLogger(this, modId);
             public void Info(string message) { }
             public void Warn(string message) { }
             public void Error(string message) => Errors.Add(message);
-            public void Error(Exception exception, string message) => Errors.Add(message + ": " + exception.Message);
+            public void Error(Exception exception, string message)
+            {
+                Errors.Add(message + ": " + exception.Message);
+                if (ThrowOnError) throw new InvalidOperationException("Synthetic log sink failure.");
+            }
 
             private sealed class CapturedModLogger : IModLogger
             {
@@ -286,13 +306,20 @@ namespace TopiaForge.ModRuntime.Tests
                 remove { }
             }
             public bool Disposed { get; private set; }
+            public bool ThrowOnDispose { get; set; }
+            public Action<IModLifetime>? ScopeCreated { get; set; }
 
             public GameplayContextServices Create(
                 string ownerModId,
                 string packagePath,
                 string dataPath,
                 IModLifetime lifetime,
-                IModLogger logger) => GameplayContextServices.Unavailable(lifetime);
+                IModLogger logger,
+                NativeTransitionAccessSlot? transitionAccess = null)
+            {
+                if (transitionAccess != null) ScopeCreated?.Invoke(lifetime);
+                return GameplayContextServices.Unavailable(lifetime);
+            }
 
             public GameTimeSample BeginFrame(float deltaTime) =>
                 new GameTimeSample(GameLoopPhase.Frame, deltaTime, deltaTime, 0d, 0);
@@ -300,6 +327,7 @@ namespace TopiaForge.ModRuntime.Tests
             public void Dispose()
             {
                 Disposed = true;
+                if (ThrowOnDispose) throw new InvalidOperationException("Synthetic gameplay host cleanup failure.");
             }
         }
     }

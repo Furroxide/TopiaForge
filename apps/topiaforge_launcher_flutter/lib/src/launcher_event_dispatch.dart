@@ -27,7 +27,13 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
-      WorldSelectionChanged() => _onWorldSelectionChanged(event, emit),
+      LaunchSelectionChanged() => _onLaunchSelectionChanged(event, emit),
+      LaunchPreviewUpdated() => _onLaunchPreviewUpdated(event, emit),
+      LaunchActivityUpdated() => _onLaunchActivityUpdated(event, emit),
+      LaunchActivityMonitorFailed() => _onLaunchActivityMonitorFailed(
+        event,
+        emit,
+      ),
       KnownInstallDetected() => _onKnownInstallDetected(event, emit),
       GameDirectorySelected() => _onGameDirectorySelected(event, emit),
       RuntimeRepaired() => _onRuntimeRepaired(event, emit),
@@ -131,33 +137,6 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
-      DeveloperUgcSettingsSaved() => _onDeveloperUgcSettingsSaved(event, emit),
-      DeveloperUgcConfigDeployed() => _onDeveloperUgcConfigDeployed(
-        event,
-        emit,
-      ),
-      DeveloperWatchFolderOpened() => _onDeveloperWatchFolderOpened(
-        event,
-        emit,
-      ),
-      DeveloperUgcPublishToggled() => _onDeveloperUgcPublishToggled(
-        event,
-        emit,
-      ),
-      DeveloperUgcCleanupRequested() => _onDeveloperUgcCleanupRequested(
-        event,
-        emit,
-      ),
-      DeveloperUgcStatusRefreshed() => _onDeveloperUgcStatusRefreshed(
-        event,
-        emit,
-      ),
-      DeveloperUgcSidecarOutput() => _onDeveloperUgcSidecarOutput(event, emit),
-      DeveloperUgcPublisherExited() => _onDeveloperUgcPublisherExited(
-        event,
-        emit,
-      ),
-      DeveloperUgcGoLive() => _onDeveloperUgcGoLive(event, emit),
     };
   }
 }

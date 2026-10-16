@@ -94,6 +94,7 @@ namespace TopiaForge.Mods.Testing
             targets.Add(normalized, registration);
             return lifetime.TrackResult<IRobotTargetRegistration>(
                 registration,
+                registration.AttachLifetimeLease,
                 "The fake mod stopped before the robot target could be registered.");
         }
 
@@ -160,6 +161,7 @@ namespace TopiaForge.Mods.Testing
             objectives[agent.Id] = handle;
             return lifetime.TrackResult<IRobotObjectiveHandle>(
                 handle,
+                handle.AttachLifetimeLease,
                 "The fake mod stopped before the robot objective could be set.");
         }
 
@@ -203,6 +205,8 @@ namespace TopiaForge.Mods.Testing
         private sealed class TargetRegistration : IRobotTargetRegistration
         {
             private Action<TargetRegistration>? release;
+            private IDisposable? lifetimeLease;
+            public void AttachLifetimeLease(IDisposable lease) => lifetimeLease = lease;
 
             public TargetRegistration(
                 RobotTargetInfo info,
@@ -225,12 +229,15 @@ namespace TopiaForge.Mods.Testing
                 var callback = release;
                 release = null;
                 callback?.Invoke(this);
+                System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
         }
 
         private sealed class ObjectiveHandle : IRobotObjectiveHandle
         {
             private Action<ObjectiveHandle>? release;
+            private IDisposable? lifetimeLease;
+            public void AttachLifetimeLease(IDisposable lease) => lifetimeLease = lease;
 
             public ObjectiveHandle(RobotObjective objective, Action<ObjectiveHandle> release)
             {
@@ -252,6 +259,7 @@ namespace TopiaForge.Mods.Testing
                 release = null;
                 State = RobotObjectiveState.Cancelled;
                 callback?.Invoke(this);
+                System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
         }
     }

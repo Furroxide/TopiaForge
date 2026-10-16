@@ -1,9 +1,9 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:topiaforge/src/live_acceptance_models.dart';
-import 'package:topiaforge/src/live_acceptance_runner.dart';
 
 import 'live_acceptance_test_fixture.dart';
 
@@ -17,7 +17,7 @@ void main() {
     'runs every canonical case and writes schema-one migration input',
     () async {
       final commands = <List<String>>[];
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (arguments) async {
           commands.add(arguments);
           if (arguments.first == 'launch') fixture.writePassingRun();
@@ -37,7 +37,13 @@ void main() {
           ['dev-install', '--game-dir', fixture.game.path],
           ['check', 'package', fixture.package.path],
           ['install', fixture.package.path, '--game-dir', fixture.game.path],
-          ['launch', '--game-dir', fixture.game.path],
+          [
+            'launch',
+            '--game-dir',
+            fixture.game.path,
+            '--target',
+            'dev.topiaforge.sdk-acceptance.menu',
+          ],
         ]),
       );
       final config = fixture.configJson();
@@ -48,7 +54,7 @@ void main() {
         (config['value'] as Map)['acceptanceChallenge'],
         matches(RegExp(r'^[0-9a-f]{64}$')),
       );
-      expect(fixture.evidenceJson()['schemaVersion'], 2);
+      expect(fixture.evidenceJson()['schemaVersion'], 3);
       expect(fixture.evidenceJson()['succeeded'], isTrue);
     },
   );
@@ -62,7 +68,7 @@ void main() {
         ..writeAsStringSync('fixture');
       final project = Directory(p.join(fixture.temp.path, 'project'))
         ..createSync();
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (_) async => 0,
         processRunner: (executable, arguments) async {
           expect(executable, cli.path);
@@ -92,7 +98,15 @@ void main() {
       expect(evidence.requiredLoadedPackageStatus, 'loaded');
       expect(
         packagedArguments,
-        containsAllInOrder(['dev', '--project', project.path]),
+        containsAllInOrder([
+          'dev',
+          '--project',
+          project.path,
+          '--game-dir',
+          fixture.game.path,
+          '--no-launch',
+          '--no-tail',
+        ]),
       );
       expect(fixture.evidenceJson()['releaseJourneyAuthoringCommandCount'], 2);
     },
@@ -103,21 +117,24 @@ void main() {
     () async {
       late String packedPath;
       final commands = <List<String>>[];
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (arguments) async {
           commands.add(arguments);
           if (arguments.first == 'pack') {
             packedPath = p.join(
               fixture.output.path,
-              'dev.topiaforge.sdk-acceptance-1.0.0-rc.1.topiaforgemod',
+              'dev.topiaforge.sdk-acceptance-0.1.0-rc.1.topiaforgemod',
             );
             File(packedPath)
               ..createSync(recursive: true)
               ..writeAsBytesSync(
-                acceptancePackageBytes('dev.topiaforge.sdk-acceptance'),
+                acceptancePackageBytes(
+                  'dev.topiaforge.sdk-acceptance',
+                  assemblyContent: 'newly packed acceptance assembly',
+                ),
               );
           } else if (arguments.first == 'launch') {
-            fixture.writePassingRun();
+            fixture.writePassingRun(acceptancePackage: File(packedPath));
           }
           return 0;
         },
@@ -127,6 +144,16 @@ void main() {
       final evidence = await runner.run(fixture.options(packagePath: ''));
 
       expect(evidence.packagePath, packedPath);
+      expect(evidence.requiredCases, ['case.one', 'case.two']);
+      expect(evidence.passedCases, ['case.one', 'case.two']);
+      final packedHash = sha256
+          .convert(File(packedPath).readAsBytesSync())
+          .toString();
+      expect(
+        packedHash,
+        isNot(sha256.convert(fixture.package.readAsBytesSync()).toString()),
+      );
+      expect(evidence.acceptancePackageReceipt!.sourceSha256, packedHash);
       expect(
         commands.singleWhere((arguments) => arguments.first == 'pack'),
         containsAllInOrder(['--configuration', 'Release']),
@@ -136,7 +163,7 @@ void main() {
 
   test('unknown requested case fails before any CLI stage', () async {
     var commandCalled = false;
-    final runner = LiveAcceptanceRunner(
+    final runner = fixture.runner(
       commandRunner: (_) async {
         commandCalled = true;
         return 0;
@@ -157,7 +184,7 @@ void main() {
   });
 
   test('partial result is retained before TFACCEPT170 is reported', () async {
-    final runner = LiveAcceptanceRunner(
+    final runner = fixture.runner(
       commandRunner: (arguments) async {
         if (arguments.first == 'launch') {
           fixture.writePassingRun(cases: ['case.one']);
@@ -185,7 +212,7 @@ void main() {
 
   test('interaction timeout starts after the launch stage returns', () async {
     var now = DateTime.now().toUtc();
-    final runner = LiveAcceptanceRunner(
+    final runner = fixture.runner(
       commandRunner: (arguments) async {
         if (arguments.first == 'launch') {
           now = now.add(const Duration(minutes: 5));
@@ -206,7 +233,7 @@ void main() {
   });
 
   test('CLI stage failures keep the stable TFACCEPT110 diagnostic', () async {
-    final runner = LiveAcceptanceRunner(commandRunner: (_) async => 9);
+    final runner = fixture.runner(commandRunner: (_) async => 9);
 
     await expectLater(
       runner.run(fixture.options()),
@@ -225,7 +252,7 @@ void main() {
   test(
     'ignores spoofed acceptance markers from another logger source',
     () async {
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (arguments) async {
           if (arguments.first == 'launch') {
             fixture.writePassingRun(acceptanceLogSource: 'example.spoof');
@@ -250,7 +277,7 @@ void main() {
   );
 
   test('ignores replayed markers carrying a different challenge', () async {
-    final runner = LiveAcceptanceRunner(
+    final runner = fixture.runner(
       commandRunner: (arguments) async {
         if (arguments.first == 'launch') {
           fixture.writePassingRun(challenge: List.filled(64, '0').join());
@@ -270,7 +297,7 @@ void main() {
   test(
     'rejects last-run source and critical-file receipt mismatches',
     () async {
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (arguments) async {
           if (arguments.first == 'launch') {
             fixture.writePassingRun(tamperAcceptanceReceipt: true);
@@ -296,7 +323,7 @@ void main() {
         ..writeAsStringSync('fixture');
       final project = Directory(p.join(fixture.temp.path, 'project'))
         ..createSync();
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (_) async => 0,
         processRunner: (_, _) async {
           fixture.writeJourneyPackage('example.release-journey');
@@ -330,7 +357,7 @@ void main() {
   test(
     'rejects a stale last-run session even with current challenge logs',
     () async {
-      final runner = LiveAcceptanceRunner(
+      final runner = fixture.runner(
         commandRunner: (arguments) async {
           if (arguments.first == 'launch') {
             fixture.writePassingRun(

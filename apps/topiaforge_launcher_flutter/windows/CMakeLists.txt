@@ -32,6 +32,22 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# Keep the build clock out of the shipped binaries.
+#
+# The MSVC linker stamps the PE header with the wall-clock time of the link, so
+# every released launcher and bundled plugin published the minute it was built.
+# ReleaseOperations.md keeps timestamps off GitHub alongside usernames and local
+# paths, and the .NET half of the package already satisfies this: Roslyn's
+# Deterministic setting replaces that field with a content hash. /Brepro makes
+# link.exe do the same, which also makes the native output reproducible.
+#
+# Applied at directory scope so plugins built through this tree inherit it;
+# APPLY_STANDARD_SETTINGS is documented as compile-only and reaches only some
+# targets.
+if(MSVC)
+  add_link_options("/Brepro")
+endif()
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

@@ -7,6 +7,9 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       'build-sdk-payload' => _releaseBuildSdkPayload(args.skip(1).toList()),
       'test-package' => _releaseTestPackage(args.skip(1).toList()),
       'validate-policy' => _releaseValidatePolicy(args.skip(1).toList()),
+      'validate-prerequisites' => _releaseValidatePrerequisites(
+        args.skip(1).toList(),
+      ),
       'validate-readiness' => _releaseValidateReadiness(args.skip(1).toList()),
       'build-metadata' => _releaseBuildMetadata(args.skip(1).toList()),
       'verify-metadata' => _releaseVerifyMetadata(args.skip(1).toList()),
@@ -23,7 +26,7 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       'build-handoff' => _releaseBuildHandoff(args.skip(1).toList()),
       'verify-handoff' => _releaseVerifyHandoff(args.skip(1).toList()),
       _ => throw UsageError(
-        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|validate-readiness|build-metadata|verify-metadata|generate-update-key|build-update-metadata|verify-update-metadata|build-platform-bundle|build-handoff|verify-handoff ...',
+        'Usage: topiaforge release build-package|build-sdk-payload|test-package|validate-policy|validate-prerequisites|validate-readiness|build-metadata|verify-metadata|generate-update-key|build-update-metadata|verify-update-metadata|build-platform-bundle|build-handoff|verify-handoff ...',
       ),
     };
   }
@@ -119,39 +122,6 @@ extension _TopiaForgeReleaseCommands on _TopiaForgeCli {
       stderr.writeln('error: $issue');
     }
     return 1;
-  }
-
-  Future<int> _releaseValidateReadiness(List<String> args) async {
-    final version = _option(args, '--version');
-    final targetSha = _option(args, '--target-sha');
-    if (version == null ||
-        version.trim().isEmpty ||
-        targetSha == null ||
-        targetSha.trim().isEmpty) {
-      throw UsageError(
-        'Usage: topiaforge release validate-readiness '
-        '--version <semver> --target-sha <40-character-sha>',
-      );
-    }
-    final decision = await ReleaseReadinessDecision.loadAtGitSha(
-      repositoryRoot: _releaseRepositoryRoot(),
-      targetSha: targetSha,
-      expectedReleaseVersion: version,
-    );
-    if (!decision.isReady) {
-      for (final gate in decision.gates) {
-        if (!gate.satisfiesRelease) {
-          stderr.writeln(
-            'error: Release readiness gate ${gate.id} is ${gate.status}.',
-          );
-        }
-      }
-      return 1;
-    }
-    stdout.writeln(
-      const JsonEncoder.withIndent('  ').convert(decision.toPublicSummary()),
-    );
-    return 0;
   }
 
   Future<int> _releaseBuildMetadata(List<String> args) async {

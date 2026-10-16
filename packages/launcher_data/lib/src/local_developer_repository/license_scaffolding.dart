@@ -13,7 +13,7 @@ extension _LicenseScaffolding on LocalDeveloperRepository {
   }
 
   String _validateSuppliedLicense(ModManifest manifest, String text) {
-    if (manifest.license == TopiaForgeScaffoldDefaults.license) {
+    if (manifest.license == TopiaForgeScaffoldDefaults.unresolvedLicense) {
       throw StateError(
         'A custom license file requires an explicit SPDX license value.',
       );
@@ -29,8 +29,10 @@ extension _LicenseScaffolding on LocalDeveloperRepository {
 
   String _builtInScaffoldLicense(ModManifest manifest) {
     switch (manifest.license) {
-      case TopiaForgeScaffoldDefaults.license:
+      case TopiaForgeScaffoldDefaults.unresolvedLicense:
         return _unlicensedScaffoldNotice;
+      case 'AGPL-3.0-or-later':
+        return agpl30LicenseText;
       case 'MIT':
         final author = manifest.author.name.trim();
         if (author.isEmpty || author == TopiaForgeScaffoldDefaults.authorName) {

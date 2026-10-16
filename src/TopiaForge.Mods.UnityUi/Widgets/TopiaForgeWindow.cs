@@ -91,7 +91,7 @@ namespace TopiaForge.Mods.UnityUi
             titleLayout.minHeight = TopiaForgeTokens.TitleBarHeight;
             titleLabel.margin = new Vector4(16f, 0f, 0f, 0f);
 
-            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
+            CloseButton = titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
 
             // Content area.
             Content = Column(TopiaForgeGap.Md, TopiaForgeGap.Lg);
@@ -109,6 +109,9 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Window body — add content here.</summary>
         public TopiaForgeContainer Content { get; }
+
+        /// <summary>The title-bar close button (the window chrome's "$close" diagnostic node).</summary>
+        public TopiaForgeButton CloseButton { get; }
 
         /// <summary>Gets whether the window is open.</summary>
         public bool IsOpen => open;

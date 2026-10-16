@@ -43,6 +43,9 @@ jobs:
       prerelease: ${{ steps.metadata.outputs.prerelease }}
       target_sha: ${{ steps.metadata.outputs.target_sha }}
       notes_file: ${{ steps.metadata.outputs.notes_file }}
+      platform_matrix: ${{ steps.metadata.outputs.platform_matrix }}
+      decision_sha256: ${{ steps.qualification.outputs.decision_sha256 }}
+      acceptance_sha256: ${{ steps.qualification.outputs.acceptance_sha256 }}
       release_head_sha: ${{ steps.evidence.outputs.release_head_sha }}
       release_pr_number: ${{ steps.evidence.outputs.release_pr_number }}
     steps:
@@ -97,12 +100,34 @@ jobs:
           [[ "/$notes_file/" != *"/../"* && "/$notes_file/" != *"/./"* ]]
           test "$notes_file" = "$expected_notes_file"
           test -s "$notes_file"
+          # The platform set is the policy's, not the workflow's. RC1 is
+          # Windows-only, so hard-coding a Linux leg here made `finalize`
+          # demand a bundle `artifactPolicy` never asks anyone to build.
+          platform_matrix=$(jq -ec '
+            [
+              .artifactPolicy.platformArchives[] |
+              (
+                if . == "TopiaForge-windows-x64.zip" then
+                  {platform: "windows", target: "windows-x64",
+                   runner: "windows-2025"}
+                elif . == "TopiaForge-linux-x64.zip" then
+                  {platform: "linux", target: "linux-x64",
+                   runner: "ubuntu-24.04"}
+                else
+                  error("Unsupported release platform archive: " + .)
+                end
+              ) + {archive: .}
+            ] |
+            select(length >= 1) |
+            {include: .}
+          ' release/release-policy.json)
           {
             printf 'version=%s\n' "$version"
             printf 'tag=%s\n' "$tag"
             printf 'prerelease=%s\n' "$prerelease"
             printf 'target_sha=%s\n' "$target_sha"
             printf 'notes_file=%s\n' "$notes_file"
+            printf 'platform_matrix=%s\n' "$platform_matrix"
           } >>"$GITHUB_OUTPUT"
 
       - name: Enforce complete release policy
@@ -111,12 +136,31 @@ jobs:
           dart run bin/topiaforge.dart release validate-policy
           --version "${{ steps.metadata.outputs.version }}"
 
-      - name: Verify exact release readiness decision
-        working-directory: apps/topiaforge_cli
+      - name: Fetch candidate bytes before protected approval
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          dart run bin/topiaforge.dart release validate-readiness
-          --version "${{ steps.metadata.outputs.version }}"
-          --target-sha "${{ steps.metadata.outputs.target_sha }}"
+          bash ./tools/fetch-release-assets.sh
+          "$GITHUB_REPOSITORY"
+          "${{ steps.metadata.outputs.tag }}"
+          "${{ steps.metadata.outputs.target_sha }}"
+          "TopiaForge ${{ steps.metadata.outputs.version }}"
+          "${{ steps.metadata.outputs.notes_file }}"
+          staged-assets
+          "${{ steps.metadata.outputs.prerelease }}"
+
+      - name: Verify exact release readiness decision
+        id: qualification
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart run bin/topiaforge.dart release validate-readiness \
+            --version "${{ steps.metadata.outputs.version }}" \
+            --target-sha "${{ steps.metadata.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/staged-assets" >"$RUNNER_TEMP/qualification.json"
+          jq -er '"decision_sha256=" + .decisionSha256,
+                  "acceptance_sha256=" + .acceptanceSha256' \
+            "$RUNNER_TEMP/qualification.json" >>"$GITHUB_OUTPUT"
 
       - name: Verify tag, exact release PR, and hosted checks
         id: evidence
@@ -138,14 +182,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            runner: windows-2025
-            archive: TopiaForge-windows-x64.zip
-          - platform: linux
-            runner: ubuntu-24.04
-            archive: TopiaForge-linux-x64.zip
+      matrix: ${{ fromJSON(needs.verify-candidate.outputs.platform_matrix) }}
     steps:
       - name: Checkout exact release commit
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -191,6 +228,16 @@ jobs:
           staged-assets
           "${{ needs.verify-candidate.outputs.prerelease }}"
 
+      - name: Bind platform verification to the approved candidate records
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' \
+            '${{ needs.verify-candidate.outputs.decision_sha256 }}' \
+            'staged-assets/release-candidate-readiness-v1.json' \
+            '${{ needs.verify-candidate.outputs.acceptance_sha256 }}' \
+            'staged-assets/release-candidate-acceptance-v1.json' | sha256sum --check --strict
+
       - name: Verify authenticated admin handoff
         shell: pwsh
         run: |
@@ -201,27 +248,49 @@ jobs:
               "codeSigningException") {
             throw "Production handoffs forbid every code-signing exception."
           }
-          $expectedSigner = [string](
-            $policy.signingIdentities.windowsCertificateSha256
-          )
-          if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
-            throw "A reviewed Windows signer certificate SHA-256 is required."
+          $windowsDistribution = "signed"
+          if ($policy.signingIdentities.PSObject.Properties.Name -contains
+              "windowsDistribution") {
+            $windowsDistribution =
+              [string]$policy.signingIdentities.windowsDistribution
           }
-          & pwsh -NoLogo -NoProfile -NonInteractive -File (
-            Join-Path $env:GITHUB_WORKSPACE
-              "tools/release/handoff-signature.ps1"
-          ) -Mode Verify `
-            -ExpectedCertificateSha256 $expectedSigner `
-            -HandoffPath (
-              Join-Path $env:GITHUB_WORKSPACE
-                "staged-assets/release-handoff-v1.json"
-            ) `
-            -SignaturePath (
-              Join-Path $env:GITHUB_WORKSPACE
-                "staged-assets/release-handoff-v1.json.p7s"
+          if ($windowsDistribution -cne "signed" -and
+              $windowsDistribution -cne "unsigned") {
+            throw "Unknown Windows distribution mode '$windowsDistribution'."
+          }
+          $signaturePath = Join-Path $env:GITHUB_WORKSPACE `
+            "staged-assets/release-handoff-v1.json.p7s"
+          if ($windowsDistribution -ceq "unsigned") {
+            # Read from the policy at the verified target SHA, so the mode is a
+            # property of the reviewed candidate and not of what the admin chose
+            # to upload. An unsigned distribution has no certificate, therefore
+            # no detached CMS handoff signature; a staged P7S here would mean the
+            # staged assets disagree with the policy.
+            if (Test-Path -LiteralPath $signaturePath) {
+              throw "An unsigned distribution must not stage a handoff signature."
+            }
+            Write-Host "Unsigned distribution: no detached CMS handoff to verify."
+          }
+          else {
+            $expectedSigner = [string](
+              $policy.signingIdentities.windowsCertificateSha256
             )
-          if ($LASTEXITCODE -ne 0) {
-            throw "Authenticated admin handoff verification failed."
+            if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+              throw "A reviewed Windows signer certificate SHA-256 is required."
+            }
+            & pwsh -NoLogo -NoProfile -NonInteractive -File (
+              Join-Path $env:GITHUB_WORKSPACE
+                "tools/release/handoff-signature.ps1"
+            ) -Mode Verify `
+              -ExpectedCertificateSha256 $expectedSigner `
+              -HandoffPath (
+                Join-Path $env:GITHUB_WORKSPACE
+                  "staged-assets/release-handoff-v1.json"
+              ) `
+              -SignaturePath $signaturePath
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticated admin handoff verification failed."
+            }
           }
 
       - name: Verify handoff claims against exact bytes
@@ -253,11 +322,15 @@ jobs:
               "codeSigningException") {
             throw "Production Windows packages forbid signing exceptions."
           }
-          $expectedSigner = [string](
-            $policy.signingIdentities.windowsCertificateSha256
-          )
-          if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
-            throw "A reviewed Windows signer certificate SHA-256 is required."
+          $windowsDistribution = "signed"
+          if ($policy.signingIdentities.PSObject.Properties.Name -contains
+              "windowsDistribution") {
+            $windowsDistribution =
+              [string]$policy.signingIdentities.windowsDistribution
+          }
+          if ($windowsDistribution -cne "signed" -and
+              $windowsDistribution -cne "unsigned") {
+            throw "Unknown Windows distribution mode '$windowsDistribution'."
           }
           $arguments = @(
             "run", "bin/topiaforge.dart", "release", "test-package",
@@ -269,10 +342,24 @@ jobs:
             "--canonical-assets", "$env:GITHUB_WORKSPACE/staged-assets",
             "--run-embedded-cli"
           )
-          $arguments += @(
-            "--require-windows-signature",
-            "--expected-windows-signer-sha256", $expectedSigner
-          )
+          if ($windowsDistribution -ceq "unsigned") {
+            # Assert the artifacts really are unsigned. Without this an unsigned
+            # policy would simply stop checking, and a package signed by stray
+            # credentials would pass unnoticed.
+            $arguments += "--require-windows-unsigned"
+          }
+          else {
+            $expectedSigner = [string](
+              $policy.signingIdentities.windowsCertificateSha256
+            )
+            if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+              throw "A reviewed Windows signer certificate SHA-256 is required."
+            }
+            $arguments += @(
+              "--require-windows-signature",
+              "--expected-windows-signer-sha256", $expectedSigner
+            )
+          }
           & dart @arguments
           if ($LASTEXITCODE -ne 0) {
             throw "Windows package trust verification failed."
@@ -313,12 +400,32 @@ jobs:
           archive_sha=$(sha256_file "$archive_path")
           archive_size=$(wc -c <"$archive_path" | tr -d ' ')
           handoff_sha=$(sha256_file staged-assets/release-handoff-v1.json)
-          handoff_signature_sha=$(
-            sha256_file staged-assets/release-handoff-v1.json.p7s
-          )
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          # An unsigned distribution produces no detached CMS handoff, so the field is
+          # omitted rather than emitted empty. An absent field cannot be mistaken for a
+          # signature that was present and went unverified; "" reads like both.
+          if [ "$windows_distribution" = unsigned ]; then
+            handoff_signature_json=null
+          else
+            handoff_signature_json=$(
+              jq -n --arg sha "$(sha256_file staged-assets/release-handoff-v1.json.p7s)" '$sha'
+            )
+          fi
           trust_check=$(
             case "$PLATFORM" in
-              windows) echo authenticode ;;
+              windows)
+                if [ "$windows_distribution" = unsigned ]; then
+                  echo unsigned
+                else
+                  echo authenticode
+                fi
+                ;;
               linux) echo not-applicable ;;
               *) exit 1 ;;
             esac
@@ -332,7 +439,9 @@ jobs:
             --arg archiveSha256 "$archive_sha" \
             --argjson archiveSize "$archive_size" \
             --arg handoffSha256 "$handoff_sha" \
-            --arg handoffSignatureSha256 "$handoff_signature_sha" \
+            --arg decisionSha256 "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+            --arg acceptanceSha256 "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
+            --argjson handoffSignatureSha256 "$handoff_signature_json" \
             --arg trustCheck "$trust_check" \
             '{
               schema: "release-hosted-verification-v1",
@@ -346,7 +455,12 @@ jobs:
                 size: $archiveSize
               },
               handoffSha256: $handoffSha256,
-              handoffSignatureSha256: $handoffSignatureSha256,
+              decisionSha256: $decisionSha256,
+              acceptanceSha256: $acceptanceSha256
+            }
+            + (if $handoffSignatureSha256 == null then {}
+               else {handoffSignatureSha256: $handoffSignatureSha256} end)
+            + {
               packageValidation: "passed",
               trustCheck: $trustCheck,
               result: "passed"
@@ -426,13 +540,6 @@ jobs:
           "${{ needs.verify-candidate.outputs.version }}"
           "${{ needs.verify-candidate.outputs.target_sha }}"
 
-      - name: Revalidate exact release readiness after approval
-        working-directory: apps/topiaforge_cli
-        run: >-
-          dart run bin/topiaforge.dart release validate-readiness
-          --version "${{ needs.verify-candidate.outputs.version }}"
-          --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
-
       - name: Fetch exact admin-staged release assets
         id: release
         env:
@@ -447,6 +554,20 @@ jobs:
           staged-assets
           "${{ needs.verify-candidate.outputs.prerelease }}"
 
+      - name: Revalidate exact release readiness after approval
+        working-directory: apps/topiaforge_cli
+        run: |
+          set -euo pipefail
+          dart run bin/topiaforge.dart release validate-readiness \
+            --version "${{ needs.verify-candidate.outputs.version }}" \
+            --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+            --assets "$GITHUB_WORKSPACE/staged-assets" >"$RUNNER_TEMP/qualification.json"
+          jq -e \
+            --arg decision "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+            --arg acceptance "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
+            '.decisionSha256 == $decision and .acceptanceSha256 == $acceptance' \
+            "$RUNNER_TEMP/qualification.json" >/dev/null
+
       - name: Verify authenticated admin handoff
         shell: pwsh
         run: |
@@ -457,27 +578,49 @@ jobs:
               "codeSigningException") {
             throw "Production handoffs forbid every code-signing exception."
           }
-          $expectedSigner = [string](
-            $policy.signingIdentities.windowsCertificateSha256
-          )
-          if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
-            throw "A reviewed Windows signer certificate SHA-256 is required."
+          $windowsDistribution = "signed"
+          if ($policy.signingIdentities.PSObject.Properties.Name -contains
+              "windowsDistribution") {
+            $windowsDistribution =
+              [string]$policy.signingIdentities.windowsDistribution
           }
-          & pwsh -NoLogo -NoProfile -NonInteractive -File (
-            Join-Path $env:GITHUB_WORKSPACE
-              "tools/release/handoff-signature.ps1"
-          ) -Mode Verify `
-            -ExpectedCertificateSha256 $expectedSigner `
-            -HandoffPath (
-              Join-Path $env:GITHUB_WORKSPACE
-                "staged-assets/release-handoff-v1.json"
-            ) `
-            -SignaturePath (
-              Join-Path $env:GITHUB_WORKSPACE
-                "staged-assets/release-handoff-v1.json.p7s"
+          if ($windowsDistribution -cne "signed" -and
+              $windowsDistribution -cne "unsigned") {
+            throw "Unknown Windows distribution mode '$windowsDistribution'."
+          }
+          $signaturePath = Join-Path $env:GITHUB_WORKSPACE `
+            "staged-assets/release-handoff-v1.json.p7s"
+          if ($windowsDistribution -ceq "unsigned") {
+            # Read from the policy at the verified target SHA, so the mode is a
+            # property of the reviewed candidate and not of what the admin chose
+            # to upload. An unsigned distribution has no certificate, therefore
+            # no detached CMS handoff signature; a staged P7S here would mean the
+            # staged assets disagree with the policy.
+            if (Test-Path -LiteralPath $signaturePath) {
+              throw "An unsigned distribution must not stage a handoff signature."
+            }
+            Write-Host "Unsigned distribution: no detached CMS handoff to verify."
+          }
+          else {
+            $expectedSigner = [string](
+              $policy.signingIdentities.windowsCertificateSha256
             )
-          if ($LASTEXITCODE -ne 0) {
-            throw "Authenticated admin handoff verification failed."
+            if ($expectedSigner -cnotmatch "^(?!0{64}$)[0-9a-f]{64}$") {
+              throw "A reviewed Windows signer certificate SHA-256 is required."
+            }
+            & pwsh -NoLogo -NoProfile -NonInteractive -File (
+              Join-Path $env:GITHUB_WORKSPACE
+                "tools/release/handoff-signature.ps1"
+            ) -Mode Verify `
+              -ExpectedCertificateSha256 $expectedSigner `
+              -HandoffPath (
+                Join-Path $env:GITHUB_WORKSPACE
+                  "staged-assets/release-handoff-v1.json"
+              ) `
+              -SignaturePath $signaturePath
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticated admin handoff verification failed."
+            }
           }
 
       - name: Verify local-build handoff and evidence
@@ -501,17 +644,50 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Expect one hosted-verification record per platform the release
+          # policy actually ships, not a fixed two.
+          read -r -a expected_platforms <<<"$(jq -er '
+            [
+              .artifactPolicy.platformArchives[] |
+              if . == "TopiaForge-windows-x64.zip" then "windows"
+              elif . == "TopiaForge-linux-x64.zip" then "linux"
+              else error("Unsupported release platform archive: " + .)
+              end
+            ] |
+            sort | join(" ")
+          ' release/release-policy.json)"
+          test "${#expected_platforms[@]}" -ge 1
           test "$(
             find hosted-verification -mindepth 1 -maxdepth 1 \
               -type f -name 'hosted-verification-*.json' | wc -l
-          )" -eq 2
+          )" -eq "${#expected_platforms[@]}"
           handoff_sha=$(sha256sum staged-assets/release-handoff-v1.json |
             awk '{print $1}')
-          handoff_signature_sha=$(
-            sha256sum staged-assets/release-handoff-v1.json.p7s |
-              awk '{print $1}'
-          )
-          windows_trust=authenticode
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          # Assert the shape the mode requires in both directions: a signed release must
+          # carry the signature digest, and an unsigned one must not carry the key at
+          # all. Checking only the signed direction would let an unsigned candidate
+          # publish evidence that silently dropped the field.
+          if [ "$windows_distribution" = unsigned ]; then
+            handoff_signature_filter='(has("handoffSignatureSha256") | not)'
+            windows_trust=unsigned
+          else
+            handoff_signature_sha=$(
+              sha256sum staged-assets/release-handoff-v1.json.p7s |
+                awk '{print $1}'
+            )
+            # $handoffSignatureSha256 is a jq variable bound by --arg below, so it
+            # must reach jq unexpanded. Single quotes are the point.
+            # shellcheck disable=SC2016
+            handoff_signature_filter='.handoffSignatureSha256 == $handoffSignatureSha256'
+            windows_trust=authenticode
+          fi
           declare -A seen_platforms
           for evidence in hosted-verification/hosted-verification-*.json; do
             jq -e \
@@ -519,13 +695,17 @@ jobs:
               --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
               --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
               --arg handoffSha256 "$handoff_sha" \
-              --arg handoffSignatureSha256 "$handoff_signature_sha" \
+              --arg decisionSha256 "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+              --arg acceptanceSha256 "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
+              --arg handoffSignatureSha256 "${handoff_signature_sha:-}" \
               '.schema == "release-hosted-verification-v1" and
                .version == $version and
                .tag == $tag and
                .targetSha == $targetSha and
                .handoffSha256 == $handoffSha256 and
-               .handoffSignatureSha256 == $handoffSignatureSha256 and
+               .decisionSha256 == $decisionSha256 and
+               .acceptanceSha256 == $acceptanceSha256 and
+               '"$handoff_signature_filter"' and
                .packageValidation == "passed" and
                .result == "passed"' "$evidence" >/dev/null
             platform=$(jq -er '.platform' "$evidence")
@@ -549,8 +729,10 @@ jobs:
               wc -c <"staged-assets/$archive"
             )"
           done
-          test "${seen_platforms[windows]:-}" = 1
-          test "${seen_platforms[linux]:-}" = 1
+          for expected_platform in "${expected_platforms[@]}"; do
+            test "${seen_platforms[$expected_platform]:-}" = 1
+          done
+          test "${#seen_platforms[@]}" -eq "${#expected_platforms[@]}"
 
       - name: Isolate the exact catalog asset set
         shell: bash
@@ -566,6 +748,11 @@ jobs:
             test -f "staged-assets/$name"
             cp -- "staged-assets/$name" "release-assets/$name"
           done
+          asset_policy=$(bash tools/release-asset-policy.sh "$GITHUB_WORKSPACE" \
+            "${{ needs.verify-candidate.outputs.version }}")
+          while IFS= read -r name; do
+            cp -- "staged-assets/$name" "release-assets/$name"
+          done < <(jq -r '.human[]' <<<"$asset_policy")
           cp "$RUNNER_TEMP/platform-trust-evidence.json" \
             release-assets/.platform-trust-evidence.json
 
@@ -600,35 +787,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          handoff_names=(
-            release-handoff-v1.json
-            release-handoff-v1.json.p7s
-            release-platform-bundle-v1-linux-x64.json
-            release-platform-bundle-v1-windows-x64.json
-          )
-          for name in "${handoff_names[@]}"; do
-            cp -- "staged-assets/$name" "release-assets/$name"
-          done
-          (
-            cd release-assets
-            for name in "${handoff_names[@]}"; do
-              sha256sum "$name"
-            done
-          ) >>release-assets/SHA256SUMS
-          sort -o release-assets/SHA256SUMS release-assets/SHA256SUMS
+          asset_policy=$(bash tools/release-asset-policy.sh "$GITHUB_WORKSPACE" \
+            "${{ needs.verify-candidate.outputs.version }}")
           (
             cd release-assets
             sha256sum --check --strict SHA256SUMS
           )
-          {
-            jq -er \
-              --arg version "${{ needs.verify-candidate.outputs.version }}" \
-              '.releases[] | select(.version == $version) | .artifacts[]' \
-              release/catalog.json
-            jq -er '.artifactPolicy.generatedMetadata[]' \
-              release/release-policy.json
-            printf '%s\n' "${handoff_names[@]}"
-          } | sort >"$RUNNER_TEMP/expected-release-assets"
+          jq -r '.all[]' <<<"$asset_policy" >"$RUNNER_TEMP/expected-release-assets"
           find release-assets -mindepth 1 -maxdepth 1 -type f \
             -printf '%f\n' | sort >"$RUNNER_TEMP/actual-release-assets"
           diff -u \
@@ -646,19 +811,38 @@ jobs:
           set -euo pipefail
           handoff_sha=$(sha256sum release-assets/release-handoff-v1.json |
             awk '{print $1}')
-          handoff_signature_sha=$(
-            sha256sum release-assets/release-handoff-v1.json.p7s |
-              awk '{print $1}'
-          )
+          windows_distribution=$(jq -er '
+            .signingIdentities.windowsDistribution // "signed"
+          ' release/release-policy.json | tr -d '\r')
+          case "$windows_distribution" in
+            signed|unsigned) ;;
+            *) echo "Unknown Windows distribution mode: $windows_distribution" >&2; exit 1 ;;
+          esac
+          # The attestation subject describes what was actually published. An unsigned
+          # release has no detached CMS object, so `handoff.signature` is absent from
+          # the predicate rather than present with an empty digest.
+          if [ "$windows_distribution" = unsigned ]; then
+            handoff_signature_json=null
+          else
+            handoff_signature_json=$(
+              jq -n --arg sha "$(
+                sha256sum release-assets/release-handoff-v1.json.p7s | awk '{print $1}'
+              )" '{name: "release-handoff-v1.json.p7s", sha256: $sha, format: "CMS-detached"}'
+            )
+          fi
           bom_sha=$(sha256sum release-assets/release-bom.json |
             awk '{print $1}')
           readiness=$(
-            jq -ecS '
+            jq -ecS \
+              --arg decision "$(sha256sum release-assets/release-candidate-readiness-v1.json | awk '{print $1}')" \
+              --arg acceptance "$(sha256sum release-assets/release-candidate-acceptance-v1.json | awk '{print $1}')" '
               .readiness |
               select(
-                .binding == "git-blob-at-target-sha" and
+                .binding == "detached-candidate-at-target-sha" and
                 .status == "ready" and
-                (.blobSha256 | test("^[0-9a-f]{64}$")) and
+                .blobSha256 == $decision and
+                .summary.decisionSha256 == $decision and
+                .summary.acceptanceSha256 == $acceptance and
                 .summary.status == "ready"
               )
             ' release-assets/release-bom.json
@@ -670,7 +854,7 @@ jobs:
             --arg tag "${{ needs.verify-candidate.outputs.tag }}" \
             --arg targetSha "${{ needs.verify-candidate.outputs.target_sha }}" \
             --arg handoffSha256 "$handoff_sha" \
-            --arg handoffSignatureSha256 "$handoff_signature_sha" \
+            --argjson handoffSignature "$handoff_signature_json" \
             --arg releaseBomSha256 "$bom_sha" \
             --argjson readiness "$readiness" \
             --argjson hostedVerification "$hosted_verification" \
@@ -690,13 +874,9 @@ jobs:
               targetSha: $targetSha,
               handoff: {
                 name: "release-handoff-v1.json",
-                sha256: $handoffSha256,
-                signature: {
-                  name: "release-handoff-v1.json.p7s",
-                  sha256: $handoffSignatureSha256,
-                  format: "CMS-detached"
-                }
-              },
+                sha256: $handoffSha256
+              } + (if $handoffSignature == null then {}
+                   else {signature: $handoffSignature} end),
               hostedVerification: $hostedVerification,
               releaseBomSha256: $releaseBomSha256,
               readiness: $readiness
@@ -809,7 +989,13 @@ jobs:
             cd apps/topiaforge_cli
             dart run bin/topiaforge.dart release validate-readiness \
               --version "${{ needs.verify-candidate.outputs.version }}" \
-              --target-sha "${{ needs.verify-candidate.outputs.target_sha }}"
+              --target-sha "${{ needs.verify-candidate.outputs.target_sha }}" \
+              --assets "$GITHUB_WORKSPACE/release-assets" >"$RUNNER_TEMP/final-qualification.json"
+            jq -e \
+              --arg decision "${{ needs.verify-candidate.outputs.decision_sha256 }}" \
+              --arg acceptance "${{ needs.verify-candidate.outputs.acceptance_sha256 }}" \
+              '.decisionSha256 == $decision and .acceptanceSha256 == $acceptance' \
+              "$RUNNER_TEMP/final-qualification.json" >/dev/null
           )
           dotnet run \
             --project tools/TopiaForge.ManagedRefs/TopiaForge.ManagedRefs.csproj \

@@ -1,0 +1,78 @@
+{
+  "id": "v6-longest-declaration-id",
+  "channel": "serialization",
+  "kind": "manifest-accepts",
+  "summary": "96 characters is the whole budget. modId's 64 would not do: a first-party package name spends 51 before it declares anything.",
+  "manifest": {
+    "$schema": "https://raw.githubusercontent.com/furroxide/TopiaForge/main/schemas/topiaforge.mod.v6.schema.json",
+    "schemaVersion": 6,
+    "name": "io.github.furroxide.topiaforge.fixture",
+    "displayName": "Contract Fixture",
+    "version": "1.0.0",
+    "author": {
+      "name": "TopiaForge"
+    },
+    "entryAssembly": "Fixture.dll",
+    "entryType": "Fixture.Mod",
+    "supportedGameVersionRange": "*",
+    "supportedLoaderVersionRange": "*",
+    "supportedSdkVersionRange": "*",
+    "capabilities": [
+      "world-service"
+    ],
+    "contributions": {
+      "gamemodes": [
+        {
+          "id": "io.github.furroxide.topiaforge.fixture.ggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+          "name": "Survival",
+          "implementation": {
+            "type": "Fixture.SurvivalGamemode"
+          }
+        }
+      ]
+    }
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [],
+        "gamemodes": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.ggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
+        ],
+        "launchTargets": []
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "worlds": [],
+        "gamemodes": [
+          {
+            "id": "io.github.furroxide.topiaforge.fixture.ggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+            "name": "Survival",
+            "description": null,
+            "implementation": {
+              "assembly": null,
+              "type": "Fixture.SurvivalGamemode"
+            },
+            "worldRequirements": null,
+            "sceneChangePolicy": null
+          }
+        ],
+        "launchTargets": []
+      }
+    }
+  },
+  "schemaOutcome": "accept"
+}

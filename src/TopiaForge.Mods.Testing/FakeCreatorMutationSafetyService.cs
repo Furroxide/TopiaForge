@@ -54,12 +54,14 @@ namespace TopiaForge.Mods.Testing
             }
             ActiveLeaseCount++;
             var lease = new Lease(this, request.Purpose);
-            return lifetime.TrackResult<ICreatorMutationLease>(lease, "The fake lifetime stopped during mutation lease creation.");
+            return lifetime.TrackResult<ICreatorMutationLease>(lease, lease.AttachLifetimeLease, "The fake lifetime stopped during mutation lease creation.");
         }
 
         private sealed class Lease : ICreatorMutationLease
         {
             private FakeCreatorMutationSafetyService? service;
+            private IDisposable? lifetimeLease;
+            public void AttachLifetimeLease(IDisposable lease) => lifetimeLease = lease;
 
             public Lease(FakeCreatorMutationSafetyService service, string purpose)
             {
@@ -75,6 +77,7 @@ namespace TopiaForge.Mods.Testing
                 var current = service;
                 service = null;
                 if (current != null) current.ActiveLeaseCount--;
+                System.Threading.Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
         }
     }

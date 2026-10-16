@@ -16,15 +16,28 @@ class _HeroLaunchPane extends StatelessWidget {
         ? profile.enabledMods.length
         : state.resolution.orderedMods.length;
 
+    final targetLabel = profile == null
+        ? 'Main menu'
+        : _launchSelectionLabel(state, profile);
+    // A mod conflict is not "one quick fix": that copy points at the runtime-repair button, which does
+    // nothing here. Name the real reason and send the player where the detail lives.
+    final blockingMods = state.blockingLaunchIssues;
     final (String headline, String subline) = state.isBusy
         ? ('Working on it…', state.statusMessage)
+        : blockingMods.isNotEmpty
+        ? (
+            'Mods need attention',
+            '${blockingMods.length} '
+                '${blockingMods.length == 1 ? 'problem stops' : 'problems stop'} '
+                'this profile loading · open Mods for details.',
+          )
         : !state.canLaunch
         ? ('Almost ready', 'One quick fix and TopiaForge is good to go.')
         : (
             'Ready for liftoff',
             '${profile?.name ?? 'Default'} profile · '
                 '$modCount ${modCount == 1 ? 'mod' : 'mods'} enabled · '
-                '${_worldNameFor(state, profile?.worldSelection ?? const WorldSelection())}',
+                '$targetLabel',
           );
 
     return Stack(
@@ -109,6 +122,16 @@ class _HeroLaunchPane extends StatelessWidget {
                         runSpacing: 12,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
+                          SizedBox(
+                            width: 260,
+                            child: Card(
+                              margin: EdgeInsets.zero,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: _LaunchTargetPicker(state: state),
+                              ),
+                            ),
+                          ),
                           GlowButton(
                             label: safeMode ? 'Launch Safe' : 'Launch',
                             icon: Icons.rocket_launch,
@@ -134,6 +157,17 @@ class _HeroLaunchPane extends StatelessWidget {
                       ),
                       const SizedBox(height: 24),
                       _SystemsCheckStrip(state: state, install: install),
+                      const SizedBox(height: 12),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: _LaunchTargetControls(
+                            state: state,
+                            showPicker: false,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -198,6 +232,12 @@ class _SystemsCheckStrip extends StatelessWidget {
         install.bepInExStatus == ComponentState.missing ||
         install.loaderStatus == ComponentState.missing;
     final modCount = state.resolution.orderedMods.length;
+    // Blocked mods drop out of orderedMods, so a bare count quietly shrinks and never says why.
+    // Show the shortfall instead: a number that went down is the only clue a player otherwise gets.
+    final candidateCount = state.installedMods
+        .where((mod) => mod.enabled && !mod.uninstallPending)
+        .length;
+    final excludedCount = candidateCount - modCount;
     final updates = _updatesAvailable(state);
 
     return Container(
@@ -245,9 +285,16 @@ class _SystemsCheckStrip extends StatelessWidget {
                   : () => _add(context, const RuntimeRepaired()),
             ),
           StatusPill(
-            label: '$modCount ${modCount == 1 ? 'mod' : 'mods'} enabled',
-            tone: StatusTone.info,
+            label: excludedCount > 0
+                ? '$modCount of $candidateCount mods enabled'
+                : '$modCount ${modCount == 1 ? 'mod' : 'mods'} enabled',
+            tone: excludedCount > 0 ? StatusTone.warning : StatusTone.info,
             icon: Icons.extension,
+            tooltip: excludedCount > 0
+                ? '$excludedCount enabled '
+                      '${excludedCount == 1 ? 'mod is' : 'mods are'} not loading. '
+                      'Open Mods to see why.'
+                : null,
             onPressed: () => _add(
               context,
               const LauncherSectionSelected(LauncherSection.mods),

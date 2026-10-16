@@ -7,7 +7,7 @@ namespace TopiaForge.Mods
     /// active. Lets a gamemode add its own actions ("RESTART RUN") and decide what happens when the player
     /// picks the vanilla exit-to-menu option, so the vanilla menu can never strand a modded session in a
     /// broken state. Everything here is best-effort: the provider resolves the game's pause UI reflectively
-    /// and degrades gracefully (see <see cref="IsAvailable"/>) — the provider's scene-load session teardown
+    /// and degrades gracefully (see <see cref="IsAvailable"/>) — the manager's authoritative session lifecycle
     /// remains the correctness backstop when the pause UI cannot be reached.
     /// </summary>
     public interface IWorldPauseMenuService
@@ -24,9 +24,15 @@ namespace TopiaForge.Mods
 
         /// <summary>
         /// Optional hook consulted when the player picks the vanilla exit-to-menu option during a session.
-        /// Null (the default) behaves as <see cref="WorldPauseExitDecision.EndSessionAndExit"/>. A throwing
+        /// Null (the default) behaves as <see cref="WorldPauseExitDecision.ReturnToMainMenu"/>. A throwing
         /// interceptor is treated as the default decision so it can never eat the vanilla button.
         /// </summary>
+        /// <remarks>
+        /// The slot is exclusive: while one interceptor is registered, a second request fails with
+        /// <see cref="ModErrorCode.Conflict"/> naming the current holder rather than replacing it, because a
+        /// silent replacement would leave the first gamemode believing it still had a veto. Dispose the returned
+        /// lease to release the slot; it is also released when the session ends.
+        /// </remarks>
         OperationResult<IDisposable> InterceptExit(
             Func<WorldPauseExitContext, WorldPauseExitDecision> interceptor);
     }
@@ -84,24 +90,20 @@ namespace TopiaForge.Mods
     public sealed class WorldPauseExitContext
     {
         /// <summary>Creates an exit context for the active world session.</summary>
-        public WorldPauseExitContext(WorldSession session)
+        public WorldPauseExitContext(IWorldSession session)
         {
             Session = session ?? throw new ArgumentNullException(nameof(session));
         }
 
         /// <summary>Gets the session that is about to exit.</summary>
-        public WorldSession Session { get; }
+        public IWorldSession Session { get; }
     }
 
     /// <summary>Specifies how a world session handles the vanilla exit-to-menu action.</summary>
     public enum WorldPauseExitDecision
     {
-        /// <summary>End the session cleanly, then let the vanilla exit handler run (the default).</summary>
-        EndSessionAndExit,
-
-        /// <summary>Run the vanilla exit handler without ending the session (the provider's scene-load
-        /// teardown will still end it once the menu loads).</summary>
-        ExitWithoutEnding,
+        /// <summary>Ask the bound session to finish cleanup and return to the main menu (the default).</summary>
+        ReturnToMainMenu,
 
         /// <summary>Swallow the click — the gamemode shows its own confirmation UI.</summary>
         Block

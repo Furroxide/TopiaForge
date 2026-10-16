@@ -10,27 +10,37 @@ import 'package:topiaforge_launcher_flutter/src/launcher_app.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_bloc.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_section.dart';
-import 'package:topiaforge_launcher_flutter/src/launcher_state.dart';
 import 'package:topiaforge_launcher_flutter/src/screens.dart';
 
 part 'widget_test_fakes.dart';
+part 'widget_test_developer_repository.dart';
+part 'widget_launch_fixtures.dart';
+part 'widget_launch_activity_test_cases.dart';
+part 'widget_launch_correlation_test_cases.dart';
 part 'widget_test_developer_fake_helpers.dart';
-part 'widget_test_publisher_fake.dart';
+part 'widget_test_install_fake.dart';
 part 'widget_lifecycle_test_cases.dart';
 part 'widget_install_test_cases.dart';
 part 'widget_mod_repair_test_cases.dart';
 part 'widget_accessibility_test_cases.dart';
 part 'widget_profile_launch_test_cases.dart';
+part 'widget_home_launch_test_cases.dart';
+part 'widget_target_launch_test_cases.dart';
 part 'widget_test_snapshots.dart';
-part 'widget_ugc_test_cases.dart';
 part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
 
+Finder _devScrollable() => find
+    .descendant(
+      of: find.byKey(const Key('developer-scroll')),
+      matching: find.byType(Scrollable),
+    )
+    .first;
+
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
-  registerUgcWidgetTests();
-  registerUgcBlocTests();
   registerLauncherLifecycleTests();
+  _registerLaunchActivityTests();
   registerInstallConfirmationWidgetTests();
   registerModRepairTests();
   registerAccessibilityWidgetTests();
@@ -88,6 +98,8 @@ void main() {
   }
 
   _registerProfileLaunchWidgetTests(pumpHome);
+  _registerHomeLaunchTests(pumpHome);
+  _registerTargetLaunchRegressions(pumpHome);
 
   testWidgets('home launch pad renders ready state and update pill', (
     tester,
@@ -138,7 +150,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.launchedProfileIds, ['default']);
-    expect(find.text('Launched TopiaForge.'), findsOneWidget);
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
 
   testWidgets('home shows almost-ready state and one-click runtime fix', (
@@ -171,7 +183,7 @@ void main() {
 
     expect(repository.installOrRepairRuntimeCount, 1);
     expect(repository.launchedProfileIds, ['default']);
-    expect(find.text('Launched TopiaForge.'), findsOneWidget);
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
 
   testWidgets('bottom repair-needed chip runs runtime repair', (tester) async {
@@ -286,7 +298,7 @@ void main() {
 
     expect(find.text('Load Order'), findsOneWidget);
     expect(find.text('Repair Runtime'), findsOneWidget);
-    expect(find.text('World'), findsWidgets);
+    expect(find.text('Launch target'), findsWidgets);
   });
 
   testWidgets('glow button pulses when animations are enabled', (tester) async {
@@ -420,7 +432,7 @@ void main() {
 
     expect(developer.runSetupCount, 1);
     expect(
-      find.textContaining('sidecar dependencies already present'),
+      find.textContaining('Ensured the developer data folder'),
       findsWidgets,
     );
   });
@@ -456,29 +468,5 @@ void main() {
 
     expect(find.text('Update'), findsOneWidget);
     expect(find.text('Preview Update'), findsOneWidget);
-  });
-
-  testWidgets('confirms restart before relaunching TopiaForge', (tester) async {
-    final repository = _FakeLauncherRepository(
-      snapshot: _updateSnapshot(needsRepair: true),
-    );
-    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Mods'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Restart').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Restart TopiaForge?'), findsOneWidget);
-    expect(repository.restartCount, 0);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
-    await tester.pumpAndSettle();
-
-    expect(repository.installOrRepairRuntimeCount, 1);
-    expect(repository.restartCount, 1);
-    expect(find.text('Restarted TopiaForge.'), findsOneWidget);
   });
 }

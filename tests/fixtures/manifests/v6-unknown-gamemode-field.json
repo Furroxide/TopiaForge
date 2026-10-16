@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 6,
+  "name": "fixtures.v6-bad-gamemode",
+  "displayName": "Bad Gamemode Fixture",
+  "version": "1.0.0",
+  "author": {
+    "name": "TopiaForge Tests"
+  },
+  "entryAssembly": "Fixture.dll",
+  "entryType": "Fixtures.V6Mod",
+  "supportedGameVersionRange": "*",
+  "supportedLoaderVersionRange": "*",
+  "supportedSdkVersionRange": "*",
+  "contributions": {
+    "gamemodes": [
+      {
+        "id": "fixtures.v6-bad-gamemode.mode",
+        "name": "Mode",
+        "icon": "not-canonical",
+        "implementation": {
+          "type": "Fixtures.ModeFactory"
+        }
+      }
+    ]
+  }
+}

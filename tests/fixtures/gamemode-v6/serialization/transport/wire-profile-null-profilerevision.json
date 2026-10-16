@@ -1,0 +1,69 @@
+{
+  "id": "wire-profile-null-profilerevision",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive profile codec null profilerevision",
+  "transport": "profile",
+  "payload": {
+    "schemaVersion": 4,
+    "profileId": "profile-01",
+    "profileRevision": null,
+    "requestId": "request-01",
+    "command": "launch-target",
+    "safeMode": false,
+    "inheritManagerModState": false,
+    "enabledMods": [
+      "base.mod",
+      "mode.mod"
+    ],
+    "selectedVersions": {
+      "base.mod": "1.0.0",
+      "mode.mod": "2.3.4"
+    },
+    "packages": [
+      {
+        "id": "base.mod",
+        "version": "1.0.0"
+      },
+      {
+        "id": "mode.mod",
+        "version": "2.3.4"
+      }
+    ],
+    "digest": "6a4a1aa84ed69e17",
+    "plan": {
+      "targetId": "base.mod.menu",
+      "gamemodeId": "mode.mod.play",
+      "worldId": "base.mod.world",
+      "transition": "scene-replacement",
+      "request": {
+        "targetId": "BASE.MOD.MENU"
+      },
+      "packages": [
+        {
+          "id": "base.mod",
+          "version": "1.0.0"
+        },
+        {
+          "id": "mode.mod",
+          "version": "2.3.4"
+        }
+      ],
+      "digest": "6a4a1aa84ed69e17"
+    }
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    },
+    "dart": {
+      "outcome": "reject",
+      "errorCodes": [
+        "transport"
+      ]
+    }
+  }
+}

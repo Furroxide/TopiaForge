@@ -69,7 +69,7 @@ namespace TopiaForge.Mods.UnityUi
             labelLayout.flexibleWidth = 1f;
             labelLayout.minHeight = TopiaForgeTokens.ControlLgHeight;
 
-            titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
+            CloseButton = titleBar.IconButton(TopiaForgeIcon.Cross, Close, TopiaForgeButtonStyle.Ghost).Fixed(34f, 34f);
 
             Content = Column(TopiaForgeGap.Md, TopiaForgeGap.Lg).Flex(1f, 1f);
             focusScope = Go.AddComponent<TopiaForgeFocusScope>();
@@ -81,6 +81,9 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Gets the content container below the title bar.</summary>
         public TopiaForgeContainer Content { get; }
+
+        /// <summary>The title-bar close button (the tool chrome's "$close" diagnostic node).</summary>
+        public TopiaForgeButton CloseButton { get; }
 
         /// <summary>Gets whether the tool is open.</summary>
         public bool IsOpen => open;

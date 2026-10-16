@@ -170,7 +170,7 @@ ModManifest _manifest(
   List<String> architectures = const [],
   List<String> contentTargets = const [],
 }) => ModManifest(
-  schemaVersion: 5,
+  schemaVersion: 6,
   id: id,
   name: id,
   version: version,

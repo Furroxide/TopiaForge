@@ -1,7 +1,13 @@
 part of '../local_launcher_repository.dart';
 
 extension _ManagerStateHelpers on LocalLauncherRepository {
-  Future<List<InstalledMod>> _loadInstalledMods(GameInstall install) async {
+  Future<List<InstalledMod>> _loadInstalledMods(
+    GameInstall install, {
+    bool reconcileRestartRequirements = true,
+  }) async {
+    if (reconcileRestartRequirements) {
+      await _reconcileRestartRequirements(install);
+    }
     final packages = <InstalledMod>[];
     final state = await _readManagerState(install);
     final stateById = _stateByModId(state);
@@ -28,6 +34,52 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
           : left.packagePath.compareTo(right.packagePath);
     });
     return packages;
+  }
+
+  /// Drops restart requirements that nothing is waiting on.
+  ///
+  /// `restartRequired` means "a running loader holds older state than disk".
+  /// With no process alive that is vacuous: the next launch reads this state
+  /// anyway, so the change is already applied and the launcher must stop
+  /// claiming a restart is owed.
+  ///
+  /// Mirrors ManagerState.ClearAppliedRestartRequirements on the runtime side,
+  /// including its exclusion of uninstall-pending mods. Those genuinely do
+  /// defer file removal to the next game start, and carry their own pill.
+  Future<void> _reconcileRestartRequirements(GameInstall install) async {
+    final state = await _readManagerState(install);
+    final stale = (state['mods'] as List)
+        .whereType<Map>()
+        .where(
+          (item) =>
+              item['restartRequired'] == true &&
+              item['uninstallPending'] != true,
+        )
+        .toList();
+    if (stale.isEmpty) {
+      // Nothing is staged, so the common path never pays for a process probe.
+      return;
+    }
+    bool running;
+    try {
+      running = await _gameRunningProbe(install);
+    } on Object {
+      // The probe contract is fail-closed; enforce it here too, so a
+      // faulty probe degrades to keeping the warning rather than
+      // breaking the whole mod load.
+      running = true;
+    }
+    if (running) {
+      return;
+    }
+    for (final item in stale) {
+      item['restartRequired'] = false;
+    }
+    await _saveManagerState(install, state);
+    await _appendLauncherLogBestEffort(
+      'Cleared ${stale.length} pending restart requirement(s); no running '
+      'Robotopia process found.',
+    );
   }
 
   Future<Map<String, List<InstalledMod>>> _loadInstalledVersionCatalog(
@@ -72,9 +124,27 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
   Map<String, Map<dynamic, dynamic>> _stateByModId(Map<String, Object?> state) {
     final result = <String, Map<dynamic, dynamic>>{};
     for (final item in (state['mods'] as List).whereType<Map>()) {
-      final id = item['id'] as String?;
-      if (id != null && ModManifest.isValidId(id)) {
-        result[id.toLowerCase()] = item;
+      final id = item['id'];
+      if (id is String && ModManifest.isValidId(id)) {
+        // Scanning remains usable when state is malformed; launch preflight
+        // retains and reports the original fields before using this view.
+        result[id.toLowerCase()] = {
+          ...item,
+          for (final key in [
+            'enabled',
+            'versionPinned',
+            'uninstallPending',
+            'restartRequired',
+          ])
+            if (item.containsKey(key) && item[key] is! bool) key: false,
+          for (final key in [
+            'version',
+            'name',
+            'installedAtUtc',
+            'updatedAtUtc',
+          ])
+            if (item.containsKey(key) && item[key] is! String) key: '',
+        };
       }
     }
     return result;
@@ -92,7 +162,9 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         id: p.basename(idDir.path),
         name: p.basename(idDir.path),
         version: p.basename(versionDir.path),
-        enabled: false,
+        enabled:
+            stateById[p.basename(idDir.path).toLowerCase()]?['enabled'] !=
+            false,
         restartRequired: false,
         uninstallPending: false,
         packagePath: versionDir.path,
@@ -172,7 +244,9 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
         id: p.basename(idDir.path),
         name: p.basename(idDir.path),
         version: p.basename(versionDir.path),
-        enabled: false,
+        enabled:
+            stateById[p.basename(idDir.path).toLowerCase()]?['enabled'] !=
+            false,
         restartRequired: false,
         uninstallPending: false,
         packagePath: versionDir.path,
@@ -291,19 +365,57 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     );
   }
 
-  Future<Map<String, Object?>> _readManagerState(GameInstall install) async {
+  Future<Map<String, Object?>> _readManagerState(
+    GameInstall install, {
+    bool allowMalformedRecords = false,
+  }) async {
     final file = _managerStateFile(install);
-    if (!file.existsSync()) {
+    final type = FileSystemEntity.typeSync(file.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) {
+      if (File('${file.path}.bak').existsSync()) {
+        throw const _ManagerStateContentException(
+          'Manager state is missing but a backup exists. Restore it explicitly before saving.',
+        );
+      }
       return {'mods': <Object?>[]};
     }
-
-    final decoded = jsonDecode(
-      utf8.decode(await _readLauncherFileBounded(file, _maxManagerStateBytes)),
-    );
-    if (decoded is Map<String, Object?> && decoded['mods'] is List) {
-      return decoded;
+    if (type != FileSystemEntityType.file) {
+      throw FileSystemException(
+        'Manager state must be an ordinary file.',
+        file.path,
+      );
     }
-    return {'mods': <Object?>[]};
+
+    if (file.lengthSync() > _maxManagerStateBytes) {
+      throw const _ManagerStateContentException(
+        'Manager state exceeds the runtime 4 MiB byte limit. Repair the original file before ordinary launch.',
+      );
+    }
+
+    final Object? decoded;
+    try {
+      final text = utf8.decode(
+        await _readLauncherFileBounded(file, _maxManagerStateBytes),
+      );
+      decoded = decodeJsonPreservingValues(
+        text,
+        label: 'Manager state at ${file.path}',
+      );
+    } on FormatException catch (error) {
+      throw _ManagerStateContentException(
+        'Manager state at ${file.path} cannot be read without losing original content. Repair the original file. $error',
+      );
+    }
+    final state = _validateManagerStateEnvelope(decoded);
+    if (!allowMalformedRecords) {
+      final issues = _managerStateRecordIssues(state).toList();
+      if (issues.isNotEmpty) {
+        throw _ManagerStateContentException(
+          issues.map((issue) => issue.$2).join(' '),
+        );
+      }
+    }
+    return state;
   }
 
   Future<void> _saveManagerState(
@@ -357,7 +469,7 @@ bool _isEnabledByDefault(ModManifest manifest) =>
 
 const _maxLauncherManifestBytes = 1024 * 1024;
 
-const _maxManagerStateBytes = 16 * 1024 * 1024;
+const _maxManagerStateBytes = 4 * 1024 * 1024;
 
 int _compareInstalledVersionsDescending(InstalledMod left, InstalledMod right) {
   final version = _compareVersionText(right.version, left.version);
@@ -371,4 +483,8 @@ int _compareVersionText(String left, String right) {
     return left.compareTo(right);
   }
   return leftVersion.compareTo(rightVersion);
+}
+
+final class _ManagerStateContentException extends FormatException {
+  const _ManagerStateContentException(super.message);
 }

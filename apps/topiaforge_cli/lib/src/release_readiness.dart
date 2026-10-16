@@ -4,6 +4,11 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:json_schema/json_schema.dart';
 
+import 'release_strict_json.dart';
+import 'release_git_contract.dart';
+
+part 'release_readiness_gate_contracts.dart';
+
 const releaseReadinessPath = 'release/release-readiness.json';
 const releaseReadinessSchemaPath =
     'schemas/topiaforge.release-readiness-v1.schema.json';
@@ -12,6 +17,7 @@ final class ReleaseReadinessGateDecision {
   ReleaseReadinessGateDecision({
     required this.id,
     required this.priority,
+    required this.enforcement,
     required this.status,
     required this.reviewerRoles,
     required this.evidenceIds,
@@ -22,6 +28,7 @@ final class ReleaseReadinessGateDecision {
 
   final String id;
   final String priority;
+  final String enforcement;
   final String status;
   final List<String> reviewerRoles;
   final List<String> evidenceIds;
@@ -29,12 +36,22 @@ final class ReleaseReadinessGateDecision {
   final String? acceptedRiskScope;
   final String? acceptedRiskEvidenceId;
 
-  bool get satisfiesRelease =>
+  /// Whether the gate's own exit criteria are met.
+  bool get isSatisfied =>
       status == 'approved' || (priority == 'P1' && status == 'accepted-risk');
+
+  /// Whether an unmet gate stops the release.
+  ///
+  /// A `0.x` line keeps the whole register visible but only lets the gates
+  /// declared `blocking` in [_gateContracts] hold a candidate. An `advisory`
+  /// gate is still recorded, still reported, and still reaches `ready` only by
+  /// approval — it just does not by itself make the computed status `blocked`.
+  bool get blocksRelease => enforcement == 'blocking' && !isSatisfied;
 
   Map<String, Object?> toPublicSummary() => {
     'id': id,
     'priority': priority,
+    'enforcement': enforcement,
     'status': status,
     if (reasonCode != null) 'reasonCode': reasonCode,
     'reviewerRoles': reviewerRoles,
@@ -76,7 +93,14 @@ final class ReleaseReadinessDecision {
     _checkTargetSha(targetSha);
     final resolved = await Process.run(
       'git',
-      ['-C', repositoryRoot, 'rev-parse', '--verify', '$targetSha^{commit}'],
+      [
+        '--no-replace-objects',
+        '-C',
+        repositoryRoot,
+        'rev-parse',
+        '--verify',
+        '$targetSha^{commit}',
+      ],
       stdoutEncoding: utf8,
       stderrEncoding: utf8,
     );
@@ -149,11 +173,13 @@ final class ReleaseReadinessDecision {
       final contract = _gateContracts[index];
       final id = raw['id']! as String;
       final priority = raw['priority']! as String;
+      final enforcement = raw['enforcement']! as String;
       final status = raw['status']! as String;
       final roles = List<String>.from(raw['reviewerRoles']! as List);
       final gateEvidence = List<String>.from(raw['evidenceIds']! as List);
       if (id != contract.id ||
           priority != contract.priority ||
+          enforcement != contract.enforcement ||
           !_sameList(roles, contract.reviewerRoles)) {
         throw StateError(
           'Release readiness gate ${contract.id} has the wrong identity '
@@ -191,6 +217,7 @@ final class ReleaseReadinessDecision {
         ReleaseReadinessGateDecision(
           id: id,
           priority: priority,
+          enforcement: enforcement,
           status: status,
           reasonCode: reasonCode,
           reviewerRoles: List.unmodifiable(roles),
@@ -201,9 +228,9 @@ final class ReleaseReadinessDecision {
       );
     }
 
-    final computedStatus = gates.every((gate) => gate.satisfiesRelease)
-        ? 'ready'
-        : 'blocked';
+    final computedStatus = gates.any((gate) => gate.blocksRelease)
+        ? 'blocked'
+        : 'ready';
     if (readiness['status'] != computedStatus) {
       throw StateError(
         'Release readiness status does not match its exact gate decisions.',
@@ -233,43 +260,14 @@ final class ReleaseReadinessDecision {
     String path,
     int maximumBytes,
   ) async {
-    final result = await Process.run(
-      'git',
-      ['-C', repositoryRoot, 'cat-file', 'blob', '$targetSha:$path'],
-      stdoutEncoding: null,
-      stderrEncoding: utf8,
-    );
-    if (result.exitCode != 0 || result.stdout is! List<int>) {
-      throw StateError(
-        'Required release decision is not tracked at the target commit: $path.',
-      );
-    }
-    final bytes = result.stdout as List<int>;
-    if (bytes.isEmpty || bytes.length > maximumBytes) {
-      throw StateError('Tracked release decision has an invalid size: $path.');
-    }
-    return bytes;
+    return readReleaseGitBlob(repositoryRoot, targetSha, path, maximumBytes);
   }
 
   static Map<String, Object?> _decodeObject(
     List<int> bytes, {
     required int maximumBytes,
     required String label,
-  }) {
-    if (bytes.isEmpty || bytes.length > maximumBytes) {
-      throw StateError('$label has an invalid size.');
-    }
-    Object? value;
-    try {
-      value = jsonDecode(utf8.decode(bytes, allowMalformed: false));
-    } on FormatException catch (error) {
-      throw StateError('$label is not strict UTF-8 JSON: $error');
-    }
-    if (value is! Map) {
-      throw StateError('$label must contain one JSON object.');
-    }
-    return Map<String, Object?>.from(value);
-  }
+  }) => decodeReleaseObject(bytes, maximumBytes: maximumBytes, label: label);
 
   static void _checkTargetSha(String targetSha) {
     if (!_shaPattern.hasMatch(targetSha)) {
@@ -278,144 +276,4 @@ final class ReleaseReadinessDecision {
       );
     }
   }
-}
-
-final class _GateContract {
-  const _GateContract({
-    required this.id,
-    required this.priority,
-    required this.blockedReasonCode,
-    required this.reviewerRoles,
-    this.acceptedRiskScope,
-  });
-
-  final String id;
-  final String priority;
-  final String blockedReasonCode;
-  final List<String> reviewerRoles;
-  final String? acceptedRiskScope;
-}
-
-const _gateContracts = [
-  _GateContract(
-    id: 'P0-IP-01',
-    priority: 'P0',
-    blockedReasonCode: 'approval-evidence-missing',
-    reviewerRoles: ['ip-trademark-counsel', 'project-owner', 'robotopia-owner'],
-  ),
-  // Re-opened 2026-08-06. The legal inventory is a fixed allowlist that proves
-  // the licence texts it names exist, not that every redistributed asset has a
-  // licence, so the readiness decision must carry the gate rather than infer it
-  // from the inventory passing. See P0-OSS-01 in docs/LaunchBlockers.md.
-  _GateContract(
-    id: 'P0-OSS-01',
-    priority: 'P0',
-    blockedReasonCode: 'approval-evidence-missing',
-    reviewerRoles: ['ip-trademark-counsel', 'release-owner'],
-  ),
-  _GateContract(
-    id: 'P0-PRIV-01',
-    priority: 'P0',
-    blockedReasonCode: 'approval-evidence-missing',
-    reviewerRoles: [
-      'backend-owner',
-      'privacy-legal',
-      'product-owner',
-      'robotopia-owner',
-      'security-owner',
-    ],
-  ),
-  _GateContract(
-    id: 'P0-TRUST-01',
-    priority: 'P0',
-    blockedReasonCode: 'approval-evidence-missing',
-    reviewerRoles: [
-      'product-owner',
-      'registry-owner',
-      'release-owner',
-      'security-owner',
-    ],
-  ),
-  _GateContract(
-    id: 'P0-CRED-01',
-    priority: 'P0',
-    blockedReasonCode: 'rotation-evidence-missing',
-    reviewerRoles: ['credential-owner', 'security-owner'],
-  ),
-  _GateContract(
-    id: 'P0-WIN-01',
-    priority: 'P0',
-    blockedReasonCode: 'platform-evidence-missing',
-    reviewerRoles: ['release-owner', 'windows-release-qa'],
-  ),
-  // P0-LINUX-01 is intentionally absent: Linux is descoped from 1.0.0-rc.1 and
-  // returns in rc.2. Restore this entry, the schema's gate count and id enum,
-  // and the policy platform archives together when it does.
-  _GateContract(
-    id: 'P0-GAME-01',
-    priority: 'P0',
-    blockedReasonCode: 'acceptance-evidence-missing',
-    reviewerRoles: ['robotopia-owner', 'runtime-mod-qa'],
-  ),
-  _GateContract(
-    id: 'P0-HOST-01',
-    priority: 'P0',
-    blockedReasonCode: 'host-evidence-missing',
-    reviewerRoles: [
-      'credential-owner',
-      'github-administrator',
-      'security-owner',
-    ],
-  ),
-  _GateContract(
-    id: 'P0-CAND-01',
-    priority: 'P0',
-    blockedReasonCode: 'candidate-evidence-missing',
-    reviewerRoles: ['project-owner', 'release-manager'],
-  ),
-  _GateContract(
-    id: 'P1-UX-01',
-    priority: 'P1',
-    blockedReasonCode: 'acceptance-evidence-missing',
-    reviewerRoles: ['accessibility-reviewer', 'native-qa', 'product-owner'],
-    acceptedRiskScope: 'rc1-native-ux-accessibility',
-  ),
-  _GateContract(
-    id: 'P1-E2E-01',
-    priority: 'P1',
-    blockedReasonCode: 'independent-evidence-missing',
-    reviewerRoles: [
-      'external-author-reviewer',
-      'external-player-reviewer',
-      'release-owner',
-    ],
-    acceptedRiskScope: 'rc1-independent-player-author-e2e',
-  ),
-  _GateContract(
-    id: 'P1-SUPPORT-01',
-    priority: 'P1',
-    blockedReasonCode: 'ownership-evidence-missing',
-    reviewerRoles: [
-      'incident-owner',
-      'release-owner',
-      'security-intake-owner',
-      'support-owner',
-    ],
-    acceptedRiskScope: 'rc1-support-incident-ownership',
-  ),
-];
-
-bool _sameList(List<String> left, List<String> right) {
-  if (left.length != right.length) return false;
-  for (var index = 0; index < left.length; index++) {
-    if (left[index] != right[index]) return false;
-  }
-  return true;
-}
-
-bool _isStrictlySorted(List<String> values) {
-  for (var index = 1; index < values.length; index++) {
-    if (values[index - 1].compareTo(values[index]) >= 0) return false;
-  }
-  return true;
 }

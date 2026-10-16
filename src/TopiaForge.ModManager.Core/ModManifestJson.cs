@@ -11,7 +11,7 @@ using System.Xml;
 namespace TopiaForge.ModManager.Core
 {
     /// <summary>Strict, bounded, schema-dispatched reader for TopiaForge manifest contracts.</summary>
-    public static class ModManifestJson
+    public static partial class ModManifestJson
     {
         public const long MaxManifestBytes = 1024L * 1024;
 
@@ -26,7 +26,8 @@ namespace TopiaForge.ModManager.Core
             "loadAfter", "loadBefore", "supportedGameVersionRange", "supportedLoaderVersionRange",
             "supportedSdkVersionRange", "category", "tags", "icon", "screenshots", "homepage",
             "source", "license", "licenseFiles", "hashes", "capabilities", "platforms",
-            "architectures", "contentTargets", "builtWith", "worldGamemodes", "apiAssemblies", "multiplayer",
+            "architectures", "contentTargets", "builtWith", "worldGamemodes", "contributions",
+            "apiAssemblies", "multiplayer",
 
             // Retired fields are decoded only so validation can return an actionable migration error.
             "vpmDependencies", "permissions", "id", "title", "gameVersion", "gameVersionRange",
@@ -37,6 +38,10 @@ namespace TopiaForge.ModManager.Core
         {
             "schemaVersion", "name", "displayName", "version", "author", "entryAssembly", "entryType",
             "supportedGameVersionRange", "supportedLoaderVersionRange", "supportedSdkVersionRange"
+        };
+        private static readonly HashSet<string> RetiredDeclarationFields = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "worldGamemodes"
         };
         private static readonly HashSet<string> AuthorFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -49,10 +54,6 @@ namespace TopiaForge.ModManager.Core
         private static readonly HashSet<string> ConflictFields = new HashSet<string>(StringComparer.Ordinal)
         {
             "id", "versionRange", "reason"
-        };
-        private static readonly HashSet<string> GamemodeFields = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "id", "name", "description"
         };
         private static readonly HashSet<string> MultiplayerFields = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -143,16 +144,24 @@ namespace TopiaForge.ModManager.Core
             var schemaVersion = ReadSchemaVersion(properties);
             switch (ManifestSchemaDispatch.Resolve(schemaVersion))
             {
-                case ManifestSchemaContract.V5:
-                    return DeserializeV5(json, properties, names, present);
+                case ManifestSchemaContract.V6:
+                    return DeserializeV6(json, properties, names, present);
                 default:
                     throw new InvalidDataException(
                         "Manifest schemaVersion " + schemaVersion + " has no registered reader.");
             }
         }
 
-        private static ModManifest DeserializeV5(
-            string json,
+        /// <summary>
+        /// Common manifest structure is checked before contribution-specific fields.
+        /// <para>
+        /// Structure is checked before anything is deserialized, always. DataContractJsonSerializer
+        /// throws its own SerializationException on a shape it cannot bind -- a string where an object
+        /// belongs, say -- and that is not an actionable manifest error, so nothing may reach it that
+        /// this walk has not already accepted.
+        /// </para>
+        /// </summary>
+        private static void ValidateCommonStructure(
             IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties,
             IReadOnlyList<string> names,
             HashSet<string> present)
@@ -202,16 +211,43 @@ namespace TopiaForge.ModManager.Core
                     requireAtLeastOne: true);
             }
 
+            foreach (var field in RetiredDeclarationFields)
+            {
+                if (present.Contains(field))
+                {
+                    throw new InvalidDataException(RetiredWorldGamemodesMessage);
+                }
+            }
+
             ValidateClosedObjectArray(properties, "conflicts", ConflictFields, new[] { "id" });
-            ValidateClosedObjectArray(properties, "worldGamemodes", GamemodeFields, new[] { "id", "name" });
 
             if (present.Contains("multiplayer"))
             {
                 ValidateMultiplayerObject(properties);
             }
+        }
 
+        private static ModManifest ReadManifest(string json)
+        {
             var manifest = JsonUtil.Deserialize<ModManifest>(json);
             NormalizeCollections(manifest);
+            return manifest;
+        }
+
+        private static ModManifest DeserializeV6(
+            string json,
+            IReadOnlyList<JsonObjectMerge.RawJsonProperty> properties,
+            IReadOnlyList<string> names,
+            HashSet<string> present)
+        {
+            ValidateCommonStructure(properties, names, present);
+            if (present.Contains("contributions"))
+            {
+                ValidateContributionsObject(properties);
+            }
+
+            var manifest = ReadManifest(json);
+            NormalizeContributions(manifest);
             return manifest;
         }
 
@@ -245,19 +281,11 @@ namespace TopiaForge.ModManager.Core
             manifest.Architectures = manifest.Architectures ?? new List<string>();
             manifest.ContentTargets = manifest.ContentTargets ?? new List<string>();
             manifest.ApiAssemblies = manifest.ApiAssemblies ?? new List<string>();
-            manifest.WorldGamemodes = manifest.WorldGamemodes ?? new List<ModGamemode>();
             foreach (var conflict in manifest.Conflicts.Where(conflict => conflict != null))
             {
                 conflict.Id = conflict.Id ?? string.Empty;
                 conflict.VersionRange = conflict.VersionRange ?? string.Empty;
                 conflict.Reason = conflict.Reason ?? string.Empty;
-            }
-
-            foreach (var gamemode in manifest.WorldGamemodes.Where(gamemode => gamemode != null))
-            {
-                gamemode.Id = gamemode.Id ?? string.Empty;
-                gamemode.Name = gamemode.Name ?? string.Empty;
-                gamemode.Description = gamemode.Description ?? string.Empty;
             }
 
             if (manifest.BuiltWith != null)

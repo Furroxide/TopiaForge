@@ -126,6 +126,8 @@ void main() {
       repositoryRoot: root.path,
       dotnetSdkResolver: (_) async =>
           throw StateError('Required .NET SDK 10.0.301 was not found.'),
+      executableLookup: (_, {configuredPath}) async => '',
+      unityEditorScanner: () async => const [],
     );
 
     final environment = await repository.checkEnvironment();

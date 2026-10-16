@@ -1,7 +1,7 @@
 part of 'topiaforge_cli_test.dart';
 
 void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
-  test('mod add multiplayer keeps V5 and scaffolds the contract lock', () async {
+  test('mod add multiplayer keeps V6 and scaffolds the contract lock', () async {
     final created = await currentHarness().runCli([
       'new',
       'mod',
@@ -28,7 +28,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
-    expect(manifest['schemaVersion'], 5);
+    expect(manifest['schemaVersion'], 6);
     expect(manifest['multiplayer'], {
       'mode': 'session',
       'presence': 'required',
@@ -37,7 +37,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       (manifest['dependencies']
           as Map)['io.github.furroxide.topiaforge.multiplayer'],
-      '1.0.0-rc.1',
+      '0.1.0-rc.1',
     );
     expect(added.stdout, contains('topiaforge mod sync multiplayer'));
 
@@ -48,13 +48,13 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="1.0.0-rc.1" />',
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.1.0-rc.1" />',
       ),
     );
     expect(
       project.readAsStringSync(),
       contains(
-        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="1.0.0-rc.1" PrivateAssets="all" />',
+        '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" Version="0.1.0-rc.1" PrivateAssets="all" />',
       ),
     );
     final lockFile = File(
@@ -118,10 +118,10 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
       projectDir,
     ]);
     expect(migrateNoOp.exitCode, 0);
-    expect(migrateNoOp.stdout, contains('supported schema V5'));
+    expect(migrateNoOp.stdout, contains('valid schema V6; no files changed'));
   });
 
-  test('mod remove multiplayer keeps the project on standalone V5', () async {
+  test('mod remove multiplayer keeps the project on standalone V6', () async {
     final created = await currentHarness().runCli([
       'new',
       'mod',
@@ -159,7 +159,7 @@ void _multiplayerCliTests(_CliTestHarness Function() currentHarness) {
               ).readAsStringSync(),
             )
             as Map<String, Object?>;
-    expect(manifest['schemaVersion'], 5);
+    expect(manifest['schemaVersion'], 6);
     expect(manifest, isNot(contains('multiplayer')));
     expect(
       (manifest['dependencies'] as Map? ?? const {}).keys,

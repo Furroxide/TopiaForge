@@ -37,6 +37,8 @@ namespace TopiaForge.GameCompat.Extractor
         public static List<AuditFinding> Audit(string repoRoot)
         {
             var findings = new List<AuditFinding>();
+            repoRoot = Path.GetFullPath(repoRoot);
+            if (!IsRegularRepositoryPath(repoRoot, repoRoot)) return findings;
             var manifests = ManifestLoader.LoadAll(repoRoot);
 
             foreach (var (manifest, _) in manifests)
@@ -49,7 +51,7 @@ namespace TopiaForge.GameCompat.Extractor
 
                 var sources = DiscoverCompiledSources(repoRoot, sourceDir);
 
-                var allText = StripComments(ReadSources(sources, manifest.ModId));
+                var allText = StripComments(ReadSources(repoRoot, sources, manifest.ModId));
                 var allow = LoadAllow(repoRoot, manifest.ModId);
 
                 // 1) undeclared: every "X, GameCode" literal should be declared as a binding on type X.
@@ -131,12 +133,14 @@ namespace TopiaForge.GameCompat.Extractor
 
             if (projects.Count == 0)
             {
-                AddDefaultSources(sourceDir, sources);
+                AddDefaultSources(repoRoot, sourceDir, sources);
                 return sources.OrderBy(path => path, StringComparer.Ordinal).ToList();
             }
 
             foreach (var project in projects)
             {
+                if (!IsRegularRepositoryPath(repoRoot, project))
+                    throw new FileNotFoundException("GameCompat project file disappeared before the audit.", project);
                 var projectXml = ExtractorFileIo.ReadStableUtf8(
                     project,
                     MaxProjectFileBytes,
@@ -148,7 +152,7 @@ namespace TopiaForge.GameCompat.Extractor
                     .Any(value => string.Equals(value, "false", StringComparison.OrdinalIgnoreCase));
                 if (defaultItems)
                 {
-                    AddDefaultSources(Path.GetDirectoryName(project)!, sources);
+                    AddDefaultSources(repoRoot, Path.GetDirectoryName(project)!, sources);
                 }
 
                 foreach (var compile in document.Descendants().Where(element => element.Name.LocalName == "Compile"))
@@ -181,14 +185,28 @@ namespace TopiaForge.GameCompat.Extractor
             return sources.OrderBy(path => path, StringComparer.Ordinal).ToList();
         }
 
-        private static void AddDefaultSources(string sourceDir, ISet<string> sources)
+        private static void AddDefaultSources(string repoRoot, string sourceDir, ISet<string> sources)
         {
-            foreach (var path in Directory.EnumerateFiles(sourceDir, "*.cs", SearchOption.AllDirectories))
+            foreach (var path in EnumerateRepositorySources(repoRoot, sourceDir, skipBuildOutputs: true))
+                AddSource(sources, path);
+        }
+
+        private static IEnumerable<string> EnumerateRepositorySources(string repoRoot, string sourceDir, bool skipBuildOutputs)
+        {
+            var pending = new Stack<string>();
+            pending.Push(sourceDir);
+            while (pending.Count != 0)
             {
-                var relative = Path.GetRelativePath(sourceDir, path).Replace('\\', '/');
-                if (!HasDirectorySegment(relative, "obj") && !HasDirectorySegment(relative, "bin"))
+                var directory = pending.Pop();
+                if (!IsRegularRepositoryPath(repoRoot, directory)) continue;
+                foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.TopDirectoryOnly))
+                    if (IsRepositorySource(repoRoot, path)) yield return Path.GetFullPath(path);
+                foreach (var child in Directory.EnumerateDirectories(directory))
                 {
-                    AddSource(sources, Path.GetFullPath(path));
+                    var name = Path.GetFileName(child);
+                    if (skipBuildOutputs && (string.Equals(name, "obj", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(name, "bin", StringComparison.OrdinalIgnoreCase))) continue;
+                    if (IsRegularRepositoryPath(repoRoot, child)) pending.Push(child);
                 }
             }
         }
@@ -226,13 +244,13 @@ namespace TopiaForge.GameCompat.Extractor
                 var searchRoot = Path.GetFullPath(Path.Combine(
                     projectDir,
                     searchRelative.Replace('/', Path.DirectorySeparatorChar)));
-                if (!IsInside(repoRoot, searchRoot) || !Directory.Exists(searchRoot))
+                if (!IsInside(repoRoot, searchRoot) || !IsRegularRepositoryPath(repoRoot, searchRoot) || !Directory.Exists(searchRoot))
                 {
                     continue;
                 }
 
                 var matcher = GlobRegex(expression);
-                foreach (var path in Directory.EnumerateFiles(searchRoot, "*.cs", SearchOption.AllDirectories))
+                foreach (var path in EnumerateRepositorySources(repoRoot, searchRoot, skipBuildOutputs: false))
                 {
                     var relative = Path.GetRelativePath(projectDir, path).Replace('\\', '/');
                     if (matcher.IsMatch(relative) && IsRepositorySource(repoRoot, path))
@@ -289,13 +307,13 @@ namespace TopiaForge.GameCompat.Extractor
         private static bool IsRepositorySource(string repoRoot, string path)
         {
             if (!IsInside(repoRoot, path) ||
-                !File.Exists(path) ||
+                !IsRegularRepositoryPath(repoRoot, path) || !File.Exists(path) ||
                 !string.Equals(Path.GetExtension(path), ".cs", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0;
+            return true;
         }
 
         private static bool IsInside(string root, string path)
@@ -309,16 +327,46 @@ namespace TopiaForge.GameCompat.Extractor
                    fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison);
         }
 
-        private static bool HasDirectorySegment(string relativePath, string segment)
+        // Check from the repository down before inspecting a descendant: testing only the final file
+        // misses a regular file reached through a directory link. Recheck before each enumeration/read.
+        private static bool IsRegularRepositoryPath(string repoRoot, string path)
         {
-            return relativePath.Split('/').Any(part =>
-                string.Equals(part, segment, StringComparison.OrdinalIgnoreCase));
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoRoot));
+            var fullPath = Path.GetFullPath(path);
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var prefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
+            if (!string.Equals(root, fullPath, comparison) && !fullPath.StartsWith(prefix, comparison))
+                throw new InvalidDataException("GameCompat audit path is outside the repository: " + fullPath);
+            var current = root;
+            var segments = Path.GetRelativePath(root, fullPath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            for (var index = -1; index < segments.Length; index++)
+            {
+                if (index >= 0)
+                {
+                    if (segments[index] == ".") continue;
+                    current = Path.Combine(current, segments[index]);
+                }
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(current); }
+                catch (FileNotFoundException) { return false; }
+                catch (DirectoryNotFoundException) { return false; }
+                if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Device)) != 0)
+                    throw new InvalidDataException("GameCompat audit rejects links and special paths: " + current);
+            }
+            return true;
         }
 
         private static string? ResolveModSourceDir(string repoRoot, string modId)
         {
+            // Manager lives under src and source-links the no-op importer helper. Normal project item
+            // discovery includes that actual shared source under the same audited ownership.
+            if (string.Equals(modId, "io.github.furroxide.topiaforge.modmanager", StringComparison.Ordinal))
+            {
+                var manager = Path.GetFullPath(Path.Combine(repoRoot, "src", "TopiaForge.ModManager"));
+                return IsRegularRepositoryPath(repoRoot, manager) && Directory.Exists(manager) ? manager : null;
+            }
             var modsRoot = Path.Combine(repoRoot, "mods");
-            if (!Directory.Exists(modsRoot))
+            if (!IsRegularRepositoryPath(repoRoot, modsRoot) || !Directory.Exists(modsRoot))
             {
                 return null;
             }
@@ -335,6 +383,7 @@ namespace TopiaForge.GameCompat.Extractor
                 var folder = Path.GetFileName(dir).Replace(".", string.Empty).ToLowerInvariant();
                 if (folder == wanted)
                 {
+                    if (!IsRegularRepositoryPath(repoRoot, dir)) return null;
                     return dir;
                 }
             }
@@ -346,6 +395,7 @@ namespace TopiaForge.GameCompat.Extractor
         {
             var path = Path.Combine(repoRoot, "bindings", modId + ".audit-allow.json");
             var allow = new HashSet<string>(StringComparer.Ordinal);
+            if (!IsRegularRepositoryPath(repoRoot, path)) return allow;
             try
             {
                 var root = JsonValue.Parse(ExtractorFileIo.ReadStableUtf8(
@@ -385,7 +435,7 @@ namespace TopiaForge.GameCompat.Extractor
             }
         }
 
-        private static string ReadSources(IReadOnlyList<string> sources, string modId)
+        private static string ReadSources(string repoRoot, IReadOnlyList<string> sources, string modId)
         {
             if (sources.Count > MaxSourceFiles)
             {
@@ -397,6 +447,8 @@ namespace TopiaForge.GameCompat.Extractor
             var combined = new StringBuilder();
             foreach (var source in sources)
             {
+                if (!IsRegularRepositoryPath(repoRoot, source))
+                    throw new FileNotFoundException("GameCompat source file disappeared before the audit.", source);
                 var text = ExtractorFileIo.ReadStableUtf8(
                     source,
                     MaxSourceFileBytes,

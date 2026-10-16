@@ -42,7 +42,6 @@ namespace TopiaForge.CreatorContent
                 }
                 catch (ObjectDisposedException)
                 {
-                    registration.Dispose();
                     return OperationResult<ICreatorToolHostRegistration>.Failure(
                         ModErrorCode.Cancelled,
                         "The host mod stopped during registration.");
@@ -56,8 +55,9 @@ namespace TopiaForge.CreatorContent
                 : router.Toggle();
 
             public OperationResult<bool> CloseActive(
-                CreatorToolCloseReason reason = CreatorToolCloseReason.Requested) =>
-                router.CloseActive(reason);
+                CreatorToolCloseReason reason = CreatorToolCloseReason.Requested) => lifetime.IsStopping
+                ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The host context is stopping.")
+                : router.CloseActive(reason);
         }
     }
 }

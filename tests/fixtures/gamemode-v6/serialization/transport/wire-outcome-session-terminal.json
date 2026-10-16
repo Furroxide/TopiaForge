@@ -1,0 +1,45 @@
+{
+  "id": "wire-outcome-session-terminal",
+  "channel": "serialization",
+  "kind": "transport-codec",
+  "summary": "Inactive outcome codec session terminal",
+  "transport": "outcome",
+  "payload": {
+    "schemaVersion": 1,
+    "kind": "session",
+    "requestId": "request-01",
+    "sequence": 5,
+    "phase": "idle",
+    "status": "succeeded",
+    "sessionId": "session-01",
+    "blocks": []
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "kind": "session",
+        "requestId": "request-01",
+        "sequence": 5,
+        "phase": "idle",
+        "status": "succeeded",
+        "sessionId": "session-01",
+        "blocks": []
+      }
+    },
+    "dart": {
+      "outcome": "accept",
+      "normalized": {
+        "schemaVersion": 1,
+        "kind": "session",
+        "requestId": "request-01",
+        "sequence": 5,
+        "phase": "idle",
+        "status": "succeeded",
+        "sessionId": "session-01",
+        "blocks": []
+      }
+    }
+  }
+}

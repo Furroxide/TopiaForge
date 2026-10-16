@@ -9,19 +9,20 @@ import 'package:topiaforge/src/release_handoff.dart';
 import 'package:topiaforge/src/release_handoff_models.dart';
 import 'package:topiaforge/src/release_policy.dart';
 
+import 'release_handoff_policy_fixture.dart';
 import 'release_handoff_qa_fixture.dart';
 
 void main() {
-  const version = '1.0.0-rc.1';
+  const version = '0.1.0-rc.1';
   const targetSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
   late Directory temp;
   late String root;
 
   setUp(() {
-    root = _repositoryRoot();
     temp = Directory.systemTemp.createTempSync(
       'topiaforge-handoff-embedded-test-',
     );
+    root = writeSignedReleaseHandoffRoot(temp);
   });
 
   tearDown(() {
@@ -188,7 +189,7 @@ Future<void> _buildPlatformBundles({
   for (final platform in TopiaForgeReleasePolicy.load(root).targetPlatforms) {
     await contract.buildPlatformBundle(
       repositoryRoot: root,
-      version: '1.0.0-rc.1',
+      version: '0.1.0-rc.1',
       targetSha: targetSha,
       platform: platform,
       archivePath: p.join(assets.path, releaseArchiveForPlatform(platform)),
@@ -252,15 +253,4 @@ void _writeEcosystemArchives(
       p.join(assets.path, archiveEntry.value),
     ).writeAsBytesSync(ZipEncoder().encode(archive));
   }
-}
-
-String _repositoryRoot() {
-  var directory = Directory.current.absolute;
-  while (!File(p.join(directory.path, 'TopiaForge.slnx')).existsSync()) {
-    if (directory.parent.path == directory.path) {
-      throw StateError('Repository root not found.');
-    }
-    directory = directory.parent;
-  }
-  return directory.path;
 }

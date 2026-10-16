@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using TopiaForge.Mods;
+using TopiaForge.Mods.GameBridge;
 using UnityEngine;
 
 namespace TopiaForge.RobotKit
@@ -383,7 +384,7 @@ namespace TopiaForge.RobotKit
             // Re-enable the LLM first (mirror of the dormant writes), preferring the captured original values.
             if (!SetFieldIfPresent(type, agent, "llmDisabled", original?.LlmDisabled ?? false))
             {
-                var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags);
+                var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags, null, new[] { typeof(bool) }, null);
                 try
                 {
                     enableTestMode?.Invoke(agent, new object[] { true });
@@ -474,7 +475,7 @@ namespace TopiaForge.RobotKit
                 // Disable the actual LLM call without disabling the component.
                 if (!SetFieldIfPresent(type, agent, "llmDisabled", true))
                 {
-                    var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags);
+                    var enableTestMode = type.GetMethod("EnableTestMode", InstanceFlags, null, new[] { typeof(bool) }, null);
                     enableTestMode?.Invoke(agent, new object[] { false });
                 }
             }
@@ -514,22 +515,41 @@ namespace TopiaForge.RobotKit
             try
             {
                 var damageType = Enum.ToObject(DamageTypeType, (int)type);
-                var method = health.GetType().GetMethods(InstanceFlags).FirstOrDefault(candidate =>
-                    candidate.Name == "Damage" &&
-                    candidate.GetParameters() is { Length: 3 } parameters &&
-                    parameters[0].ParameterType == typeof(float) &&
-                    parameters[1].ParameterType == DamageTypeType);
+                var method = NativeDamageSource.Select(
+                    health.GetType(), "Damage", InstanceFlags, typeof(GameObject), typeof(float), DamageTypeType);
                 if (method == null)
                 {
                     return false;
                 }
 
-                method.Invoke(health, new[] { Mathf.Max(0f, amount), damageType, source });
+                method.Invoke(health, new[] { Mathf.Max(0f, amount), damageType, NativeDamageSource.Argument(method, source) });
                 return true;
             }
             catch (Exception ex)
             {
                 logger?.Debug("RobotKit Health.Damage failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        // Change health through the native Health.ChangeHealth(delta, source); a negative delta is damage.
+        public static bool ChangeHealth(Component health, float delta, string source, IModLogger? logger)
+        {
+            try
+            {
+                var method = NativeDamageSource.Select(
+                    health.GetType(), "ChangeHealth", InstanceFlags, typeof(GameObject), typeof(float));
+                if (method == null)
+                {
+                    return false;
+                }
+
+                method.Invoke(health, new[] { delta, NativeDamageSource.Argument(method, source) });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger?.Debug("RobotKit Health.ChangeHealth failed: " + ex.Message);
                 return false;
             }
         }
@@ -546,7 +566,10 @@ namespace TopiaForge.RobotKit
             try
             {
                 var method = body.GetType().GetMethods(InstanceFlags).FirstOrDefault(candidate =>
-                    candidate.Name == "StartEmote" && candidate.GetParameters().Length == 2);
+                    candidate.Name == "StartEmote" &&
+                    candidate.GetParameters() is { Length: 2 } parameters &&
+                    parameters[0].ParameterType == typeof(string) &&
+                    parameters[1].ParameterType == typeof(System.Threading.CancellationToken));
                 method?.Invoke(body, new object[] { emojiShortcode ?? string.Empty, System.Threading.CancellationToken.None });
             }
             catch (Exception ex)
@@ -555,12 +578,17 @@ namespace TopiaForge.RobotKit
             }
         }
 
-        // Resolve the RobotBody root GameObject from any component on (or under) a robot: prefer the Body/MaybeBody
-        // property, then walk parents for a RobotBody, then fall back to the transform root.
+        // Resolve the RobotBody root GameObject from any component on (or under) a robot: prefer the
+        // MaybeBody/Body property, then walk parents for a RobotBody, then fall back to the transform root.
+        //
+        // MaybeBody is read first deliberately. On build 2409 the Body getter throws when the robot has no
+        // body yet, and asking it first meant every campaign scene load paid a TargetInvocationException
+        // that was caught, logged once at Debug, and then silently resolved through a different path than
+        // intended. The "Maybe" sibling is the non-throwing accessor; ask it first and Body never throws.
         public static GameObject GetRobotBodyRoot(Component component)
         {
-            var body = GetPropertyValue(component, "Body") as Component ??
-                GetPropertyValue(component, "MaybeBody") as Component;
+            var body = GetPropertyValue(component, "MaybeBody") as Component ??
+                GetPropertyValue(component, "Body") as Component;
             if (body != null)
             {
                 return body.gameObject;
