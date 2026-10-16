@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "about": "TokenBucket in integer micro-tokens: starts full, refills elapsed * tokensPerSecond micro-tokens per microsecond up to capacity, ignores time that runs backwards, and takes a cost only when all of it is there.",
+  "cases": [
+    {
+      "name": "burst then steady",
+      "capacity": 3,
+      "tokensPerSecond": 2,
+      "startMicros": 0,
+      "steps": [
+        {"atMicros": 0, "cost": 1, "allowed": true},
+        {"atMicros": 0, "cost": 1, "allowed": true},
+        {"atMicros": 0, "cost": 1, "allowed": true},
+        {"atMicros": 0, "cost": 1, "allowed": false},
+        {"atMicros": 499999, "cost": 1, "allowed": false},
+        {"atMicros": 500000, "cost": 1, "allowed": true},
+        {"atMicros": 750000, "cost": 1, "allowed": false},
+        {"atMicros": 1000000, "cost": 1, "allowed": true},
+        {"atMicros": 1000000, "cost": 1, "allowed": false},
+        {"atMicros": 2500000, "cost": 2, "allowed": true},
+        {"atMicros": 2500000, "cost": 1, "allowed": true}
+      ]
+    },
+    {
+      "name": "time runs backwards",
+      "capacity": 1,
+      "tokensPerSecond": 1,
+      "startMicros": 1000000,
+      "steps": [
+        {"atMicros": 1000000, "cost": 1, "allowed": true},
+        {"atMicros": 500000, "cost": 1, "allowed": false},
+        {"atMicros": 1999999, "cost": 1, "allowed": false},
+        {"atMicros": 2000000, "cost": 1, "allowed": true},
+        {"atMicros": 1000, "cost": 1, "allowed": false},
+        {"atMicros": 3000000, "cost": 1, "allowed": true}
+      ]
+    },
+    {
+      "name": "time runs backwards with tokens left",
+      "capacity": 2,
+      "tokensPerSecond": 1,
+      "startMicros": 0,
+      "steps": [
+        {"atMicros": 1000000, "cost": 1, "allowed": true},
+        {"atMicros": 0, "cost": 1, "allowed": true},
+        {"atMicros": 0, "cost": 1, "allowed": false},
+        {"atMicros": 1000000, "cost": 1, "allowed": false},
+        {"atMicros": 2000000, "cost": 1, "allowed": true}
+      ]
+    },
+    {
+      "name": "a fixed allowance",
+      "capacity": 2,
+      "tokensPerSecond": 0,
+      "startMicros": 0,
+      "steps": [
+        {"atMicros": 0, "cost": 1, "allowed": true},
+        {"atMicros": 10, "cost": 1, "allowed": true},
+        {"atMicros": 1000000000000, "cost": 1, "allowed": false}
+      ]
+    },
+    {
+      "name": "multi-token costs",
+      "capacity": 5,
+      "tokensPerSecond": 3,
+      "startMicros": 0,
+      "steps": [
+        {"atMicros": 0, "cost": 5, "allowed": true},
+        {"atMicros": 333333, "cost": 1, "allowed": false},
+        {"atMicros": 333334, "cost": 1, "allowed": true},
+        {"atMicros": 2000000, "cost": 4, "allowed": true},
+        {"atMicros": 2000000, "cost": 2, "allowed": false},
+        {"atMicros": 1000000000, "cost": 5, "allowed": true}
+      ]
+    },
+    {
+      "name": "presentation toasts",
+      "capacity": 4,
+      "tokensPerSecond": 2,
+      "startMicros": 0,
+      "steps": [
+        {"atMicros": 0, "cost": 1, "allowed": true},
+        {"atMicros": 11, "cost": 1, "allowed": true},
+        {"atMicros": 11, "cost": 1, "allowed": true},
+        {"atMicros": 11, "cost": 1, "allowed": true},
+        {"atMicros": 11, "cost": 1, "allowed": false},
+        {"atMicros": 499999, "cost": 1, "allowed": false},
+        {"atMicros": 500000, "cost": 1, "allowed": true},
+        {"atMicros": 2000000, "cost": 1, "allowed": true}
+      ]
+    }
+  ]
+}

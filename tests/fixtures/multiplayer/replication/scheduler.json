@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "about": "ReplicationScheduler choices. Each tick: credit = min(credit, 0) + budget; every candidate's accumulator grows by its priority, except a body at rest after three confirmations (accumulator held at zero); candidates sort by accumulator descending, then priority descending, then the scheduler's send count at their last send ascending (never sent is zero), then id ascending; the first is sent while credit is positive, later ones only if they fit; a sent accumulator resets. Entities missing from a tick are forgotten.",
+  "restConfirmationSends": 3,
+  "candidateFields": [
+    "id",
+    "priority",
+    "sizeBytes",
+    "atRest"
+  ],
+  "scenarios": [
+    {
+      "name": "equal priorities rotate",
+      "budgetBytesPerTick": 250,
+      "ticks": [
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [1, 2], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [3, 4], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [5, 1], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [2, 3], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [4, 5], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [1, 2], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [3, 4], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [5, 1], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [2, 3], "creditAfter": 50},
+        {"candidates": [[1, 1, 100, false], [2, 1, 100, false], [3, 1, 100, false], [4, 1, 100, false], [5, 1, 100, false]], "selected": [4, 5], "creditAfter": 50}
+      ]
+    },
+    {
+      "name": "shares follow priorities",
+      "budgetBytesPerTick": 300,
+      "ticks": [
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [1, 2], "creditAfter": 100},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 1, 120, false], [2, 2, 80, false], [3, 5, 200, false]], "selected": [1, 2], "creditAfter": 100}
+      ]
+    },
+    {
+      "name": "an oversized update overdraws",
+      "budgetBytesPerTick": 400,
+      "ticks": [
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [1], "creditAfter": -600},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [], "creditAfter": -200},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [1], "creditAfter": -800},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [], "creditAfter": -400},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [], "creditAfter": 0},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [1], "creditAfter": -600},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [], "creditAfter": -200},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [2, 3], "creditAfter": 90},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [1], "creditAfter": -600},
+        {"candidates": [[1, 3, 1000, false], [2, 1, 50, false], [3, 1, 60, false]], "selected": [], "creditAfter": -200}
+      ]
+    },
+    {
+      "name": "bodies at rest are confirmed, then free",
+      "budgetBytesPerTick": 200,
+      "ticks": [
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [1, 3], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [1, 3], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [1, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, false]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [3, 2], "creditAfter": 20},
+        {"candidates": [[1, 4, 90, true], [2, 1, 90, false], [3, 2, 90, true]], "selected": [2], "creditAfter": 110}
+      ]
+    },
+    {
+      "name": "entities come and go",
+      "budgetBytesPerTick": 500,
+      "ticks": [
+        {"candidates": [[1, 3, 117, false], [3, 6, 165, true], [4, 1, 38, false], [7, 2, 258, true], [8, 1, 163, false], [11, 3, 90, false], [12, 5, 159, false]], "selected": [3, 12, 1, 4], "creditAfter": 21},
+        {"candidates": [[2, 4, 111, true], [3, 1, 174, true], [4, 7, 214, false], [5, 8, 108, true], [6, 4, 36, false], [7, 6, 202, false], [8, 2, 46, false], [10, 8, 123, true], [11, 9, 162, false], [12, 6, 193, false]], "selected": [11, 5, 10, 6, 8], "creditAfter": 25},
+        {"candidates": [[1, 8, 33, false], [2, 8, 194, false], [4, 8, 88, false], [5, 6, 21, false], [6, 2, 142, true], [7, 3, 205, true], [8, 8, 36, true], [9, 5, 242, true], [10, 9, 87, false], [11, 7, 75, true]], "selected": [4, 2, 7], "creditAfter": 13},
+        {"candidates": [[3, 3, 83, true], [5, 6, 259, true], [6, 1, 132, false], [7, 9, 116, false], [8, 8, 178, false], [10, 8, 57, true], [11, 2, 16, false], [12, 6, 173, true]], "selected": [10, 8, 5], "creditAfter": 6},
+        {"candidates": [[1, 7, 54, false], [2, 6, 137, true], [3, 8, 138, false], [6, 5, 138, false], [9, 9, 108, true], [10, 1, 210, false], [11, 2, 194, false], [12, 3, 107, false]], "selected": [3, 11, 9, 1], "creditAfter": 6},
+        {"candidates": [[1, 9, 100, false], [2, 4, 222, true], [3, 4, 67, false], [4, 1, 23, false], [5, 4, 193, false], [6, 6, 260, false], [9, 6, 68, false], [10, 1, 138, false], [11, 2, 229, false], [12, 4, 138, false]], "selected": [6, 12, 1], "creditAfter": 2},
+        {"candidates": [[1, 6, 38, false], [2, 7, 134, false], [3, 3, 59, false], [5, 8, 222, false], [6, 8, 184, false], [8, 1, 19, false], [9, 2, 150, false], [11, 4, 227, false]], "selected": [2, 5, 3, 1, 8], "creditAfter": 28},
+        {"candidates": [[2, 6, 82, false], [3, 1, 248, false], [4, 9, 123, false], [5, 3, 152, true], [6, 8, 214, true], [8, 3, 52, false], [9, 9, 31, false], [10, 9, 139, false], [12, 4, 64, true]], "selected": [9, 6, 4, 2], "creditAfter": 50},
+        {"candidates": [[1, 9, 131, false], [2, 2, 129, false], [3, 9, 67, false], [4, 9, 222, false], [5, 9, 240, false], [6, 9, 244, false], [7, 3, 122, true], [8, 2, 187, true], [10, 2, 245, false], [11, 6, 52, true]], "selected": [5, 10], "creditAfter": 15},
+        {"candidates": [[1, 2, 117, false], [3, 4, 57, false], [4, 7, 102, false], [5, 2, 200, false], [6, 8, 128, false], [7, 9, 175, true], [8, 2, 251, false], [9, 2, 37, true], [11, 5, 209, true], [12, 5, 119, true]], "selected": [6, 4, 3, 7, 9], "creditAfter": 1},
+        {"candidates": [[1, 8, 195, false], [2, 3, 124, false], [3, 1, 178, true], [4, 4, 33, true], [7, 7, 253, false], [8, 1, 150, false], [9, 3, 83, true], [11, 5, 151, false], [12, 9, 188, true]], "selected": [1, 11, 8], "creditAfter": 4},
+        {"candidates": [[1, 1, 80, true], [3, 4, 147, false], [4, 2, 184, false], [5, 8, 155, false], [6, 9, 94, false], [7, 6, 66, false], [8, 3, 119, false], [9, 3, 19, true], [10, 5, 126, true], [12, 9, 187, false]], "selected": [12, 7, 6, 9, 10], "creditAfter": 8},
+        {"candidates": [[1, 5, 27, false], [3, 5, 109, false], [4, 9, 98, true], [5, 5, 71, false], [7, 8, 87, false], [9, 1, 39, true], [11, 1, 116, true], [12, 4, 37, false]], "selected": [4, 5, 3, 7, 1, 12, 9], "creditAfter": 32},
+        {"candidates": [[1, 3, 184, false], [2, 7, 211, false], [3, 3, 88, false], [4, 1, 227, false], [5, 7, 203, false], [6, 9, 208, false], [7, 1, 227, false], [8, 4, 37, true], [10, 2, 112, false], [11, 1, 176, false]], "selected": [6, 2, 8], "creditAfter": 44},
+        {"candidates": [[1, 8, 220, true], [2, 9, 39, false], [4, 5, 223, true], [5, 4, 75, false], [6, 8, 232, false], [7, 5, 212, true], [8, 4, 35, false], [9, 5, 175, false], [12, 2, 193, true]], "selected": [1, 5, 2, 8], "creditAfter": 131},
+        {"candidates": [[1, 9, 89, false], [2, 2, 244, false], [3, 2, 255, false], [4, 2, 225, false], [5, 5, 115, true], [6, 4, 35, false], [8, 6, 49, false], [9, 5, 243, true], [10, 8, 245, false], [11, 3, 16, false], [12, 7, 93, false]], "selected": [6, 9, 1, 12, 11], "creditAfter": 24},
+        {"candidates": [[1, 7, 96, true], [2, 6, 208, false], [3, 4, 198, true], [4, 5, 111, true], [5, 2, 108, false], [6, 1, 87, true], [7, 5, 178, false], [9, 9, 96, true], [10, 7, 242, true], [11, 7, 249, false], [12, 4, 200, true]], "selected": [10, 4, 9], "creditAfter": 51},
+        {"candidates": [[1, 7, 131, false], [3, 8, 28, false], [4, 3, 136, false], [5, 5, 205, false], [6, 7, 183, true], [7, 7, 46, true], [10, 8, 156, true], [11, 8, 125, true]], "selected": [11, 3, 1, 7, 10], "creditAfter": 14},
+        {"candidates": [[2, 2, 97, true], [3, 4, 243, true], [4, 7, 121, false], [6, 1, 143, true], [7, 3, 191, false], [8, 4, 39, true], [10, 8, 126, false], [11, 1, 48, true], [12, 8, 166, false]], "selected": [4, 6, 12, 8], "creditAfter": 31},
+        {"candidates": [[2, 9, 234, false], [3, 2, 73, true], [4, 2, 257, false], [5, 8, 37, false], [7, 4, 161, false], [8, 5, 48, false], [9, 7, 194, false], [11, 4, 115, true], [12, 1, 18, false]], "selected": [2, 5, 9, 12], "creditAfter": 17},
+        {"candidates": [[1, 5, 96, false], [2, 8, 150, true], [4, 5, 30, true], [5, 7, 36, true], [6, 6, 74, false], [7, 7, 108, false], [9, 9, 33, true], [10, 5, 212, false]], "selected": [7, 9, 2, 5, 4, 6], "creditAfter": 69},
+        {"candidates": [[1, 5, 43, false], [2, 3, 245, true], [3, 1, 258, false], [4, 1, 70, true], [5, 7, 29, false], [7, 6, 203, true], [11, 9, 207, false], [12, 7, 230, false]], "selected": [1, 11, 12], "creditAfter": 20},
+        {"candidates": [[1, 3, 43, true], [2, 6, 123, false], [4, 4, 113, false], [5, 7, 38, true], [6, 6, 154, false], [8, 8, 23, false], [10, 7, 26, false], [11, 1, 81, true]], "selected": [5, 2, 8, 10, 6, 4], "creditAfter": 23},
+        {"candidates": [[1, 6, 85, false], [2, 1, 83, false], [3, 5, 92, true], [4, 2, 22, false], [6, 8, 260, false], [7, 7, 224, false], [8, 3, 18, false], [9, 3, 171, true], [10, 8, 108, false], [11, 9, 66, false]], "selected": [11, 1, 10, 7], "creditAfter": 17},
+        {"candidates": [[1, 1, 139, false], [2, 7, 242, true], [4, 4, 40, false], [5, 8, 60, true], [6, 4, 207, false], [7, 2, 215, false], [8, 5, 111, true], [9, 8, 79, true], [11, 4, 99, true], [12, 4, 145, false]], "selected": [6, 9, 5, 8, 4], "creditAfter": 3},
+        {"candidates": [[1, 2, 183, false], [4, 4, 231, false], [5, 5, 75, true], [7, 4, 254, true], [8, 3, 130, false], [9, 1, 43, false], [10, 6, 71, true], [11, 1, 68, false]], "selected": [10, 7, 5, 11], "creditAfter": 32},
+        {"candidates": [[1, 4, 224, true], [2, 6, 63, false], [5, 8, 32, false], [6, 9, 55, false], [9, 7, 88, false], [10, 1, 95, false], [11, 7, 122, true], [12, 6, 180, true]], "selected": [6, 5, 9, 11, 2, 10], "creditAfter": 45},
+        {"candidates": [[1, 4, 257, true], [2, 7, 45, false], [3, 6, 133, false], [7, 7, 38, false], [8, 9, 59, true], [9, 9, 59, false], [11, 4, 93, true], [12, 8, 96, true]], "selected": [12, 1, 8, 9], "creditAfter": 29},
+        {"candidates": [[1, 7, 38, false], [2, 3, 179, false], [4, 4, 228, false], [5, 1, 118, false], [7, 3, 79, false], [8, 4, 26, false], [9, 1, 186, false], [11, 9, 233, false], [12, 7, 94, false]], "selected": [11, 7, 2], "creditAfter": 9},
+        {"candidates": [[1, 6, 130, false], [4, 8, 76, false], [5, 8, 230, true], [6, 2, 33, true], [7, 2, 221, false], [8, 1, 26, false], [10, 9, 36, true], [11, 7, 183, false]], "selected": [1, 4, 10, 5, 8], "creditAfter": 2},
+        {"candidates": [[1, 2, 65, true], [2, 5, 260, false], [3, 4, 32, false], [4, 5, 56, false], [5, 8, 52, true], [6, 8, 69, false], [7, 4, 97, false], [9, 5, 189, false], [10, 5, 45, false], [12, 8, 158, false]], "selected": [6, 12, 5, 7, 4, 10], "creditAfter": 23},
+        {"candidates": [[1, 2, 80, false], [2, 7, 204, false], [3, 6, 163, true], [4, 2, 129, true], [5, 1, 91, false], [6, 6, 203, true], [9, 7, 122, false], [10, 3, 141, true], [11, 1, 29, true], [12, 2, 149, false]], "selected": [2, 9, 3], "creditAfter": 11},
+        {"candidates": [[2, 3, 68, false], [3, 3, 50, true], [4, 3, 131, true], [5, 5, 118, false], [6, 1, 181, false], [7, 8, 170, false], [8, 4, 58, false], [10, 7, 63, true], [12, 1, 172, false]], "selected": [10, 7, 6, 8], "creditAfter": 28},
+        {"candidates": [[1, 3, 121, true], [2, 9, 181, false], [3, 3, 146, false], [4, 1, 243, false], [5, 9, 17, false], [6, 8, 36, false], [7, 4, 42, true], [8, 2, 101, false], [9, 5, 198, true], [10, 7, 191, false], [11, 5, 91, false], [12, 4, 37, false]], "selected": [5, 2, 6, 10, 12], "creditAfter": 38},
+        {"candidates": [[2, 4, 231, false], [3, 6, 65, false], [4, 4, 113, false], [5, 9, 136, false], [6, 1, 235, true], [7, 4, 162, false], [8, 7, 175, false], [9, 3, 53, true], [11, 3, 104, false], [12, 1, 26, true]], "selected": [3, 4, 5, 8], "creditAfter": 11},
+        {"candidates": [[1, 1, 194, true], [3, 6, 67, false], [4, 2, 241, false], [5, 7, 43, true], [8, 2, 227, false], [9, 8, 41, true], [10, 4, 91, false], [11, 1, 105, true], [12, 6, 249, false]], "selected": [9, 11, 5, 12], "creditAfter": 62},
+        {"candidates": [[1, 9, 137, false], [2, 1, 217, false], [3, 2, 104, false], [5, 2, 163, false], [9, 1, 17, false], [11, 3, 142, false], [12, 9, 82, false]], "selected": [1, 12, 3, 11, 9], "creditAfter": 18},
+        {"candidates": [[2, 4, 143, true], [3, 2, 141, false], [4, 2, 176, false], [6, 2, 124, false], [9, 9, 144, true], [10, 4, 257, false], [11, 1, 105, false], [12, 8, 185, false]], "selected": [9, 12, 2], "creditAfter": 28},
+        {"candidates": [[1, 8, 128, false], [2, 4, 48, false], [3, 4, 145, true], [4, 3, 201, true], [6, 9, 105, true], [7, 4, 82, false], [8, 2, 58, false], [10, 3, 219, false], [11, 5, 66, true], [12, 5, 68, false]], "selected": [6, 1, 10, 2], "creditAfter": 0},
+        {"candidates": [[1, 1, 118, false], [2, 4, 144, false], [3, 1, 52, true], [4, 1, 205, true], [5, 7, 232, true], [6, 4, 189, true], [8, 5, 176, false], [9, 4, 216, false], [10, 3, 80, false], [11, 1, 175, false], [12, 3, 244, false]], "selected": [12, 5], "creditAfter": 24}
+      ]
+    }
+  ]
+}
