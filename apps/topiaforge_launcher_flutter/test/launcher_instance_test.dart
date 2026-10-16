@@ -28,6 +28,9 @@ final class _FakePort implements LauncherInstancePort {
     handedOff.add(link);
     return accepts;
   }
+
+  @override
+  Future<void> release() async => calls.add('release');
 }
 
 void main() {
@@ -92,6 +95,18 @@ void main() {
       expect(port.handedOff, ['TOPIAFORGE://join/not-a-code']);
     });
 
+    test('a link split by a quote is still a link start, not a health '
+        'check', () async {
+      // `topiaforge://join/ABCDE12345" --topiaforge-update-health-nonce "`
+      // through a `"%1"` registration, as a shell splits it.
+      final port = _FakePort([LauncherInstanceClaim.secondary]);
+
+      final role = await resolve(port, [invite, updateHealthNonceOption, '']);
+
+      expect(role, LauncherInstanceRole.handedOff);
+      expect(port.handedOff, [invite]);
+    });
+
     test('claims again when the owner does not answer', () async {
       final port = _FakePort([
         LauncherInstanceClaim.secondary,
@@ -118,61 +133,61 @@ void main() {
       expect(port.handedOff, isEmpty);
     });
 
-    test('never hands off, even with a link beside its options', () async {
-      final port = _FakePort([LauncherInstanceClaim.secondary]);
-
-      expect(
-        await resolve(port, [...health, invite]),
-        LauncherInstanceRole.standalone,
-      );
-      expect(port.handedOff, isEmpty);
-    });
-
-    test('never hands off with either option alone', () async {
-      for (final arguments in [
-        [updateHealthNonceOption, nonce],
-        [updateHealthFileOption, 'health.json'],
-      ]) {
-        final port = _FakePort([LauncherInstanceClaim.secondary]);
-        expect(await resolve(port, arguments), LauncherInstanceRole.standalone);
-        expect(port.handedOff, isEmpty);
-      }
-    });
-
     test('claims the scope when it is free, so links reach it', () async {
       final port = _FakePort([LauncherInstanceClaim.primary]);
 
       expect(await resolve(port, health), LauncherInstanceRole.primary);
     });
+
+    test('is only the helper\'s exact command line', () async {
+      for (final arguments in [
+        [...health, invite],
+        [invite, ...health],
+        [updateHealthNonceOption, nonce],
+        [updateHealthFileOption, 'health.json'],
+        [health[2], health[3], health[0], health[1]],
+      ]) {
+        final port = _FakePort([LauncherInstanceClaim.secondary]);
+        expect(
+          await resolve(port, arguments),
+          LauncherInstanceRole.handedOff,
+          reason: '$arguments',
+        );
+      }
+    });
   });
 
   group('the command line', () {
-    test('names a start for an update health check', () {
+    test('names a health check only in the helper\'s exact shape', () {
       expect(isUpdateHealthStart(health), isTrue);
-      expect(isUpdateHealthStart([invite]), isFalse);
-      expect(isUpdateHealthStart(const []), isFalse);
+      for (final arguments in [
+        const <String>[],
+        [invite],
+        [...health, 'extra'],
+        ['extra', ...health],
+        [health[0], '', health[2], health[3]],
+        [health[0], nonce.toUpperCase(), health[2], health[3]],
+        [health[0], '${nonce}a', health[2], health[3]],
+        [health[0], nonce, health[2], ''],
+        [health[2], health[3], health[0], health[1]],
+        [health[0], nonce, health[0], health[3]],
+      ]) {
+        expect(isUpdateHealthStart(arguments), isFalse, reason: '$arguments');
+      }
     });
 
-    test('carries the last topiaforge link', () {
+    test('is a link start only when its first argument is a link', () {
       expect(sessionLinkArgument(const []), isNull);
-      expect(sessionLinkArgument(['--verbose', invite]), invite);
+      expect(sessionLinkArgument([invite]), invite);
+      expect(sessionLinkArgument([invite, 'ignored', 'too']), invite);
       expect(
-        sessionLinkArgument([invite, 'TopiaForge://join/ZZZZZ99999']),
+        sessionLinkArgument(['TopiaForge://join/ZZZZZ99999']),
         'TopiaForge://join/ZZZZZ99999',
       );
+      expect(sessionLinkArgument(['--verbose', invite]), isNull);
+      expect(sessionLinkArgument([...health, invite]), isNull);
       expect(sessionLinkArgument(['https://example.com/join']), isNull);
       expect(sessionLinkArgument(['topiaforgex://join/ABCDE12345']), isNull);
-    });
-
-    test('never takes an option value for a link', () {
-      expect(
-        sessionLinkArgument([updateHealthFileOption, 'topiaforge://join/X']),
-        isNull,
-      );
-      expect(
-        sessionLinkArgument([updateHealthNonceOption, 'topiaforge:', invite]),
-        invite,
-      );
     });
   });
 }

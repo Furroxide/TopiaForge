@@ -52,8 +52,8 @@ tool because the package name differs from the launcher's custom Snap app name.
 ## Single instance and `topiaforge://` links
 
 One launcher runs per user and data root. A later start hands its session
-link, if it has one, to the running launcher and exits before it shows a
-window:
+link, if it has one, to the running launcher and exits with code 0 before it
+shows a window:
 
 - **Windows.** Dart claims a named mutex through
   `windows/runner/single_instance.cpp`. The name holds the user's SID and a
@@ -62,20 +62,38 @@ window:
   checks that the same user owns it, allows it to come to the foreground, and
   sends the link with `WM_COPYDATA`. The owner reads only the scheme in place,
   checks the length (512 characters plus a margin) before it copies anything,
-  and passes the text to Dart, never to a shell.
+  and passes the text to Dart, never to a shell. A closing launcher gives the
+  scope up before its window goes, and refuses a link it can no longer show,
+  so the start that sent it claims the scope instead.
 - **Linux.** `GApplication` negotiates uniqueness over D-Bus
   (`G_APPLICATION_HANDLES_COMMAND_LINE`). A launcher started with its own
-  `TOPIAFORGE_DATA_ROOT` gets an application id of its own.
+  `TOPIAFORGE_DATA_ROOT` gets an application id of its own, from a hash of the
+  resolved root; the default data root keeps the plain id however it is
+  spelled.
 - **macOS.** LaunchServices keeps one launcher running and calls
   `application(_:open:)`.
 
-A start with the update helper's `--topiaforge-update-health-*` options never
-hands off. When another launcher owns the scope, it runs beside it and still
-writes its health marker, so the update can commit.
+A link start is one whose first argument has the `topiaforge:` scheme, and the
+link is its only argument. Windows puts a link into the registered command
+verbatim, so the Windows runner reads it whole from the raw command line,
+everything after the program name: a quote inside a link cannot add launcher
+arguments, and such a link is refused as damaged.
 
-While link handling is on, which is the default, the launcher registers itself
-at start: `HKCU\Software\Classes\topiaforge` on Windows, a hidden desktop entry
-made the `x-scheme-handler/topiaforge` default with `xdg-mime` on Linux, and
-`CFBundleURLTypes` in the bundle on macOS. Turning it off removes the
-registration while it names this launcher. A link never joins by itself; it
-opens the consent flow.
+Only the update helper's exact start,
+`--topiaforge-update-health-nonce <64 hex> --topiaforge-update-health-file <path>`
+and nothing else, is a health start. It never hands off: when another launcher
+owns the scope, it runs beside it and still writes its health marker, so the
+update can commit. Its options are checked before anything is claimed, and a
+start that is refused or fails before its window shows gives the scope up and
+exits with code 1.
+
+While link handling is on, which is the default, a launcher on the default data
+root registers itself at start: `HKCU\Software\Classes\topiaforge` on Windows,
+and a hidden desktop entry made the `x-scheme-handler/topiaforge` default with
+`xdg-mime` on Linux. On macOS the bundle declares the scheme with
+`CFBundleURLTypes`. A launcher on its own data root leaves the registration
+alone, since the system opens links with the default data root. Turning link
+handling off removes the registration while it names this launcher. Until the
+setting is saved with the other multiplayer settings, it is on again at the
+next start, which registers again. A link never joins by itself; it opens the
+consent flow.

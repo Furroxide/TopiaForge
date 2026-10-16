@@ -39,6 +39,10 @@ abstract interface class LauncherInstancePort {
   /// Hands [link] to the owner of the scope, or with null only asks it to
   /// come forward. True when the owner took it.
   Future<bool> handOff(String? link);
+
+  /// Gives up the scope this process claimed, so a later start can claim
+  /// it. Nothing happens when this process holds none.
+  Future<void> release();
 }
 
 /// The launcher's start rule: one launcher per user and data root.
@@ -81,19 +85,17 @@ final class LauncherInstanceGate {
   }
 }
 
-/// The session link on a command line: the last argument with the
-/// `topiaforge:` scheme, apart from the update health options' values.
-/// Null when there is none.
+/// The session link of a link start, or null for any other start.
+///
+/// A start is a link start when its first argument has the `topiaforge:`
+/// scheme, and then that argument is the link and every other argument is
+/// ignored. A quote inside a link can split it into more arguments, so
+/// nothing after the first may count. On Windows the runner goes further and
+/// passes the rest of the raw command line as the one argument, so a split
+/// link reads as the damaged link it is.
 String? sessionLinkArgument(List<String> arguments) {
-  String? link;
-  for (var index = 0; index < arguments.length; index++) {
-    final argument = arguments[index];
-    if (argument == updateHealthNonceOption ||
-        argument == updateHealthFileOption) {
-      index++;
-      continue;
-    }
-    if (SessionLink.hasScheme(argument)) link = argument;
+  if (arguments.isEmpty || !SessionLink.hasScheme(arguments.first)) {
+    return null;
   }
-  return link;
+  return arguments.first;
 }

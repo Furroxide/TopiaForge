@@ -70,6 +70,7 @@ void main() {
   test('a platform without the runner side claims nothing', () async {
     expect(await instance.claim('ab' * 16), LauncherInstanceClaim.notSupported);
     expect(await instance.handOff('topiaforge://join/ABCDE12345'), isFalse);
+    await instance.release();
     await instance.ready();
   });
 
@@ -77,6 +78,13 @@ void main() {
     runner((_) => throw PlatformException(code: 'broken'));
     expect(await instance.claim('ab' * 16), LauncherInstanceClaim.notSupported);
     expect(await instance.handOff(null), isFalse);
+    await instance.release();
+  });
+
+  test('release tells the runner to give up the claim', () async {
+    runner((_) => null);
+    await instance.release();
+    expect(calls.single.method, 'release');
   });
 
   test('hand-off sends the link, or null to only come forward', () async {

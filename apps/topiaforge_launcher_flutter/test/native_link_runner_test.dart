@@ -38,9 +38,10 @@ void main() {
   });
 
   test('the Windows runner checks a link before it copies one', () {
-    final receive = windows.substring(
-      windows.indexOf('bool SingleInstance::Receive('),
-      windows.indexOf('void SingleInstance::Deliver('),
+    final receive = _between(
+      windows,
+      'bool SingleInstance::Receive(',
+      'bool SingleInstance::Deliver(',
     );
     final scheme = receive.indexOf('HasSessionLinkScheme(text, length)');
     final bound = receive.indexOf('length > kMaximumLinkLength');
@@ -55,6 +56,59 @@ void main() {
     );
   });
 
+  test('a Windows link start passes the raw command line as its link', () {
+    final main = read(['windows', 'runner', 'main.cpp']);
+    final link = main.indexOf(
+      'SingleInstance::LinkFromCommandLine(::GetCommandLineW())',
+    );
+    final split = main.indexOf('GetCommandLineArguments()');
+    expect(link, greaterThan(0));
+    expect(split, greaterThan(link));
+    expect(main, contains('return static_cast<int>(msg.wParam);'));
+    // A link that does not convert still arrives as a link, and is refused.
+    expect(main, contains('text.empty() ? "topiaforge:"'));
+    expect(SessionLink.read('topiaforge:').refusal, SessionLinkRefusal.invalid);
+  });
+
+  test(
+    'a closing Windows launcher gives its scope up before anything else',
+    () {
+      final destroy = _between(
+        windowsChannel,
+        'void FlutterWindow::OnDestroy()',
+        'LRESULT',
+      );
+      final release = destroy.indexOf('single_instance_.Release();');
+      expect(release, greaterThan(0));
+      expect(
+        destroy.indexOf('single_instance_.SetHandlers(nullptr, nullptr);'),
+        greaterThan(release),
+      );
+      final deliver = _between(
+        windows,
+        'bool SingleInstance::Deliver(',
+        'void SingleInstance::BringForward()',
+      );
+      // A link nothing can take any more is not acknowledged.
+      expect(deliver, contains('if (released_) {\n    return false;'));
+      expect(deliver, contains('if (!handler) {\n    return false;'));
+      expect(windows, contains('return delivered;'));
+      // Win32Window::Create runs OnDestroy before anything is claimed, so a
+      // release with nothing held must leave the claim possible.
+      expect(
+        _between(windows, 'void SingleInstance::Release()', 'released_ = '),
+        contains('if (window_ == nullptr && mutex_ == nullptr) {\n    return;'),
+      );
+    },
+  );
+
+  test('the Windows runner never sizes text from a failed conversion', () {
+    final utils = read(['windows', 'runner', 'utils.cpp']);
+    expect(utils, contains('const int target_length = '));
+    expect(utils, contains('if (target_length <= 0) {'));
+    expect(utils, isNot(contains('unsigned int target_length')));
+  });
+
   test('the Linux runner is unique over D-Bus and knows health starts', () {
     expect(
       RegExp(
@@ -65,6 +119,15 @@ void main() {
     expect(linux, contains('"$updateHealthNonceOption"'));
     expect(linux, contains('"$updateHealthFileOption"'));
     expect(linux, contains('"topiaforge:"'));
+    // Only the helper's exact five-element argv is a health start, and a
+    // link start is its first argument alone.
+    expect(linux, contains('g_strv_length(arguments) == 5'));
+    expect(
+      _between(linux, 'session_link_argument(gchar** arguments) {', '\n}'),
+      isNot(contains('for (')),
+    );
+    // The default data root keeps the plain id however it is spelled.
+    expect(linux, contains('g_strcmp0(absolute, fallback) == 0'));
   });
 
   test('the macOS bundle declares the topiaforge scheme', () {
@@ -77,6 +140,14 @@ void main() {
     );
     expect(macos, contains('override func application('));
   });
+}
+
+/// The text of [source] from [start] up to the next [end] after it.
+String _between(String source, String start, String end) {
+  final from = source.indexOf(start);
+  expect(from, greaterThanOrEqualTo(0), reason: 'missing $start');
+  final to = source.indexOf(end, from + start.length);
+  return source.substring(from, to < 0 ? source.length : to);
 }
 
 Directory _launcherRoot() {

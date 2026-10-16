@@ -27,7 +27,8 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
-  // Answers Dart's single-instance calls: claim, handOff and ready.
+  // Answers Dart's single-instance calls: claim, handOff, release and
+  // ready.
   void HandleInstanceCall(
       const flutter::MethodCall<flutter::EncodableValue>& call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);

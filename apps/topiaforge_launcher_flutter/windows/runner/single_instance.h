@@ -42,6 +42,12 @@ class SingleInstance {
   // asks it to come forward. Returns true when the owner took it.
   bool HandOff(const std::optional<std::wstring>& link);
 
+  // Gives up the scope: the message window goes, then the mutex, so a later
+  // start claims the scope instead of handing its link to a launcher that is
+  // shutting down. Nothing happens while nothing is held, and it is safe to
+  // call more than once.
+  void Release();
+
   // The window that comes forward when a link arrives.
   void SetMainWindow(HWND window) { main_window_ = window; }
 
@@ -54,6 +60,14 @@ class SingleInstance {
   // Whether |text| starts with the topiaforge: scheme, in ASCII case only.
   // It reads at most the scheme's eleven code units.
   static bool HasSessionLinkScheme(const wchar_t* text, size_t length);
+
+  // The link of a link start: everything on the raw |command_line| after the
+  // program name, without the one pair of quotes a "%1" registration adds,
+  // when it starts with the topiaforge: scheme. Windows puts %1 into the
+  // command verbatim, so a quote inside a link would split it into more
+  // arguments; read whole, such a link stays one damaged link.
+  static std::optional<std::wstring> LinkFromCommandLine(
+      const wchar_t* command_line);
 
  private:
   struct Delivery {
@@ -69,13 +83,16 @@ class SingleInstance {
 
   bool CreateMessageWindow();
   bool Receive(const COPYDATASTRUCT& data);
-  void Deliver(Delivery delivery);
+  // Returns false when nothing can take the link any more, so the sender
+  // claims the scope itself.
+  bool Deliver(Delivery delivery);
   void BringForward() const;
   HWND FindOwner() const;
 
   std::wstring name_;
   HANDLE mutex_ = nullptr;
   bool owns_mutex_ = false;
+  bool released_ = false;
   HWND window_ = nullptr;
   HWND main_window_ = nullptr;
   bool ready_ = false;

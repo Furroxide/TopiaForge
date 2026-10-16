@@ -6,8 +6,9 @@ import 'session_link_inbox.dart';
 
 /// The runner's side of single instance and session links, on one channel.
 ///
-/// Dart calls `claim` with the scope, `handOff` with the link, and `ready`
-/// once it listens, which releases the newest link the runner held. The
+/// Dart calls `claim` with the scope, `handOff` with the link, `release` when
+/// a start fails before its first frame, and `ready` once it listens, which
+/// passes on the newest link the runner held. The
 /// runner calls `link` with the text of a link that another start handed
 /// over or the system opened, and `linkRefused` with a reason when it
 /// refused one before reading it. Every link goes to the [SessionLinkInbox],
@@ -53,6 +54,17 @@ final class LauncherInstanceChannel implements LauncherInstancePort {
       return false;
     } on PlatformException {
       return false;
+    }
+  }
+
+  @override
+  Future<void> release() async {
+    try {
+      await _channel.invokeMethod<void>('release');
+    } on MissingPluginException {
+      // The system keeps the launcher single here: there is no claim.
+    } on PlatformException {
+      // Quitting releases the claim as well.
     }
   }
 

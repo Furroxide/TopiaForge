@@ -37,6 +37,25 @@ final class _FakeSessionLinkHandling implements SessionLinkHandlingGateway {
   }
 }
 
+/// Link handling whose start does not finish until the test says so, as
+/// when xdg-mime is slow.
+final class _StalledSessionLinkHandling implements SessionLinkHandlingGateway {
+  final finish = Completer<SessionLinkHandlingStatus>();
+  int starts = 0;
+
+  @override
+  Stream<SessionLinkHandlingStatus> get statuses => const Stream.empty();
+
+  @override
+  Future<SessionLinkHandlingStatus> start() {
+    starts++;
+    return finish.future;
+  }
+
+  @override
+  Future<void> setEnabled(bool enabled) async {}
+}
+
 /// A registrar that only records what it was asked.
 final class _RecordingRegistrar implements SessionLinkRegistrar {
   final calls = <String>[];
@@ -322,6 +341,38 @@ void registerSessionLinkWidgetTests() {
     blocOf(tester).add(const LauncherRefreshRequested());
     await tester.pumpAndSettle();
     expect(handling.calls, ['start', 'set false']);
+  });
+
+  testWidgets('a slow registration never holds up the launcher', (
+    tester,
+  ) async {
+    final handling = _StalledSessionLinkHandling();
+    await pumpLauncher(
+      tester,
+      repository: _FakeLauncherRepository(),
+      inbox: SessionLinkInbox(),
+      handling: handling,
+    );
+    expect(handling.starts, 1);
+
+    blocOf(tester).add(const LauncherSectionSelected(LauncherSection.settings));
+    await tester.pumpAndSettle();
+    expect(blocOf(tester).state.section, LauncherSection.settings);
+
+    // When it finishes, its status arrives without taking the status bar.
+    final status = blocOf(tester).state.statusMessage;
+    handling.finish.complete(
+      const SessionLinkHandlingStatus(
+        enabled: true,
+        registration: SessionLinkRegistration.registered,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      blocOf(tester).state.multiplayer.linkHandling?.registration,
+      SessionLinkRegistration.registered,
+    );
+    expect(blocOf(tester).state.statusMessage, status);
   });
 
   testWidgets('the real policy registers at start and follows the setting', (
