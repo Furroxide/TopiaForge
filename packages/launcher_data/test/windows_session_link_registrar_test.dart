@@ -42,7 +42,7 @@ final class _MemoryRegistry implements CurrentUserRegistry {
 void main() {
   const launcher =
       r'C:\Program Files\TopiaForge\launcher\topiaforge_launcher.exe';
-  const other = r'D:\Other\topiaforge_launcher.exe';
+  const other = r'E:\Other\topiaforge_launcher.exe';
   const scheme = r'Software\Classes\topiaforge';
   late _MemoryRegistry registry;
 

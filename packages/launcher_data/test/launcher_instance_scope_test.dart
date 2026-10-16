@@ -53,8 +53,8 @@ void main() {
     final roots = [
       r'C:\Users\player\AppData\Roaming\TopiaForgeLauncher',
       r'C:\Users\other\AppData\Roaming\TopiaForgeLauncher',
-      r'D:\Portable\TopiaForge\data',
-      r'D:\Portable\TopiaForge\data2',
+      r'E:\Portable\TopiaForge\data',
+      r'E:\Portable\TopiaForge\data2',
     ];
     expect(roots.map(windows).toSet(), hasLength(roots.length));
   });

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
@@ -76,6 +77,72 @@ void main() {
     } else if (Platform.isLinux) {
       expect(registrar, isA<LinuxSessionLinkRegistrar>());
     }
+  });
+
+  group('on Windows', () {
+    final windowsHost = Platform.isWindows ? null : 'Windows only';
+
+    test(
+      'the roaming folder is the one Windows keeps for the user',
+      () {
+        final folder = windowsRoamingAppDataFolder();
+        expect(folder, isNotNull);
+        expect(p.windows.isAbsolute(folder!), isTrue);
+        expect(Directory(folder).existsSync(), isTrue);
+      },
+      skip: windowsHost,
+    );
+
+    test('a scratch APPDATA never takes the registration', () {
+      const scratch = r'C:\Temp\isolated\Roaming';
+      final registrar = platformSessionLinkRegistrar(
+        executable: r'C:\TopiaForge\launcher\topiaforge_launcher.exe',
+        dataRoot: r'C:\Temp\isolated\Roaming\TopiaForgeLauncher',
+        environment: const {'APPDATA': scratch},
+      );
+      expect(registrar, isA<OwnDataRootSessionLinkRegistrar>());
+    }, skip: windowsHost);
+
+    test('a run with a scratch APPDATA or USERPROFILE leaves the registration '
+        'alone', () async {
+      final scratch = await Directory.systemTemp.createTemp(
+        'topiaforge-isolated-',
+      );
+      addTearDown(() => scratch.delete(recursive: true));
+      final probe = File(p.join(scratch.path, 'probe.dart'))
+        ..writeAsStringSync('''
+import 'package:launcher_data/launcher_data.dart';
+
+void main() {
+  final root = resolveTopiaForgeDataRoot();
+  print(windowsRoamingAppDataFolder());
+  print(root);
+  print(platformSessionLinkRegistrar(dataRoot: root).runtimeType);
+}
+''');
+      final packages = File(
+        p.join('.dart_tool', 'package_config.json'),
+      ).absolute.path;
+      final roaming = p.join(scratch.path, 'AppData', 'Roaming');
+      for (final isolated in [
+        {'APPDATA': roaming},
+        {'APPDATA': roaming, 'USERPROFILE': scratch.path},
+      ]) {
+        // Never registers: the probe only asks which registrar it gets.
+        final result = await Process.run(
+          Platform.resolvedExecutable,
+          ['--packages=$packages', probe.path],
+          environment: {...isolated, 'TOPIAFORGE_DATA_ROOT': ''},
+        );
+        expect(result.exitCode, 0, reason: '${result.stderr}');
+        final lines = (result.stdout as String).trim().split(RegExp(r'\r?\n'));
+        expect(lines, [
+          windowsRoamingAppDataFolder(),
+          p.join(roaming, 'TopiaForgeLauncher'),
+          'OwnDataRootSessionLinkRegistrar',
+        ], reason: '$isolated');
+      }
+    }, skip: windowsHost);
   });
 
   test('macOS leaves the bundle registration to the system', () async {
