@@ -200,7 +200,7 @@ internal static class NatRelayRecoveryTests
     }
 
     /// <summary>Gets the TURN server port a player's current allocation uses.</summary>
-    private static int ServerPort(NatPeerNode peer) =>
+    internal static int ServerPort(NatPeerNode peer) =>
         peer.Agent.Relay != null && UdpPaths.TryGetEndPoint(peer.Agent.Relay.Server, out var server) ? server.Port : 0;
 
     internal static (NatScenario Scenario, NatPeerNode Host, NatPeerNode Joiner, NetworkLink JoinerLink, NetworkLink HostLink) RelayOnlySession(int seed, Action<NatScenario> configure) =>

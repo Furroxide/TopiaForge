@@ -13,8 +13,11 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// The relay's lifecycle. One allocation is in use, or on its way, whenever the relay is wanted; while a rotation moves
     /// connections off the one before, that one stays up too. A relay that is wanted but not ready always has its next
     /// attempt scheduled: after a failure it tries again with backoff, one second doubling to thirty, on the server
-    /// address that last worked. An allocation that is lost is released first, since the server may still hold its
-    /// 5-tuple; a release is a transaction of its own, and nothing allocates on a 5-tuple until the release there settled.
+    /// address that last worked, unless that address went silent or holds an allocation nothing here can release; such
+    /// an address is left alone for a while, and the next one is tried. An allocation that is lost is released first,
+    /// since the server may still hold its 5-tuple; a release is a transaction of its own, and nothing allocates on a
+    /// 5-tuple until the release there settled. Every allocation shares the game's socket, so its local port never
+    /// changes: another 5-tuple means another server address or port.
     /// </summary>
     internal sealed partial class NatAgent
     {
@@ -90,9 +93,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
         {
             var client = relay!;
             lastWorked = client.Server;
+            failedTargets.Remove(client.Server);
             relayHeard = true;
             relayFailures = 0;
             reallocateDelay = ReallocateFirstMicros;
+            refusedSinceReady = false;
+            refusedRetryDelay = RenewRetryMicros;
             relayBase = LocalBase.Relay(client.Allocation, IceCandidate.ComputePriority(IceCandidateKind.Relayed, 65535));
             relayCandidate = new IceCandidate(IceCandidateKind.Relayed, client.RelayedAddress!, relayBase.Priority, candidateOrder++);
             if (!RelayOnly && client.MappedAddress != null) AddReflexive(client.MappedAddress, 65533);
@@ -132,8 +138,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         /// <summary>
         /// An allocation failed, on its way up or after it came up. It is released, the next one is scheduled with
-        /// backoff on the address that last worked, and a rotation that could not come up elsewhere falls back to that
-        /// address by releasing the allocation there first. A credential the server refused waits for a fresh one.
+        /// backoff where <see cref="RetryTarget"/> says, and a rotation that could not come up elsewhere falls back to the
+        /// address that worked by releasing the allocation there first. A credential the server refused waits for a
+        /// fresh one, minted at once the first time after an allocation worked and with backoff after that.
         /// </summary>
         private void OnRelayFailed(long now)
         {
@@ -153,20 +160,27 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 Report(NatDiagnosticKind.RelayFailed, "The relay allocation was lost.");
             }
 
-            // The server may still hold what this client allocated; releasing it frees the 5-tuple for the next attempt,
-            // and a 437 means an earlier release there went unanswered, so that one goes again.
+            // The server may still hold what this client allocated; releasing it frees the 5-tuple for the next attempt.
+            // A 437 to an Allocate means the 5-tuple is taken: by an earlier release here that went unanswered, which
+            // goes again, or else by an allocation nothing here can release, as one a crashed run left behind.
             Release(failed, now);
-            if (failed.Failure == TurnFailure.AllocationMismatch) ReleaseAgainOn(failed.Server, now);
+            var orphaned = false;
+            if (failed.Failure == TurnFailure.AllocationMismatch)
+            {
+                orphaned = failed.RelayedAddress == null && !HasRelease(failed.Server);
+                ReleaseAgainOn(failed.Server, now);
+            }
+
             if (!RelayWanted) return;
             if (failed.Failure == TurnFailure.Unauthorized)
             {
                 // The credential itself was refused: only a fresh one can bring the relay back.
-                if (plan?.Renew != null) nextRenewalAt = Math.Min(nextRenewalAt, now);
+                if (plan?.Renew != null) nextRenewalAt = Math.Min(nextRenewalAt, RefusedMintAt(now));
                 else relayRefused = true;
                 return;
             }
 
-            var target = RetryTarget(failed);
+            var target = RetryTarget(failed, orphaned, now);
             var startAt = now + reallocateDelay;
             reallocateDelay = Math.Min(reallocateDelay * 2, ReallocateLongestMicros);
             if (retiring != null && target.Equals(retiring.Server))
@@ -183,15 +197,40 @@ namespace TopiaForge.Multiplayer.NatTraversal
         }
 
         /// <summary>
-        /// Where the next attempt goes: the server address that last worked; before any has, the same address after an
-        /// answer, or the next one after silence, since an address that never answers may be one the network blocks.
+        /// Where the next attempt goes. An address whose last request met silence, which may be one the network now
+        /// blocks, or that an allocation nothing here can release still holds, is left alone for a while. Otherwise the
+        /// address that last worked; before any has, the same address after an answer; else the next one in order that
+        /// has not failed lately, and the next one in order when all of them have.
         /// </summary>
-        private TransportPath RetryTarget(TurnClient failed)
+        private TransportPath RetryTarget(TurnClient failed, bool orphaned, long now)
         {
-            if (lastWorked != null && IndexOfTarget(lastWorked) >= 0) return lastWorked;
             var index = IndexOfTarget(failed.Server);
-            if (failed.Answered || index < 0 || relayTargets.Count == 0) return failed.Server;
-            return relayTargets[(index + 1) % relayTargets.Count].Path;
+            var unusable = orphaned || failed.Failure == TurnFailure.Timeout;
+            if (unusable && index >= 0 && relayTargets.Count > 1) RememberFailedTarget(failed.Server, now);
+            if (lastWorked != null && IndexOfTarget(lastWorked) >= 0 && !FailedLately(lastWorked, now)) return lastWorked;
+            if (!unusable && index >= 0) return failed.Server;
+            return NextTarget(index, now) ?? failed.Server;
+        }
+
+        /// <summary>The first address after the one at <paramref name="index"/> that has not failed lately, or simply the next when all have.</summary>
+        private TransportPath? NextTarget(int index, long now)
+        {
+            var count = relayTargets.Count;
+            if (count == 0) return null;
+            for (var step = 1; step <= count; step++)
+            {
+                var target = relayTargets[(index + step + count) % count].Path;
+                if (!FailedLately(target, now)) return target;
+            }
+
+            return relayTargets[(index + 1 + count) % count].Path;
+        }
+
+        /// <summary>The address an allocation starts on when nothing just failed: the one that last worked, unless it failed lately.</summary>
+        private TransportPath PreferredTarget(long now)
+        {
+            if (lastWorked != null && IndexOfTarget(lastWorked) >= 0 && !FailedLately(lastWorked, now)) return lastWorked;
+            return NextTarget(lastWorked == null ? -1 : IndexOfTarget(lastWorked), now) ?? relayTargets[0].Path;
         }
 
         private int IndexOfTarget(TransportPath path)
@@ -227,6 +266,17 @@ namespace TopiaForge.Multiplayer.NatTraversal
             if ((client.State != TurnAllocationState.Releasing && !client.ReleaseUnconfirmed) || releasing.Contains(client)) return;
             if (releasing.Count >= MaximumRemembered) releasing.RemoveAt(0);
             releasing.Add(client);
+        }
+
+        /// <summary>Gets whether a release this agent sent on <paramref name="server"/>'s 5-tuple is remembered, settling or unanswered.</summary>
+        private bool HasRelease(TransportPath server)
+        {
+            foreach (var client in releasing)
+            {
+                if (client.Server.Equals(server)) return true;
+            }
+
+            return false;
         }
 
         private void ReleaseAgainOn(TransportPath server, long now)
@@ -270,6 +320,31 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <summary>Gets whether the transport still has a connection running through allocation <paramref name="allocation"/>.</summary>
         private static bool AllocationInUse(NetworkStack stack, int allocation) =>
             stack.Endpoint.CountConnections(path => TurnRelayPath.TryGetAllocation(path, out var number) && number == allocation) > 0;
+
+        /// <summary>
+        /// Forgets the last session's relay: its allocations, its targets and what failed there, and every backoff. A
+        /// release still settling stays, since the next allocation on its 5-tuple must wait for it.
+        /// </summary>
+        private void ResetRelay()
+        {
+            retiredBases.Clear();
+            relayTargets = new List<RelayTarget>();
+            relay = null;
+            retiring = null;
+            relayBase = null;
+            retiringBase = null;
+            relayCandidate = null;
+            lastWorked = null;
+            rotations = 0;
+            retireBy = long.MaxValue;
+            relayStartAt = 0;
+            reallocateDelay = ReallocateFirstMicros;
+            relayChangeSince = long.MinValue / 2;
+            relayFailures = 0;
+            lastRelayFailure = TurnFailure.None;
+            relayHeard = false;
+            relayRefused = false;
+        }
 
         /// <summary>Stopping: every allocation is released, and the releases settle on their own while turns still run.</summary>
         private void ReleaseRelays(long now)

@@ -13,7 +13,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// its places (ControlPlaneApi.md, section 8.4), so a joiner closes its socket once its connection is up and opens it
     /// again only when it has something to say: while its relay changes, so the new relay candidate reaches the host,
     /// or once its path is lost, until a new one validates. The host keeps its socket, and sends a returning peer its
-    /// candidates again, since whatever it trickled while that peer's socket was closed went nowhere.
+    /// candidates again, since whatever it trickled while that peer's socket was closed went nowhere. Every session
+    /// starts afresh, so a host restarted within its registration, or a player joining again, signals as the first did.
     /// </summary>
     internal sealed partial class NatAgent
     {
@@ -66,9 +67,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
             if (sessionPlan == null) throw new ArgumentNullException(nameof(sessionPlan));
             if (attempt == null) throw new ArgumentNullException(nameof(attempt));
             if (disposed || Role != NatRole.None) throw new InvalidOperationException("The NAT layer is already running a session.");
-            forcedRelayOnly = relayOnly;
+            BeginSession(relayOnly, now);
             Role = NatRole.Joiner;
-            currentTime = now;
             BeginGathering(sessionPlan, now);
             var session = CreateSession(null, true, now);
             session.BeginJoin(attempt, expectedKey, now);
@@ -82,12 +82,39 @@ namespace TopiaForge.Multiplayer.NatTraversal
         {
             if (sessionPlan == null) throw new ArgumentNullException(nameof(sessionPlan));
             if (disposed || Role != NatRole.None) throw new InvalidOperationException("The NAT layer is already running a session.");
-            forcedRelayOnly = relayOnly;
+            BeginSession(relayOnly, now);
             Role = NatRole.Host;
-            currentTime = now;
             BeginGathering(sessionPlan, now);
             OpenSignaling(now);
             Publish();
+        }
+
+        /// <summary>
+        /// Forgets everything the last session learned or decided, so the next one on this agent starts as the first did:
+        /// its signaling, its gathering, its relay and its credentials. Releases still settling stay, since the next
+        /// allocation on their 5-tuple must wait for them; so do the counters, which add up over the agent's life.
+        /// </summary>
+        private void BeginSession(bool relayOnly, long now)
+        {
+            forcedRelayOnly = relayOnly;
+            currentTime = now;
+            sessions.Clear();
+            byUfrag.Clear();
+            relayOnlyPeers.Clear();
+            signaling = null;
+            reconnectAt = long.MaxValue;
+            reconnectDelay = ReconnectFirstMicros;
+            reconnectWindowStart = 0;
+            reconnectsInWindow = 0;
+            signalingDone = false;
+            signalingParked = false;
+            lastOpenedAt = long.MinValue / 2;
+            withheldByService = 0;
+            lastJoinStage = NatJoinStage.Idle;
+            lastJoinFailure = NatFailure.None;
+            ResetGathering();
+            ResetRelay();
+            ResetRotation();
         }
 
         /// <summary>Queues a frame for the service. Losing one is survivable: checks retransmit and descriptions are resent.</summary>
@@ -191,17 +218,17 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
             if (signaling == null)
             {
-                // A connected joiner with nothing to say stays closed. One that needs its socket opens it once its backoff
-                // and spacing allow. Opening for a change of relay is never held back further: the new relay candidate
-                // must reach the host, and changes come no faster than credentials expire. Any other reopening counts
-                // toward the reconnection window.
+                // A connected joiner with nothing to say stays closed. One that needs its socket opens it once spacing
+                // and backoff allow, and nothing else holds it back: its connection lives on it, whether its own relay
+                // changes or its path through the host's relay stalls, and those come no faster than credentials expire
+                // and networks drop, far inside the service's 30 upgrades a minute and 240 an hour for each prefix.
                 if (need == SignalingNeed.Idle)
                 {
                     signalingParked = true;
                     return;
                 }
 
-                if (now < reconnectAt || (signalingParked && !RelayChanging(now) && !WindowAllows(now))) return;
+                if (now < reconnectAt) return;
                 signalingParked = false;
                 OpenSignaling(now);
                 return;
@@ -231,31 +258,13 @@ namespace TopiaForge.Multiplayer.NatTraversal
             Report(NatDiagnosticKind.SignalingParked, "The signaling socket closed until it is needed again.");
         }
 
-        /// <summary>Takes a place in the reconnection window: six openings in ten minutes; false, and the next turn waits for the window, once they are used.</summary>
-        private bool WindowAllows(long now)
-        {
-            if (now - reconnectWindowStart > ReconnectWindowMicros)
-            {
-                reconnectWindowStart = now;
-                reconnectsInWindow = 0;
-            }
-
-            if (reconnectsInWindow >= ReconnectsPerWindow)
-            {
-                reconnectAt = reconnectWindowStart + ReconnectWindowMicros + 1;
-                return false;
-            }
-
-            reconnectsInWindow++;
-            return true;
-        }
-
         /// <summary>
         /// A socket closed. One whose lifetime ended, whose connection broke or that was rate limited is opened again
-        /// while it is still needed, with backoff, at most six times in ten minutes. A connected joiner does not depend
-        /// on signaling, so it never gives up on it: it parks, and opens again once it needs to and its backoff allows,
-        /// even after a refused upgrade, since a full room refuses it too. A replaced socket, an ended session, a
-        /// withdrawn ticket or a goodbye is final, and so is a refused upgrade before the connection is up.
+        /// while it is still needed, with backoff: a host's, or a joiner's still connecting, at most six times in ten
+        /// minutes. A connected joiner does not depend on signaling, so it never gives up on it: it parks, and opens again
+        /// once it needs to and its backoff allows, even after a refused upgrade, since a full room refuses it too. A
+        /// replaced socket, an ended session, a withdrawn ticket or a goodbye is final, and so is a refused upgrade before
+        /// the connection is up.
         /// </summary>
         private void OnSignalingLost(SignalingCloseReason reason, long now)
         {

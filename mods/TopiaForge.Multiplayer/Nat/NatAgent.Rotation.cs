@@ -12,9 +12,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
     /// <summary>
     /// Credentials and rotation. Relay credentials last ten minutes and their expiry ends the allocation, so the next one
     /// is minted ninety seconds before, and minted again whenever the relay is down, since an allocation can only come
-    /// back with a credential that still works. Each TURN server's own name is resolved for it. With the relay up, the
-    /// new allocation comes up on another server address of the family that worked (make before break), or replaces the
-    /// old one on its own address (break before make); with the relay down, the next allocation simply uses it.
+    /// back with a credential that still works. A credential the server refuses is minted again at once the first time
+    /// after an allocation worked, as when one is revoked; after that, as with a misconfigured key, the next mint waits
+    /// fifteen seconds, doubling to five minutes, so a player stays far inside the control plane's five mints a minute
+    /// and twenty an hour. Each TURN server's own name is resolved for it. With the relay up, the new allocation comes
+    /// up on another server address of the family that worked (make before break), or replaces the old one on its own
+    /// address (break before make); with the relay down, the next allocation simply uses it.
     /// </summary>
     internal sealed partial class NatAgent
     {
@@ -32,6 +35,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private long credentialExpiresAt = long.MaxValue;
         private long nextRenewalAt = long.MaxValue;
         private long renewRetryDelay = RenewRetryMicros;
+
+        /// <summary>How long the next mint waits once a fresh credential was refused too; only an allocation that comes up resets it.</summary>
+        private long refusedRetryDelay = RenewRetryMicros;
+
+        /// <summary>Gets whether a credential was refused since an allocation last came up, or before any has.</summary>
+        private bool refusedSinceReady = true;
 
         /// <summary>Gets whether a fresh credential is being minted or its servers resolved.</summary>
         internal bool Renewing => renewal != null || resolving != null;
@@ -97,12 +106,14 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 return;
             }
 
-            // Down, or still coming up under the old credential: the next allocation starts now with this one, on the
-            // address that last worked, once any release there has settled.
+            // Down, or still coming up under the old credential: the next allocation starts now with this one, where the
+            // next attempt was going, or else on the address that last worked unless it failed lately, once any release
+            // there has settled.
+            var target = relay != null && relay.State == TurnAllocationState.Idle && IndexOfTarget(relay.Server) >= 0 ? relay.Server : PreferredTarget(now);
             if (relay != null) Release(relay, now);
             reallocateDelay = ReallocateFirstMicros;
             relayChangeSince = now;
-            ScheduleRelay(lastWorked != null && IndexOfTarget(lastWorked) >= 0 ? lastWorked : targets[0].Path, set, now);
+            ScheduleRelay(target, set, now);
         }
 
         /// <summary>Moves to a new allocation under the fresh credential, on another server address when one may work.</summary>
@@ -146,8 +157,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             var family = RelayServers.FamilyOf(current);
             foreach (var target in relayTargets)
             {
-                if (target.Family != family || target.Path.Equals(current)) continue;
-                if (failedTargets.TryGetValue(target.Path, out var until) && now < until) continue;
+                if (target.Family != family || target.Path.Equals(current) || FailedLately(target.Path, now)) continue;
                 return target.Path;
             }
 
@@ -158,6 +168,37 @@ namespace TopiaForge.Multiplayer.NatTraversal
         {
             if (failedTargets.Count >= MaximumFailedTargets) failedTargets.Clear();
             failedTargets[target] = now + FailedTargetMicros;
+        }
+
+        private bool FailedLately(TransportPath target, long now) => failedTargets.TryGetValue(target, out var until) && now < until;
+
+        /// <summary>When to mint after the server refused a credential: at once the first time since an allocation came up, then with backoff.</summary>
+        private long RefusedMintAt(long now)
+        {
+            if (!refusedSinceReady)
+            {
+                refusedSinceReady = true;
+                return now;
+            }
+
+            var at = now + refusedRetryDelay;
+            refusedRetryDelay = Math.Min(refusedRetryDelay * 2, RenewRetryLongestMicros);
+            return at;
+        }
+
+        /// <summary>Forgets the last session's credentials: a mint or lookup still running is left to finish unobserved.</summary>
+        private void ResetRotation()
+        {
+            Abandon(renewal);
+            resolving?.Abandon();
+            renewal = null;
+            resolving = null;
+            failedTargets.Clear();
+            credentialExpiresAt = long.MaxValue;
+            nextRenewalAt = long.MaxValue;
+            renewRetryDelay = RenewRetryMicros;
+            refusedRetryDelay = RenewRetryMicros;
+            refusedSinceReady = true;
         }
 
         /// <summary>

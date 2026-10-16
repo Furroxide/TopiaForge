@@ -65,6 +65,29 @@ namespace TopiaForge.Multiplayer.NatTraversal
             foreach (var session in sessions) session.TrickleLocal(candidate);
         }
 
+        /// <summary>Forgets the last session's candidates and lookups; a lookup still running is left to finish unobserved.</summary>
+        private void ResetGathering()
+        {
+            Abandon(stunLookup);
+            initialResolving?.Abandon();
+            hostCandidates.Clear();
+            reflexiveCandidates.Clear();
+            bindingOwner = null;
+            plan = null;
+            servers = null;
+            stunLookup = null;
+            initialResolving = null;
+            stunAttempted = false;
+            turnAttempted = false;
+            bindingSettled = false;
+            bindingAnswered = false;
+            relayLookupFailed = false;
+            gathered = false;
+            gatherDeadline = long.MaxValue;
+            gatheringOutcome = NatGathering.Idle;
+            socketBase = null;
+        }
+
         private void BeginGathering(NatSessionPlan sessionPlan, long now)
         {
             plan = sessionPlan;
@@ -259,6 +282,14 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         /// <summary>Reads a failed task's exception so it never surfaces as unobserved; its message is never used.</summary>
         private static void Observe(Task task) => _ = task.Exception;
+
+        /// <summary>Lets go of a task nothing will wait for: whenever it fails, its exception is observed and never read.</summary>
+        internal static void Abandon(Task? task)
+        {
+            if (task == null) return;
+            if (task.IsCompleted) Observe(task);
+            else task.ContinueWith(done => _ = done.Exception, System.Threading.CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        }
 
         /// <summary>The gathering Binding request's owner: an answer is a server-reflexive candidate; any answer proves UDP gets out.</summary>
         private sealed class BindingOwner : IStunTransactionOwner

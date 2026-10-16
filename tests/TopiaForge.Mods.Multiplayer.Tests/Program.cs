@@ -402,6 +402,13 @@ internal static class Program
             NatSessionTests.TheServiceNoticesAndErrorsAreCounted();
             NatSessionTests.AHostServesSeveralPeers();
             NatSocketTests.NetworkThreadsJoinThroughARelayOverLoopback();
+            NatRestartTests.ARestartedHostAnswersTheNextJoiner();
+            NatRestartTests.APlayerJoinsAgainOnTheSameAgent();
+            NatLongSessionTests.AJoinerWhoseNetworkKeepsDroppingStaysConnected();
+            NatLongSessionTests.FiveJoinersOnChangingRelaysStayConnected();
+            NatRelayTargetTests.ARelayLeavesAnAddressThatWentSilent();
+            NatRelayTargetTests.AnAllocationLeftOnTheFiveTupleSendsTheNextElsewhere();
+            NatRelayTargetTests.RefusedCredentialsAreMintedWithinTheLimits();
             FuzzLedger.Print();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
