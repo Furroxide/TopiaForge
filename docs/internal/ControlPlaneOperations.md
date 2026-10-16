@@ -14,12 +14,12 @@ the API document, the code and every player-facing page. The relay pricing facts
 
 | Piece | Where |
 | --- | --- |
-| Worker `topiaforge-control-plane-staging` | Cloudflare, deployed from `dev` or `main` |
-| Worker `topiaforge-control-plane-production` | Cloudflare, deployed from `main` only |
+| Worker `topiaforge-control-plane-staging` | Cloudflare, deployed from `dev` or `main`, served at `https://mp-staging.topiaforge.dev` |
+| Worker `topiaforge-control-plane-production` | Cloudflare, deployed from `main` only, served at `https://mp.topiaforge.dev` |
 | Durable Objects `HostSession`, `DirectoryShard`, `InviteShard`, `SpendGuard`, `RateLimiter` | Inside each Worker, SQLite-backed, created by migration `v1` on the first deploy |
 | Hourly cron (minute 7) | Each Worker; measures relay usage and can trip the kill switch |
 | Relay | Cloudflare Realtime TURN, one key per environment |
-| Deploy | `.github/workflows/control-plane.yml`, manual dispatch through a protected GitHub environment |
+| Deploy | `.github/workflows/control-plane.yml`, manual dispatch through a protected GitHub environment; staging may also be deployed from a maintainer's machine (section 3) |
 
 `wrangler.toml` holds no account details. The deploy reads the account from the environment, and every Worker
 secret is set by hand, out of band.
@@ -39,9 +39,13 @@ Do the steps in order: the deploy workflow refuses to run until the GitHub envir
    Each gives a key id and an API token; keep them for section 2.3.
 4. **Analytics token.** Create an API token with Account Analytics read only. The hourly measurement uses it to read
    the `callsTurnUsageAdaptiveGroups` dataset. One token can serve both environments.
-5. **Origin.** The first deploy publishes each Worker on its `workers.dev` address. To use a custom domain instead,
-   add a `routes = [{ pattern = "<host>", custom_domain = true }]` line under that environment in `wrangler.toml`,
-   in a reviewed pull request.
+5. **Origin.** Each environment is served only from its custom domain on the `topiaforge.dev` zone,
+   `mp-staging.topiaforge.dev` and `mp.topiaforge.dev`, which the `routes` lines in `wrangler.toml` name. The first
+   deploy of each creates its DNS record and certificate. `workers_dev` and `preview_urls` are off, so the account's
+   `workers.dev` subdomain, which can carry the account holder's name, never appears in a URL, a response or a deploy
+   log. A change of host is a reviewed pull request.
+6. **Account name.** Give the Cloudflare account a neutral name. The default name carries the sign-up email, and
+   `wrangler whoami` prints it, so never run `wrangler whoami` in a workflow: its logs are public.
 
 ### 2.2 GitHub environments
 
@@ -122,17 +126,18 @@ they are set by hand and never sit in the repository; they are not sensitive in 
 
 ## 3. First deploy
 
-1. Merge the service to `dev`. Before the first dispatch, check `RELAY_ADDRESS_RANGES` against Cloudflare's current
-   Realtime TURN documentation and published ranges, and correct it by pull request (section 4.1). The shipped value
-   has never been checked.
+1. Merge the service to `dev`. `RELAY_ADDRESS_RANGES` was checked on 2026-10-16 (section 4.1); check it again if the
+   quarter has turned or Cloudflare has announced an address change.
 2. In Actions, run **Control plane** with `control-plane-staging` on `dev`. Approve the deployment when GitHub asks.
    The job deploys the Worker and applies migration `v1`, which creates the five Durable Object classes, then
-   smoke-tests `GET /v1/status`.
+   smoke-tests `GET /v1/status`. Staging may instead be deployed from a maintainer's machine signed in with
+   `npx wrangler login`: run `npx wrangler deploy --env staging` in `services/control-plane` with
+   `WRANGLER_SEND_METRICS=false`.
 3. Set the eight secrets for staging (section 2.3).
 4. Check the deployment:
 
    ```bash
-   origin=https://…                    # the staging origin
+   origin=https://mp-staging.topiaforge.dev
    read -rs ADMIN && export ADMIN      # paste the staging admin token
    curl -s "$origin/v1/status"
    curl -s -H "Authorization: Bearer $ADMIN" "$origin/v1/admin/state"
@@ -171,11 +176,12 @@ blocks separated by single spaces. A relay-only side's signaling candidates are 
 (ControlPlaneApi.md, section 8.3). That makes the list a privacy control: a block too wide lets more through, and a
 missing block breaks relay-only joins.
 
-**The shipped value is unchecked.** It was written down from memory, when the service was built, as Cloudflare's
-published CDN address list, IPv4 then IPv6. Nobody has compared it with https://www.cloudflare.com/ips/, and nobody has
-confirmed that Realtime TURN allocates relay addresses from those ranges at all. It may also be far wider than relay
-needs: a list of every address Cloudflare publishes for its network passes a candidate anywhere in that network as a
-relay address.
+**Checked on 2026-10-16.** The value equals Cloudflare's published lists at https://www.cloudflare.com/ips-v4 and
+https://www.cloudflare.com/ips-v6, IPv4 then IPv6. Realtime TURN's documentation names no range of its own for relay
+allocations, and its FAQ says it issues IPv4 relay addresses only, so the IPv6 blocks never match a genuine relay
+candidate. They can go in a later change, which must move the tests and fixtures that use 2a06:98c0::/29 (step 4).
+The list is still wider than relay needs: a list of every address Cloudflare publishes for its network passes a
+candidate anywhere in that network as a relay address.
 
 Before deploying, check the list against Cloudflare's current Realtime TURN documentation and its published ranges.
 Check it again every quarter, and whenever Cloudflare announces a change of its addresses:
