@@ -334,7 +334,7 @@ String _withExactSdkPackageReferences(
   required String devPropsPath,
 }) {
   var result = project;
-  final projectElement = RegExp(r'<Project(?:\s[^>]*)?>').firstMatch(result);
+  final projectElement = firstStartTag(result, 'Project');
   if (projectElement == null) {
     throw StateError('TopiaForge C# project has no Project element.');
   }
@@ -348,12 +348,11 @@ String _withExactSdkPackageReferences(
         'Condition="Exists(\'$devPropsPath\')" />'
         '${result.substring(offset)}';
   }
-  final safePattern = RegExp(
-    r'<TopiaForgeSafeProject(?:\s[^>]*)?>[^<]*</TopiaForgeSafeProject>',
-  );
-  if (safePattern.hasMatch(result)) {
-    result = result.replaceFirst(
-      safePattern,
+  final safeElement = firstTextElement(result, 'TopiaForgeSafeProject');
+  if (safeElement != null) {
+    result = result.replaceRange(
+      safeElement.start,
+      safeElement.end,
       '<TopiaForgeSafeProject>${safeProject ? 'true' : 'false'}</TopiaForgeSafeProject>',
     );
   }
@@ -363,16 +362,13 @@ String _withExactSdkPackageReferences(
         "\$(ContinuousIntegrationBuild) == 'true' and Exists('\$(MSBuildProjectDirectory)/packages.lock.json')",
     'TopiaForgeSafeProject': safeProject ? 'true' : 'false',
   };
-  final firstPropertyGroup = RegExp(
-    r'<PropertyGroup(?:\s[^>]*)?>',
-  ).firstMatch(result);
+  final firstPropertyGroup = firstStartTag(result, 'PropertyGroup');
   if (firstPropertyGroup == null) {
     throw StateError('TopiaForge C# project has no PropertyGroup.');
   }
   final propertyLines = <String>[];
   for (final entry in properties.entries) {
-    final existing = RegExp('<${entry.key}(?:\\s[^>]*)?>');
-    if (existing.hasMatch(result)) continue;
+    if (firstStartTag(result, entry.key) != null) continue;
     if (entry.key == 'RestoreLockedMode') {
       propertyLines.add(
         '    <RestoreLockedMode Condition="${entry.value}">true</RestoreLockedMode>',
@@ -390,16 +386,12 @@ String _withExactSdkPackageReferences(
 
   final missing = <String>[];
   for (final package in packages.toList()..sort()) {
-    final pattern = RegExp(
-      '<PackageReference\\s+Include=["\\\']${RegExp.escape(package)}["\\\'][^>]*(?:/>|>.*?</PackageReference>)',
-      dotAll: true,
-    );
-    final match = pattern.firstMatch(result);
-    if (match == null) {
+    final reference = firstPackageReference(result, package);
+    if (reference == null) {
       missing.add(package);
       continue;
     }
-    var item = match.group(0)!;
+    var item = result.substring(reference.start, reference.end);
     final versionPattern = RegExp(r'\sVersion="[^"]*"');
     if (versionPattern.hasMatch(item)) {
       item = item.replaceFirst(versionPattern, ' Version="$version"');
@@ -416,7 +408,7 @@ String _withExactSdkPackageReferences(
         '<PackageReference PrivateAssets="all" ',
       );
     }
-    result = result.replaceRange(match.start, match.end, item);
+    result = result.replaceRange(reference.start, reference.end, item);
   }
   if (missing.isNotEmpty) {
     final items = missing
