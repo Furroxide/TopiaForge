@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:topiaforge/src/release_dart_runtime_packages.dart';
 import 'package:topiaforge/src/release_metadata.dart';
 import 'package:topiaforge/src/release_metadata_source.dart';
 import 'package:topiaforge/src/release_policy.dart';
@@ -94,6 +95,41 @@ void main() {
     ).writeAsStringSync('unreviewed legal text');
     await expectLater(
       fixture.verify(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('not tracked'),
+        ),
+      ),
+    );
+  });
+  test('the SBOM reads only tracked pubspec lockfiles', () async {
+    final fixture = _SourceFixture.create();
+    addTearDown(() => fixture.root.deleteSync(recursive: true));
+    final lockfile = releaseDartShipments['launcher']!.lockfile;
+    File(p.join(fixture.root.path, '.gitignore')).writeAsStringSync(
+      'third_party/BepInEx/LICENSES/ignored.txt\n$lockfile\n',
+    );
+    fixture.git(['rm', '--cached', '--quiet', '--', lockfile]);
+    fixture.git(['add', '--', '.gitignore']);
+    fixture.git([
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '--quiet',
+      '-m',
+      'test: ignore an SBOM lockfile',
+    ]);
+    await expectLater(
+      verifyMetadataPublicationSource(
+        fixture.root.path,
+        fixture.git(['rev-parse', 'HEAD']),
+        '0.1.0-rc.1',
+        p.join(fixture.root.path, 'release-assets'),
+        p.join(fixture.root.path, 'release-assets'),
+        allowUnresolved: false,
+      ),
       throwsA(
         isA<StateError>().having(
           (error) => error.message,
@@ -256,6 +292,7 @@ final class _SourceFixture {
       'templates/TopiaForge.UnityWorldTemplate/Packages/'
           'io.github.furroxide.topiaforge.world-companion/LICENSE.md',
       if (policy.licenseFile != null) policy.licenseFile!,
+      for (final shipment in releaseDartShipments.values) shipment.lockfile,
       'third_party/BepInEx/LICENSES/tracked.txt',
     }) {
       write(name, 'Synthetic source identity fixture.');

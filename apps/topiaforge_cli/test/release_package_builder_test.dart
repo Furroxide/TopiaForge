@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
+import 'package:topiaforge/src/release_dart_runtime_packages.dart';
 import 'package:topiaforge/src/release_ecosystem_identity.dart';
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_io.dart';

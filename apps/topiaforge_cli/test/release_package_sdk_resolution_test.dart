@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:launcher_data/launcher_data.dart';
 import 'package:path/path.dart' as p;
+import 'package:topiaforge/src/release_dart_runtime_packages.dart';
 import 'package:topiaforge/src/release_package_builder.dart';
 import 'package:topiaforge/src/release_package_io.dart';
 import 'package:topiaforge/src/release_package_models.dart';
@@ -166,6 +167,66 @@ void main() {
       );
     },
   );
+
+  group('Dart CLI licence bundle', () {
+    late Directory repo;
+    late String bundle;
+
+    setUp(() {
+      repo = Directory(p.join(temp.path, 'notice-repo'))..createSync();
+      _writeReleaseNoticeFixtures(repo);
+      bundle = p.join(temp.path, 'payload', 'third_party', 'dart', 'LICENSES');
+    });
+
+    void copyNotices() => ReleasePackageNoticeWriter(
+      repositoryRoot: repo.path,
+      fileOps: const ReleaseFileOps(),
+    ).copyDartCliNotices(p.join(temp.path, 'payload'));
+
+    String fixturePath(String package, String file) => p.join(
+      repo.path,
+      'apps',
+      'topiaforge_cli',
+      '.dart_tool',
+      'notice-fixtures',
+      package,
+      file,
+    );
+
+    test('carries every recorded supplementary notice', () {
+      copyNotices();
+      for (final name in dartCliLicenseNames) {
+        expect(File(p.join(bundle, name)).existsSync(), isTrue, reason: name);
+      }
+      expect(
+        File(p.join(bundle, 'quiver-NOTICE')).readAsStringSync(),
+        'quiver fixture NOTICE',
+      );
+      expect(
+        File(p.join(bundle, 'archive-LICENSE-other.md')).readAsStringSync(),
+        'archive fixture LICENSE-other.md',
+      );
+    });
+
+    test('refuses a notice file the release does not record', () {
+      File(fixturePath('async', 'NOTICE')).writeAsStringSync('unrecorded');
+      expect(
+        copyNotices,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('async carries licence or notice files [NOTICE]'),
+          ),
+        ),
+      );
+    });
+
+    test('refuses a recorded notice the package no longer carries', () {
+      File(fixturePath('quiver', 'NOTICE')).deleteSync();
+      expect(copyNotices, throwsA(isA<StateError>()));
+    });
+  });
 }
 
 final _throwsSetupGuidance = throwsA(
@@ -306,6 +367,16 @@ void _writeReleaseNoticeFixtures(Directory repo) {
       name,
       'pubspec.yaml',
     ], 'name: $name\nversion: 1.0.0\n');
+    for (final file in dartCliSupplementaryNotices[name] ?? const <String>[]) {
+      _writeFile(repo, [
+        'apps',
+        'topiaforge_cli',
+        '.dart_tool',
+        'notice-fixtures',
+        name,
+        file,
+      ], '$name fixture $file');
+    }
     packages.add({
       'name': name,
       'rootUri': 'notice-fixtures/$name/',
