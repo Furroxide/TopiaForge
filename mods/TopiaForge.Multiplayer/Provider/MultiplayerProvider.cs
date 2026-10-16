@@ -43,7 +43,7 @@ namespace TopiaForge.Multiplayer
             if (live != null)
             {
                 Live = new LiveSessions(engine, live.Files, live.Content, live.Factory ?? new SocketNetworkFactory(this.clockMicros), this.clockMicros,
-                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver);
+                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver, live.TransportOptions);
             }
         }
 
@@ -240,5 +240,12 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets or sets the target resolver; null resolves over real networks.</summary>
         internal IJoinTargetResolver? Resolver { get; set; }
+
+        /// <summary>
+        /// Gets or sets what every transport endpoint the live flows build starts from. Hosting, joining and browsing each
+        /// ask for a fresh instance and set only their own privacy and capacity on it. Null uses the production defaults.
+        /// Seeded randomness given here is in place before the endpoint draws anything, its cookie secrets included.
+        /// </summary>
+        internal System.Func<Transport.TransportOptions>? TransportOptions { get; set; }
     }
 }

@@ -29,6 +29,9 @@ namespace TopiaForge.Multiplayer.Engine
 
         public bool IsActive { get; internal set; } = true;
 
+        /// <summary>Gets how many senders have a rate limiter here.</summary>
+        internal int LimiterCount => limiters.Count;
+
         public void Dispose() => Engine.UnregisterCommand(this);
 
         internal bool TryConsumeRate(ParticipantId sender, long nowMicros)
@@ -43,6 +46,9 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         internal void ResetForNewSession() => limiters.Clear();
+
+        /// <summary>Drops the limiter of a sender the host no longer knows.</summary>
+        internal void ForgetSender(ParticipantId sender) => limiters.Remove(sender);
 
         /// <summary>Decodes the request, runs the handler inside <paramref name="scope"/>, and encodes the response.</summary>
         internal abstract WireOutcome Invoke(ParticipantId sender, ulong sequence, byte[] requestBytes, TransactionScope scope);

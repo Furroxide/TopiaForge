@@ -58,6 +58,8 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Queue<NetworkLink> accepted = new Queue<NetworkLink>();
         private readonly Func<byte[], MultiplayerPlayerKey>? playerKeys;
         private readonly Func<TransportPath, string?> sourceOf;
+        private readonly Func<TransportPath, byte[]?> networkOf;
+        private readonly SourceNetworks networks = new SourceNetworks();
         private readonly int maximumLinksPerSource;
         private bool disposed;
 
@@ -65,17 +67,23 @@ namespace TopiaForge.Multiplayer.Network
         /// <param name="playerKeys">Derives the player key for a peer's transport key; null on a client, which gives none.</param>
         /// <param name="maximumLinksPerSource">How many inbound links one source may hold at once; a host keeps it small.</param>
         /// <param name="sourceOf">Names the host a path reaches, or null where sources cannot be told apart; UDP addresses by default.</param>
+        /// <param name="networkOf">
+        /// Names the network a path comes from, or null where it cannot be told; UDP addresses by default. Each inbound link
+        /// carries it only as a <see cref="SourceNetwork"/>, a hash under this stack's own secret.
+        /// </param>
         internal NetworkStack(
             TransportEndpoint endpoint,
             Func<byte[], MultiplayerPlayerKey>? playerKeys = null,
             int maximumLinksPerSource = int.MaxValue,
-            Func<TransportPath, string?>? sourceOf = null)
+            Func<TransportPath, string?>? sourceOf = null,
+            Func<TransportPath, byte[]?>? networkOf = null)
         {
             if (maximumLinksPerSource < 1) throw new ArgumentOutOfRangeException(nameof(maximumLinksPerSource));
             Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
             this.playerKeys = playerKeys;
             this.maximumLinksPerSource = maximumLinksPerSource;
             this.sourceOf = sourceOf ?? UdpPaths.SourceOf;
+            this.networkOf = networkOf ?? UdpPaths.NetworkOf;
         }
 
         internal TransportEndpoint Endpoint { get; }
@@ -85,6 +93,30 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets how many inbound links were closed because their source already held its share.</summary>
         internal long RefusedForSource { get; private set; }
+        /// <summary>Gets the outbound attempts still in their handshake and the accepted links not yet taken.</summary>
+        internal int PendingCount => pending.Count + accepted.Count;
+
+        /// <summary>Gets the session bytes every link holds for the main thread to read.</summary>
+        internal long InboundBytes
+        {
+            get
+            {
+                long total = 0;
+                foreach (var pair in pairs) total += pair.Link.InboundBytes;
+                return total;
+            }
+        }
+
+        /// <summary>Gets the bytes the main thread queued on every link that this side has not taken yet.</summary>
+        internal long OutboundBytes
+        {
+            get
+            {
+                long total = 0;
+                foreach (var pair in pairs) total += pair.Link.OutboundBytes;
+                return total;
+            }
+        }
 
         /// <summary>Takes one datagram. Once the stack is disposed, datagrams are ignored rather than refused.</summary>
         internal void Receive(TransportPath path, byte[] datagram, int offset, int count, long now)
@@ -180,6 +212,7 @@ namespace TopiaForge.Multiplayer.Network
             foreach (var attempt in pending) attempt.Attempt.Fail(TransportCloseReason.Local);
             pairs.Clear();
             pending.Clear();
+            networks.Wipe();
             Endpoint.Dispose();
         }
 
@@ -197,7 +230,9 @@ namespace TopiaForge.Multiplayer.Network
                     continue;
                 }
 
-                accepted.Enqueue(Attach(connection, source));
+                // The link learns its network only as a hash, so nothing above this layer ever holds an address.
+                var network = networkOf(connection.Path);
+                accepted.Enqueue(Attach(connection, source, network == null ? (SourceNetwork?)null : networks.Of(network)));
             }
         }
 
@@ -230,10 +265,10 @@ namespace TopiaForge.Multiplayer.Network
             }
         }
 
-        private NetworkLink Attach(TransportConnection connection, string? source = null)
+        private NetworkLink Attach(TransportConnection connection, string? source = null, SourceNetwork? network = null)
         {
             var remote = connection.RemoteStaticKey;
-            var link = new NetworkLink(connection.Number, remote, playerKeys?.Invoke(remote) ?? default, connection.HandshakeHash);
+            var link = new NetworkLink(connection.Number, remote, playerKeys?.Invoke(remote) ?? default, connection.HandshakeHash, network);
             link.Publish(EngineLinkState.Open);
             pairs.Add(new Pair(connection, link, source));
             return link;

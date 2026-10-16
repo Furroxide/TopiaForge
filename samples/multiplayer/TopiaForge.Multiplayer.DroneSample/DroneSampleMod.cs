@@ -10,25 +10,31 @@ namespace TopiaForge.Multiplayer.DroneSample
         private IReplicatedObject<DroneState, DroneInput>? drone;
 
         /// <inheritdoc/>
+        /// <remarks>
+        /// TopiaForge binds the generated contract before this runs, and the session hook below spawns the drone, so
+        /// there is nothing to wire up here.
+        /// </remarks>
         protected override void OnLoad()
         {
-            var session = Context.RequireMultiplayer();
-            var binding = BindMultiplayer(session);
-            if (!binding.TryGetValue(out var lease))
-            {
-                throw new InvalidOperationException(binding.ErrorMessage);
-            }
+            Context.Logger.Info("Multiplayer drone sample is ready; it spawns a drone in every session this process hosts.");
+        }
 
-            Context.Lifetime.Track(lease);
-            if (!session.Snapshot.HasWorldAuthority)
+        /// <summary>
+        /// Runs once for every session, on every peer. Only the process holding world authority spawns, so each session
+        /// gets one drone: in solo play, in a session this process hosts, and again in the solo session a finished join
+        /// returns to. A joined player sees the host's drone instead.
+        /// </summary>
+        partial void OnMultiplayerSessionStarted(MultiplayerSessionSnapshot snapshot)
+        {
+            if (!snapshot.HasWorldAuthority)
             {
                 return;
             }
 
-            ParticipantId? owner = session.Snapshot.LocalParticipantId;
+            ParticipantId? owner = snapshot.LocalParticipantId;
             if (!owner.HasValue)
             {
-                foreach (var participant in session.Snapshot.Participants)
+                foreach (var participant in snapshot.Participants)
                 {
                     if (!participant.IsConnected)
                     {
@@ -47,8 +53,6 @@ namespace TopiaForge.Multiplayer.DroneSample
             {
                 throw new InvalidOperationException(spawned.ErrorMessage);
             }
-
-            Context.Logger.Info("Multiplayer drone sample spawned a canonical predicted object.");
         }
 
         [ReplicatedObject("drone", Prediction = PredictionMode.Owner, MaximumPerSecond = 30, MaximumPayloadBytes = 512)]
