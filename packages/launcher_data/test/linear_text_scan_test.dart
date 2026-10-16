@@ -1,11 +1,10 @@
-import 'dart:math';
-
 import 'package:launcher_data/src/linear_text_scan.dart';
 import 'package:test/test.dart';
 
-// The patterns the scanners replaced, except where noted. Each scanner must
-// return exactly what its pattern matched, and must stay fast where the
-// pattern backtracked.
+import 'scan_agreement.dart';
+
+// The patterns the scanners replaced. Each scanner must return exactly what
+// its pattern matched, and must stay fast where the pattern backtracked.
 RegExp _elementPattern(String name) =>
     RegExp('<$name>\\s*([^<]+?)\\s*</$name>');
 
@@ -14,68 +13,7 @@ RegExp _startTagPattern(String name) => RegExp('<$name(?:\\s[^>]*)?>');
 RegExp _textElementPattern(String name) =>
     RegExp('<$name(?:\\s[^>]*)?>[^<]*</$name>');
 
-// Corrected. The replaced pattern's greedy `[^>]*` tried
-// `>.*?</PackageReference>` before `/>`, so a self-closing item ran on to a
-// later closing tag. The lazy `[^>]*?` reaches `/>` first.
-RegExp _packageReferencePattern(String package) => RegExp(
-  '<PackageReference\\s+Include=["\\\']${RegExp.escape(package)}["\\\'][^>]*?(?:/>|>.*?</PackageReference>)',
-  dotAll: true,
-);
-
 final _vdfPattern = RegExp(r'"((?:\\.|[^"\\])*)"\s*"((?:\\.|[^"\\])*)"');
-
-const _abstractions = 'TopiaForge.Mods.Abstractions';
-
-/// How long a scanner may take on input its pattern spent seconds on.
-const _budget = Duration(milliseconds: 100);
-
-({int start, int end})? _bounds(RegExpMatch? match) =>
-    match == null ? null : (start: match.start, end: match.end);
-
-/// Runs [scan] and fails when it takes longer than [_budget].
-T _withinBudget<T>(T Function() scan) {
-  final watch = Stopwatch()..start();
-  final result = scan();
-  watch.stop();
-  expect(watch.elapsed, lessThan(_budget));
-  return result;
-}
-
-/// Seeded strings of up to 16 [tokens], so a disagreement reproduces.
-List<String> _samples(List<String> tokens, {required int seed}) {
-  final random = Random(seed);
-  return [
-    for (var sample = 0; sample < 4000; sample++)
-      [
-        for (var token = random.nextInt(17); token > 0; token--)
-          tokens[random.nextInt(tokens.length)],
-      ].join(),
-  ];
-}
-
-/// Checks [scan] against [oracle] on every sample, and that the samples
-/// exercise both matches and misses.
-void _expectAgreement<T extends Object>(
-  List<String> samples,
-  T? Function(String text) scan,
-  T? Function(String text) oracle,
-) {
-  var matches = 0;
-  for (final sample in samples) {
-    final expected = oracle(sample);
-    expect(scan(sample), expected, reason: 'input: ${_escape(sample)}');
-    if (expected != null) matches++;
-  }
-  expect(matches, inInclusiveRange(200, samples.length - 200));
-}
-
-String _escape(String text) => text.codeUnits
-    .map(
-      (unit) => unit >= 0x20 && unit < 0x7F
-          ? String.fromCharCode(unit)
-          : '\\u{${unit.toRadixString(16)}}',
-    )
-    .join();
 
 void main() {
   test('whitespace matches RegExp \\s for every UTF-16 code unit', () {
@@ -175,8 +113,8 @@ void main() {
         ('PackageVersion', 'Version'),
       ]) {
         final pattern = _elementPattern(name);
-        _expectAgreement(
-          _samples([
+        expectAgreement(
+          generatedSamples([
             '<$name>',
             '<$name>',
             '</$name>',
@@ -210,7 +148,7 @@ void main() {
         'Version',
       ]) {
         final text = '<$name>${' ' * 1000}';
-        expect(_withinBudget(() => firstElementText(text, name)), isNull);
+        expect(withinBudget(() => firstElementText(text, name)), isNull);
       }
     });
   });
@@ -254,7 +192,7 @@ void main() {
     });
 
     test('agrees with the pattern on generated input', () {
-      final samples = _samples(const [
+      final samples = generatedSamples(const [
         '<Project',
         '<Project>',
         '<ProjectReference',
@@ -270,10 +208,10 @@ void main() {
       ], seed: 2);
       for (final name in const ['Project', 'PropertyGroup']) {
         final pattern = _startTagPattern(name);
-        _expectAgreement(
+        expectAgreement(
           samples,
           (text) => firstStartTag(text, name),
-          (text) => _bounds(pattern.firstMatch(text)),
+          (text) => matchBounds(pattern.firstMatch(text)),
         );
       }
     });
@@ -287,7 +225,7 @@ void main() {
         'TopiaForgeSafeProject',
       ]) {
         final text = '<$name ' * 4000;
-        expect(_withinBudget(() => firstStartTag(text, name)), isNull);
+        expect(withinBudget(() => firstStartTag(text, name)), isNull);
       }
     });
   });
@@ -319,8 +257,8 @@ void main() {
 
     test('agrees with the pattern on generated input', () {
       final pattern = _textElementPattern(name);
-      _expectAgreement(
-        _samples(const [
+      expectAgreement(
+        generatedSamples(const [
           '<TopiaForgeSafeProject',
           '<TopiaForgeSafeProject>',
           '</TopiaForgeSafeProject>',
@@ -332,106 +270,13 @@ void main() {
           'a="b"',
         ], seed: 3),
         (text) => firstTextElement(text, name),
-        (text) => _bounds(pattern.firstMatch(text)),
+        (text) => matchBounds(pattern.firstMatch(text)),
       );
     });
 
     test('finishes many unterminated tags within the budget', () {
       final text = '${'<$name ' * 4000}>';
-      expect(_withinBudget(() => firstTextElement(text, name)), isNull);
-    });
-  });
-
-  group('firstPackageReference', () {
-    test('finds self-closing and element items', () {
-      const closed = '<PackageReference Include="$_abstractions" />';
-      expect(firstPackageReference('  $closed', _abstractions), (
-        start: 2,
-        end: closed.length + 2,
-      ));
-      const element =
-          "<PackageReference\n  Include='$_abstractions'>\n"
-          '  <PrivateAssets>all</PrivateAssets>\n'
-          '</PackageReference>';
-      expect(firstPackageReference(element, _abstractions), (
-        start: 0,
-        end: element.length,
-      ));
-    });
-
-    test('skips items the pattern rejected', () {
-      expect(
-        firstPackageReference(
-          '<PackageReference Include="$_abstractions" />',
-          'TopiaForge.Mods',
-        ),
-        isNull,
-      );
-      expect(
-        firstPackageReference(
-          '<PackageReference Version="1" Include="$_abstractions" />',
-          _abstractions,
-        ),
-        isNull,
-      );
-    });
-
-    test('ends each item at its own `/>` or closing tag', () {
-      // The replaced pattern ran a self-closing item on to the next
-      // `</PackageReference>`, swallowing the items in between.
-      const later =
-          '\n<PackageReference Include="Other" Version="1">\n'
-          '</PackageReference>';
-      for (final item in const [
-        '<PackageReference Include="$_abstractions" />',
-        '<PackageReference Include="$_abstractions">\n</PackageReference>',
-      ]) {
-        expect(firstPackageReference('$item$later', _abstractions), (
-          start: 0,
-          end: item.length,
-        ));
-      }
-    });
-
-    test('agrees with the corrected pattern on generated input', () {
-      final samples = _samples(const [
-        '<PackageReference',
-        '<PackageReference Include="$_abstractions"',
-        "<PackageReference Include='TopiaForge.Mods'",
-        ' Include="TopiaForge.Mods"',
-        ' ',
-        '\n',
-        'Include=',
-        '"',
-        "'",
-        'TopiaForge.Mods',
-        '.Abstractions',
-        '/',
-        '>',
-        '/>',
-        '</PackageReference>',
-        ' Version="1"',
-      ], seed: 4);
-      for (final package in const [_abstractions, 'TopiaForge.Mods']) {
-        final pattern = _packageReferencePattern(package);
-        _expectAgreement(
-          samples,
-          (text) => firstPackageReference(text, package),
-          (text) => _bounds(pattern.firstMatch(text)),
-        );
-      }
-    });
-
-    test('finishes many unclosed items within the budget', () {
-      for (final text in [
-        '<PackageReference Include="$_abstractions">' * 8000,
-        '${'<PackageReference Include="$_abstractions"' * 8000}>',
-      ]) {
-        expect(
-          _withinBudget(() => firstPackageReference(text, _abstractions)),
-          isNull,
-        );
-      }
+      expect(withinBudget(() => firstTextElement(text, name)), isNull);
     });
   });
 
@@ -455,8 +300,8 @@ void main() {
     });
 
     test('agrees with the pattern on generated input', () {
-      _expectAgreement(
-        _samples(const [
+      expectAgreement(
+        generatedSamples(const [
           '"',
           '"',
           '"k"',
@@ -489,7 +334,7 @@ void main() {
     test('finishes unclosed strings within the budget', () {
       final escapedQuotes = r'\"' * 20000;
       for (final text in ['"$escapedQuotes', '"key" "$escapedQuotes']) {
-        expect(_withinBudget(() => vdfQuotedPairs(text).toList()), isEmpty);
+        expect(withinBudget(() => vdfQuotedPairs(text).toList()), isEmpty);
       }
     });
   });

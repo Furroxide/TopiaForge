@@ -2,8 +2,9 @@
 /// file.
 ///
 /// Mod scaffolding and `topiaforge mod add|remove` share these, so both find
-/// and pin an item the same way. An item is found by its literal id, and ends
-/// at its own `/>` or closing tag, as [firstPackageReference] bounds it. Each
+/// and pin an item the same way. An item is found as [firstPackageReference]
+/// finds it: by its id in any ASCII case, wherever `Include` sits in its
+/// start tag, outside comments, and ending at its own `/>` or end tag. Each
 /// package's edit takes time linear in the length of the project.
 library;
 
@@ -74,8 +75,8 @@ String _pinned(
   // would override the pin. Dropping each one leaves the attribute as the
   // item's only version.
   var pinned = withoutMetadataElements(item, 'Version');
-  // A missing attribute goes after the others, so Include stays first and
-  // the next rewrite finds this item rather than adding another.
+  // A missing attribute goes after the others, so an item written with
+  // Include first, as the templates write it, keeps that order.
   pinned = withMetadataAttribute(pinned, 'Version', version);
   // PrivateAssets is added only when missing, and a child sets it as an
   // attribute does.
