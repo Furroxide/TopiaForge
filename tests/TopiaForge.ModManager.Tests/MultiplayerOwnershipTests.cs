@@ -33,21 +33,22 @@ namespace TopiaForge.ModManager.Tests
         {
             var host = new OwnershipStateMachine();
             var alice = new OwnershipClaim(Alice);
-            True(alice.Grab(out var observed) && observed == 0, "a grab sends the epoch it observed");
+            True(alice.Grab(0, out var grab) && grab.Epoch == 0, "a grab sends the epoch it observed");
+            Equal(0u, grab.Number, "and the claim's first request number");
             Equal(OwnershipState.Requested, alice.State, "requested");
             True(alice.IsSimulating && alice.GrantPending, "the client simulates before the host answers");
             Equal(1u, alice.StreamEpoch, "samples carry the epoch a grant will assign");
             Equal(OwnershipResult.StaleEpoch, host.Stream(Alice, alice.StreamEpoch, Origin, Origin, 10_000).Result, "a sample that beats the request");
             Equal(OwnershipState.Server, host.State, "and changes nothing");
 
-            var grant = host.Request(Alice, observed, Origin, Origin, 20_000);
+            var grant = host.Request(Alice, grab.Epoch, Origin, Origin, 20_000);
             Equal(OwnershipResult.Granted, grant.Result, "granted");
             True(grant.EpochChanged && grant.Epoch == 1 && grant.Owner.Equals(NetOwner.ForParticipant(Alice)), "new owner and epoch");
             Equal(OwnershipResult.Accepted, host.Stream(Alice, alice.StreamEpoch, P(0.5), Origin, 40_000).Result, "the optimistic stream is valid at once");
-            alice.OnGranted(grant.Epoch);
+            alice.OnGranted(grab.Number, grant.Epoch);
             Equal(OwnershipState.Owned, alice.State, "owned");
             True(!alice.GrantPending && alice.StreamEpoch == 1, "confirmed");
-            True(!alice.Grab(out _), "grabbing again sends nothing");
+            True(!alice.Grab(50_000, out _), "grabbing again sends nothing");
             Equal(OwnershipResult.AlreadyOwned, host.Request(Alice, 1, Origin, Origin, 50_000).Result, "a repeated request");
         }
 
@@ -56,15 +57,15 @@ namespace TopiaForge.ModManager.Tests
             var host = new OwnershipStateMachine();
             var alice = new OwnershipClaim(Alice);
             var bob = new OwnershipClaim(Bob);
-            alice.Grab(out var aliceEpoch);
-            bob.Grab(out var bobEpoch);
-            var first = host.Request(Bob, bobEpoch, Origin, Origin, 1_000);
-            var second = host.Request(Alice, aliceEpoch, Origin, Origin, 1_001);
+            alice.Grab(0, out var aliceGrab);
+            bob.Grab(0, out var bobGrab);
+            var first = host.Request(Bob, bobGrab.Epoch, Origin, Origin, 1_000);
+            var second = host.Request(Alice, aliceGrab.Epoch, Origin, Origin, 1_001);
             Equal(OwnershipResult.Granted, first.Result, "the first request wins");
             Equal(OwnershipResult.Denied, second.Result, "the second is denied");
             True(!second.EpochChanged && second.Owner.Equals(NetOwner.ForParticipant(Bob)) && second.Epoch == 1, "denial names the winner");
-            alice.OnRefused(second.Epoch, second.Owner);
-            bob.OnGranted(first.Epoch);
+            alice.OnRefused(aliceGrab.Number, second.Epoch, second.Owner);
+            bob.OnGranted(bobGrab.Number, first.Epoch);
             True(!alice.IsSimulating && alice.State == OwnershipState.Server, "the loser rolls back");
             Equal(NetOwner.ForParticipant(Bob), alice.KnownOwner, "and knows who won");
             Equal(OwnershipResult.NotOwner, host.Stream(Alice, 1, Origin, Origin, 2_000).Result, "the loser's samples are refused");
@@ -154,8 +155,8 @@ namespace TopiaForge.ModManager.Tests
         {
             var host = Granted(Alice, Origin, 0);
             var alice = new OwnershipClaim(Alice);
-            alice.Grab(out _);
-            alice.OnGranted(1);
+            alice.Grab(0, out var grab);
+            alice.OnGranted(grab.Number, 1);
             True(alice.BeginRelease(100_000), "throw");
             Equal(OwnershipResult.Releasing, host.BeginRelease(Alice, alice.StreamEpoch, Origin, 100_000).Result, "the host opens the window");
             Equal(OwnershipState.ReleaseWindow, host.State, "release window");
@@ -246,12 +247,13 @@ namespace TopiaForge.ModManager.Tests
 
             var own = Granted(Alice, Origin, 0);
             var alice = new OwnershipClaim(Alice);
-            alice.Grab(out _);
-            alice.OnGranted(1);
+            alice.Grab(0, out var grab);
+            alice.OnGranted(grab.Number, 1);
             alice.BeginRelease(10_000);
             own.BeginRelease(Alice, 1, Origin, 10_000);
-            True(alice.Grab(out var catchEpoch) && catchEpoch == 1 && alice.State == OwnershipState.Owned, "the thrower catches its own throw");
-            var caught = own.Request(Alice, catchEpoch, Origin, Origin, 20_000);
+            True(alice.Grab(15_000, out var catchGrab) && catchGrab.Epoch == 1 && alice.State == OwnershipState.Owned, "the thrower catches its own throw");
+            Equal(grab.Number + 1, catchGrab.Number, "under the next request number");
+            var caught = own.Request(Alice, catchGrab.Epoch, Origin, Origin, 20_000);
             True(caught.Result == OwnershipResult.Granted && !caught.EpochChanged && own.State == OwnershipState.Owned, "without an epoch change");
             Equal(OwnershipResult.Accepted, own.Stream(Alice, 1, P(0.25), Origin, 30_000).Result, "and keeps streaming");
         }
@@ -259,27 +261,27 @@ namespace TopiaForge.ModManager.Tests
         private static void AClaimFollowsTheHost()
         {
             var alice = new OwnershipClaim(Alice);
-            alice.Grab(out _);
+            alice.Grab(0, out var grab);
             True(alice.BeginRelease(5_000), "a throw before the grant is confirmed");
             True(alice.GrantPending && alice.State == OwnershipState.ReleaseWindow && alice.StreamEpoch == 1, "still pending");
             var host = new OwnershipStateMachine();
             host.Request(Alice, 0, Origin, Origin, 6_000);
             Equal(OwnershipResult.Releasing, host.BeginRelease(Alice, alice.StreamEpoch, Origin, 6_000).Result, "the host applies both in order");
-            alice.OnGranted(1);
+            alice.OnGranted(grab.Number, 1);
             True(!alice.GrantPending && alice.State == OwnershipState.ReleaseWindow, "the window stays open");
 
-            alice.OnRefused(1, NetOwner.ForParticipant(Alice));
-            Equal(OwnershipState.ReleaseWindow, alice.State, "a refusal that names us changes nothing");
+            alice.OnRefused(grab.Number, 1, NetOwner.ForParticipant(Alice));
+            Equal(OwnershipState.ReleaseWindow, alice.State, "a refusal of a request already settled, naming us, changes nothing");
             alice.OnOwnerChanged(NetOwner.Server, 2);
             True(alice.State == OwnershipState.Server && alice.Epoch == 2 && alice.KnownOwner.IsServer, "a reclaim stops simulation");
 
             // Only an answer settles a request: an announcement of our own grant records it and nothing more.
             var bob = new OwnershipClaim(Bob);
-            bob.Grab(out _);
+            bob.Grab(0, out var bobGrab);
             bob.OnOwnerChanged(NetOwner.ForParticipant(Bob), 1);
             True(bob.State == OwnershipState.Requested && bob.GrantPending && bob.OutstandingRequests == 1, "hearing our own grant first settles nothing");
             True(bob.Epoch == 1 && bob.KnownOwner.Equals(NetOwner.ForParticipant(Bob)) && bob.StreamEpoch == 1, "but records it");
-            bob.OnGranted(1);
+            bob.OnGranted(bobGrab.Number, 1);
             True(bob.State == OwnershipState.Owned && !bob.GrantPending && bob.OutstandingRequests == 0, "its answer does");
             bob.OnOwnerChanged(NetOwner.ForParticipant(Bob), 1);
             Equal(OwnershipState.Owned, bob.State, "and hearing it again changes nothing");
@@ -295,9 +297,9 @@ namespace TopiaForge.ModManager.Tests
         {
             var host = new OwnershipStateMachine(initialEpoch: uint.MaxValue);
             var alice = new OwnershipClaim(Alice, knownEpoch: uint.MaxValue);
-            alice.Grab(out var observed);
+            alice.Grab(0, out var grab);
             Equal(0u, alice.StreamEpoch, "the stream epoch wraps");
-            var grant = host.Request(Alice, observed, Origin, Origin, 0);
+            var grant = host.Request(Alice, grab.Epoch, Origin, Origin, 0);
             True(grant.Result == OwnershipResult.Granted && grant.Epoch == 0, "the grant wraps to zero");
             Equal(OwnershipResult.Accepted, host.Stream(Alice, alice.StreamEpoch, P(0.1), Origin, 10_000).Result, "and still matches");
         }
@@ -309,6 +311,7 @@ namespace TopiaForge.ModManager.Tests
             var range = OwnershipPolicy.Default.MaximumHoldRangeSquaredUnits;
             var now = 0L;
             var counts = new int[13];
+            var linkCloses = 0;
             for (var step = 0; step < 50_000; step++)
             {
                 now += random.NextInt(0, 60_000);
@@ -320,7 +323,9 @@ namespace TopiaForge.ModManager.Tests
                 var avatar = new NetQuantizedPosition(random.NextInt(-110 * Unit, 110 * Unit), 0, 0);
                 var before = (host.State, host.Owner, host.Epoch);
                 var wasYielding = host.IsYielding(participant, now);
-                var kind = random.NextInt(0, 7);
+                var quietOwner = host.State != OwnershipState.Server && host.Owner.Participant == participant &&
+                                 (host.AwaitingFirstSample || host.Contested);
+                var kind = random.NextInt(0, 8);
                 OwnershipOutcome outcome;
                 switch (kind)
                 {
@@ -330,10 +335,25 @@ namespace TopiaForge.ModManager.Tests
                     case 3: outcome = host.BeginRelease(participant, epoch, avatar, now); break;
                     case 4: outcome = host.Handback(participant, epoch, Handback(position), avatar, now, out _); break;
                     case 5: outcome = host.Disconnect(participant); break;
+                    case 6: outcome = host.LinkClosed(participant, now); break;
                     default: outcome = host.Poll(now); break;
                 }
 
                 counts[(int)outcome.Result]++;
+                for (var slot = 1; slot <= 3; slot++)
+                {
+                    var cooldown = host.CooldownOf(slot);
+                    True(cooldown.UntilMicros - now <= OwnershipPolicy.DefaultMaximumYieldCooldownMicros, "no cooldown is longer than the cap");
+                    True(cooldown.StrikeMicros == 0 || (cooldown.StrikeMicros % OwnershipPolicy.DefaultYieldCooldownMicros == 0 &&
+                                                        cooldown.StrikeMicros <= OwnershipPolicy.DefaultMaximumYieldCooldownMicros), "a strike is a doubling of the base");
+                }
+
+                if (kind == 6 && outcome.Result == OwnershipResult.Reclaimed)
+                {
+                    linkCloses++;
+                    True(outcome.ReclaimReason == OwnershipReclaimReason.Disconnected, "a closed link reclaims as disconnected");
+                    Equal(quietOwner, host.IsYielding(participant, now), "a closed link yields exactly when the hold was quiet or contested");
+                }
                 True((host.State == OwnershipState.Server) == host.Owner.IsServer, "server state and server owner agree");
                 True(host.State != OwnershipState.Requested, "the host is never in the requested state");
                 True(!host.AwaitingFirstSample || host.State != OwnershipState.Server, "only an owner owes a first sample");
@@ -370,6 +390,8 @@ namespace TopiaForge.ModManager.Tests
             {
                 True(counts[(int)result] > 0, "the sweep reached " + result);
             }
+
+            True(linkCloses > 100, "the sweep closed holders' links " + linkCloses + " times");
         }
 
         private static OwnershipStateMachine Granted(int participant, NetQuantizedPosition position, long nowMicros)

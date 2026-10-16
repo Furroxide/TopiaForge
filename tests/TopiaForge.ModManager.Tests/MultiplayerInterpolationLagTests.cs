@@ -20,6 +20,9 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>The delay above which catching up speeds up: the 350 ms cap plus the 50 ms dead band.</summary>
         private const long CatchUpFrom = SnapshotInterpolationBuffer.MaximumDelayMicros + SnapshotInterpolationBuffer.CatchUpDeadBandMicros;
 
+        /// <summary>The delay below which falling back speeds up: the 80 ms floor less its 20 ms dead band.</summary>
+        private const long FallBackFrom = SnapshotInterpolationBuffer.MinimumDelayMicros - SnapshotInterpolationBuffer.FallBackDeadBandMicros;
+
         public static void Run()
         {
             ATimelineStepIsCaughtUpWithoutAJump();
@@ -95,16 +98,17 @@ namespace TopiaForge.ModManager.Tests
             // 50 to 150 ms at 30 Hz: the first late sample moves the offset estimate 12.5 ms at once, and the estimate
             // keeps falling faster than 0.9 times real time can follow, so the delay must dip below the 80 ms floor. The
             // fall-back used to wait for the delay to go negative: it sat at 38 ms at 0.9 times real time for 58 frames,
-            // and 20 frames extrapolated. Now the render falls back faster below the floor: the delay dips only to
-            // 66 ms, for 26 frames, and is back above the floor within half a second. At 20 Hz it sat there for 55
-            // frames over 0.9 s, and now for 30 frames over 0.7 s.
-            foreach (var (hertz, worstDelay, extrapolating, framesBelow, window) in new[] { (30, 64_000L, 10, 28, 500_000L), (20, 68_000L, 15, 32, 750_000L) })
+            // and 20 frames extrapolated. Falling back faster from the floor itself kept the dip to 66 ms, but it slowed
+            // light-jitter streams held at the floor below 0.9 times real time. From 60 ms, the floor less its dead band,
+            // the delay dips to 52 ms, ends 44 frames below the floor, all within 0.75 s, and 14 frames extrapolate. At
+            // 20 Hz it dips to 56 ms, for 49 frames within 0.85 s, and 23 frames extrapolate.
+            foreach (var (hertz, worstDelay, extrapolating, framesBelow, window) in new[] { (30, 52_000L, 14, 44, 750_000L), (20, 55_500L, 23, 49, 850_000L) })
             {
                 var name = "50 to 150 ms at " + hertz + " Hz";
                 var played = Play(Latency(hertz, 50_000, 150_000, hertz * 3), 1_000_000 / hertz);
                 ExpectEveryFrame(played, name);
                 True(played.Rate.SlowestRatio < 0.85 && played.Rate.SlowestRatio >= 0.5,
-                    name + ": below the floor it fell back faster than the normal slew: " + Format(played.Rate.SlowestRatio));
+                    name + ": below the fall-back's dead band it fell back faster than the normal slew: " + Format(played.Rate.SlowestRatio));
                 True(played.Rate.FastestRatio <= 1.0, name + ": and never sped up: " + Format(played.Rate.FastestRatio));
                 True(played.Rate.SmallestDelay >= worstDelay, name + ": the delay dipped only to " + played.Rate.SmallestDelay);
                 True(played.FramesBelowFloor > 0 && played.FramesBelowFloor <= framesBelow, name + ": " + played.FramesBelowFloor + " frames ended below the floor");
@@ -183,7 +187,7 @@ namespace TopiaForge.ModManager.Tests
 
                 var delayBefore = buffer.CurrentDelayMicros;
                 if (!played.Rate.Sample(buffer, now, out var result)) continue;
-                if (delayBefore > CatchUpFrom || delayBefore < SnapshotInterpolationBuffer.MinimumDelayMicros) played.LastCorrectionMicros = now;
+                if (delayBefore > CatchUpFrom || delayBefore < FallBackFrom) played.LastCorrectionMicros = now;
 
                 // The frame's own correction counts: a frame that ends below the floor could not climb back in time.
                 if (buffer.CurrentDelayMicros < SnapshotInterpolationBuffer.MinimumDelayMicros)

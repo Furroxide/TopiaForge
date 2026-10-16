@@ -83,10 +83,10 @@ namespace TopiaForge.ModManager.Tests
 
     /// <summary>
     /// Renders a buffer frame by frame and checks each frame's render advance against the written rule, not the code:
-    /// within 10% of the elapsed time while the delay before the frame lay between the 80 ms floor and 400 ms, the cap
-    /// plus the dead band; beyond 400 ms, one percent more per millisecond of excess, up to 100%; below the floor, one
-    /// percent more per millisecond short of it, up to 50%. So playback never runs faster than twice or slower than half
-    /// real time.
+    /// within 10% of the elapsed time while the delay before the frame lay between 60 ms, the 80 ms floor less its dead
+    /// band, and 400 ms, the cap plus its dead band; beyond 400 ms, one percent more per millisecond of excess, up to
+    /// 100%; below 60 ms, one percent more per millisecond short of it, up to 50%. So playback never runs faster than
+    /// twice or slower than half real time.
     /// </summary>
     internal sealed class PlaybackRate
     {
@@ -100,6 +100,9 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>Frames that ran faster than 1.1 times real time.</summary>
         public int FastFrames { get; private set; }
+
+        /// <summary>Frames that ran slower than 0.9 times real time.</summary>
+        public int SlowFrames { get; private set; }
 
         public long SlowestAdvance { get; private set; } = long.MaxValue;
 
@@ -129,6 +132,7 @@ namespace TopiaForge.ModManager.Tests
                     delayBefore + " us, where " + percent + "% is allowed");
                 if (percent > SnapshotInterpolationBuffer.PlaybackSlewPercent) Corrections++;
                 if (advance * 10 > elapsed * 11) FastFrames++;
+                if (advance * 10 < elapsed * 9) SlowFrames++;
                 SlowestAdvance = Math.Min(SlowestAdvance, advance);
                 SlowestRatio = Math.Min(SlowestRatio, ratio);
                 FastestRatio = Math.Max(FastestRatio, ratio);
@@ -144,7 +148,7 @@ namespace TopiaForge.ModManager.Tests
         private static long AllowedPercent(long delay)
         {
             if (delay > 400_000) return Math.Min(100, 10 + (delay - 400_000) / 1_000);
-            return delay < 80_000 ? Math.Min(50, 10 + (80_000 - delay) / 1_000) : 10;
+            return delay < 60_000 ? Math.Min(50, 10 + (60_000 - delay) / 1_000) : 10;
         }
     }
 

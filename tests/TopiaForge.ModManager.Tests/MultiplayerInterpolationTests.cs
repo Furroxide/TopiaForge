@@ -96,9 +96,10 @@ namespace TopiaForge.ModManager.Tests
             // Calm for five seconds, rough for ten, then calm for twenty-five: long enough for the jitter estimate to
             // decay to zero, so the target moves up and all the way back down. Moving the render clock with the offset
             // estimate as well used to swing playback between a standstill and 2.06 times real time here, and catching
-            // up as soon as the delay passed the cap ran it at up to 1.27. Now it never runs faster than 1.1; when the
-            // rough phase starts, the late samples pull the delay under the floor and the render falls back for a few
-            // frames.
+            // up as soon as the delay passed the cap ran it at up to 1.27. Now it never runs faster than 1.1. When the
+            // rough phase starts, the late samples pull the delay under the floor, to 64 ms, but not past the
+            // fall-back's dead band, so playback never slows below 0.9 either; falling back from the floor itself ran
+            // 12 frames slower than that, down to 0.78.
             var random = new SeededRandom(29);
             var arrivals = new long[400];
             for (var index = 0; index < arrivals.Length; index++)
@@ -125,8 +126,10 @@ namespace TopiaForge.ModManager.Tests
 
             True(playback.Frames > 2000, "every frame was checked");
             True(playback.FastestRatio <= 1.1, "the rough phase never sped playback up: " + playback.FastestRatio.ToString("F3", CultureInfo.InvariantCulture));
-            True(playback.Corrections > 0 && playback.SlowestRatio >= 0.75,
-                "it only fell back, gently: " + playback.SlowestRatio.ToString("F3", CultureInfo.InvariantCulture));
+            True(playback.Corrections == 0 && playback.SlowestRatio >= 0.9,
+                "nor slowed it below the normal slew: " + playback.SlowestRatio.ToString("F3", CultureInfo.InvariantCulture));
+            True(playback.SmallestDelay < SnapshotInterpolationBuffer.MinimumDelayMicros,
+                "though the onset pulled the delay under the floor, to " + playback.SmallestDelay);
             True(maximumDelay > 200_000, "the rough phase raised the delay to " + maximumDelay);
             Equal(Step, buffer.CurrentDelayMicros, "the calm phase brought it back to one interval");
             Equal(Step, buffer.TargetDelayMicros, "and the target with it");
