@@ -147,7 +147,18 @@ they are set by hand and never sit in the repository; they are not sensitive in 
    Status shows every feature `true` and `killSwitch` `false`. Admin state shows `providerConfigured` and
    `analyticsConfigured` `true`. The measurement shows `measurementFailures` `0`; if it does not, fix the analytics
    token before the cron's third failure trips the kill switch (section 5.2).
-5. Play an Internet session through staging: invite join, relay join with "hide my IP", and a hole-punched join.
+5. Run the live check, which uses a fresh invite-only test server, so nothing is listed, and cleans up after itself:
+
+   ```bash
+   cd services/control-plane && npm ci --ignore-scripts
+   node scripts/live-check.mjs https://mp-staging.topiaforge.dev
+   ```
+
+   It registers a host, resolves an invite, takes a join ticket, checks that signaling withholds a relay-only side's
+   host candidates, mints relay credentials for both sides, and allocates two real relays that pass data to each other
+   over bound channels. It prints only the shapes of tokens and credentials, never their values, and never the
+   caller's own address. Then play an Internet session through staging: invite join, relay join with "hide my IP",
+   and a hole-punched join.
 6. Register both GitHub environments in governance (section 2.2).
 7. For production, repeat steps 2 to 4 with `control-plane-production` on `main` after the release merge, and give
    the release builds the production origin (`--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=…`).
@@ -176,10 +187,13 @@ blocks separated by single spaces. A relay-only side's signaling candidates are 
 (ControlPlaneApi.md, section 8.3). That makes the list a privacy control: a block too wide lets more through, and a
 missing block breaks relay-only joins.
 
-**Checked on 2026-10-16.** The value equals Cloudflare's published lists at https://www.cloudflare.com/ips-v4 and
-https://www.cloudflare.com/ips-v6, IPv4 then IPv6. Realtime TURN's documentation names no range of its own for relay
-allocations, and its FAQ says it issues IPv4 relay addresses only, so the IPv6 blocks never match a genuine relay
-candidate. They can go in a later change, which must move the tests and fixtures that use 2a06:98c0::/29 (step 4).
+**Checked on 2026-10-16.** The value is Cloudflare's published lists at https://www.cloudflare.com/ips-v4 and
+https://www.cloudflare.com/ips-v6, IPv4 then IPv6, with 104.16.0.0/13 and 104.24.0.0/14 widened to 104.16.0.0/12,
+Cloudflare's registered block (ARIN NET-104-16-0-0-1). The live check below allocated relays through staging, and
+Realtime TURN gave addresses in 104.30.0.0, which the published list leaves out; with only the published list, a
+relay-only player's genuine relay candidates would have been withheld. Realtime TURN's documentation names no range
+of its own for relay allocations, and its FAQ says it issues IPv4 relay addresses only, so the IPv6 blocks never match
+a genuine relay candidate. They can go in a later change, which must move the tests and fixtures that use 2a06:98c0::/29 (step 4).
 The list is still wider than relay needs: a list of every address Cloudflare publishes for its network passes a
 candidate anywhere in that network as a relay address.
 
@@ -197,6 +211,8 @@ Check it again every quarter, and whenever Cloudflare announces a change of its 
    162.158.0.0/15 and 2a06:98c0::/29. If the new list leaves those out, move the tests to addresses inside it and
    regenerate the fixtures (ControlPlaneApi.md, section 11).
 5. Merge by pull request, and deploy as above.
+6. Run the live check against the deployment (section 3, step 5). It allocates two real relays and fails if either
+   relay address lies outside the list in `wrangler.toml`.
 
 A list that does not parse leaves relay unavailable rather than unchecked: `GET /v1/status` reports `features.relay`
 `false`, and admin state reports `providerConfigured` `false`.
