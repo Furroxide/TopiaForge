@@ -17,7 +17,9 @@ import 'sdk_reference_pack.dart';
 /// `ItemGroup` before `</Project>`.
 ///
 /// An analyzer package also gets `PrivateAssets="all"` unless the item sets
-/// PrivateAssets already.
+/// PrivateAssets already. MSBuild applies the `Update` and `Remove` items
+/// that follow a pinned item to it, so an `Update` item that names just its
+/// package loses its Version metadata, and such a `Remove` item goes.
 String withPinnedSdkPackageReferences(
   String project, {
   required Iterable<String> packages,
@@ -31,14 +33,15 @@ String withPinnedSdkPackageReferences(
       missing.add(package);
       continue;
     }
-    result = result.replaceRange(
-      reference.start,
-      reference.end,
-      _pinned(
-        result.substring(reference.start, reference.end),
-        package: package,
-        version: version,
-      ),
+    final pinned = _pinned(
+      result.substring(reference.start, reference.end),
+      package: package,
+      version: version,
+    );
+    result = _withoutOverrides(
+      result.replaceRange(reference.start, reference.end, pinned),
+      package,
+      reference.start + pinned.length,
     );
   }
   if (missing.isEmpty) return result;
@@ -86,4 +89,52 @@ String _pinned(
     pinned = withMetadataAttribute(pinned, 'PrivateAssets', 'all');
   }
   return pinned;
+}
+
+/// [project] without the overrides of the pin on [package] that its items
+/// from [index] on hold, [index] being where the pinned item ends.
+///
+/// MSBuild applies an `Update` or `Remove` item to the items before it,
+/// even under a condition that is true, so a later one would undo the pin.
+/// Each `Update` item that [namesPackage] loses its Version attributes and
+/// children, as the pinned item loses its Version children, and keeps its
+/// other metadata. Each such `Remove` item goes, with the white space before
+/// it: the pin adds an SDK item that a project leaves out, and removing the
+/// item is another way to leave it out. An item whose `Update` or `Remove`
+/// names several ids or a pattern is left alone, because an edit would
+/// change the other packages it names too.
+String _withoutOverrides(String project, String package, int index) {
+  final edited = StringBuffer();
+  var from = 0;
+  for (final item in packageReferences(project, start: index)) {
+    // An item nested in one already edited is part of that edit.
+    if (item.start < from) continue;
+    var start = item.start;
+    final String replacement;
+    if (namesPackage(project, item.tag, 'Remove', package)) {
+      while (start > from &&
+          isRegExpWhitespace(project.codeUnitAt(start - 1))) {
+        start--;
+      }
+      replacement = '';
+    } else if (namesPackage(project, item.tag, 'Update', package)) {
+      replacement = withoutMetadataAttributes(
+        withoutMetadataElements(
+          project.substring(item.start, item.end),
+          'Version',
+        ),
+        'Version',
+      );
+    } else {
+      continue;
+    }
+    edited
+      ..write(project.substring(from, start))
+      ..write(replacement);
+    from = item.end;
+  }
+  // No item was edited.
+  if (from == 0) return project;
+  edited.write(project.substring(from));
+  return edited.toString();
 }

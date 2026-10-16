@@ -157,6 +157,43 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     expect(removed, isNot(contains('"TopiaForge.Mods.RobotKit"')));
   });
 
+  test(
+    'mod add keeps later Update and Remove items from undoing the pin',
+    () async {
+      // MSBuild applies an Update or Remove item to the items before it, so
+      // either would leave RobotKit at 0.0.1 or drop it.
+      const robotKit = 'TopiaForge.Mods.RobotKit';
+      final project = await _scaffoldModProject(
+        currentHarness(),
+        't.update-remove',
+        '<Project Sdk="Microsoft.NET.Sdk">\n'
+            '  <ItemGroup>\n'
+            '    <PackageReference Include="$robotKit" Version="0.0.1" />\n'
+            '    <PackageReference Update="$robotKit" Version="0.0.1" '
+            'PrivateAssets="all" />\n'
+            '  </ItemGroup>\n'
+            '  <ItemGroup>\n'
+            '    <PackageReference Remove="$robotKit" />\n'
+            '  </ItemGroup>\n'
+            '</Project>\n',
+      );
+
+      await _runModule(currentHarness(), 'add', 'robotkit', project);
+
+      expect(
+        project.readAsStringSync(),
+        '<Project Sdk="Microsoft.NET.Sdk">\n'
+        '  <ItemGroup>\n'
+        '    <PackageReference Include="$robotKit" Version="0.1.0-rc.1" />\n'
+        '    <PackageReference Update="$robotKit" PrivateAssets="all" />\n'
+        '  </ItemGroup>\n'
+        '  <ItemGroup>\n'
+        '  </ItemGroup>\n'
+        '</Project>\n',
+      );
+    },
+  );
+
   test('mod add and remove find items however they are written', () async {
     // MSBuild reads item types and NuGet ids in any case, Include anywhere
     // in the start tag and a `>` inside a value, but no commented-out item.

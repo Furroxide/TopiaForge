@@ -134,6 +134,23 @@ String withMetadataAttribute(String item, String name, String value) {
   return edited.toString();
 }
 
+/// [item] without the attributes that [metadataAttributes] finds for
+/// [name], each with the white space before it. A start tag that
+/// [readStartTag] cannot read is left as it is.
+String withoutMetadataAttributes(String item, String name) {
+  final tag = readStartTag(item, 0);
+  if (tag == null) return item;
+  final kept = StringBuffer();
+  var from = 0;
+  for (final attribute in tag.attributes) {
+    if (!_isName(item, attribute.start, attribute.nameEnd, name)) continue;
+    kept.write(item.substring(from, attribute.leading));
+    from = attribute.end;
+  }
+  kept.write(item.substring(from));
+  return kept.toString();
+}
+
 bool _endsName(int codeUnit) =>
     isRegExpWhitespace(codeUnit) ||
     codeUnit == _slash ||

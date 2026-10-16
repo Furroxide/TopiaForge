@@ -168,6 +168,7 @@ void main() {
     test('leaves a start tag XML rejects', () {
       for (final item in _rejectedStartTags) {
         expect(withMetadataAttribute(item, 'Version', '2'), item);
+        expect(withoutMetadataAttributes(item, 'Version'), item);
       }
     });
 
@@ -186,9 +187,28 @@ void main() {
         final watch = Stopwatch()..start();
         metadataAttributes(item, 'Version').length;
         withMetadataAttribute(item, 'Version', '1');
+        withoutMetadataAttributes(item, 'Version');
         watch.stop();
         expect(watch.elapsed, lessThan(_budget));
       }
+    });
+  });
+
+  group('withoutMetadataAttributes', () {
+    test('drops each attribute with the white space before it', () {
+      expect(
+        withoutMetadataAttributes(
+          '<PackageReference Update="X" version=\'0\'\n'
+              '  PrivateAssets="all" VERSION = "1">\n'
+              '  <Version>2</Version>\n'
+              '</PackageReference>',
+          'Version',
+        ),
+        '<PackageReference Update="X"\n'
+        '  PrivateAssets="all">\n'
+        '  <Version>2</Version>\n'
+        '</PackageReference>',
+      );
     });
   });
 }
