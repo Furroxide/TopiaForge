@@ -270,7 +270,8 @@ namespace TopiaForge.Multiplayer.Engine
             var state = EngineCodec.Decode(TypedType.Definition.StateCodec, change.Bytes);
             if (!state.TryGetValue(out var value))
             {
-                Engine.ReportCodecFailure("replicated object '" + Id + "'", state.ErrorMessage);
+                // The type is this game's own registration; on a joined player the object's id is the host's choice.
+                Engine.ReportCodecFailure("a replicated object of type '" + Type.Key + "'", state.ErrorMessage);
                 return;
             }
 

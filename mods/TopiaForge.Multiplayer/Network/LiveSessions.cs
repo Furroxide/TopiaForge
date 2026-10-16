@@ -128,8 +128,12 @@ namespace TopiaForge.Multiplayer.Network
             if (identity == null) throw new InvalidOperationException("The identity is not ready yet; call PrepareAsync first.");
             Join?.Dispose();
             Join = new LiveJoin(engine, identity, target, settings, resolver, content, factory, clock, NextSolo, transportOptions);
+            Join.Timings = JoinTimings;
             return Join;
         }
+
+        /// <summary>Gets or sets how long joins wait for their hosts; tests shorten it.</summary>
+        internal LiveJoinTimings JoinTimings { get; set; } = LiveJoinTimings.Default;
 
         /// <summary>Loads the identity ahead of a join, so the join can start at once.</summary>
         internal Task PrepareAsync()
@@ -140,6 +144,32 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets whether the identity has loaded.</summary>
         internal bool IsReady => identity != null;
+
+        /// <summary>Gets whether the last attempt to load or create the identity failed; the next one tries again.</summary>
+        internal bool IdentityFailed { get; private set; }
+
+        /// <summary>Gets whether the LAN browser is listening.</summary>
+        internal bool IsBrowsing => browserNetwork != null;
+
+        /// <summary>Gets this host's bans, oldest first; empty until the identity has loaded.</summary>
+        internal IReadOnlyList<BanRecord> Bans => bans?.Records() ?? Array.Empty<BanRecord>();
+
+        /// <summary>Lifts the ban on <paramref name="identity"/> and saves the list; false when it was not banned.</summary>
+        internal bool Unban(string identity)
+        {
+            ThrowIfDisposed();
+            if (bans == null || !bans.Remove(identity)) return false;
+            Interlocked.Exchange(ref bansDirty, 1);
+            Persist();
+            return true;
+        }
+
+        /// <summary>Looks <paramref name="target"/> up without joining it; the identity is not needed.</summary>
+        internal LiveQuery StartQuery(JoinTarget target, bool allowDirect)
+        {
+            ThrowIfDisposed();
+            return new LiveQuery(resolver, target, allowDirect, content);
+        }
 
         /// <summary>
         /// Gets the work running on other threads that lands at a later pump: the identity load, a password key being
@@ -161,17 +191,42 @@ namespace TopiaForge.Multiplayer.Network
         /// Starts listening for LAN sessions, on its own socket and network. Browsing is always relay-only: LAN hosts are
         /// still asked for their info, but a beacon from any other address is never answered with this player's own.
         /// </summary>
-        internal void StartBrowsing(int discoveryPort = LanBeacon.DiscoveryPort)
+        /// <returns>False when the network or the discovery port could not be opened; browsing is then off.</returns>
+        internal bool StartBrowsing(int discoveryPort = LanBeacon.DiscoveryPort)
         {
             ThrowIfDisposed();
-            if (browserNetwork != null) return;
+            if (browserNetwork != null) return true;
             var options = transportOptions();
             options.RelayOnly = true;
             options.AcceptsInbound = false;
             var endpoint = new Transport.TransportEndpoint(X25519.GeneratePrivateKey(), options, clock());
-            browserNetwork = factory.Start(0, new NetworkStack(endpoint));
-            browser = factory.CreateBrowser(discoveryPort);
-            if (browser != null) browserNetwork.Attach(browser);
+            var stack = new NetworkStack(endpoint);
+            INetworkControl started;
+            try
+            {
+                started = factory.Start(0, stack);
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                stack.Dispose();
+                return false;
+            }
+
+            LanBrowser? listening;
+            try
+            {
+                listening = factory.CreateBrowser(discoveryPort);
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                started.Stop(0);
+                return false;
+            }
+
+            browserNetwork = started;
+            browser = listening;
+            if (listening != null) started.Attach(listening);
+            return true;
         }
 
         internal void StopBrowsing()
@@ -239,6 +294,7 @@ namespace TopiaForge.Multiplayer.Network
         private void EnsureIdentity()
         {
             if (identity != null || loading != null) return;
+            IdentityFailed = false;
             var store = new IdentityStore(files, unixSeconds);
             var token = lifetime.Token;
             loading = Task.Run(async () =>
@@ -269,6 +325,7 @@ namespace TopiaForge.Multiplayer.Network
             {
                 // The next attempt to host or prepare loads it again.
                 loading = null;
+                IdentityFailed = true;
                 if (pendingHost != null) Fail(LiveFailure.IdentityUnavailable);
                 return;
             }

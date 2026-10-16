@@ -6,9 +6,8 @@ namespace TopiaForge.Multiplayer.Network
 {
     /// <summary>
     /// What a live session needs from the runtime about installed content: the packages a host announces, what a joining
-    /// player presents, the host's admission decision, and the player's readiness for a host's descriptor. The runtime
-    /// supplies the real one through its internal service interface (WS3); until then <see cref="ProviderOnlyContent"/>
-    /// stands in.
+    /// player presents, the host's admission decision, and the player's readiness for a host's descriptor. In the game it
+    /// is <see cref="RuntimeContent"/>, which asks the runtime attached through the internal control.
     /// </summary>
     internal interface ILiveSessionContent
     {
@@ -37,8 +36,9 @@ namespace TopiaForge.Multiplayer.Network
     /// <summary>
     /// The runtime's verdict on what a joining player presents: admitted, or refused with a code and one line per problem,
     /// such as "Zombies 0.2.0 is missing.". The runtime's admission report (one mismatch per package, each with its
-    /// message) fills it directly. Content refuses for its packages (<see cref="AdmissionCode.Content"/>) or for a
-    /// runtime protocol it cannot share (<see cref="AdmissionCode.Protocol"/>); every other code belongs to the host.
+    /// message) fills it directly. Content refuses for its packages (<see cref="AdmissionCode.Content"/>), for a
+    /// runtime protocol it cannot share (<see cref="AdmissionCode.Protocol"/>), or because the host's runtime cannot
+    /// decide yet (<see cref="AdmissionCode.NotReady"/>); every other code belongs to the host.
     /// </summary>
     internal sealed class ContentAdmission
     {
@@ -53,7 +53,10 @@ namespace TopiaForge.Multiplayer.Network
 
         internal bool IsAdmitted { get; }
 
-        /// <summary>Gets why the content was refused: <see cref="AdmissionCode.Content"/> or <see cref="AdmissionCode.Protocol"/>.</summary>
+        /// <summary>
+        /// Gets why the content was refused: <see cref="AdmissionCode.Content"/>, <see cref="AdmissionCode.Protocol"/> or
+        /// <see cref="AdmissionCode.NotReady"/>.
+        /// </summary>
         internal AdmissionCode Code { get; }
 
         /// <summary>Gets the lines the player sees, in order; the report keeps those that are display text and fit its bound.</summary>
@@ -62,40 +65,15 @@ namespace TopiaForge.Multiplayer.Network
         internal static ContentAdmission Refused(IReadOnlyList<string> problems, AdmissionCode code = AdmissionCode.Content)
         {
             if (problems == null) throw new ArgumentNullException(nameof(problems));
-            if (code != AdmissionCode.Content && code != AdmissionCode.Protocol)
+            if (code != AdmissionCode.Content && code != AdmissionCode.Protocol && code != AdmissionCode.NotReady)
             {
-                throw new ArgumentOutOfRangeException(nameof(code), "Content refuses a join for its packages or its protocol; the host decides every other refusal.");
+                throw new ArgumentOutOfRangeException(
+                    nameof(code),
+                    "Content refuses a join for its packages, its protocol or a runtime not ready yet; the host decides every other refusal.");
             }
 
             return new ContentAdmission(false, code, new List<string>(problems).AsReadOnly());
         }
-    }
-
-    /// <summary>
-    /// The stand-in until the runtime provides content: it announces no packages, presents nothing, admits everyone and
-    /// is always ready, so the engine's own protocol and contract checks are all that apply.
-    /// </summary>
-    internal sealed class ProviderOnlyContent : ILiveSessionContent
-    {
-        internal ProviderOnlyContent(string gameBuild, string runtimeVersion)
-        {
-            if (!ServerDescriptor.IsGameBuild(gameBuild)) throw new ArgumentException("A game build is 1 to 16 letters, digits, dots, dashes or underscores.", nameof(gameBuild));
-            if (!ServerDescriptor.IsSemanticVersion(runtimeVersion)) throw new ArgumentException("The runtime version is a semantic version.", nameof(runtimeVersion));
-            GameBuild = gameBuild;
-            RuntimeVersion = runtimeVersion;
-        }
-
-        public string GameBuild { get; }
-
-        public string RuntimeVersion { get; }
-
-        public IReadOnlyList<DescriptorPackage> HostPackages() => Array.Empty<DescriptorPackage>();
-
-        public byte[] ClientContent() => Array.Empty<byte>();
-
-        public ContentAdmission Admit(byte[] clientContent) => ContentAdmission.Admitted;
-
-        public ContentCheck Check(ServerDescriptor descriptor) => ContentCheck.Ready;
     }
 
     /// <summary>
@@ -179,7 +157,10 @@ namespace TopiaForge.Multiplayer.Network
         PasswordWrong = 4,
         TooManyAttempts = 5,
         Banned = 6,
-        Content = 7
+        Content = 7,
+
+        /// <summary>The host's runtime could not decide yet, or failed to; the player may try again shortly.</summary>
+        NotReady = 8
     }
 
     /// <summary>
@@ -193,7 +174,10 @@ namespace TopiaForge.Multiplayer.Network
         internal const int MaximumBytes = 16 * 1024;
         private const int MaximumProblems = 64;
 
-        private static readonly string[] Codes = { "other", "full", "protocol", "password-required", "password-wrong", "too-many-attempts", "banned", "content" };
+        private static readonly string[] Codes =
+        {
+            "other", "full", "protocol", "password-required", "password-wrong", "too-many-attempts", "banned", "content", "not-ready"
+        };
 
         /// <summary>Encodes a report, keeping problems in order until the next would not fit the reader's bound.</summary>
         internal static byte[] Encode(AdmissionCode code, IReadOnlyList<string>? problems = null)

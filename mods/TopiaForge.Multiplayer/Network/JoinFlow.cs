@@ -61,9 +61,6 @@ namespace TopiaForge.Multiplayer.Network
     {
         internal const long ReconnectWindowMicros = 30_000_000;
         internal const long ReconnectIntervalMicros = 2_000_000;
-
-        /// <summary>How long the host may take to admit a player and send the session once the link is up.</summary>
-        internal const long SynchronizeTimeoutMicros = 120_000_000;
         private const long StopGraceMicros = 100_000;
 
         private readonly SessionEngine engine;
@@ -87,7 +84,7 @@ namespace TopiaForge.Multiplayer.Network
         private NetworkLink? link;
         private long reconnectDeadline;
         private long nextAttemptAt;
-        private long synchronizeDeadline;
+        private JoinReadiness? readiness;
         private bool engineJoined;
         private bool everReady;
 
@@ -121,8 +118,19 @@ namespace TopiaForge.Multiplayer.Network
 
         internal LiveFailure Failure { get; private set; }
 
-        /// <summary>Gets what went wrong, for the player, when the join failed. It never names an address.</summary>
+        /// <summary>Gets what went wrong, for the player, in this game's own words. It never names an address.</summary>
         internal string Detail { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// Gets what the host said when it ended, refused or removed this player, such as a kick message. Host-authored:
+        /// it may hold anything, so it is shown only as the host's words and never logged.
+        /// </summary>
+        internal string HostMessage { get; private set; } = string.Empty;
+
+        /// <summary>Gets or sets how long this join waits for its host. Set before the first pump.</summary>
+        internal LiveJoinTimings Timings { get; set; } = LiveJoinTimings.Default;
+
+        private JoinReadiness Readiness => readiness ??= new JoinReadiness(Timings);
 
         /// <summary>Gets the host's admission report when it refused the join, decoded.</summary>
         internal AdmissionCode RejectionCode { get; private set; }
@@ -215,6 +223,7 @@ namespace TopiaForge.Multiplayer.Network
                 MultiplayerSessionEndReason.HostEnded => LiveFailure.HostEnded,
                 MultiplayerSessionEndReason.ProtocolMismatch => LiveFailure.ProtocolMismatch,
                 MultiplayerSessionEndReason.Left => LiveFailure.Left,
+                MultiplayerSessionEndReason.TimedOut => LiveFailure.TimedOut,
                 _ => LiveFailure.Rejected
             };
             if (AdmissionReport.TryDecode(end.Report, out var code, out var problems))
@@ -227,7 +236,9 @@ namespace TopiaForge.Multiplayer.Network
                 RejectionCode = AdmissionCode.Other;
                 RejectionProblems = Array.Empty<string>();
             }
-            Detail = end.Message;
+
+            HostMessage = end.Message;
+            Detail = EndDetail(Failure, RejectionCode);
             engineJoined = false;
             link = null;
             Phase = JoinPhase.Ended;
@@ -270,28 +281,11 @@ namespace TopiaForge.Multiplayer.Network
 
             Phase = JoinPhase.Checking;
             var descriptor = resolved.Descriptor!.Descriptor;
-            if (descriptor.GameBuild != content.GameBuild)
+            var failure = JoinChecks.Evaluate(resolved, settings.AllowDirect, content, out var detail, out var check);
+            Content = check;
+            if (failure != LiveFailure.None)
             {
-                End(LiveFailure.WrongGameBuild, "The host runs Robotopia build " + descriptor.GameBuild + "; this game runs " + content.GameBuild + ".");
-                return;
-            }
-
-            if (Major(descriptor.ProtocolVersion) != Major(SessionEngine.ProtocolVersion))
-            {
-                End(LiveFailure.ProtocolMismatch, "The host speaks multiplayer protocol " + descriptor.ProtocolVersion + ".");
-                return;
-            }
-
-            if (resolved.Path!.Kind == TransportPathKind.Direct && !settings.AllowDirect)
-            {
-                End(LiveFailure.DirectNotAllowed, "Joining directly would show the host your address; allow it for this session to continue.");
-                return;
-            }
-
-            Content = content.Check(descriptor);
-            if (!Content.IsReady)
-            {
-                End(LiveFailure.ContentMismatch, "This game is missing packages the host runs.");
+                End(failure, detail);
                 return;
             }
 
@@ -403,17 +397,19 @@ namespace TopiaForge.Multiplayer.Network
 
             engine.Connect(link, settings.DisplayName, joinContent);
             Phase = JoinPhase.Synchronizing;
-            synchronizeDeadline = now + SynchronizeTimeoutMicros;
+            Readiness.LinkUp(now, engine.SessionReplacementsReceived);
         }
 
         private void Watch()
         {
             if (!engineJoined) return;
             var now = clock();
-            if (engine.Snapshot.State == MultiplayerSessionState.Ready)
+            var state = engine.SessionState;
+            if (state == MultiplayerSessionState.Ready)
             {
                 Phase = JoinPhase.InSession;
                 everReady = true;
+                Readiness.Ready();
                 return;
             }
 
@@ -435,9 +431,57 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
-            if (Phase == JoinPhase.Synchronizing && now >= synchronizeDeadline)
+            // A host that withholds the world, or replaces it again and again, cannot keep the player for ever.
+            var timedOut = Readiness.Check(
+                now,
+                state == MultiplayerSessionState.Synchronizing,
+                engine.IsAwaitingLocalReadiness,
+                engine.ReadinessHeldSinceMicros,
+                engine.ReadinessProgressMicros,
+                engine.SessionReplacementsReceived);
+            if (timedOut != null) End(LiveFailure.TimedOut, timedOut);
+        }
+
+        /// <summary>
+        /// Says, in this game's own words, why the host ended or refused the session, from the failure and the report's
+        /// code; the host's own words are <see cref="HostMessage"/>.
+        /// </summary>
+        private static string EndDetail(LiveFailure failure, AdmissionCode code)
+        {
+            switch (failure)
             {
-                End(LiveFailure.TimedOut, "The host did not finish sending the session in time.");
+                case LiveFailure.Kicked:
+                    return "The host removed this player from the session.";
+                case LiveFailure.Banned:
+                    return "The host banned this player from the session.";
+                case LiveFailure.HostEnded:
+                    return "The host ended the session.";
+                case LiveFailure.ProtocolMismatch:
+                    return "The host and this game could not agree on the session protocol.";
+                case LiveFailure.TimedOut:
+                    return "The host stopped waiting for this game to finish joining.";
+                case LiveFailure.Left:
+                    return string.Empty;
+            }
+
+            switch (code)
+            {
+                case AdmissionCode.Full:
+                    return "The session is full.";
+                case AdmissionCode.PasswordRequired:
+                    return "The session needs a password.";
+                case AdmissionCode.PasswordWrong:
+                    return "The password is wrong.";
+                case AdmissionCode.TooManyAttempts:
+                    return "The host is turning joins away after too many wrong passwords; try again shortly.";
+                case AdmissionCode.Banned:
+                    return "The host banned this player from the session.";
+                case AdmissionCode.Content:
+                    return "This game's packages do not match the session's.";
+                case AdmissionCode.NotReady:
+                    return "The host is not ready for players yet; try again shortly.";
+                default:
+                    return "The host refused the join.";
             }
         }
 
@@ -491,12 +535,6 @@ namespace TopiaForge.Multiplayer.Network
             var current = network;
             network = null;
             current?.Stop(StopGraceMicros);
-        }
-
-        private static string Major(string version)
-        {
-            var dot = version.IndexOf('.');
-            return dot < 0 ? version : version.Substring(0, dot);
         }
     }
 }

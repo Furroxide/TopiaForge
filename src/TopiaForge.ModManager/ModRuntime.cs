@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager
         private readonly RuntimeInfo runtimeInfo;
         private readonly ManifestValidationContext validationContext;
         private readonly IModLoadObserver? loadObserver;
+        private readonly MultiplayerRuntime multiplayer;
         private readonly List<LoadedMod> loadedMods = new List<LoadedMod>();
         private readonly List<string> loadedModIds = new List<string>();
         private readonly ReadOnlyCollection<string> loadedModIdsView;
@@ -109,6 +110,18 @@ namespace TopiaForge.ModManager
                 this.coreGameplayServices = coreGameplayServices;
             }
             sceneCoordinator.SetRuntimeCleanupAdmissionGate(() => pendingFailedLoadCleanups != 0);
+
+            // The multiplayer composition root: it attaches to the provider's internal control once packages have loaded
+            // and drives the multiplayer frame around the mods (see DispatchUpdate and DispatchLateUpdate).
+            var multiplayerLog = new MultiplayerManagerLog(logger);
+            multiplayer = new MultiplayerRuntime(
+                () => serviceRegistry.Get<Mods.Internal.IInternalMultiplayerControl>(),
+                new MultiplayerRuntimeHost(
+                    MultiplayerRuntimeHost.GameBuildOf(runtimeInfo),
+                    TopiaForgeVersions.LoaderVersion,
+                    multiplayerLog,
+                    this.coreGameplayServices as IMultiplayerPlatform),
+                multiplayerLog);
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
@@ -120,6 +133,7 @@ namespace TopiaForge.ModManager
         internal string RuntimeOwnershipId => runtimeOwnershipId;
         internal SceneCoordinator NativeTransitions => sceneCoordinator;
         internal HostDispatcher NativeDispatcher => nativeDispatcher;
+        internal MultiplayerRuntime Multiplayer => multiplayer;
 
         /// <summary>Why a mod in the load order did not come up (skip reason or exception), or null.</summary>
         public string? GetLoadFailure(string id)
@@ -167,6 +181,9 @@ namespace TopiaForge.ModManager
                     runtimeInfo.MarkProviderFailed(package.Manifest, providerFailure);
                 }
             }
+
+            // The multiplayer provider published its control during its own OnLoad; attach once everything is up.
+            multiplayer.Connect();
         }
 
         public bool IsLoaded(string id)
@@ -193,6 +210,10 @@ namespace TopiaForge.ModManager
                 RefreshRuntimeCapabilities();
                 capabilityRefreshRemaining = CapabilityRefreshIntervalSeconds;
             }
+
+            // Frame order: 1. the multiplayer provider's pump (main-thread receive) and 2. world events and the follower,
+            // then 3. the mods' Update, then 4. pose, voice and host snapshots, and the provider's flush.
+            multiplayer.BeforeModsUpdate(deltaTime);
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {
@@ -211,6 +232,7 @@ namespace TopiaForge.ModManager
                 }
             }
 
+            multiplayer.AfterModsUpdate(deltaTime);
         }
 
         public void DispatchSceneLoaded(string sceneName)

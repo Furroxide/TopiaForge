@@ -198,6 +198,13 @@ namespace TopiaForge.Multiplayer.Engine
             connection.Queue.Clear();
             if (connection.IsJoined)
             {
+                // Credits tell the player what this host's owners took, which opens its windows again; they need no commit.
+                if (connection.Streams.CreditsDue)
+                {
+                    connection.Streams.WriteCredits(context.Frame, context.Body, epoch, connection.JoinGeneration);
+                    SplitHostFrame(connection);
+                }
+
                 WritePendingStates(connection, downstreamDue);
                 WritePendingObjects(connection, downstreamDue);
                 if (context.WroteMessage || connection.CommitNeeded)

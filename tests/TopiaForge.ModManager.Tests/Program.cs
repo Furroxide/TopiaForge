@@ -252,6 +252,13 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--multiplayer-runtime", StringComparison.Ordinal))
+            {
+                var multiplayerRoot = Directory.CreateTempSubdirectory("TopiaForgeMultiplayerRuntime-");
+                try { MultiplayerRuntimeHostTests.Run(multiplayerRoot.FullName); return 0; }
+                finally { multiplayerRoot.Delete(true); }
+            }
+
             if (args.Length == 1 &&
                 string.Equals(args[0], "--installed-version-coexistence", StringComparison.Ordinal))
             {
@@ -361,6 +368,7 @@ namespace TopiaForge.ModManager.Tests
                 NativeDamageSourceTests.Run();
                 SdkSurfaceTests.Run();
                 RuntimeInfoTests.Run();
+                MultiplayerRuntimeHostTests.Run(root);
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();
                 GameplayFacadeTests.Run();

@@ -105,6 +105,9 @@ namespace TopiaForge.ModManager
         private void DispatchLateUpdate(GameTimeSample sample)
         {
             UnityMainThreadGuard.AssertCurrent();
+
+            // Replicas move to where a joined player should see them before any mod reads them.
+            multiplayer.BeforeModsLateUpdate(sample);
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {

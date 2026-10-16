@@ -44,6 +44,7 @@ namespace TopiaForge.Multiplayer
             {
                 Live = new LiveSessions(engine, live.Files, live.Content, live.Factory ?? new SocketNetworkFactory(this.clockMicros), this.clockMicros,
                     () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver, live.TransportOptions);
+                if (live.JoinTimings != null) Live.JoinTimings = live.JoinTimings;
             }
         }
 
@@ -64,6 +65,13 @@ namespace TopiaForge.Multiplayer
             if (disposed) return;
             Live?.Pump();
             engine.Pump(clockMicros());
+        }
+
+        /// <summary>Sends what the frame queued after <see cref="Pump"/>, at the frame's end.</summary>
+        internal void FlushOutbound()
+        {
+            if (disposed) return;
+            engine.FlushOutbound();
         }
 
         object IOwnerBoundExtensionFactory.CreateOwnerFacade(Type contractType, string ownerModId, IModLifetime lifetime) =>
@@ -202,23 +210,6 @@ namespace TopiaForge.Multiplayer
             return ((timestamp / frequency) * 1_000_000) + ((timestamp % frequency) * 1_000_000 / frequency);
         }
     }
-
-    /// <summary>Routes engine diagnostics to the provider's log. Diagnostics never carry network addresses.</summary>
-    internal sealed class LoggerDiagnostics : IEngineDiagnostics
-    {
-        private readonly IModLogger logger;
-
-        internal LoggerDiagnostics(IModLogger logger)
-        {
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
-
-        public void Report(EngineDiagnostic diagnostic)
-        {
-            if (diagnostic.Exception != null) logger.Error(diagnostic.Exception, "Multiplayer: " + diagnostic.Message);
-            else logger.Warn("Multiplayer: " + diagnostic);
-        }
-    }
 }
 
 namespace TopiaForge.Multiplayer.Network
@@ -247,5 +238,8 @@ namespace TopiaForge.Multiplayer.Network
         /// Seeded randomness given here is in place before the endpoint draws anything, its cookie secrets included.
         /// </summary>
         internal System.Func<Transport.TransportOptions>? TransportOptions { get; set; }
+
+        /// <summary>Gets or sets how long joins wait for their hosts; null uses the production waits.</summary>
+        internal LiveJoinTimings? JoinTimings { get; set; }
     }
 }

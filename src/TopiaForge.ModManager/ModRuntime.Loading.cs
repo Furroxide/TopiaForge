@@ -136,6 +136,7 @@ namespace TopiaForge.ModManager
                 loadedMods.Add(new LoadedMod(manifest, instance, context));
                 loadedModIds.Add(manifest.Id);
                 recorded = true;
+                multiplayer.Host.Inventory.Add(manifest, package.PackagePath);
                 runtimeInfo.MarkProviderLoaded(manifest);
                 RefreshRuntimeCapabilities();
                 if (bindingAttempt != null && !sessionBindings!.CommitLoaded(bindingAttempt, context, bindingBatch!))
@@ -147,6 +148,7 @@ namespace TopiaForge.ModManager
                 {
                     loadedMods.RemoveAll(loaded => ReferenceEquals(loaded.Context, context));
                     loadedModIds.Remove(manifest.Id);
+                    multiplayer.Host.Inventory.Remove(manifest.Id);
                 }
                 var rootException = UnwrapInvocationException(ex);
                 failedMods[manifest.Id] = rootException.GetType().Name + ": " + rootException.Message;
