@@ -77,9 +77,12 @@ describe("wrangler.toml", () => {
     const shipped = /^RELAY_ADDRESS_RANGES = "([^"]*)"$/m.exec(wranglerToml)?.[1];
     const config = readConfig(env({ RELAY_ADDRESS_RANGES: shipped! }));
     expect(config.relayRanges).toHaveLength(shipped!.split(" ").length);
-    expect(config.relayRanges.filter((range) => range.family === 4)).toHaveLength(15);
+    expect(config.relayRanges.filter((range) => range.family === 4)).toHaveLength(14);
     expect(config.relayRanges.filter((range) => range.family === 6)).toHaveLength(7);
-    for (const inside of ["141.101.90.1", "162.159.207.1", "2a06:98c1:3200::1", "2606:4700::1"]) expect(inRanges(parseIp(inside)!, config.relayRanges), inside).toBe(true);
+    // 104.30.150.57 and 104.30.147.50 were relay addresses Realtime TURN allocated in staging, outside the published list.
+    for (const inside of ["141.101.90.1", "162.159.207.1", "104.30.150.57", "104.30.147.50", "2a06:98c1:3200::1", "2606:4700::1"]) {
+      expect(inRanges(parseIp(inside)!, config.relayRanges), inside).toBe(true);
+    }
     for (const outside of ["203.0.113.50", "198.51.100.77", "2001:db8::50"]) expect(inRanges(parseIp(outside)!, config.relayRanges), outside).toBe(false);
   });
 
