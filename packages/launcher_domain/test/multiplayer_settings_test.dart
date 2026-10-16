@@ -39,10 +39,7 @@ void main() {
           throwsArgumentError,
         );
       }
-      expect(
-        MultiplayerSettings().withDisplayName('Sam').displayName,
-        'Sam',
-      );
+      expect(MultiplayerSettings().withDisplayName('Sam').displayName, 'Sam');
     });
 
     test('direct is a per-session choice after the disclosure', () {
