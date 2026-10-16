@@ -42,21 +42,33 @@ V5 is `launch-profile-<request key>.json` in manager staging, the file V4 uses, 
 
 There is no `safeMode`: safe mode never hosts or joins. A join never inherits the manager's mod state, since it runs
 exactly the packages it planned. The runtime executes the request's V4 view (`Executable`): `launch-target` with the
-host's plan, otherwise `main-menu`.
+host's plan, otherwise `main-menu`. `LocalLauncherRepository.launchSession` refuses Safe Mode, a join from a profile that
+inherits the manager's mod state, and acceptance runs before it does anything, so a restart never stops the running
+game for a launch V5 cannot carry.
 
 | `session` member | Value |
 | --- | --- |
 | `role` | `host` or `join` |
 | `intentId` | The launcher's intent: one host or join attempt, kept across its restarts and re-plans |
 | `displayName` | 2 to 24 UTF-16 code units of display text |
+| `developerMode` | Whether the launcher runs in developer mode. Always present |
 | `transport` | `privacy` (`relay-only` or `direct`), `directConsent`, `port` (0 to 65535, zero for any free port), `upnp`, `lan` |
-| `serviceOrigin` | The control plane's `https://` origin: a lowercase DNS name and an optional port. Omitted when none is configured. An IP literal is refused |
+| `serviceOrigin` | The control plane's origin, omitted when none is configured: see below |
 | `target` | A join's server (section 3) |
-| `host` | A host's options: `name` (1 to 48), `maxPlayers` (2 to 16), `visibility` (`public`, `invite`, `lan`), `voice`, `passwordRequired`, `servePackages` (developer mode only) |
+| `host` | A host's options: `name` (1 to 48), `maxPlayers` (2 to 16), `visibility` (`public`, `invite`, `lan`), `voice`, `passwordRequired`, `servePackages` |
 | `devInstance` | `topiaforge dev --peers N` only: `index` and `count` (2 to 8) |
 
 - **Passwords are never staged.** They are typed in game. `passwordRequired` only tells a host to ask before it opens,
   and a `password` member anywhere is refused.
+- **Served packages need developer mode.** Both readers refuse `servePackages` without `developerMode`, and the
+  provider's plan serves nothing without it either.
+- **Display text** has no surrounding white space, no control characters, no unpaired surrogates, and neither U+FFFE
+  nor U+FFFF, which the game's JSON reader refuses: a document holding one could never be read back.
+- **The service origin** is written one way: `https://`, a lowercase DNS name, and a port of 1 to 65535 in plain
+  decimal, never the default 443. An address is refused, so none can pass as the service: an IP literal, and a name
+  whose last label is a number, decimal or `0x` hexadecimal, which the URL Standard and the system resolver read as an
+  IPv4 address (`0x7f000001` is 127.0.0.1). `LaunchSessionRequest.isServiceOrigin` applies the same rule, for the
+  service configuration to share.
 - **Consent to direct play.** `privacy: direct` must carry `directConsent`: the `intentId` it was given for, which must
   be this session's, and the address disclosure version the player acknowledged, 1 or later. Relay-only never carries
   one. The launcher can only build a direct transport from `MultiplayerSettings.privacyForSession(allowDirect: true)`,
@@ -133,6 +145,13 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
 - **A live join never carries an address.** Its target is an invite or a listing; a direct target needs a launch
   request. The game refuses a join whose package-set digest is not its own, and reports it under `joinId` as it would
   a launch request. A newer join replaces one the game has not taken.
+- **A take claims before it reads.** The taker renames the file to a private `.taking-<nonce>` name, then reads,
+  checks and removes that, so a newer file the other side writes meanwhile lands at the channel's name again and is
+  never removed unread. A malformed or foreign file is removed without being acted on. `withdrawSessionJoin` says
+  whether it withdrew the join, since the game may have taken it.
+- **Writes retry briefly.** Windows refuses to rename over a file while another process reads it, however that reader
+  shares it, so both sides retry a refused replace a few times, waiting up to about 310 ms in all. The game's readers
+  share deletion, so the launcher can still claim or remove a file the game is reading.
 
 ## 7. Preferences and their change journal
 
@@ -145,11 +164,17 @@ and `journalApplied`. Favorites and history are never projected.
   `multiplayer-preferences-journal-v1.json`: at most 64 changes in strictly increasing `sequence` order, each setting
   exactly one of `displayName`, `disclosure`, `voice`, `network` or `hosting`. Privacy is not a change, since direct
   play is never stored.
+- **The launcher's store is the record.** It keeps the projection's `revision` and `journalApplied` with the player's
+  settings, and gives them to the round through `MultiplayerPreferencesSource`.
 - **One round** (`MultiplayerPreferencesSync`, and `syncPreferences` in staging): the launcher builds the projection
-  from its multiplayer store and service configuration through `MultiplayerPreferencesSource`, applies the journal's
-  changes after `journalApplied` on top, raises the revision when what the game reads changes, and keeps the game's
-  changes in its store. An acknowledgement never lowers the disclosure version. The game then drops the changes the
-  projection's `journalApplied` covers.
+  from its store and service configuration, applies the journal's changes after the later of the store's and the
+  projection's `journalApplied` on top, and gives every write the next revision after the later of theirs. When the
+  projection must change, the store is saved first and the projection written after. A projection that is missing or
+  damaged is therefore rewritten from the store: no journal change applies twice, and the revision never goes down. An
+  acknowledgement never lowers the disclosure version. The game then drops the changes the projection's
+  `journalApplied` covers.
+- **Hosting defaults.** Until the launcher's store holds hosting defaults, the source gives none, and the projection
+  keeps its own, a change made in game included. The first projection starts from `MultiplayerHostingDefaults.forPlayer`.
 
 ## 8. The game side today
 
@@ -157,13 +182,20 @@ and `journalApplied`. Favorites and history are never projected.
   but never its target, and runs the executable profile through the V4 path.
 - Before mods load, a V5 session is offered to the multiplayer provider as an internal ticket
   (`TopiaForge.Mods.Internal.LaunchSessionTickets`), unless the command was rejected or recovery runs. The provider's
-  narrow entry point is `MultiplayerProvider.TakeLaunchSession`, which takes the ticket once and maps it onto live
-  sessions (`LaunchSessionPlan`): host settings, or a join target pinned by the verified server and its settings.
-  Invites and Internet listings wait for the control plane.
+  narrow entry point is `MultiplayerProvider.TakeLaunchSession`, which takes the ticket once, while mods load, and maps
+  it onto live sessions (`LaunchSessionPlan`): host settings, or a join target pinned by the verified server and its
+  settings. Invites and Internet listings wait for the control plane. Once mods have loaded, the runtime withdraws a
+  ticket no one took, so a direct target's address does not stay in memory for the whole process. When #195's
+  internal control merges, the ticket becomes a call on it.
+- The ticket is internal, and the manager's package validator keeps it so: a package may not bundle any assembly a
+  TopiaForge assembly names in `InternalsVisibleTo`, unless it is the first-party package that ships it. Test and
+  tool assemblies never ship.
 - `RuntimeLaunchPublisher` reports a session launch's runtime records as version 2: progress with the session still
   `pending`, and a failure before the session started as the session launch's own outcome. A running target or the
   main menu is not yet a session's success, and a gamemode session's end is not the live session's, so both are left
   for the provider to report. A rejected V5 request is correlated by its intent and reported the same way.
+- In crash recovery, the session is not offered, and its launch fails at once (`unavailable`, with the reason), so the
+  launcher never waits on a session nothing will report.
 
 What later slices wire: starting the session from the plan when live sessions are on, the provider's progress and
 outcomes V2 from its live flows, writing handoffs, polling for live joins, and reading the projection in game.
@@ -174,7 +206,8 @@ A join must install the exact `id@version@sha256` a server runs, which is often 
 
 - **History manifests.** `topiaforge registry index` inlines the full manifest and the archive size (`manifest`,
   `packageBytes` on each `history` row) for each mod's newest 20 older versions (`--history-manifests n`, 0 to 1000).
-  Both members are additive; launchers that ignore history are unaffected.
+  Both members are additive; launchers that ignore history are unaffected. The builder refuses to write an index
+  larger than the 16 MiB a launcher reads (`ModRegistryFormat.maxIndexBytes`).
 - **Candidates, never tiles.** The launcher reads a history row only when its manifest names the entry's mod at the
   row's version and its URL and hash pass the source's checks; anything else is skipped without failing the source.
   Such rows fill the exact-version candidate map that dependency installs use, after every current entry, and never

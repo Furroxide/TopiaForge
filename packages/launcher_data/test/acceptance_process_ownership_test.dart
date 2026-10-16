@@ -29,6 +29,28 @@ void main() {
       },
     );
 
+    test('a session restart is refused before the owned process', () async {
+      final install = await fixture.repository.selectGameDirectory(
+        fixture.isolation.game.path,
+      );
+      final result = await fixture.repository.launchSession(
+        install,
+        const LauncherProfile(id: 'qa', name: 'QA'),
+        LaunchSessionRequest.host(
+          intentId: 'intent-qa',
+          settings: MultiplayerSettings(displayName: 'Sam'),
+          privacy: SessionPrivacy.relayOnly,
+          host: LaunchHostOptions(name: 'QA'),
+        ),
+        restart: true,
+      );
+      expect(result.started, isFalse);
+      expect(result.message, contains('Acceptance runs never host or join'));
+      expect(fixture.stopped, isEmpty);
+      expect(fixture.probed, isEmpty);
+      expect(fixture.alive, isTrue);
+    });
+
     test('equivalent caller receipt releases ownership exactly once', () async {
       await fixture.repository.stopAcceptanceProcess(fixture.copyResult());
       final probes = fixture.probed.length;

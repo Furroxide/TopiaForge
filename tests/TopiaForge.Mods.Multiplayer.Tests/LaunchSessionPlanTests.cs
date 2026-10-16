@@ -24,12 +24,16 @@ internal static class LaunchSessionPlanTests
 
     internal static void HostsAndJoinsAreMappedOntoLiveSessions()
     {
-        var host = LaunchSessionPlan.FromTicket(new LaunchSessionTicket("host", "intent-2", "Sam", true, 0, true, true, null, null,
-            new LaunchSessionTicketHost("Sam's Sandbox", 6, "public", true, true, true)), out var unsupported);
+        LaunchSessionTicket Host(bool developerMode) => new("host", "intent-2", "Sam", true, 0, true, true, null, null,
+            new LaunchSessionTicketHost("Sam's Sandbox", 6, "public", true, true, true), developerMode: developerMode);
+        var host = LaunchSessionPlan.FromTicket(Host(developerMode: true), out var unsupported);
         That(unsupported == LaunchSessionUnsupported.None && host!.Host!.Name == "Sam's Sandbox" && host.Host.MaxPlayers == 6 &&
              host.Host.Visibility == ServerVisibility.Public && host.Host.Port == 0 && host.Host.AllowDirect && host.Host.Voice &&
-             host.Host.Password == null && host.PasswordRequired && host.ServePackages && host.Upnp && host.Target == null,
+             host.Host.Password == null && host.PasswordRequired && host.ServePackages && host.DeveloperMode && host.Upnp &&
+             host.Target == null,
             "a host opens with its options; the password is typed in game, never staged");
+        That(!LaunchSessionPlan.FromTicket(Host(developerMode: false), out _)!.ServePackages,
+            "only developer mode serves packages, even when the ticket asks");
 
         var direct = LaunchSessionPlan.FromTicket(Join(Target("direct", "192.168.77.31", 41297)), out unsupported);
         That(unsupported == LaunchSessionUnsupported.None && direct!.Target!.Kind == JoinTargetKind.Direct &&

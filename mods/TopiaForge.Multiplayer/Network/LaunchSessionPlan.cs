@@ -36,7 +36,9 @@ namespace TopiaForge.Multiplayer.Network
             Target = target;
             Join = join;
             PasswordRequired = ticket.Host?.PasswordRequired ?? false;
-            ServePackages = ticket.Host?.ServePackages ?? false;
+            DeveloperMode = ticket.DeveloperMode;
+            // The runtime's reader already refuses served packages outside developer mode; this holds without it too.
+            ServePackages = (ticket.Host?.ServePackages ?? false) && ticket.DeveloperMode;
             Upnp = ticket.Upnp;
             Lan = ticket.Lan;
             ExpectedDescriptorSha256 = ticket.Target?.DescriptorSha256;
@@ -49,7 +51,10 @@ namespace TopiaForge.Multiplayer.Network
         internal JoinTarget? Target { get; }
         internal JoinSettings? Join { get; }
         internal bool PasswordRequired { get; }
+
+        /// <summary>Gets whether the host serves its packages to joining players, which only developer mode allows.</summary>
         internal bool ServePackages { get; }
+        internal bool DeveloperMode { get; }
         internal bool Upnp { get; }
         internal bool Lan { get; }
         internal string? ExpectedDescriptorSha256 { get; }

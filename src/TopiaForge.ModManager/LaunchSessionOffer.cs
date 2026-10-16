@@ -22,9 +22,33 @@ namespace TopiaForge.ModManager
                     target.PackageDigest, target.InviteCode, target.Source, target.Host, target.Port),
                 host == null ? null : new LaunchSessionTicketHost(host.Name, host.MaxPlayers, host.Visibility, host.Voice,
                     host.PasswordRequired, host.ServePackages),
-                session.DevInstance?.Index ?? -1, session.DevInstance?.Count ?? 0);
+                session.DevInstance?.Index ?? -1, session.DevInstance?.Count ?? 0, session.DeveloperMode);
         }
 
-        internal static void Offer(LaunchSessionRequest session) => LaunchSessionTickets.Offer(ToTicket(session));
+        /// <summary>Offers the session's ticket. Withdraw the offering once startup ends.</summary>
+        internal static LaunchSessionOffering Offer(LaunchSessionRequest session)
+        {
+            var ticket = ToTicket(session);
+            LaunchSessionTickets.Offer(ticket);
+            return new LaunchSessionOffering(ticket);
+        }
+    }
+
+    /// <summary>One offered ticket, withdrawn when the provider did not take it during startup.</summary>
+    internal sealed class LaunchSessionOffering : IDisposable
+    {
+        private LaunchSessionTicket? ticket;
+
+        internal LaunchSessionOffering(LaunchSessionTicket ticket) => this.ticket = ticket;
+
+        /// <summary>Withdraws the ticket if the provider has not taken it; true when it had not.</summary>
+        internal bool Withdraw()
+        {
+            var offered = ticket;
+            ticket = null;
+            return offered != null && LaunchSessionTickets.Withdraw(offered);
+        }
+
+        public void Dispose() => Withdraw();
     }
 }

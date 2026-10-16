@@ -9,7 +9,7 @@ using System.Reflection.PortableExecutable;
 namespace TopiaForge.ModManager.Core
 {
     /// <summary>Validates managed package assemblies from metadata without loading or executing package code.</summary>
-    public static class ManagedModAssemblyValidator
+    public static partial class ManagedModAssemblyValidator
     {
         private const string SdkAssemblyName = "TopiaForge.Mods.Abstractions";
         private const string SupportedTargetFramework = ".NETStandard,Version=v2.1";
@@ -103,6 +103,10 @@ namespace TopiaForge.ModManager.Core
                      assemblyName.StartsWith("UnityEngine", StringComparison.OrdinalIgnoreCase)))
                 {
                     errors.Add("Package must not bundle framework/runtime assembly: " + name + ".");
+                }
+                else if (isManagedArtifact && InternalsVisibleToRefusal(name, assemblyName, manifest) is string refusal)
+                {
+                    errors.Add(refusal);
                 }
             }
 

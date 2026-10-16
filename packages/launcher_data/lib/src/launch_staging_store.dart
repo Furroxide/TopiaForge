@@ -15,11 +15,24 @@ part 'launch_staging_sessions.dart';
 
 /// One bounded launch protocol directory beneath a caller-established game root.
 final class LaunchStagingStore {
-  LaunchStagingStore(String trustedGameRoot)
-    : trustedGameRoot = p.normalize(p.absolute(trustedGameRoot));
+  /// [afterClaim] runs once a channel file is claimed, and [beforeRetry]
+  /// before a refused replace is retried, so tests can interleave the other
+  /// side; production code passes neither.
+  LaunchStagingStore(
+    String trustedGameRoot, {
+    void Function()? afterClaim,
+    Future<void> Function(int attempt)? beforeRetry,
+  }) : trustedGameRoot = p.normalize(p.absolute(trustedGameRoot)),
+       _afterClaim = afterClaim,
+       _beforeRetry = beforeRetry;
   final String trustedGameRoot;
+  final void Function()? _afterClaim;
+  final Future<void> Function(int attempt)? _beforeRetry;
   static const documentLimit = 4 * 1024 * 1024;
   static const observationLimit = 16 * 1024 * 1024;
+
+  /// How often a refused channel replace is tried again.
+  static const replaceRetries = 5;
   String get _staging =>
       p.join(trustedGameRoot, 'BepInEx', 'TopiaForge', 'staging');
 

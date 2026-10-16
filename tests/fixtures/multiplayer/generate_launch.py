@@ -114,7 +114,7 @@ def target(kind, **fields):
 
 
 def session(role, **overrides):
-    value = {"role": role, "intentId": INTENT, "displayName": "Sam",
+    value = {"role": role, "intentId": INTENT, "displayName": "Sam", "developerMode": False,
              "transport": transport(port=27250 if role == "host" else 0)}
     value.update(overrides)
     return value
@@ -157,6 +157,7 @@ def fields(document):
         "executableCommand": "launch-target" if "plan" in document else "main-menu",
         "intentId": value["intentId"],
         "displayName": value["displayName"],
+        "developerMode": value["developerMode"],
         "privacy": value["transport"]["privacy"],
         "consented": "directConsent" in value["transport"],
         "port": value["transport"]["port"],
@@ -183,6 +184,9 @@ JOIN_DIRECT_NAME = v5(session("join", target=target("direct", host=NAME_HOST, po
 JOIN_DIRECT_IPV6 = v5(session("join", target=target("direct", host=IPV6_HOST, port=IPV6_PORT)))
 JOIN_DIRECT_PUBLIC = v5(session("join", displayName="A B", transport=transport("direct", consent=consent()),
                                 target=target("direct", host=PUBLIC_HOST, port=PUBLIC_PORT)))
+HOST_SERVES = v5(session("host", developerMode=True, host=host_options(servePackages=True)), plan=PLAN)
+JOIN_INVITE_PORT = v5(session("join", serviceOrigin="https://0x7f.topiaforge.dev:8443",
+                              target=target("invite", inviteCode=INVITE)))
 
 launch_valid = [
     valid("host-target", "A host starts a launch target, then opens it on the LAN under relay-only privacy.",
@@ -203,6 +207,10 @@ launch_valid = [
     valid("join-direct-public-consented", "A public direct target with the player's consent to direct play; a "
           "display name with a line separator inside is written raw.", JOIN_DIRECT_PUBLIC,
           fields=fields(JOIN_DIRECT_PUBLIC)),
+    valid("host-serves-packages", "In developer mode, a host may serve its packages.", HOST_SERVES,
+          fields=fields(HOST_SERVES)),
+    valid("join-invite-service-port", "A service origin writes a port other than 443, and only its last label must "
+          "not be a number.", JOIN_INVITE_PORT, fields=fields(JOIN_INVITE_PORT)),
 ]
 
 
@@ -307,6 +315,26 @@ launch_invalid = [
             mutated(JOIN_LAN, put("relay", "session", "target", "kind"))),
     invalid("duplicate-member", "A member appears once.",
             text=good.replace('"intentId":', '"intentId":"intent-other","intentId":', 1)),
+    invalid("serve-packages-outside-developer-mode", "Only developer mode lets a host serve its packages.",
+            mutated(HOST_SERVES, put(False, "session", "developerMode"))),
+    invalid("developer-mode-missing", "Every session says whether the launcher runs in developer mode.",
+            mutated(JOIN_LAN, drop("session", "developerMode"))),
+    invalid("developer-mode-not-boolean", "Developer mode is a boolean.",
+            mutated(JOIN_LAN, put("yes", "session", "developerMode"))),
+    invalid("display-name-noncharacter", "Display text never holds U+FFFF, which the game's reader refuses.",
+            mutated(JOIN_LAN, put("Sam\uffff", "session", "displayName"))),
+    invalid("host-name-noncharacter", "Display text never holds U+FFFE either.",
+            mutated(HOST_TARGET, put("Sandbox \ufffe", "session", "host", "name"))),
+    invalid("service-hex-address", "A name that is a hexadecimal number is an IPv4 address (127.0.0.1).",
+            mutated(JOIN_INVITE, put("https://0x7f000001", "session", "serviceOrigin"))),
+    invalid("service-hex-last-label", "A name whose last label is a hexadecimal number reads as an address.",
+            mutated(JOIN_INVITE, put("https://lan.0x1f", "session", "serviceOrigin"))),
+    invalid("service-numeric-last-label", "A name whose last label is a decimal number reads as an address.",
+            mutated(JOIN_INVITE, put("https://play.example.42", "session", "serviceOrigin"))),
+    invalid("service-default-port", "The default port 443 is never written out.",
+            mutated(JOIN_INVITE, put(ORIGIN + ":443", "session", "serviceOrigin"))),
+    invalid("service-uppercase", "Service origins are lowercase.",
+            mutated(JOIN_INVITE, put("https://MP.topiaforge.dev", "session", "serviceOrigin"))),
 ]
 
 write("launch-v5/cases.json", {
@@ -476,6 +504,10 @@ outcome_invalid = [
             mutated(HOST_PORT_FAILED, drop("multiplayer", "failure"))),
     invalid("detail-control-character", "Details are display text.",
             mutated(JOIN_PASSWORD_FAILED, put("Wrong\npassword.", "multiplayer", "detail"))),
+    invalid("detail-noncharacter", "Display text never holds U+FFFF.",
+            mutated(JOIN_PASSWORD_FAILED, put("Wrong password \uffff", "multiplayer", "detail"))),
+    invalid("problem-noncharacter", "Admission problems are display text without U+FFFE.",
+            mutated(JOIN_CONTENT_CHANGED, put(["Zombies \ufffe"], "multiplayer", "admission", "problems"))),
     invalid("admission-65-problems", "An admission report lists at most 64 problems.",
             mutated(JOIN_CONTENT_CHANGED, put(["Problem %d." % index for index in range(65)], "multiplayer",
                                               "admission", "problems"))),
@@ -593,6 +625,11 @@ preferences_invalid = [
     invalid("voice-without-consent", "Voice stays off until the player consents.",
             preferences(voice={"consent": 0, "enabled": True})),
     invalid("display-name-short", "Display names are 2 to 24 UTF-16 code units.", preferences(displayName="A")),
+    invalid("display-name-noncharacter", "Display text never holds U+FFFE.", preferences(displayName="Player\ufffe")),
+    invalid("hosting-name-noncharacter", "Display text never holds U+FFFF.",
+            mutated(PREFERENCES_DEFAULT, put("Server \uffff", "hosting", "name"))),
+    invalid("service-hex-address", "A hexadecimal number is an address, not a DNS name.",
+            preferences(serviceOrigin="https://0x7f000001")),
     invalid("service-ip-literal", "The service origin is a DNS name.",
             preferences(serviceOrigin="https://203.0.113.5")),
     invalid("service-with-path", "The service origin has no path.", preferences(serviceOrigin=ORIGIN + "/")),
@@ -633,6 +670,8 @@ journal_invalid = [
             journal({"sequence": 1, "disclosure": 0})),
     invalid("voice-without-consent", "Voice stays off until the player consents.",
             journal({"sequence": 1, "voice": {"consent": 0, "enabled": True}})),
+    invalid("display-name-noncharacter", "Display text never holds U+FFFF.",
+            journal({"sequence": 1, "displayName": "Sam\uffff"})),
     invalid("too-many", "The journal holds at most 64 changes.",
             journal(*({"sequence": index + 1, "disclosure": 1} for index in range(65)))),
 ]

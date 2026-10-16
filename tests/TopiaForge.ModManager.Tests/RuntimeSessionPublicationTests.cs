@@ -16,7 +16,8 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run(string root)
         {
             var failures = new List<Exception>();
-            foreach (var (name, test) in new (string, Action<string>)[] { ("session-launch", SessionLaunch), ("rejected-session", RejectedSession) })
+            foreach (var (name, test) in new (string, Action<string>)[]
+                { ("session-launch", SessionLaunch), ("rejected-session", RejectedSession), ("recovery-session", RecoverySession) })
             {
                 try { test(Path.Combine(root, name)); Console.WriteLine("Runtime session publication " + name + ": PASS"); }
                 catch (Exception error) { failures.Add(error); Console.WriteLine("Runtime session publication " + name + ": FAIL " + error.Message); }
@@ -60,6 +61,28 @@ namespace TopiaForge.ModManager.Tests
                 && outcome.Multiplayer!.IntentId == "intent-2" && outcome.Multiplayer.Failure == null,
                 "A rejected session launch is reported as itself, with the runtime's error.");
             Assert(errors.Count == 0, "Publication completes without IO failures.");
+        }
+
+        private static void RecoverySession(string root)
+        {
+            using var fixture = new SessionFixture(root);
+            var store = new LaunchStagingStore(new ManagerPaths(root));
+            var errors = new List<Exception>();
+            var identity = new LaunchSessionIdentity("recovered-request", "host", "intent-3");
+            const string reason = "The game started in recovery after a crash, so it did not host the session.";
+            using var publisher = new RuntimeLaunchPublisher(fixture.Hosted, store, "recovered-request", errors.Add, session: identity,
+                sessionRefusal: reason);
+            var outcome = LaunchTransportJson.ReadOutcome(File.ReadAllText(store.OutcomePath("recovered-request")));
+            Assert(outcome.Version == 2 && outcome.Command == "host-session" && outcome.Status == "failed" && outcome.Phase == "idle"
+                && outcome.Error!.Code == "unavailable" && outcome.Error.Message == reason && outcome.Multiplayer!.IntentId == "intent-3",
+                "A session launch the process will not start fails at once instead of staying unconfirmed.");
+            var written = File.ReadAllText(store.OutcomePath("recovered-request"));
+            var launch = fixture.Hosted.StartAsync(fixture.Plan.Descriptor, "recovered-request");
+            fixture.Wait(launch);
+            Assert(File.ReadAllText(store.OutcomePath("recovered-request")) == written, "The refusal is the launch's one outcome.");
+            Assert(errors.Count == 0, "Publication completes without IO failures.");
+            Rejects(() => new RuntimeLaunchPublisher(fixture.Hosted, store, "plain-request", errors.Add, sessionRefusal: reason),
+                "Only a session launch is refused as one.");
         }
 
         private static void Rejects(Action operation, string message)

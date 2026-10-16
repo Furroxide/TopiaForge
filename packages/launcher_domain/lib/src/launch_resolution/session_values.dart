@@ -27,10 +27,14 @@ Object? _sorted(Object? value) {
 }
 
 /// Display text of [minimum] to [maximum] UTF-16 code units, as the wire
-/// formats count them.
+/// formats count them, without the noncharacters U+FFFE and U+FFFF: the
+/// game's JSON reader refuses them, so a document holding one could never be
+/// read back.
 String _displayText(Object? value, int maximum, {int minimum = 1}) {
   if (value is! String ||
-      !WireText.isDisplayText(value, maximum, minimum: minimum)) {
+      !WireText.isDisplayText(value, maximum, minimum: minimum) ||
+      value.contains('\uFFFE') ||
+      value.contains('\uFFFF')) {
     throw const FormatException('Invalid session display text.');
   }
   return value;
@@ -61,9 +65,12 @@ String _inviteCode(Object? value) {
   return value;
 }
 
-/// A control-plane origin: `https://`, a lowercase DNS name and an optional
-/// port, nothing more. The service is not a peer, but an IP literal is
-/// refused all the same, so no address can pass as one.
+/// A control-plane origin in the one spelling a launch carries: `https://`, a
+/// lowercase DNS name, and a port of 1 to 65535 in plain decimal, never the
+/// default 443. The service is not a peer, but an address is refused all the
+/// same, so none can pass as one: an IP literal, and a name whose last label
+/// is a number, decimal or `0x` hexadecimal, which the URL Standard and the
+/// system resolver read as an IPv4 address (`0x7f000001` is 127.0.0.1).
 String _serviceOrigin(Object? value) {
   const invalid = FormatException('Invalid service origin.');
   if (value is! String || value.length > 256 || !value.startsWith('https://')) {
@@ -72,15 +79,29 @@ String _serviceOrigin(Object? value) {
   final authority = value.substring('https://'.length);
   final colon = authority.indexOf(':');
   final host = colon < 0 ? authority : authority.substring(0, colon);
-  if (colon >= 0 && _portText(authority.substring(colon + 1)) == null) {
-    throw invalid;
+  if (colon >= 0) {
+    final port = _portText(authority.substring(colon + 1));
+    if (port == null || port == 443) throw invalid;
   }
   if (host.isEmpty ||
       NetworkHost.tryNormalize(host) != host ||
-      NetworkHost.pathKindOf(host) != null) {
+      NetworkHost.pathKindOf(host) != null ||
+      _endsInNumber(host)) {
     throw invalid;
   }
   return value;
+}
+
+/// Whether the last label of the DNS name [host] is a number: all decimal
+/// digits, or `0x` followed by hexadecimal digits only.
+bool _endsInNumber(String host) {
+  final last = host.substring(host.lastIndexOf('.') + 1);
+  final digits = last.startsWith('0x') ? last.substring(2) : last;
+  final hex = digits.length != last.length;
+  return digits.codeUnits.every(
+    (unit) =>
+        (unit >= 0x30 && unit <= 0x39) || (hex && unit >= 0x61 && unit <= 0x66),
+  );
 }
 
 /// A direct target's host, in the one spelling [NetworkHost] writes.

@@ -1,6 +1,8 @@
 part of '../local_launcher_repository.dart';
 
-const _maxRegistryDocumentBytes = 16 * 1024 * 1024;
+/// The largest registry document a source may serve; the index builder
+/// writes no larger index.
+const _maxRegistryDocumentBytes = ModRegistryFormat.maxIndexBytes;
 
 class _SourceDocument {
   const _SourceDocument({required this.content, required this.baseUri});

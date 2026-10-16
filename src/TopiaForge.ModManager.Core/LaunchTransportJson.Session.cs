@@ -55,7 +55,7 @@ namespace TopiaForge.ModManager.Core
             return Sorted(
                 ("devInstance", session.DevInstance == null ? null
                     : Sorted(("count", Number(session.DevInstance.Count)), ("index", Number(session.DevInstance.Index)))),
-                ("displayName", Text(session.DisplayName)),
+                ("developerMode", Boolean(session.DeveloperMode)), ("displayName", Text(session.DisplayName)),
                 ("host", host == null ? null : Sorted(("maxPlayers", Number(host.MaxPlayers)), ("name", Text(host.Name)),
                     ("passwordRequired", Boolean(host.PasswordRequired)), ("servePackages", Boolean(host.ServePackages)),
                     ("visibility", Text(host.Visibility)), ("voice", Boolean(host.Voice)))),
@@ -76,7 +76,8 @@ namespace TopiaForge.ModManager.Core
 
         internal static LaunchSessionRequest ParseSession(string json)
         {
-            var value = new Fields(json, "devInstance", "displayName", "host", "intentId", "role", "serviceOrigin", "target", "transport");
+            var value = new Fields(json, "devInstance", "developerMode", "displayName", "host", "intentId", "role", "serviceOrigin", "target",
+                "transport");
             var transport = new Fields(value.Required("transport"), "directConsent", "lan", "port", "privacy", "upnp");
             LaunchDirectConsent? consent = null;
             if (transport.Has("directConsent"))
@@ -102,7 +103,8 @@ namespace TopiaForge.ModManager.Core
 
             return new LaunchSessionRequest(value.String("role"), value.String("intentId"), value.String("displayName"),
                 new LaunchSessionTransport(transport.String("privacy"), consent, transport.Integer("port"), transport.Bool("upnp"), transport.Bool("lan")),
-                value.OptionalString("serviceOrigin"), value.Has("target") ? ParseTarget(value.Required("target")) : null, host, peer);
+                value.OptionalString("serviceOrigin"), value.Has("target") ? ParseTarget(value.Required("target")) : null, host, peer,
+                value.Bool("developerMode"));
         }
 
         private static LaunchSessionTarget ParseTarget(string json)

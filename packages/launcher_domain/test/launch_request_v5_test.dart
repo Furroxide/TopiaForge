@@ -299,21 +299,34 @@ void main() {
       for (final origin in [
         'https://mp.topiaforge.dev',
         'https://localhost:8787',
-        'https://a-b.example.org:443',
+        'https://a-b.example.org:65535',
+        'https://0x7f.example.org',
+        'https://example.0x7g',
       ]) {
         expect(
           _join(target: invite, serviceOrigin: origin).serviceOrigin,
           origin,
         );
+        expect(LaunchSessionRequest.isServiceOrigin(origin), isTrue);
       }
       for (final origin in [
         'http://mp.topiaforge.dev',
         'https://203.0.113.5',
         'https://[::1]',
+        // Names the URL Standard and the system resolver read as addresses.
+        'https://0x7f000001',
+        'https://0X7F000001',
+        'https://0x',
+        'https://lan.0x1f',
+        'https://play.example.42',
+        'https://127.1',
+        'https://2130706433',
         'https://MP.topiaforge.dev',
         'https://mp.topiaforge.dev/',
         'https://mp.topiaforge.dev:0',
+        'https://mp.topiaforge.dev:443',
         'https://mp.topiaforge.dev:08787',
+        'https://mp.topiaforge.dev:65536',
         'https://user@mp.topiaforge.dev',
         'https://mp.topiaforge.dev?x=1',
         'https://',
@@ -323,7 +336,30 @@ void main() {
           throwsFormatException,
           reason: origin,
         );
+        expect(LaunchSessionRequest.isServiceOrigin(origin), isFalse);
       }
+    });
+
+    test('only developer mode serves packages', () {
+      final settings = MultiplayerSettings(displayName: 'Sam');
+      LaunchSessionRequest host({required bool developerMode}) =>
+          LaunchSessionRequest.host(
+            intentId: 'intent-dev',
+            settings: settings,
+            privacy: SessionPrivacy.relayOnly,
+            host: LaunchHostOptions(name: 'Dev', servePackages: true),
+            developerMode: developerMode,
+          );
+      expect(() => host(developerMode: false), throwsFormatException);
+      final serving = host(developerMode: true);
+      expect(serving.developerMode, isTrue);
+      expect(serving.toJson()['developerMode'], isTrue);
+      expect(
+        LaunchSessionRequest.fromJson(serving.toJson()).host!.servePackages,
+        isTrue,
+      );
+      final json = serving.toJson()..['developerMode'] = false;
+      expect(() => LaunchSessionRequest.fromJson(json), throwsFormatException);
     });
   });
 
