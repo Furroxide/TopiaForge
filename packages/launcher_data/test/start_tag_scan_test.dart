@@ -111,6 +111,59 @@ void main() {
     });
   });
 
+  group('packageReferences', () {
+    test('bounds each item from a start, skipping unclosed ones', () {
+      const closed = '<PackageReference Update="A" />';
+      const outer = '<PackageReference Include="B">';
+      const inner = '<packagereference Remove="C"/>';
+      const end = '</PackageReference >';
+      const open = '<PackageReference Include="D">';
+      const text = 'x$closed$outer$inner$end<!-- $closed -->$closed$open';
+      final items = [
+        for (final item in packageReferences(text, start: 1))
+          text.substring(item.start, item.end),
+      ];
+      expect(items, [closed, '$outer$inner$end', inner, closed]);
+      expect(packageReferences(text, start: text.indexOf(inner)), hasLength(2));
+    });
+
+    test('names a package by one attribute and one id', () {
+      bool names(String tag, String attribute) =>
+          namesPackage(tag, readStartTag(tag, 0)!, attribute, _abstractions);
+      expect(
+        names('<PackageReference Update=" $_abstractions " />', 'Update'),
+        isTrue,
+      );
+      expect(
+        names(
+          '<PackageReference Remove="topiaforge.mods.abstractions"/>',
+          'Remove',
+        ),
+        isTrue,
+      );
+      for (final tag in const [
+        '<PackageReference update="$_abstractions" />',
+        '<PackageReference Update="$_abstractions;Other" />',
+        '<PackageReference Update="TopiaForge.Mods.*" />',
+        '<PackageReference Update="@(PackageReference)" />',
+      ]) {
+        expect(names(tag, 'Update'), isFalse, reason: tag);
+      }
+    });
+
+    test('finishes nested or unclosed items within the budget', () {
+      const open = '<PackageReference Update="A">';
+      const end = '</PackageReference>';
+      for (final (text, count) in [
+        ('${open * 8000}${end * 8000}', 8000),
+        (open * 8000, 0),
+        ('$open${'<!-- -->' * 20000}$end' * 2, 2),
+      ]) {
+        expect(withinBudget(() => packageReferences(text).length), count);
+      }
+    });
+  });
+
   group('firstPackageReference', () {
     test('finds an item however its start tag is written', () {
       for (final item in const [

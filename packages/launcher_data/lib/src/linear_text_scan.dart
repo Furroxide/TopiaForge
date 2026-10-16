@@ -8,9 +8,10 @@
 /// times. `test/linear_text_scan_test.dart` checks each scanner against the
 /// pattern it replaced.
 ///
-/// [readStartTag], [startTags] and [firstPackageReference] read start tags
-/// the way XML writes them instead: attributes in any order, white space
-/// around `=`, values in either quote, and comments skipped.
+/// [readStartTag], [startTags], [packageReferences] and
+/// [firstPackageReference] read start tags the way XML writes them instead:
+/// attributes in any order, white space around `=`, values in either quote,
+/// and comments skipped.
 /// `test/start_tag_scan_test.dart` checks [firstPackageReference] against a
 /// pattern written to that grammar.
 library;
@@ -218,13 +219,15 @@ StartTag? readStartTag(String text, int start) {
 ///
 /// Each is read by [readStartTag], and one it cannot read is skipped. With
 /// [anyCase], the name matches in any ASCII case, as MSBuild matches item
-/// types. [name] holds only ASCII letters.
+/// types. [name] holds only ASCII letters. The search begins at [start],
+/// which must not be inside a comment.
 Iterable<({int start, StartTag tag})> startTags(
   String text,
   String name, {
   bool anyCase = false,
+  int start = 0,
 }) sync* {
-  var open = text.indexOf('<');
+  var open = text.indexOf('<', start);
   while (open >= 0) {
     if (text.startsWith('<!--', open)) {
       final close = text.indexOf('-->', open + 4);
@@ -263,56 +266,86 @@ bool isAttributeNamed(String text, TagAttribute attribute, String name) =>
   return (start: start, end: end);
 }
 
+/// The `PackageReference` items in [text] from [start] on, outside comments
+/// and in order, each with its bounds and its start tag.
+///
+/// The items are the start tags that [startTags] finds, with their element
+/// name in any ASCII case. A self-closing item ends at its own `/>`. An
+/// element item ends at the first `</PackageReference>` after its start
+/// tag, in any case and outside comments, with optional white space before
+/// the `>`; one with no such end tag is skipped. [start] must not be inside
+/// a comment.
+Iterable<({int start, int end, StartTag tag})> packageReferences(
+  String text, {
+  int start = 0,
+}) sync* {
+  const name = 'PackageReference';
+  // The end tag found last. A search from before it would find it again.
+  ({int start, int end})? endTag;
+  var endTagMissing = false;
+  for (final found in startTags(text, name, anyCase: true, start: start)) {
+    final tag = found.tag;
+    if (text.codeUnitAt(tag.end - 2) == _slash) {
+      yield (start: found.start, end: tag.end, tag: tag);
+      continue;
+    }
+    // No later element item can close either.
+    if (endTagMissing) continue;
+    if (endTag == null || tag.end > endTag.start) {
+      endTag = _endTag(text, name, tag.end);
+      if (endTag == null) {
+        endTagMissing = true;
+        continue;
+      }
+    }
+    yield (start: found.start, end: endTag.end, tag: tag);
+  }
+}
+
+/// Whether the start [tag] in [text] has an attribute named exactly
+/// [attribute] whose value, without the white space at either end, is
+/// [package] in any ASCII case, as NuGet matches ids.
+///
+/// MSBuild requires the exact case of an item's `Include`, `Update` and
+/// `Remove` attributes, and reads a value that names several ids or a
+/// pattern as more than one, so neither names [package] here.
+bool namesPackage(
+  String text,
+  StartTag tag,
+  String attribute,
+  String package,
+) => tag.attributes.any((candidate) {
+  if (!isAttributeNamed(text, candidate, attribute)) return false;
+  final value = trimmedAttributeValue(text, candidate);
+  return value.end - value.start == package.length &&
+      _equalsIgnoringAsciiCase(text, value.start, package);
+});
+
 /// The bounds of the first `PackageReference` item for [package] in [text],
 /// outside comments, or null.
 ///
-/// The item is the first start tag that [startTags] finds, with its element
-/// name in any ASCII case, that has an `Include` attribute whose value,
-/// without the white space at either end, is [package] in any ASCII case,
-/// as NuGet matches ids. `Include` may be any of the attributes, but its
-/// name must have that exact case, as MSBuild requires. A self-closing item
-/// ends at its own `/>`. An element item ends at the first
-/// `</PackageReference>` after its start tag, in any case and outside
-/// comments, with optional white space before the `>`. [package] is a NuGet
-/// id.
+/// It is the first of [packageReferences] whose `Include` attribute
+/// [namesPackage]. `Include` may be any of the attributes. [package] is a
+/// NuGet id.
 ({int start, int end})? firstPackageReference(String text, String package) {
-  const name = 'PackageReference';
-  var closeMissing = false;
-  for (final (:start, :tag) in startTags(text, name, anyCase: true)) {
-    if (!tag.attributes.any(
-      (attribute) => _isIncludeOf(text, attribute, package),
-    )) {
-      continue;
+  for (final item in packageReferences(text)) {
+    if (namesPackage(text, item.tag, 'Include', package)) {
+      return (start: item.start, end: item.end);
     }
-    if (text.codeUnitAt(tag.end - 2) == _slash) {
-      return (start: start, end: tag.end);
-    }
-    if (closeMissing) continue;
-    final end = _endTagEnd(text, name, tag.end);
-    if (end >= 0) return (start: start, end: end);
-    // No later element item can close either.
-    closeMissing = true;
   }
   return null;
 }
 
-bool _isIncludeOf(String text, TagAttribute attribute, String package) {
-  if (!isAttributeNamed(text, attribute, 'Include')) return false;
-  final value = trimmedAttributeValue(text, attribute);
-  return value.end - value.start == package.length &&
-      _equalsIgnoringAsciiCase(text, value.start, package);
-}
-
-/// The offset just past the `>` of the first `</name>` end tag at or after
-/// [index] in [text], outside comments, or -1.
+/// The bounds of the first `</name>` end tag at or after [index] in
+/// [text], outside comments, or null.
 ///
 /// [name] matches in any ASCII case, and white space may come before `>`.
-int _endTagEnd(String text, String name, int index) {
+({int start, int end})? _endTag(String text, String name, int index) {
   var open = text.indexOf('<', index);
   while (open >= 0) {
     if (text.startsWith('<!--', open)) {
       final close = text.indexOf('-->', open + 4);
-      if (close < 0) return -1;
+      if (close < 0) return null;
       open = text.indexOf('<', close + 3);
       continue;
     }
@@ -320,12 +353,12 @@ int _endTagEnd(String text, String name, int index) {
         _isNameAt(text, open + 2, name, true)) {
       final end = _skipWhitespace(text, open + 2 + name.length);
       if (end < text.length && text.codeUnitAt(end) == _greaterThan) {
-        return end + 1;
+        return (start: open, end: end + 1);
       }
     }
     open = text.indexOf('<', open + 1);
   }
-  return -1;
+  return null;
 }
 
 /// Whether the element name at [index] in [text] is [name], in any ASCII
