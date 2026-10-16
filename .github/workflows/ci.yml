@@ -269,6 +269,13 @@ jobs:
           flutter analyze
           flutter test
 
+      # The launcher's Linux application-id tests compile linux/runner/data_root_id.cc against GLib, and skip
+      # themselves without its headers.
+      - name: Install GLib headers for the Linux runner tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libglib2.0-dev
+
       - name: Analyze and test launcher
         working-directory: apps/topiaforge_launcher_flutter
         run: |
