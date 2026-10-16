@@ -102,6 +102,9 @@ namespace TopiaForge.ModManager.Tests
                 }
                 catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
                 catch (SocketException) when (lifetime.IsCancellationRequested) { }
+                // Dispose stops the listener while an accept may still be pending, and that accept can then fail on
+                // the disposed socket instead of observing the cancellation.
+                catch (ObjectDisposedException) when (lifetime.IsCancellationRequested) { }
             }
 
             private async Task ServeConnectionAsync(TcpClient connection)
