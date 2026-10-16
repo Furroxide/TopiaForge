@@ -66,3 +66,41 @@ not attest any reviewer role.
 The native world-loading fixes that FlyBrain's native runs exposed (native
 teleport spawn placement, an original empty UGC scene) are ordinary source
 fixes and are integrated separately; the rest of that work stays out of RC1.
+
+## Blocking-gate review refresh (2026-10-09)
+
+The user asked to help close `P0-IP-01`, `P0-OSS-01`, `P0-PRIV-01` and
+`P0-CRED-01`: repin the three review requests once the build-2545 retarget and
+relocated-install PRs merge, then integrate actual attributable records when
+the user supplies them. A source audit of the three requests found statements
+the source no longer supports, stale passages in documents they cite, and
+engineering gaps reviewers would see. The user selected the options below in
+that session. They are task-scope decisions; they attest no reviewer role and
+approve no gate.
+
+| Topic | Selected option | Effect |
+| --- | --- | --- |
+| Credential-incident closure (deferred 2026-09-09) | **“Resume it”** | `P0-CRED-01` work resumes with a prepared [closure request](credential-closure-review-request.md) for `credential-owner` and `security-owner`. The gate stays blocked until actual closure evidence exists. Secret values, the update-signing seed and old incident logs stay unread |
+| Stale documents the requests cite | **“Fix first, separate PR”** | A documentation PR corrects `TRADEMARKS.md`, `docs/PrivacyAndCapabilities.md`, `docs/LaunchBlockers.md` and `THIRD_PARTY_NOTICES.md` before the repin, so the pinned tree is consistent |
+| Engineering gaps reviewers would see | **“Fix before the repin”** | Separate PRs rebake the Quicksand SDF and UI bundle from the upstream font bytes, record vendored third-party components in the SBOM, extend the asset-licence audit to icon files, and install licence notices beside the game-side loader. The repin waits for them and for the build-2545 and relocated-install PRs |
+
+Every merge still needs the user's explicit authorization. Prepared requests
+are not approvals, and the user sends them; reviewers are never contacted from
+this work.
+
+Later in the same session the user instructed **“delete the
+media/pr-128-before-after branch”**. That pushed branch held the before-and-after
+comparison images embedded in PR #128's description, including the replaced
+Robotopia art. After inspection (two commits, ten PNG files, no protecting rule
+and no pull request using it), it was deleted from GitHub on 2026-10-09. The
+embedded image links in PR #128 now return 404. The deleted commits stay
+retrievable by commit ID until GitHub removes unreferenced objects, and the
+pre-#128 Git LFS history is unchanged; whether those copies must be removed
+remains a `P0-IP-01` question for counsel.
+
+Two more selections followed once the fixes were in draft PRs:
+
+| Topic | Selected option | Effect |
+| --- | --- | --- |
+| Vendored TextMesh Pro shader | **“Approve the one-line change”** | The UI-bundle PR drops `#pragma enable_d3d11_debug_symbols` from `TMP_SDF-Mobile.shader`. With it, Windows builds of the bundle were not reproducible and embedded the build account's paths. The change is recorded as a local modification in `THIRD_PARTY_NOTICES.md` |
+| Merging the pre-repin fix PRs | **“Merge each when green”** | Once the build-2545 retarget lands, each of the documentation, UI-bundle, loader-notice and SBOM PRs is updated with the new base. Each is squash-merged into `release/0.1.0-rc.1` after every required check and CodeQL pass. The repin PR that follows still needs the user's separate approval |

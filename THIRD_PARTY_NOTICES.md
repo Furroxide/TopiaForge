@@ -34,6 +34,10 @@ recorded by the BepInEx 5.4.23.5 README, and their license texts are redistribut
 | MonoMod | 21.12.13.01 / `ede81f48924d58abf05359409fad740fe2b0dfb5` | MIT | `MonoMod.RuntimeDetour.dll`, `MonoMod.Utils.dll` | `third_party/BepInEx/LICENSES/MonoMod-MIT.txt` |
 | Mono.Cecil | 0.10.4 / `98ec890d44643ad88d573e97be0e120435eda732` | MIT | `Mono.Cecil*.dll` | `third_party/BepInEx/LICENSES/Mono.Cecil-MIT.txt` |
 
+The corresponding source for the LGPL-2.1 UnityDoorstop binaries ships in the release archive as
+`third_party/BepInEx/UnityDoorstop-4.5.0-source-33dab9a6733862eb81869ff08431d9478b28784b.zip`, the
+source archive that `third_party/BepInEx/provenance.json` declares.
+
 RoboPatch was used only as behavior prior art for clean-room compatibility planning. No RoboPatch code was copied or ported.
 
 Prism Launcher was used only as product maturity and UX inspiration. No Prism Launcher code was copied or ported.
@@ -134,8 +138,10 @@ TopiaForge bundles the Audiowide font for display typography in the launcher UI 
 - Upstream: https://fonts.google.com/specimen/Audiowide
 - License: SIL Open Font License 1.1
 - Bundled at: `packages/launcher_ui/fonts` and `tools/unity-ui-bundle/Assets/Fonts`
-- Local changes: none known; filename was normalized for launcher and Unity packaging.
+- Local changes: none known. The font keeps its upstream filename; the upstream `OFL.txt` is stored as
+  `Audiowide-OFL.txt`.
 - SHA-256: `c7c0f2b0f6fad8c623e31772ce79f94a4edb9321ffce9fce978ea892d20ae730`
+- License text: `packages/launcher_ui/fonts/Audiowide-OFL.txt` (also copied into the Unity UI bundle source)
 
 TopiaForge redistributes Unity's TextMesh Pro essential resources inside the Unity UI bundle source at
 `tools/unity-ui-bundle/Assets/TextMesh Pro`, and the release archives carry that directory. The set

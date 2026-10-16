@@ -37,7 +37,7 @@ The 2026-09-24 replies are recorded in `Decisions.md`:
 
 Earlier decisions stand:
 
-- Credential-incident closure is deferred.
+- Credential-incident closure was deferred; I resumed it on 2026-10-09 (see `Decisions.md`).
 - Neutral release-build roots, a fresh SDK and a dedicated cache stay plan-only.
 - Signing recovery and plaintext cleanup were authorized only as a prepared checklist.
 
@@ -71,7 +71,7 @@ Never substitute an expected path, forged acknowledgement, success flag or force
 
 5. Close the review prerequisites.
 
-`P0-IP-01`, `P0-OSS-01` and `P0-PRIV-01` need real role-complete approval records. The three prepared requests are pinned to the stabilized release head, and I send them. Follow `ReviewGates.md`: prepared requests, ownership assumptions and disclaimers do not clear gates. Integrate only valid safe references through normal review before the final freeze. `P0-CRED-01` remains deferred until I resume it and the credential and security owners supply actual closure evidence.
+`P0-IP-01`, `P0-OSS-01` and `P0-PRIV-01` need real role-complete approval records. The three prepared requests are pinned to the stabilized release head, and I send them. Follow `ReviewGates.md`: prepared requests, ownership assumptions and disclaimers do not clear gates. Integrate only valid safe references through normal review before the final freeze. I resumed `P0-CRED-01` on 2026-10-09 and its closure request is prepared; it stays blocked until the credential and security owners supply actual closure evidence.
 
 Several items need the administrator:
 
