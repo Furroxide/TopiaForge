@@ -69,6 +69,22 @@ void main() {
       );
       expect(withoutPackageReference(project, _abstractions), project);
     });
+
+    test('removes an item however it is written, not a comment', () {
+      const commented = '<!-- <PackageReference Include="$_robotKit" /> -->';
+      for (final item in const [
+        '<PackageReference Version="1.0.0" Include = " topiaforge.mods.robotkit " />',
+        '<packagereference Include="$_robotKit" Label="a > b">\n'
+            '</PACKAGEREFERENCE >',
+      ]) {
+        final project = _project('$commented\n$item\n$commented');
+        expect(
+          withoutPackageReference(project, _robotKit),
+          _project('$commented\n\n$commented'),
+          reason: item,
+        );
+      }
+    });
   });
 
   test('both edits finish malformed projects within the budget', () {

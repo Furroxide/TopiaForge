@@ -15,12 +15,13 @@ List<String> _attributes(String item, String name) => [
 ];
 
 /// Start tags that XML rejects: an unquoted value, no white space between
-/// attributes, no `=`, an unclosed value, and no end.
+/// attributes, no `=`, an unclosed value, a `<` in a value, and no end.
 const _rejectedStartTags = [
   '<PackageReference Include="X" Version=1 />',
   '<PackageReference Include="X"Version="1" />',
   '<PackageReference Include="X" Version "1" />',
   '<PackageReference Include="X" Version="1 />',
+  '<PackageReference Include="X" Version="<1" />',
   '<PackageReference Include="X" Version="1"',
 ];
 

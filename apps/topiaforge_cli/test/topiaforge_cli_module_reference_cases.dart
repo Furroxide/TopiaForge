@@ -157,6 +157,55 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     expect(removed, isNot(contains('"TopiaForge.Mods.RobotKit"')));
   });
 
+  test('mod add and remove find items however they are written', () async {
+    // MSBuild reads item types and NuGet ids in any case, Include anywhere
+    // in the start tag and a `>` inside a value, but no commented-out item.
+    // The finder used to read only `<PackageReference Include="id"`, so add
+    // appended copies of these items and remove left them in place.
+    const commented =
+        '    <!-- <PackageReference Include="TopiaForge.Mods.Multiplayer" Version="0.0.1" /> -->';
+    const multiplayer =
+        '''<PackageReference Condition="'a' != 'b'" Include = "topiaforge.mods.multiplayer"''';
+    const generators =
+        '<packagereference Include="TopiaForge.Mods.Multiplayer.Generators" Label="a > b"';
+    const end = '\n    </packagereference >';
+    final project = await _scaffoldModProject(
+      currentHarness(),
+      't.any-form',
+      '<Project Sdk="Microsoft.NET.Sdk">\n'
+          '  <ItemGroup>\n'
+          '$commented\n'
+          '    $multiplayer />\n'
+          '    $generators>$end\n'
+          '  </ItemGroup>\n'
+          '</Project>\n',
+    );
+
+    await _runModule(currentHarness(), 'add', 'multiplayer', project);
+
+    const pinnedMultiplayer = '$multiplayer Version="0.1.0-rc.1" />';
+    const pinnedGenerators =
+        '$generators Version="0.1.0-rc.1" PrivateAssets="all">$end';
+    const pinned =
+        '<Project Sdk="Microsoft.NET.Sdk">\n'
+        '  <ItemGroup>\n'
+        '$commented\n'
+        '    $pinnedMultiplayer\n'
+        '    $pinnedGenerators\n'
+        '  </ItemGroup>\n'
+        '</Project>\n';
+    expect(project.readAsStringSync(), pinned);
+
+    await _runModule(currentHarness(), 'remove', 'multiplayer', project);
+
+    expect(
+      project.readAsStringSync(),
+      pinned
+          .replaceFirst(pinnedMultiplayer, '')
+          .replaceFirst(pinnedGenerators, ''),
+    );
+  });
+
   test(
     'mod add and remove finish a malformed project within the budget',
     () async {

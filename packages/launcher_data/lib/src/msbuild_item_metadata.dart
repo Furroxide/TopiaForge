@@ -17,13 +17,7 @@ const _quote = 0x22;
 const _apostrophe = 0x27;
 const _slash = 0x2F;
 const _lessThan = 0x3C;
-const _equals = 0x3D;
 const _greaterThan = 0x3E;
-
-/// One attribute of a start tag: `start` is where its name starts, and
-/// `leading` where the white space before it does. `nameEnd` and `end`
-/// follow its name and its closing quote.
-typedef _Attribute = ({int leading, int start, int nameEnd, int end});
 
 /// The bounds of each child element of the MSBuild [item] that sets the
 /// metadata [name], in order.
@@ -93,22 +87,22 @@ String withoutMetadataElements(String item, String name) {
 /// The bounds of each attribute of the MSBuild [item]'s start tag that sets
 /// the metadata [name], in order.
 ///
-/// [item] starts with its start tag, as [firstPackageReference] bounds one.
-/// [name] holds only ASCII letters, and an attribute matches it in any case.
-/// An attribute runs from its name to its closing quote: white space may
-/// surround its `=`, and its value may take either quote, so a `>` inside
-/// the value does not end the tag. Comments and children come after the
-/// start tag, so no text in them is read as an attribute. A start tag that
-/// does not read that way yields none, such as one with an unquoted value,
-/// no white space between attributes, or no end.
-Iterable<({int start, int end})> metadataAttributes(
-  String item,
-  String name,
-) => [
-  for (final attribute in _startTag(item)?.attributes ?? const <_Attribute>[])
-    if (_isName(item, attribute.start, attribute.nameEnd, name))
-      (start: attribute.start, end: attribute.end),
-];
+/// [item] starts with its start tag, as [firstPackageReference] bounds one,
+/// and [readStartTag] reads that tag. [name] holds only ASCII letters, and
+/// an attribute matches it in any case. An attribute runs from its name to
+/// its closing quote: white space may surround its `=`, and its value may
+/// take either quote, so a `>` inside the value does not end the tag.
+/// Comments and children come after the start tag, so no text in them is
+/// read as an attribute. A start tag that [readStartTag] cannot read yields
+/// none, such as one with an unquoted value, no white space between
+/// attributes, a `<` in a value, or no end.
+Iterable<({int start, int end})> metadataAttributes(String item, String name) =>
+    [
+      for (final attribute
+          in readStartTag(item, 0)?.attributes ?? const <TagAttribute>[])
+        if (_isName(item, attribute.start, attribute.nameEnd, name))
+          (start: attribute.start, end: attribute.end),
+    ];
 
 /// [item] with the metadata [name] set to [value] by a single attribute.
 ///
@@ -116,9 +110,9 @@ Iterable<({int start, int end})> metadataAttributes(
 /// `name="value"`, and each later one goes with the white space before it.
 /// Without any, ` name="value"` follows the start tag's last attribute, so
 /// the attributes before it keep their order. A start tag that
-/// [metadataAttributes] cannot read is left as it is. [value] holds no `"`.
+/// [readStartTag] cannot read is left as it is. [value] holds no `"`.
 String withMetadataAttribute(String item, String name, String value) {
-  final tag = _startTag(item);
+  final tag = readStartTag(item, 0);
   if (tag == null) return item;
   final attribute = '$name="$value"';
   final matches = [
@@ -126,7 +120,8 @@ String withMetadataAttribute(String item, String name, String value) {
       if (_isName(item, existing.start, existing.nameEnd, name)) existing,
   ];
   if (matches.isEmpty) {
-    return '${item.substring(0, tag.end)} $attribute${item.substring(tag.end)}';
+    final end = tag.attributesEnd;
+    return '${item.substring(0, end)} $attribute${item.substring(end)}';
   }
   final edited = StringBuffer(item.substring(0, matches.first.start))
     ..write(attribute);
@@ -139,71 +134,11 @@ String withMetadataAttribute(String item, String name, String value) {
   return edited.toString();
 }
 
-/// The attributes of the start tag that opens [item], and where the last
-/// one ends (where the element name does, without any), or null when the
-/// tag does not read as [metadataAttributes] describes.
-({List<_Attribute> attributes, int end})? _startTag(String item) {
-  var cursor = 1;
-  while (cursor < item.length && !_endsName(item.codeUnitAt(cursor))) {
-    cursor++;
-  }
-  final attributes = <_Attribute>[];
-  while (true) {
-    final leading = cursor;
-    cursor = _skipWhitespace(item, cursor);
-    if (cursor == item.length) return null;
-    if (item.codeUnitAt(cursor) == _greaterThan ||
-        item.startsWith('/>', cursor)) {
-      return (attributes: attributes, end: leading);
-    }
-    // XML separates attributes with white space.
-    if (cursor == leading) return null;
-    final start = cursor;
-    while (cursor < item.length &&
-        !_endsAttributeName(item.codeUnitAt(cursor))) {
-      cursor++;
-    }
-    final nameEnd = cursor;
-    if (nameEnd == start) return null;
-    cursor = _skipWhitespace(item, nameEnd);
-    if (cursor == item.length || item.codeUnitAt(cursor) != _equals) {
-      return null;
-    }
-    cursor = _skipWhitespace(item, cursor + 1);
-    if (cursor == item.length) return null;
-    final quote = item.codeUnitAt(cursor);
-    if (quote != _quote && quote != _apostrophe) return null;
-    final close = item.indexOf(quote == _quote ? '"' : "'", cursor + 1);
-    if (close < 0) return null;
-    cursor = close + 1;
-    attributes.add((
-      leading: leading,
-      start: start,
-      nameEnd: nameEnd,
-      end: cursor,
-    ));
-  }
-}
-
-int _skipWhitespace(String text, int index) {
-  var cursor = index;
-  while (cursor < text.length && isRegExpWhitespace(text.codeUnitAt(cursor))) {
-    cursor++;
-  }
-  return cursor;
-}
-
 bool _endsName(int codeUnit) =>
     isRegExpWhitespace(codeUnit) ||
     codeUnit == _slash ||
     codeUnit == _lessThan ||
     codeUnit == _greaterThan;
-
-bool _endsAttributeName(int codeUnit) =>
-    _endsName(codeUnit) ||
-    codeUnit == _equals ||
-    codeUnit == _quote ||
-    codeUnit == _apostrophe;
 
 /// Whether `text.substring(start, end)` is [name] in any case. [name] holds
 /// only ASCII letters, which differ from their other case in one bit.

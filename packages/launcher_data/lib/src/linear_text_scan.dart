@@ -1,22 +1,50 @@
 /// Linear-time scanners for the project, props, and Steam files the launcher
 /// reads.
 ///
-/// Each scanner replaces one backtracking [RegExp] and returns exactly what
+/// Most scanners replace one backtracking [RegExp] and return exactly what
 /// that pattern matched, including which occurrence wins, so well-formed
-/// files read the same. [firstPackageReference] is the one exception: it
-/// ends a self-closing item at its own `/>`, where its pattern let the item
-/// run on to a later closing tag. On malformed files those patterns took
-/// quadratic or cubic time; these scanners examine each code unit a bounded
-/// number of times. `test/linear_text_scan_test.dart` checks each scanner
-/// against the pattern it replaced, and [firstPackageReference] against the
-/// corrected pattern.
+/// files read the same. On malformed files those patterns took quadratic or
+/// cubic time; these scanners examine each code unit a bounded number of
+/// times. `test/linear_text_scan_test.dart` checks each scanner against the
+/// pattern it replaced.
+///
+/// [readStartTag], [startTags] and [firstPackageReference] read start tags
+/// the way XML writes them instead: attributes in any order, white space
+/// around `=`, values in either quote, and comments skipped.
+/// `test/start_tag_scan_test.dart` checks [firstPackageReference] against a
+/// pattern written to that grammar.
 library;
 
 const _quote = 0x22;
 const _apostrophe = 0x27;
 const _slash = 0x2F;
+const _lessThan = 0x3C;
+const _equals = 0x3D;
 const _greaterThan = 0x3E;
 const _backslash = 0x5C;
+
+/// One attribute of a start tag that [readStartTag] read, as offsets into
+/// its text. The white space before the attribute starts at `leading`, and
+/// its name runs from `start` to `nameEnd`. Its value runs from its opening
+/// quote at `valueStart` to just past its closing quote at `end`.
+typedef TagAttribute = ({
+  int leading,
+  int start,
+  int nameEnd,
+  int valueStart,
+  int end,
+});
+
+/// A start tag that [readStartTag] read, as offsets into its text. Its
+/// element name ends at `nameEnd`, and its last attribute (or its name,
+/// without any) at `attributesEnd`. The tag itself ends just past its `>`,
+/// at `end`.
+typedef StartTag = ({
+  int nameEnd,
+  List<TagAttribute> attributes,
+  int attributesEnd,
+  int end,
+});
 
 /// Whether `\s` in a non-Unicode [RegExp] matches the UTF-16 [codeUnit].
 ///
@@ -117,68 +145,236 @@ String? firstElementText(String text, String name) {
   }
 }
 
-/// The bounds of the first `PackageReference` item for [package], as
-/// `<PackageReference\s+Include=["']package["'][^>]*?(?:/>|>.*?</PackageReference>)`
-/// matches it with `dotAll`, or null.
+/// The start tag that opens at the `<` at [start] in [text], or null when
+/// it does not read as XML writes one.
 ///
-/// A self-closing item ends at its own `/>`, and an element item at the
-/// first `</PackageReference>` after its start tag. The pattern this
-/// replaced had a greedy `[^>]*`, which let a self-closing item run on to
-/// the next `</PackageReference>` anywhere later in [text]. Like both
-/// patterns, a start tag ends at its first `>`. [package] is a NuGet id,
-/// matched literally; NuGet ids never contain `<` or `>`.
-({int start, int end})? firstPackageReference(String text, String package) {
-  const open = '<PackageReference';
-  const close = '</PackageReference>';
-  var closeMissing = false;
-  var start = text.indexOf(open);
-  while (start >= 0) {
-    final attributes = _afterInclude(text, start + open.length, package);
-    if (attributes < 0) {
-      start = text.indexOf(open, start + 1);
+/// After the element name, each attribute has white space before it, then
+/// a name, `=` with optional white space around it, and a value in either
+/// quote. The tag ends at the first `/>` or `>` outside a value. A value
+/// that does not close or holds a `<`, which XML forbids, makes the tag
+/// unreadable, as does any other text. Reading stops at the next `<` at the
+/// latest, so reading every tag in a file takes linear time.
+StartTag? readStartTag(String text, int start) {
+  var cursor = start + 1;
+  while (cursor < text.length && !_endsName(text.codeUnitAt(cursor))) {
+    cursor++;
+  }
+  final nameEnd = cursor;
+  final attributes = <TagAttribute>[];
+  while (true) {
+    final leading = cursor;
+    cursor = _skipWhitespace(text, cursor);
+    if (cursor == text.length) return null;
+    final ends = text.codeUnitAt(cursor) == _greaterThan
+        ? cursor + 1
+        : text.startsWith('/>', cursor)
+        ? cursor + 2
+        : -1;
+    if (ends >= 0) {
+      return (
+        nameEnd: nameEnd,
+        attributes: attributes,
+        attributesEnd: leading,
+        end: ends,
+      );
+    }
+    // XML separates attributes with white space.
+    if (cursor == leading) return null;
+    final nameStart = cursor;
+    while (cursor < text.length &&
+        !_endsAttributeName(text.codeUnitAt(cursor))) {
+      cursor++;
+    }
+    final attributeNameEnd = cursor;
+    if (attributeNameEnd == nameStart) return null;
+    cursor = _skipWhitespace(text, cursor);
+    if (cursor == text.length || text.codeUnitAt(cursor) != _equals) {
+      return null;
+    }
+    cursor = _skipWhitespace(text, cursor + 1);
+    if (cursor == text.length) return null;
+    final quote = text.codeUnitAt(cursor);
+    if (quote != _quote && quote != _apostrophe) return null;
+    final valueStart = cursor;
+    do {
+      cursor++;
+      if (cursor == text.length || text.codeUnitAt(cursor) == _lessThan) {
+        return null;
+      }
+    } while (text.codeUnitAt(cursor) != quote);
+    cursor++;
+    attributes.add((
+      leading: leading,
+      start: nameStart,
+      nameEnd: attributeNameEnd,
+      valueStart: valueStart,
+      end: cursor,
+    ));
+  }
+}
+
+/// The start tags in [text] whose element name is [name], outside comments
+/// and in order, each with the offset of its `<`.
+///
+/// Each is read by [readStartTag], and one it cannot read is skipped. With
+/// [anyCase], the name matches in any ASCII case, as MSBuild matches item
+/// types. [name] holds only ASCII letters.
+Iterable<({int start, StartTag tag})> startTags(
+  String text,
+  String name, {
+  bool anyCase = false,
+}) sync* {
+  var open = text.indexOf('<');
+  while (open >= 0) {
+    if (text.startsWith('<!--', open)) {
+      final close = text.indexOf('-->', open + 4);
+      // An unclosed comment hides the rest of the file.
+      if (close < 0) return;
+      open = text.indexOf('<', close + 3);
       continue;
     }
-    final tagEnd = text.indexOf('>', attributes);
-    // Every later item needs a `>` too, so a missing one ends the search.
-    if (tagEnd < 0) return null;
-    if (tagEnd > attributes && text.codeUnitAt(tagEnd - 1) == _slash) {
-      return (start: start, end: tagEnd + 1);
+    if (_isNameAt(text, open + 1, name, anyCase)) {
+      final tag = readStartTag(text, open);
+      if (tag != null) yield (start: open, tag: tag);
     }
-    if (!closeMissing) {
-      final closeStart = text.indexOf(close, tagEnd + 1);
-      if (closeStart >= 0) {
-        return (start: start, end: closeStart + close.length);
-      }
-      // No later element item can close either.
-      closeMissing = true;
+    open = text.indexOf('<', open + 1);
+  }
+}
+
+/// Whether [attribute] of a start tag in [text] is named exactly [name].
+bool isAttributeNamed(String text, TagAttribute attribute, String name) =>
+    attribute.nameEnd - attribute.start == name.length &&
+    text.startsWith(name, attribute.start);
+
+/// The bounds of [attribute]'s value in [text], inside its quotes and
+/// without the white space at either end.
+({int start, int end}) trimmedAttributeValue(
+  String text,
+  TagAttribute attribute,
+) {
+  var start = attribute.valueStart + 1;
+  var end = attribute.end - 1;
+  while (start < end && isRegExpWhitespace(text.codeUnitAt(start))) {
+    start++;
+  }
+  while (end > start && isRegExpWhitespace(text.codeUnitAt(end - 1))) {
+    end--;
+  }
+  return (start: start, end: end);
+}
+
+/// The bounds of the first `PackageReference` item for [package] in [text],
+/// outside comments, or null.
+///
+/// The item is the first start tag that [startTags] finds, with its element
+/// name in any ASCII case, that has an `Include` attribute whose value,
+/// without the white space at either end, is [package] in any ASCII case,
+/// as NuGet matches ids. `Include` may be any of the attributes, but its
+/// name must have that exact case, as MSBuild requires. A self-closing item
+/// ends at its own `/>`. An element item ends at the first
+/// `</PackageReference>` after its start tag, in any case and outside
+/// comments, with optional white space before the `>`. [package] is a NuGet
+/// id.
+({int start, int end})? firstPackageReference(String text, String package) {
+  const name = 'PackageReference';
+  var closeMissing = false;
+  for (final (:start, :tag) in startTags(text, name, anyCase: true)) {
+    if (!tag.attributes.any(
+      (attribute) => _isIncludeOf(text, attribute, package),
+    )) {
+      continue;
     }
-    // An item that opens before [tagEnd] shares its `>`, so it fails the
-    // same way.
-    start = text.indexOf(open, tagEnd);
+    if (text.codeUnitAt(tag.end - 2) == _slash) {
+      return (start: start, end: tag.end);
+    }
+    if (closeMissing) continue;
+    final end = _endTagEnd(text, name, tag.end);
+    if (end >= 0) return (start: start, end: end);
+    // No later element item can close either.
+    closeMissing = true;
   }
   return null;
 }
 
-/// The offset just after `\s+Include=["']package["']` at [index], or -1.
-int _afterInclude(String text, int index, String package) {
-  const include = 'Include=';
+bool _isIncludeOf(String text, TagAttribute attribute, String package) {
+  if (!isAttributeNamed(text, attribute, 'Include')) return false;
+  final value = trimmedAttributeValue(text, attribute);
+  return value.end - value.start == package.length &&
+      _equalsIgnoringAsciiCase(text, value.start, package);
+}
+
+/// The offset just past the `>` of the first `</name>` end tag at or after
+/// [index] in [text], outside comments, or -1.
+///
+/// [name] matches in any ASCII case, and white space may come before `>`.
+int _endTagEnd(String text, String name, int index) {
+  var open = text.indexOf('<', index);
+  while (open >= 0) {
+    if (text.startsWith('<!--', open)) {
+      final close = text.indexOf('-->', open + 4);
+      if (close < 0) return -1;
+      open = text.indexOf('<', close + 3);
+      continue;
+    }
+    if (text.startsWith('/', open + 1) &&
+        _isNameAt(text, open + 2, name, true)) {
+      final end = _skipWhitespace(text, open + 2 + name.length);
+      if (end < text.length && text.codeUnitAt(end) == _greaterThan) {
+        return end + 1;
+      }
+    }
+    open = text.indexOf('<', open + 1);
+  }
+  return -1;
+}
+
+/// Whether the element name at [index] in [text] is [name], in any ASCII
+/// case with [anyCase].
+bool _isNameAt(String text, int index, String name, bool anyCase) {
+  final end = index + name.length;
+  if (end > text.length ||
+      end < text.length && !_endsName(text.codeUnitAt(end))) {
+    return false;
+  }
+  return anyCase
+      ? _equalsIgnoringAsciiCase(text, index, name)
+      : text.startsWith(name, index);
+}
+
+/// Whether [text] holds [other] at [index], ignoring the case of ASCII
+/// letters only.
+bool _equalsIgnoringAsciiCase(String text, int index, String other) {
+  for (var offset = 0; offset < other.length; offset++) {
+    final unit = text.codeUnitAt(index + offset);
+    final expected = other.codeUnitAt(offset);
+    if (unit == expected) continue;
+    final lower = unit | 0x20;
+    if (lower != (expected | 0x20) || lower < 0x61 || lower > 0x7A) {
+      return false;
+    }
+  }
+  return true;
+}
+
+int _skipWhitespace(String text, int index) {
   var cursor = index;
   while (cursor < text.length && isRegExpWhitespace(text.codeUnitAt(cursor))) {
     cursor++;
   }
-  if (cursor == index || !text.startsWith(include, cursor)) return -1;
-  final opening = cursor + include.length;
-  final closing = opening + 1 + package.length;
-  if (closing >= text.length ||
-      !_isQuote(text.codeUnitAt(opening)) ||
-      !text.startsWith(package, opening + 1) ||
-      !_isQuote(text.codeUnitAt(closing))) {
-    return -1;
-  }
-  return closing + 1;
+  return cursor;
 }
 
-bool _isQuote(int codeUnit) => codeUnit == _quote || codeUnit == _apostrophe;
+bool _endsName(int codeUnit) =>
+    isRegExpWhitespace(codeUnit) ||
+    codeUnit == _slash ||
+    codeUnit == _lessThan ||
+    codeUnit == _greaterThan;
+
+bool _endsAttributeName(int codeUnit) =>
+    _endsName(codeUnit) ||
+    codeUnit == _equals ||
+    codeUnit == _quote ||
+    codeUnit == _apostrophe;
 
 /// The quoted key/value pairs in Steam VDF [text], still escaped, as
 /// `allMatches` of `"((?:\\.|[^"\\])*)"\s*"((?:\\.|[^"\\])*)"` captured them.

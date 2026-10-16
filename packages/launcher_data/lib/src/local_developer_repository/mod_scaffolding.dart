@@ -338,9 +338,7 @@ String _withExactSdkPackageReferences(
   if (projectElement == null) {
     throw StateError('TopiaForge C# project has no Project element.');
   }
-  if (!RegExp(
-    r'<Import\s+Project="[^"]*topiaforge\.dev\.props"',
-  ).hasMatch(result)) {
+  if (!_importsDevProps(result)) {
     final offset = projectElement.end;
     result =
         '${result.substring(0, offset)}\n'
@@ -390,3 +388,16 @@ String _withExactSdkPackageReferences(
     version: version,
   );
 }
+
+/// Whether [project] has an `<Import>` outside comments whose `Project`
+/// attribute, in either quote and among any others, ends in
+/// `topiaforge.dev.props`.
+bool _importsDevProps(String project) => startTags(project, 'Import').any(
+  (found) => found.tag.attributes.any((attribute) {
+    if (!isAttributeNamed(project, attribute, 'Project')) return false;
+    final value = trimmedAttributeValue(project, attribute);
+    return project
+        .substring(value.start, value.end)
+        .endsWith('topiaforge.dev.props');
+  }),
+);

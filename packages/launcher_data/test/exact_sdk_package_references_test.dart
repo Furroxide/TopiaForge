@@ -231,6 +231,103 @@ void main() {
 '''),
     );
   });
+
+  test('pins an item wherever Include sits, however its id is cased', () async {
+    // NuGet matches ids ignoring case, and MSBuild trims the white space
+    // around one. The finder used to need `Include="id"` first, in the id's
+    // exact case, so it missed both items and added unconditional copies.
+    // Each is now pinned in place, keeping its condition and its spelling.
+    final project = await _scaffold(r'''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Version="0.0.1" Include = " topiaforge.mods.abstractions " />
+    <PackageReference Condition="'$(Configuration)' != 'Fuzz'" Include="TopiaForge.Mods.Analyzers" />
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains(r'''
+  <ItemGroup>
+    <PackageReference Version="1.0.0" Include = " topiaforge.mods.abstractions " />
+    <PackageReference Condition="'$(Configuration)' != 'Fuzz'" Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all" />
+  </ItemGroup>
+'''),
+    );
+  });
+
+  test('reads each item to its own end, outside comments', () async {
+    // MSBuild ignores comments and reads item types in any case. The finder
+    // used to pin the commented-out item, miss the lowercase one, end the
+    // analyzer at the end tag in its comment, which left its Version child
+    // to beat the pin, and count the commented-out import as an import.
+    final project = await _scaffold('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- <Import Project="topiaforge.dev.props" /> -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- <PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.0.1" /> -->
+    <packagereference Include="TopiaForge.Mods.Abstractions" Label="a > b">
+    </packagereference >
+    <PackageReference Include="TopiaForge.Mods.Analyzers" PrivateAssets="all">
+      <!-- </PackageReference> -->
+      <Version>0.0.1</Version>
+    </PackageReference>
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      startsWith('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="topiaforge.dev.props" Condition="Exists('topiaforge.dev.props')" />
+  <!-- <Import Project="topiaforge.dev.props" /> -->
+'''),
+    );
+    expect(
+      project,
+      contains('''
+  <ItemGroup>
+    <!-- <PackageReference Include="TopiaForge.Mods.Abstractions" Version="0.0.1" /> -->
+    <packagereference Include="TopiaForge.Mods.Abstractions" Label="a > b" Version="1.0.0">
+    </packagereference >
+    <PackageReference Include="TopiaForge.Mods.Analyzers" PrivateAssets="all" Version="1.0.0">
+      <!-- </PackageReference> -->
+    </PackageReference>
+  </ItemGroup>
+'''),
+    );
+  });
+
+  test('finds the dev props import however it is written', () async {
+    // The check used to need `Project="…"` first and double-quoted, so this
+    // project got a second import, which MSBuild warns about.
+    const import =
+        "  <Import Condition=\"Exists('topiaforge.dev.props')\" "
+        "Project = 'topiaforge.dev.props' />";
+    final project = await _scaffold('''
+<Project Sdk="Microsoft.NET.Sdk">
+$import
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
+''');
+
+    expect(project, startsWith('<Project Sdk="Microsoft.NET.Sdk">\n$import\n'));
+    expect('<Import'.allMatches(project), hasLength(1));
+  });
 }
 
 /// Stands in for the NuGet restore that resolving runs after its rewrite,
@@ -244,7 +341,7 @@ final class _RestoreSkipped implements Exception {
 /// scaffolding wrote.
 ///
 /// Two resolves then rewrite the file again, and each must leave it as it
-/// is, with one item for each SDK package.
+/// is, with one item for each SDK package outside comments.
 Future<String> _scaffold(String project) async {
   final root = Directory.systemTemp.createTempSync('topiaforge-sdk-pins-');
   addTearDown(() => root.deleteSync(recursive: true));
@@ -273,9 +370,13 @@ Future<String> _scaffold(String project) async {
     );
     expect(file.readAsStringSync(), scaffolded, reason: 'the $rewrite rewrite');
   }
+  final items = scaffolded.replaceAll(RegExp('<!--.*?-->', dotAll: true), '');
   for (final package in _sdkPackages) {
     expect(
-      RegExp('${RegExp.escape(package)}["\']').allMatches(scaffolded),
+      RegExp(
+        '${RegExp.escape(package)}\\s*["\']',
+        caseSensitive: false,
+      ).allMatches(items),
       hasLength(1),
       reason: package,
     );
