@@ -10,15 +10,11 @@ import 'package:test/test.dart';
 /// version and leaves every other item alone.
 void main() {
   test('edits only the SDK items, not the items after them', () async {
-    final root = Directory.systemTemp.createTempSync('topiaforge-sdk-pins-');
-    addTearDown(() => root.deleteSync(recursive: true));
-    final source = p.join(root.path, 'source');
-    _writeSdkPack(source);
     // Each self-closing SDK item has no Version and is followed by an element
     // item that has one. The SDK items used to run on to that item's closing
     // tag, so the element item took the SDK version, and StyleCop's
     // PrivateAssets hid the analyzer's missing one.
-    _writeTemplate(source, '''
+    final project = await _scaffold('''
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -35,20 +31,9 @@ void main() {
   </ItemGroup>
 </Project>
 ''');
-    final repository = LocalDeveloperRepository(
-      dataRoot: p.join(root.path, 'data'),
-      repositoryRoot: source,
-    );
-
-    final workspace = await repository.createModProject(
-      parentDirectory: p.join(root.path, 'mods'),
-      id: 'sample.pins',
-      name: 'Pins',
-      options: const ModScaffoldOptions(template: 'pins'),
-    );
 
     expect(
-      File(p.join(workspace.projectRoot, 'Pins.csproj')).readAsStringSync(),
+      project,
       contains('''
   <ItemGroup>
     <PackageReference Version="1.0.0" Include="TopiaForge.Mods.Abstractions" />
@@ -63,6 +48,108 @@ void main() {
 '''),
     );
   });
+
+  test('replaces a Version child with the pinned attribute', () async {
+    // MSBuild applies child metadata after the attributes, so either child
+    // would override a Version attribute added or set next to it. The
+    // PrivateAssets child is already set, so no attribute competes with it.
+    final project = await _scaffold('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions">
+      <Version>0.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="0.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <Version>0.0.2</Version>
+    </PackageReference>
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains('''
+  <ItemGroup>
+    <PackageReference Version="1.0.0" Include="TopiaForge.Mods.Abstractions">
+    </PackageReference>
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+'''),
+    );
+  });
+
+  test('reads metadata children the way MSBuild does', () async {
+    // MSBuild matches metadata names ignoring case, a child's condition may
+    // hold, and an empty child clears the version, so each Version child
+    // goes. A child inside a comment sets nothing, so it stays, and the
+    // analyzer still gets PrivateAssets.
+    final project = await _scaffold(r'''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions">
+      <!-- <Version>0.0.1</Version> -->
+      <version>0.0.2</version>
+      <Version Condition="'$(Configuration)' == 'Debug'">0.0.3</Version>
+      <IncludeAssets>compile</IncludeAssets>
+      <Version />
+    </PackageReference>
+    <PackageReference Include="TopiaForge.Mods.Analyzers">
+      <!-- <PrivateAssets>all</PrivateAssets> -->
+      <IncludeAssets>analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains('''
+  <ItemGroup>
+    <PackageReference Version="1.0.0" Include="TopiaForge.Mods.Abstractions">
+      <!-- <Version>0.0.1</Version> -->
+      <IncludeAssets>compile</IncludeAssets>
+    </PackageReference>
+    <PackageReference PrivateAssets="all" Version="1.0.0" Include="TopiaForge.Mods.Analyzers">
+      <!-- <PrivateAssets>all</PrivateAssets> -->
+      <IncludeAssets>analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+'''),
+    );
+  });
+}
+
+/// Scaffolds a mod from a `pins` template whose only project file is
+/// [project], against a packaged SDK 1.0.0, and returns the project file
+/// scaffolding wrote.
+Future<String> _scaffold(String project) async {
+  final root = Directory.systemTemp.createTempSync('topiaforge-sdk-pins-');
+  addTearDown(() => root.deleteSync(recursive: true));
+  final source = p.join(root.path, 'source');
+  _writeSdkPack(source);
+  _writeTemplate(source, project);
+  final repository = LocalDeveloperRepository(
+    dataRoot: p.join(root.path, 'data'),
+    repositoryRoot: source,
+  );
+
+  final workspace = await repository.createModProject(
+    parentDirectory: p.join(root.path, 'mods'),
+    id: 'sample.pins',
+    name: 'Pins',
+    options: const ModScaffoldOptions(template: 'pins'),
+  );
+
+  return File(p.join(workspace.projectRoot, 'Pins.csproj')).readAsStringSync();
 }
 
 /// Writes a packaged SDK 1.0.0 with the contract and analyzer packages.
