@@ -398,24 +398,15 @@ String _withExactSdkPackageReferences(
       result.substring(reference.start, reference.end),
       'Version',
     );
-    final versionPattern = RegExp(r'\sVersion="[^"]*"');
-    if (versionPattern.hasMatch(item)) {
-      item = item.replaceFirst(versionPattern, ' Version="$version"');
-    } else {
-      item = item.replaceFirst(
-        '<PackageReference ',
-        '<PackageReference Version="$version" ',
-      );
-    }
-    // PrivateAssets is added only when missing, and a child sets it as the
+    // A missing attribute goes after the others, so Include stays first and
+    // the next rewrite finds this item rather than adding another.
+    item = withMetadataAttribute(item, 'Version', version);
+    // PrivateAssets is added only when missing, and a child sets it as an
     // attribute does.
     if (topiaForgeAnalyzerPackageIds.contains(package) &&
-        !item.contains('PrivateAssets=') &&
+        metadataAttributes(item, 'PrivateAssets').isEmpty &&
         metadataElements(item, 'PrivateAssets').isEmpty) {
-      item = item.replaceFirst(
-        '<PackageReference ',
-        '<PackageReference PrivateAssets="all" ',
-      );
+      item = withMetadataAttribute(item, 'PrivateAssets', 'all');
     }
     result = result.replaceRange(reference.start, reference.end, item);
   }

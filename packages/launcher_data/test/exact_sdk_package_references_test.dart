@@ -6,8 +6,14 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+const _sdkPackages = [
+  'TopiaForge.Mods.Abstractions',
+  'TopiaForge.Mods.Analyzers',
+];
+
 /// Scaffolding pins the SDK items in a template's project file to the SDK
-/// version and leaves every other item alone.
+/// version and leaves every other item alone. Resolving pins them again, so
+/// it must leave the file as scaffolding wrote it.
 void main() {
   test('edits only the SDK items, not the items after them', () async {
     // Each self-closing SDK item has no Version and is followed by an element
@@ -36,13 +42,112 @@ void main() {
       project,
       contains('''
   <ItemGroup>
-    <PackageReference Version="1.0.0" Include="TopiaForge.Mods.Abstractions" />
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
-    <PackageReference PrivateAssets="all" Version="1.0.0" Include="TopiaForge.Mods.Analyzers" />
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all" />
     <PackageReference Include="StyleCop.Analyzers" Version="1.1.118" PrivateAssets="all">
       <IncludeAssets>analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+'''),
+    );
+  });
+
+  test('adds attributes after the others, wherever lines break', () async {
+    // Attributes used to go in front of Include, after a literal
+    // `<PackageReference `. With a line break there, the item got no
+    // Version at all. With a space, Include was no longer first, so the next
+    // rewrite did not find the item and added a second copy of it.
+    final project = await _scaffold('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference
+      Include="TopiaForge.Mods.Abstractions" />
+    <PackageReference
+      Include="TopiaForge.Mods.Analyzers"
+      GeneratePathProperty="true"
+      />
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains('''
+  <ItemGroup>
+    <PackageReference
+      Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference
+      Include="TopiaForge.Mods.Analyzers"
+      GeneratePathProperty="true" Version="1.0.0" PrivateAssets="all"
+      />
+  </ItemGroup>
+'''),
+    );
+  });
+
+  test('reads attributes in any case and either quote', () async {
+    // MSBuild matches metadata names ignoring case, and the later of two
+    // attributes wins, so an added Version lost to a lowercase one. XML
+    // forbids the same attribute twice, so an added Version next to a
+    // single-quoted one stopped the project from loading.
+    final project = await _scaffold('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" version="0.0.1" />
+    <PackageReference Include='TopiaForge.Mods.Analyzers' Version='0.0.1' privateassets='all' />
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains('''
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference Include='TopiaForge.Mods.Analyzers' Version="1.0.0" privateassets='all' />
+  </ItemGroup>
+'''),
+    );
+  });
+
+  test('reads only the start tag, however it is spaced', () async {
+    // White space may surround `=`, and one Version stays of several. The
+    // comments set nothing, but the checks used to read them: the pin went
+    // into the first comment and the analyzer kept no PrivateAssets.
+    final project = await _scaffold('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version = "0.0.1" VERSION="0.0.2">
+      <!-- Version="0.0.3" -->
+    </PackageReference>
+    <PackageReference Include="TopiaForge.Mods.Analyzers">
+      <!-- PrivateAssets="all" -->
+    </PackageReference>
+  </ItemGroup>
+</Project>
+''');
+
+    expect(
+      project,
+      contains('''
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0">
+      <!-- Version="0.0.3" -->
+    </PackageReference>
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all">
+      <!-- PrivateAssets="all" -->
     </PackageReference>
   </ItemGroup>
 '''),
@@ -74,7 +179,7 @@ void main() {
       project,
       contains('''
   <ItemGroup>
-    <PackageReference Version="1.0.0" Include="TopiaForge.Mods.Abstractions">
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0">
     </PackageReference>
     <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0">
       <PrivateAssets>all</PrivateAssets>
@@ -114,11 +219,11 @@ void main() {
       project,
       contains('''
   <ItemGroup>
-    <PackageReference Version="1.0.0" Include="TopiaForge.Mods.Abstractions">
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0">
       <!-- <Version>0.0.1</Version> -->
       <IncludeAssets>compile</IncludeAssets>
     </PackageReference>
-    <PackageReference PrivateAssets="all" Version="1.0.0" Include="TopiaForge.Mods.Analyzers">
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all">
       <!-- <PrivateAssets>all</PrivateAssets> -->
       <IncludeAssets>analyzers</IncludeAssets>
     </PackageReference>
@@ -128,9 +233,18 @@ void main() {
   });
 }
 
+/// Stands in for the NuGet restore that resolving runs after its rewrite,
+/// which needs real SDK packages.
+final class _RestoreSkipped implements Exception {
+  const _RestoreSkipped();
+}
+
 /// Scaffolds a mod from a `pins` template whose only project file is
 /// [project], against a packaged SDK 1.0.0, and returns the project file
 /// scaffolding wrote.
+///
+/// Two resolves then rewrite the file again, and each must leave it as it
+/// is, with one item for each SDK package.
 Future<String> _scaffold(String project) async {
   final root = Directory.systemTemp.createTempSync('topiaforge-sdk-pins-');
   addTearDown(() => root.deleteSync(recursive: true));
@@ -140,6 +254,7 @@ Future<String> _scaffold(String project) async {
   final repository = LocalDeveloperRepository(
     dataRoot: p.join(root.path, 'data'),
     repositoryRoot: source,
+    dotnetSdkResolver: (_) async => throw const _RestoreSkipped(),
   );
 
   final workspace = await repository.createModProject(
@@ -149,7 +264,23 @@ Future<String> _scaffold(String project) async {
     options: const ModScaffoldOptions(template: 'pins'),
   );
 
-  return File(p.join(workspace.projectRoot, 'Pins.csproj')).readAsStringSync();
+  final file = File(p.join(workspace.projectRoot, 'Pins.csproj'));
+  final scaffolded = file.readAsStringSync();
+  for (final rewrite in const ['second', 'third']) {
+    await expectLater(
+      repository.resolveDeveloperProject(workspace.projectRoot),
+      throwsA(isA<_RestoreSkipped>()),
+    );
+    expect(file.readAsStringSync(), scaffolded, reason: 'the $rewrite rewrite');
+  }
+  for (final package in _sdkPackages) {
+    expect(
+      RegExp('${RegExp.escape(package)}["\']').allMatches(scaffolded),
+      hasLength(1),
+      reason: package,
+    );
+  }
+  return scaffolded;
 }
 
 /// Writes a packaged SDK 1.0.0 with the contract and analyzer packages.
