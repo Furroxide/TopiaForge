@@ -195,4 +195,9 @@ void _createRuntimeSources(Directory repositoryRoot) {
   for (final name in topiaForgeRuntimeLoaderDlls) {
     File(p.join(loader.path, name)).writeAsStringSync('');
   }
+  for (final notice in topiaForgeRuntimeLoaderNotices) {
+    File(p.joinAll([repositoryRoot.path, ...p.posix.split(notice.sourcePath)]))
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(notice.sourcePath);
+  }
 }

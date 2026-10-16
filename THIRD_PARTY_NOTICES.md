@@ -107,6 +107,10 @@ checked, and this section claims to cover every non-source file a user receives:
   `apps/topiaforge_launcher_flutter/snap/gui/topiaforge.png` — the launcher application icon.
 - `apps/topiaforge_launcher_flutter/macos/Runner/Assets.xcassets/AppIcon.appiconset` — the same icon at
   the eight sizes macOS requires. Generated from the mark above, not drawn separately.
+- `apps/topiaforge_launcher_flutter/windows/runner/resources/app_icon.ico` — the same icon at eight
+  sizes from 16 to 256 pixels, embedded into the Windows launcher executable by `Runner.rc`.
+  `icons_launcher` generates it from `topiaforge-app-icon.png`; the five sizes it shares with the macOS
+  set are pixel-identical to those files.
 - `website/public/favicon.png` and `website/src/assets/topiaforge-wordmark.png` — the documentation
   site's copies of the same marks.
 
@@ -213,6 +217,15 @@ Robotopia build 2545 supplies the referenced `System.Memory`, `System.Buffers`,
 and `System.Runtime.CompilerServices.Unsafe` assemblies; those player-profile
 identities and hashes are validated but their proprietary game copies are not
 redistributed.
+
+The loader's licence texts are installed beside its assemblies, in a `licenses`
+folder wherever they are placed: the payload's
+`src/TopiaForge.ModManager/bin/Release/netstandard2.1`, the Windows archive-root
+`BepInEx/plugins/TopiaForge.ModManager`, and the same plugin folder in the game
+when the launcher installs or repairs the runtime. The folder holds the project
+`LICENSE`, this file, the Quicksand and Audiowide OFL texts for the glyph data
+inside `TopiaForge.Mods.UnityUi.dll`, and the MIT licence and third-party
+notices of each System package above.
 
 The CLI's publication gate includes a generated identifier allowlist from SPDX License List Data 3.28.0.
 
