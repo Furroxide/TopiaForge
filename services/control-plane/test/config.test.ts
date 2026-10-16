@@ -83,6 +83,18 @@ describe("wrangler.toml", () => {
     for (const outside of ["203.0.113.50", "198.51.100.77", "2001:db8::50"]) expect(inRanges(parseIp(outside)!, config.relayRanges), outside).toBe(false);
   });
 
+  it("serves each deployed environment only from its own topiaforge.dev host", () => {
+    const [top, , staging, , production] = sections as [string, string, string, string, string];
+    for (const [label, text] of [["top level", top], ["staging", staging], ["production", production]] as const) {
+      expect(text, label).toMatch(/^workers_dev = false$/m);
+      expect(text, label).toMatch(/^preview_urls = false$/m);
+    }
+    expect(top).not.toMatch(/^routes = /m);
+    expect(staging).toContain('routes = [{ pattern = "mp-staging.topiaforge.dev", custom_domain = true }]');
+    expect(production).toContain('routes = [{ pattern = "mp.topiaforge.dev", custom_domain = true }]');
+    expect(wranglerToml).not.toMatch(/workers\.dev"/);
+  });
+
   it("keeps account details and secrets out of the file", () => {
     expect(wranglerToml).not.toMatch(/^\s*account_id\s*=/m);
     for (const secret of ["SERVICE_KEY", "ADMIN_TOKEN", "TURN_KEY_ID", "TURN_KEY_API_TOKEN", "ANALYTICS_API_TOKEN", "ANALYTICS_ACCOUNT_ID", "TURN_DAILY_CAP_GB", "TURN_TICKET_CAP_GB"]) {
