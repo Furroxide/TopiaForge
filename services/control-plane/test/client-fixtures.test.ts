@@ -94,7 +94,7 @@ describe("the client fixtures", () => {
       body: { serverId },
     });
     await record("turn-credentials-host", "Relay credentials for the host.", "POST", "/v1/turn/credentials", { token, body: { serverId } });
-    const updated = await signedDescriptor(identity, { name: "Charl's Sandbox", issuedAt: sandbox.descriptor.issuedAt + 60, maxPlayers: 8 });
+    const updated = await signedDescriptor(identity, { name: "Sam's Sandbox", issuedAt: sandbox.descriptor.issuedAt + 60, maxPlayers: 8 });
     await record("host-descriptor", "The host publishes a newer signed descriptor.", "PUT", `/v1/hosts/${serverId}/descriptor`, { token, body: { descriptor: updated } });
     await record("invite-revoke", "The host withdraws an invite, naming it in the body so the code stays out of the URL.", "POST", `/v1/hosts/${serverId}/invites/revoke`, {
       token,

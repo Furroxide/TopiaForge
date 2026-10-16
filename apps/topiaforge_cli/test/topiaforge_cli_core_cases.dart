@@ -146,7 +146,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
         '--dependency',
         'io.github.furroxide.topiaforge.chronos@>=0.1.0',
         '--author',
-        'Charl',
+        'Sam',
         '--license',
         'MIT',
       ]);
@@ -167,7 +167,7 @@ void _coreCliTests(_CliTestHarness Function() currentHarness) {
       expect(manifest[r'$schema'], contains('topiaforge.mod.schema.json'));
       expect(manifest['displayName'], 'Demo Mode');
       expect(manifest['tags'], ['alpha', 'beta']);
-      expect((manifest['author'] as Map)['name'], 'Charl');
+      expect((manifest['author'] as Map)['name'], 'Sam');
       // The template default (worlds) merges with the --dependency override (chronos).
       expect(
         (manifest['dependencies'] as Map).keys,

@@ -44,7 +44,7 @@ void main() {
       expect(result.blockers, isEmpty);
       final profile = result.derivedProfile;
       expect(profile.id, 'mp-c9075fd68f79b153');
-      expect(profile.name, "Server · Charl's Sandbox");
+      expect(profile.name, "Server · Sam's Sandbox");
       expect(profile.inheritManagerModState, isFalse);
       expect(profile.enabledMods, {'example.sandbox', 'example.zombies'});
       expect(profile.selectedVersions, {

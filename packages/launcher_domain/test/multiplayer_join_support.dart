@@ -93,7 +93,7 @@ DescriptorPackage testPackage(
 /// Host A's descriptor with [packages], sorted by id.
 ServerDescriptorV1 testDescriptor({
   List<DescriptorPackage> packages = const [],
-  String name = "Charl's Sandbox",
+  String name = "Sam's Sandbox",
   String gameBuild = '2545',
   String runtimeVersion = '0.2.0',
   String protocolVersion = '1.0.0',

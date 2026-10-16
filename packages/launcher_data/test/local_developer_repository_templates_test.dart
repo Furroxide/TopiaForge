@@ -314,7 +314,7 @@ void main() {
         description: 'Custom description',
         license: 'Apache-2.0',
         category: 'DevTool',
-        authorName: 'Charl',
+        authorName: 'Sam',
         tags: const ['custom-tag'],
         capabilities: const ['time'],
         dependencies: [
@@ -331,7 +331,7 @@ void main() {
     expect(manifest.description, 'Custom description');
     expect(manifest.license, 'Apache-2.0');
     expect(manifest.category, 'DevTool');
-    expect(manifest.author.name, 'Charl');
+    expect(manifest.author.name, 'Sam');
     expect(manifest.tags, ['custom-tag']);
     // Repeatable list flags merge with template defaults instead of clobbering them.
     expect(manifest.capabilities, containsAll(['input', 'physics', 'time']));

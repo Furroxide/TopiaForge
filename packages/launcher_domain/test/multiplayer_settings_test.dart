@@ -39,10 +39,7 @@ void main() {
           throwsArgumentError,
         );
       }
-      expect(
-        MultiplayerSettings().withDisplayName('Charl').displayName,
-        'Charl',
-      );
+      expect(MultiplayerSettings().withDisplayName('Sam').displayName, 'Sam');
     });
 
     test('direct is a per-session choice after the disclosure', () {
@@ -108,7 +105,7 @@ void main() {
 
     test('switches round-trip through JSON', () {
       final settings = MultiplayerSettings()
-          .withDisplayName('Charl')
+          .withDisplayName('Sam')
           .acknowledgePrivacyDisclosure()
           .withUpnp(true)
           .withLanDiscovery(false)
@@ -122,7 +119,7 @@ void main() {
             .cast<String, Object?>(),
       );
       expect(read.toJson(), settings.toJson());
-      expect(read.displayName, 'Charl');
+      expect(read.displayName, 'Sam');
       expect(read.upnpEnabled, isTrue);
       expect(read.lanDiscoveryEnabled, isFalse);
       expect(read.voiceActive, isTrue);
