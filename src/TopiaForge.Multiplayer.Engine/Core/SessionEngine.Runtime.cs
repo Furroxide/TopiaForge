@@ -205,14 +205,48 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         /// <summary>
-        /// Ends a joined connection that took the snapshot but never acknowledged it within the host's bound, after a join
-        /// or a session replacement, so a player that stalls cannot hold its slot for ever. Returns whether it ended.
+        /// Ends a joined connection that took the snapshot but never acknowledged it within the host's bound, counted from
+        /// its acceptance or from the replacement that took it out of Ready, so a player that stalls cannot hold its slot
+        /// for ever. Returns whether it ended.
         /// </summary>
         private bool ExpireUnreadyConnection(HostConnection connection)
         {
             if (connection.Phase != HostConnectionPhase.Accepted || nowMicros - connection.SnapshotSentAtMicros <= options.ReadyTimeoutMicros) return false;
             EndConnection(connection, MultiplayerSessionEndReason.TimedOut, "The player did not finish joining in time.");
             return true;
+        }
+
+        /// <summary>
+        /// Starts the host's wait for a player the session's replacement takes out of Ready: from now, and once more from the
+        /// player's report that the replacement reached it. A player still joining keeps the wait it started, as its own
+        /// allowance does, so replacing the session more often than the bound never lets a player that stalls keep its slot.
+        /// </summary>
+        private void StartWaitingAfterReplacement(HostConnection connection)
+        {
+            if (connection.Phase != HostConnectionPhase.Ready) return;
+            connection.SnapshotSentAtMicros = nowMicros;
+            connection.AwaitedReceiptEpoch = epoch;
+        }
+
+        /// <summary>
+        /// Takes a player's report that a replacement reached it. The first report since the replacement that took the
+        /// player out of Ready starts the host's wait again, once: the player's own allowance starts when the replacement
+        /// reaches it, so the host still waits longer, however long the replacement waited behind earlier traffic.
+        /// </summary>
+        private void TakeReplacementReceipt(HostConnection connection, ulong receivedEpoch)
+        {
+            var awaited = connection.AwaitedReceiptEpoch;
+            if (awaited == 0 || connection.Phase != HostConnectionPhase.Accepted || receivedEpoch < awaited || receivedEpoch > epoch) return;
+            connection.AwaitedReceiptEpoch = 0;
+            if (nowMicros > connection.SnapshotSentAtMicros) connection.SnapshotSentAtMicros = nowMicros;
+        }
+
+        /// <summary>Tells the host, at this flush, that its replacement reached this player.</summary>
+        private void WriteReplacementReceived(ClientChannel current)
+        {
+            if (!current.ReplacementReceivedPending) return;
+            current.ReplacementReceivedPending = false;
+            SessionMessages.WriteEpochMessage(clientFrame, clientBody, MessageType.ReplacementReceived, epoch);
         }
 
         /// <summary>

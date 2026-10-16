@@ -64,8 +64,18 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the allowance within which the host counts the player's stale system messages.</summary>
         internal TokenBucket? StaleSystemIngress { get; set; }
 
-        /// <summary>Gets or sets when the host sent this connection the snapshot it must acknowledge to become Ready.</summary>
+        /// <summary>
+        /// Gets or sets when the host began waiting for this connection to acknowledge a snapshot and become Ready: its
+        /// acceptance, or the replacement that took it out of Ready, or the player's report that this replacement reached
+        /// it. A replacement while the player is still joining starts nothing over.
+        /// </summary>
         internal long SnapshotSentAtMicros { get; set; }
+
+        /// <summary>
+        /// Gets or sets the epoch of the replacement that took this player out of Ready, while the host still waits for the
+        /// player's report that it arrived; zero otherwise.
+        /// </summary>
+        internal ulong AwaitedReceiptEpoch { get; set; }
 
         /// <summary>Gets or sets when the player last acknowledged a snapshot and became Ready.</summary>
         internal long ReadyAtMicros { get; set; }

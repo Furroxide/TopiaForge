@@ -169,9 +169,11 @@ namespace TopiaForge.Mods.Internal
     /// <summary>
     /// How long a joining player waits to be Ready, and how long its host waits for it. Until the player has been Ready, it
     /// gives the host <see cref="SynchronizeSeconds"/> for each snapshot and its own holds <see cref="MaximumSeconds"/> from
-    /// the first of them, and waits <see cref="AllowanceSeconds"/> in all, from link-up or from the replacement that took
-    /// it out of the session. The host waits <see cref="HostSeconds"/> from its acceptance or its replacement, a minute
-    /// longer, so an honest player always gives up first.
+    /// the first of them, and waits <see cref="AllowanceSeconds"/> in all, from link-up or from the arrival of the
+    /// replacement that took it out of the session. The host waits <see cref="HostSeconds"/>, a minute longer, from its
+    /// acceptance, or from that replacement and again from the player's report that it arrived, however long it waited
+    /// behind earlier traffic; replacements while the player is still joining start neither wait over. So an honest player
+    /// always gives up first, and a player that stalls never keeps its slot.
     /// </summary>
     internal static class InternalReadinessLimits
     {
@@ -188,8 +190,8 @@ namespace TopiaForge.Mods.Internal
         internal const int AllowanceSeconds = SynchronizeSeconds + MaximumSeconds;
 
         /// <summary>
-        /// How long a host waits for a player to acknowledge its snapshot, from the join's acceptance or the session's
-        /// replacement: the player's whole allowance, and a minute for the replacement to reach it.
+        /// How long a host waits for a player to acknowledge its snapshot, from the join's acceptance, or from the player's
+        /// report that a replacement reached it: the player's whole allowance, and a minute for the report to reach the host.
         /// </summary>
         internal const int HostSeconds = AllowanceSeconds + 60;
     }

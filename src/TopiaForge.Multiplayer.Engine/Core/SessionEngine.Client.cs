@@ -595,6 +595,7 @@ namespace TopiaForge.Multiplayer.Engine
             current.SnapshotCompleted = false;
             current.ReadinessHeld = false;
             current.ReadyAckPending = false;
+            current.ReplacementReceivedPending = true;
             state = MultiplayerSessionState.Synchronizing;
             sessionReplacementsReceived++;
             MarkSessionChanged();
@@ -723,6 +724,7 @@ namespace TopiaForge.Multiplayer.Engine
                     new JoinRequestMessage(ProtocolVersion, current.DisplayName, RegisteredContracts(), current.Content));
             }
 
+            WriteReplacementReceived(current);
             if (current.ReadyAckPending)
             {
                 current.ReadyAckPending = false;

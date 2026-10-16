@@ -323,10 +323,15 @@ host's world and applies its baseline (WS3.6, WS3.8).
     a replacement after it was Ready, until it has been Ready again;
   - **progress** is a snapshot, a system message from the host, or `IInternalReadinessHold.ReportProgress` while the
     runtime works on its own, for example while it loads a large scene;
-  - **the host** waits 8 minutes for a player to acknowledge a snapshot, from the join's acceptance or the session's
-    replacement, and then ends the connection as timed out, so a player that stalls never keeps its slot. That is the
-    player's whole allowance and a minute for the replacement to reach it; the player counts from link-up, which comes
-    before the acceptance, so an honest player always gives up first.
+  - **the host** waits 8 minutes for a player to acknowledge a snapshot, and then ends the connection as timed out. It
+    counts from the join's acceptance, or from the replacement that took a Ready player out of the session and again
+    from the player's report that this replacement reached it (`ReplacementReceived`, `0x42`): a replacement can wait
+    behind minutes of earlier traffic when the player's windows are full, and the player counts its allowance from the
+    replacement's arrival. A report counts once per replacement, so a player can move the host's start once and never
+    again. Replacements while the player is still joining start nothing over, on either side, so a host that replaces
+    the session more often than its bound never lets a player that stalls keep its slot. That is the player's whole
+    allowance and a minute; the player counts from link-up, which comes before the acceptance, or from the replacement's
+    arrival, which comes before its report, so an honest player always gives up first.
 
   A session the host replaces while the player is in it is synchronized again within the same bounds, although the join
   stays `InSession`.
@@ -403,7 +408,11 @@ answers no and is reported.
   stale messages stays within its allowance; a newer peer's channels are credited both ways.
 - **Readiness bounds** (`ReadinessBoundsTests`): a replacement before the player is Ready gets its own snapshot
   deadline, a host that keeps replacing the session cannot keep the player waiting, and, with production timings and a
-  1.6 MB snapshot on the link's 32 KiB a second, the host waits out an honest player's whole allowance.
+  1.6 MB snapshot on the link's 32 KiB a second, the host waits out an honest player's whole allowance. With production
+  timings and every window full when the host replaces the session, the replacement reaches the player more than two
+  minutes late and the host still waits out the player's allowance from there; on the engine, a late replacement's
+  report moves the start of the host's wait once and never again, and a host that replaces the session every half
+  second still ends a player that never acknowledges at the bound from its acceptance.
 - **The host's text** (`HostTextTests`): a refused descriptor request is described in this game's words, whatever
   status the host sends, and a host whose runtime is not ready refuses with a code of its own.
 - **The composition root** (`RuntimeCompositionTests`, `MultiplayerRuntimeHostTests`, the ModRuntime harness): who

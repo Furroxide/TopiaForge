@@ -225,6 +225,7 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | `0x30` | host → client | `VoiceRoster`: each speaker index, its participant, and whether the host muted it |
 | `0x31` | client → host | `VoiceMutes`: whom the client's player does not want to hear, or everyone |
 | `0x40`, `0x41` | both | `ClockSync`, `ClockSyncReply` |
+| `0x42` | client → host | `ReplacementReceived` (epoch): a session replacement reached the player (see Runtime support) |
 
 Submissions carry the session epoch. The host answers a submission from an earlier epoch, or one whose sequence does
 not increase, with `Conflict`. Malformed frames, bound violations and unknown critical types end that connection with
@@ -294,8 +295,11 @@ TopiaForge's runtime drives the provider's engine through the internal SPI
   acknowledging, until the last hold is released. A host's holds change nothing. The engine records when holds first
   applied since the client was last Ready, however many replacements followed, the latest progress (a snapshot, a host
   system message, or the runtime's report) and how many replacements arrived, which the live join bounds. A host ends a
-  connection that has not acknowledged its snapshot `ReadyTimeoutMicros` after the join's acceptance or the session's
-  replacement (8 minutes, `InternalReadinessLimits.HostSeconds`), longer than a joining player's whole allowance.
+  connection that has not acknowledged its snapshot `ReadyTimeoutMicros` (8 minutes, `InternalReadinessLimits.HostSeconds`)
+  after the join's acceptance, or after the replacement that took a Ready player out of the session; a client reports
+  each replacement's arrival in `ReplacementReceived`, and the first report since that replacement starts the host's wait
+  again, once, since a replacement can wait behind a full link. Replacements while the player is still joining start
+  nothing over. The wait is longer than a joining player's whole allowance.
 - **The host's words.** A pending submission that a session end cancels fails with the engine's own text, never the
   host's message.
 - **World sources.** The facade's `TryGetNetworkObjectId`, `TryGetEntity`, `TryGetAvatar` and `TryGetPose` ask the

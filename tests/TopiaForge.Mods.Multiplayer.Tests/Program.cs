@@ -373,6 +373,9 @@ internal static class Program
             ReadinessBoundsTests.RepeatedReplacementsCannotKeepAPlayerWaiting();
             ReadinessBoundsTests.HostsWaitOutAPlayersWholeAllowance();
             ReadinessBoundsTests.TheJoinClockKeepsEveryBound();
+            ReadinessBoundsTests.ReplacementsCannotKeepAStalledPlayersSlot();
+            ReadinessBoundsTests.TheHostWaitsFromAReplacementsArrival();
+            ReadinessBoundsTests.AReplacementBehindFullWindowsLeavesThePlayerItsAllowance();
             HostTextTests.DescriptorRefusalsAreThisGamesOwnWords();
             HostTextTests.HostsNotReadySaySoInACodeOfTheirOwn();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");

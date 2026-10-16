@@ -91,13 +91,13 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var connection in connections)
             {
                 if (!connection.IsJoined) continue;
+                StartWaitingAfterReplacement(connection);
                 connection.ResetForNewSession();
                 connection.RestartStreams();
                 connection.StreamGeneration = generation;
                 connection.Enqueue(new SessionReplacedItem(replaced));
                 connection.Enqueue(snapshotItem ??= CaptureSnapshot());
                 connection.Phase = HostConnectionPhase.Accepted;
-                connection.SnapshotSentAtMicros = nowMicros;
             }
 
             MarkParticipantsChanged();
@@ -338,6 +338,9 @@ namespace TopiaForge.Multiplayer.Engine
                         connection.ReadyAtMicros = nowMicros;
                     }
 
+                    break;
+                case MessageType.ReplacementReceived:
+                    TakeReplacementReceipt(connection, body.ReadVarUInt());
                     break;
                 case MessageType.Command:
                     HandleSubmission(connection, ReplicationMessages.ReadCommand(body, connection.InIntern), isCommand: true);

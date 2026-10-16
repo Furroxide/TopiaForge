@@ -42,6 +42,12 @@ namespace TopiaForge.Multiplayer.Engine
         internal const byte ClockSync = 0x40;
         internal const byte ClockSyncReply = 0x41;
 
+        /// <summary>
+        /// Client to host: a session replacement reached this player (the new epoch). A host counts its wait for the new
+        /// acknowledgement from here, since the replacement can wait behind a full link. Ignorable, so an older host skips it.
+        /// </summary>
+        internal const byte ReplacementReceived = 0x42;
+
         internal const byte LastCritical = 0x3F;
         internal const byte LastIgnorable = 0x7F;
 

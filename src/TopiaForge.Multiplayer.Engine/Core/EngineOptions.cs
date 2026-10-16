@@ -46,10 +46,12 @@ namespace TopiaForge.Multiplayer.Engine
         internal long JoinRequestTimeoutMicros { get; set; } = 10_000_000;
 
         /// <summary>
-        /// Gets or sets how long a host waits for a player to acknowledge a snapshot, from the join's acceptance or the
-        /// session's replacement, before it ends the connection as timed out:
-        /// <see cref="InternalReadinessLimits.HostSeconds"/>. That is the joining player's whole allowance, its wait for the
-        /// snapshot and its holds, which it counts from link-up, and a minute more, so an honest player always gives up first.
+        /// Gets or sets how long a host waits for a player to acknowledge a snapshot before it ends the connection as timed
+        /// out: <see cref="InternalReadinessLimits.HostSeconds"/>. It counts from the join's acceptance, or from the
+        /// replacement that took a Ready player out of the session and again from the player's report that it arrived; a
+        /// replacement while the player is still joining starts nothing over. That is the player's whole allowance, its wait
+        /// for the snapshot and its holds, which it counts from link-up or from the replacement's arrival, and a minute more,
+        /// so an honest player always gives up first.
         /// </summary>
         internal long ReadyTimeoutMicros { get; set; } = InternalReadinessLimits.HostSeconds * 1_000_000L;
 
