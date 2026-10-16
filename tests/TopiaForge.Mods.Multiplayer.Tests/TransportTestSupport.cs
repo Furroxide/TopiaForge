@@ -93,7 +93,8 @@ internal sealed class TransportPair
 
     private static TransportOptions Options(int seed, RecordingTransportDiagnostics diagnostics, Action<TransportOptions>? configure)
     {
-        var options = new TransportOptions { Random = new SeededTransportRandom(seed), Diagnostics = diagnostics };
+        // The pair connects over direct paths, which a test chooses as a player who allowed direct play would.
+        var options = new TransportOptions { Random = new SeededTransportRandom(seed), Diagnostics = diagnostics, RelayOnly = false };
         configure?.Invoke(options);
         return options;
     }

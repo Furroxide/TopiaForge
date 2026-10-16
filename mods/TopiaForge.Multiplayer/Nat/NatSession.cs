@@ -80,6 +80,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <summary>Gets the pair the session's connection uses now, if the transport has one on a known pair.</summary>
         internal CandidatePair? Current { get; private set; }
 
+        /// <summary>
+        /// Gets whether a connected join's connection is in trouble: it has heard nothing authenticated for the stall time,
+        /// on whatever path it runs. The joiner then needs signaling again, until a path validates.
+        /// </summary>
+        internal bool PathTrouble { get; private set; }
+
         internal NatRoute Route => Current == null ? NatRoute.None : Current.IsRelayed ? NatRoute.Relayed : NatRoute.Direct;
 
         internal NatJoinStage Stage
@@ -103,8 +109,17 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         internal void OnWelcome(bool online, long now)
         {
+            // A joiner back in the room after closing its socket says again what the host may have missed.
+            if (welcomed && offered) ResendCandidates();
             welcomed = true;
             OnHostStatus(online, now);
+        }
+
+        /// <summary>The peer's socket is back in the room: whatever the host trickled while it was closed went nowhere, so it goes again.</summary>
+        internal void OnRejoined(long now)
+        {
+            signalingGone = false;
+            if (answered) ResendCandidates();
         }
 
         internal void OnHostStatus(bool online, long now)
@@ -125,7 +140,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 return;
             }
 
-            if (IsJoin && options.RelayOnly && !agent.RelayUp)
+            if (IsJoin && agent.RelayOnly && !agent.RelayUp)
             {
                 Fail(NatFailure.RelayUnavailable, now);
                 return;
@@ -177,6 +192,13 @@ namespace TopiaForge.Multiplayer.NatTraversal
             agent.Signal(SignalMessage.Trickle(PeerId, SignalCandidate.From(candidate)));
         }
 
+        /// <summary>Trickles every candidate this side may signal now, through the privacy gate; the remote ignores those it holds.</summary>
+        private void ResendCandidates()
+        {
+            if (State == NatSessionState.Ended || State == NatSessionState.Failed) return;
+            foreach (var candidate in agent.SignalableCandidates()) agent.Signal(SignalMessage.Trickle(PeerId, candidate));
+        }
+
         internal void OnBye(long now)
         {
             signalingGone = true;
@@ -211,7 +233,8 @@ namespace TopiaForge.Multiplayer.NatTraversal
             KeepRoute(stack, now);
             UpdateConsent(now);
             Checker.Prune(now, Current);
-            if (!IsJoin) PollHost(now);
+            if (IsJoin) PathTrouble = State == NatSessionState.Connected && JoinStalled(stack);
+            else PollHost(now);
         }
 
         internal long NextTimeoutMicros()

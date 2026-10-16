@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Text;
 using provider::TopiaForge.Multiplayer.NatTraversal.Ice;
 using provider::TopiaForge.Multiplayer.NatTraversal.Signaling;
+using provider::TopiaForge.Multiplayer.NatTraversal.Turn;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
@@ -14,75 +15,67 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// </summary>
 internal static class NatSignalingTests
 {
-    private const string PeerId = "74aea50c644d302f";
+    /// <summary>
+    /// The control plane's signaling transcript (ControlPlaneApi.md, section 11), recorded by the service's own tests:
+    /// what clients send, which a client must write byte for byte, and what the service sends, which it must read.
+    /// </summary>
+    private static (int Step, string From, string Frame)[]? transcript;
 
-    // The control plane's signaling transcript (ControlPlaneApi.md, section 11), frame for frame. Steps 4, 7, 9, 11 and
-    // 13 are what clients send; the rest are what the service sends.
-    private static readonly (int Step, string From, string Frame)[] Transcript =
-    {
-        (1, "service", """{"peers":[],"role":"host","type":"welcome"}"""),
-        (2, "service", """{"hostOnline":true,"hostRelayOnly":false,"peer":"74aea50c644d302f","role":"peer","type":"welcome"}"""),
-        (3, "service", """{"peer":"74aea50c644d302f","relayOnly":true,"type":"joined"}"""),
-        (4, "peer", """{"candidates":[{"address":"192.168.1.20","kind":"host","port":27250,"priority":2130706431},{"address":"198.51.100.77","kind":"srflx","port":40000,"priority":1694498815},{"address":"203.0.113.50","kind":"relay","port":50000,"priority":16777215}],"ice":{"pwd":"0123456789abcdefABCDEF","ufrag":"abcd1234"},"type":"offer"}"""),
-        (5, "service", """{"code":"candidates-withheld","type":"notice","withheld":2}"""),
-        (6, "service", """{"candidates":[{"address":"203.0.113.50","kind":"relay","port":50000,"priority":16777215}],"ice":{"pwd":"0123456789abcdefABCDEF","ufrag":"abcd1234"},"peer":"74aea50c644d302f","type":"offer"}"""),
-        (7, "host", """{"candidates":[{"address":"203.0.113.9","kind":"srflx","port":27250,"priority":1694498815}],"ice":{"pwd":"ZYXWVUTSRQPONMLKJIHGFE","ufrag":"wxyz5678"},"peer":"74aea50c644d302f","type":"answer"}"""),
-        (8, "service", """{"candidates":[{"address":"203.0.113.9","kind":"srflx","port":27250,"priority":1694498815}],"ice":{"pwd":"ZYXWVUTSRQPONMLKJIHGFE","ufrag":"wxyz5678"},"type":"answer"}"""),
-        (9, "peer", """{"candidate":{"address":"203.0.113.51","kind":"relay","port":50001,"priority":16777214},"type":"candidate"}"""),
-        (10, "service", """{"candidate":{"address":"203.0.113.51","kind":"relay","port":50001,"priority":16777214},"peer":"74aea50c644d302f","type":"candidate"}"""),
-        (11, "host", """{"delayMs":250,"peer":"74aea50c644d302f","type":"punch"}"""),
-        (12, "service", """{"delayMs":250,"type":"punch"}"""),
-        (13, "peer", """{"reason":"done","type":"bye"}"""),
-        (14, "service", """{"peer":"74aea50c644d302f","reason":"done","type":"bye"}"""),
-        (15, "service", """{"peer":"74aea50c644d302f","type":"left"}""")
-    };
+    private static (int Step, string From, string Frame)[] Transcript => transcript ??= LoadTranscript();
+
+    /// <summary>Gets the peer id the service gave the joining side in the transcript, from its welcome.</summary>
+    private static string PeerId => Decode(Frame(2), out var welcome) ? welcome.Peer! : throw new InvalidOperationException("The transcript's peer welcome does not read.");
 
     internal static void SignalFramesMatchTheControlPlaneTranscript()
     {
-        Replay(Transcript, "the embedded transcript");
+        That(Transcript.Length == 15, "the shared fixture holds the whole transcript (" + Transcript.Length + " steps)");
+        foreach (var (step, from, frame) in Transcript)
+        {
+            var bytes = Encoding.UTF8.GetBytes(frame);
+            if (from == "service")
+            {
+                That(SignalCodec.TryDecode(bytes, false, out _), "the client reads step " + step);
+                continue;
+            }
 
-        // The control plane records the same transcript as a shared fixture; once it is in the tree, it is replayed too.
-        System.Text.Json.JsonElement? shared = null;
-        try
-        {
-            shared = NetworkFixtures.Load(Path.Combine("control-plane", "signaling.json"));
-        }
-        catch (Exception exception) when (exception is FileNotFoundException || exception is DirectoryNotFoundException)
-        {
-            shared = null;
-        }
-
-        if (shared != null)
-        {
-            var steps = shared.Value.GetProperty("transcript").EnumerateArray()
-                .Select(step => (step.GetProperty("step").GetInt32(), step.Text("from"), step.Text("frame"))).ToArray();
-            Replay(steps, "the shared fixture");
+            That(SignalCodec.TryDecode(bytes, true, out var message), "the service's strict reading accepts step " + step);
+            That(Text(SignalCodec.Encode(message)) == frame, "and the client writes step " + step + " back byte for byte");
         }
 
-        // The client writes exactly what the service recorded.
-        var peerIce = new IceCredentials("abcd1234", "0123456789abcdefABCDEF");
-        var hostIce = new IceCredentials("wxyz5678", "ZYXWVUTSRQPONMLKJIHGFE");
-        var offer = SignalMessage.Offer(peerIce, new[]
-        {
-            new SignalCandidate(IceCandidateKind.Host, "192.168.1.20", 27250, 2130706431),
-            new SignalCandidate(IceCandidateKind.ServerReflexive, "198.51.100.77", 40000, 1694498815),
-            new SignalCandidate(IceCandidateKind.Relayed, "203.0.113.50", 50000, 16777215)
-        });
-        That(Text(SignalCodec.Encode(offer)) == Transcript[3].Frame, "an offer is written byte for byte");
-        That(Text(SignalCodec.Encode(SignalMessage.Answer(PeerId, hostIce, new[] { new SignalCandidate(IceCandidateKind.ServerReflexive, "203.0.113.9", 27250, 1694498815) }))) == Transcript[6].Frame,
-            "so is an answer");
-        That(Text(SignalCodec.Encode(SignalMessage.Trickle(null, new SignalCandidate(IceCandidateKind.Relayed, "203.0.113.51", 50001, 16777214)))) == Transcript[8].Frame, "a trickled candidate");
-        That(Text(SignalCodec.Encode(SignalMessage.Punch(PeerId, 250))) == Transcript[10].Frame, "a punch");
-        That(Text(SignalCodec.Encode(SignalMessage.Bye(null, SignalByeReason.Done))) == Transcript[12].Frame, "and a goodbye");
+        // The client writes exactly what the service recorded, from fresh messages built field by field.
+        That(Decode(Frame(4), out var offer) && Text(SignalCodec.Encode(SignalMessage.Offer(Copy(offer.Ice!), offer.Candidates.Select(Copy).ToList()))) == Frame(4), "an offer is written byte for byte");
+        That(Decode(Frame(7), out var answer) && Text(SignalCodec.Encode(SignalMessage.Answer(answer.Peer!, Copy(answer.Ice!), answer.Candidates.Select(Copy).ToList()))) == Frame(7), "so is an answer");
+        That(Decode(Frame(9), out var trickle) && Text(SignalCodec.Encode(SignalMessage.Trickle(null, Copy(trickle.Candidate!)))) == Frame(9), "a trickled candidate");
+        That(Decode(Frame(11), out var punch) && Text(SignalCodec.Encode(SignalMessage.Punch(punch.Peer, punch.DelayMs))) == Frame(11), "a punch");
+        That(Text(SignalCodec.Encode(SignalMessage.Bye(null, SignalByeReason.Done))) == Frame(13), "and a goodbye");
 
-        That(Decode(Transcript[0].Frame, out var hostWelcome) && hostWelcome.Type == SignalType.Welcome && hostWelcome.Role == SignalRole.Host && hostWelcome.Peers.Count == 0, "the host's welcome reads");
-        That(Decode(Transcript[1].Frame, out var peerWelcome) && peerWelcome.Role == SignalRole.Peer && peerWelcome.Peer == PeerId && peerWelcome.Online && !peerWelcome.RelayOnly, "and a peer's");
-        That(Decode(Transcript[2].Frame, out var joined) && joined.Type == SignalType.Joined && joined.RelayOnly, "joined carries the peer's relay-only choice");
-        That(Decode(Transcript[4].Frame, out var notice) && notice.Type == SignalType.Notice && notice.Withheld == 2, "a notice counts what was withheld");
-        That(Decode(Transcript[5].Frame, out var forwarded) && forwarded.Peer == PeerId && forwarded.Candidates.Single().Kind == IceCandidateKind.Relayed, "a forwarded offer names its peer");
-        That(Decode(Transcript[7].Frame, out var answer) && answer.Peer == null && answer.Ice!.Ufrag == "wxyz5678", "an answer reaches the peer without a peer id");
-        That(Decode(Transcript[11].Frame, out var punch) && punch.DelayMs == 250, "a punch carries its delay");
-        That(Decode(Transcript[14].Frame, out var left) && left.Type == SignalType.Left && left.Peer == PeerId, "left names the peer");
+        That(Decode(Frame(1), out var hostWelcome) && hostWelcome.Type == SignalType.Welcome && hostWelcome.Role == SignalRole.Host && hostWelcome.Peers.Count == 0, "the host's welcome reads");
+        That(Decode(Frame(2), out var peerWelcome) && peerWelcome.Role == SignalRole.Peer && peerWelcome.Peer?.Length == 16 && peerWelcome.Online && !peerWelcome.RelayOnly, "and a peer's");
+        That(Decode(Frame(3), out var joined) && joined.Type == SignalType.Joined && joined.Peer == PeerId && joined.RelayOnly, "joined carries the peer's relay-only choice");
+        That(Decode(Frame(5), out var notice) && notice.Type == SignalType.Notice && notice.Withheld == 3, "a notice counts what was withheld: host, server-reflexive and the mislabelled relay");
+        That(Decode(Frame(6), out var forwarded) && forwarded.Peer == PeerId && forwarded.Candidates.Single().Kind == IceCandidateKind.Relayed &&
+             offer.Candidates.Any(candidate => candidate.Address == forwarded.Candidates[0].Address), "a forwarded offer names its peer and keeps only the relay candidate inside the ranges");
+        That(Decode(Frame(8), out var reachesPeer) && reachesPeer.Peer == null && reachesPeer.Ice!.Ufrag == answer.Ice!.Ufrag, "an answer reaches the peer without a peer id");
+        That(Decode(Frame(10), out var trickled) && trickled.Peer == PeerId && trickled.Candidate!.Address == trickle.Candidate!.Address, "a trickled candidate reaches the host with the peer named");
+        That(Decode(Frame(12), out var punched) && punched.Peer == null && punched.DelayMs == 250, "a punch carries its delay");
+        That(Decode(Frame(14), out var bye) && bye.Type == SignalType.Bye && bye.Peer == PeerId && bye.Reason == SignalByeReason.Done, "a peer's goodbye reaches the host");
+        That(Decode(Frame(15), out var left) && left.Type == SignalType.Left && left.Peer == PeerId, "left names the peer");
+    }
+
+    internal static void RelayCredentialsMatchTheControlPlaneExchanges()
+    {
+        var exchanges = NetworkFixtures.Load(Path.Combine("control-plane", "exchanges.json")).GetProperty("exchanges").EnumerateArray()
+            .Where(exchange => exchange.GetProperty("request").Text("path") == "/v1/turn/credentials").ToList();
+        That(exchanges.Count == 2, "the recording mints relay credentials for the joiner and the host (" + exchanges.Count + ")");
+        foreach (var exchange in exchanges)
+        {
+            var body = Encoding.UTF8.GetBytes(exchange.GetProperty("response").Text("body"));
+            That(IceServerSet.TryParse(body, out var set), exchange.Text("id") + ": the recorded answer parses");
+            That(set.HasRelay && set.TtlSeconds == 600 && set.TurnServers.All(server => server.Host == "turn.cloudflare.com"),
+                exchange.Text("id") + ": with its credential, its lifetime, and only DNS names");
+            That(set.TurnServers.Count == 1 && set.TurnServers[0].Port == 3478 && set.StunServers.Count == 2,
+                exchange.Text("id") + ": keeping the UDP relay and both STUN ports, and leaving TCP and TLS for later");
+        }
     }
 
     internal static void SignalFramesAreReadStrictlyAndBounded()
@@ -132,12 +125,12 @@ internal static class NatSignalingTests
         using var client = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + server.Port), serverId, "tfj1_ticket");
         That(Wait(() => server.Upgraded && client.State == SignalingState.Open), "the client upgrades");
         That(server.Path == "/v1/signal/" + serverId && server.Authorization == "Bearer tfj1_ticket", "to the room's path, with the ticket in the header and not the URL");
-        server.SendText(Transcript[1].Frame);
+        server.SendText(Frame(2));
         That(Wait(() => client.TryReceive(out var message) && message.Type == SignalType.Welcome && message.Peer == PeerId), "a service frame arrives decoded");
         That(client.TrySend(SignalMessage.Bye(null, SignalByeReason.Done)), "a frame is queued");
-        That(Wait(() => server.Received.TryPeek(out var text) && text == Transcript[12].Frame), "and reaches the service exactly as written");
+        That(Wait(() => server.Received.TryPeek(out var text) && text == Frame(13)), "and reaches the service exactly as written");
         server.SendText("{not json");
-        server.SendText(Transcript[11].Frame);
+        server.SendText(Frame(12));
         That(Wait(() => client.TryReceive(out var message) && message.Type == SignalType.Punch), "a malformed frame is skipped, the next one read");
         server.SendClose(4411);
         That(Wait(() => client.State == SignalingState.Closed) && client.CloseReason == SignalingCloseReason.Expired, "a lifetime close reads as expired (" + client.CloseReason + ")");
@@ -160,7 +153,8 @@ internal static class NatSignalingTests
                      (server => server.SendBinary(new byte[] { 1, 2, 3 }), SignalingCloseReason.Invalid),
                      (server => server.SendClose(4409), SignalingCloseReason.Replaced),
                      (server => server.SendClose(4410), SignalingCloseReason.SessionEnded),
-                     (server => server.SendClose(4408), SignalingCloseReason.RateLimited)
+                     (server => server.SendClose(4408), SignalingCloseReason.RateLimited),
+                     (server => server.SendClose(4403), SignalingCloseReason.Revoked)
                  })
         {
             using var server = new LoopbackWebSocketServer();
@@ -192,21 +186,15 @@ internal static class NatSignalingTests
         Throws<ArgumentException>(() => WebSocketSignalingClient.Open(new Uri("https://control.example.test"), serverId, "two words"), "a credential with a space is refused");
     }
 
-    private static void Replay((int Step, string From, string Frame)[] steps, string source)
-    {
-        foreach (var (step, from, frame) in steps)
-        {
-            var bytes = Encoding.UTF8.GetBytes(frame);
-            if (from == "service")
-            {
-                That(SignalCodec.TryDecode(bytes, false, out _), source + ": the client reads step " + step);
-                continue;
-            }
+    private static (int Step, string From, string Frame)[] LoadTranscript() =>
+        NetworkFixtures.Load(Path.Combine("control-plane", "signaling.json")).GetProperty("transcript").EnumerateArray()
+            .Select(step => (step.GetProperty("step").GetInt32(), step.Text("from"), step.Text("frame"))).ToArray();
 
-            That(SignalCodec.TryDecode(bytes, true, out var message), source + ": the service's strict reading accepts step " + step);
-            That(Text(SignalCodec.Encode(message)) == frame, source + ": and the client writes step " + step + " back byte for byte");
-        }
-    }
+    private static string Frame(int step) => Transcript.Single(entry => entry.Step == step).Frame;
+
+    private static IceCredentials Copy(IceCredentials ice) => new(ice.Ufrag, ice.Password);
+
+    private static SignalCandidate Copy(SignalCandidate candidate) => new(candidate.Kind, candidate.Address, candidate.Port, candidate.Priority);
 
     private static bool Decode(string frame, out SignalMessage message) => SignalCodec.TryDecode(Encoding.UTF8.GetBytes(frame), false, out message);
 

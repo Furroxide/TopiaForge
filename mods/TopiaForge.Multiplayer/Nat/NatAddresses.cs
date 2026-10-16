@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using TopiaForge.Multiplayer.Network;
+using TopiaForge.Multiplayer.Transport;
 
 namespace TopiaForge.Multiplayer.NatTraversal
 {
@@ -80,6 +81,25 @@ namespace TopiaForge.Multiplayer.NatTraversal
             if (!string.Equals(Format(parsed), text, StringComparison.Ordinal)) return false;
             address = Unmap(parsed);
             return true;
+        }
+
+        /// <summary>
+        /// Gets whether a datagram from <paramref name="path"/> can be genuine: a UDP source sends from a port, and never
+        /// from an unspecified, "this network", multicast, reserved or broadcast address. Loopback and the LAN pass. It
+        /// reads the path's key where it lies, so it allocates nothing; paths of any other kind are left to their owners.
+        /// </summary>
+        internal static bool IsPlausibleSource(TransportPath path)
+        {
+            var key = path.KeyBytes;
+            if (key.Length != UdpPaths.KeySize || key[0] != UdpPaths.UdpKeyType) return true;
+            if (key[17] == 0 && key[18] == 0) return false;
+            var mapped = key[11] == 0xFF && key[12] == 0xFF;
+            var zero = true;
+            for (var index = 1; index <= 10; index++) zero &= key[index] == 0;
+            if (zero && mapped) return key[13] != 0 && key[13] < 224;
+            if (key[1] == 0xFF) return false;
+            for (var index = 11; index <= 16; index++) zero &= key[index] == 0;
+            return !zero;
         }
 
         /// <summary>Gets whether two endpoints name the same address and port, mapped and plain IPv4 alike.</summary>

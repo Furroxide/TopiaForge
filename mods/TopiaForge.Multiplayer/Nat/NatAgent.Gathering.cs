@@ -29,7 +29,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private NatSessionPlan? plan;
         private IceServerSet? servers;
         private Task<IPAddress[]>? stunLookup;
-        private Task<IPAddress[]>? turnLookup;
+        private RelayServers? initialResolving;
         private bool stunAttempted;
         private bool turnAttempted;
         private bool bindingSettled;
@@ -59,7 +59,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <summary>Adds a candidate a port mapping produced: a server-reflexive address of this host's own making.</summary>
         internal void AddMappedCandidate(IPEndPoint endpoint, long now)
         {
-            if (endpoint == null || options.RelayOnly || Role != NatRole.Host || !NatAddresses.IsPublic(endpoint.Address)) return;
+            if (endpoint == null || RelayOnly || Role != NatRole.Host || !NatAddresses.IsPublic(endpoint.Address)) return;
             var candidate = AddReflexive(endpoint, 65535);
             if (candidate == null) return;
             foreach (var session in sessions) session.TrickleLocal(candidate);
@@ -74,7 +74,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             gatherDeadline = now + options.GatheringTimeoutMicros;
             credentialExpiresAt = now + (servers.TtlSeconds * 1_000_000L);
             if (sessionPlan.Renew != null) nextRenewalAt = credentialExpiresAt - options.RenewMarginMicros;
-            if (!options.RelayOnly)
+            if (!RelayOnly)
             {
                 socketBase = LocalBase.Socket(IceCandidate.ComputePriority(IceCandidateKind.Host, 65535));
                 AddHostCandidates(sessionPlan.LocalAddresses, sessionPlan.LocalPort);
@@ -88,9 +88,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
             if (servers.HasRelay)
             {
+                // Every TURN server's own name is looked up, so a rotation or a retry can move to another address.
                 turnAttempted = true;
-                turnLookup = Lookup(servers.TurnServers[0].Host);
-                if (turnLookup == null) relayLookupFailed = true;
+                initialResolving = new RelayServers(servers, Lookup);
             }
         }
 
@@ -104,31 +104,49 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 else StartBinding(new IPEndPoint(address, servers!.StunServers[0].Port), now);
             }
 
-            if (turnLookup != null && turnLookup.IsCompleted)
+            if (initialResolving != null && initialResolving.IsCompleted)
             {
-                var address = Pick(turnLookup);
-                turnLookup = null;
-                if (address == null) relayLookupFailed = true;
-                else StartRelay(UdpPaths.For(new IPEndPoint(address, servers!.TurnServers[0].Port)), servers, now);
+                var targets = initialResolving.Targets(null, options.AcceptLoopback);
+                initialResolving = null;
+                if (targets.Count == 0)
+                {
+                    relayLookupFailed = true;
+                }
+                else
+                {
+                    relayTargets = targets;
+                    if (RelayWanted) ScheduleRelay(targets[0].Path, servers!, now);
+                }
             }
 
-            if (relay != null && relay.State == TurnAllocationState.Ready && relayBase == null) OnRelayReady(now);
+            CatchRelayReady(now);
             if (!gathered && gatheringOutcome == NatGathering.Gathering && (GatheringSettled() || now >= gatherDeadline)) CompleteGathering(now);
         }
 
         private bool GatheringSettled()
         {
-            if (stunLookup != null || turnLookup != null) return false;
+            if (stunLookup != null || initialResolving != null) return false;
             var stunDone = !stunAttempted || bindingSettled;
-            var turnDone = !turnAttempted || relayLookupFailed || (relay != null && relay.State != TurnAllocationState.Allocating && relay.State != TurnAllocationState.Idle);
-            return stunDone && turnDone;
+            return stunDone && (!turnAttempted || relayLookupFailed || RelayUp || RelayGaveUp());
+        }
+
+        /// <summary>
+        /// Gets whether gathering stops waiting for the relay: an attempt failed, and either nothing ever answered (the
+        /// network may block UDP), no attempt is pending, or the next one starts only after the deadline.
+        /// </summary>
+        private bool RelayGaveUp()
+        {
+            if (relayFailures == 0) return false;
+            if (relay == null) return true;
+            if (relay.State != TurnAllocationState.Idle) return false;
+            return relayStartAt >= gatherDeadline || (!relayHeard && lastRelayFailure == TurnFailure.Timeout);
         }
 
         private void CompleteGathering(long now)
         {
             gathered = true;
             var relayUp = RelayUp;
-            var relayAnswered = relay != null && (relayUp || (relay.State == TurnAllocationState.Failed && relay.Failure != TurnFailure.Timeout));
+            var relayAnswered = relayHeard || (relay != null && relay.Answered);
             if (!bindingAnswered && !relayAnswered && (stunAttempted || turnAttempted))
             {
                 gatheringOutcome = NatGathering.UdpBlocked;
@@ -159,7 +177,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         private long GatheringTimeout()
         {
-            if (stunLookup != null || turnLookup != null) return currentTime + PendingTaskPollMicros;
+            if (stunLookup != null || initialResolving != null) return currentTime + PendingTaskPollMicros;
             return gathered ? long.MaxValue : gatherDeadline;
         }
 
@@ -179,7 +197,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         private IceCandidate? AddReflexive(IPEndPoint endpoint, int localPreference)
         {
-            if (options.RelayOnly) return null;
+            if (RelayOnly) return null;
             foreach (var existing in reflexiveCandidates)
             {
                 if (existing.SameAddress(endpoint)) return null;
@@ -233,7 +251,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 if (raw == null) continue;
                 var address = NatAddresses.Unmap(raw);
                 if (NatAddresses.IsUsable(address) || (options.AcceptLoopback && IPAddress.IsLoopback(address))) result.Add(address);
-                if (result.Count == 4) break;
+                if (result.Count == RelayServers.AddressesPerName) break;
             }
 
             return result;

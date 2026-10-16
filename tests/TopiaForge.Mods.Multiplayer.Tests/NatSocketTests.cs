@@ -73,8 +73,9 @@ internal static class NatSocketTests
 
     private static (NetworkThread Thread, NatPlumbing Nat) Build(string name, int role)
     {
-        var nat = NatPlumbing.Wrap(new UdpSocketDriver(0, IPAddress.Loopback), new NatAgentOptions { AcceptLoopback = true, Random = new SeededTransportRandom(900 + role) }, Clock);
-        var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(900, role), new TransportOptions(), Clock()));
+        // Both players allowed direct play, so the joiner can move to the direct path the two sockets share.
+        var nat = NatPlumbing.Wrap(new UdpSocketDriver(0, IPAddress.Loopback), new NatAgentOptions { AcceptLoopback = true, RelayOnly = false, Random = new SeededTransportRandom(900 + role) }, Clock);
+        var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(900, role), new TransportOptions { RelayOnly = false }, Clock()));
         var thread = new NetworkThread("TopiaForge test NAT " + name, nat.Socket, stack, Clock);
         thread.Attach(nat.Service);
         thread.Start();

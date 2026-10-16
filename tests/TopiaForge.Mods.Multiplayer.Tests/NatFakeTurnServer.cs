@@ -55,6 +55,7 @@ internal sealed class FakeTurnServer
     private readonly StunMessageWriter writer = new();
     private readonly Random random;
     private int nextRelayPort = 50_000;
+    private int allocated;
     private int nonceCounter;
     private long currentTime;
 
@@ -78,10 +79,31 @@ internal sealed class FakeTurnServer
 
     internal long NonceLifetimeMicros { get; set; } = long.MaxValue;
 
+    /// <summary>Gets or sets the nonce text every challenge carries, as a server with very long nonces would; numbered nonces otherwise.</summary>
+    internal string? NonceText { get; set; }
+
     internal uint LifetimeSeconds { get; set; } = 600;
 
     /// <summary>Gets or sets an error code every Allocate meets, such as 486 or 508.</summary>
     internal int? AllocateError { get; set; }
+
+    /// <summary>Gets the error codes the next authenticated Allocates meet, one each, before any are granted.</summary>
+    internal Queue<int> AllocateErrors { get; } = new();
+
+    /// <summary>Gets or sets whether every ChannelBind is refused, so data travels as Send and Data indications.</summary>
+    internal bool RefuseChannelBinds { get; set; }
+
+    /// <summary>Gets or sets a filter that loses requests on their way to the server: the client's address and the bytes.</summary>
+    internal Func<IPEndPoint, byte[], bool>? LoseRequest { get; set; }
+
+    /// <summary>Gets how many zero-lifetime Refreshes, releases, reached the server.</summary>
+    internal int Releases { get; private set; }
+
+    /// <summary>Gets how many Allocates met an allocation already on their 5-tuple and drew a 437.</summary>
+    internal int Mismatches { get; private set; }
+
+    /// <summary>Forgets every allocation at once, as a server that restarted would.</summary>
+    internal void ForgetAllocations() => allocations.Clear();
 
     /// <summary>Gets or sets whether the server answers nothing at all, as when UDP never reaches it.</summary>
     internal bool Silent { get; set; }
@@ -93,6 +115,12 @@ internal sealed class FakeTurnServer
 
     /// <summary>Gets or sets where relayed ports come from; real-socket tests bind a socket for each.</summary>
     internal Func<int>? RelayPorts { get; set; }
+
+    /// <summary>
+    /// Gets or sets the address each new allocation relays from, by the allocation's number from zero; the server's own
+    /// address by default. Distinct addresses mean a peer's permission for one relay never covers the next.
+    /// </summary>
+    internal Func<int, IPAddress>? RelayAddresses { get; set; }
 
     internal Queue<(IPEndPoint From, IPEndPoint To, byte[] Bytes)> Outbox { get; } = new();
 
@@ -121,21 +149,21 @@ internal sealed class FakeTurnServer
 
     /// <summary>Gets whether <paramref name="destination"/> is one of this server's addresses: a listening port or a relayed address.</summary>
     internal bool Owns(IPEndPoint destination) =>
-        NatAddresses.SameAddress(destination.Address, Address) &&
-        (ports.Contains(destination.Port) || allocations.Any(allocation => allocation.Relay.Port == destination.Port));
+        (NatAddresses.SameAddress(destination.Address, Address) && ports.Contains(destination.Port)) ||
+        allocations.Any(allocation => NatAddresses.SameEndPoint(allocation.Relay, destination));
 
     internal void Receive(IPEndPoint from, IPEndPoint to, byte[] bytes, long now)
     {
         currentTime = now;
         if (Silent) return;
         Expire(now);
-        if (ports.Contains(to.Port))
+        if (NatAddresses.SameAddress(to.Address, Address) && ports.Contains(to.Port))
         {
             ReceiveFromClient(from, new IPEndPoint(Address, to.Port), bytes, now);
             return;
         }
 
-        var allocation = allocations.FirstOrDefault(candidate => candidate.Relay.Port == to.Port);
+        var allocation = allocations.FirstOrDefault(candidate => NatAddresses.SameEndPoint(candidate.Relay, to));
         if (allocation == null) return;
         if (!allocation.Permissions.TryGetValue(NatAddresses.Unmap(from.Address), out var expires) || expires <= now)
         {
@@ -160,11 +188,11 @@ internal sealed class FakeTurnServer
         Send(allocation.ServerSide, allocation.Client, Trim(buffer, writer.Finish(null, true)));
     }
 
-    /// <summary>Ends allocations whose lifetime or credential ran out.</summary>
+    /// <summary>Ends allocations whose lifetime or credential ran out, silent or not: silence only stops the answers.</summary>
     internal void Poll(long now)
     {
         currentTime = now;
-        if (!Silent) Expire(now);
+        Expire(now);
     }
 
     internal long NextTimeoutMicros()
@@ -184,6 +212,7 @@ internal sealed class FakeTurnServer
 
     private void ReceiveFromClient(IPEndPoint from, IPEndPoint serverSide, byte[] bytes, long now)
     {
+        if (LoseRequest != null && LoseRequest(from, bytes)) return;
         if (bytes.Length > 0 && bytes[0] >= 0x40 && bytes[0] <= 0x4F)
         {
             var owner = Find(from, serverSide);
@@ -282,14 +311,22 @@ internal sealed class FakeTurnServer
         AllocateRequests++;
         if (existing != null)
         {
-            if (existing.AllocateId.Equals(message.TransactionId) && existing.AllocateResponse != null) Send(serverSide, from, existing.AllocateResponse);
-            else Error(message, from, serverSide, 437, key, false);
+            if (existing.AllocateId.Equals(message.TransactionId) && existing.AllocateResponse != null)
+            {
+                Send(serverSide, from, existing.AllocateResponse);
+            }
+            else
+            {
+                Mismatches++;
+                Error(message, from, serverSide, 437, key, false);
+            }
+
             return;
         }
 
-        if (AllocateError is int code)
+        if (AllocateErrors.Count > 0 || AllocateError is int)
         {
-            Error(message, from, serverSide, code, key, false);
+            Error(message, from, serverSide, AllocateErrors.Count > 0 ? AllocateErrors.Dequeue() : AllocateError!.Value, key, false);
             return;
         }
 
@@ -300,7 +337,8 @@ internal sealed class FakeTurnServer
         }
 
         var relayPort = RelayPorts?.Invoke() ?? nextRelayPort++;
-        var allocation = new FakeAllocation(from, serverSide, new IPEndPoint(Address, relayPort), user, now + (LifetimeSeconds * 1_000_000L));
+        var relayAddress = RelayAddresses?.Invoke(allocated++) ?? Address;
+        var allocation = new FakeAllocation(from, serverSide, new IPEndPoint(relayAddress, relayPort), user, now + (LifetimeSeconds * 1_000_000L));
         writer.Begin(Buffer(out var buffer), StunMethod.Allocate, StunClass.Success, message.TransactionId);
         writer.AddAddress(StunAttribute.XorRelayedAddress, allocation.Relay);
         writer.AddAddress(StunAttribute.XorMappedAddress, from);
@@ -322,6 +360,7 @@ internal sealed class FakeTurnServer
         }
 
         var lifetime = message.TryGetUInt32(StunAttribute.Lifetime, out var requested) ? Math.Min(requested, LifetimeSeconds) : LifetimeSeconds;
+        if (lifetime == 0) Releases++;
         if (lifetime == 0) allocations.Remove(allocation);
         else allocation.ExpiresAt = now + (lifetime * 1_000_000L);
         writer.Begin(Buffer(out var buffer), StunMethod.Refresh, StunClass.Success, message.TransactionId);
@@ -365,7 +404,7 @@ internal sealed class FakeTurnServer
             return;
         }
 
-        if (Forbidden.Contains(NatAddresses.Unmap(peer.Address)))
+        if (RefuseChannelBinds || Forbidden.Contains(NatAddresses.Unmap(peer.Address)))
         {
             Error(message, from, serverSide, 403, key, false);
             return;
@@ -424,7 +463,7 @@ internal sealed class FakeTurnServer
 
     private string NewNonce()
     {
-        var nonce = "nonce" + (++nonceCounter).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var nonce = NonceText ?? "nonce" + (++nonceCounter).ToString(System.Globalization.CultureInfo.InvariantCulture);
         nonces[nonce] = currentTime;
         return nonce;
     }

@@ -174,6 +174,39 @@ internal static class NatPrivacyTests
         That(!exposed.Any(), "nothing in the NAT layer is public: mods cannot reach it");
     }
 
+    internal static void DefaultOptionsNeverGoDirect()
+    {
+        That(new NatAgentOptions().RelayOnly && new TransportOptions().RelayOnly, "both option types hide the player unless told otherwise");
+
+        // Nobody chose direct play: both players' agents and transports keep their defaults, behind cone NATs that would
+        // otherwise go direct at once, and the service's own stripping is off.
+        var scenario = new NatScenario(430);
+        scenario.Signaling.Strip = false;
+        var hostHome = scenario.Behind("host router", NatBehaviour.FullCone, "198.51.100.10");
+        var joinerHome = scenario.Behind("joiner router", NatBehaviour.FullCone, "198.51.100.20");
+        var host = scenario.AddDefaultPeer("host", hostHome, "192.168.1.10", 27250, 1);
+        var joiner = scenario.AddDefaultPeer("joiner", joinerHome, "192.168.2.20", 27250, 2);
+        scenario.StartHost(host);
+        scenario.Network.RunFor(500_000);
+        var attempt = scenario.StartJoin(joiner);
+        var (joinerLink, hostLink) = scenario.Connect(host, joiner, attempt);
+        That(scenario.Exchange(joinerLink, hostLink, 1), "the session works through the relay");
+        scenario.Network.RunFor(30_000_000);
+        That(NatScenario.RouteOf(joiner) == NatRoute.Relayed && NatScenario.RouteOf(host) == NatRoute.Relayed, "and never goes direct");
+        foreach (var peer in new[] { host, joiner })
+        {
+            That(peer.Agent.RelayOnly && peer.Stack.Endpoint.Options.RelayOnly, peer.Name + ": runs relay-only");
+            That(peer.SentTo.All(target => NatAddresses.SameAddress(target.Address, NatScenario.ServerAddress)), peer.Name + ": sends to its relay and nowhere else");
+            That(scenario.Lookups.Where(lookup => lookup.Peer == peer.Name).All(lookup => lookup.Host == NatScenario.TurnHost), peer.Name + ": never looks up the STUN server");
+            That(peer.Agent.LocalCandidates().All(candidate => candidate.Kind == IceCandidateKind.Relayed) && peer.Agent.SocketBase == null,
+                peer.Name + ": holds nothing but its relay candidate, and no socket base to check from");
+        }
+
+        That(scenario.Turn.Bindings == 0, "no STUN Binding request ever reached a server");
+        That(scenario.Signaling.Sent.All(frame => !frame.Frame.Contains("\"kind\":\"host\"", StringComparison.Ordinal) && !frame.Frame.Contains("\"kind\":\"srflx\"", StringComparison.Ordinal)),
+            "and no host or server-reflexive candidate was ever signaled");
+    }
+
     internal static void NoControlPlaneMeansNoContact()
     {
         var agent = new NatAgent(new NatAgentOptions { Random = new SeededTransportRandom(420) });

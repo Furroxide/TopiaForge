@@ -96,7 +96,7 @@ internal static class TransportDeliveryTests
             options.ProcessReassemblyBytes = 64 * 1024;
         }, SmallFrames);
         var (first, firstAtHost) = pair.Establish();
-        var secondOptions = new TransportOptions { Random = new SeededTransportRandom(133) };
+        var secondOptions = new TransportOptions { Random = new SeededTransportRandom(133), RelayOnly = false };
         SmallFrames(secondOptions);
         var secondEndpoint = new TransportEndpoint(TransportPair.Key(13, 3), secondOptions, pair.Network.Now);
         pair.Network.AddEndpoint("second", secondEndpoint);
@@ -133,7 +133,7 @@ internal static class TransportDeliveryTests
     internal static void PeersFillingTheCapCannotStallTheRest()
     {
         var network = new VirtualDatagramNetwork(18);
-        var hostOptions = new TransportOptions { Random = new SeededTransportRandom(180), ProcessReassemblyBytes = 64 * 1024 };
+        var hostOptions = new TransportOptions { Random = new SeededTransportRandom(180), ProcessReassemblyBytes = 64 * 1024, RelayOnly = false };
         SmallFrames(hostOptions);
         var host = new TransportEndpoint(TransportPair.Key(18, 1), hostOptions, network.Now);
         var hostNode = network.AddEndpoint("host", host);
@@ -161,7 +161,7 @@ internal static class TransportDeliveryTests
         network.RunFor(200_000);
         That(host.ReassemblyBytes == 64 * 1024, "the hogs hold the whole cap (" + host.ReassemblyBytes + ")");
 
-        var clientOptions = new TransportOptions { Random = new SeededTransportRandom(189) };
+        var clientOptions = new TransportOptions { Random = new SeededTransportRandom(189), RelayOnly = false };
         SmallFrames(clientOptions);
         var clientEndpoint = new TransportEndpoint(TransportPair.Key(18, 2), clientOptions, network.Now);
         network.AddEndpoint("client", clientEndpoint);

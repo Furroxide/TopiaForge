@@ -177,11 +177,17 @@ namespace TopiaForge.Multiplayer.NatTraversal.PortMapping
                     string? type = null;
                     string? control = null;
                     var inService = false;
-                    while (reader.Read())
+
+                    // Reading an element's content leaves the reader on the node after its end tag, which must be looked at
+                    // next rather than skipped: in a description written without whitespace that node is a sibling's
+                    // start tag or the service's own end tag.
+                    var positioned = false;
+                    while (positioned || reader.Read())
                     {
+                        positioned = false;
                         if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "service")
                         {
-                            inService = true;
+                            inService = !reader.IsEmptyElement;
                             type = null;
                             control = null;
                         }
@@ -193,14 +199,17 @@ namespace TopiaForge.Multiplayer.NatTraversal.PortMapping
                         else if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "URLBase" && !inService)
                         {
                             baseText = reader.ReadElementContentAsString().Trim();
+                            positioned = true;
                         }
                         else if (inService && reader.NodeType == XmlNodeType.Element && reader.LocalName == "serviceType")
                         {
                             type = reader.ReadElementContentAsString().Trim();
+                            positioned = true;
                         }
                         else if (inService && reader.NodeType == XmlNodeType.Element && reader.LocalName == "controlURL")
                         {
                             control = reader.ReadElementContentAsString().Trim();
+                            positioned = true;
                         }
                     }
                 }

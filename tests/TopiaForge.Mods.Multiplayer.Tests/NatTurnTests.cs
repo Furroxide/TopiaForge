@@ -17,14 +17,14 @@ internal sealed class TurnHarness
 {
     private readonly byte[] output = new byte[StunMessage.MaximumBytes];
 
-    internal TurnHarness(int seed, Action<FakeTurnServer>? configure = null, string password = "turn-secret")
+    internal TurnHarness(int seed, Action<FakeTurnServer>? configure = null, string password = "turn-secret", string user = "player")
     {
         Server = new FakeTurnServer(IPAddress.Parse("203.0.113.1"), seed);
         Server.Users["player"] = ("turn-secret", long.MaxValue);
         configure?.Invoke(Server);
         ServerPath = UdpPaths.For(Server.EndPoint);
         Stun = new StunClient(new SeededTransportRandom(seed), (path, bytes, length) => ToServer(path, bytes, length));
-        Client = new TurnClient(1, ServerPath, "player", password, Stun);
+        Client = new TurnClient(1, ServerPath, user, password, Stun);
     }
 
     internal FakeTurnServer Server { get; }
@@ -118,13 +118,18 @@ internal sealed class TurnHarness
         if (Intercept != null && Intercept(bytes)) return;
         if (bytes[0] >= 0x40 && bytes[0] <= 0x4F)
         {
-            if (Client.TryUnwrap(bytes, 0, bytes.Length, out var path, out var offset, out var length)) Delivered.Add((path, bytes.AsSpan(offset, length).ToArray(), true));
+            if (Client.TryUnwrap(bytes, 0, bytes.Length, Now, out var path, out var offset, out var length)) Delivered.Add((path, bytes.AsSpan(offset, length).ToArray(), true));
+            return;
+        }
+
+        if (StunMessage.IsDataIndication(bytes, 0, bytes.Length))
+        {
+            if (Client.TryReadData(bytes, 0, bytes.Length, Now, out var path, out var offset, out var length)) Delivered.Add((path, bytes.AsSpan(offset, length).ToArray(), false));
             return;
         }
 
         if (!StunMessage.TryParse(bytes, 0, bytes.Length, out var message)) return;
         if (message.Class == StunClass.Success || message.Class == StunClass.Error) Stun.TryComplete(message, ServerPath, Now);
-        else if (Client.TryReadData(message, Now, out var path, out var offset, out var length)) Delivered.Add((path, message.Bytes.AsSpan(offset, length).ToArray(), false));
     }
 }
 
@@ -274,7 +279,7 @@ internal static class NatTurnTests
         That(harness.Delivered.Count == 0 && harness.Server.Unpermitted == 1, "a stranger without a permission never reaches the client");
 
         var bytes = new byte[] { 0x40, 0x00, 0x00, 0x02, 9, 9, 0, 0 };
-        That(!harness.Client.TryUnwrap(bytes, 0, bytes.Length, out _, out _, out _), "ChannelData on an unbound channel is dropped");
+        That(!harness.Client.TryUnwrap(bytes, 0, bytes.Length, harness.Now, out _, out _, out _), "ChannelData on an unbound channel is dropped");
         harness.SendData(path, new byte[] { 3 });
         harness.RunFor(1_000_000);
         harness.SendData(path, new byte[] { 4 });

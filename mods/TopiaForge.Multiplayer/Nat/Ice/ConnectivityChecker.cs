@@ -102,25 +102,54 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
             }
         }
 
-        /// <summary>Adds a signaled candidate; false when it repeats one, or the session holds as many as it may.</summary>
+        /// <summary>
+        /// Adds a signaled candidate; false when it repeats one, or the session holds as many as it may. One this side
+        /// already learned from a check takes the kind the remote signals: a peer-reflexive address that is in fact the
+        /// remote's new relay candidate replaces the remote's older relay candidates as a signaled one would.
+        /// </summary>
         internal bool AddRemote(IceCandidate candidate, long now)
         {
             if (candidate == null) throw new ArgumentNullException(nameof(candidate));
-            if (FindRemote(candidate.EndPoint) != null || remotes.Count >= MaximumRemoteCandidates) return false;
+            var known = FindRemote(candidate.EndPoint);
+            if (known != null)
+            {
+                if (known.Kind != IceCandidateKind.PeerReflexive || candidate.Kind == IceCandidateKind.PeerReflexive) return false;
+                known.Promote(candidate.Kind, candidate.Priority);
+                peerReflexive--;
+                if (known.Kind == IceCandidateKind.Relayed) SupersedeRelays(known, now);
+                return false;
+            }
+
+            if (remotes.Count >= MaximumRemoteCandidates) return false;
             var numbered = new IceCandidate(candidate.Kind, candidate.EndPoint, candidate.Priority, order++);
 
             // A new relay candidate means the remote moved to a fresh allocation: the older ones lapse after a grace.
-            if (numbered.Kind == IceCandidateKind.Relayed)
-            {
-                foreach (var older in remotes)
-                {
-                    if (older.Kind == IceCandidateKind.Relayed && !superseded.ContainsKey(older)) superseded.Add(older, now);
-                }
-            }
-
+            if (numbered.Kind == IceCandidateKind.Relayed) SupersedeRelays(numbered, now);
             remotes.Add(numbered);
             foreach (var local in bases) Pair(local, numbered);
             return true;
+        }
+
+        /// <summary>Gets whether the remote replaced <paramref name="remote"/> with a newer relay candidate: nothing should move onto it.</summary>
+        internal bool IsSuperseded(IceCandidate remote) => superseded.ContainsKey(remote);
+
+        /// <summary>Checks a pair again at once, as when it would not take a connection though it answered once.</summary>
+        internal void Recheck(CandidatePair pair, long now)
+        {
+            if (pair == null || pair.Local.Retiring || pair.State == CandidatePairState.InProgress) return;
+            stun.Cancel(pair.Check);
+            pair.Check = null;
+            pair.State = CandidatePairState.Waiting;
+            pair.Triggered = true;
+            if (nextCheckAt > now) nextCheckAt = now;
+        }
+
+        private void SupersedeRelays(IceCandidate newest, long now)
+        {
+            foreach (var older in remotes)
+            {
+                if (!ReferenceEquals(older, newest) && older.Kind == IceCandidateKind.Relayed && !superseded.ContainsKey(older)) superseded.Add(older, now);
+            }
         }
 
         /// <summary>Forgets a base that was released: its pairs, and the peer-reflexive candidates only it had found.</summary>
@@ -314,6 +343,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
             if (pair.State != CandidatePairState.Succeeded) pair.SucceededAt = now;
             pair.State = CandidatePairState.Succeeded;
             pair.ConsentExpiresAt = now + ConsentLifetimeMicros;
+            pair.AnsweredAt = now;
         }
 
         public void OnTimeout(StunTransaction transaction, long now)

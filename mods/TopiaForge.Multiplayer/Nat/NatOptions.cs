@@ -28,7 +28,10 @@ namespace TopiaForge.Multiplayer.NatTraversal
         SignalingRefusedFrame = 13,
         PortMapped = 14,
         PortMappingFailed = 15,
-        TraversalFailed = 16
+        TraversalFailed = 16,
+
+        /// <summary>A connected joiner closed its signaling socket until it has something to say.</summary>
+        SignalingParked = 17
     }
 
     /// <summary>Receives NAT-layer events. Messages are fixed text chosen here, never built from network data.</summary>
@@ -41,11 +44,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
     internal sealed class NatAgentOptions
     {
         /// <summary>
-        /// Gets or sets the player's "hide my IP" choice. Host and server-reflexive candidates are then never gathered,
-        /// signaled or checked: the only thing that leaves the socket is traffic to the TURN server, and every path to the
-        /// peer runs through this side's own allocation.
+        /// Gets or sets the player's "hide my IP" choice, which is on unless the player allowed direct play for this
+        /// session: direct play is never a silent default, so a caller sets this false only for a player who chose it.
+        /// Host and server-reflexive candidates are then never gathered, signaled or checked: the only thing that leaves
+        /// the socket is traffic to the TURN server, and every path to the peer runs through this side's own allocation.
         /// </summary>
-        internal bool RelayOnly { get; set; }
+        internal bool RelayOnly { get; set; } = true;
 
         internal ITransportRandom Random { get; set; } = CryptoTransportRandom.Instance;
 

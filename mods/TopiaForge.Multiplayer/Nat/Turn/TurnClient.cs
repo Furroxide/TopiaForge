@@ -12,7 +12,10 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         Allocating = 1,
         Ready = 2,
         Failed = 3,
-        Released = 4
+        Released = 4,
+
+        /// <summary>The release is in flight: until the server answers or it times out, the 5-tuple may still be taken.</summary>
+        Releasing = 5
     }
 
     /// <summary>Why an allocation failed or ended. None of these names an address.</summary>
@@ -43,6 +46,8 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 
         internal int StaleNonceRetries { get; set; }
 
+        internal int Releases { get; set; }
+
         internal long ChannelDataSent { get; set; }
 
         internal long SendIndicationsSent { get; set; }
@@ -64,7 +69,8 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
     /// with the fresh nonce, refreshes the allocation a minute before it lapses, keeps permissions alive every four
     /// minutes (the server holds them five) and channel bindings every eight (it holds them ten), and sends a Binding
     /// indication after 15 quiet seconds so the NAT in front of it keeps the mapping. Responses to authenticated
-    /// requests count only with valid integrity.
+    /// requests count only with valid integrity. Releasing is a transaction of its own, retransmitted until the server
+    /// answers or it times out, so whoever allocates next on the same 5-tuple can wait for it to settle.
     /// </summary>
     internal sealed partial class TurnClient : IStunTransactionOwner
     {
@@ -92,6 +98,9 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         private long lastSentAt;
         private StunTransaction? refreshing;
 
+        /// <summary>Whether the server may hold an allocation this client asked for, until a release is answered.</summary>
+        private bool holds;
+
         internal TurnClient(int allocation, TransportPath server, string username, string password, StunClient stun)
         {
             Server = server ?? throw new ArgumentNullException(nameof(server));
@@ -114,6 +123,12 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 
         internal TurnFailure Failure { get; private set; }
 
+        /// <summary>Gets whether the server answered anything this client asked: proof that UDP reaches it.</summary>
+        internal bool Answered { get; private set; }
+
+        /// <summary>Gets whether a release went out and the server never answered it, so it may still hold the allocation.</summary>
+        internal bool ReleaseUnconfirmed => State == TurnAllocationState.Released && holds;
+
         /// <summary>Gets the relayed address the server allocated: this side's relay candidate. It never leaves the NAT layer except as one.</summary>
         internal IPEndPoint? RelayedAddress { get; private set; }
 
@@ -134,15 +149,29 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             if (Send(new Request(RequestKind.Allocate, false), now) == null) Fail(TurnFailure.ServerError);
         }
 
-        /// <summary>Deletes the allocation with a zero-lifetime Refresh, sent once without waiting for an answer.</summary>
+        /// <summary>
+        /// Deletes the allocation with a zero-lifetime Refresh. When the server may hold one (this client allocated, or
+        /// asked to), the release is a transaction: it retransmits until the server answers, or gives up after five and a
+        /// half seconds, and the client stays <see cref="TurnAllocationState.Releasing"/> until then. Otherwise it ends at once.
+        /// </summary>
         internal void Release(long now)
         {
-            if (State == TurnAllocationState.Released || State == TurnAllocationState.Failed) return;
-            var wasReady = State == TurnAllocationState.Ready;
+            if (State == TurnAllocationState.Released || State == TurnAllocationState.Releasing) return;
             stun.CancelAll(this);
-            State = TurnAllocationState.Released;
+            refreshing = null;
             ClearPeers();
-            if (wasReady && key != null) Send(new Request(RequestKind.Release, true), now);
+            SendRelease(now);
+        }
+
+        /// <summary>
+        /// Sends the release again when an earlier one went unanswered and the 5-tuple is still taken (a 437); false when
+        /// there is nothing to release.
+        /// </summary>
+        internal bool ReleaseAgain(long now)
+        {
+            if (!ReleaseUnconfirmed) return false;
+            SendRelease(now);
+            return State == TurnAllocationState.Releasing;
         }
 
         internal void Poll(long now)
@@ -200,8 +229,15 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         public void OnResponse(StunTransaction transaction, StunMessage response, long now)
         {
             var request = (Request)transaction.Tag!;
+            Answered = true;
             if (ReferenceEquals(transaction, refreshing)) refreshing = null;
-            if (State == TurnAllocationState.Released || State == TurnAllocationState.Failed) return;
+            if (request.Kind == RequestKind.Release)
+            {
+                OnReleaseAnswered(request, response, now);
+                return;
+            }
+
+            if (State != TurnAllocationState.Allocating && State != TurnAllocationState.Ready) return;
             if (response.Class == StunClass.Error)
             {
                 if (!response.TryGetErrorCode(out var code)) code = 500;
@@ -237,7 +273,14 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         {
             var request = (Request)transaction.Tag!;
             if (ReferenceEquals(transaction, refreshing)) refreshing = null;
-            if (State == TurnAllocationState.Released || State == TurnAllocationState.Failed) return;
+            if (request.Kind == RequestKind.Release)
+            {
+                // Nobody answered: the allocation may still be there, so a 437 later can send the release again.
+                if (State == TurnAllocationState.Releasing) State = TurnAllocationState.Released;
+                return;
+            }
+
+            if (State != TurnAllocationState.Allocating && State != TurnAllocationState.Ready) return;
             switch (request.Kind)
             {
                 case RequestKind.Allocate:
@@ -251,6 +294,28 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
                     OnChannelFailed(request, true, now);
                     break;
             }
+        }
+
+        private void SendRelease(long now)
+        {
+            if (!holds || key == null || realm == null || nonce == null)
+            {
+                State = TurnAllocationState.Released;
+                return;
+            }
+
+            State = TurnAllocationState.Releasing;
+            Statistics.Releases++;
+            if (Send(new Request(RequestKind.Release, true), now) == null) State = TurnAllocationState.Released;
+        }
+
+        /// <summary>Any answer settles a release: success deletes the allocation, and a 437 says there was none left.</summary>
+        private void OnReleaseAnswered(Request request, StunMessage response, long now)
+        {
+            if (State != TurnAllocationState.Releasing) return;
+            if (response.Class == StunClass.Error && response.TryGetErrorCode(out var code) && TryAuthenticate(request, response, code, now)) return;
+            holds = false;
+            State = TurnAllocationState.Released;
         }
 
         /// <summary>Answers the server's challenge: a first 401 brings realm and nonce, a 438 a fresh nonce. True when retried.</summary>
@@ -290,14 +355,27 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         {
             var transaction = Send(request, now);
             if (request.Kind == RequestKind.Refresh) refreshing = transaction;
-            if (transaction == null) OnError(request, 500, now);
+            if (transaction != null) return;
+            if (request.Kind == RequestKind.Release) State = TurnAllocationState.Released;
+            else OnError(request, 500, now);
         }
 
         private void OnError(Request request, int code, long now)
         {
+            // A 437 to anything on a live allocation means the server holds none on this 5-tuple any more: it is lost.
+            if (code == 437 && request.Kind != RequestKind.Allocate)
+            {
+                Fail(TurnFailure.AllocationMismatch);
+                return;
+            }
+
             switch (request.Kind)
             {
                 case RequestKind.Allocate:
+                    // An Allocate the server refused created nothing; one already there belongs to someone else (437).
+                    holds = false;
+                    Fail(FailureFor(code));
+                    break;
                 case RequestKind.Refresh:
                     Fail(FailureFor(code));
                     break;
@@ -362,49 +440,66 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             refreshAt = now + (micros > 2 * RefreshMarginMicros ? micros - RefreshMarginMicros : micros / 2);
         }
 
+        /// <summary>The allocation is lost. The server may still hold it (a refresh that timed out), so it can still be released.</summary>
         private void Fail(TurnFailure failure)
         {
-            if (State == TurnAllocationState.Failed || State == TurnAllocationState.Released) return;
+            if (State != TurnAllocationState.Allocating && State != TurnAllocationState.Ready && State != TurnAllocationState.Idle) return;
             stun.CancelAll(this);
+            refreshing = null;
             State = TurnAllocationState.Failed;
             Failure = failure;
             ClearPeers();
         }
 
-        /// <summary>Writes and starts one request; authenticated requests carry user, realm, nonce and integrity.</summary>
+        /// <summary>
+        /// Writes and starts one request; authenticated requests carry user, realm, nonce and integrity. Returns null,
+        /// sending nothing, when the client is full or the request cannot fit a datagram, so no server's answer can make
+        /// this throw.
+        /// </summary>
         private StunTransaction? Send(Request request, long now)
         {
             var id = stun.NewTransactionId();
-            writer.Begin(requestBuffer, request.Method, StunClass.Request, id);
-            switch (request.Kind)
+            int length;
+            try
             {
-                case RequestKind.Allocate:
-                    writer.AddRequestedTransport(UdpProtocol);
-                    break;
-                case RequestKind.Release:
-                    writer.AddUInt32(StunAttribute.Lifetime, 0);
-                    break;
-                case RequestKind.Permission:
-                    foreach (var permission in request.Permissions!) writer.AddAddressBytes(StunAttribute.XorPeerAddress, permission.AddressBytes, 1);
-                    break;
-                case RequestKind.Channel:
-                    writer.AddChannelNumber(request.Peer!.Channel);
-                    writer.AddAddressBytes(StunAttribute.XorPeerAddress, request.Peer.AddressBytes, request.Peer.EndPoint.Port);
-                    break;
+                writer.Begin(requestBuffer, request.Method, StunClass.Request, id);
+                switch (request.Kind)
+                {
+                    case RequestKind.Allocate:
+                        writer.AddRequestedTransport(UdpProtocol);
+                        break;
+                    case RequestKind.Release:
+                        writer.AddUInt32(StunAttribute.Lifetime, 0);
+                        break;
+                    case RequestKind.Permission:
+                        foreach (var permission in request.Permissions!) writer.AddAddressBytes(StunAttribute.XorPeerAddress, permission.AddressBytes, 1);
+                        break;
+                    case RequestKind.Channel:
+                        writer.AddChannelNumber(request.Peer!.Channel);
+                        writer.AddAddressBytes(StunAttribute.XorPeerAddress, request.Peer.AddressBytes, request.Peer.EndPoint.Port);
+                        break;
+                }
+
+                if (request.Authenticated)
+                {
+                    writer.AddText(StunAttribute.Username, username);
+                    writer.AddText(StunAttribute.Realm, realm!);
+                    writer.AddText(StunAttribute.Nonce, nonce!);
+                }
+
+                length = writer.Finish(request.Authenticated ? key : null, true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The server's realm and nonce left no room for the request: it is never sent.
+                return null;
             }
 
-            if (request.Authenticated)
-            {
-                writer.AddText(StunAttribute.Username, username);
-                writer.AddText(StunAttribute.Realm, realm!);
-                writer.AddText(StunAttribute.Nonce, nonce!);
-            }
-
-            var length = writer.Finish(request.Authenticated ? key : null, true);
             lastSentAt = now;
-            var timing = request.Kind == RequestKind.Release ? new StunTiming(500_000, 1, 1) :
-                request.Kind == RequestKind.Allocate ? StunTiming.Gathering : StunTiming.Relay;
-            return stun.Begin(Server, requestBuffer, length, id, timing, this, request, now);
+            var timing = request.Kind == RequestKind.Release || request.Kind == RequestKind.Allocate ? StunTiming.Gathering : StunTiming.Relay;
+            var transaction = stun.Begin(Server, requestBuffer, length, id, timing, this, request, now);
+            if (transaction != null && request.Kind == RequestKind.Allocate && request.Authenticated) holds = true;
+            return transaction;
         }
 
         private enum RequestKind

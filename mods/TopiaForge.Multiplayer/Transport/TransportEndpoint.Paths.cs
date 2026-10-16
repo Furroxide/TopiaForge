@@ -47,6 +47,25 @@ namespace TopiaForge.Multiplayer.Transport
             return new TransportPathUsage(count, stalled, validating);
         }
 
+        /// <summary>Counts the connections whose path <paramref name="where"/> accepts, as <see cref="UsageOf"/> counts one path's.</summary>
+        internal TransportPathUsage UsageWhere(Predicate<TransportPath> where)
+        {
+            if (where == null) throw new ArgumentNullException(nameof(where));
+            var count = 0;
+            var stalled = 0;
+            var validating = 0;
+            foreach (var connection in connections)
+            {
+                if (connection.State != TransportConnectionState.Established && connection.State != TransportConnectionState.Closing) continue;
+                if (!where(connection.Path)) continue;
+                count++;
+                if (connection.IsStalled) stalled++;
+                if (connection.IsValidatingPath) validating++;
+            }
+
+            return new TransportPathUsage(count, stalled, validating);
+        }
+
         /// <summary>Counts the established or closing connections whose path <paramref name="where"/> accepts.</summary>
         internal int CountConnections(Predicate<TransportPath> where)
         {

@@ -32,11 +32,22 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
             Order = order;
         }
 
-        internal IceCandidateKind Kind { get; }
+        internal IceCandidateKind Kind { get; private set; }
 
         internal IPEndPoint EndPoint { get; }
 
-        internal uint Priority { get; }
+        internal uint Priority { get; private set; }
+
+        /// <summary>
+        /// Takes the kind and priority the remote signals for an address this side first learned from a check: a
+        /// peer-reflexive candidate that turns out to be, say, the remote's new relay candidate is ranked as one from now on.
+        /// </summary>
+        internal void Promote(IceCandidateKind kind, uint priority)
+        {
+            if (Kind != IceCandidateKind.PeerReflexive || kind == IceCandidateKind.PeerReflexive) return;
+            Kind = kind;
+            Priority = priority;
+        }
 
         /// <summary>Gets when this side learned the candidate, counting from zero: a later relay candidate replaces an earlier one.</summary>
         internal int Order { get; }

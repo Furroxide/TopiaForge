@@ -73,6 +73,26 @@ internal sealed class NatScenario
     /// <summary>Gets or sets whether the TURN server set offers a second UDP port, so a rotation can make before it breaks.</summary>
     internal bool SecondTurnPort { get; set; } = true;
 
+    /// <summary>Gets or sets what DNS answers for the TURN server's name; the server's own address by default.</summary>
+    internal IPAddress[] TurnAddresses { get; set; } = { ServerAddress };
+
+    /// <summary>Gets or sets whether minting works; when it does not, the control plane answers with an error and the plan yields nothing.</summary>
+    internal Func<bool> MintWorks { get; set; } = () => true;
+
+    /// <summary>Gets how many relay credentials were minted, the first one of every plan included.</summary>
+    internal int Mints => credentials;
+
+    /// <summary>
+    /// Gives every allocation a relayed address of its own, 203.0.113.100 and on, as a relay service may: a permission for
+    /// one of a peer's relays then never admits the next, so only signaling can introduce it.
+    /// </summary>
+    internal void DistinctRelayAddresses()
+    {
+        Turn.RelayAddresses = index => IPAddress.Parse("203.0.113." + (100 + (index % 100)).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        for (var index = 0; index < 100; index++) Router.Place(TurnNode, Router.Internet, new IPEndPoint(IPAddress.Parse("203.0.113." + (100 + index).ToString(System.Globalization.CultureInfo.InvariantCulture)), 3478));
+        Router.Place(TurnNode, Router.Internet, new IPEndPoint(ServerAddress, 3478));
+    }
+
     /// <summary>Puts a site behind a NAT on <paramref name="outside"/> (the Internet by default); returns the inside site.</summary>
     internal SimulatedSite Behind(string name, NatBehaviour behaviour, string publicAddress, SimulatedSite? outside = null)
     {
@@ -86,10 +106,22 @@ internal sealed class NatScenario
     internal NatPeerNode AddPeer(string name, SimulatedSite site, string address, int port, bool relayOnly, int role)
     {
         var transport = new TransportOptions { Random = new SeededTransportRandom((Seed * 97) + role), RelayOnly = relayOnly };
-        var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(Seed, role), transport, Network.Now));
         var diagnostics = new RecordingNatDiagnostics();
-        var agent = new NatAgent(new NatAgentOptions { RelayOnly = relayOnly, Random = new SeededTransportRandom((Seed * 89) + role), Diagnostics = diagnostics });
-        var peer = new NatPeerNode(name, stack, agent) { Diagnostics = diagnostics, Address = new IPEndPoint(IPAddress.Parse(address), port), RelayOnly = relayOnly };
+        return Place(name, site, address, port, transport, new NatAgentOptions { RelayOnly = relayOnly, Random = new SeededTransportRandom((Seed * 89) + role), Diagnostics = diagnostics }, diagnostics, relayOnly, role);
+    }
+
+    /// <summary>Adds a player whose agent and transport keep their defaults, as when nobody chose direct play; its ticket says relay-only.</summary>
+    internal NatPeerNode AddDefaultPeer(string name, SimulatedSite site, string address, int port, int role)
+    {
+        var diagnostics = new RecordingNatDiagnostics();
+        var transport = new TransportOptions { Random = new SeededTransportRandom((Seed * 97) + role) };
+        return Place(name, site, address, port, transport, new NatAgentOptions { Random = new SeededTransportRandom((Seed * 89) + role), Diagnostics = diagnostics }, diagnostics, true, role);
+    }
+
+    private NatPeerNode Place(string name, SimulatedSite site, string address, int port, TransportOptions transport, NatAgentOptions options, RecordingNatDiagnostics diagnostics, bool relayOnly, int role)
+    {
+        var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(Seed, role), transport, Network.Now));
+        var peer = new NatPeerNode(name, stack, new NatAgent(options)) { Diagnostics = diagnostics, Address = new IPEndPoint(IPAddress.Parse(address), port), RelayOnly = relayOnly };
         peer.Node = Network.AddAttachment(name, peer);
         Router.Place(peer.Node, site, peer.Address);
         return peer;
@@ -100,25 +132,26 @@ internal sealed class NatScenario
         var plan = new NatSessionPlan(Credentials(), signaling, host =>
         {
             Lookups.Add((peer.Name, host));
-            return host == StunHost || host == TurnHost
-                ? Task.FromResult(new[] { ServerAddress })
+            return host == StunHost ? Task.FromResult(new[] { ServerAddress })
+                : host == TurnHost ? Task.FromResult(TurnAddresses)
                 : Task.FromException<IPAddress[]>(new System.Net.Sockets.SocketException(11001));
         })
         {
             LocalAddresses = new[] { peer.Address.Address },
             LocalPort = peer.Address.Port
         };
-        if (Renewable) plan.Renew = () => Task.FromResult<IceServerSet?>(Credentials());
+        if (Renewable) plan.Renew = () => Task.FromResult(MintWorks() ? Credentials() : null);
         return plan;
     }
 
     internal void StartHost(NatPeerNode host) => host.Agent.StartHost(Plan(host, () => Signaling.ConnectHost(host.RelayOnly)), Network.Now);
 
-    internal ConnectAttempt StartJoin(NatPeerNode joiner, int hostRole = 1, string peerId = PeerId, bool? ticketRelayOnly = null)
+    /// <param name="prefix">The address prefix the joiner reaches the control plane from, which the room counts its sockets under.</param>
+    internal ConnectAttempt StartJoin(NatPeerNode joiner, int hostRole = 1, string peerId = PeerId, bool? ticketRelayOnly = null, string prefix = "")
     {
         var attempt = new ConnectAttempt();
         var relayOnly = ticketRelayOnly ?? joiner.RelayOnly;
-        joiner.Agent.StartJoin(Plan(joiner, () => Signaling.ConnectPeer(peerId, relayOnly)), attempt, X25519Public(hostRole), Network.Now);
+        joiner.Agent.StartJoin(Plan(joiner, () => Signaling.ConnectPeer(peerId, relayOnly, prefix)), attempt, X25519Public(hostRole), Network.Now);
         return attempt;
     }
 

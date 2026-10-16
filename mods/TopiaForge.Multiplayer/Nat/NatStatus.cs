@@ -56,7 +56,10 @@ namespace TopiaForge.Multiplayer.NatTraversal
         HostEnded = 7,
 
         /// <summary>This side stopped the attempt.</summary>
-        Cancelled = 8
+        Cancelled = 8,
+
+        /// <summary>The service stopped honouring the join ticket: its invite was withdrawn or expired, or the server stopped being public.</summary>
+        TicketRevoked = 9
     }
 
     /// <summary>The route a session's connection takes now.</summary>
