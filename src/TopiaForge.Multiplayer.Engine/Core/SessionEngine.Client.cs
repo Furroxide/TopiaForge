@@ -28,6 +28,12 @@ namespace TopiaForge.Multiplayer.Engine
 
         private bool ClientFlushOpen => channel != null && channel.FlushOpen;
 
+        /// <summary>
+        /// Gets whether the joined session is over: it ended, or the process went back to solo play. A value that did not
+        /// decode ends it in the middle of applying a batch, and nothing more of that batch may land in what follows.
+        /// </summary>
+        private bool ClientSessionOver => ended || Role != EngineRole.Client;
+
         /// <summary>Gets how many submissions await the host, including cancelled ones still replaying.</summary>
         internal int PendingSubmissionCount => pending.Count;
 
@@ -374,7 +380,12 @@ namespace TopiaForge.Multiplayer.Engine
 
             unboundObjects.Clear();
             tombstones.Clear();
-            foreach (var item in staging.Objects) ApplyObjectSpawned(item);
+            foreach (var item in staging.Objects)
+            {
+                ApplyObjectSpawned(item);
+                if (ClientSessionOver) return;
+            }
+
             reconcileRequested = true;
         }
 
@@ -471,7 +482,8 @@ namespace TopiaForge.Multiplayer.Engine
             unboundStates.Remove(record.Key);
             if (!record.CanDecode(staged.Bytes))
             {
-                ReportCodecFailure("replicated state '" + record.Key + "'", "The canonical value does not match the local codec.");
+                // The host's value cannot be shown, so the session ends, as it does for an object adopted the same way.
+                FailContract("replicated state '" + record.Key + "'");
                 return;
             }
 
@@ -486,6 +498,7 @@ namespace TopiaForge.Multiplayer.Engine
                 if (!new WireKey(message.Owner, message.TypeId).Equals(binding.Key)) continue;
                 unboundObjects.Remove(message.ObjectId);
                 CreateRemoteObject(binding, message);
+                if (ClientSessionOver) return;
             }
         }
 

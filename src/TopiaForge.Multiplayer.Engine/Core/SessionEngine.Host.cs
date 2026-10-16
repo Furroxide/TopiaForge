@@ -110,6 +110,25 @@ namespace TopiaForge.Multiplayer.Engine
             return true;
         }
 
+        /// <summary>
+        /// Gets how many joined connections have not yet acknowledged the session snapshot, so they do not yet receive
+        /// presentation events. A soak waits for this to reach zero before it checks that an event reaches everyone.
+        /// </summary>
+        internal int ConnectionsAwaitingReady
+        {
+            get
+            {
+                RequireOwnerThread();
+                var count = 0;
+                foreach (var connection in connections)
+                {
+                    if (connection.Phase == HostConnectionPhase.Accepted) count++;
+                }
+
+                return count;
+            }
+        }
+
         internal bool IsConnectedParticipant(ParticipantId id)
         {
             if (Role == EngineRole.Client) return FindClientParticipant(id)?.IsConnected ?? false;
@@ -347,7 +366,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             var decision = (options.JoinPolicy ?? DefaultJoinPolicy.Instance).Evaluate(
-                new JoinRequestContext(connection.Link, identity, request, RegisteredContracts(), connected, options.MaximumParticipants));
+                new JoinRequestContext(connection.Link, identity, request, RegisteredContracts(), connected, options.MaximumParticipants, returning: record != null));
             if (decision.Accepted && record == null) decision = AdmitNewParticipant(identity, request.DisplayName, out record) ?? decision;
             if (!decision.Accepted || record == null)
             {
@@ -416,11 +435,24 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             if (evicted == null) return false;
-            NoteVoiceSeen(evicted);
-            participantRecords.Remove(evicted);
+            ForgetParticipant(evicted);
             MarkParticipantsChanged();
             MarkVoiceRosterDirty();
             return true;
+        }
+
+        /// <summary>
+        /// Removes a participant's record, with the rate limiters it left on commands and objects. Nothing can submit
+        /// under its id until a new record takes it, and a new record starts its limits afresh, so the old limiters would
+        /// otherwise grow with every player who ever came and went.
+        /// </summary>
+        private void ForgetParticipant(ParticipantRecord record)
+        {
+            // The voice moderation table forgets whoever was seen longest ago, so a record that goes counts as seen now.
+            NoteVoiceSeen(record);
+            participantRecords.Remove(record);
+            foreach (var binding in commands.Values) binding.ForgetSender(record.Id);
+            foreach (var item in objectList) item.ForgetSender(record.Id);
         }
 
         private ParticipantId? AllocateParticipantId(string identity)
@@ -599,8 +631,7 @@ namespace TopiaForge.Multiplayer.Engine
                 var record = participantRecords[index];
                 if (record.IsConnected || record.Identity == null) continue;
                 if (nowMicros - record.DepartedAtMicros < options.ParticipantGraceMicros) continue;
-                NoteVoiceSeen(record);
-                participantRecords.RemoveAt(index);
+                ForgetParticipant(record);
                 removed = true;
             }
 

@@ -160,7 +160,8 @@ internal static class LivePolicyTests
         That(Code(Ask(right, body: new byte[] { 9, 9, 9 })) == AdmissionCode.Protocol, "then the join content's own form");
         That(Code(Ask(null, body: JoinContent.Encode(null, new byte[] { 4 }))) == AdmissionCode.PasswordRequired, "then the password, before content");
         var refused = Ask(right, body: JoinContent.Encode(right, new byte[] { 4 }));
-        That(!refused.Accepted && refused.Message == "Unknown content.", "and the runtime's content admission decides last");
+        That(Code(refused) == AdmissionCode.Content && AdmissionReport.TryDecode(refused.Report, out _, out var problems) && problems.SequenceEqual(new[] { "Unknown content." }),
+            "and the runtime's content admission decides last, its problems in the report");
 
         var open = new HostPolicy(bans, null, content, () => now);
         var openContext = new ProviderEngine.JoinRequestContext(link, Identity(4),

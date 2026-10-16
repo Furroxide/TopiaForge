@@ -18,13 +18,24 @@ namespace TopiaForge.Multiplayer.Network
         internal const int ProofSize = 32;
         internal const int MaximumPasswordLength = 64;
 
-        /// <summary>Whether <paramref name="password"/> is acceptable: 1 to 64 characters with no control characters.</summary>
+        /// <summary>What a password must be, for the player and for every refusal.</summary>
+        internal const string Rule = "A password is 1 to 64 characters with no control characters or unpaired surrogates.";
+
+        /// <summary>
+        /// Whether <paramref name="password"/> is acceptable: 1 to 64 UTF-16 code units with no control characters and no
+        /// unpaired surrogates. A lone surrogate cannot be normalized, and UTF-8 would turn every one into U+FFFD, so two
+        /// different passwords would prove the same.
+        /// </summary>
         internal static bool IsValidPassword(string? password)
         {
             if (string.IsNullOrEmpty(password) || password!.Length > MaximumPasswordLength) return false;
-            foreach (var character in password)
+            for (var index = 0; index < password.Length; index++)
             {
-                if (char.IsControl(character)) return false;
+                var character = password[index];
+                if (char.IsControl(character) || char.IsLowSurrogate(character)) return false;
+                if (!char.IsHighSurrogate(character)) continue;
+                if (index + 1 >= password.Length || !char.IsLowSurrogate(password[index + 1])) return false;
+                index++;
             }
 
             return true;
@@ -36,7 +47,7 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         internal static byte[] DeriveKey(string password, byte[] hostTransportKey)
         {
-            if (!IsValidPassword(password)) throw new ArgumentException("A password is 1 to 64 characters with no control characters.", nameof(password));
+            if (!IsValidPassword(password)) throw new ArgumentException(Rule, nameof(password));
             if (hostTransportKey == null || hostTransportKey.Length != 32) throw new ArgumentException("The host transport key is 32 bytes.", nameof(hostTransportKey));
             var secret = Encoding.UTF8.GetBytes(password.Normalize(NormalizationForm.FormC));
             try

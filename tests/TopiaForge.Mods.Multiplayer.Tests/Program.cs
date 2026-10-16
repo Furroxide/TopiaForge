@@ -2,10 +2,11 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 
 internal static class Program
 {
-    private static int Main()
+    private static int Main(string[] args)
     {
         try
         {
+            HarnessOptions.Parse(args);
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
             SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
             SdkContractCompletionTests.PresentationTargetsSelectExactRecipients();
@@ -298,6 +299,38 @@ internal static class Program
             VoiceBudgetTests.AVoiceOverloadIsShedAndTheSessionLaneKeepsItsPace();
             VoiceBudgetTests.VoiceWithinTheRateIsNeverShed();
             VoiceRelayPolicyTests.FloodsJustPastTwiceALimitAreRateLimitedWithoutStrikesEnoughToMute();
+            DroneSampleTests.TheDroneSpawnsOnceInEverySessionTheHostHolds();
+            DroneSampleTests.AFinishedJoinSpawnsTheDroneAgainInSoloPlay();
+            HardeningRegressionTests.ForgottenParticipantsTakeTheirRateLimitersWithThem();
+            HardeningRegressionTests.JoinContentLengthsCannotWrapAround();
+            HardeningRegressionTests.ASessionThatEndsMidSnapshotLeavesNothingBehind();
+            WireFormatFuzzTests.CanonicalJsonAcceptsExactlyWhatItWrites();
+            WireFormatFuzzTests.SignedDescriptorsVerifyOnlyTheirOwnBytes();
+            WireFormatFuzzTests.LinksInviteCodesAndHostsHaveOneSpelling();
+            WireFormatFuzzTests.LanBeaconsAndSessionInfoReadBackExactly();
+            LiveFormatFuzzTests.JoinContentHasOneSpelling();
+            LiveFormatFuzzTests.AdmissionReportsHaveOneSpelling();
+            LiveFormatFuzzTests.TheHostAdmitsExactlyWhatTheRulesAdmit();
+            LiveFormatFuzzTests.DescriptorRequestsReadTheSameHoweverTheyArrive();
+            EngineHostFuzzTests.HostileClientFramesEndOnlyTheirOwnConnection();
+            EngineClientFuzzTests.HostileHostFramesStayInsideTheClient();
+            TransportDeepFuzzTests.EveryKindOfDatagramMutatedLeavesASessionStanding();
+            TransportDeepFuzzTests.AuthenticatedGarbageEndsOnlyItsOwnConnection();
+            LiveSoakTests.ASoakConvergesStaysBoundedAndRepeats();
+            TransportPathTests.AConnectionThatMovedLeavesNothingBehindWhenItCloses();
+            HardeningRegressionTests.AStateAdoptedThatDoesNotDecodeEndsTheSession();
+            PasswordGuessTests.WrongProofsCountPerNetworkWhateverTheIdentity();
+            PasswordGuessTests.TheHostsBudgetHoldsManyNetworksAndSparesItsPlayers();
+            PasswordGuessTests.FullTablesForgetOnlyWhatNoLongerLimits();
+            PasswordGuessTests.PortsAndAddressesOfOneSlash64AreOneNetwork();
+            PasswordGuessRateTests.APlayerInTheSessionNeverWaitsForGuessers();
+            PasswordGuessRateTests.GuessersGetNoMoreThanTheirBudgets();
+            LiveRegressionTests.AContentRefusalTellsThePlayerWhatIsMissing();
+            LiveRegressionTests.PasswordsWithUnpairedSurrogatesAreRefusedWhereTheyAreSet();
+            LiveRegressionTests.IdenticallySeededRunsMatchThroughARetry();
+            LiveRegressionTests.NumericHostNamesInLegacyFormsAreNeverResolved();
+            LiveRegressionTests.WorkOnOtherThreadsTakesNoVirtualTime();
+            FuzzLedger.Print();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

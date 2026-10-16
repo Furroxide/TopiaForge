@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
@@ -74,6 +75,7 @@ namespace TopiaForge.Multiplayer.Network
         private readonly INetworkFactory factory;
         private readonly Func<long> clock;
         private readonly Func<SoloSessionStart> soloStart;
+        private readonly Func<TransportOptions> transportOptions;
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private Task<ResolvedTarget>? resolving;
         private Task<byte[]>? deriving;
@@ -98,7 +100,8 @@ namespace TopiaForge.Multiplayer.Network
             ILiveSessionContent content,
             INetworkFactory factory,
             Func<long> clock,
-            Func<SoloSessionStart> soloStart)
+            Func<SoloSessionStart> soloStart,
+            Func<TransportOptions>? transportOptions = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -109,6 +112,7 @@ namespace TopiaForge.Multiplayer.Network
             this.factory = factory ?? throw new ArgumentNullException(nameof(factory));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.soloStart = soloStart ?? throw new ArgumentNullException(nameof(soloStart));
+            this.transportOptions = transportOptions ?? (() => new TransportOptions());
             password = settings.Password;
             resolving = resolver.ResolveAsync(target, settings.AllowDirect, settings.TrustedServerId, cancellation.Token);
         }
@@ -122,6 +126,9 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets the host's admission report when it refused the join, decoded.</summary>
         internal AdmissionCode RejectionCode { get; private set; }
+
+        /// <summary>Gets the problems the host's admission report listed, such as the packages a content refusal names.</summary>
+        internal IReadOnlyList<string> RejectionProblems { get; private set; } = Array.Empty<string>();
 
         /// <summary>Gets the packages the host listed that are missing or differ, when content stopped the join.</summary>
         internal ContentCheck? Content { get; private set; }
@@ -150,11 +157,18 @@ namespace TopiaForge.Multiplayer.Network
             }
         }
 
+        /// <summary>Adds the work this join runs on other threads, which lands at a later pump: its resolve and its proof key.</summary>
+        internal void AddPendingBackgroundWork(List<Task> work)
+        {
+            if (resolving != null && !resolving.IsCompleted) work.Add(resolving);
+            if (deriving != null && !deriving.IsCompleted) work.Add(deriving);
+        }
+
         /// <summary>Gives the password the session asked for, when the join is waiting for it.</summary>
         internal void SupplyPassword(string value)
         {
             if (Phase != JoinPhase.AwaitingPassword) throw new InvalidOperationException("The join is not waiting for a password.");
-            if (!PasswordProof.IsValidPassword(value)) throw new ArgumentException("A password is 1 to 64 characters with no control characters.", nameof(value));
+            if (!PasswordProof.IsValidPassword(value)) throw new ArgumentException(PasswordProof.Rule, nameof(value));
             password = value;
             BeginProof();
         }
@@ -203,7 +217,16 @@ namespace TopiaForge.Multiplayer.Network
                 MultiplayerSessionEndReason.Left => LiveFailure.Left,
                 _ => LiveFailure.Rejected
             };
-            RejectionCode = AdmissionReport.TryDecode(end.Report, out var code, out _) ? code : AdmissionCode.Other;
+            if (AdmissionReport.TryDecode(end.Report, out var code, out var problems))
+            {
+                RejectionCode = code;
+                RejectionProblems = problems;
+            }
+            else
+            {
+                RejectionCode = AdmissionCode.Other;
+                RejectionProblems = Array.Empty<string>();
+            }
             Detail = end.Message;
             engineJoined = false;
             link = null;
@@ -310,7 +333,10 @@ namespace TopiaForge.Multiplayer.Network
             Phase = JoinPhase.Connecting;
 
             // A joining player connects out and accepts nobody, so no one else can reach it or learn its key.
-            var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), new TransportOptions { RelayOnly = !settings.AllowDirect, AcceptsInbound = false }, clock());
+            var options = transportOptions();
+            options.RelayOnly = !settings.AllowDirect;
+            options.AcceptsInbound = false;
+            var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), options, clock());
             var stack = new NetworkStack(endpoint);
             try
             {

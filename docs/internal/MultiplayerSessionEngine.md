@@ -163,6 +163,10 @@ with that result, because the host executed it; the rest complete as `Cancelled`
 - **Unregistered ids:** a client keeps canonical values for states and object types it has not registered and adopts
   them when it registers. Unregistering a state keeps its canonical value the same way, so registering it again
   restores it.
+- **A value that does not decode** with the client's codec ends the session as a protocol mismatch, whether it arrives
+  in a delta or a snapshot or is the canonical value a late registration adopts — a state no less than an object, which
+  behaved differently before. When that happens partway through a snapshot or an adoption, the rest of it is dropped
+  too, so nothing of the host's lands in the solo session the provider returns to.
 
 ## Participants and connections
 
@@ -175,7 +179,9 @@ creating one; only then does the client keep its listener mutes (`MultiplayerVoi
 
 The host keeps at most twice `MaximumParticipants` records, connected or within their grace period, and never more
 than the 256 a snapshot and a peer accept. A new identity that would exceed the limit takes the place of the
-longest-departed record; if every record is connected, the join is refused as full.
+longest-departed record; if every record is connected, the join is refused as full. A record that goes, whether its
+grace period ended, a newer player took its place or the host closed every connection, takes the rate limiters it left
+on commands and objects with it, so they never outnumber the participants the host knows.
 
 Each joined connection receives the participant list at most once per flush, however many joins, departures or quality
 changes happened since the last one. A round-trip sample comes only from the echo of the latest clock probe, so a client

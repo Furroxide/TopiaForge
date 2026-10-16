@@ -163,11 +163,26 @@ namespace TopiaForge.Multiplayer.Transport
         /// <summary>Gets the session bytes waiting for the reader, which count toward the endpoint's reassembly cap.</summary>
         internal long BufferedBytes => receiveStream.BufferedBytes;
 
+        /// <summary>Gets the session bytes sent or queued and not yet acknowledged.</summary>
+        internal long SendBacklogBytes => sendStream.Backlog;
+
+        /// <summary>Gets the packets awaiting acknowledgement.</summary>
+        internal int PacketsInFlight => loss.InFlightCount;
+
+        /// <summary>Gets the realtime and voice frames waiting for the reader.</summary>
+        internal int QueuedDatagrams => inboundDatagrams.Count;
+
         /// <summary>Gets or sets whether the endpoint still routes to this connection and counts its buffers.</summary>
         internal bool IsRegistered { get; set; }
 
         /// <summary>Gets or sets whether the endpoint counts this connection as a half-open handshake.</summary>
         internal bool CountsAsHalfOpen { get; set; }
+
+        /// <summary>
+        /// Gets or sets the key a responder's endpoint registered this connection under for duplicate Initiations: the
+        /// path the Initiation came from, which <see cref="Path"/> may since have left. Null for an initiator.
+        /// </summary>
+        internal InitiationKey? Initiation { get; set; }
 
         /// <summary>
         /// Queues one frame. Session frames are reliable and ordered and may be queued during the handshake; Realtime

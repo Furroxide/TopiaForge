@@ -138,6 +138,9 @@ namespace TopiaForge.Multiplayer.Engine
         internal ParticipantId? CurrentOwner { get; set; }
         internal ObjectLife Life { get; set; } = ObjectLife.Live;
 
+        /// <summary>Gets how many senders have a rate limiter on this object.</summary>
+        internal int LimiterCount => limiters?.Count ?? 0;
+
         internal void Confirm()
         {
             ConfirmedBytes = CurrentBytes;
@@ -163,6 +166,9 @@ namespace TopiaForge.Multiplayer.Engine
 
             return limiter.TryAcquire(nowMicros);
         }
+
+        /// <summary>Drops the limiter of a sender the host no longer knows.</summary>
+        internal void ForgetSender(ParticipantId sender) => limiters?.Remove(sender);
 
         /// <summary>Runs the type's input handler against the current state inside <paramref name="scope"/>.</summary>
         internal abstract WireOutcome InvokeInput(ParticipantId sender, ulong sequence, bool senderOwns, byte[] inputBytes, TransactionScope scope);

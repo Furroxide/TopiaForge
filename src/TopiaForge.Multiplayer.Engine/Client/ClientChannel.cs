@@ -76,6 +76,8 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly HashSet<string> ids = new HashSet<string>(StringComparer.Ordinal);
         private readonly Queue<string> order = new Queue<string>();
 
+        internal int Count => order.Count;
+
         internal bool Contains(string id) => ids.Contains(id);
 
         internal void Add(string id)

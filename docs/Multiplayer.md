@@ -201,6 +201,77 @@ The test rig runs the session engine, so ticks, sequences, seeds, targeted event
 will in a live session. The provider runs the same engine in solo sessions. In both, player actions and replicated
 presence report `Unavailable` rather than pretending to succeed.
 
+## How sessions work
+
+A mod binds once and keeps the same `IMultiplayerSession` for as long as it runs. Sessions come and go underneath it,
+and the snapshot says which one is current, whether this process holds world authority, and who is playing.
+
+- **Solo play.** The game starts in a solo session. This process holds world authority, its player is the host and the
+  only participant, and the snapshot is `Ready` from the start. Commands run once, inline, and their confirmations
+  report `WasPredicted` as false. A command's presentation events reach the player before its confirmation does.
+- **Hosting.** Opening the game to others promotes the running solo session in place. The session id, every replicated
+  value and every object stay as they are, and a player who joins receives them. The host keeps world authority, and
+  its player stays the host participant. When hosting stops, every other player's session ends and the host plays on
+  alone in the same session.
+- **Joining.** Joining another host replaces this process's session with the host's. Nothing changes until the
+  connection to the host is up, so a join that fails leaves solo play as it was. Once the link is up the snapshot names
+  a placeholder session and `HasWorldAuthority` is false; it takes the host's own session id when the host accepts the
+  join. The state goes from `Connecting` through `Synchronizing` to `Ready`, which it reaches only once all the host's
+  values and objects have arrived.
+- **What replicates.** What a contract declares, and nothing else: `[ReplicatedState]` values, `[ReplicatedObject]`
+  objects, commands with their confirmations, and presentation events, which reach players only once the host commits
+  them. Unity objects, files, configuration and a mod's own fields stay in their process. Replicating the world itself,
+  such as scene props, spawned entities and players' avatars, is later work.
+- **Session replacement.** Whenever a session gives way to another, a mod sees the same steps. `CurrentSessionToken` is
+  cancelled, every replicated value returns to its declared default, every object despawns with a notification, and
+  the snapshot names the new session. `OnMultiplayerSessionEnded` runs with the old session's last snapshot, then
+  `OnMultiplayerSessionStarted` runs with the new session's first `Ready` one. Joining, a host that restarts its
+  session, and leaving a joined session all take these steps; leaving, however it happens, lands in a fresh solo
+  session.
+- **Reconnecting.** When the connection to the host goes quiet, the snapshot reports `Reconnecting` and canonical
+  values hold still. A connection that recovers carries on. One that drops is tried again every two seconds for 30
+  seconds: meanwhile the snapshot reports `Connecting`, and submissions still waiting for the host complete as
+  cancelled. The host keeps a player's place, participant id included, for 30 seconds after the connection drops, so
+  a reconnect in that window resumes the same session as the same player, with the host's current values, and the
+  session hooks do not run. A player who cannot get back in time returns to solo play.
+
+What a mod sees at each step:
+
+| Step | `State` | `HasWorldAuthority` | Session hooks |
+| --- | --- | --- | --- |
+| Solo play | `Ready` | Yes | Started, for the solo session |
+| Opening the session to others | `Ready` | Yes | None: the session goes on |
+| Another player joins this host | `Ready` | Yes | None: the participant list grows |
+| Joining another host | `Connecting`, `Synchronizing`, then `Ready` | No | Ended for the solo session, Started for the host's |
+| The connection to the host goes quiet | `Reconnecting` | No | None |
+| The connection drops and comes back in time | `Connecting`, `Synchronizing`, then `Ready` | No | None: the session goes on |
+| The host restarts its session | `Synchronizing`, then `Ready`; the host stays `Ready` | Unchanged | Ended, then Started |
+| Leaving, a kick or ban, the host stopping, or the reconnect window running out | `Ready`, in a new solo session | Yes | Ended for the host's session, Started for the solo one |
+
+Live sessions on a LAN or at a direct address already exist in the provider, behind a developer switch
+(`TOPIAFORGE_LIVE_MULTIPLAYER=1`) until the in-game interface for hosting and joining arrives. That interface, Internet
+play through invite codes and a relay, and joining from the launcher are later work.
+
+## What solo cannot tell you
+
+Solo play runs everything once, inline, in one process, with one player and no network. A mod can pass every solo test
+and still go wrong in a live session, because solo play never shows these:
+
+| Blind spot | What happens in a live session | How to see it |
+| --- | --- | --- |
+| Latency | A client's command confirms a round trip later, and its presentation events arrive with the confirmation, not before it. Code that waits on a confirmation waits that long. | Rig conditions with latency, or `WithDownstreamRate(10)` for the live snapshot rate |
+| Prediction rollbacks | An owner-predicted handler runs on the client first, then again on the host. When the host refuses it or reaches another result, the client's values roll back to the host's. | A rig client whose command the host refuses, or whose frames `rig.Network` holds back |
+| Authority on a client | A client holds no world authority. Spawning, despawning, `Apply` and updates outside a predicted handler return `NotAuthoritative`, and tick handlers do not run. Code that spawns whenever it loads spawns on every player's process. | A rig remote client, and a hook that checks `snapshot.HasWorldAuthority` |
+| Late join | A player who joins later receives every replicated value and object, but no presentation event published before it was `Ready`, and nothing a mod kept in its own fields. | `AddRemoteClient` after play has started |
+| Reconnects | A dropped connection cancels the submissions still waiting for the host, although the host may have run some of them, and the values come back from the host's snapshot. | `Interrupt` and `Resume`, `Disconnect` and `Reconnect` |
+| Session replacement | Values return to their defaults, objects despawn and tokens are cancelled, so handles and values kept from the old session go stale. | `StartNewSession` |
+| Several players | Commands from several players interleave, and every limit applies to each sender. A handler must check canonical state rather than assume it. | Several rig clients |
+
+The [test rig](#test-before-transport) shows each of these deterministically, in a unit test, on the same session
+engine the provider runs. To see them in the game, two machines on one LAN can host and join each other with the
+developer switch. Running several copies of the game on one machine needs a separate folder for each copy;
+`topiaforge dev --peers`, which will set those up and join the copies into one session, is later work.
+
 ## Test before transport
 
 `MultiplayerTestRig` in `TopiaForge.Mods.Testing` runs the same session engine as the provider, connected by a
@@ -234,7 +305,9 @@ Two build-checked first-party examples keep the intended author experience hones
 - `samples/multiplayer/TopiaForge.Multiplayer.CounterSample` covers snapshot state, owner-predicted commands,
   canonical rejection, typed submission, and accepted presentation events.
 - `samples/multiplayer/TopiaForge.Multiplayer.DroneSample` covers generated replicated-object type registration,
-  typed spawning/discovery, bounded state/input codecs, and predictive ownership.
+  typed spawning/discovery, bounded state/input codecs, and predictive ownership. It spawns its drone from
+  `OnMultiplayerSessionStarted`, and only when the snapshot holds world authority, so each session the process hosts
+  gets one drone and a joining player spawns none.
 
 ## Security boundary
 
