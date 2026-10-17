@@ -54,6 +54,7 @@ topiaforge new mod example.my-mod --template gameplay --name "My Mod" --author "
 | `ui` | Configurable input and a TopiaForgeUi-backed window. |
 | `asset` | Package bundle/prefab loading, spawning, and result handling. |
 | `world` | Declared bundle worlds and launch targets with session-owned loading, readiness, and cleanup. |
+| `multiplayer` | A host-owned count shared through a generated contract, with explicit command limits and rig tests. |
 
 Every scaffold includes:
 

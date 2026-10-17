@@ -77,6 +77,16 @@ extension _NewCommands on _TopiaForgeCli {
         'custom-world AssetBundles, then build them with `topiaforge world build`.',
       );
     }
+    // A template with a multiplayer contract ships the empty lock that `mod add multiplayer` writes, and
+    // `topiaforge pack` refuses it until it is generated from the built contract.
+    if (File(
+      p.join(workspace.projectRoot, 'topiaforge.multiplayer.lock.json'),
+    ).existsSync()) {
+      stdout.writeln(
+        'Multiplayer mod: run `topiaforge restore`, then `topiaforge mod sync multiplayer` to '
+        'generate topiaforge.multiplayer.lock.json from the contract before packing, and commit it.',
+      );
+    }
     return 0;
   }
 

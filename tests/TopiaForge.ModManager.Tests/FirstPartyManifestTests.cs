@@ -437,8 +437,8 @@ namespace TopiaForge.ModManager.Tests
             var templates = Directory.GetDirectories(templatesRoot)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToArray();
-            Assert(templates.Length == 7,
-                "V1 must ship exactly seven canonical mod templates");
+            Assert(templates.Length == 8,
+                "V1 must ship exactly eight canonical mod templates");
 
             foreach (var template in templates)
             {
@@ -483,6 +483,20 @@ namespace TopiaForge.ModManager.Tests
                 Assert(source.Contains("TopiaForgeMod", StringComparison.Ordinal)
                     && source.Contains("protected override void OnLoad()", StringComparison.Ordinal),
                     id + " template must demonstrate the V1 authoring base class");
+                if (id == "multiplayer")
+                {
+                    // Every command states the rate and payload it needs, so TFMP014 has nothing to report.
+                    var commands = Regex.Matches(
+                        source,
+                        @"\[MultiplayerCommand\((?<settings>[^\]]*)\)\]",
+                        RegexOptions.CultureInvariant);
+                    var everyCommandIsLimited = commands.Count > 0 && commands.All(command =>
+                        command.Groups["settings"].Value.Contains("MaximumPerSecond", StringComparison.Ordinal)
+                        && command.Groups["settings"].Value.Contains("MaximumPayloadBytes", StringComparison.Ordinal));
+                    Assert(everyCommandIsLimited
+                        && projectText.Contains("TopiaForge.Mods.Multiplayer.Generators", StringComparison.Ordinal),
+                        "multiplayer template must generate its contract and give every command explicit limits");
+                }
                 Assert(!Regex.IsMatch(
                         source,
                         @"InputBinding\.(?:Key|GamepadButton)\s*\(\s*\""F(?:8|10)\""",

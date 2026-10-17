@@ -35,8 +35,8 @@ launcher never downloads or installs Unity.
 
 ## Templates
 
-- **Mod templates** (`templates/mod/<id>/`) — seven directory templates for C# mods (`minimal`, `gameplay`,
-  `gamemode`, `service`, `ui`, `asset`, `world`), each with a `template.json` (metadata + manifest defaults) and
+- **Mod templates** (`templates/mod/<id>/`) — eight directory templates for C# mods (`minimal`, `gameplay`,
+  `gamemode`, `service`, `ui`, `asset`, `world`, `multiplayer`), each with a `template.json` (metadata + manifest defaults) and
   `{{TOKEN}}`-substituted sources. Scaffold with `topiaforge new mod <id> --template <id>`; list them with
   `topiaforge list templates`. See [Modding.md](Modding.md#choose-a-template).
 - **Unity world** (`templates/TopiaForge.UnityWorldTemplate/`) — a starter Unity project for authoring

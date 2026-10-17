@@ -536,7 +536,7 @@ jobs:
               "$payload/topiaforge-arm64" "$payload/topiaforge-x64"
           fi
 
-          templates=(minimal gameplay gamemode service ui asset world)
+          templates=(minimal gameplay gamemode service ui asset world multiplayer)
           for template in "${templates[@]}"; do
             "$cli" new mod "release.$template" --template "$template" \
               --name "Release $template" --author "TopiaForge CI" \
@@ -546,9 +546,11 @@ jobs:
               --forbid "$extracted" --forbid "$workspace"
           done
 
-          # World and gamemode scaffolds declare these runtime providers. Seed
-          # them from the canonical payload so installs remain fully offline.
+          # World, gamemode, and multiplayer scaffolds declare these runtime
+          # providers. Seed them from the canonical payload so installs remain
+          # fully offline.
           for dependency_id in \
+            io.github.furroxide.topiaforge.multiplayer \
             io.github.furroxide.topiaforge.robotkit \
             io.github.furroxide.topiaforge.worlds; do
             dependency_package=''
@@ -566,6 +568,11 @@ jobs:
 
           for template in "${templates[@]}"; do
             project="$projects/release.$template"
+            # A multiplayer scaffold's contract lock starts empty; generate it
+            # from the built contract, as an author does, before packing.
+            if [ -f "$project/topiaforge.multiplayer.lock.json" ]; then
+              "$cli" mod sync multiplayer --project "$project"
+            fi
             entry=$(find "$project" -maxdepth 1 -name '*.csproj' -print -quit)
             test -n "$entry"
             dotnet build "$entry" -c Release --no-restore --nologo
