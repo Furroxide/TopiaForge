@@ -117,7 +117,8 @@ namespace TopiaForge.ModManager.Core
     /// <summary>
     /// Preferences the player changed in game (<c>multiplayer-preferences-journal-v1.json</c> in manager staging, game to
     /// launcher): at most 64 changes in strictly increasing sequence order. The game appends and rewrites the whole file
-    /// atomically, and drops what a projection's <see cref="MultiplayerPreferencesProjection.JournalApplied"/> covers.
+    /// atomically, and drops what a projection's <see cref="MultiplayerPreferencesProjection.JournalApplied"/> covers and
+    /// every change a later one supersedes, so a long session never fills the journal.
     /// </summary>
     public sealed class MultiplayerPreferencesJournal
     {
@@ -143,11 +144,21 @@ namespace TopiaForge.ModManager.Core
         public int NextSequence(MultiplayerPreferencesProjection? projection) =>
             Math.Max(Changes.Count == 0 ? 0 : Changes[Changes.Count - 1].Sequence, projection?.JournalApplied ?? 0) + 1;
 
-        /// <summary>This journal without what <paramref name="projection"/> applied, with <paramref name="change"/> appended.</summary>
+        /// <summary>
+        /// This journal without what <paramref name="projection"/> applied and without the changes <paramref name="change"/>
+        /// supersedes, with <paramref name="change"/> appended. The launcher applies changes in order and each sets its whole
+        /// preference, so an earlier change of the same preference can never alter the result. A disclosure is the exception:
+        /// an acknowledgement never lowers the version, so only one that acknowledges no more than <paramref name="change"/>
+        /// is superseded.
+        /// </summary>
         public MultiplayerPreferencesJournal Append(MultiplayerPreferenceChange change, MultiplayerPreferencesProjection? projection)
         {
+            if (change == null) throw new ArgumentNullException(nameof(change));
             var applied = projection?.JournalApplied ?? 0;
-            return new MultiplayerPreferencesJournal(Changes.Where(item => item.Sequence > applied).Append(change));
+            return new MultiplayerPreferencesJournal(Changes.Where(item => item.Sequence > applied && !Supersedes(change, item)).Append(change));
         }
+
+        private static bool Supersedes(MultiplayerPreferenceChange later, MultiplayerPreferenceChange earlier) =>
+            later.Kind == earlier.Kind && (later.Kind != "disclosure" || later.NewDisclosure >= earlier.NewDisclosure);
     }
 }

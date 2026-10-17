@@ -51,6 +51,49 @@ void main() {
     }
   });
 
+  // The session fixtures pin the servers descriptor/ describes, so a change
+  // to the descriptor fixtures must regenerate these too.
+  test('every pinned server is one the descriptor fixtures describe', () {
+    final descriptors = asObjects(
+      readMultiplayerFixture('descriptor/cases.json')['valid'],
+    );
+    final pins = {
+      for (final item in descriptors)
+        '${item['serverId']} ${item['descriptorSha256']} '
+            '${item['packageDigest']}',
+    };
+    final servers = {for (final item in descriptors) item['serverId']};
+    final channels = readMultiplayerFixture('channels/cases.json');
+    final targets = [
+      for (final item in asObjects(
+        readMultiplayerFixture('launch-v5/cases.json')['valid'],
+      ))
+        LaunchTransport.readProfileV5(item['bytes']! as String).session.target,
+      for (final item in asObjects(asObject(channels['join'])['valid']))
+        LaunchTransport.readSessionJoin(
+          item['bytes']! as String,
+        ).session.target,
+    ].nonNulls.toList();
+    expect(targets, isNotEmpty);
+    for (final target in targets) {
+      expect(
+        pins,
+        contains(
+          '${target.serverId} ${target.descriptorSha256} '
+          '${target.packageDigest}',
+        ),
+      );
+    }
+    final listings = [
+      for (final item in asObjects(asObject(channels['handoff'])['valid']))
+        if (LaunchTransport.readSessionHandoff(item['bytes']! as String).target
+            case LaunchHandoffListing(:final serverId))
+          serverId,
+    ];
+    expect(listings, isNotEmpty);
+    expect(servers, containsAll(listings));
+  });
+
   group('progress V2 fixtures', () {
     final fixture = readMultiplayerFixture('progress-v2/cases.json');
     final progress = asObject(fixture['progress']);

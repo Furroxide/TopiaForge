@@ -263,6 +263,32 @@ namespace TopiaForge.ModManager.Tests
                 Rejects(() => MultiplayerPreferenceChange.Voice(4, 0, true), "Voice stays off until the player consents.");
                 Rejects(() => new MultiplayerPreferencesJournal(new[] { MultiplayerPreferenceChange.Disclosure(2, 1), MultiplayerPreferenceChange.Disclosure(2, 1) }),
                     "Sequences increase strictly.");
+
+                // The launcher takes the journal in only before a session launch and after the game exits, so one session's
+                // edits all land in it. Only the newest change of each preference matters, so the journal never fills.
+                var session = new MultiplayerPreferencesJournal(Array.Empty<MultiplayerPreferenceChange>());
+                for (var edit = 0; edit < 200; edit++)
+                {
+                    var sequence = session.NextSequence(projection);
+                    session = session.Append((edit % 3) switch
+                    {
+                        0 => MultiplayerPreferenceChange.Voice(sequence, 1, edit % 2 == 0),
+                        1 => MultiplayerPreferenceChange.Network(sequence, edit % 2 == 0, false),
+                        _ => MultiplayerPreferenceChange.DisplayName(sequence, "Sam " + (edit % 10)),
+                    }, projection);
+                }
+
+                Assert(session.Changes.Select(change => change.Kind + "@" + change.Sequence)
+                    .SequenceEqual(new[] { "displayName@199", "voice@200", "network@201" }),
+                    "Two hundred edits keep only the newest change of each preference.");
+                Assert(session.Changes[0].NewDisplayName == "Sam 7" && session.Changes[1].NewVoiceEnabled && !session.Changes[2].NewLanDiscovery,
+                    "The kept changes hold the newest values.");
+                var acknowledged = new MultiplayerPreferencesJournal(Array.Empty<MultiplayerPreferenceChange>())
+                    .Append(MultiplayerPreferenceChange.Disclosure(2, 2), null).Append(MultiplayerPreferenceChange.Disclosure(3, 1), null);
+                Assert(acknowledged.Changes.Select(change => change.NewDisclosure).SequenceEqual(new[] { 2, 1 }),
+                    "An acknowledgement of less never supersedes one of more, since the launcher never lowers the version.");
+                Assert(acknowledged.Append(MultiplayerPreferenceChange.Disclosure(4, 2), null).Changes.Select(change => change.Sequence)
+                    .SequenceEqual(new[] { 4 }), "One that acknowledges at least as much supersedes them.");
             }
             finally { owned.Delete(true); }
         }

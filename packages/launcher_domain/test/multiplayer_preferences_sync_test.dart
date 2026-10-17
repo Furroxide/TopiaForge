@@ -172,6 +172,61 @@ void main() {
       contains('"mode":"relay-only"'),
     );
   });
+
+  // The game drops every change a later one supersedes, so a long session
+  // never fills the journal (`MultiplayerPreferencesJournal.Append` in C#).
+  // That holds only while each change sets its whole preference and an
+  // acknowledgement never lowers the disclosure.
+  test('a superseded change never alters what a journal applies', () {
+    final changes = <MultiplayerPreferenceChange>[
+      DisplayNameChange(sequence: 1, displayName: 'Alex'),
+      VoiceChange(sequence: 2, consent: 1, enabled: true),
+      DisclosureChange(sequence: 3, disclosure: 2),
+      NetworkChange(sequence: 4, lanDiscovery: false, upnp: true),
+      DisplayNameChange(sequence: 5, displayName: 'Robin'),
+      DisclosureChange(sequence: 6, disclosure: 1),
+      HostingChange(
+        sequence: 7,
+        hosting: MultiplayerHostingDefaults(name: 'Late night', maxPlayers: 3),
+      ),
+      VoiceChange(sequence: 8, consent: 1, enabled: false),
+      NetworkChange(sequence: 9, lanDiscovery: true, upnp: false),
+      HostingChange(
+        sequence: 10,
+        hosting: MultiplayerHostingDefaults(name: 'Early bird'),
+      ),
+    ];
+    bool supersedes(
+      MultiplayerPreferenceChange later,
+      MultiplayerPreferenceChange earlier,
+    ) =>
+        later.runtimeType == earlier.runtimeType &&
+        (later is! DisclosureChange ||
+            later.disclosure >= (earlier as DisclosureChange).disclosure);
+    final kept = [
+      for (final (index, change) in changes.indexed)
+        if (!changes.skip(index + 1).any((later) => supersedes(later, change)))
+          change,
+    ];
+    expect(kept.map((change) => change.sequence), [3, 5, 6, 8, 9, 10]);
+    for (var applied = 0; applied <= changes.length; applied++) {
+      final projection = MultiplayerPreferencesProjection.fromSettings(
+        settings,
+        hosting: hosting,
+        revision: 3,
+        journalApplied: applied,
+      );
+      expect(
+        LaunchTransport.writePreferences(
+          MultiplayerPreferencesJournal(kept).applyTo(projection),
+        ),
+        LaunchTransport.writePreferences(
+          MultiplayerPreferencesJournal(changes).applyTo(projection),
+        ),
+        reason: 'with changes through $applied applied',
+      );
+    }
+  });
 }
 
 /// A launcher store with no hosting defaults yet, as the multiplayer store is

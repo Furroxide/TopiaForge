@@ -164,6 +164,10 @@ and `journalApplied`. Favorites and history are never projected.
   `multiplayer-preferences-journal-v1.json`: at most 64 changes in strictly increasing `sequence` order, each setting
   exactly one of `displayName`, `disclosure`, `voice`, `network` or `hosting`. Privacy is not a change, since direct
   play is never stored.
+- **A long session never fills the journal.** The launcher takes the journal in only before a session launch and after
+  the game exits, so every edit of a session lands in it. Each change sets its whole preference, so when the game
+  appends one (`MultiplayerPreferencesJournal.Append`) it drops every earlier change of the same preference; an earlier
+  disclosure goes only when the new one acknowledges at least as much. The launcher's result is the same either way.
 - **The launcher's store is the record.** It keeps the projection's `revision` and `journalApplied` with the player's
   settings, and gives them to the round through `MultiplayerPreferencesSource`.
 - **One round** (`MultiplayerPreferencesSync`, and `syncPreferences` in staging): the launcher builds the projection
@@ -175,6 +179,12 @@ and `journalApplied`. Favorites and history are never projected.
   `journalApplied` covers.
 - **Hosting defaults.** Until the launcher's store holds hosting defaults, the source gives none, and the projection
   keeps its own, a change made in game included. The first projection starts from `MultiplayerHostingDefaults.forPlayer`.
+- **Known limit: a journal started over.** If staging loses both the projection and the journal (a runtime reinstall,
+  say) while the launcher's store keeps its position, a game started without the launcher numbers its next changes
+  from 1 again, and the launcher skips them until their sequence passes the store's. The launcher cannot tell that
+  journal from one it has already applied, which it must never apply twice. A journal epoch, a token the game picks
+  when it starts a journal and the store keeps with `journalApplied`, would tell them apart; it waits for the slice
+  that first writes journals, since nothing writes one yet.
 
 ## 8. The game side today
 
@@ -185,8 +195,8 @@ and `journalApplied`. Favorites and history are never projected.
   narrow entry point is `MultiplayerProvider.TakeLaunchSession`, which takes the ticket once, while mods load, and maps
   it onto live sessions (`LaunchSessionPlan`): host settings, or a join target pinned by the verified server and its
   settings. Invites and Internet listings wait for the control plane. Once mods have loaded, the runtime withdraws a
-  ticket no one took, so a direct target's address does not stay in memory for the whole process. When #195's
-  internal control merges, the ticket becomes a call on it.
+  ticket no one took, so a direct target's address does not stay in memory for the whole process. When the runtime's
+  internal multiplayer control merges (#211), the ticket becomes a call on it.
 - The ticket is internal, and the manager's package validator keeps it so: a package may not bundle any assembly a
   TopiaForge assembly names in `InternalsVisibleTo`, unless it is the first-party package that ships it. Test and
   tool assemblies never ship.
@@ -227,3 +237,8 @@ A join must install the exact `id@version@sha256` a server runs, which is often 
 read the same in any member order and write back to the exact bytes, and every invalid one is refused. The launcher
 also replays how a journal applies. The generator checks that no progress, outcome or channel fixture names a direct
 target's host or port.
+
+The generator takes its server pins (`serverId`, `descriptorSha256` and `packageDigest`) from `descriptor/cases.json`,
+and both runtimes check that every pinned target, and every handoff listing, names a server those descriptor fixtures
+describe. A change to the descriptor fixtures therefore fails until `generate_launch.py` runs again after
+`generate.py`.

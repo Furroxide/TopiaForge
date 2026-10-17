@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
             using var launch = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "launch-v5", "cases.json")));
             using var outputs = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "progress-v2", "cases.json")));
             using var channels = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "channels", "cases.json")));
+            using var descriptors = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "descriptor", "cases.json")));
             var runs = 0;
             void Check(string name, Action test)
             {
@@ -33,6 +34,8 @@ namespace TopiaForge.ModManager.Tests
             {
                 Check("launch-v5 " + item.GetProperty("id").GetString() + " fields", () => LaunchFields(item));
             }
+
+            Check("pinned servers", () => DescriptorPins(descriptors.RootElement, launch.RootElement, channels.RootElement));
 
             Replay("progress-v2", outputs.RootElement.GetProperty("progress"),
                 text => LaunchTransportJson.WriteProgress(LaunchTransportJson.ReadProgress(text)), Check);
@@ -118,6 +121,30 @@ namespace TopiaForge.ModManager.Tests
             try { LaunchTransportJson.ReadProfile(bytes); }
             catch (InvalidDataException) { return; }
             throw new InvalidOperationException("The V4 reader must refuse V5.");
+        }
+
+        /// <summary>
+        /// The session fixtures pin the servers descriptor/ describes, so a change to the descriptor fixtures must regenerate
+        /// these too.
+        /// </summary>
+        private static void DescriptorPins(JsonElement descriptors, JsonElement launch, JsonElement channels)
+        {
+            var valid = descriptors.GetProperty("valid").EnumerateArray().ToArray();
+            var pins = new HashSet<string>(valid.Select(item => item.GetProperty("serverId").GetString() + " "
+                + item.GetProperty("descriptorSha256").GetString() + " " + item.GetProperty("packageDigest").GetString()), StringComparer.Ordinal);
+            var servers = new HashSet<string>(valid.Select(item => item.GetProperty("serverId").GetString()!), StringComparer.Ordinal);
+            var targets = launch.GetProperty("valid").EnumerateArray()
+                .Select(item => LaunchTransportJson.ReadProfileV5(item.GetProperty("bytes").GetString()!).Session.Target)
+                .Concat(channels.GetProperty("join").GetProperty("valid").EnumerateArray()
+                    .Select(item => LaunchTransportJson.ReadSessionJoin(item.GetProperty("bytes").GetString()!).Session.Target))
+                .OfType<LaunchSessionTarget>().ToArray();
+            Assert(targets.Length != 0 && targets.All(target => pins.Contains(target.ServerId + " " + target.DescriptorSha256 + " " + target.PackageDigest)),
+                "Every pinned target names a descriptor fixture's server, descriptor and package digest.");
+            var listings = channels.GetProperty("handoff").GetProperty("valid").EnumerateArray()
+                .Select(item => LaunchTransportJson.ReadSessionHandoff(item.GetProperty("bytes").GetString()!).Target)
+                .Where(target => target.Kind == "listing").ToArray();
+            Assert(listings.Length != 0 && listings.All(target => servers.Contains(target.ServerId!)),
+                "Every handoff listing names a descriptor fixture's server.");
         }
 
         private static IEnumerable<string> Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()!);
