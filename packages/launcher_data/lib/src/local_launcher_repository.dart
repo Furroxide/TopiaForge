@@ -30,6 +30,7 @@ import 'acceptance_isolation_identity.dart';
 import 'acceptance_isolation_bootstrap.dart';
 import 'tomato_cake_launcher_state.dart';
 
+part 'local_launcher_repository/atomic_backup_recovery.dart';
 part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_install_discovery_helpers.dart';
 part 'local_launcher_repository/game_architecture.dart';
