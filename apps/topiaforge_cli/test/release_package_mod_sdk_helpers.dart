@@ -5,10 +5,33 @@ const _releaseModTemplates = [
   'gamemode',
   'gameplay',
   'minimal',
+  'multiplayer',
   'service',
   'ui',
   'world',
 ];
+
+/// Whether [projectRoot] carries a multiplayer contract lock. A template ships
+/// the empty lock that `topiaforge mod add multiplayer` writes, and pack accepts
+/// the project only once the lock is generated from the built contract.
+bool _hasContractLock(String projectRoot) =>
+    File(p.join(projectRoot, 'topiaforge.multiplayer.lock.json')).existsSync();
+
+/// Generates [project]'s contract lock with the packaged [cli], as an author
+/// does after restore. A project without a contract lock is left alone.
+Future<void> _syncContractLock(
+  File cli,
+  String project,
+  Map<String, String> environment,
+) async {
+  if (!_hasContractLock(project)) return;
+  await _runPackagedCli(
+    cli,
+    ['mod', 'sync', 'multiplayer', '--project', project],
+    workingDirectory: project,
+    environment: environment,
+  );
+}
 
 List<File> _releaseProjectFiles(String projectRoot) => Directory(projectRoot)
     .listSync(recursive: true, followLinks: false)
@@ -271,6 +294,7 @@ Future<List<String>> _packRuntimeTemplateDependencies(
   for (final projectName in const [
     'TopiaForge.Worlds',
     'TopiaForge.RobotKit',
+    'TopiaForge.Multiplayer',
   ]) {
     await _runPackagedCli(
       cli,
@@ -293,7 +317,7 @@ Future<List<String>> _packRuntimeTemplateDependencies(
           .map((file) => file.path)
           .toList()
         ..sort();
-  expect(packages, hasLength(2));
+  expect(packages, hasLength(3));
   return packages;
 }
 

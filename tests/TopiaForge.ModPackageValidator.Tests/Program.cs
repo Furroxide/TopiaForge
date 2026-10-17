@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using TopiaForge.ModPackageValidator;
 
@@ -8,6 +10,7 @@ namespace TopiaForge.ModPackageValidator.Tests;
 internal static class Program
 {
     private const string SdkVersion = "0.1.0-rc.1";
+    private const string ContractLockPath = "topiaforge.multiplayer.lock.json";
 
     private static int Main()
     {
@@ -25,6 +28,10 @@ internal static class Program
         Run("bounded receipt metadata", TestBoundedReceiptMetadata);
         Run("duplicate nested lock metadata", TestDuplicateNestedLockMetadata);
         Run("session package requires canonical multiplayer lock", TestSessionPackageRequiresCanonicalLock);
+        Run("session scaffold install adds the generated lock", TestSessionInstallAddsGeneratedLock);
+        Run("session scaffold install keeps declared files first", TestSessionInstallKeepsDeclaredFilesFirst);
+        Run("session scaffold install canonicalizes a declared lock", TestSessionInstallCanonicalizesDeclaredLock);
+        Run("session scaffold install rejects lists pack cannot produce", TestSessionInstallRejectsUnpackedFileLists);
         Console.WriteLine("Release scaffold validator tests passed.");
         return 0;
     }
@@ -300,6 +307,70 @@ internal static class Program
             "canonical generated contract lock '" + lockPath + "'");
     }
 
+    private static void TestSessionInstallAddsGeneratedLock(string root)
+    {
+        // A session scaffold's source manifest lists no synchronized files; packing adds the generated lock.
+        var (project, install) = WriteSessionInstallFixture(
+            root,
+            Array.Empty<string>(),
+            new[] { ContractLockPath });
+        AssertNoErrors(ReleaseScaffoldValidator.Validate(
+            project,
+            Array.Empty<string>(),
+            install.Package,
+            install.PackagesRoot));
+    }
+
+    private static void TestSessionInstallKeepsDeclaredFilesFirst(string root)
+    {
+        var (project, install) = WriteSessionInstallFixture(
+            root,
+            new[] { "Content/rules.json" },
+            new[] { "Content/rules.json", ContractLockPath });
+        AssertNoErrors(ReleaseScaffoldValidator.Validate(
+            project,
+            Array.Empty<string>(),
+            install.Package,
+            install.PackagesRoot));
+    }
+
+    private static void TestSessionInstallCanonicalizesDeclaredLock(string root)
+    {
+        // Packing gives a lock entry declared in another letter case the canonical spelling, in place.
+        var (project, install) = WriteSessionInstallFixture(
+            root,
+            new[] { "TopiaForge.Multiplayer.Lock.JSON", "Content/rules.json" },
+            new[] { ContractLockPath, "Content/rules.json" });
+        AssertNoErrors(ReleaseScaffoldValidator.Validate(
+            project,
+            Array.Empty<string>(),
+            install.Package,
+            install.PackagesRoot));
+    }
+
+    private static void TestSessionInstallRejectsUnpackedFileLists(string root)
+    {
+        var cases = new[]
+        {
+            (Source: Array.Empty<string>(), Installed: new[] { "Content/extra.json", ContractLockPath }),
+            (Source: new[] { "Content/rules.json" }, Installed: new[] { ContractLockPath, "Content/rules.json" }),
+        };
+        for (var index = 0; index < cases.Length; index++)
+        {
+            var (project, install) = WriteSessionInstallFixture(
+                Path.Combine(root, index.ToString(CultureInfo.InvariantCulture)),
+                cases[index].Source,
+                cases[index].Installed);
+            AssertContains(
+                ReleaseScaffoldValidator.Validate(
+                    project,
+                    Array.Empty<string>(),
+                    install.Package,
+                    install.PackagesRoot),
+                "multiplayer.synchronizedFiles differs from scaffold");
+        }
+    }
+
     private static string WriteProjectFixture(string root)
     {
         var project = Path.Combine(root, "project");
@@ -364,32 +435,110 @@ internal static class Program
         string root,
         bool reverseInventory = false)
     {
+        var payload = new SortedDictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["Example.dll"] = "managed entry fixture"u8.ToArray(),
+            ["topiaforge.mod.json"] = File.ReadAllBytes(Path.Combine(project, "topiaforge.mod.json")),
+        };
+        return WritePayloadInstall(root, payload, _ => true, reverseInventory);
+    }
+
+    /// <summary>
+    /// Writes a session scaffold whose source manifest declares <paramref name="sourceSynchronizedFiles"/>, and an
+    /// installed copy whose packed manifest declares and hashes <paramref name="installedSynchronizedFiles"/>.
+    /// </summary>
+    private static (string Project, InstallFixture Install) WriteSessionInstallFixture(
+        string root,
+        string[] sourceSynchronizedFiles,
+        string[] installedSynchronizedFiles)
+    {
+        var project = WriteProjectFixture(root);
+        WriteJson(Path.Combine(project, "topiaforge.mod.json"), SessionManifest(sourceSynchronizedFiles, null));
+        var payload = new SortedDictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["Example.dll"] = "managed entry fixture"u8.ToArray(),
+        };
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var path in installedSynchronizedFiles)
+        {
+            payload[path] = Encoding.UTF8.GetBytes("synchronized fixture " + path);
+            hashes[path] = Sha256(payload[path]);
+        }
+
+        payload["topiaforge.mod.json"] = JsonSerializer.SerializeToUtf8Bytes(
+            SessionManifest(installedSynchronizedFiles, hashes));
+        var install = WritePayloadInstall(
+            root,
+            payload,
+            path => path is "Example.dll" or "topiaforge.mod.json" ||
+                installedSynchronizedFiles.Contains(path, StringComparer.Ordinal));
+        return (project, install);
+    }
+
+    private static Dictionary<string, object> SessionManifest(
+        string[] synchronizedFiles,
+        Dictionary<string, string>? hashes)
+    {
+        var multiplayer = new Dictionary<string, object>
+        {
+            ["mode"] = "session",
+            ["presence"] = "required",
+            ["protocol"] = new { version = "1.0.0", peerVersionRange = ">=1.0.0 <2.0.0" },
+        };
+        if (synchronizedFiles.Length > 0)
+        {
+            multiplayer["synchronizedFiles"] = synchronizedFiles;
+        }
+
+        var manifest = new Dictionary<string, object>
+        {
+            ["schemaVersion"] = 6,
+            ["name"] = "example.scaffold",
+            ["displayName"] = "Example scaffold",
+            ["version"] = "1.0.0",
+            ["author"] = new { name = "TopiaForge" },
+            ["entryAssembly"] = "Example.dll",
+            ["entryType"] = "Example.Mod",
+            ["supportedGameVersionRange"] = "*",
+            ["supportedLoaderVersionRange"] = "*",
+            ["supportedSdkVersionRange"] = "*",
+            ["apiAssemblies"] = Array.Empty<string>(),
+            ["multiplayer"] = multiplayer,
+        };
+        if (hashes != null)
+        {
+            manifest["hashes"] = hashes;
+        }
+
+        return manifest;
+    }
+
+    /// <summary>Installs <paramref name="payload"/>, in path order, with its receipt and manager state.</summary>
+    private static InstallFixture WritePayloadInstall(
+        string root,
+        SortedDictionary<string, byte[]> payload,
+        Func<string, bool> isCritical,
+        bool reverseInventory = false)
+    {
         var package = Path.Combine(root, "example.scaffold-1.0.0.topiaforgemod");
         File.WriteAllBytes(package, "deterministic package fixture"u8.ToArray());
         var packagesRoot = Path.Combine(root, "game", "BepInEx", "TopiaForge", "packages");
         var installedRoot = Path.Combine(packagesRoot, "example.scaffold", "1.0.0");
-        Directory.CreateDirectory(installedRoot);
-        var manifest = File.ReadAllBytes(Path.Combine(project, "topiaforge.mod.json"));
-        var entry = "managed entry fixture"u8.ToArray();
-        File.WriteAllBytes(Path.Combine(installedRoot, "topiaforge.mod.json"), manifest);
-        File.WriteAllBytes(Path.Combine(installedRoot, "Example.dll"), entry);
-        var inventory = new List<object>
+        var inventory = new List<object>();
+        foreach (var (path, bytes) in payload)
         {
-            new
+            var file = Path.Combine(installedRoot, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllBytes(file, bytes);
+            inventory.Add(new
             {
-                path = "Example.dll",
-                length = entry.Length,
-                sha256 = Sha256(entry),
-                critical = true,
-            },
-            new
-            {
-                path = "topiaforge.mod.json",
-                length = manifest.Length,
-                sha256 = Sha256(manifest),
-                critical = true,
-            },
-        };
+                path,
+                length = bytes.Length,
+                sha256 = Sha256(bytes),
+                critical = isCritical(path),
+            });
+        }
+
         if (reverseInventory)
         {
             inventory.Reverse();

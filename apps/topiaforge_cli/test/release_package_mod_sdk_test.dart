@@ -149,7 +149,7 @@ void main() {
   });
 
   test(
-    'packaged CLI owns the relocated seven-template lifecycle',
+    'packaged CLI owns the relocated lifecycle of every template',
     () async {
       final payload = Directory(p.join(temp.path, 'extracted-release'))
         ..createSync(recursive: true);
@@ -275,6 +275,7 @@ void main() {
           forbiddenPaths: [payload.path, repositoryRoot.path],
           environment: environment,
         );
+        await _syncContractLock(relocatedCli, project, environment);
         final projectFiles = _releaseProjectFiles(project);
         final entryProject = _releaseEntryProject(project, projectFiles);
         await _runCheckedProcess(
@@ -462,6 +463,11 @@ void main() {
               '${p.basename(workspace.projectRoot)}\n'
               '${build.stdout}\n${build.stderr}',
         );
+        if (_hasContractLock(workspace.projectRoot)) {
+          await repository.synchronizeMultiplayerContractLock(
+            workspace.projectRoot,
+          );
+        }
         final package = await repository.packProject(workspace.projectRoot);
         expect(File(package).existsSync(), isTrue);
         final archive = ZipDecoder().decodeBytes(

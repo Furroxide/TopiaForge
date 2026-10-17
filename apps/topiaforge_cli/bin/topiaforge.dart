@@ -198,15 +198,21 @@ class _TopiaForgeCli {
     }
     if (args.first == 'templates') {
       final templates = await developerRepository.listModTemplates();
+      // Pad to the longest id so every label, unity-world's included, starts in one column.
+      var idWidth = 10;
+      for (final template in templates) {
+        if (template.id.length > idWidth) idWidth = template.id.length;
+      }
       for (final template in templates) {
         final label = template.label.isEmpty ? template.id : template.label;
         stdout.writeln(
-          'mod --template ${template.id.padRight(10)} $label'
+          'mod --template ${template.id.padRight(idWidth)} $label'
           '${template.description.isEmpty ? '' : ' — ${template.description}'}',
         );
       }
       stdout.writeln(
-        'unity-world${' ' * 15} Unity 6 custom-world authoring project',
+        '${'unity-world'.padRight('mod --template '.length + idWidth)} '
+        'Unity 6 custom-world authoring project',
       );
       return 0;
     }

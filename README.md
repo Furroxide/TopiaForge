@@ -112,7 +112,7 @@ The release-facing component and contract map is
 | **Desktop launcher** | Detects and repairs the install, manages profiles, previews dependency and conflict plans, launches the game. |
 | **`topiaforge` CLI** | 27 commands covering scaffold, restore, build, test, pack, validate, install, and release. |
 | **In-game UI kit** | Declarative `UiNode` trees rendered by TopiaForgeUi — HUDs, windows, modals, toasts, with accessibility built in. See [docs/UiKit.md](docs/UiKit.md). |
-| **7 mod templates** | `minimal`, `gameplay`, `gamemode`, `service`, `ui`, `asset`, `world` — each scaffolded, built, packed, and validated in CI. |
+| **8 mod templates** | `minimal`, `gameplay`, `gamemode`, `service`, `ui`, `asset`, `world`, `multiplayer` — each scaffolded, built, packed, and validated in CI. |
 | **14 first-party mods** | Working reference implementations, from physics toys to a wave-survival showcase. See [docs/FirstPartyMods.md](docs/FirstPartyMods.md). |
 | **Build-time analyzers** | Roslyn diagnostics that fail the build on direct Unity, GameCode, or Harmony use, wrong target framework, or undeclared capabilities. |
 | **Optional modules** | RobotKit, Worlds, Chronos, Creator Content, Prompts, and Multiplayer, added atomically with `topiaforge mod add`. See [docs/Modules.md](docs/Modules.md). |
