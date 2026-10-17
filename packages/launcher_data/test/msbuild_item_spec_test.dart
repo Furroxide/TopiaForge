@@ -5,17 +5,23 @@ import 'package:test/test.dart';
 import 'scan_agreement.dart';
 
 const _abstractions = 'TopiaForge.Mods.Abstractions';
+const _robotKit = 'TopiaForge.Mods.RobotKit';
 
 /// How the [attribute] of a `PackageReference` written with [value] names
-/// the Abstractions package.
-PackageNaming _naming(String attribute, String value) {
+/// [package].
+PackageNaming _naming(
+  String attribute,
+  String value, {
+  String package = _abstractions,
+}) {
   final tag = '<PackageReference $attribute="$value" />';
-  return packageNaming(tag, readStartTag(tag, 0)!, attribute, _abstractions);
+  return packageNaming(tag, readStartTag(tag, 0)!, attribute, package);
 }
 
-// The references, escapes, lists, wildcards and expressions below were each
-// checked with `dotnet msbuild -getItem`, on an item after
-// `<PackageReference Include="TopiaForge.Mods.Abstractions" />`.
+// The references, escapes, lists, wildcards, expressions, cases and white
+// space below were each checked with `dotnet msbuild -getItem`, or with a
+// restore against an empty feed, on an item after the package's own
+// `<PackageReference Include="id" />`.
 void main() {
   group('packageNaming', () {
     test('reads one id however MSBuild spells it', () {
@@ -94,7 +100,6 @@ void main() {
         '$_abstractions%3BOther',
         'TopiaForge.Mods.%2A',
         'TopiaForge.Mods.Abstraction%3F',
-        '%20$_abstractions',
         '$_abstractions%zz',
         // A path separator is no wildcard match.
         'TopiaForge/*',
@@ -111,6 +116,77 @@ void main() {
           expect(
             _naming(attribute, value),
             PackageNaming.none,
+            reason: '$attribute="$value"',
+          );
+        }
+      }
+    });
+
+    test('trims white space as .NET does, and an included id again', () {
+      // MSBuild trims each part where char.IsWhiteSpace holds, which takes
+      // U+0085 and leaves U+FEFF and U+180E, unlike `\s`. NuGet trims an
+      // included id again once MSBuild has unescaped it, while MSBuild
+      // matches an Update or Remove by the unescaped value.
+      const alone = PackageNaming.alone;
+      const none = PackageNaming.none;
+      for (final (value, include, update) in [
+        ('&#x85;$_abstractions&#x85;', alone, alone),
+        ('${String.fromCharCode(0x85)}$_abstractions', alone, alone),
+        ('&#x3000;$_abstractions&#x2028;', alone, alone),
+        (
+          'Other;&#x85;$_abstractions',
+          PackageNaming.shared,
+          PackageNaming.shared,
+        ),
+        ('&#xFEFF;$_abstractions', none, none),
+        ('$_abstractions&#xFEFF;', none, none),
+        ('&#x180E;$_abstractions', none, none),
+        ('%20$_abstractions', alone, none),
+        ('$_abstractions%85', alone, none),
+        ('%A0$_abstractions%09', alone, none),
+      ]) {
+        expect(_naming('Include', value), include, reason: 'Include="$value"');
+        for (final attribute in const ['Update', 'Remove']) {
+          expect(
+            _naming(attribute, value),
+            update,
+            reason: '$attribute="$value"',
+          );
+        }
+      }
+    });
+
+    test('compares case as NuGet and MSBuild do', () {
+      // An id compares ordinal ignoring case, which folds only the ASCII
+      // letters of an ASCII id. NuGet reads each of these as another
+      // package, and MSBuild applies no such Update to the item.
+      for (final (value, package) in const [
+        ('Top&#x131;aForge.Mods.Abstractions', _abstractions),
+        ('TopiaForge.Mod&#x17F;.Abstractions', _abstractions),
+        ('TOP&#x130;AFORGE.MODS.ABSTRACTIONS', _abstractions),
+        ('TopiaForge.Mods.Robot&#x212A;it', _robotKit),
+      ]) {
+        for (final attribute in const ['Include', 'Update', 'Remove']) {
+          expect(
+            _naming(attribute, value, package: package),
+            PackageNaming.none,
+            reason: '$attribute="$value"',
+          );
+        }
+      }
+      // A wildcard ignores case as a .NET regular expression does, which
+      // matches U+0130 to i and the Kelvin sign to k, but not U+0131 or
+      // U+017F.
+      for (final (value, package, naming) in const [
+        ('TOP&#x130;AFORGE.*', _abstractions, PackageNaming.shared),
+        ('TopiaForge.Mods.Robot&#x212A;*', _robotKit, PackageNaming.shared),
+        ('Top&#x131;a*', _abstractions, PackageNaming.none),
+        ('TopiaForge.Mod&#x17F;.*', _abstractions, PackageNaming.none),
+      ]) {
+        for (final attribute in const ['Update', 'Remove']) {
+          expect(
+            _naming(attribute, value, package: package),
+            naming,
             reason: '$attribute="$value"',
           );
         }

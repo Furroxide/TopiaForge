@@ -187,6 +187,81 @@ void main() {
       }
     });
 
+    test('trims and compares ids as NuGet and MSBuild do', () {
+      // NuGet reads an id trimmed of U+0085, or of an escaped space, as the
+      // package, so the pin edits that item in place. It reads one that
+      // starts with U+FEFF, or holds a dotless i, as another package, so the
+      // pin leaves that item and adds the package's own.
+      String project(String items) =>
+          _project('  <ItemGroup>\n$items\n  </ItemGroup>');
+      String pin(String items) => withPinnedSdkPackageReferences(
+        project(items),
+        packages: const [_abstractions],
+        version: '1.0.0',
+      );
+      for (final item in const [
+        '    <PackageReference Include="&#x85;TopiaForge.Mods.Abstractions" Version="0.0.1" />',
+        '    <PackageReference Include="%20TopiaForge.Mods.Abstractions" Version="0.0.1" />',
+      ]) {
+        expect(
+          pin(item),
+          project(item.replaceFirst('0.0.1', '1.0.0')),
+          reason: item,
+        );
+      }
+      for (final item in const [
+        '    <PackageReference Include="&#xFEFF;TopiaForge.Mods.Abstractions" Version="0.0.1" />',
+        '    <PackageReference Include="Top&#x131;aForge.Mods.Abstractions" Version="0.0.1" />',
+      ]) {
+        expect(
+          pin(item),
+          project(
+            '$item\n  </ItemGroup>\n  <ItemGroup>\n'
+            '    <PackageReference Include="$_abstractions" Version="1.0.0" />',
+          ),
+          reason: item,
+        );
+      }
+      // MSBuild trims U+0085 from a later Update too, so it loses its
+      // Version.
+      const pinned =
+          '    <PackageReference Include="$_abstractions" Version="1.0.0" />';
+      expect(
+        pin(
+          '$pinned\n'
+          '    <PackageReference Update="$_abstractions&#x85;" Version="0.0.1" PrivateAssets="all" />',
+        ),
+        project(
+          '$pinned\n'
+          '    <PackageReference Update="$_abstractions&#x85;" PrivateAssets="all" />',
+        ),
+      );
+    });
+
+    test('refuses a wildcard that takes the Kelvin sign for k', () {
+      // A .NET regular expression that ignores case matches U+212A to k,
+      // so MSBuild applies this Update to the pinned RobotKit item.
+      expect(
+        () => withPinnedSdkPackageReferences(
+          _project(
+            '  <ItemGroup>\n'
+            '    <PackageReference Include="$_robotKit" Version="1.0.0" />\n'
+            '    <PackageReference Update="TopiaForge.Mods.Robot&#x212A;*" Version="0.0.1" />\n'
+            '  </ItemGroup>',
+          ),
+          packages: const [_robotKit],
+          version: '1.0.0',
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('Update="TopiaForge.Mods.Robot&#x212A;*"'),
+          ),
+        ),
+      );
+    });
+
     test('skips items and end tags inside CDATA sections', () {
       // A CDATA section holds text. The pin used to edit the description
       // instead of the item, and to end the item at the end tag in its

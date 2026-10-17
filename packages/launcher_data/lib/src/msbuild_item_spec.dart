@@ -3,13 +3,18 @@
 ///
 /// The XML reader replaces entity and character references first, so
 /// `&#59;` splits a value as `;` does and `&#42;` is a wildcard. MSBuild then
-/// splits the value at each `;`, trims the white space around each part,
-/// and replaces each `%XX` escape, after which an escaped `;`, `*` or `?` is
-/// a plain character. An `Update` or `Remove` part with a `*` or `?` names
-/// the items before it that the wildcard matches, in any case as on
-/// Windows. An `Include` part with one names files, never a package. A part
-/// that holds a
-/// property, item or metadata expression names what that evaluates to,
+/// splits the value at each `;`, trims each part as .NET's
+/// `char.IsWhiteSpace` decides, and replaces each `%XX` escape, after which
+/// an escaped `;`, `*` or `?` is a plain character. NuGet trims an included
+/// id again once it is unescaped, so an escaped space around it still names
+/// the package.
+///
+/// A literal id matches as .NET's ordinal comparison ignoring case matches
+/// it, which for an ASCII id folds only ASCII letters. An `Update` or
+/// `Remove` part with a `*` or `?` names the items before it that the
+/// wildcard matches, ignoring case as a .NET regular expression does. An
+/// `Include` part with one names files, never a package. A part that holds
+/// a property, item or metadata expression names what that evaluates to,
 /// which a scan of the text cannot know, so it names no package here.
 library;
 
@@ -44,7 +49,7 @@ PackageNaming packageNaming(
     final naming = _naming(
       text.substring(candidate.valueStart + 1, candidate.end - 1),
       package,
-      wildcards: attribute != 'Include',
+      include: attribute == 'Include',
     );
     if (naming != PackageNaming.none) return naming;
   }
@@ -71,8 +76,9 @@ PackageNaming packageNaming(
 }
 
 /// How the attribute value [raw], as written between its quotes, names
-/// [package]. With [wildcards], a part with `*` or `?` matches ids.
-PackageNaming _naming(String raw, String package, {required bool wildcards}) {
+/// [package]. In an [include], a part with `*` or `?` names files, and the
+/// part's ends are trimmed again after it is unescaped.
+PackageNaming _naming(String raw, String package, {required bool include}) {
   final value = _withoutXmlReferences(raw);
   // XML rejects a malformed reference, so MSBuild cannot load the project.
   if (value == null) return PackageNaming.none;
@@ -81,10 +87,10 @@ PackageNaming _naming(String raw, String package, {required bool wildcards}) {
   for (final part in value.split(';')) {
     var start = 0;
     var end = part.length;
-    while (start < end && isRegExpWhitespace(part.codeUnitAt(start))) {
+    while (start < end && _isWhiteSpace(part.codeUnitAt(start))) {
       start++;
     }
-    while (end > start && isRegExpWhitespace(part.codeUnitAt(end - 1))) {
+    while (end > start && _isWhiteSpace(part.codeUnitAt(end - 1))) {
       end--;
     }
     if (start == end) continue;
@@ -93,10 +99,10 @@ PackageNaming _naming(String raw, String package, {required bool wildcards}) {
       alone = false;
       continue;
     }
-    final spec = _unescaped(trimmed);
+    final spec = _unescaped(trimmed, trim: include);
     final wildcard = spec.contains(_anyRun) || spec.contains(_anyOne);
     final matches = wildcard
-        ? wildcards && _matches(spec, package)
+        ? !include && _matches(spec, package)
         : _isId(spec, package);
     names = names || matches;
     alone = alone && matches && !wildcard;
@@ -114,8 +120,9 @@ const _anyRun = -1;
 const _anyOne = -2;
 
 /// The code units of [part] after MSBuild replaces each `%XX` escape, with
-/// each `*` and `?` that was not escaped as [_anyRun] or [_anyOne].
-List<int> _unescaped(String part) {
+/// each `*` and `?` that was not escaped as [_anyRun] or [_anyOne], and
+/// with [trim], without the white space at either end, as NuGet trims an id.
+List<int> _unescaped(String part, {required bool trim}) {
   final units = <int>[];
   for (var index = 0; index < part.length; index++) {
     final unit = part.codeUnitAt(index);
@@ -136,10 +143,43 @@ List<int> _unescaped(String part) {
       );
     }
   }
-  return units;
+  if (!trim) return units;
+  var start = 0;
+  var end = units.length;
+  while (start < end && _isWhiteSpace(units[start])) {
+    start++;
+  }
+  while (end > start && _isWhiteSpace(units[end - 1])) {
+    end--;
+  }
+  return units.sublist(start, end);
 }
 
+/// Whether .NET's `char.IsWhiteSpace` holds for [unit], as it does where
+/// MSBuild trims a part and NuGet an id: tab to carriage return, space,
+/// U+0085, U+00A0, and the space, line and paragraph separators. Unlike
+/// `\s`, it holds for U+0085 and not for U+FEFF.
+bool _isWhiteSpace(int unit) => switch (unit) {
+  >= 0x09 && <= 0x0D ||
+  0x20 ||
+  0x85 ||
+  0xA0 ||
+  0x1680 ||
+  >= 0x2000 && <= 0x200A ||
+  0x2028 ||
+  0x2029 ||
+  0x202F ||
+  0x205F ||
+  0x3000 => true,
+  _ => false,
+};
+
 /// Whether [spec], which holds no wildcard, is [package] in any ASCII case.
+///
+/// NuGet and MSBuild compare ids with .NET's ordinal comparison ignoring
+/// case, which matches no other code unit to an ASCII letter: not U+0131
+/// (dotless i), U+017F (long s), U+0130 (capital I with a dot) or U+212A
+/// (the Kelvin sign).
 bool _isId(List<int> spec, String package) {
   if (spec.length != package.length) return false;
   for (var index = 0; index < spec.length; index++) {
@@ -171,7 +211,7 @@ bool _matches(List<int> spec, String package) {
     if (unit == _anyOne ||
         unit != null &&
             unit >= 0 &&
-            _sameIgnoringAsciiCase(unit, package.codeUnitAt(cursor))) {
+            _sameInWildcard(unit, package.codeUnitAt(cursor))) {
       at++;
       cursor++;
     } else if (unit == _anyRun) {
@@ -189,6 +229,16 @@ bool _matches(List<int> spec, String package) {
   }
   return at == pattern.length;
 }
+
+/// Whether the code unit [unit] of a wildcard matches [other] of an id.
+///
+/// MSBuild matches a wildcard as a .NET regular expression that ignores
+/// case, which also matches a letter whose lowercase is ASCII: U+0130
+/// (capital I with a dot) to `i`, and U+212A (the Kelvin sign) to `k`.
+bool _sameInWildcard(int unit, int other) =>
+    _sameIgnoringAsciiCase(unit, other) ||
+    unit == 0x0130 && (other | 0x20) == 0x69 ||
+    unit == 0x212A && (other | 0x20) == 0x6B;
 
 bool _sameIgnoringAsciiCase(int unit, int other) {
   if (unit == other) return true;
