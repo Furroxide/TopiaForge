@@ -171,6 +171,30 @@ void main() {
     expect(forgetful.settings.voiceActive, isFalse);
   });
 
+  test('a projection behind the store applies nothing twice', () {
+    final store = _Store(settings);
+    final behind = store.round(
+      null,
+      MultiplayerPreferencesJournal(_epoch, [
+        DisplayNameChange(sequence: 1, displayName: 'InGame'),
+      ]),
+    );
+    // The game drops the change the projection counts and journals change 2.
+    // The store takes it in, but the projection write fails, so the
+    // projection on disk still counts change 1 of the same journal.
+    final journal = MultiplayerPreferencesJournal(_epoch, [
+      VoiceChange(sequence: 2, consent: 1, enabled: true),
+    ]);
+    store.round(behind, journal);
+    expect((behind.journalEpoch, behind.journalApplied), (_epoch, 1));
+    expect((store.journalEpoch, store.journalApplied), (_epoch, 2));
+    store.settings = store.settings.withVoice(false);
+    final projection = store.round(behind, journal);
+    expect(store.settings.voiceActive, isFalse);
+    expect(projection.voiceEnabled, isFalse);
+    expect((projection.journalEpoch, projection.journalApplied), (_epoch, 2));
+  });
+
   test('journals and journal positions name their epoch exactly', () {
     for (final epoch in [
       _epoch.toUpperCase(),
