@@ -1,5 +1,6 @@
 import 'package:launcher_domain/launcher_domain.dart';
 
+import 'launcher_multiplayer_state.dart';
 import 'launcher_section.dart';
 
 class LauncherState {
@@ -43,6 +44,7 @@ class LauncherState {
     this.unityRepos = const [],
     this.reachabilityProbe = const ReachabilityProbeSettings(),
     this.reachabilityResult,
+    this.multiplayer = const MultiplayerViewState(),
   });
 
   factory LauncherState.initial() => LauncherState(
@@ -103,6 +105,9 @@ class LauncherState {
 
   /// The last local probe classification, or null if the probe has not been run this session. Never persisted.
   final NatClassification? reachabilityResult;
+
+  /// Session links, link handling, and what the multiplayer section adds.
+  final MultiplayerViewState multiplayer;
 
   /// Last developer-toolchain audit (.NET/Node/Unity/Git), shown in the Dev tab's Environment pane.
   final EnvironmentReport? developerEnvironment;
@@ -242,6 +247,7 @@ class LauncherState {
     List<PackageSource>? unityRepos,
     ReachabilityProbeSettings? reachabilityProbe,
     NatClassification? reachabilityResult,
+    MultiplayerViewState? multiplayer,
   }) {
     return LauncherState(
       section: section ?? this.section,
@@ -296,6 +302,7 @@ class LauncherState {
       unityRepos: unityRepos ?? this.unityRepos,
       reachabilityProbe: reachabilityProbe ?? this.reachabilityProbe,
       reachabilityResult: reachabilityResult ?? this.reachabilityResult,
+      multiplayer: multiplayer ?? this.multiplayer,
     );
   }
 

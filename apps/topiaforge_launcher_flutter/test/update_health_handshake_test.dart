@@ -58,4 +58,55 @@ void main() {
       throwsStateError,
     );
   });
+
+  test(
+    'reads only the helper\'s exact command line as a health check',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'topiaforge-health-shape-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      const transactionId = '0123456789abcdef0123456789abcdef';
+      Directory(
+        p.join(root.path, 'updates', 'transactions', transactionId),
+      ).createSync(recursive: true);
+      final marker = p.join(
+        root.path,
+        'updates',
+        'transactions',
+        transactionId,
+        'health.json',
+      );
+      final nonce = List.filled(64, 'c').join();
+      final exact = [
+        updateHealthNonceOption,
+        nonce,
+        updateHealthFileOption,
+        marker,
+      ];
+
+      expect(readUpdateHealthRequest(const [], dataRoot: root.path), isNull);
+      expect(
+        readUpdateHealthRequest(['--verbose'], dataRoot: root.path),
+        isNull,
+      );
+      expect(readUpdateHealthRequest(exact, dataRoot: root.path)?.nonce, nonce);
+      for (final arguments in [
+        [...exact, 'topiaforge://join/ABCDE12345'],
+        ['topiaforge://join/ABCDE12345', ...exact],
+        [exact[0], exact[1]],
+        [exact[2], exact[3]],
+        [exact[2], exact[3], exact[0], exact[1]],
+        [exact[0], '', exact[2], exact[3]],
+        [exact[0], nonce.toUpperCase(), exact[2], exact[3]],
+        [exact[0], nonce, exact[2], exact[3], exact[2], exact[3]],
+      ]) {
+        expect(
+          () => readUpdateHealthRequest(arguments, dataRoot: root.path),
+          throwsStateError,
+          reason: '$arguments',
+        );
+      }
+    },
+  );
 }

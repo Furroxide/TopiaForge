@@ -145,6 +145,7 @@ extension LauncherEventDispatch on LauncherBloc {
         event,
         emit,
       ),
+      MultiplayerEvent() => _dispatchMultiplayerEvent(event, emit),
     };
   }
 }

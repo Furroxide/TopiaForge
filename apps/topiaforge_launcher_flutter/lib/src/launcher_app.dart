@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 
 import 'launcher_bloc.dart';
 import 'launcher_event.dart';
+import 'launcher_exit.dart';
 import 'launcher_keyboard_navigation.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
 import 'screens.dart';
+import 'session_link_inbox.dart';
 
 class TopiaForgeLauncherApp extends StatelessWidget {
   const TopiaForgeLauncherApp({
@@ -18,6 +19,9 @@ class TopiaForgeLauncherApp extends StatelessWidget {
     this.developerRepository,
     this.updateRepository,
     this.reachabilityProbe,
+    this.sessionLinks,
+    this.sessionLinkHandling,
+    this.quitLauncher = exitLauncher,
   });
 
   final LauncherRepository repository;
@@ -26,6 +30,15 @@ class TopiaForgeLauncherApp extends StatelessWidget {
 
   /// Developer-only NAT reachability probe. Null in tests and whenever the host cannot supply one.
   final ReachabilityProbeGateway? reachabilityProbe;
+
+  /// `topiaforge://` links from the command line and the runner.
+  final Stream<SessionLinkArrival>? sessionLinks;
+
+  /// The link-handling setting and the system registration.
+  final SessionLinkHandlingGateway? sessionLinkHandling;
+
+  /// Quits the launcher once a staged update is being applied.
+  final Future<void> Function() quitLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +50,8 @@ class TopiaForgeLauncherApp extends StatelessWidget {
           developerRepository: developerRepository,
           updateRepository: updateRepository,
           reachabilityProbe: reachabilityProbe,
+          sessionLinks: sessionLinks,
+          sessionLinkHandling: sessionLinkHandling,
         )..add(const LauncherStarted()),
         child: BlocListener<LauncherBloc, LauncherState>(
           listenWhen: (previous, current) =>
@@ -44,7 +59,7 @@ class TopiaForgeLauncherApp extends StatelessWidget {
                   LauncherUpdatePhase.applying &&
               current.launcherUpdateStatus.phase ==
                   LauncherUpdatePhase.applying,
-          listener: (_, _) => SystemNavigator.pop(),
+          listener: (_, _) => quitLauncher(),
           child: MaterialApp(
             title: 'TopiaForge',
             debugShowCheckedModeBanner: false,

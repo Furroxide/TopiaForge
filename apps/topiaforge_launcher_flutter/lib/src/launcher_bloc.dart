@@ -6,8 +6,10 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'launcher_event.dart';
 import 'launcher_build.dart';
+import 'launcher_multiplayer_state.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
+import 'session_link_inbox.dart';
 
 part 'launcher_bloc_actions.dart';
 part 'launcher_launch_actions.dart';
@@ -20,6 +22,7 @@ part 'launcher_runtime_constraints.dart';
 part 'launcher_update_actions.dart';
 part 'launcher_reachability_actions.dart';
 part 'launcher_bloc_helpers.dart';
+part 'launcher_session_link_actions.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
@@ -27,9 +30,12 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     DeveloperRepository? developerRepository,
     LauncherUpdateRepository? updateRepository,
     ReachabilityProbeGateway? reachabilityProbe,
+    Stream<SessionLinkArrival>? sessionLinks,
+    SessionLinkHandlingGateway? sessionLinkHandling,
   }) : _developerRepository = developerRepository,
        _updateRepository = updateRepository,
        _reachabilityProbe = reachabilityProbe,
+       _sessionLinkHandling = sessionLinkHandling,
        super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
     _launchActivitySub = _repository.launchActivities.listen(
@@ -49,16 +55,25 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     _updateStatusSub = _updateRepository?.statuses.listen((status) {
       if (!isClosed) add(LauncherUpdateStatusChanged(status));
     });
+    _sessionLinkSub = sessionLinks?.listen((arrival) {
+      if (!isClosed) add(SessionLinkReceived(arrival));
+    });
+    _linkHandlingSub = sessionLinkHandling?.statuses.listen((status) {
+      if (!isClosed) add(SessionLinkHandlingUpdated(status));
+    });
   }
 
   final LauncherRepository _repository;
   final DeveloperRepository? _developerRepository;
   final LauncherUpdateRepository? _updateRepository;
   final ReachabilityProbeGateway? _reachabilityProbe;
+  final SessionLinkHandlingGateway? _sessionLinkHandling;
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
   StreamSubscription<LaunchActivity>? _launchActivitySub;
+  StreamSubscription<SessionLinkArrival>? _sessionLinkSub;
+  StreamSubscription<SessionLinkHandlingStatus>? _linkHandlingSub;
   int _launchPreviewGeneration = 0;
   String? _activeLaunchRequest;
   LaunchActivity? _launchReceipt;
@@ -73,11 +88,17 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     _updateStatusSub = null;
     final launchClose = _launchActivitySub?.cancel();
     _launchActivitySub = null;
+    final linkClose = _sessionLinkSub?.cancel();
+    _sessionLinkSub = null;
+    final handlingClose = _linkHandlingSub?.cancel();
+    _linkHandlingSub = null;
     _launchPreviewGeneration++;
     final blocClose = super.close();
     return Future.wait<void>([
       ?updateClose,
       ?launchClose,
+      ?linkClose,
+      ?handlingClose,
       blocClose,
     ]).whenComplete(() async {
       await _updateRepository?.dispose();
@@ -86,6 +107,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   }
 
   Future<void> _onLoad(LauncherEvent event, Emitter<LauncherState> emit) async {
+    if (event is LauncherStarted && _sessionLinkHandling != null) {
+      add(const SessionLinkHandlingStarted());
+    }
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();
       final probeSettings = await _reachabilityProbe?.loadSettings();
