@@ -344,6 +344,8 @@ internal static class VoiceServiceTests
             Assert(Fail(VoiceWorker.FaultLimit - 1) && voice.Worker.TryStep() && Fail(VoiceWorker.FaultLimit - 1) && !voice.Worker.Failed,
                 "nine failed steps, one that works and nine more leave the worker running");
             Assert(!Fail(1) && voice.Worker.Failed && voice.Worker.Faults == (2 * VoiceWorker.FaultLimit) - 1, "a tenth in a row and it gives up");
+            var steps = voice.Worker.Steps;
+            Assert(!voice.Worker.TryStep() && voice.Worker.Steps == steps, "and once it has given up it never steps again");
             Pump();
             Assert(voice.TransmitState == VoiceTransmitState.Failed && reports.Count(EngineDiagnosticKind.VoiceFailed) == 1, "voice says so, and reports it once");
 

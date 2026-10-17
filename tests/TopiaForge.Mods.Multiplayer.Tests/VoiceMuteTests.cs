@@ -5,10 +5,11 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// Listener mutes follow the people. A mute set lasts as long as the host keeps the player's participant record, however
-/// the client got back into the session, and is forgotten when the join finds a host that did not keep it. Names name the
-/// players the session lists, so they belong to the host that listed them, even while a join is under way or after one,
-/// until the new host lists its own. A set that names nobody, made while a join is under way or with no link at all,
-/// applies to the session the join finds, with or without a role change first.
+/// the client got back into the session, and is forgotten when the join finds a host that did not keep it, or when a
+/// join's answer is lost, which may hide a record the host made meanwhile. Names name the players the session lists, so
+/// they belong to the host that listed them, even while a join is under way or after one, until the new host lists its
+/// own. A set that names nobody, made while a join is under way or with no link at all, applies to the session the join
+/// finds, with or without a role change first.
 /// </summary>
 internal static class VoiceMuteTests
 {
@@ -275,16 +276,7 @@ internal static class VoiceMuteTests
         // the traveller's session still lists the old process's players, and the player mutes p2, meaning a. p2 is d now:
         // the name goes at once, and the traveller hears all of d.
         using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 64_000 });
-        var numbered = new EngineOptions
-        {
-            StepRateHz = 60,
-            DownstreamRateHz = 0,
-            ClockSyncIntervalMicros = 0,
-            ObjectIdPrefix = "voice-",
-            CallbackFailures = EngineCallbackFailureMode.Propagate,
-            Diagnostics = rig.Diagnostics,
-            Voice = rig.Voice
-        };
+        var numbered = Numbered(rig);
         var p2 = new ParticipantId("p2");
         var first = rig.Track(SessionEngine.CreateHost(numbered, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("first-run"),
             new SessionSeed(3), new ParticipantId("host"), "Host", rig.NowMicros));
@@ -330,6 +322,133 @@ internal static class VoiceMuteTests
         Assert(ears.From("p2").Count == 10, "the traveller hears all of d (" + ears.From("p2").Count + ")");
         Assert(second.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 0, "and the host never took d for the muted a");
     }
+
+    internal static void MutesFromBeforeARestartStayBehindWhenItsFirstAnswerIsLost()
+    {
+        // Host A numbers its players, as a live host does: x is p1, a is p2, t1 p3 and t2 p4. t1 mutes p2, meaning a. A's
+        // process dies and starts again under the same identity, and c and d join the new process as p1 and p2. Each
+        // traveller's first join to it is accepted, so the host makes its record, but the link goes before the answer
+        // arrives. With its link down, t2 then mutes p2 from what it saw, meaning a too. Both join again, and the host says
+        // it kept their records, records neither ever saw it make: neither name survives, and both hear all of d.
+        using var rig = new VoiceSessionHarness();
+        var numbered = Numbered(rig);
+        var p2 = new ParticipantId("p2");
+        var first = rig.Track(SessionEngine.CreateHost(numbered, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("first-run"),
+            new SessionSeed(3), new ParticipantId("host"), "Host", rig.NowMicros));
+        var links = new List<VirtualLinkEnd>();
+        SessionEngine Join(SessionEngine host, string identity)
+        {
+            var engine = rig.Track(SessionEngine.CreateClient(rig.Options, new MultiplayerSessionId("joining"), rig.NowMicros));
+            links.Add(rig.ConnectTo(host, engine, identity));
+            rig.Flush();
+            return engine;
+        }
+
+        Join(first, "x");
+        Join(first, "a");
+        var t1 = Join(first, "t1");
+        var t2 = Join(first, "t2");
+        Assert(t1.Snapshot.TryGetParticipant(p2, out var before) && before!.DisplayName == "a", "with the first process, p2 is a");
+        t1.SetListenerMutes(new[] { p2 });
+        rig.Flush();
+
+        foreach (var link in links) rig.Network.Sever(link);
+        first.Shutdown(MultiplayerSessionEndReason.HostEnded);
+        var second = rig.Track(SessionEngine.CreateHost(numbered, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("second-run"),
+            new SessionSeed(4), new ParticipantId("host"), "Host", rig.NowMicros));
+        Join(second, "c");
+        var d = Join(second, "d");
+        Assert(second.Snapshot.TryGetParticipant(p2, out var now) && now!.DisplayName == "d", "with the second process, p2 is d");
+        foreach (var (traveller, identity) in new[] { (t1, "t1"), (t2, "t2") })
+        {
+            var link = rig.ConnectTo(second, traveller, identity);
+            rig.Advance();
+            Assert(traveller.Snapshot.State == MultiplayerSessionState.Connecting && second.Snapshot.Participants.Any(participant => participant.DisplayName == identity),
+                identity + "'s join is accepted, and the answer is still on its way");
+            rig.Network.Sever(link);
+            rig.Advance();
+        }
+
+        var kept = new List<ParticipantId>();
+        Assert(!t1.GetListenerMutes(kept) && kept.Count == 0, "t1's set goes with the answer it never heard");
+        t2.SetListenerMutes(new[] { p2 });
+        rig.ConnectTo(second, t1, "t1");
+        rig.ConnectTo(second, t2, "t2");
+        rig.Flush();
+        Assert(new[] { t1, t2 }.All(engine => engine.Snapshot.State == MultiplayerSessionState.Ready && engine.Snapshot.Id.Equals(new MultiplayerSessionId("second-run"))),
+            "both are in the second process's session");
+        Assert(!t2.GetListenerMutes(kept) && kept.Count == 0, "and t2's name, from the first process's players, is gone too");
+        var ears = new[] { t1, t2 }.Select(rig.Listen).ToList();
+        rig.Talk(d, 6000, 10);
+        rig.Advance(30);
+        rig.Flush();
+        Assert(ears.All(listener => listener.From("p2").Count == 10),
+            "both hear all of d (t1 " + ears[0].From("p2").Count + ", t2 " + ears[1].From("p2").Count + ")");
+        Assert(second.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 0, "and the second process never took d for the muted a");
+    }
+
+    internal static void AJoinReplacedBeforeItsRequestLeftKeepsTheMutes()
+    {
+        // b mutes a, and b's link drops. b sets out to rejoin twice in a row, the first attempt replaced before it sent
+        // anything, so no answer can have gone missing. The host kept b's record: the mute stays, and the host leaves a out.
+        using var rig = new VoiceSessionHarness();
+        var (a, _) = rig.AddClient("a");
+        var (b, link) = rig.AddClient("b");
+        var aId = new ParticipantId("a");
+        b.SetListenerMutes(new[] { aId });
+        rig.Flush();
+        rig.Network.Sever(link);
+        rig.Advance(2);
+        rig.Connect(b, "b");
+        rig.Connect(b, "b");
+        rig.Flush();
+        var kept = new List<ParticipantId>();
+        Assert(b.Snapshot.State == MultiplayerSessionState.Ready && !b.GetListenerMutes(kept) && kept.SequenceEqual(new[] { aId }), "b is back and still mutes a");
+        var ears = rig.Listen(b);
+        rig.Talk(a, 5000, 10);
+        rig.Advance(30);
+        rig.Flush();
+        Assert(ears.From("a").Count == 0 && rig.Host.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) > 0, "and b hears none of a");
+    }
+
+    internal static void NamesGivenBeforeTheSameHostListsAgainStay()
+    {
+        // b's link drops and b comes back to the same host, which kept b's record. The host's world is large, so over a
+        // 64 kB/s link its list comes well after JoinAccepted. In between, the player mutes a from the list b still shows,
+        // which is this host's: the record was kept, so the id still names a, the name stays, and b hears none of a.
+        using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 64_000 });
+        FillWorld(rig.Host.CreateFacade("world"));
+        var (a, _) = rig.AddClient("a");
+        var (b, link) = rig.AddClient("b");
+        var aId = new ParticipantId("a");
+        rig.Network.Sever(link);
+        rig.Advance(2);
+        rig.Connect(b, "b");
+        for (var tick = 0; tick < 600 && b.Snapshot.State != MultiplayerSessionState.Synchronizing; tick++) rig.Advance();
+        Assert(b.Snapshot.State == MultiplayerSessionState.Synchronizing, "b is back in, and the host's world is still on its way");
+        b.SetListenerMutes(new[] { aId });
+        var kept = new List<ParticipantId>();
+        Assert(!b.GetListenerMutes(kept) && kept.SequenceEqual(new[] { aId }), "the name stays");
+        rig.Flush();
+        var ears = rig.Listen(b);
+        rig.Talk(a, 5000, 10);
+        rig.Advance(30);
+        rig.Flush();
+        Assert(b.Snapshot.State == MultiplayerSessionState.Ready && ears.From("a").Count == 0 &&
+            rig.Host.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) > 0, "and b hears none of a");
+    }
+
+    /// <summary>Engine options for a host that numbers its players itself, p1, p2 and on, as a live host does.</summary>
+    private static EngineOptions Numbered(VoiceSessionHarness rig) => new()
+    {
+        StepRateHz = 60,
+        DownstreamRateHz = 0,
+        ClockSyncIntervalMicros = 0,
+        ObjectIdPrefix = "voice-",
+        CallbackFailures = EngineCallbackFailureMode.Propagate,
+        Diagnostics = rig.Diagnostics,
+        Voice = rig.Voice
+    };
 
     /// <summary>
     /// Gives a host twenty replicated values of about 4 kB each, so its answer to a join spans two frames, the participant

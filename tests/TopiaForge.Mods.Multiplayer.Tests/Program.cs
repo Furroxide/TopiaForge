@@ -530,6 +530,9 @@ internal static class Program
             VoiceServiceTests.AWorkerThatGivesUpLeavesNothingQueued();
             VoiceServiceTests.TheIndicatorAndStatisticsBelongToTheMainThread();
             VoiceProviderTests.EveryEngineDiagnosticHasACodeOfItsOwn();
+            VoiceMuteTests.MutesFromBeforeARestartStayBehindWhenItsFirstAnswerIsLost();
+            VoiceMuteTests.AJoinReplacedBeforeItsRequestLeftKeepsTheMutes();
+            VoiceMuteTests.NamesGivenBeforeTheSameHostListsAgainStay();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

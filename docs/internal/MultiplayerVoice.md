@@ -310,7 +310,7 @@ reliably (`VoiceMutes`, `0x31`) when it changes and after every join, so the hos
 A host applies its own player's set locally. The set holds at most 256 ids, and `GetListenerMutes` reads it back.
 
 Mutes follow the people. A participant id names a player only while the host that assigned it keeps that player's
-record, so the set lasts exactly as long as the host keeps the record of the player who made it:
+record, so the set lasts as long as the client knows the host kept the record of the player who made it:
 
 - **Kept.** An in-place replacement (`ReplaceSession`) keeps every record, and a reconnect within the 30-second grace
   finds the record it left. The ids still name the same people, so the set stays, whether the client stayed connected
@@ -320,6 +320,11 @@ record, so the set lasts exactly as long as the host keeps the record of the pla
   also remembers the host it was made with, by the host's authenticated identity, so another host's kept record does
   not count: a traveller who returns within the grace to a host it visited, after muting players elsewhere, leaves
   those mutes behind.
+- **An unanswered join counts as a lost record.** When the link goes after a join's request left but before its answer
+  came, the host may have made the record meanwhile, also as a new process after a restart. The next join would then
+  find a record kept that the client never saw made. So losing the link forgets the set made with that host, and the
+  ids of that host's list name nobody until it sends its list again. A join replaced before its request left changes
+  nothing.
 - **Names belong to the host that listed them.** A player can name only the players the session lists, and a client's
   list is the last one a host sent it. A join changes it only when the new host sends its own, after the snapshot, which
   for a large world can come a second or more after `JoinAccepted`. So names given while no session is joined, or while
@@ -341,7 +346,9 @@ that id on the new one, and a caller had to hold names back by session, which lo
 in-place replacement. A fourth tied names given while no session was joined, or while a join was under way, to the host
 joined last. A client goes on listing the previous host's players until the new host's list arrives, so a name given
 from that list after the new host's `JoinAccepted`, or while the link was down before its list came, still reached the
-new host.
+new host. A fifth trusted every `JoinAccepted` that said the record was kept. A restarted host's first answer to a join
+can be lost with the link after the host has made the record, so the next join found it kept, and both the set and the
+names given from the old process's list reached the new process.
 
 ### 2.6 The engine API
 
@@ -469,7 +476,9 @@ These run in the multiplayer test project, and every one is deterministic:
   applied to the session the join finds, with or without a role change first; and, for a host whose snapshot spans two
   frames over a slow link, a name given from the old host's list after `JoinAccepted` dropped at once, one given while
   the link was down before the new list came left with the old host, and one from a restarted host's old list, whose
-  number the new process has given to someone else, dropped too;
+  number the new process has given to someone else, dropped too; and, when the new process's first answer to each
+  traveller is lost with the link, a set made with the old process and a name given afterwards from its list both
+  forgotten, while a join replaced before its request left keeps the set;
 - `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, link time kept in fractions
   of a tick, the link's datagram-first, bounded reads, and datagrams shed when their lane is more than three ticks
   behind, or past their share while the session lane is.
@@ -651,12 +660,12 @@ it; otherwise every mute, stream and capture the session went on producing would
   join, so whatever shows the player whom they muted never shows a mute that no longer applies.
 - **Names stay with their host.** Names reach the engine at once, whatever the session's state, and the engine ties them
   to the host whose players the session lists (section 2.5). A reconnect to that host keeps them, through an in-place
-  replacement too, and a join that finds another host forgets them. A name given after a join has found another host,
-  but before that host's list arrives, goes at once: the session still lists the players of before. A name meant for one
-  host's player never silences whoever has that id on the next. An earlier version of the service held names
-  back until this player was Ready in the session they were given in. It cleared the engine's set meanwhile and knew
-  sessions only by id, so a change made while the link was down lost every mute when the host replaced its session
-  before the player was back.
+  replacement too. A join that finds another host forgets them, and so does losing the link while a join's answer is
+  still on its way. A name given after a join has found another host, but before that host's list arrives, goes at
+  once: the session still lists the players of before. A name meant for one host's player never silences whoever has
+  that id on the next. An earlier version of the service held names back until this player was Ready in the session
+  they were given in. It cleared the engine's set meanwhile and knew sessions only by id, so a change made while the
+  link was down lost every mute when the host replaced its session before the player was back.
 - **The wish to hear nobody**, `muteAll`, is the player's own and lasts until they change it. It names nobody, so the
   service gives it back wherever the engine forgot it: after a role change, and after a join that found a host without
   this player's record. While a join is under way the service makes it again, so the engine applies it to whichever

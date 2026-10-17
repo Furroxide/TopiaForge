@@ -28,8 +28,8 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>
         /// The authenticated identity of the host whose players a client's session lists, the only players its player can
         /// name: the host that sent the last participant list. It is null before any list and after a role change, which
-        /// list nobody, and <see cref="NoMutesHost"/> once a join finds that host without this player's record, whose ids
-        /// then name nobody.
+        /// list nobody, and <see cref="NoMutesHost"/> once a join finds that host without this player's record, or a join
+        /// to it goes unanswered: its ids then name nobody.
         /// </summary>
         private string? listedHost;
 
@@ -40,8 +40,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// only when the new host sends its own, after its snapshot. A set made while no session is joined, or while a join
         /// is under way, therefore belongs to that host, and the join keeps or forgets it as it would any set made there.
         /// Names given once a join has found another host, or this one without the player's record, but before that host
-        /// lists its players, name nobody in the session and are dropped. A name never silences whoever has that id with the
-        /// next host. A set that names nobody, such as muting everyone, applies to whichever session the join finds.
+        /// lists its players, name nobody in the session and are dropped. A join that went unanswered counts as one that
+        /// found the record lost. A name never silences whoever has that id with the next host. A set that names nobody,
+        /// such as muting everyone, applies to whichever session the join finds.
         /// </summary>
         internal void SetListenerMutes(IReadOnlyCollection<ParticipantId> muted, bool muteAll = false)
         {
@@ -115,6 +116,20 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>Records that the session now lists the players of <paramref name="current"/>'s host.</summary>
         private void NoteListedHost(ClientChannel current) => listedHost = current.Link.PeerIdentity;
+
+        /// <summary>
+        /// Handles a lost link whose join went unanswered: its request left, and no answer came. The host may still have
+        /// accepted it and made the player's record, also as a new process after a restart, and the next join would then
+        /// find that record kept though this client never saw it made. So the set made with that host, and the ids its list
+        /// gave, fare as they would at a join that found the record lost.
+        /// </summary>
+        private void NoteUnansweredJoin(ClientChannel lost)
+        {
+            if (lost.Phase != ClientPhase.AwaitingJoin || lost.JoinPending) return;
+            var host = lost.Link.PeerIdentity;
+            if (string.Equals(listenerMutesHost, host, StringComparison.Ordinal)) ForgetListenerMutes();
+            if (string.Equals(listedHost, host, StringComparison.Ordinal)) listedHost = NoMutesHost;
+        }
 
         /// <summary>Forgets the set and the hosts it named, as leaving a session for another role does.</summary>
         private void RetireListenerMutes()

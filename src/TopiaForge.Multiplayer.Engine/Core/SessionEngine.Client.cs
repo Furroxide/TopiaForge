@@ -639,6 +639,7 @@ namespace TopiaForge.Multiplayer.Engine
                 if (lost.Link.State != EngineLinkState.Closed) lost.Link.Close();
                 CountUnsentSystem(lost);
                 systemGeneration++;
+                NoteUnansweredJoin(lost);
             }
 
             ResetClientVoice();
