@@ -76,3 +76,13 @@ teardown completes, repeated disposal is a thread-safe no-op. Patch application 
 a patch cannot land after the teardown sweep. The runtime keeps the patch owner id private; all patches must
 go through the lease to retain that guarantee. Consumers do not need a compile-time patch-library reference;
 the game runtime supplies the implementation.
+
+### Patches when the player quits
+
+A patch on the game's own quit steps needs nothing extra. When the player quits, mods unload only after every
+other quit handler, the game's own among them, has let the quit go ahead, so those steps run with every patch
+still in place. NoFeedbackUrl relies on this: the game opens its feedback page from its own quit handler, and the
+patch that suppresses the page is still there when it runs. Patches are removed before Unity's own quitting phase
+begins, so code that runs from `Application.quitting` or while objects are destroyed runs unpatched. Unity sends
+`OnApplicationQuit` for every quit request, including one that a handler refuses, so it does not mean the game is
+closing.
