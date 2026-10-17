@@ -53,7 +53,8 @@ internal static class InternalControlTests
 
     internal static void HostsKickBanUnbanAndMuteThroughTheSpi()
     {
-        using var rig = new ControlRig(141, Sandbox);
+        // Server mutes are the engine's voice moderation, which live sessions always run with, so every peer runs voice.
+        using var rig = ControlRig.WithVoice(141, Sandbox);
         rig.StartHosting(new InternalHostSettings("Moderated", 8));
         var first = rig.AddPeer("first", Sandbox);
         var second = rig.AddPeer("second", Sandbox);

@@ -164,10 +164,13 @@ internal sealed class UncheckedRuntimeHost : IInternalMultiplayerRuntimeHost
 
 /// <summary>
 /// One peer as the game composes it: the provider with live sessions on the deterministic network, its internal
-/// control, and ModManager's runtime host and composition root attached to it.
+/// control, and ModManager's runtime host and composition root attached to it. With voice, the provider runs voice chat
+/// and its voice worker steps at the end of each frame on the network's clock, never on a thread of its own.
 /// </summary>
 internal sealed class ControlPeer
 {
+    private readonly VirtualDatagramNetwork network;
+
     internal ControlPeer(
         string name,
         VirtualDatagramNetwork network,
@@ -177,14 +180,25 @@ internal sealed class ControlPeer
         bool live = true,
         LiveJoinTimings? timings = null,
         string gameBuild = "2545",
-        IMultiplayerWorkScheduler? contentScheduler = null)
+        IMultiplayerWorkScheduler? contentScheduler = null,
+        bool voice = false,
+        MemoryDataFiles? files = null)
     {
         Name = name;
+        this.network = network;
+        Files = files ?? new MemoryDataFiles();
         Factory = new SteppedNetworkFactory(network, name);
         Content = new RuntimeContent(gameBuild, "0.2.0");
         var diagnostics = new RoutedDiagnostics(null);
         var setup = live ? new LiveSessionsSetup(Files, Content) { Factory = Factory, Resolver = resolver, JoinTimings = timings } : null;
+        if (setup != null && voice)
+        {
+            setup.Voice = true;
+            setup.VoiceWorkerThread = false;
+        }
+
         Provider = new Provider(LiveRig.ProviderId, diagnostics, () => network.Now, setup);
+        SteppedVoice = setup != null && voice;
         Control = new Control(Provider, Content, diagnostics);
 
         // Packages are identified inline unless a test holds the work back, as a worker thread that has not finished would.
@@ -196,7 +210,9 @@ internal sealed class ControlPeer
     internal string Name { get; }
     internal SteppedNetworkFactory Factory { get; }
     internal RuntimeContent Content { get; }
-    internal MemoryDataFiles Files { get; } = new();
+
+    /// <summary>Gets the peer's data folder, which holds its identity; a restarted process reads the one its last run wrote.</summary>
+    internal MemoryDataFiles Files { get; }
     internal Provider Provider { get; }
     internal Control Control { get; }
     internal MultiplayerRuntimeHost Runtime { get; }
@@ -209,6 +225,12 @@ internal sealed class ControlPeer
 
     /// <summary>Gets the runtime a test attached in place of the composed one, if any.</summary>
     internal IInternalMultiplayerRuntimeHost? Replacement { get; private set; }
+
+    /// <summary>Gets or sets what runs where the mods' Update would, between the pump and the flush, such as a microphone.</summary>
+    internal Action? ModsUpdate { get; set; }
+
+    /// <summary>Gets or sets what runs once the frame and the voice worker's step are done, such as the audio thread's reads.</summary>
+    internal Action? AfterFrame { get; set; }
 
     /// <summary>Attaches <paramref name="runtime"/> to the control in place of the composed runtime; frames then pump the control directly.</summary>
     internal void UseRuntime(IInternalMultiplayerRuntimeHost runtime)
@@ -224,14 +246,23 @@ internal sealed class ControlPeer
         if (Replacement != null)
         {
             Control.Pump();
+            ModsUpdate?.Invoke();
             Control.Flush();
-            return;
+        }
+        else
+        {
+            Composition.BeforeModsUpdate(0.016f);
+            ModsUpdate?.Invoke();
+            Composition.AfterModsUpdate(0.016f);
+            Composition.BeforeModsLateUpdate(new GameTimeSample(GameLoopPhase.Late, 0.016f, 0.016f, 0d, 0));
         }
 
-        Composition.BeforeModsUpdate(0.016f);
-        Composition.AfterModsUpdate(0.016f);
-        Composition.BeforeModsLateUpdate(new GameTimeSample(GameLoopPhase.Late, 0.016f, 0.016f, 0d, 0));
+        if (SteppedVoice) Provider.Voice!.Worker.Step(network.Now);
+        AfterFrame?.Invoke();
     }
+
+    /// <summary>Gets whether this peer runs voice chat, its worker stepping in its frame rather than on a thread.</summary>
+    internal bool SteppedVoice { get; }
 
     internal ParticipantId IdOf(string displayName) =>
         Session.Snapshot.Participants.Single(participant => participant.DisplayName == displayName).Id;
@@ -255,7 +286,13 @@ internal sealed class ControlRig : IDisposable
 
     /// <summary>Creates a rig whose host announces <paramref name="hostBuild"/>, as a host on another build, or a hostile one, would.</summary>
     internal ControlRig(int seed, string hostBuild, params PackageSpec[] hostPackages)
+        : this(seed, hostBuild, voice: false, hostPackages)
     {
+    }
+
+    private ControlRig(int seed, string hostBuild, bool voice, PackageSpec[] hostPackages)
+    {
+        Voice = voice;
         Network = new VirtualDatagramNetwork(seed);
         Host = Add("host", hostPackages, hostBuild);
         Resolver.Host = () => Host.Provider.Live!.Host?.Descriptor is { } descriptor && Host.Factory.Networks.Count > 0
@@ -263,10 +300,34 @@ internal sealed class ControlRig : IDisposable
             : null;
     }
 
+    /// <summary>Creates a rig whose peers run voice chat, each voice worker stepping in its peer's frame.</summary>
+    internal static ControlRig WithVoice(int seed, params PackageSpec[] hostPackages) => new(seed, "2545", voice: true, hostPackages);
+
+    /// <summary>Gets whether every peer runs voice chat.</summary>
+    internal bool Voice { get; }
+
     internal VirtualDatagramNetwork Network { get; }
     internal SteppedResolver Resolver { get; } = new();
-    internal ControlPeer Host { get; }
+    internal ControlPeer Host { get; private set; }
     internal List<ControlPeer> Peers { get; } = new();
+
+    /// <summary>
+    /// Replaces the host's process with a new one under the same identity, bound to the same address and port, as a game
+    /// that crashed and started again: the old process is never pumped again and leaves the network at once, saying
+    /// goodbye to nobody, and the new one is composed fresh, hosting nothing yet. A crashed process is never disposed.
+    /// </summary>
+    internal ControlPeer RestartHost(params PackageSpec[] packages)
+    {
+        var crashed = Host;
+        var node = crashed.Factory.Networks[^1].Node;
+        Network.Retire(node, Network.Now);
+        Network.RunFor(1);
+        var restarted = new ControlPeer("host", Network, Resolver, packageRoot, packages, timings: Timings, contentScheduler: ContentScheduler, voice: Voice, files: crashed.Files);
+        restarted.Factory.Replaces = node;
+        if (!restarted.Composition.Connect()) throw new InvalidOperationException("Assertion failed: the runtime attaches to the restarted host");
+        Host = restarted;
+        return restarted;
+    }
 
     /// <summary>Gets the folder the peers' installed packages live in, for a peer a test composes itself.</summary>
     internal string PackageRoot => packageRoot;
@@ -345,7 +406,7 @@ internal sealed class ControlRig : IDisposable
 
     private ControlPeer Add(string name, PackageSpec[] packages, string gameBuild)
     {
-        var peer = new ControlPeer(name, Network, Resolver, packageRoot, packages, timings: Timings, gameBuild: gameBuild, contentScheduler: ContentScheduler);
+        var peer = new ControlPeer(name, Network, Resolver, packageRoot, packages, timings: Timings, gameBuild: gameBuild, contentScheduler: ContentScheduler, voice: Voice);
         if (!peer.Composition.Connect()) throw new InvalidOperationException("Assertion failed: the runtime attaches to " + name);
         if (name != "host") Peers.Add(peer);
         return peer;

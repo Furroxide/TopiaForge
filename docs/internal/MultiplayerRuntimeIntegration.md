@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.3 and WS3.6 of the live-multiplayer plan) · Date: 2026-10-17 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.3 and WS3.6 of the live-multiplayer plan) · Date: 2026-10-18 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -15,8 +15,9 @@ The work lands in three steps:
 3. **The network world** (WS3.6, section 13): scene objects, spawns and world content that exist, move and baseline on
    every player.
 
-All three have landed. Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where
-authority routing (WS3.7) and session follow (WS3.8) attach to the network world.
+All three have landed, and so has the voice service behind the SPI (section 2, "Voice"). Section 8 says what each
+later WS3 slice plugs in where, and section 13 says exactly where authority routing (WS3.7) and session follow (WS3.8)
+attach to the network world.
 
 ## 1. Shape
 
@@ -59,7 +60,7 @@ authority routing (WS3.7) and session follow (WS3.8) attach to the network world
 | Moderation | `Kick`, `Ban`, `Unban`, `GetBans`, `SetServerMute`, `IsServerMuted` | Host only. |
 | Session | `ReplaceSession`, `OpenSystemChannel`, `HoldReadiness`, `IsReadinessHeld`, `IsParticipantReady` | Sections 5 and 6. |
 | Sources | `SetEntityIdentitySource`, `SetAvatarSource` | Shape only for now; section 8. |
-| Voice and counters | `Voice`, `GetStatistics`, `GetStatus` | `Voice` is null until the voice service implements the SPI. |
+| Voice and counters | `Voice`, `GetStatistics`, `GetStatus` | `Voice` is the provider's voice service, or null without one; see "Voice" below. |
 | Internet | `CreateInvite`, `RevokeInvite` | Host only, once the session is registered with the TopiaForge service: `MultiplayerInternetSessions.md`. |
 
 - **Results.** Commands answer with `OperationResult<bool>`: `NotAuthoritative` for a host-only action on a joined
@@ -73,8 +74,13 @@ authority routing (WS3.7) and session follow (WS3.8) attach to the network world
   `JoinDetail` is always this game's own words; what the host wrote is kept apart, as the next section sets out.
 - **Bans.** A ban is listed by an opaque 32-character id, the first 128 bits of a labelled SHA-256 of the banned key,
   so the interface can lift a ban without ever holding the key.
-- **Server mute.** A mute follows the player's identity until hosting stops. The host drops a muted player's chat at
-  ingress (section 5), so nothing the host relays can carry it. Voice joins it when the voice engine lands.
+- **Server mute.** A mute is the engine's voice moderation, the one set the voice relay and the chat ingress both read.
+  It follows the player's identity, through rejoins, until hosting stops: closing every connection forgets it. The
+  host drops a muted player's voice at the relay and their chat at ingress (section 5), so nothing the host relays can
+  carry either. `IsServerMuted` counts the automatic mutes the relay makes for abusing voice chat
+  ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.4), and answers on a joined player too, from the host's voice
+  roster. Live sessions always run with voice; a provider without it, as some tests compose, answers `SetServerMute`
+  with `Unavailable`.
 - **Names.** The provider names this player after the runtime's display name whenever it hosts, in solo play too, and
   again whenever the name changes. A joining player sends the name in its join request.
 - **Developer switch.** The `TOPIAFORGE_LIVE_MULTIPLAYER` switch still drives live sessions directly through the
@@ -112,6 +118,65 @@ launcher and anything else that shows a status:
 The provider and the runtime keep to the same rules for their own logs: the developer switch and the runtime log a join's
 failure by name only, and an engine diagnostic about a replicated object names the type this game registered, never the
 id the host chose for it.
+
+### Voice
+
+`Voice` is the provider's voice service ([MultiplayerVoice.md](MultiplayerVoice.md), part 3) behind
+`ProviderVoiceService`, or null when the provider has none: it runs voice only with live multiplayer switched on, and
+hands out none once it has stopped.
+
+| Members | What they do |
+| --- | --- |
+| `Enabled` | Off until the player turns it on, which the interface does only after consent. Until then nothing is captured, coded or sent |
+| `SubmitCapture`, `SetTransmitting` | Capture at the device's rate. `SetTransmitting(true)` while push-to-talk is held or voice activation listens, and `false` at the release, which ends the talk spurt |
+| `Mode`, `ActivationThresholdDb` | Push-to-talk or voice activation, and its threshold. An undefined mode, or a threshold outside -96 to 0 dBFS, is refused |
+| `InputLevelDb`, `TransmitState`, `IsSpeaking` | The meter, the transmit indicator and the talk glyph |
+| `GetPlaybackStream`, `TryGetPlaybackStream` | Each speaker's stream, read on the audio thread |
+| `SetListenerMutes`, `GetListenerMutes` | Whom the player does not want to hear, and the set as the engine kept it |
+| `GetStatistics` | The counters, mapped below; the control's `GetStatistics` carries them as well |
+
+- **Threads.** The voice service belongs to the main thread, the engine's owner, so every member runs there and refuses
+  any other with `InvalidOperationException`. The one exception is a stream's `Read`, which is wait-free on the audio
+  thread: it takes no lock, never blocks and allocates nothing, so it runs even while the main thread holds the
+  service's gate. Capture taken on an audio callback is handed to the main thread first. Coding runs on the provider's
+  voice worker.
+- **Mutes.** Names belong to the host that listed them, and a wish to hear nobody holds across joins. A participant id
+  names a player only on the host that gave it, so names stay with that host, through an in-place replacement and a
+  reconnect that finds this player's record kept. Leaving for solo play forgets them, and so does a join that finds
+  another host or one without the record; names given after such a join, before that host lists its players, are
+  dropped. The wish to hear nobody names nobody, so it follows the player to every host until they change it. The
+  interface shows whom the player muted from `GetListenerMutes`, never from a list of its own.
+- **Streams.** The SPI hands out the service's own `VoicePlaybackStream`, never a wrapper, so a stream plays the
+  speaker the session listed under its id, and nobody else. It lasts while the session lists them, through an in-place
+  replacement and a rejoin within the grace, and ends for good, playing silence, when the session stops listing them,
+  when the bound of 16 streams leaves no room, and when a join lets go of the list that named them: the engine's
+  `ParticipantListGeneration` moves at a join that finds another host or one without this player's record, and at a
+  return to solo play, and from then on the same id may name someone else. Follow a player across a join by player key,
+  never by id alone.
+- **Asking again.** `TryGetPlaybackStream` gives the speaker's stream, or makes one for a speaker the session listed at
+  the last pump while there is room, and otherwise returns false, making and allocating nothing, so it may run every
+  frame. `GetPlaybackStream` always gives a stream: for a speaker the session does not list it makes one, a 64 KiB ring
+  and a decoder kept for 2 s, and when the bound leaves no room it makes a new 64 KiB ring at every call. Asking it every
+  frame for an ended stream costs that much each time, so ask once per speaker and ask again with
+  `TryGetPlaybackStream`.
+
+The statistics are mapped by what each counter means:
+
+| `InternalVoiceStatistics` | From `VoiceServiceStatistics` | Meaning |
+| --- | --- | --- |
+| `Mode`, `State` | `Mode`, `State` | The same values, mapped by name |
+| `InputLevelDb`, `ExpectedLossPercent` | The same | The meter, and the loss the encoder plans for |
+| `SubmittedSamples` | `SubmittedSamples` | Capture handed in while voice was on |
+| `FramesEncoded` | `FramesEncoded` | Frames coded for sending |
+| `FramesSent` | `Sent` and `Held` | Frames the session took to send. The engine holds every other frame of a steady talker to share a datagram with the next, so `Sent` alone counts about half of them |
+| `FramesReceived` | `FramesReceived` | Frames the engine delivered for playback |
+| `FramesRefused` | `RateLimited`, `ServerMuted` and `NotConnected` | Frames the session refused to send. `Invalid` frames are a fault, not a refusal, and stay out |
+| Each speaker's `Decoded`, `Recovered`, `Late`, `TargetDelayMicros`, `IsSpeaking` | The same, for that speaker | — |
+| Each speaker's `Concealed` | `Concealed` and `Faded` | Frames concealed because nothing arrived. After three, the jitter buffer fades two more to silence, and those are concealment too |
+| Each speaker's `Underruns` | The stream's `Underruns` | Reads that found too little audio |
+
+The service's other counters, such as stale capture, the worker's steps and the engine's own voice statistics, stay
+in the provider.
 
 ## 3. Join targets
 
@@ -345,7 +410,8 @@ contract. `OpenSystemChannel` opens one of four channels, one owner each: `World
 - **Unknown kinds**, which a newer peer may send, are left unclaimed and credited as taken at once, and so are messages
   for a channel nobody has open. A minor protocol version can therefore add a channel: the joining checks compare major
   versions only, and an older peer's credits keep a newer sender's window open.
-- **Server mute.** The host's chat channel refuses a muted player's messages as they arrive.
+- **Server mute.** The host's chat channel refuses a muted player's messages as they arrive, by the engine's voice
+  moderation: a mute by hand, or one the voice relay made for abuse.
 - **Delivery** is by polling: the owner takes messages with `TryReceive` during its frame stage, which opens its sender's
   window again.
 
@@ -443,7 +509,7 @@ plug in here:
 | WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
-| WS5 voice | `IInternalVoiceService` from the provider's voice service, `SubmitCapture` from `PresenceSend`'s capture, and each speaker's `IVoicePlaybackStream` in an audio callback; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted |
+| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted |
 
 Two rules hold for everything that plugs in:
 
@@ -465,6 +531,17 @@ answers no and is reported.
   replacement, role refusals, queries and their owner thread, readiness holds and their idle, total and
   resynchronization bounds, on the virtual network with real cryptography, transport and engine, each provider composed
   with the real runtime host and composition root.
+- **Voice through the SPI** (`InternalVoiceTests`, `InternalVoiceStreamTests`), over the same peers with the real Opus
+  codec, each voice worker stepped on the network's clock: no voice without voice options; voice off until it is turned
+  on, and off again at once; push-to-talk and voice activation following the SPI's binding, mode and threshold; listener
+  mutes kept through an in-place replacement and a reconnect, left behind at a move to another host whose p1 is someone
+  else, and a wish to hear nobody held across the move back; a host's server mute silencing the relay, read on joined
+  players from the roster, and forgotten when hosting stops; an automatic mute for malformed voice sent past the
+  client's engine, counted by every control and at the chat ingress until it ends; the service's own streams, kept
+  across a rejoin within the grace and ended once the record goes; asking again for an unlisted or refused speaker
+  allocating nothing while `GetPlaybackStream` makes a ring each time; every statistic against the service's own; every
+  member refused off the main thread while a stream reads past the service's gate; and a stream for one host process's
+  p1 ending at the reconnect to its restarted process, never playing the new p1.
 - **Admission through the runtime host** (`RuntimeAdmissionTests`): the descriptor's packages by role, a stale player
   refused by the host's planner with its report reaching the player, the joining player's own check before connecting, a
   required session mod at a compatible version joining, the offer's format and its refusals, the content seam
@@ -502,7 +579,10 @@ answers no and is reported.
 - **Privacy** (`RuntimePrivacyTests`): no SPI member, parameter or type is shaped like an address or names a network
   type; typed hosts stay inside the handle; what the runtime logs and keeps is redacted, every address form above
   included, and the provider's own log gets the same redacted lines with no runtime attached and behind one that throws;
-  and the host's words reach neither a log, through the developer switch or the runtime, nor a mod.
+  and the host's words reach neither a log, through the developer switch or the runtime, nor a mod. For voice
+  (`InternalVoiceStreamTests.TheVoiceSpiCarriesNoAddress`): the voice SPI with every SDK type it names, transitively,
+  and the provider's types behind it, scanned the same way, and every name it answers in a live session a listed
+  participant's id.
 - **The realm at the runtime** (`MultiplayerRealmRuntimeTests`, and `RuntimeRealmTests` over real providers): the realm
   follows the provider's role at each pump; opening to multiplayer while a world runs promotes the solo session in
   place, keeping its session id, and the census baselines the live spawns recorded offline, in order, once per
@@ -702,7 +782,16 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   nothing and a frame never waits for it. Hand-copied builds are development work, and section 4 measures the cost;
   content reports as pending, with its progress, until the work is done.
 - **Bans are listed by id, not by key**, so the interface never holds a player's key.
-- **Voice is null** until the voice lane adapts the provider's voice service to `IInternalVoiceService`.
+- **The voice service's own streams, not wrappers.** A wrapper that looked a speaker up by id at each read would carry
+  on into whoever has that id after a join; the service's stream ends there, and stays ended.
+- **`TryGetPlaybackStream` beside `GetPlaybackStream`.** The plan's emitter asks for one stream per avatar; once one
+  ends, asking again must cost nothing until there is something to give, and the service's own `GetPlaybackStream`
+  makes a stream for anybody it is asked about. The new member gives only what exists or what the session lists.
+- **`FramesSent` counts held frames, and `Concealed` faded ones.** The SPI's counters say what happened to the frames;
+  the service splits both further, and a field taken by name alone would undercount.
+- **One set of server mutes, the engine's.** The control kept its own set for chat, which the voice relay never saw.
+  Now the engine's moderation drives both, automatic mutes included, and closing every connection forgets it, as the
+  control's set ended with hosting.
 - **The realm follows the provider's role** rather than the requests: a request only asks, and the realm moves when the
   pump shows the provider hosting or joined. A join that fails early therefore never leaves `Offline`, and nothing that
   reads the realm sees a session that did not happen.

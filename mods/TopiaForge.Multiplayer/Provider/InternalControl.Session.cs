@@ -171,17 +171,18 @@ namespace TopiaForge.Multiplayer
                 Participants = snapshot.Participants.Count,
                 ConnectedPlayers = CountConnected(snapshot),
                 ReadinessHolds = engine.ReadinessHolds,
-                ServerMutes = serverMutes.Count,
-                SystemChannels = channels.AsReadOnly()
+                ServerMutes = engine.IsVoiceEnabled ? engine.ServerMuteCount : 0,
+                SystemChannels = channels.AsReadOnly(),
+                Voice = voice?.GetStatistics()
             };
         }
 
-        private bool AdmitChat(ParticipantId sender)
-        {
-            if (engine.Role != EngineRole.Host || serverMutes.Count == 0) return true;
-            var identity = engine.ParticipantIdentityOf(sender);
-            return identity == null || !serverMutes.Contains(identity);
-        }
+        /// <summary>
+        /// Drops a muted player's chat as it reaches the host, by the engine's voice moderation, the same set the voice relay
+        /// drops by: a mute by hand, or one the relay made for abusing voice chat.
+        /// </summary>
+        private bool AdmitChat(ParticipantId sender) =>
+            engine.Role != EngineRole.Host || !engine.IsVoiceEnabled || !engine.IsServerMuted(sender);
 
         private static int CountConnected(MultiplayerSessionSnapshot snapshot)
         {

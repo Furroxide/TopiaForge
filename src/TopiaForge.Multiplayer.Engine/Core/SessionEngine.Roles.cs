@@ -92,7 +92,8 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>
         /// Ends every client connection with <paramref name="reason"/> and carries on as a solo session: the values and
-        /// objects stay, and departed players leave the participant list at once rather than after their grace period.
+        /// objects stay, and departed players leave the participant list at once rather than after their grace period. Their
+        /// voice moderation goes with them, server mutes included, so a host that opens its session again starts with none.
         /// </summary>
         internal void CloseConnections(MultiplayerSessionEndReason reason, string message)
         {
@@ -103,6 +104,7 @@ namespace TopiaForge.Multiplayer.Engine
             foreach (var connection in connections.ToArray()) EndConnection(connection, reason, message);
             var departed = participantRecords.FindAll(record => record.Identity != null);
             foreach (var record in departed) ForgetParticipant(record);
+            ForgetVoiceModeration();
             if (departed.Count > 0) MarkParticipantsChanged();
             EndOperation();
         }

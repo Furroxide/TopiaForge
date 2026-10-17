@@ -16,13 +16,13 @@ internal sealed class SteppedNetwork : INetworkControl
     private readonly NetworkStack stack;
     private readonly bool retireWhenStopped;
 
-    internal SteppedNetwork(VirtualDatagramNetwork network, string name, NetworkStack stack, int port, bool retireWhenStopped = false)
+    internal SteppedNetwork(VirtualDatagramNetwork network, string name, NetworkStack stack, int port, bool retireWhenStopped = false, VirtualNode? replaces = null)
     {
         this.network = network;
         this.stack = stack;
         this.retireWhenStopped = retireWhenStopped;
         LocalPort = port;
-        Node = network.AddStack(name, stack);
+        Node = network.AddStack(name, stack, replaces, samePort: replaces != null);
     }
 
     internal VirtualNode Node { get; }
@@ -110,11 +110,18 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
     /// <summary>Gets or sets whether a stopped network leaves the virtual network after its grace period.</summary>
     internal bool RetireStopped { get; set; }
 
+    /// <summary>
+    /// Gets or sets a node that has left the network, whose address and port the next network takes, as a game that
+    /// restarts binds the port its last run held. It applies once.
+    /// </summary>
+    internal VirtualNode? Replaces { get; set; }
+
     public INetworkControl Start(int port, NetworkStack stack)
     {
         if (FailStarts) throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.AddressFamilyNotSupported);
         ++created;
-        var started = new SteppedNetwork(network, name + "-" + created, stack, port == 0 ? 40_000 + created : port, RetireStopped);
+        var started = new SteppedNetwork(network, name + "-" + created, stack, port == 0 ? 40_000 + created : port, RetireStopped, Replaces);
+        Replaces = null;
         Networks.Add(started);
         return started;
     }
