@@ -115,7 +115,10 @@ namespace TopiaForge.Multiplayer.Engine
         CodecFailed = 2,
 
         /// <summary>A participant broke the voice limits often enough to be muted automatically or removed.</summary>
-        VoiceAbuse = 3
+        VoiceAbuse = 3,
+
+        /// <summary>The provider's voice worker failed repeatedly and stopped; voice chat is off until the provider restarts.</summary>
+        VoiceFailed = 4
     }
 
     /// <summary>One engine diagnostic. It names participants, owners and wire ids, never network addresses.</summary>

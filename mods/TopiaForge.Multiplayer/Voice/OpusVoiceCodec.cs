@@ -1,21 +1,25 @@
 using System;
+using TopiaForge.Multiplayer.Engine;
 
 namespace TopiaForge.Multiplayer.Voice
 {
     /// <summary>
     /// The voice chat codec: Opus, through the vendored Concentus port of libopus 1.1.2, set up for speech. A frame is
     /// 20 ms of 48 kHz mono audio, 960 samples, and encodes to one packet of at most 160 bytes. The encoder uses the VOIP
-    /// application, unconstrained VBR at 20 to 24 kbit/s, discontinuous transmission on silence, and in-band forward
-    /// error correction sized by an expected-loss hint. Its audio band is capped at wideband, which keeps it in SILK-only
-    /// mode: at these bitrates the fullband hybrid mode leaves SILK too few bits to carry any FEC. The measurements
-    /// behind these choices are in docs/internal/MultiplayerVoice.md.
+    /// application, unconstrained VBR at 20 kbit/s, discontinuous transmission on silence, and in-band forward error
+    /// correction sized by an expected-loss hint. Its audio band is capped at wideband, which keeps it in SILK-only mode:
+    /// at these bitrates the fullband hybrid mode leaves SILK too few bits to carry any FEC. The bitrate target is 20
+    /// kbit/s, a target rather than a cap, since VBR follows the input; at it a talker, with the transport's charge on
+    /// paired frames, fits the 32.8 kbit/s client voice share. The measurements behind these choices are in
+    /// docs/internal/MultiplayerVoice.md.
     /// </summary>
     /// <remarks>
     /// The codec holds settings only, so it is immutable and safe to share. Each encoder and decoder it creates belongs
     /// to one thread. They write into buffers the caller provides and allocate nothing themselves; the Concentus code
-    /// underneath still allocates scratch arrays for every frame, as upstream does.
+    /// underneath still allocates scratch arrays for every frame, as upstream does. It is the engine's
+    /// <see cref="IVoiceCodec"/>, so the host checks relayed packets with it and jitter buffers decode with it.
     /// </remarks>
-    internal sealed class OpusVoiceCodec
+    internal sealed class OpusVoiceCodec : IVoiceCodec
     {
         /// <summary>The sample rate of every frame, in hertz.</summary>
         internal const int SampleRateHz = 48_000;
@@ -29,9 +33,9 @@ namespace TopiaForge.Multiplayer.Voice
         internal const int DefaultComplexity = 10;
         internal const int MinimumComplexity = 5;
         internal const int MaximumComplexity = 10;
-        internal const int DefaultBitrate = 24_000;
+        internal const int DefaultBitrate = 20_000;
         internal const int MinimumBitrate = 20_000;
-        internal const int MaximumBitrate = 24_000;
+        internal const int MaximumBitrate = 20_000;
         internal const int DefaultExpectedLossPercent = 10;
 
         /// <summary>Creates a codec whose encoders start with these settings.</summary>
@@ -39,7 +43,7 @@ namespace TopiaForge.Multiplayer.Voice
         /// The encoder complexity, 5 to 10. The Mono spike measured 10 at about 0.42 ms per frame; 5 is the fallback
         /// for slow machines.
         /// </param>
-        /// <param name="bitrateBitsPerSecond">The VBR target, 20,000 to 24,000 bit/s.</param>
+        /// <param name="bitrateBitsPerSecond">The VBR target, 20,000 bit/s: the target that keeps voice within its transport share.</param>
         /// <param name="expectedLossPercent">The loss hint, 0 to 100 percent; 0 turns in-band FEC off.</param>
         internal OpusVoiceCodec(
             int complexity = DefaultComplexity,
@@ -51,11 +55,11 @@ namespace TopiaForge.Multiplayer.Voice
             ExpectedLossPercent = RequireLossPercent(expectedLossPercent, nameof(expectedLossPercent));
         }
 
-        internal int SampleRate => SampleRateHz;
+        public int SampleRate => SampleRateHz;
 
-        internal int FrameSamples => FrameSampleCount;
+        public int FrameSamples => FrameSampleCount;
 
-        internal int MaximumPacketBytes => MaximumPacketLength;
+        public int MaximumPacketBytes => MaximumPacketLength;
 
         internal int Complexity { get; }
 
@@ -64,16 +68,20 @@ namespace TopiaForge.Multiplayer.Voice
         internal int ExpectedLossPercent { get; }
 
         /// <summary>Gets whether <paramref name="packet"/> is a voice packet a host may relay; see <see cref="OpusToc"/>.</summary>
-        internal bool IsValidPacket(ReadOnlySpan<byte> packet) => OpusToc.IsVoicePacket(packet);
+        public bool IsValidPacket(ReadOnlySpan<byte> packet) => OpusToc.IsVoicePacket(packet);
 
         /// <summary>Gets whether <paramref name="packet"/> is a silence packet under discontinuous transmission.</summary>
-        internal bool IsDiscontinuous(ReadOnlySpan<byte> packet) => OpusToc.IsDiscontinuous(packet);
+        public bool IsDiscontinuous(ReadOnlySpan<byte> packet) => OpusToc.IsDiscontinuous(packet);
 
         /// <summary>Creates an encoder for one talker's stream, starting from this codec's settings.</summary>
         internal OpusVoiceEncoder CreateEncoder() => new OpusVoiceEncoder(Complexity, BitrateBitsPerSecond, ExpectedLossPercent);
 
         /// <summary>Creates a decoder for one speaker's stream.</summary>
         internal OpusVoiceDecoder CreateDecoder() => new OpusVoiceDecoder();
+
+        IVoiceEncoder IVoiceCodec.CreateEncoder() => CreateEncoder();
+
+        IVoiceDecoder IVoiceCodec.CreateDecoder() => CreateDecoder();
 
         internal static int RequireComplexity(int value, string name)
         {
@@ -89,7 +97,7 @@ namespace TopiaForge.Multiplayer.Voice
         {
             if (value < MinimumBitrate || value > MaximumBitrate)
             {
-                throw new ArgumentOutOfRangeException(name, value, "The voice bitrate target is 20,000 to 24,000 bit/s.");
+                throw new ArgumentOutOfRangeException(name, value, "The voice bitrate target is 20,000 bit/s.");
             }
 
             return value;

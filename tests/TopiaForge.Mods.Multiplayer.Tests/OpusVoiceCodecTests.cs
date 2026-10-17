@@ -18,10 +18,11 @@ internal static class OpusVoiceCodecTests
     internal const int Frame = OpusVoiceCodec.FrameSampleCount;
 
     // Frozen from the vendored Concentus 2.2.2 subset (commit 6c2328dc). Any change to the vendored code, its edits or the
-    // codec settings changes them; update them only alongside a reviewed vendoring or settings change.
-    private const string DefaultPacketsSha256 = "020da9692bbe20789f0489490c4006bb5e862605f8143c39a27e803fe57e0b37";
+    // codec settings changes them; update them only alongside a reviewed vendoring or settings change. The default ones
+    // moved once, when the bitrate target moved to 20 kbit/s.
+    private const string DefaultPacketsSha256 = "5353b041e703b3cdb80ae06c314e20092bca8d2062ce59d4a9c74c6b2c1a72bf";
     private const string LowCostPacketsSha256 = "cb98ffaa54073ab036ad4d8ba7f15d6434850237fa91b6b71dbbfd9d68fee704";
-    private const string DefaultPcmSha256 = "3c6f828cb226f55b06142f2a0ee7e8ef7de14fd4cbbde27533456c18268d6a56";
+    private const string DefaultPcmSha256 = "73b0870fe4fce7da049eba1c0f3caec7b46ccbf40184d496d3b50d47bbd8ced1";
 
     // Measured at 9.0 dB for complexity 10 and 9.1 dB for complexity 5. Opus is a perceptual codec, so waveform SNR is
     // modest; a codec that lost the signal or its alignment scores near 0 dB.

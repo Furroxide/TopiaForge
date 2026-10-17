@@ -2,15 +2,17 @@
 
 Status: Implementing (WS2g of the live-multiplayer plan) · Date: 2026-10-13 · Owner: multiplayer
 
-This records voice chat below the user interface: the codec the provider runs, and the session engine's path for voice
-frames between peers. Microphone capture, resampling, voice activity detection, playback and the voice worker thread
-come in a later slice, as does every in-game control. No player-facing behaviour changes until then.
+This records voice chat below the user interface: the codec the provider runs, the session engine's path for voice
+frames between peers, and the provider's voice service around them. Microphone capture in Unity, emitters and every
+in-game control come in later workstreams. No player-facing behaviour changes until then.
 
-WS2g lands in two pull requests, each with its own part of this record:
+WS2g lands in three pull requests, each with its own part of this record:
 
 1. **The codec** (part 1): Opus through vendored Concentus, wrapped for the provider.
 2. **The engine's voice path** (part 2): the codec seam, the frame format, the jitter buffer and the host's relay
    policy.
+3. **The voice service** (part 3): capture, transmit modes, the voice worker, playback streams and the provider's
+   wiring.
 
 ## Part 1: the codec
 
@@ -24,7 +26,7 @@ engine never names a codec; the provider hands it one through the seam in part 2
 | Format | 48 kHz mono, 16-bit samples |
 | Frame | 20 ms, 960 samples, one Opus frame per packet |
 | Application | VOIP, signal type voice |
-| Bitrate | Unconstrained VBR, 24 kbit/s target by default, 20 to 24 kbit/s allowed |
+| Bitrate | Unconstrained VBR with a 20 kbit/s target, which keeps a talker within the transport's voice share (section 2.10) |
 | Audio band | Capped at wideband (8 kHz), so the encoder stays in SILK-only mode |
 | Silence | Discontinuous transmission: TOC-only packets after a hangover |
 | Loss | In-band FEC, sized by an expected-loss hint (10% by default, 0 turns it off) |
@@ -32,14 +34,20 @@ engine never names a codec; the provider hands it one through the seam in part 2
 | Packet | At most 160 bytes |
 
 `OpusVoiceCodec` holds the settings, validates packets, and creates one `OpusVoiceEncoder` per talker and one
-`OpusVoiceDecoder` per speaker. Encoders and decoders belong to one thread each. Complexity, bitrate and the loss hint
-can change live on an encoder; the voice service will feed the hint from the loss its transport measures.
+`OpusVoiceDecoder` per speaker. Encoders and decoders belong to one thread each. Complexity and the loss hint can
+change live on an encoder; the voice service feeds the hint from the loss its transport measures (section 3.5).
+
+The bitrate was 24 kbit/s by default at first, with 20 to 24 kbit/s allowed. Section 2.10 found that 24 kbit/s does not
+fit the transport's voice shares, so the encoder now targets 20 kbit/s. It is a target, not a cap: VBR follows the
+input. Ten seconds of the test speech code at 19.7 kbit/s, and full-scale white noise, the hardest input there is, at
+23.9 kbit/s, which still fits the client's share.
 
 ### 1.2 Why wideband
 
 At 20 to 24 kbit/s the encoder picks fullband hybrid mode (TOC configuration 15) unless capped. Hybrid splits the
 bits between SILK and CELT, and SILK's share stays under the threshold at which it codes in-band FEC (LBRR) at all.
-Measured on the synthetic speech the tests use, 24 kbit/s, complexity 10, on .NET 10:
+Measured on the synthetic speech the tests use, 24 kbit/s, complexity 10, on .NET 10, before the 20 kbit/s target; at
+20 kbit/s the loss test of section 1.7 still finds FEC well ahead of concealment:
 
 | Mode | Loss hint | Frames FEC improved | FEC / PLC SNR on lost frames | Encode | Decode |
 | --- | --- | --- | --- | --- | --- |
@@ -94,8 +102,8 @@ payloads behind valid TOC bytes produced no rejection once the defect above was 
 The wrapper writes into the caller's buffers and allocates nothing: a test runs the same frames through the bare
 Concentus objects and requires the same allocation, byte for byte, and the same output. Concentus itself allocates
 scratch arrays for every frame, as upstream does: about 104 KB per encode and 12 KB per decode in wideband. A talker
-and three listeners therefore make about 7 MB of short-lived garbage a second. The voice worker thread, which the next
-slice adds, keeps that and the coding time off the game's main thread; removing it would mean rewriting upstream.
+and three listeners therefore make about 7 MB of short-lived garbage a second. The voice worker thread of part 3 keeps
+that and the coding time off the game's main thread; removing it would mean rewriting upstream.
 
 The Mono spike measured complexity 10 at about 0.43 ms per encode and 0.09 ms per decode. A test runs a four-player
 session's codec work for one second of speech, four encodes and twelve decodes per frame, on one thread, and requires
@@ -106,15 +114,17 @@ it to finish within real time; it takes about 0.1 s on the development machine o
 With analysis off and `PARITY` on, encoding and decoding are integer arithmetic throughout. A test freezes the SHA-256
 of the packets for five seconds of synthetic speech at the default settings and at complexity 5, 20 kbit/s and a 20%
 hint, and of the decoded audio. The test signal uses only IEEE basic arithmetic, never the runtime's sine, whose last
-bit differs between C libraries. The hashes match on Windows and Linux under .NET 10; Mono was not run.
+bit differs between C libraries. The hashes match on Windows and Linux under .NET 10; Mono was not run. The default
+ones moved once, with the 20 kbit/s target, and were checked on Linux again.
 
 ### 1.7 Tests
 
 `OpusVoiceCodecTests` and `OpusVoiceCostTests`, in the multiplayer test project:
 
-- round-trip SNR on synthetic voiced speech: at least 7 dB at complexity 10 and 5 (measured 9.0 and 9.1 dB), since a
-  perceptual codec does not match the waveform closely, while a lost or misaligned signal scores near 0 dB;
-- packet bounds at both bitrates and on full-scale noise, with every packet SILK-only wideband;
+- round-trip SNR on synthetic voiced speech: at least 7 dB at complexity 10 and 5 (measured 8.4 and 8.2 dB at 20
+  kbit/s, 9.0 and 9.1 dB at 24 kbit/s), since a perceptual codec does not match the waveform closely, while a lost or
+  misaligned signal scores near 0 dB;
+- packet bounds at the bitrate and on full-scale noise, with every packet SILK-only wideband;
 - loss: with a lost packet every 20 frames, FEC recovery beats concealment by at least 2 dB and on at least half the
   lost frames, and without a loss hint it does not;
 - DTX: sustained silence becomes TOC-only packets that decode to near-silent comfort noise, and speech resumes at once;
@@ -129,7 +139,7 @@ The code lives in `src/TopiaForge.Multiplayer.Engine/Voice/` and `Core/SessionEn
 internal: there is no mod-facing voice API. Voice is off unless `EngineOptions.Voice` names a codec, so the rig and the
 solo provider run as before; an engine without voice options sends nothing for voice and ignores voice it receives.
 The engine moves packets and never decodes them; the jitter buffer, which does, is a separate class that the provider's
-voice worker will run, one per speaker.
+voice worker runs, one per speaker (part 3).
 
 ### 2.1 The codec seam
 
@@ -138,9 +148,8 @@ voice worker will run, one per speaker.
 `IVoiceEncoder` per talker and one `IVoiceDecoder` per speaker. A decoder decodes, conceals a missing frame, rebuilds
 one from the next packet's forward error correction, and resets. The engine itself calls only the header check.
 
-The Opus wrapper of part 1 offers the same operations, and the next slice makes it implement the seam. The tests use `FakeVoiceCodec`, whose output
-names the path that produced it: the frame's id when decoded, the previous frame's id when recovered, a marker when
-concealed.
+The Opus wrapper of part 1 implements the seam (part 3). The tests use `FakeVoiceCodec`, whose output names the path
+that produced it: the frame's id when decoded, the previous frame's id when recovered, a marker when concealed.
 
 ### 2.2 Frames and datagrams
 
@@ -290,7 +299,7 @@ ends an automatic mute, and the roster tells everyone.
 
 The plan does not set these thresholds. They are chosen so that a sustained flood is muted within seconds, while a bad
 link's occasional damaged frame never is. Honest traffic earns no strikes: it sends 25 datagrams a second against 30, and
-about 26 kbit/s at 24 kbit/s of codec data against 40, with a second of burst for VBR peaks. A client also holds itself
+about 22 kbit/s at the 20 kbit/s target against 40, with a second of burst for VBR peaks. A client also holds itself
 to the same limits, so when frames bunch up after a stall it drops what would break them rather than sending it.
 `VoiceOptions` holds every value.
 
@@ -301,7 +310,7 @@ reliably (`VoiceMutes`, `0x31`) when it changes and after every join, so the hos
 A host applies its own player's set locally. The set holds at most 256 ids, and `GetListenerMutes` reads it back.
 
 Mutes follow the people. A participant id names a player only while the host that assigned it keeps that player's
-record, so the set lasts exactly as long as the host keeps the record of the player who made it:
+record, so the set lasts as long as the client knows the host kept the record of the player who made it:
 
 - **Kept.** An in-place replacement (`ReplaceSession`) keeps every record, and a reconnect within the 30-second grace
   finds the record it left. The ids still name the same people, so the set stays, whether the client stayed connected
@@ -311,9 +320,19 @@ record, so the set lasts exactly as long as the host keeps the record of the pla
   also remembers the host it was made with, by the host's authenticated identity, so another host's kept record does
   not count: a traveller who returns within the grace to a host it visited, after muting players elsewhere, leaves
   those mutes behind.
-- **Made while joining.** A set made while the engine awaits a join names nobody yet and applies to the session the join
-  finds, whichever that is, just as it does after a role change. It should hold only wishes that name nobody, such as
-  muting everyone.
+- **An unanswered join counts as a lost record.** When the link goes after a join's request left but before its answer
+  came, the host may have made the record meanwhile, also as a new process after a restart. The next join would then
+  find a record kept that the client never saw made. So losing the link forgets the set made with that host, and the
+  ids of that host's list name nobody until it sends its list again. A join replaced before its request left changes
+  nothing.
+- **Names belong to the host that listed them.** A player can name only the players the session lists, and a client's
+  list is the last one a host sent it. A join changes it only when the new host sends its own, after the snapshot, which
+  for a large world can come a second or more after `JoinAccepted`. So names given while no session is joined, or while
+  a join is under way, belong to the host that sent the list, and the join keeps or forgets them as above. Names given
+  after a join has found another host, or this one without the player's record, but before that host lists its
+  players, name nobody in the session and go at once. Names given before any list, or after a role change, belong to no
+  host, and every join forgets them. A set that names nobody, such as muting everyone, applies to the session the join
+  finds, whichever that is, whether it was made with no link or during the join.
 - **Role changes** forget the set.
 
 So muting `p2` on one host never silences a different `p2` on the next, and never tells the next host whom the player
@@ -321,12 +340,20 @@ had muted. Two earlier versions went by the session. The first cleared the set o
 a restarted host sent it the old set. The second forgot the set whenever a join named another session id: a client
 whose link was down while the host replaced its session in place came back without its mutes, though one that stayed
 connected kept them, and a set made between moving the link and the `JoinAccepted` was dropped when the join found
-another session, though the same call after a role change was kept.
+another session, though the same call after a role change was kept. A third applied every set made while a join was
+under way to the session the join found, names included, so a name given from the old host's list silenced whoever had
+that id on the new one, and a caller had to hold names back by session, which lost them across a reconnect into an
+in-place replacement. A fourth tied names given while no session was joined, or while a join was under way, to the host
+joined last. A client goes on listing the previous host's players until the new host's list arrives, so a name given
+from that list after the new host's `JoinAccepted`, or while the link was down before its list came, still reached the
+new host. A fifth trusted every `JoinAccepted` that said the record was kept. A restarted host's first answer to a join
+can be lost with the link after the host has made the record, so the next join found it kept, and both the set and the
+names given from the old process's list reached the new process.
 
 ### 2.6 The engine API
 
-Every member runs on the owner thread, like the rest of the engine. The next slice's voice worker encodes and decodes
-on its own thread and trades frames with the main thread through queues.
+Every member runs on the owner thread, like the rest of the engine. The voice worker of part 3 encodes and decodes on
+its own thread and trades frames with the main thread through queues.
 
 | Member | What it does |
 | --- | --- |
@@ -445,43 +472,311 @@ These run in the multiplayer test project, and every one is deterministic:
   and a restart noticed by host and client alike when the path loses its first datagram;
 - `VoiceMuteTests`, over the rig: `JoinAccepted`'s vector, which says whether the host kept the record; mutes that
   survive an in-place replacement however the client resynchronizes; mutes forgotten when the record expired, and when
-  a host other than the one they were made with kept it; and a set made while joining applied to the session the join
-  finds, with or without a role change first;
+  a host other than the one they were made with kept it; a set that names nobody, made while joining or with no link,
+  applied to the session the join finds, with or without a role change first; and, for a host whose snapshot spans two
+  frames over a slow link, a name given from the old host's list after `JoinAccepted` dropped at once, one given while
+  the link was down before the new list came left with the old host, and one from a restarted host's old list, whose
+  number the new process has given to someone else, dropped too; and, when the new process's first answer to each
+  traveller is lost with the link, a set made with the old process and a name given afterwards from its list both
+  forgotten, while a join replaced before its request left keeps the set;
 - `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, link time kept in fractions
   of a tick, the link's datagram-first, bounded reads, and datagrams shed when their lane is more than three ticks
   behind, or past their share while the session lane is.
 
+### 2.10 The budget
+
+Two costs matter. On the wire, each datagram also carries about 40 bytes of the secure transport: the protected
+packet's 17-byte header and 16-byte tag, and the DATAGRAM frame's type, channel, sequence and length. That is what the
+connection's 256 kbit/s budget pays, and what the four-player test counts. The class shaper charges each datagram only
+its DATAGRAM frame against the voice share: the payload and 4 to 7 bytes, the frame's type and channel and its
+sequence and length as varints. The share is 4 KiB/s (32.8 kbit/s) from a client and 12 KiB/s (98.3 kbit/s) from the
+host to each client. Relayed datagrams carry the stream generation, one byte more than the uplink's.
+
+| Codec data | One talker's uplink, on the wire | Three speakers relayed to one client, on the wire |
+| --- | --- | --- |
+| 20 kbit/s, 50-byte frames (measured) | 29.8 kbit/s | 90.6 kbit/s |
+| 24 kbit/s, 60-byte frames (measured) | 33.8 kbit/s | 102.6 kbit/s |
+| The real codec at its 20 kbit/s target (measured, part 3) | 29.8 to 29.9 kbit/s | 90.6 to 90.7 kbit/s |
+
+What the shaper charges, for the real codec: the test speech comes to 22.5 kbit/s a talker, 23.0 in its busiest
+second, against the client's 32.8; full-scale white noise, the hardest input, to 26.8 kbit/s, 27.7 in its busiest
+second. Both fit. So at part 1's first default of 24 kbit/s, voice exceeded the classes at every peak; the encoder now
+targets 20 kbit/s instead of the classes growing.
+
+**The downlink limit.** The host's 98.3 kbit/s share to each client fits about four talkers of the test speech at once,
+and three of full-scale noise. Nothing selects among speakers beyond that: with more talking at once, the host's voice
+queue to that client fills, and what it cannot carry is late or dropped (section 2.11). Choosing the loudest speakers is
+later work.
+
 ### 2.11 Later work
 
-The voice service in the provider, the next slice, must:
-
-- make the Opus types implement the seam and set `EngineOptions.Voice`;
-- drain `TryReceiveVoiceFrame` on the main thread and hand the frames, with their engine-clock arrival times and stream
-  generations, to the voice worker, which pushes them into one `VoiceJitterBuffer` per speaker and pulls every 20 ms;
-- drop every jitter buffer when the session id changes. Stream generations come from one counter in each host process,
-  so a new host process, after a move to another host or a restart, numbers its streams from 1 again, and a buffer kept
-  from before could take a new stream for the old one;
-- map `IsDiscontinuous` to the `Discontinuous` flag, set `EndOfTalk` when push-to-talk or voice activity ends, and drop
-  capture frames that are stale after a stall;
-- read the listener mutes back with `GetListenerMutes` after each join rather than keep a copy, and apply a lasting
-  wish such as muting everyone again only where the engine forgets it: after a role change, or while awaiting a join,
-  where a set applies to the session the join finds;
-- settle the bitrate (section 2.10).
+This section first listed what the voice service had to do with the engine's path. Part 3 does it: the Opus types
+implement the seam and the provider sets `EngineOptions.Voice` (3.7); received frames reach one `VoiceJitterBuffer` per
+speaker on the voice worker with their arrival times and stream generations, and every jitter buffer goes when the
+session id changes, because each host process numbers its streams from 1 again (3.4); silence and the end of talk are
+flagged and stale capture is dropped (3.2, 3.3); the listener mutes are read back from the engine rather than copied,
+and only the wish to hear nobody is given back where the engine forgets it (3.5); and the bitrate is settled (2.10).
 
 The transport's voice queue holds up to 64 datagrams for the class share. Under a sustained overload that is half a
 second to two seconds of voice at the class rates (12 KiB/s down, 4 KiB/s up, depending on the frame size), past the
 jitter buffer's 200 ms ceiling, so the frames that do arrive would be too late to play. Shedding queued voice by age, as
-the rig's bound does, would keep it fresh.
+the rig's bound does, would keep it fresh. The same overload comes from more than about four talkers at once (2.10),
+and selecting the loudest of them is later work too.
 
-### 2.10 The budget
+## Part 3: the voice service
 
-The four-player test measures what voice costs, counting 40 bytes of transport overhead per datagram. Relayed
-datagrams carry the stream generation, one byte more than the uplink's:
+The provider's side of voice lives in `mods/TopiaForge.Multiplayer/Voice/`, and every type is internal. It covers
+everything between the microphone's samples and each speaker's playback samples. The Unity pieces come later: capture
+from the microphone, emitters, the push-to-talk binding, consent and the settings page (WS5), and the internal SPI that
+ModManager calls (WS3). The public members of `VoicePlaybackStream` are those of that SPI's playback stream, so WS3
+hands out the streams as they are. `VoiceService`'s members are close to its voice service, but the SPI as drafted has
+no way to turn voice on or to say when the player transmits, so WS3 adds `Enabled` and `SetTransmitting` to it or
+drives them itself. `OpusVoiceCodec`, `OpusVoiceEncoder` and `OpusVoiceDecoder` now implement the engine's seam from
+part 2.
 
-| Codec data | One talker's uplink | Three speakers relayed to one client |
+### 3.1 Threads
+
+| Thread | Does | Never |
 | --- | --- | --- |
-| 20 kbit/s, 50-byte frames (measured) | 29.8 kbit/s, of a 32 kbit/s class | 90.6 kbit/s, of a 96 kbit/s class |
-| 24 kbit/s, 60-byte frames (measured) | 33.8 kbit/s | 102.6 kbit/s |
+| Main, the engine's owner | Every member of `VoiceService`; capture, transmission, `Enabled`, the mutes, `GetPlaybackStream`, `IsSpeaking` and `GetStatistics` refuse any other thread. `Pump` hands capture to the worker, gives the engine encoded frames, takes received frames from it and watches the session | Encodes, decodes or waits |
+| Voice worker | Resampling, framing, voice activation, encoding, the jitter buffers, decoding, filling the playback streams | Touches the engine |
+| Audio | `VoicePlaybackStream.Read` | Locks, waits or allocates |
 
-So at part 1's default of 24 kbit/s, voice exceeds both of the transport's voice classes, which would shed it at every
-peak. Before voice ships, either the encoder runs at 20 kbit/s or the classes grow to fit 24 kbit/s.
+The main thread and the worker trade work through two double-buffered exchanges (`VoiceExchange`). The producer adds to
+a batch under a brief lock; the consumer swaps the whole batch out, works on it without the lock, and gives it back.
+Both batches are allocated once, so steady traffic allocates nothing there. Control for the speakers keeps its place
+among the received frames in a batch, so a reset drops only the frames queued before it, however far the worker has
+fallen behind. The audio thread reads a single-producer, single-consumer ring.
+
+`Pump` runs once per game frame, after the engine's own pump. The worker runs on a background thread at above-normal
+priority. It wakes when the main thread queues work, or when its next 20 ms playout slot falls due, and sleeps when
+there is nothing to do. Tests run its step on a virtual clock instead. A step that throws is counted, and ten in a row
+stop the worker and voice with one `VoiceFailed` diagnostic, which the provider passes on as `engine.voice-failed`. No
+exception leaves the thread. From then on nothing takes what the main thread queues for the worker, so each pump drops
+it; otherwise every mute, stream and capture the session went on producing would pile up for as long as it lasted.
+
+### 3.2 Capture
+
+- **Voice stays off until the player turns it on.** Until `Enabled` is set, nothing is captured, coded or sent, and the
+  meter reads silence; that holds in the service, not only in the interface. Turning it off stops at once: the worker
+  codes nothing more, and frames already coded that have not left are dropped. Voice from other players still plays.
+- `SubmitCapture(samples, count, sampleRate)` takes float samples at the device's rate, on the main thread, and refuses
+  any other thread, so capture from an audio callback is handed to the main thread first.
+- **What one call keeps follows the frame rate.** The service smooths the interval between capture calls and between
+  pumps. One call keeps its newest 60 ms, or one and a half frame intervals when the main thread runs slower than 25
+  frames a second; more than that arrived at once after a stall, and sending it would only add delay. An interval over
+  250 ms is a stall or a pause, not a frame rate, and leaves the estimate as it was, so a stall's backlog is still cut.
+  An encoded frame may wait 120 ms, or what one call keeps and one and a half pumps more, before it is dropped as late.
+  A fixed 60 ms cut every call below about 17 frames a second: at 70 ms frames 14% of capture was lost, at 100 ms 40%.
+- The worker resamples to 48 kHz with the vendored Speex resampler (quality 5) and cuts 20 ms frames.
+- Timestamps follow the clock. After a gap of more than 40 ms, such as a released key or a stall, the stream resumes at
+  the frame the clock has reached, so listeners see a pause as a pause and their delay estimates hold.
+
+### 3.3 Transmit modes
+
+- **Transmitting is explicit.** `SetTransmitting(true)` while the push-to-talk key is held, or while voice activation
+  listens; `SetTransmitting(false)` ends the spurt at once: the frame being filled is padded with silence and sent with
+  `EndOfTalk`. Capture handed over while not transmitting is only metered. Each capture carries the state it was made
+  in, so the end lands exactly between the last capture transmitted and the first that is not, whatever the cadence of
+  the calls. An earlier version took a pump with no capture since the last one for a released key, so at an audio
+  callback's cadence it ended a held key's spurt at every pump that happened to see no capture.
+- **Push-to-talk**, the default, sends every frame captured while transmitting. When the key stays down while the
+  microphone yields nothing for more than 40 ms, the end of talk comes at the frame the clock has reached, so it is
+  neither stale nor late.
+- **Voice activation**, while transmitting, treats a frame at or above the threshold (-40 dBFS by default) as speech.
+  The spurt stays open for a 300 ms hangover after the last such frame, and the hangover's fifteenth frame carries
+  `EndOfTalk`. Every frame is metered, for the settings page.
+- **Silence.** The encoder's DTX packets are one byte. The first of a run goes out marked `Discontinuous`, so listeners
+  play silence rather than conceal; the rest of the run is not sent. An end of talk is always sent.
+- **Nobody to hear.** In a solo session, when muted by the host, or when not connected, frames are cut and metered but
+  not coded. `TransmitState` says which. A host counts only players who are Ready as listeners, since it relays to no
+  one else: a player still joining, perhaps held short of Ready while the runtime loads the world, hears nothing yet.
+
+### 3.4 Receiving and playback
+
+- The main thread drains `TryReceiveVoiceFrame` and copies each frame, with its engine-clock arrival time and stream
+  generation, into the exchange. It creates a speaker's playback stream the first time that speaker is heard or
+  `GetPlaybackStream` asks.
+- **The session bounds the speakers.** Each costs a 64 KiB ring, a jitter buffer and a decoder, so there are at most
+  `EngineOptions.MaximumParticipants` streams at once, as the engine had it when voice started: 16 by default, the most
+  a live session allows. That holds whatever a host's roster names.
+  - A speaker the session's participants list always gets one, ahead of the rest: when there is no room, the stream
+    unlisted the longest ends.
+  - One they do not list yet, as when voice comes just before the participant update that names its speaker, gets one
+    only while there is room. It keeps it for 2 s unless the participants list them by then; after that the stream
+    ends, and a later frame takes a new one only while there is room.
+  - Past the bound, frames are dropped and counted, and `GetPlaybackStream` returns an ended stream that plays silence.
+  - A host that names 2,000 strangers, a hundred to a roster, leaves a listener at most 16 streams, and none of them
+    2 s later.
+- On the worker, each speaker has a `VoiceJitterBuffer` with an Opus decoder. Every 20 ms slot pulls one frame and
+  writes it to the speaker's `VoicePlaybackStream`.
+- **Stalls leave no lasting delay.** A stall of this player's main thread, of the host's, or of the worker hands a
+  speaker's backlog over at once.
+  - A speaker's frames that come out of one pump spanning more than 200 ms, the most delay a jitter buffer aims for, get
+    the arrival times they would have had in step with the newest of them. Stamped with the moment they were read, they
+    would look like a second of jitter and push the delay target to its ceiling for the next 128 frames.
+  - After any batch that leaves a jitter buffer more than 11 frames deep, the worker trims it: frames are decoded, so
+    the codec state stays continuous, and dropped until the buffer holds its target and one frame. Left in place, the
+    backlog played late until drift control caught up, a frame every half second or more.
+  - A worker step more than five slots late follows a stall of its own: the missed slots are dropped rather than run in
+    a burst, and every buffer is trimmed the same way.
+  - With any of the three stalled for a second mid-speech, speech plays within the 150 ms bound again 0.6 s after the
+    stall ends.
+- **Two clocks.** The audio device's clock drifts from the worker's. The channel watches the stream's lowest level over
+  each second of slots, measured just before it writes, which is the cushion left after the reader's reads.
+  - Below 10 ms, it pulls one extra frame.
+  - More than three frames above that, it skips one pull.
+  - The jitter buffer's own drift control then sees a slightly faster or slower listener, which it already handles.
+  - A reader that just arrived, or one that ran dry, gets a cushion for its largest read at once.
+- A stream nobody has read for 200 ms, such as one whose avatar has no emitter yet or whose audio source is paused,
+  still has its jitter buffer pulled on time, but the audio is dropped instead of filling the ring, and what the reader
+  left in the ring when it stopped is flushed. A reader that comes back hears the speaker as they are now, never what
+  they said before the pause.
+- **The ring.**
+  - `Read(buffer, offset, count)` is wait-free.
+  - The ring holds 16,384 samples, about 341 ms.
+  - An underrun yields silence and is counted.
+  - A backlog over 200 ms is skipped down to the newest 60 ms.
+  - Each side owns its own position, so a flush is a position the reader skips to.
+  - A read loads the flush position before the end, and never skips past the end it loaded. The writer flushes only to
+    an end it has published, so the end loaded second is never behind. Loaded the other way round, a write and a flush
+    between the two loads put the flush past the end, and the read's copy got a negative length.
+- **Resets.**
+  - A speaker who rejoins or restarts sends a new stream, and the host stamps it with a new generation, so their
+    jitter buffer and decoder start again at the first frame of it to arrive. The service resets nothing itself for a
+    rejoin. That first frame can reach a listener before the session's participants say the speaker is back, because
+    the host relays voice at once while the reliable stream may lag. An earlier version reset a speaker when the
+    participants showed them back, and so dropped the new stream's first frames whenever that update came late.
+  - When the session id changes, and when this player is Ready again after a lost or stalled link, every jitter buffer
+    goes, after the frames already queued for the worker and before any that follow. Each host process numbers its
+    streams from 1, so a buffer kept from another session could take a new stream for an old one; a host's own session
+    never leaves Ready, so the new id alone decides.
+  - A speaker who leaves gets an ended stream, which plays silence and counts nothing.
+
+### 3.5 Mutes, limits and the loss hint
+
+- `SetListenerMutes` passes the set to the engine, which owns it, and drops what newly muted speakers left buffered at
+  once. The service keeps no copy: `GetListenerMutes` reads the engine's, as section 2.5 kept or forgot it at the last
+  join, so whatever shows the player whom they muted never shows a mute that no longer applies.
+- **Names stay with their host.** Names reach the engine at once, whatever the session's state, and the engine ties them
+  to the host whose players the session lists (section 2.5). A reconnect to that host keeps them, through an in-place
+  replacement too. A join that finds another host forgets them, and so does losing the link while a join's answer is
+  still on its way. A name given after a join has found another host, but before that host's list arrives, goes at
+  once: the session still lists the players of before. A name meant for one host's player never silences whoever has
+  that id on the next. An earlier version of the service held names back until this player was Ready in the session
+  they were given in. It cleared the engine's set meanwhile and knew sessions only by id, so a change made while the
+  link was down lost every mute when the host replaced its session before the player was back.
+- **The wish to hear nobody**, `muteAll`, is the player's own and lasts until they change it. It names nobody, so the
+  service gives it back wherever the engine forgot it: after a role change, and after a join that found a host without
+  this player's record. While a join is under way the service makes it again, so the engine applies it to whichever
+  session the join finds, and that host never relays the player a datagram they did not want. A set that also names
+  people is left for the join to keep or forget, so whom the player muted on one host never reaches another.
+- `SetServerMute` passes through for a host.
+- `RateLimited` and `ServerMuted` results are counted, not reported, and the transmit indicator shows `MutedByHost`.
+- `ReportTransportCounters(sent, lost)` takes the transport link's running packet totals. Every 250 packets yield a
+  loss rate, rounded up and capped at 25%, which becomes the encoder's FEC hint. A rise applies at once; a fall halves
+  the gap. The live sessions keep the transport's counters on the network thread and publish none to the main thread
+  yet, so nothing calls it, and the codec's 10% default stands until they do.
+
+### 3.6 Statistics
+
+`GetStatistics()` reports:
+
+- whether voice is on;
+- capture, sending and receiving counters, with the frames the session took to send (`FramesSent`) and refused
+  (`FramesRefused`), and the coded frames dropped when voice was turned off before they left (`FramesDroppedOff`);
+- frames dropped because the bound on streams left their speaker none (`UnlistedFramesDropped`), and the streams
+  ended because the participants did not list their speaker in time or a listed one needed the room
+  (`UnlistedStreamsEnded`);
+- the worker's steps, faults, slots run and slots dropped after a stall;
+- the engine's `VoiceStatistics`;
+- the encoder's loss hint;
+- the input level;
+- for each speaker, playback counters: decoded, recovered, concealed and faded frames, late frames, restarts, resets,
+  extra and skipped pulls, cushions, frames trimmed from a stall's backlog, underruns, skips and the target delay.
+
+They name participants, never addresses. `IsSpeaking(participant)` is true for 250 ms after a speaker was heard, for
+talking indicators. Both read the speakers the main thread keeps, and refuse any other thread.
+
+### 3.7 In the provider
+
+Voice is off unless live multiplayer is switched on with `TOPIAFORGE_LIVE_MULTIPLAYER=1`, the switch that turns on live
+sessions. When it is off, nothing is created: no codec, no voice options, no worker thread. When it is on, the provider
+does four things:
+
+- it gives its engine `EngineOptions.Voice` with an `OpusVoiceCodec`;
+- it creates the `VoiceService` with that engine and the engine's clock, with voice off until the player turns it on;
+- it pumps voice after the live sessions and the engine;
+- it disposes voice before the live sessions and the engine shut down.
+
+### 3.8 Tests and measurements
+
+These run in the multiplayer test project, through the rig with the real codec on the provider's own copy of the
+engine, deterministic except where noted:
+
+- `VoiceServiceTests`:
+  - four players all talking;
+  - the voice shares;
+  - a late listener;
+  - a lone host coding nothing, and a host coding only for players who are Ready;
+  - nothing captured, coded or sent until voice is turned on, and nothing more once it is turned off;
+  - a reconnect and a restart, each started by its new generation;
+  - listener and server mutes;
+  - a returning speaker heard from the first frame while the session stream that announces the return is held back;
+  - a worker that gives up after ten failed steps in a row, a step that works ending a run of them: voice reports it
+    once, and every pump then drops what was queued for the worker;
+  - the talking indicator and the statistics refused off the main thread.
+- `VoiceSessionChangeTests`:
+  - a listener moving to a host whose streams carry the same generations, with its worker stalled across the move, so
+    the old session's last frames are still queued: none of them plays;
+  - a host's own buffers dropped when its session is replaced in place;
+  - the worker applying a reset among queued frames in their order, checked sample for sample;
+  - the wish to hear nobody carried to another host, alone, and made again during the join, so the new host never
+    sends a datagram;
+  - mutes the engine keeps across an in-place replacement, honoured and reported;
+  - a name muted while joining forgotten with another host, and one muted while the link was down kept by the host
+    that kept the record;
+  - mutes changed while the link is down or stalled kept through an in-place replacement, whether the reconnect or the
+    recovered link brings it, with the mute made before the outage kept too;
+  - names given while a stalled link moves to another host left behind, and a wish to hear nobody made while the link
+    is down holding from the next host's first message;
+  - names given with no host joined, at a first join or after a return to solo play, forgotten by the join;
+  - a name given from the first host's list after the second host's `JoinAccepted`, while its large snapshot is still
+    on the way, dropped at once, so the second host's own player is heard.
+- `VoiceCaptureTests`:
+  - voice activation and its hangover;
+  - push-to-talk spurts, including a held key with no samples;
+  - push-to-talk following the key, not the cadence of the capture calls;
+  - silence under a held key;
+  - stale capture after a stall;
+  - capture keeping up at 10, 20, 30 and 60 frames a second;
+  - capture and transmission refused off the main thread;
+  - capture at 44.1 and 16 kHz.
+- `VoicePlaybackTests`:
+  - the ring's order, underruns, skips, flushes and overflow;
+  - reads that allocate nothing, nor the writes beside them, through underruns, skips and a full ring, measured over a
+    warmed loop as the best of three passes; reads that call nothing that can block (checked in the IL), and finish
+    while another thread holds the stream's monitor;
+  - 800,000 reads, each reader on its own thread, beside a writer that flushes between them, on real threads;
+  - a device clock 0.5% fast and slow.
+- `VoiceSpeakerBoundTests`:
+  - a host naming 2,000 strangers, which never grows the streams past the bound, while a player who joins is heard;
+  - voice before its speaker is listed, kept for the grace, and a stream nobody lists, ended after it.
+- `VoiceStallTests`:
+  - a second's stall of the listener's worker, its main thread or the host's, which leaves no lasting delay;
+  - a paused reader, which hears nothing stale when it resumes.
+- `VoiceProviderTests`:
+  - the live switch, with voice off until it is turned on;
+  - a real worker thread, the one test that waits on the wall clock, for at most five seconds;
+  - the loss hint;
+  - a code of its own for each engine diagnostic the provider passes on, the worker's failure included.
+
+| Measurement | Result |
+| --- | --- |
+| Speech end to end, four players | 126 ms of delay; correlation 0.95 and 9.1 to 9.5 dB SNR against the input, the codec's own figure; nothing concealed, late or short |
+| One talker's uplink at the 20 kbit/s target, 5 s | 29.8 to 29.9 kbit/s on the wire; the shaper charges 22.5 to 22.6 kbit/s of the client's 32.8, and 22.9 to 23.0 once the sequence takes three bytes |
+| Three speakers relayed to one client | 90.6 to 90.7 kbit/s on the wire; the shaper charges 69.3 kbit/s of the 98.3 kbit/s share, and 70.1 to 70.2 once the sequence takes three bytes; the stream generation adds a byte to each relayed datagram |
+| A second's stall mid-speech, of the listener's worker, its main thread or the host's | 126, 126 and 146 ms of delay 0.6 s after it ends, and 126 ms for all three 2 s after |
+| Both players at 10, 15, 20, 30 and 60 frames a second | 366, 276, 226, 186 and 146 ms of delay; all capture kept but the first call's excess over 60 ms, and every coded frame sent; at 10 frames a second the first second conceals 10 frames while the jitter buffer adapts |
+| Device clock 0.5% fast, 120 s | 29 extra pulls; never ran dry; at most 71 ms waiting |
+| Device clock 0.5% slow, 120 s | 28 skipped pulls; never skipped audio; at most 117 ms waiting |

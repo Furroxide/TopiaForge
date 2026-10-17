@@ -13,7 +13,7 @@ namespace TopiaForge.Multiplayer
     /// player is the host, and canonical work runs inline. Calls made on the provider itself use its own owner
     /// partition, which no consuming mod can reach.
     /// </summary>
-    internal sealed class MultiplayerProvider : IMultiplayerSession, IOwnerBoundExtensionFactory, IDisposable
+    internal sealed partial class MultiplayerProvider : IMultiplayerSession, IOwnerBoundExtensionFactory, IDisposable
     {
         internal const string LocalParticipantId = "local";
         internal const string LocalDisplayName = "Local player";
@@ -30,7 +30,7 @@ namespace TopiaForge.Multiplayer
             if (!ProtocolLimits.IsValidIdentity(providerModId)) throw new ArgumentException("A provider mod id is required.", nameof(providerModId));
             this.providerModId = providerModId;
             this.clockMicros = clockMicros ?? MonotonicMicros;
-            var options = new EngineOptions { Diagnostics = diagnostics };
+            var options = new EngineOptions { Diagnostics = diagnostics, Voice = CreateVoiceOptions() };
             engine = SessionEngine.CreateHost(
                 options,
                 MultiplayerProcessKind.Interactive,
@@ -39,6 +39,7 @@ namespace TopiaForge.Multiplayer
                 new ParticipantId(LocalParticipantId),
                 LocalDisplayName,
                 this.clockMicros());
+            voice = StartVoice(diagnostics);
             reserved = engine.CreateFacade(providerModId);
             if (live != null)
             {
@@ -72,7 +73,9 @@ namespace TopiaForge.Multiplayer
         {
             if (disposed) return;
             Live?.Pump();
-            engine.Pump(clockMicros());
+            var now = clockMicros();
+            engine.Pump(now);
+            voice?.Pump(now);
         }
 
         /// <summary>Sends what the frame queued after <see cref="Pump"/>, at the frame's end.</summary>
@@ -195,6 +198,7 @@ namespace TopiaForge.Multiplayer
         {
             if (disposed) return;
             disposed = true;
+            voice?.Dispose();
             Live?.Dispose();
             engine.Shutdown(MultiplayerSessionEndReason.HostEnded);
         }

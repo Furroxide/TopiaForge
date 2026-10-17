@@ -173,6 +173,7 @@ namespace TopiaForge.Multiplayer.Engine
                     break;
                 case MessageType.ParticipantsChanged:
                     clientParticipants = SessionMessages.ReadParticipants(body);
+                    NoteListedHost(current);
                     MarkSessionChanged(participantsChanged: true);
                     break;
                 case MessageType.StateDelta:
@@ -638,6 +639,7 @@ namespace TopiaForge.Multiplayer.Engine
                 if (lost.Link.State != EngineLinkState.Closed) lost.Link.Close();
                 CountUnsentSystem(lost);
                 systemGeneration++;
+                NoteUnansweredJoin(lost);
             }
 
             ResetClientVoice();
