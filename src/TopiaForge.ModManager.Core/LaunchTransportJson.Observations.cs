@@ -43,18 +43,22 @@ namespace TopiaForge.ModManager.Core
                 value.String("packageSetDigest"), value.Integer("observationRevision"), worlds, availability);
         }
 
-        private static string ProgressJson(LaunchProgress progress) => Object(Pair("schemaVersion", "1"), Pair("requestId", Quote(progress.RequestId)),
+        // Version 2 is a session launch's; version 1 stays exactly as it was (LaunchTransportJson.Session.cs).
+        private static string ProgressJson(LaunchProgress progress) => progress.Session != null ? SessionProgressJson(progress) : Object(
+            Pair("schemaVersion", "1"), Pair("requestId", Quote(progress.RequestId)),
             Pair("sequence", Number(progress.Sequence)), Pair("phase", Quote(progress.Phase)), Optional("sessionId", progress.SessionId),
             progress.NativeBusy.HasValue ? Pair("nativeBusy", Boolean(progress.NativeBusy.Value)) : null);
 
         private static LaunchProgress ParseProgress(string json)
         {
+            if (SchemaVersionOf(json) == LaunchProgress.SessionSchemaVersion) return ParseSessionProgress(json);
             var value = new Fields(json, "schemaVersion", "requestId", "sequence", "phase", "sessionId", "nativeBusy");
             value.Version(1);
             return new LaunchProgress(value.String("requestId"), value.Integer("sequence"), value.String("phase"), value.OptionalString("sessionId"), value.OptionalBool("nativeBusy"));
         }
 
-        private static string OutcomeJson(LaunchOutcome outcome) => Object(Pair("schemaVersion", "1"), Pair("kind", Quote(outcome.Kind)),
+        private static string OutcomeJson(LaunchOutcome outcome) => outcome.Multiplayer != null ? SessionOutcomeJson(outcome) : Object(
+            Pair("schemaVersion", "1"), Pair("kind", Quote(outcome.Kind)),
             Pair("requestId", Quote(outcome.RequestId)), Pair("sequence", Number(outcome.Sequence)), Pair("phase", Quote(outcome.Phase)),
             Pair("status", Quote(outcome.Status)), Pair("blocks", BlocksJson(outcome.Blocks)), Optional("sessionId", outcome.SessionId),
             Optional("command", outcome.Command), outcome.Error == null ? null : Pair("error", Object(
@@ -62,6 +66,7 @@ namespace TopiaForge.ModManager.Core
 
         private static LaunchOutcome ParseOutcome(string json)
         {
+            if (SchemaVersionOf(json) == LaunchOutcome.SessionSchemaVersion) return ParseSessionOutcome(json);
             var value = new Fields(json, "schemaVersion", "kind", "requestId", "sequence", "phase", "status", "blocks", "sessionId", "command", "error");
             value.Version(1);
             LaunchExecutionError? error = null;

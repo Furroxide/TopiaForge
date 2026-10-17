@@ -305,6 +305,20 @@ Explicit main-menu overrides remembered autoload; Safe Mode uses main-menu and a
 empty package set. Only direct startup without a launcher command may use the
 manager's remembered choice.
 
+Only a launch that hosts or joins a multiplayer session writes version 5: the same
+profile, packages and plan, a `host-session` or `join-session` command, and the
+session to host or join. Every other launch, Safe Mode, acceptance and the CLI
+still write version 4, byte for byte. A join never carries a plan or inherits the
+manager's mod state, passwords are typed in game and never staged, and a direct
+target beyond the local network needs the player's consent to direct play for that
+session. Session launches report progress and outcomes version 2. The session names
+its role, intent and display name, its transport (privacy, port, UPnP and LAN), the
+control-plane origin, and a host's options or a join's target, which is pinned by
+the server id, descriptor hash and package digest the launcher verified. While the
+session runs, the launcher and the game exchange handoffs, live joins and the
+player's multiplayer preferences through files in manager staging; none of them
+names an address.
+
 Versioned runtime observations replace `catalog.json`. Their profile/revision,
 producer package and package digest must match installed content. Observations can
 supply discovered instances and availability reasons, but cannot add targets or

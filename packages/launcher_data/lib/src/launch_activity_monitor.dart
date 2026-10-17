@@ -70,7 +70,7 @@ final class LaunchActivityMonitor {
           processExited: true,
           unconfirmed:
               next.launchOutcome == null ||
-              next.command == 'launch-target' && next.sessionOutcome == null,
+              next.expectsTerminalOutcome && next.sessionOutcome == null,
         );
         _finished = true;
       }

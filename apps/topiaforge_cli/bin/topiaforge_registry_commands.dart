@@ -21,11 +21,20 @@ extension _RegistryCommands on _TopiaForgeCli {
     final repository = _option(args, '--repository') ?? '';
     final packagesDir = _option(args, '--dir') ?? '';
     final output = _option(args, '--output');
-    if (output == null || (repository.isEmpty == packagesDir.isEmpty)) {
+    final historyText = _option(args, '--history-manifests');
+    final historyManifests = historyText == null
+        ? ModRegistryIndexConfig.defaultHistoryManifests
+        : int.tryParse(historyText);
+    if (output == null ||
+        (repository.isEmpty == packagesDir.isEmpty) ||
+        historyManifests == null ||
+        historyManifests < 0 ||
+        historyManifests > ModRegistryIndexConfig.maximumHistoryManifests ||
+        (historyText != null && !RegExp(r'^[0-9]+$').hasMatch(historyText))) {
       throw UsageError(
         'Usage: topiaforge registry index (--repository owner/name | --dir packages) '
         '--output path [--entries registry] [--changelogs mods] '
-        '[--base-url url] [--include-prerelease]',
+        '[--base-url url] [--include-prerelease] [--history-manifests 0..1000]',
       );
     }
 
@@ -37,6 +46,7 @@ extension _RegistryCommands on _TopiaForgeCli {
       changelogsDirectory: _option(args, '--changelogs') ?? '',
       baseUrl: _option(args, '--base-url') ?? '',
       includePrerelease: args.contains('--include-prerelease'),
+      historyManifests: historyManifests,
     );
 
     HttpGitHubReleaseClient? client;
@@ -228,7 +238,10 @@ extension _RegistryCommands on _TopiaForgeCli {
     stdout.writeln(
       '      Build an index.json (options: --entries, --changelogs, --base-url,',
     );
-    stdout.writeln('      --include-prerelease).');
+    stdout.writeln(
+      '      --include-prerelease, --history-manifests n: manifests for the n',
+    );
+    stdout.writeln('      newest older versions of each mod, 20 by default).');
     stdout.writeln(
       '  topiaforge registry validate [--only file] [--offline] [--publication --previous-entries dir]',
     );

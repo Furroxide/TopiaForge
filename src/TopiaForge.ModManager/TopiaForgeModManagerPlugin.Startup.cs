@@ -13,10 +13,15 @@ namespace TopiaForge.ModManager
         private bool rejectedLauncherCommand;
         private LaunchRequestCorrelation? rejectedCorrelation;
         private string rejectionReason = string.Empty;
+        private ProfileLaunchConfigurationV5? launchSession;
+        private LaunchSessionOffering? launchSessionOffering;
+        private string? launchSessionRefusal;
 
         private void AdmitStartup()
         {
             launchStaging = new LaunchStagingStore(paths);
+            // A join claim a crashed process left behind holds no address; the sweep never throws.
+            launchStaging.SweepStaleClaims();
             var acceptanceRequest = Environment.GetEnvironmentVariable(AcceptanceIsolationGate.EnvironmentVariable);
             if (acceptanceRequest == null) return;
             launchProfile = launchStaging.AdmitAcceptance(acceptanceRequest,
@@ -35,8 +40,11 @@ namespace TopiaForge.ModManager
             if (!hasLauncherCommand) return null;
             try
             {
-                var request = launchStaging.ConsumeRequest(configuredPath!);
-                managerLogger.Info("Using one-shot V4 launch profile " + request.ProfileId + " request " + request.RequestId + ".");
+                var consumed = launchStaging.ConsumeLaunchRequest(configuredPath!);
+                var request = consumed.Profile;
+                launchSession = consumed.SessionRequest;
+                // The session's target is never logged: a direct target is an address.
+                managerLogger.Info(consumed.Describe());
                 return request;
             }
             catch (Exception error)
@@ -48,6 +56,37 @@ namespace TopiaForge.ModManager
                 return null;
             }
         }
+
+        /// <summary>Hands a V5 request's session to the multiplayer provider, unless the command was rejected or recovery runs.</summary>
+        private void OfferLaunchSession()
+        {
+            if (launchSession == null) return;
+            if (rejectedLauncherCommand || startupSelection.SafeMode)
+            {
+                managerLogger.Warn("The session launch was not offered to the multiplayer provider: this process starts in recovery.");
+                // A rejected command is reported as rejected; crash recovery would otherwise report nothing at all.
+                if (!rejectedLauncherCommand)
+                    launchSessionRefusal = "The game started in recovery after a crash, so it did not " + launchSession.Session.Role
+                        + " the session.";
+                return;
+            }
+
+            launchSessionOffering = LaunchSessionOffer.Offer(launchSession.Session);
+            managerLogger.Info("Offered the " + launchSession.Session.Role + " session to the multiplayer provider.");
+        }
+
+        /// <summary>Withdraws a session ticket the provider did not take while mods loaded.</summary>
+        private void WithdrawLaunchSession()
+        {
+            var offering = launchSessionOffering;
+            launchSessionOffering = null;
+            if (offering != null && offering.Withdraw())
+                managerLogger.Info("The multiplayer provider did not take the session launch during startup; it was withdrawn.");
+        }
+
+        /// <summary>The identity a session launch's records are published under, from its request or its rejected correlation.</summary>
+        private LaunchSessionIdentity? LaunchSessionIdentityForPublication() =>
+            launchSession != null ? LaunchSessionIdentity.Of(launchSession) : rejectedCorrelation?.Session;
 
         private void ApplyStartupRecovery()
         {

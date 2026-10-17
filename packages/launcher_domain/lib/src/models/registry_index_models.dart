@@ -30,6 +30,9 @@ class ModRegistryFormat {
   /// oversized submissions are rejected before players ever see them.
   static const maxPackageBytes = 512 * 1024 * 1024;
 
+  /// The largest index a launcher reads; the index builder writes no larger.
+  static const maxIndexBytes = 16 * 1024 * 1024;
+
   /// Community entries may not claim these first-party namespaces.
   static const reservedIdPrefixes = ['io.github.furroxide.topiaforge.'];
 }
@@ -37,6 +40,10 @@ class ModRegistryFormat {
 /// One prior version of a mod in the published index (`history` array) or a
 /// non-latest version of a community entry. Ignored by launchers that only
 /// understand the flat `mods` list — the field is purely additive.
+///
+/// The index builder inlines the [manifest] and archive size ([packageBytes])
+/// of the newest history versions, so a launcher can install the exact one a
+/// server runs. Such rows never become catalog tiles.
 class RegistryVersionRef {
   RegistryVersionRef({
     required this.version,
@@ -44,6 +51,8 @@ class RegistryVersionRef {
     required this.packageSha256,
     this.changelog = '',
     this.publishedAt = '',
+    this.manifest,
+    this.packageBytes,
     Map<String, Object?> extraFields = const {},
   }) : extraFields = _withoutKnownRegistryFields(
          extraFields,
@@ -55,6 +64,12 @@ class RegistryVersionRef {
   final String packageSha256;
   final String changelog;
   final String publishedAt;
+
+  /// The version's full `topiaforge.mod.json`, when the index inlines it.
+  final ModManifest? manifest;
+
+  /// The archive's size in bytes, when the index states it.
+  final int? packageBytes;
   final Map<String, Object?> extraFields;
 
   factory RegistryVersionRef.fromJson(Map<String, Object?> json) {
@@ -64,6 +79,13 @@ class RegistryVersionRef {
       packageSha256: _lowercaseSha(json['packageSha256']),
       changelog: (json['changelog'] as String?) ?? '',
       publishedAt: (json['publishedAt'] as String?) ?? '',
+      manifest: _historyManifest(_objectMap(json['manifest'])),
+      packageBytes: switch (json['packageBytes']) {
+        final int bytes
+            when bytes >= 0 && bytes <= ModRegistryFormat.maxPackageBytes =>
+          bytes,
+        _ => null,
+      },
       extraFields: _unknownRegistryFields(json, _registryVersionRefKeys),
     );
   }
@@ -75,6 +97,8 @@ class RegistryVersionRef {
     'packageSha256': packageSha256.toLowerCase(),
     if (changelog.isNotEmpty) 'changelog': changelog,
     if (publishedAt.isNotEmpty) 'publishedAt': publishedAt,
+    if (manifest != null) 'manifest': manifest!.toJson(),
+    if (packageBytes != null) 'packageBytes': packageBytes,
   };
 }
 
@@ -362,6 +386,17 @@ class RegistryEntryFile {
   }
 }
 
+/// A history row's inlined manifest, or null when there is none or it does
+/// not read, whatever the fault: the row then stays out of exact installs.
+ModManifest? _historyManifest(Map<String, Object?> json) {
+  if (json.isEmpty) return null;
+  try {
+    return ModManifest.fromJson(json);
+  } on Object {
+    return null;
+  }
+}
+
 String _lowercaseSha(Object? value) {
   return (value is String ? value : '').trim().toLowerCase();
 }
@@ -435,6 +470,8 @@ const _registryVersionRefKeys = {
   'packageSha256',
   'changelog',
   'publishedAt',
+  'manifest',
+  'packageBytes',
 };
 const _registryIndexEntryKeys = {
   'manifest',

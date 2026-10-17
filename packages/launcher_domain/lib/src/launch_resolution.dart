@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'models.dart';
+import 'multiplayer.dart';
 import 'versioning.dart';
 
 part 'launch_resolution/launch_resolver.dart';
@@ -17,6 +18,15 @@ part 'launch_resolution/owner_index.dart';
 part 'launch_resolution/launch_preview_builder.dart';
 part 'launch_resolution/legacy_selection_resolution.dart';
 part 'launch_resolution/launch_block_messages.dart';
+part 'launch_resolution/session_values.dart';
+part 'launch_resolution/session_targets.dart';
+part 'launch_resolution/session_request.dart';
+part 'launch_resolution/profile_transport_v5.dart';
+part 'launch_resolution/session_outputs.dart';
+part 'launch_resolution/session_channels.dart';
+part 'launch_resolution/session_preferences.dart';
+part 'launch_resolution/session_journal.dart';
+part 'launch_resolution/session_preferences_sync.dart';
 
 /// Shared, closed resolution reasons. Ordering uses their ordinal wire names.
 enum LaunchBlockCode {

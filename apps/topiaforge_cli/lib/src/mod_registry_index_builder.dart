@@ -32,7 +32,14 @@ class ModRegistryIndexConfig {
     this.baseUrl = '',
     this.includePrerelease = false,
     this.registryName = 'TopiaForge Mod Registry',
+    this.historyManifests = defaultHistoryManifests,
   });
+
+  /// How many history versions per mod carry their manifest by default.
+  static const defaultHistoryManifests = 20;
+
+  /// The most history manifests a mod may carry.
+  static const maximumHistoryManifests = 1000;
 
   final String outputDirectory;
 
@@ -56,6 +63,12 @@ class ModRegistryIndexConfig {
 
   final bool includePrerelease;
   final String registryName;
+
+  /// How many of each mod's newest history versions carry their full
+  /// manifest (and, for first-party packages, their size), so a launcher can
+  /// install the exact version a multiplayer server runs. Zero inlines none;
+  /// older rows keep only version, URL and SHA-256.
+  final int historyManifests;
 }
 
 class ModRegistryIndexResult {
@@ -71,16 +84,30 @@ class ModRegistryIndexResult {
 }
 
 class ModRegistryIndexBuilder {
+  /// [maxIndexBytes] is the largest index the builder writes: by default the
+  /// [ModRegistryFormat.maxIndexBytes] a launcher reads.
   ModRegistryIndexBuilder({
     GitHubReleaseClient? client,
     DateTime Function()? clock,
+    int maxIndexBytes = ModRegistryFormat.maxIndexBytes,
   }) : _client = client,
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _maxIndexBytes = maxIndexBytes;
 
   final GitHubReleaseClient? _client;
   final DateTime Function() _clock;
+  final int _maxIndexBytes;
 
   Future<ModRegistryIndexResult> build(ModRegistryIndexConfig config) async {
+    if (config.historyManifests < 0 ||
+        config.historyManifests >
+            ModRegistryIndexConfig.maximumHistoryManifests) {
+      throw ArgumentError.value(
+        config.historyManifests,
+        'historyManifests',
+        'Must be 0 to ${ModRegistryIndexConfig.maximumHistoryManifests}.',
+      );
+    }
     final hasRepository = config.repository.trim().isNotEmpty;
     final hasDirectory = config.packagesDirectory.trim().isNotEmpty;
     if (hasRepository == hasDirectory) {
@@ -97,12 +124,17 @@ class ModRegistryIndexBuilder {
     final community = _loadCommunityEntries(
       config.entriesDirectory,
       firstPartyIds: firstParty.keys.toSet(),
+      historyManifests: config.historyManifests,
     );
 
     final mods =
         [
           ...firstParty.values.map(
-            (versions) => _indexEntry(versions, 'first-party'),
+            (versions) => _indexEntry(
+              versions,
+              'first-party',
+              historyManifests: config.historyManifests,
+            ),
           ),
           ...community,
         ]..sort(
@@ -111,8 +143,6 @@ class ModRegistryIndexBuilder {
           ),
         );
 
-    final output = createAtomicStagingDirectory(config.outputDirectory);
-    final indexPath = p.join(output.path, 'index.json');
     final index = <String, Object?>{
       r'$schema': ModRegistryFormat.canonicalIndexSchemaUrl,
       'formatVersion': ModRegistryFormat.indexFormatVersion,
@@ -122,9 +152,20 @@ class ModRegistryIndexBuilder {
         'sourceRepository': 'https://github.com/${config.repository.trim()}',
       'mods': mods.map((entry) => entry.toJson()).toList(),
     };
-    final json = const JsonEncoder.withIndent('  ').convert(index);
+    final json = '${const JsonEncoder.withIndent('  ').convert(index)}\n';
+    // A launcher refuses a larger index whole, so never publish one.
+    final size = utf8.encode(json).length;
+    if (size > _maxIndexBytes) {
+      throw StateError(
+        'The registry index would be $size bytes, more than the '
+        '$_maxIndexBytes a launcher reads. Lower --history-manifests or '
+        'split the registry.',
+      );
+    }
+    final output = createAtomicStagingDirectory(config.outputDirectory);
+    final indexPath = p.join(output.path, 'index.json');
     try {
-      await File(indexPath).writeAsString('$json\n');
+      await File(indexPath).writeAsString(json);
       await File(p.join(output.path, '.nojekyll')).writeAsString('');
       publishAtomicDirectory(output, config.outputDirectory);
       return ModRegistryIndexResult(
@@ -140,8 +181,9 @@ class ModRegistryIndexBuilder {
 
   RegistryIndexEntry _indexEntry(
     List<_CollectedVersion> versions,
-    String origin,
-  ) {
+    String origin, {
+    required int historyManifests,
+  }) {
     final latest = _latestOf(versions);
     final history = versions.where((item) => !identical(item, latest)).toList()
       ..sort(
@@ -155,12 +197,16 @@ class ModRegistryIndexBuilder {
       origin: origin,
       publishedAt: latest.publishedAt,
       history: [
-        for (final version in history)
+        for (final (index, version) in history.indexed)
           RegistryVersionRef(
             version: version.manifest.version,
             downloadUrl: version.downloadUrl,
             packageSha256: version.packageSha256,
             publishedAt: version.publishedAt,
+            manifest: index < historyManifests ? version.manifest : null,
+            packageBytes: index < historyManifests
+                ? version.packageBytes
+                : null,
           ),
       ],
     );

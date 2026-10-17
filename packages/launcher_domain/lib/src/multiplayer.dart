@@ -35,6 +35,7 @@ part 'multiplayer/server_listing.dart';
 part 'multiplayer/server_bookmarks.dart';
 part 'multiplayer/multiplayer_settings.dart';
 part 'multiplayer/join_package_resolution.dart';
+part 'multiplayer/exact_package_resolution.dart';
 part 'multiplayer/join_plan.dart';
 part 'multiplayer/join_planner.dart';
 part 'multiplayer/join_planner_checks.dart';

@@ -465,6 +465,10 @@ namespace TopiaForge.ModManager.Tests
                 UiKitSourceConventionTests.Run();
                 UiKitMultiplayerConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
+                LaunchSessionFixtureTests.Run(FindRepoRoot());
+                LaunchSessionContractTests.Run(FindRepoRoot());
+                RuntimeSessionPublicationTests.Run(Path.Combine(root, "runtime-session-publication"));
+                LaunchSessionStagingTests.Run(FindRepoRoot());
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

@@ -106,6 +106,7 @@ namespace TopiaForge.ModManager
                     { rejectedLauncherCommand = true; rejectionReason = stateStore.Failure; }
                 }
                 ApplyStartupRecovery();
+                OfferLaunchSession();
                 try
                 {
                     if (CanSaveState) registry.ApplyPendingUninstalls(paths, state);
@@ -144,11 +145,14 @@ namespace TopiaForge.ModManager
                 runtime.ActivateSessionRuntime(selection.Profile, rejectedSelections: selection.RejectedSelections);
                 launchPublisher = new RuntimeLaunchPublisher(runtime.Sessions, launchStaging,
                     launchProfile?.RequestId ?? rejectedCorrelation?.RequestId,
-                    error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."));
+                    error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."),
+                    session: LaunchSessionIdentityForPublication(), sessionRefusal: launchSessionRefusal);
                 initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
                 PublishRuntimeObservations();
                 // Every selected package now has a binding result, including failed owners.
                 ArmWorldLaunch();
+                // The provider takes its session ticket while mods load; no one takes it later.
+                WithdrawLaunchSession();
                 RecordStartupStage("mod-loading", stageStart);
                 if (!hasLauncherCommand)
                 {
@@ -180,6 +184,7 @@ namespace TopiaForge.ModManager
                 // Stay inert (ready == false) rather than crashing the game. OnDestroy still unloads any mods
                 // that did load before the failure (it gates on runtime, not ready).
                 managerLogger.Error(ex, "TopiaForge failed to initialize.");
+                WithdrawLaunchSession();
                 WriteLastRunReport(ex);
             }
         }

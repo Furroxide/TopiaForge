@@ -72,7 +72,8 @@ namespace TopiaForge.ModManager
                     if (rejectedLauncherCommand)
                     {
                         var rejectedId = launchProfile?.RequestId ?? rejectedCorrelation?.RequestId;
-                        var rejectedCommand = launchProfile?.Command ?? rejectedCorrelation?.Command;
+                        // A rejected V5 request returns to the main menu; the publisher reports it as the session launch it was.
+                        var rejectedCommand = launchProfile?.Command ?? rejectedCorrelation?.ExecutableCommand;
                         if (rejectedId != null && rejectedCommand != null)
                             await runtime.Sessions.RejectCommandAsync(rejectedId, rejectedCommand,
                                 ModErrorCode.InvalidArgument, "The launcher request was rejected: " + rejectionReason);

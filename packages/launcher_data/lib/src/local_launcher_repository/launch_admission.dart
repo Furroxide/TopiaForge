@@ -42,6 +42,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
     LauncherProfile source, {
     LaunchSelection? selectionOverride,
     required bool restart,
+    LaunchSessionRequest? session,
   }) async {
     if (_disposed) {
       return const LaunchResult(
@@ -149,6 +150,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
         current,
         profile,
         selectionOverride: selectionOverride,
+        session: session,
         message: profile.launchSettings.safeMode
             ? 'Started TopiaForge process in Safe Mode for this run only.'
             : restart

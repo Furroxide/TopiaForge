@@ -214,10 +214,14 @@ launcher, and TypeScript in the control plane.
 | `lan/` | Beacon bytes, session info, and invalid forms of each |
 | `secrets/` | PBKDF2-HMAC-SHA256 vectors from RFC 7914, password proofs (including composed and decomposed Unicode), and player keys |
 | `control-plane/` | HTTP exchanges and a signaling transcript for the control plane's clients ([ControlPlaneApi.md](ControlPlaneApi.md), section 11) |
+| `launch-v5/` | Session launch requests with their exact bytes and a reordered form, and invalid requests, direct targets that lack consent included ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md)) |
+| `progress-v2/` | Session progress and outcomes, the failure and end-reason names, and invalid forms of each |
+| `channels/` | Session handoffs, live joins, the preferences projection and its journal, invalid forms of each, and how journals apply |
 
 An independent Python and OpenSSL implementation generated them, from fixed seeds, so they repeat exactly. Ed25519 is
 deterministic, so signing a valid case's descriptor with its key must reproduce the served bytes. The `control-plane/`
-files are the exception: the service's own tests record them, with a fixed clock and seeded randomness.
+files are the exception: the service's own tests record them, with a fixed clock and seeded randomness. The three
+session-launch folders come from `generate_launch.py`, which uses no randomness; the manager's tests replay them in C#.
 
 ## 10. Tests
 
@@ -549,6 +553,12 @@ and it is off by default:
 
 Progress is logged by phase and reason, never by address. The switch never allows direct play, so a joining player
 reaches LAN addresses only.
+
+The launcher's session launches (request V5, `MultiplayerLaunchContract.md`) reach the provider as a ticket the runtime
+offers before mods load. `MultiplayerProvider.TakeLaunchSession` takes it once, while mods load, and plans it: host
+settings, or a join target pinned by the server the launcher verified, so the join never repeats trust on first use.
+The runtime withdraws a ticket no one took once mods have loaded. Planning starts nothing: the in-game flows of WS5,
+which replace the developer switch, start the planned session.
 
 These choices differ from the plan:
 
