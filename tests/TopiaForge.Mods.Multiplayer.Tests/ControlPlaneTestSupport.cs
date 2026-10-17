@@ -31,6 +31,53 @@ internal sealed class RecordingTransport : IControlPlaneTransport
     }
 }
 
+/// <summary>
+/// A slow network in front of a service: the service takes each held request at once, as the real one does once its
+/// bytes arrive, but the answer waits until <see cref="Release"/>. A caller that gives up first gets Cancelled, as the
+/// HTTPS transport reports a request whose answer it stopped reading, while the service keeps what it did.
+/// </summary>
+internal sealed class HeldAnswerTransport : IControlPlaneTransport
+{
+    private readonly IControlPlaneTransport service;
+    private readonly Func<ControlPlaneRequest, bool> held;
+    private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int holding;
+    private int cancelled;
+
+    internal HeldAnswerTransport(IControlPlaneTransport service, Func<ControlPlaneRequest, bool> held)
+    {
+        this.service = service;
+        this.held = held;
+    }
+
+    /// <summary>Gets whether a held request reached the service and its answer is waiting.</summary>
+    internal bool Holding => Volatile.Read(ref holding) > 0;
+
+    /// <summary>Gets how many held answers their callers gave up on.</summary>
+    internal int Cancelled => Volatile.Read(ref cancelled);
+
+    /// <summary>Lets every held answer, and every later one, through.</summary>
+    internal void Release() => released.TrySetResult();
+
+    public async Task<ControlPlaneResponse> SendAsync(ControlPlaneRequest request, CancellationToken cancellation)
+    {
+        if (!held(request) || released.Task.IsCompleted) return await service.SendAsync(request, cancellation).ConfigureAwait(false);
+        var answer = await service.SendAsync(request, CancellationToken.None).ConfigureAwait(false);
+        var givenUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Interlocked.Increment(ref holding);
+        using (cancellation.Register(() => givenUp.TrySetResult()))
+        {
+            if (await Task.WhenAny(released.Task, givenUp.Task).ConfigureAwait(false) != released.Task)
+            {
+                Interlocked.Increment(ref cancelled);
+                return ControlPlaneResponse.Failed(ControlPlaneTransportFailure.Cancelled);
+            }
+        }
+
+        return answer;
+    }
+}
+
 /// <summary>The shared control-plane fixtures, read as the service recorded them.</summary>
 internal static class ControlPlaneFixtures
 {

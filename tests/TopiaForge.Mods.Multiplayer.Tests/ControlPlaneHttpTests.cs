@@ -42,6 +42,17 @@ internal static class ControlPlaneHttpTests
             "more than 64 headers are refused");
         var exact = Answer("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4096\r\n\r\n" + new string('y', 4096));
         That(exact.Succeeded && exact.Body.Length == 4096 && exact.IsJson, "a body exactly at the bound is read whole");
+
+        // A chunked body inside its bound, sent a byte at a time behind long extensions: its framing has a budget too, so
+        // the answer never costs the wire more than twice its bound and a header block.
+        var padded = new StringBuilder("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n");
+        for (var index = 0; index < 4096; index++) padded.Append("1;").Append(new string('e', 24)).Append("\r\ny\r\n");
+        var refused = Answer(padded.Append("0\r\n\r\n").ToString());
+        That(!refused.Succeeded, "a chunked body whose framing outweighs its bound is refused (" + refused + ")");
+        var small = new StringBuilder("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n");
+        for (var index = 0; index < 64; index++) small.Append("40;n=").Append(index).Append("\r\n").Append(new string('y', 64)).Append("\r\n");
+        var chunks = Answer(small.Append("0\r\nX-Trailer: 1\r\n\r\n").ToString());
+        That(chunks.Succeeded && chunks.Body.Length == 4096, "while a full body in many small chunks, as servers send them, reads whole (" + chunks + ")");
     }
 
     internal static void MalformedAnswersAreRefused()

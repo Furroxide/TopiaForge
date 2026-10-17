@@ -131,7 +131,9 @@ namespace TopiaForge.Multiplayer.ControlPlane
 
             if (ServiceErrors.IsTransient(result.Failure) || result.Failure == ServiceFailure.RateLimited)
             {
-                // Tried again after the next heartbeat; a descriptor the service refuses outright is not sent again.
+                // Tried again after the next heartbeat, and never sooner than a delay the service named; a descriptor the
+                // service refuses outright is not sent again.
+                descriptorAt = Math.Max(heartbeatAt, now + ((result.RetryAfterSeconds ?? 0) * 1_000_000L));
                 return;
             }
 

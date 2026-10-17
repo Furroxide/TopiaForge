@@ -61,6 +61,24 @@ internal static class InternetHostingTests
                 "and the third registers");
         }
 
+        // A rate limit from the platform in front of the service, a page and not the service's own error, is still one.
+        using (var rig = new InternetRig(7_212))
+        {
+            var host = rig.AddPeer("host", NatBehaviour.FullCone, "198.51.100.122", "192.168.1.122");
+            var refusals = 0;
+            rig.Service.Hostile = request => request.Path == "/v1/hosts" && refusals++ < 1
+                ? ControlPlaneResponse.Answered(429, Encoding.ASCII.GetBytes("<html>error 1015: you are being rate limited</html>"), false, 12)
+                : null;
+            That(host.Control.StartHosting(new InternalHostSettings("Sam's Sandbox", 4, InternalSessionVisibility.Public)).Succeeded, "hosting starts");
+            That(rig.Run(() => host.Internet.ListingPhase == InternalListingPhase.Retrying || host.Internet.ListingPhase == InternalListingPhase.Failed, 10_000_000) &&
+                 host.Internet.ListingPhase == InternalListingPhase.Retrying &&
+                 host.Internet.ListingFailure == InternalLiveFailure.ServiceRateLimited && host.Internet.RetryAfterSeconds == 12,
+                "a platform's rate-limit page is a rate limit with its delay, not a refusal (" + host.Internet.ListingPhase + ", " + host.Internet.ListingFailure + ")");
+            var refusedAt = rig.Now;
+            That(rig.Run(() => host.Internet.ListingPhase == InternalListingPhase.Online, 60_000_000) && rig.Now - refusedAt >= 12_000_000,
+                "and the host registers once the delay is over");
+        }
+
         // A 503 that names a delay is honoured as a rate limit is, over the host's own shorter backoff, from a fresh challenge.
         using (var rig = new InternetRig(7_209))
         {
@@ -187,6 +205,64 @@ internal static class InternetHostingTests
         That(rig.Run(() => rig.Service.Count("PUT", "/descriptor") == 1, 40_000_000), "a new world is published to the service");
         var listed = rig.Service.Sessions[serverId].Signed.Descriptor;
         That(listed.World == "Night City" && listed.Gamemode == "Zombies", "and the service lists the newer descriptor");
+
+        // The service turns the next one away for now: it is sent again after a heartbeat, never sooner than the delay the
+        // service named, and never frame after frame.
+        int Puts() => rig.Service.Count("PUT", "/descriptor");
+        int Beats() => rig.Service.Count("POST", "/heartbeat");
+        var puts = Puts();
+        rig.Service.Hostile = request => request.Method == ControlPlaneMethod.Put ? rig.Service.Error("rate-limited", 45) : null;
+        host.Provider.Live!.Host!.UpdateWorld("Zombies", "Day City");
+        var limitedAt = rig.Now;
+        rig.Run(() => false, 30_000_000);
+        That(Puts() - puts == 1, "a rate-limited descriptor waits the delay the service named (" + (Puts() - puts) + " sent in 30 s)");
+        That(rig.Run(() => Puts() - puts == 2, 60_000_000) && rig.Now - limitedAt >= 45_000_000, "and is sent again once the delay is over");
+        rig.Service.Hostile = request => request.Method == ControlPlaneMethod.Put ? rig.Service.Error("internal") : null;
+        puts = Puts();
+        var beats = Beats();
+        rig.Run(() => false, 90_000_000);
+        That(Puts() - puts <= Beats() - beats + 1, "a failing service gets it again at most once a heartbeat (" + (Puts() - puts) + " for " + (Beats() - beats) + " heartbeats)");
+        rig.Service.Hostile = null;
+        That(rig.Run(() => rig.Service.Sessions[serverId].Signed.Descriptor.World == "Day City", 60_000_000), "and the service lists it once it takes it");
+    }
+
+    /// <summary>
+    /// The host stops, or the game closes, while its registration's answer is still on the way: the service already holds
+    /// the listing, and only that answer's token can delete it, so stopping lets the registration land and then deletes.
+    /// </summary>
+    internal static void AStopWhileRegisteringStillDeletesTheListing()
+    {
+        using (var rig = new InternetRig(7_210))
+        {
+            var held = new HeldAnswerTransport(rig.Service, request => request.Path == "/v1/hosts");
+            rig.WrapTransport = _ => held;
+            var host = rig.AddPeer("host", NatBehaviour.FullCone, "198.51.100.185", "192.168.1.185");
+            That(host.Control.StartHosting(new InternalHostSettings("Sam's Sandbox", 4, InternalSessionVisibility.Public)).Succeeded, "hosting starts");
+            That(rig.Run(() => held.Holding, 10_000_000), "the service takes the registration while its answer is still on the way");
+            var serverId = rig.Service.Sessions.Keys.Single();
+            That(rig.Service.IsListed(serverId), "so the server is listed already");
+            host.Control.StopHosting();
+            held.Release();
+            That(rig.Run(() => rig.Service.Sessions[serverId].Ended, 10_000_000) && rig.Service.Count("DELETE", "/v1/hosts/" + serverId) == 1 && !rig.Service.IsListed(serverId),
+                "stopping deletes the listing once the registration lands (" + rig.Service.Count("DELETE", "/v1/hosts/" + serverId) + " deletes)");
+            That(held.Cancelled == 0 && host.Internet.ListingPhase == InternalListingPhase.Off, "and never gave the registration up");
+        }
+
+        using (var rig = new InternetRig(7_211))
+        {
+            var held = new HeldAnswerTransport(rig.Service, request => request.Path == "/v1/hosts");
+            rig.WrapTransport = _ => held;
+            var host = rig.AddPeer("host", NatBehaviour.FullCone, "198.51.100.186", "192.168.1.186");
+            That(host.Control.StartHosting(new InternalHostSettings("Sam's Sandbox", 4, InternalSessionVisibility.Invite)).Succeeded, "hosting starts");
+            That(rig.Run(() => held.Holding, 10_000_000), "the registration is on its way");
+            var serverId = rig.Service.Sessions.Keys.Single();
+
+            // The answer lands while the provider closes, inside the moment closing waits for the delete.
+            _ = Task.Delay(100).ContinueWith(_ => held.Release(), TaskScheduler.Default);
+            host.Provider.Dispose();
+            That(rig.Service.Sessions[serverId].Ended && rig.Service.Count("DELETE", "/v1/hosts/" + serverId) == 1 && held.Cancelled == 0,
+                "closing the game deletes the session the registration made, invite and all");
+        }
     }
 
     private static int LastHeartbeatPlayers(InternetRig rig)

@@ -58,7 +58,7 @@ namespace TopiaForge.Multiplayer.ControlPlane
         /// <summary>The deployment lacks its configuration (<c>service-unavailable</c>).</summary>
         ServiceMisconfigured = 40,
 
-        /// <summary>A 4xx the catalogue does not hold, or one whose code and status disagree.</summary>
+        /// <summary>A 4xx other than 429 the catalogue does not hold, or one whose code and status disagree.</summary>
         Refused = 41,
 
         /// <summary>A 5xx the catalogue does not hold, or one whose code and status disagree.</summary>
@@ -139,12 +139,14 @@ namespace TopiaForge.Multiplayer.ControlPlane
 
         /// <summary>
         /// Reads an error answer: <c>{"error":{"code","message"}}</c>, canonical JSON. A code the catalogue holds counts only
-        /// with the status the catalogue gives it; anything else falls back to the status alone. The message is never read.
+        /// with the status the catalogue gives it; anything else falls back to the status alone. A 429 is a rate limit
+        /// whatever its body says, as when the platform in front of the service writes its own page. The message is never
+        /// read.
         /// </summary>
         internal static ServiceFailure Read(ControlPlaneResponse response)
         {
             if (response == null) throw new ArgumentNullException(nameof(response));
-            var fallback = response.Status >= 500 ? ServiceFailure.Failed : ServiceFailure.Refused;
+            var fallback = response.Status >= 500 ? ServiceFailure.Failed : response.Status == 429 ? ServiceFailure.RateLimited : ServiceFailure.Refused;
             if (!response.IsJson || response.Body.Length == 0 || response.Body.Length > MaximumErrorBytes) return fallback;
             if (!CanonicalJson.TryParse(response.Body, MaximumErrorBytes, out var node, out _)) return fallback;
             if (!(node is JsonObjectNode root) || !root.TryGet("error", out var errorNode) || !(errorNode is JsonObjectNode error)) return fallback;

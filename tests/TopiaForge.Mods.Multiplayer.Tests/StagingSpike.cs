@@ -61,7 +61,7 @@ internal static class StagingSpike
 
         var serverId = registration.ServerId;
         var token = registration.SessionToken;
-        Console.WriteLine("staging: session token " + Shape(token) + ", listed " + registration.Listed + ", invite " + Shape(registration.Invite.Code));
+        Console.WriteLine("staging: session token " + Shape(token) + ", listed " + registration.Listed + ", invite of " + registration.Invite.Code.Length + " characters");
         That(!registration.Listed, "an invite-only server is not listed");
         try
         {

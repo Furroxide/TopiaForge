@@ -573,6 +573,7 @@ internal static class Program
             InternetHostingTests.HostileAnswersNeverBreakTheHost();
             InternetHostingTests.InvitesAreMadeAndWithdrawnThroughTheSpi();
             InternetHostingTests.TheDescriptorFollowsTheSessionsWorld();
+            InternetHostingTests.AStopWhileRegisteringStillDeletesTheListing();
             InternetSessionTests.AnInvitedJoinerReachesTheHostRelayOnlyThroughSymmetricNats();
             InternetSessionTests.ADirectUpgradeHappensOnlyWhenTheJoinerChoseIt();
             InternetSessionTests.AHostThatQuitsTakesItsListingWithIt();

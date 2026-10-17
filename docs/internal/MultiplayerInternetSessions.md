@@ -79,8 +79,10 @@ runtime's. The small client keeps every rule in this code, and runs the same on 
   answer, has 20 s. A service that answers a byte at a time cannot hold a request past it.
 - **The answer.** The status line and at most 64 header lines in 16 KiB, each ending in CR LF; folded or malformed
   lines are refused. The body is framed by `Content-Length`, chunked encoding or the end of the connection, and an
-  answer that names both framings is refused as ambiguous. At most four interim answers are skipped; a protocol switch
-  is refused. `Retry-After` is kept only as plain whole seconds up to 86,400.
+  answer that names both framings is refused as ambiguous. A chunked body's framing, its size lines, their extensions,
+  its line ends and its trailers, shares one budget of 16 KiB plus the body's bound, so tiny chunks behind long
+  extensions cannot make an answer cost the wire more than twice its bound and a header block. At most four interim
+  answers are skipped; a protocol switch is refused. `Retry-After` is kept only as plain whole seconds up to 86,400.
 - **Bounds.** 4 KiB for most answers, 16 KiB for relay credentials, and 576 KiB for a server's answer, which carries a
   whole signed descriptor as an escaped string.
 - **Failures.** Nothing throws out of the transport. A failure is `Unreachable`, `TimedOut`, `Tls`, `Redirected`,
@@ -101,8 +103,8 @@ Every answer is hostile input until it reads.
   whose listing agrees on both. A join ticket names this server and carries the joiner's own privacy choice: one that
   says otherwise is not this join's.
 - **Errors** are read by code and status alone. A code counts only with the status the catalogue gives it; anything
-  else is `Refused` for a 4xx and `Failed` for a 5xx. The error's message is never read, and nothing the service wrote
-  is kept, logged or shown.
+  else is `RateLimited` for a 429, whatever page the platform in front of the service wrote, `Refused` for any other
+  4xx and `Failed` for a 5xx. The error's message is never read, and nothing the service wrote is kept, logged or shown.
 - **Credentials.** Tokens, tickets, challenges and invite codes are held to their alphabets and lengths, and no type
   that holds one prints it.
 
@@ -118,7 +120,7 @@ so a LAN host never contacts the service.
 | Challenge | `POST /v1/hosts/challenge` | The proof can be signed | Retried with backoff |
 | Register | `POST /v1/hosts` | Online: a session token, the first invite, and whether the server is listed | Retried from a fresh challenge |
 | Heartbeat | `POST /v1/hosts/{id}/heartbeat` every heartbeat, with the player count | The listing is renewed | Retried within the listing's lifetime |
-| Descriptor | `PUT /v1/hosts/{id}/descriptor` when the world changes | The service lists the newer descriptor | Tried again after the next heartbeat |
+| Descriptor | `PUT /v1/hosts/{id}/descriptor` when the world changes | The service lists the newer descriptor | Tried again after the next heartbeat, and never sooner than `Retry-After` |
 | Relay | `POST /v1/turn/credentials` with the session token | NAT hosting starts | See relay-only below |
 | Stop | `DELETE /v1/hosts/{id}` | The listing, invites, tickets and signaling room end | The listing expires by itself |
 
@@ -136,8 +138,9 @@ so a LAN host never contacts the service.
   NAT hosting restarts with it, so players connected through the old registration lose their connection and join
   again with the new invite.
 - **Descriptor.** `LiveHost.UpdateWorld` signs a newer descriptor, and the next free moment publishes it. A
-  `stale-descriptor` answer means the service already holds a newer one, which stands. A descriptor the service refuses
-  outright is not sent again.
+  `stale-descriptor` answer means the service already holds a newer one, which stands. One the service turns away for
+  now, failing or rate-limited, is sent again after the next heartbeat and never sooner than a delay the service named,
+  so at most once a heartbeat. A descriptor the service refuses outright is not sent again.
 - **Invites.** Registration brings the session's first invite, valid for seven days. `CreateInvite` asks for another,
   also for seven days, which becomes the one the status shows once it lands; earlier ones keep working until they
   expire or are withdrawn. `RevokeInvite` withdraws one, and a `not-found` answer counts as done. A session holds at
@@ -147,17 +150,20 @@ so a LAN host never contacts the service.
   exist only for a host that allows direct connections, and the router is asked to forward the port only when the
   host also turned on `RouterForwarding`.
 - **Stopping.** `StopHosting` sends the delete. A registration still in flight is deleted as soon as it lands, so no
-  listing outlives the host. The NAT layer is left to the network: its links close first, so the message ending each
-  player's session still leaves through the relay, and then the network disposes the NAT layer, which says goodbye and
-  releases the relay. When the provider is disposed as the game closes, it waits up to 2 s for the delete with the last
-  saves. A game that is killed leaves its listing to expire after the listing's lifetime, 90 s on staging.
+  listing outlives the host. Stopping cancels the host's other requests but never a registration: the service may
+  already hold one whose answer is still on its way, and only that answer's token can delete it, so the registration
+  keeps its own 20 s deadline instead. The NAT layer is left to the network: its links close first, so the message
+  ending each player's session still leaves through the relay, and then the network disposes the NAT layer, which says
+  goodbye and releases the relay. When the provider is disposed as the game closes, it waits up to 2 s for the delete
+  with the last saves. A game that is killed leaves its listing to expire after the listing's lifetime, 90 s on staging.
 
 ### Backoff
 
 | Case | Wait |
 | --- | --- |
 | The first retry of a failed step | 5 s, doubling to at most 5 minutes |
-| `rate-limited` (429) | At least `Retry-After`, and at least 5 s |
+| `rate-limited`, or any other 429 | At least `Retry-After`, and at least 5 s |
+| A newer descriptor the service turns away for now | Until the next heartbeat, and at least `Retry-After` |
 | Any other refusal that names `Retry-After`, a 503 included | The longer of `Retry-After` and the host's own wait |
 | Hosting, signaling or invites turned off | 60 s, then the status is read again |
 | `server-blocked` | 15 minutes |
@@ -360,3 +366,9 @@ second in the game; every deadline in the client is at least 10 s.
 - **Public and Invite hosting without a service** are refused rather than quietly hosting on the LAN, so the player
   never believes friends can reach a session they cannot.
 - **The listing's world** follows `LiveHost.UpdateWorld`; the SPI has no member of its own for it yet.
+- **The signaling socket is the runtime's `ClientWebSocket`,** so its handshake follows each runtime's rules. Under the
+  game's Mono 6.13 it is the managed handshake over its own socket: measured in the game on 2026-10-17, it followed no
+  302 or 307 the origin answered its upgrade with, and used no proxy, whether one was set on its options or named by
+  environment variables. On .NET, where the tests and the staging spike run, it asks no proxy but does follow a redirect
+  to another ws or wss address, without the `Authorization` header. A handshake of its own over the HTTPS client's
+  connection, handed to `WebSocket.CreateFromStream`, would hold both runtimes to the HTTPS client's rules.

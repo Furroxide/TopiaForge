@@ -150,6 +150,9 @@ internal static class ControlPlaneClientTests
         That(Read(503, """{"error":{"code":"not-found","message":"x"}}""") == ServiceFailure.Failed, "nor is one that claims a 404 under a 503");
         That(Read(418, """{"error":{"code":"teapot","message":"x"}}""") == ServiceFailure.Refused, "an unknown code falls back to its status class");
         That(Read(500, "<html>busy</html>", json: false) == ServiceFailure.Failed, "a page that is not JSON is the status alone");
+        That(Read(429, "<html>error 1015: you are being rate limited</html>", json: false) == ServiceFailure.RateLimited,
+            "a 429 is a rate limit whatever page the platform in front of the service writes");
+        That(Read(429, """{"error":{"code":"not-found","message":"x"}}""") == ServiceFailure.RateLimited, "even one whose code claims something else");
         That(Read(404, """{ "error":{"code":"not-found","message":"x"}}""") == ServiceFailure.Refused, "and so is JSON that is not canonical");
         That(Read(404, """{"error":{"code":"not-found"}}""") == ServiceFailure.Refused, "or an error without its message");
         That(Read(404, "{\"error\":{\"code\":\"not-found\",\"message\":\"" + new string('x', 5000) + "\"}}") == ServiceFailure.Refused, "or one past its bound");

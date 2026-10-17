@@ -114,6 +114,12 @@ internal sealed class InternetRig : IDisposable
 
     internal List<InternetPeer> Peers { get; } = new();
 
+    /// <summary>
+    /// Gets or sets what stands between the players added next and the fake service, such as a slow network that holds
+    /// answers back; null puts nothing between them.
+    /// </summary>
+    internal Func<IControlPlaneTransport, IControlPlaneTransport>? WrapTransport { get; set; }
+
     internal long Now => Scenario.Network.Now;
 
     /// <summary>Adds a player machine at <paramref name="local"/> behind its own NAT with public address <paramref name="publicAddress"/>.</summary>
@@ -127,7 +133,7 @@ internal sealed class InternetRig : IDisposable
 
     /// <summary>The services one player reaches: the real client over the fake service, its signaling rooms, and the simulator's DNS.</summary>
     internal InternetServices ServicesFor(InternetPeer peer) => new(
-        new ControlPlaneClient(Service),
+        new ControlPlaneClient(WrapTransport?.Invoke(Service) ?? Service),
         Service.OpenSignaling,
         host => host == NatScenario.StunHost ? Task.FromResult(new[] { NatScenario.ServerAddress })
             : host == NatScenario.TurnHost ? Task.FromResult(Scenario.TurnAddresses)

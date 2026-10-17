@@ -60,6 +60,7 @@ namespace TopiaForge.Multiplayer.ControlPlane
         private string? token;
         private long nextAt;
         private long heartbeatAt;
+        private long descriptorAt;
         private long mintAt;
         private long renewedAt;
         private long registeredAt = long.MinValue / 2;
@@ -199,7 +200,8 @@ namespace TopiaForge.Multiplayer.ControlPlane
 
         /// <summary>
         /// Stops hosting through the service: the listing is deleted, and a registration still in flight is deleted as soon
-        /// as it lands, so no listing outlives the host. The NAT layer is left to the network, which the host stops next: its
+        /// as it lands, so no listing outlives the host; stopping cancels every other request, but never a registration,
+        /// which the service may already hold. The NAT layer is left to the network, which the host stops next: its
         /// links close first, so the message ending each player's session still leaves through the relay, and then the
         /// network disposes the NAT layer, which says goodbye and releases the relay.
         /// </summary>
@@ -246,11 +248,14 @@ namespace TopiaForge.Multiplayer.ControlPlane
 
         private void Register()
         {
-            // The proof is signed before the request leaves, so the seed is wiped at once.
+            // The proof is signed before the request leaves, so the seed is wiped at once. Stopping never cancels a
+            // registration: the service may already hold one whose answer is still on its way, and only that answer's
+            // token can delete it. The request's own deadline bounds it instead, and Stop deletes the listing once it
+            // lands.
             var seed = identity.CopySigningSeed();
             try
             {
-                registering = services.Client.RegisterAsync(challenge!, descriptor, relayOnly, seed, lifetime.Token);
+                registering = services.Client.RegisterAsync(challenge!, descriptor, relayOnly, seed, CancellationToken.None);
             }
             finally
             {
@@ -276,7 +281,7 @@ namespace TopiaForge.Multiplayer.ControlPlane
                 return;
             }
 
-            if (!ReferenceEquals(published, descriptor))
+            if (!ReferenceEquals(published, descriptor) && now >= descriptorAt)
             {
                 var update = descriptor;
                 Begin(services.Client.UpdateDescriptorAsync(update.Descriptor.ServerId, token!, update, lifetime.Token), result => Updated(result, update));

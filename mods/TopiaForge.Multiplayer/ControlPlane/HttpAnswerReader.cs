@@ -22,10 +22,10 @@ namespace TopiaForge.Multiplayer.ControlPlane
 
     /// <summary>
     /// Reads one HTTP/1.1 answer strictly and within bounds: a status line, at most 64 header lines in 16 KiB, and a body
-    /// framed by Content-Length, chunked encoding or the end of the connection, never larger than the caller allows. Every
-    /// line ends in CR LF, folded and malformed lines are refused, and an answer that names both framings is refused as
-    /// ambiguous. A redirect is never followed. Nothing the service writes is kept but the status, the body, whether the
-    /// body is JSON, and a plain Retry-After.
+    /// framed by Content-Length, chunked encoding or the end of the connection, never larger than the caller allows; a
+    /// chunked body's framing has a budget of its own. Every line ends in CR LF, folded and malformed lines are refused,
+    /// and an answer that names both framings is refused as ambiguous. A redirect is never followed. Nothing the service
+    /// writes is kept but the status, the body, whether the body is JSON, and a plain Retry-After.
     /// </summary>
     internal static class HttpAnswerReader
     {
@@ -169,29 +169,44 @@ namespace TopiaForge.Multiplayer.ControlPlane
             return new KeyValuePair<string, string>(line.Substring(0, colon), line.Substring(colon + 1).Trim(' ', '\t'));
         }
 
+        /// <summary>
+        /// Reads a chunked body. Its framing, every chunk's size line and line end and the trailers, shares one budget
+        /// of a header block plus the body's own bound, so a body sent in tiny chunks with long extensions costs no more
+        /// on the wire than twice its bound and a header block; past that the answer is refused.
+        /// </summary>
         private static async Task<byte[]> ReadChunkedAsync(BoundedReader reader, int maximumBody)
         {
+            var framing = (long)MaximumHeaderBytes + maximumBody;
             using (var body = new MemoryStream())
             {
                 while (true)
                 {
-                    reader.BeginHead(MaximumChunkLineBytes);
-                    var line = await reader.ReadLineAsync().ConfigureAwait(false);
+                    var line = await ReadFramingLineAsync(reader, MaximumChunkLineBytes, framing).ConfigureAwait(false);
+                    framing -= line.Length + 2;
                     var semicolon = line.IndexOf(';');
                     var size = ParseChunkSize(semicolon < 0 ? line : line.Substring(0, semicolon));
                     if (size == 0) break;
                     if (body.Length + size > maximumBody) throw new ControlPlaneProtocolException(ControlPlaneTransportFailure.TooLarge);
                     var chunk = await reader.ReadExactlyAsync((int)size).ConfigureAwait(false);
                     body.Write(chunk, 0, chunk.Length);
-                    reader.BeginHead(2);
-                    if ((await reader.ReadLineAsync().ConfigureAwait(false)).Length != 0) throw Malformed();
+                    if ((await ReadFramingLineAsync(reader, 2, framing).ConfigureAwait(false)).Length != 0) throw Malformed();
+                    framing -= 2;
                 }
 
-                // Trailers, if any, are read and dropped within the header budget.
-                reader.BeginHead(MaximumHeaderBytes);
+                // Trailers, if any, are read and dropped within what the framing budget has left, and a header block at most.
+                if (framing < 2) throw new ControlPlaneProtocolException(ControlPlaneTransportFailure.TooLarge);
+                reader.BeginHead((int)Math.Min(MaximumHeaderBytes, framing));
                 await ReadHeadersAsync(reader).ConfigureAwait(false);
                 return body.ToArray();
             }
+        }
+
+        /// <summary>Reads one line of a chunked body's framing within its own limit and what the budget has left.</summary>
+        private static Task<string> ReadFramingLineAsync(BoundedReader reader, int limit, long framing)
+        {
+            if (framing < 2) throw new ControlPlaneProtocolException(ControlPlaneTransportFailure.TooLarge);
+            reader.BeginHead((int)Math.Min(limit, framing));
+            return reader.ReadLineAsync();
         }
 
         private static long ParseChunkSize(string text)
