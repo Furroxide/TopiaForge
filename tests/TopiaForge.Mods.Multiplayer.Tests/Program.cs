@@ -512,7 +512,7 @@ internal static class Program
             VoiceSpeakerBoundTests.AHostileRosterCannotGrowTheStreams();
             VoiceSpeakerBoundTests.VoiceBeforeItsSpeakerIsListedIsKeptForAGrace();
             VoiceCaptureTests.CaptureKeepsUpAtLowFrameRates();
-            VoiceSessionChangeTests.NamesMutedWhileJoiningStayWithTheirSession();
+            VoiceSessionChangeTests.NamesMutedWhileJoiningStayWithTheirHost();
             VoiceStallTests.StallsLeaveNoLastingDelay();
             VoicePlaybackTests.ReadsSurviveAWriterThatFlushesBetweenThem();
             VoiceStallTests.APausedReaderHearsNothingStaleWhenItResumes();
@@ -520,6 +520,9 @@ internal static class Program
             VoiceCaptureTests.CaptureBelongsToTheMainThread();
             VoiceServiceTests.NothingLeavesUntilVoiceIsTurnedOn();
             VoiceServiceTests.AHostCodesOnlyForReadyListeners();
+            VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownSurviveAnInPlaceReplacement();
+            VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownNeverReachAnotherHost();
+            VoiceSessionChangeTests.NamesGivenWithNoHostJoinedNameNobody();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

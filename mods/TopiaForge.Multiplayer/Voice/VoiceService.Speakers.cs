@@ -115,7 +115,7 @@ namespace TopiaForge.Multiplayer.Voice
                 }
             }
 
-            AdoptListenerMutes(snapshot.State, snapshot.Id);
+            AdoptListenerMutes(snapshot.State);
         }
 
         /// <summary>Ends the streams of speakers the participants still do not list once their grace is over.</summary>

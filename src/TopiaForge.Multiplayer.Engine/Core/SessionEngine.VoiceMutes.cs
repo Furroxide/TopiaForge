@@ -14,18 +14,26 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly HashSet<string> localVoiceMutes = new HashSet<string>(StringComparer.Ordinal);
         private bool localVoiceMuteAll;
 
+        /// <summary>Stands in <see cref="listenerMutesHost"/> for no host at all, which every join forgets: no identity is empty.</summary>
+        private const string NoMutesHost = "";
+
         /// <summary>
         /// The authenticated identity of the host whose participants the set names: the host the client had joined when the
-        /// set was made. It is null for a set made before any join or while one is under way, which names the players of
-        /// whichever session that join finds.
+        /// set was made. It is null for a set that names nobody, made while no session is joined or a join is under way,
+        /// which applies to whichever session the join finds.
         /// </summary>
         private string? listenerMutesHost;
 
+        /// <summary>The authenticated identity of the host the client joined last; null before its first join and after a role change.</summary>
+        private string? lastJoinedHost;
+
         /// <summary>
         /// Sets whom the local player does not want to hear. A client also sends the set to its host, reliably, so muted
-        /// speakers are never relayed to it; <paramref name="muteAll"/> stops all relayed voice. A set made while the
-        /// client awaits a join applies to the session that join finds, so it should carry only wishes that name nobody,
-        /// such as muting everyone.
+        /// speakers are never relayed to it; <paramref name="muteAll"/> stops all relayed voice. A set made while no session
+        /// is joined, or while a join is under way, can name only players the player saw: those of the host it joined last.
+        /// Such a set belongs to that host, so the join keeps or forgets it as it would any set made there, and a name never
+        /// silences whoever has that id with the next host. One that names nobody, such as muting everyone, applies to
+        /// whichever session the join finds.
         /// </summary>
         internal void SetListenerMutes(IReadOnlyCollection<ParticipantId> muted, bool muteAll = false)
         {
@@ -40,7 +48,11 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             localVoiceMuteAll = muteAll;
-            if (Role == EngineRole.Client && channel != null && channel.Phase == ClientPhase.AwaitingJoin) listenerMutesHost = null;
+            if (Role == EngineRole.Client && (channel == null || channel.Phase == ClientPhase.AwaitingJoin))
+            {
+                listenerMutesHost = localVoiceMutes.Count == 0 ? null : lastJoinedHost ?? NoMutesHost;
+            }
+
             if (options.Voice != null && channel != null && channel.Phase != ClientPhase.AwaitingJoin) channel.VoiceMutesPending = true;
             EndOperation();
         }
@@ -64,7 +76,8 @@ namespace TopiaForge.Multiplayer.Engine
         /// as across an in-place replacement or within the grace period, because its ids still name the same people. One
         /// made with another host, or with this one before it lost the record by restarting or letting it expire, is
         /// forgotten, mute-all included, so it neither silences strangers who got the same ids nor tells this host whom the
-        /// player muted. One made while the join was under way stays, for the session the join found.
+        /// player muted. Names given while the join was under way belong to the host joined before it, and fare the same. A
+        /// set that names nobody, made while the join was under way, stays, for the session the join found.
         /// </summary>
         private void AdoptListenerMutes(string host, bool recordKept)
         {
@@ -74,13 +87,15 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             listenerMutesHost = host;
+            lastJoinedHost = host;
         }
 
-        /// <summary>Forgets the set and the host it named, as leaving a session for another role does.</summary>
+        /// <summary>Forgets the set and the hosts it named, as leaving a session for another role does.</summary>
         private void RetireListenerMutes()
         {
             ForgetListenerMutes();
             listenerMutesHost = null;
+            lastJoinedHost = null;
         }
 
         private void ForgetListenerMutes()

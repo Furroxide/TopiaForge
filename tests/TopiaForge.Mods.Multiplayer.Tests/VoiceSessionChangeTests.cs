@@ -211,11 +211,11 @@ internal static class VoiceSessionChangeTests
         Assert(VoiceAudio.LevelDecibels(bTail, 0, bTail.Length) > -35, "unmuted, b hears a");
     }
 
-    internal static void NamesMutedWhileJoiningStayWithTheirSession()
+    internal static void NamesMutedWhileJoiningStayWithTheirHost()
     {
         // b's link moves to a second host. While it joins, b's scoreboard still lists the first host's players, and the
-        // player mutes the first host's a. The name is held back until b is Ready, and the join found another session, so
-        // it is forgotten: b hears the second host's a, whom it never muted, and that host never learns the name.
+        // player mutes the first host's a. The name belongs to the first host, and the join found another, so it is
+        // forgotten: b hears the second host's a, whom it never muted, and that host never learns the name.
         using var rig = new VoiceServiceRig();
         rig.AddHost();
         var second = rig.AddHost("host-2", session: SecondSession.Value);
@@ -238,8 +238,8 @@ internal static class VoiceSessionChangeTests
         Assert(VoiceAudio.LevelDecibels(heard, heard.Length / 2, heard.Length / 2) > -35, "and b hears the second host's a");
         Assert(second.Engine.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 0, "which never learned whom b had muted");
 
-        // b's link to the second host drops, and the player mutes its a while it is down. b comes back to the same session,
-        // so the held name is given to the engine there, and b hears no more of that a.
+        // b's link to the second host drops, and the player mutes its a while it is down. b comes back to the same host,
+        // which kept b's record, so the name holds there, and b hears no more of that a.
         rig.Network.Sever(b.Link!);
         for (var step = 0; step < 50 && b.Engine.Snapshot.State == MultiplayerSessionState.Ready; step++) rig.Step();
         b.Voice.SetListenerMutes(new[] { a });
@@ -248,10 +248,164 @@ internal static class VoiceSessionChangeTests
         var mark = b.Heard("a").Count;
         farA.Source = VoiceSource.Speech(2, seed: 36);
         rig.StepFor(1_500_000);
-        Assert(!b.Voice.GetListenerMutes(mutes) && mutes.SetEquals(new[] { a }), "back in the session it was given in, the name applies");
+        Assert(!b.Voice.GetListenerMutes(mutes) && mutes.SetEquals(new[] { a }), "back with the host it was given for, the name applies");
         var silent = b.Heard("a").Skip(mark).ToArray();
         Assert(VoiceAudio.LevelDecibels(silent, 0, silent.Length) < -90 && second.Engine.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) > 0,
             "b hears none of a, whom the host now leaves out");
+    }
+
+    internal static void MutesMadeWhileTheLinkIsDownSurviveAnInPlaceReplacement()
+    {
+        // b mutes a. b's link drops, and while it is down the player mutes c as well. Before b is back the host replaces
+        // its session in place: same host, same records, same ids, so b comes back into the new session with both mutes,
+        // as a client that stayed connected would, and the mute it made long before is not lost either.
+        using var rig = new VoiceServiceRig();
+        var host = rig.AddHost();
+        var a = rig.AddClient("a");
+        var b = rig.AddClient("b");
+        var c = rig.AddClient("c");
+        var aId = new ParticipantId("a");
+        var cId = new ParticipantId("c");
+        b.Listen("a");
+        b.Listen("c");
+        b.Voice!.SetListenerMutes(new[] { aId });
+        rig.Step(5);
+        rig.Network.Sever(b.Link!);
+        for (var step = 0; step < 50 && b.Engine.Snapshot.State == MultiplayerSessionState.Ready; step++) rig.Step();
+        b.Voice.SetListenerMutes(new[] { aId, cId });
+        var mutes = new HashSet<ParticipantId>();
+        Assert(b.Engine.Snapshot.State == MultiplayerSessionState.Connecting && !b.Voice.GetListenerMutes(mutes) && mutes.SetEquals(new[] { aId, cId }),
+            "while b's link is down, its set names a and c");
+        var first = new MultiplayerSessionId("voice-service-replaced");
+        host.Engine.ReplaceSession(first, new SessionSeed(12));
+        rig.Step(3);
+        rig.Connect(b);
+        StepUntilReady(rig, b);
+        Assert(b.Engine.Snapshot.Id.Equals(first) && !b.Voice.GetListenerMutes(mutes) && mutes.SetEquals(new[] { aId, cId }),
+            "back in the replaced session, b's set still names a and c");
+        var mark = b.Heard("a").Count;
+        var dropped = host.Engine.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted);
+        a.Source = VoiceSource.Speech(1.5, seed: 37);
+        c.Source = VoiceSource.Speech(1.5, seed: 38);
+        rig.StepFor(1_200_000);
+        foreach (var speaker in new[] { "a", "c" })
+        {
+            var heard = b.Heard(speaker).Skip(mark).ToArray();
+            Assert(VoiceAudio.LevelDecibels(heard, 0, heard.Length) < -90, "b hears none of " + speaker);
+        }
+
+        Assert(host.Engine.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) > dropped, "whom the host leaves out for b");
+
+        // b's link stalls; the player unmutes c while it is down, and the host replaces the session again. The replacement
+        // reaches b before its link reports open again, so b is never Ready in the session it stalled in. Its set still
+        // names a alone, the people are still the same, and b hears c again but none of a.
+        Stall(b, stalled: true);
+        for (var step = 0; step < 20 && b.Engine.Snapshot.State != MultiplayerSessionState.Reconnecting; step++) rig.Step();
+        Assert(b.Engine.Snapshot.State == MultiplayerSessionState.Reconnecting, "b's link stalls");
+        b.Voice.SetListenerMutes(new[] { aId });
+        var second = new MultiplayerSessionId("voice-service-replaced-again");
+        host.Engine.ReplaceSession(second, new SessionSeed(13));
+        rig.Step(3);
+        foreach (var end in new[] { b.Link!, b.Link!.Peer! }) end.Outbound!.Held = false;
+        for (var step = 0; step < 50 && !b.Engine.Snapshot.Id.Equals(second); step++) rig.Step();
+        Stall(b, stalled: false);
+        StepUntilReady(rig, b);
+        Assert(b.Engine.Snapshot.Id.Equals(second) && !b.Voice.GetListenerMutes(mutes) && mutes.SetEquals(new[] { aId }),
+            "in the session replaced while b's link stalled, b's set names a alone");
+        mark = b.Heard("a").Count;
+        a.Source = VoiceSource.Speech(1.5, seed: 39);
+        c.Source = VoiceSource.Speech(1.5, seed: 40);
+        rig.StepFor(1_200_000);
+        var fromA = b.Heard("a").Skip(mark).ToArray();
+        var fromC = b.Heard("c").Skip(mark).ToArray();
+        Assert(VoiceAudio.LevelDecibels(fromA, 0, fromA.Length) < -90 && VoiceAudio.LevelDecibels(fromC, fromC.Length / 2, fromC.Length / 2) > -35,
+            "b hears c again, and none of a");
+    }
+
+    internal static void MutesMadeWhileTheLinkIsDownNeverReachAnotherHost()
+    {
+        // b's link stalls, and the player mutes the first host's a while it is down. Then b's link moves to a second host,
+        // which has an a of its own: the name stays behind with the first host, and b hears the second host's a. d's link
+        // drops, and d asks to hear nobody while it is down. That names nobody, so it holds in whatever session d joins
+        // next, from its first message: the second host, where four players talk a tick apart so it has a datagram to
+        // relay in every tick, never sends d one.
+        using var rig = new VoiceServiceRig();
+        rig.AddHost();
+        var second = rig.AddHost("host-2", session: SecondSession.Value);
+        var talkers = new[] { "a", "e", "f", "g" }.Select(name => rig.AddClient(name, host: second)).ToArray();
+        rig.AddClient("a");
+        var b = rig.AddClient("b");
+        var d = rig.AddClient("d");
+        Stall(b, stalled: true);
+        for (var step = 0; step < 20 && b.Engine.Snapshot.State != MultiplayerSessionState.Reconnecting; step++) rig.Step();
+        b.Voice!.SetListenerMutes(new[] { new ParticipantId("a") });
+        rig.Network.Sever(d.Link!);
+        for (var step = 0; step < 50 && d.Engine.Snapshot.State == MultiplayerSessionState.Ready; step++) rig.Step();
+        d.Voice!.SetListenerMutes(Array.Empty<ParticipantId>(), muteAll: true);
+        for (var index = 0; index < talkers.Length; index++)
+        {
+            talkers[index].Source = VoiceSource.Speech(3, seed: (uint)(41 + index));
+            rig.Step();
+        }
+
+        rig.Step(10);
+        rig.Connect(b, second);
+        rig.Connect(d, second);
+        StepUntilReady(rig, b);
+        StepUntilReady(rig, d);
+        b.Listen("a");
+        rig.StepFor(1_500_000);
+        var mutes = new HashSet<ParticipantId>();
+        Assert(b.Engine.Snapshot.Id.Equals(SecondSession) && !b.Voice.GetListenerMutes(mutes) && mutes.Count == 0,
+            "with the second host, b's set names nobody");
+        var heard = b.Heard("a").ToArray();
+        Assert(VoiceAudio.LevelDecibels(heard, heard.Length / 2, heard.Length / 2) > -35, "and b hears the second host's a");
+        Assert(d.Voice.GetListenerMutes(mutes) && mutes.Count == 0, "d's set holds the wish alone");
+        Assert(d.Link!.Peer!.Outbound!.ChannelFramesSent[(int)EngineChannel.Voice] == 0, "and the second host never sends d a voice datagram");
+    }
+
+    internal static void NamesGivenWithNoHostJoinedNameNobody()
+    {
+        // t names a while it joins for the first time, before it has seen anyone. b's link drops, b goes back to solo
+        // play and sets out to join again, and names a, a name its solo session never showed. Both names belong to no
+        // host: each join forgets them, even b's, which finds the host that kept its record, so both hear a.
+        using var rig = new VoiceServiceRig();
+        rig.AddHost();
+        var a = rig.AddClient("a");
+        var b = rig.AddClient("b");
+        var aId = new ParticipantId("a");
+        var t = rig.AddClient("t", untilReady: false);
+        t.Voice!.SetListenerMutes(new[] { aId });
+        StepUntilReady(rig, t);
+        rig.Network.Sever(b.Link!);
+        for (var step = 0; step < 50 && b.Engine.Snapshot.State == MultiplayerSessionState.Ready; step++) rig.Step();
+        b.Engine.SwitchToSolo(new SoloSessionStart(new MultiplayerSessionId("voice-solo"), new SessionSeed(5), new ParticipantId("b"), "B"));
+        rig.Step();
+        b.Engine.SwitchToClient(new MultiplayerSessionId("voice-joining"));
+        b.Voice!.SetListenerMutes(new[] { aId });
+        rig.Connect(b);
+        StepUntilReady(rig, b);
+        t.Listen("a");
+        b.Listen("a");
+        a.Source = VoiceSource.Speech(2, seed: 42);
+        rig.StepFor(1_500_000);
+        var mutes = new HashSet<ParticipantId>();
+        foreach (var member in new[] { t, b })
+        {
+            Assert(!member.Voice!.GetListenerMutes(mutes) && mutes.Count == 0, member.Name + "'s set names nobody");
+            var heard = member.Heard("a").ToArray();
+            Assert(VoiceAudio.LevelDecibels(heard, heard.Length / 2, heard.Length / 2) > -35, "and " + member.Name + " hears a");
+        }
+    }
+
+    /// <summary>Stalls or restores a member's link both ways, holding what is sent meanwhile, as the rig's Interrupt does.</summary>
+    private static void Stall(VoiceServiceRig.Member member, bool stalled)
+    {
+        foreach (var end in new[] { member.Link!, member.Link!.Peer! })
+        {
+            if (end.State != EngineLinkState.Closed) end.State = stalled ? EngineLinkState.Stalled : EngineLinkState.Open;
+            end.Outbound!.Held = stalled;
+        }
     }
 
     private static void StepUntilReady(VoiceServiceRig rig, VoiceServiceRig.Member member)

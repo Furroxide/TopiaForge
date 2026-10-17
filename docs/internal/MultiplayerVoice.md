@@ -320,9 +320,10 @@ record, so the set lasts exactly as long as the host keeps the record of the pla
   also remembers the host it was made with, by the host's authenticated identity, so another host's kept record does
   not count: a traveller who returns within the grace to a host it visited, after muting players elsewhere, leaves
   those mutes behind.
-- **Made while joining.** A set made while the engine awaits a join names nobody yet and applies to the session the join
-  finds, whichever that is, just as it does after a role change. It should hold only wishes that name nobody, such as
-  muting everyone.
+- **Made while joining.** A set made while no session is joined, or while a join is under way, can name only players
+  the player has seen: those of the host it joined last. Its names belong to that host, so the join keeps or forgets
+  them as above; names made before any join, or after a role change, belong to no host and every join forgets them. A
+  set that names nobody, such as muting everyone, applies to the session the join finds, whichever that is.
 - **Role changes** forget the set.
 
 So muting `p2` on one host never silences a different `p2` on the next, and never tells the next host whom the player
@@ -330,7 +331,10 @@ had muted. Two earlier versions went by the session. The first cleared the set o
 a restarted host sent it the old set. The second forgot the set whenever a join named another session id: a client
 whose link was down while the host replaced its session in place came back without its mutes, though one that stayed
 connected kept them, and a set made between moving the link and the `JoinAccepted` was dropped when the join found
-another session, though the same call after a role change was kept.
+another session, though the same call after a role change was kept. A third applied every set made while a join was
+under way to the session the join found, names included, so a name given from the old host's list silenced whoever had
+that id on the new one, and a caller had to hold names back by session, which lost them across a reconnect into an
+in-place replacement.
 
 ### 2.6 The engine API
 
@@ -454,8 +458,8 @@ These run in the multiplayer test project, and every one is deterministic:
   and a restart noticed by host and client alike when the path loses its first datagram;
 - `VoiceMuteTests`, over the rig: `JoinAccepted`'s vector, which says whether the host kept the record; mutes that
   survive an in-place replacement however the client resynchronizes; mutes forgotten when the record expired, and when
-  a host other than the one they were made with kept it; and a set made while joining applied to the session the join
-  finds, with or without a role change first;
+  a host other than the one they were made with kept it; and a set that names nobody, made while joining, applied to
+  the session the join finds, with or without a role change first;
 - `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, link time kept in fractions
   of a tick, the link's datagram-first, bounded reads, and datagrams shed when their lane is more than three ticks
   behind, or past their share while the session lane is.
@@ -633,11 +637,13 @@ stop the worker and voice with one `VoiceFailed` diagnostic. No exception leaves
 - `SetListenerMutes` passes the set to the engine, which owns it, and drops what newly muted speakers left buffered at
   once. The service keeps no copy: `GetListenerMutes` reads the engine's, as section 2.5 kept or forgot it at the last
   join, so whatever shows the player whom they muted never shows a mute that no longer applies.
-- **Names wait for their session.** Until this player is Ready, the service gives the engine only the wish to hear
-  nobody. The engine applies a set made while it awaits a join to whichever session the join finds, so a name meant for
-  a player of one session would silence whoever has that id in the next. Names given while not Ready are held, and
-  `GetListenerMutes` reports them with the engine's. They go to the engine once this player is Ready again in the
-  session they were given in, and are forgotten in any other.
+- **Names stay with their host.** Names reach the engine at once, whatever the session's state. Those given while the
+  link is down or a join is under way belong to the host this player joined last (section 2.5), so a reconnect to that
+  host keeps them, through an in-place replacement too, and a join that finds another host forgets them: a name meant
+  for one host's player never silences whoever has that id on the next. An earlier version of the service held names
+  back until this player was Ready in the session they were given in. It cleared the engine's set meanwhile and knew
+  sessions only by id, so a change made while the link was down lost every mute when the host replaced its session
+  before the player was back.
 - **The wish to hear nobody**, `muteAll`, is the player's own and lasts until they change it. It names nobody, so the
   service gives it back wherever the engine forgot it: after a role change, and after a join that found a host without
   this player's record. While a join is under way the service makes it again, so the engine applies it to whichever
@@ -703,7 +709,13 @@ engine, deterministic except where noted:
   - the wish to hear nobody carried to another host, alone, and made again during the join, so the new host never
     sends a datagram;
   - mutes the engine keeps across an in-place replacement, honoured and reported;
-  - a name muted while joining forgotten in the session the join found, and applied back in the one it was given in.
+  - a name muted while joining forgotten with another host, and one muted while the link was down kept by the host
+    that kept the record;
+  - mutes changed while the link is down or stalled kept through an in-place replacement, whether the reconnect or the
+    recovered link brings it, with the mute made before the outage kept too;
+  - names given while a stalled link moves to another host left behind, and a wish to hear nobody made while the link
+    is down holding from the next host's first message;
+  - names given with no host joined, at a first join or after a return to solo play, forgotten by the join.
 - `VoiceCaptureTests`:
   - voice activation and its hangover;
   - push-to-talk spurts, including a held key with no samples;
@@ -715,8 +727,8 @@ engine, deterministic except where noted:
   - capture at 44.1 and 16 kHz.
 - `VoicePlaybackTests`:
   - the ring's order, underruns, skips, flushes and overflow;
-  - reads that allocate nothing, call nothing that can block (checked in the IL), and finish while another thread holds
-    the stream's monitor;
+  - reads that allocate nothing, measured over a warmed loop as the best of three passes, call nothing that can block
+    (checked in the IL), and finish while another thread holds the stream's monitor;
   - 800,000 reads, each reader on its own thread, beside a writer that flushes between them, on real threads;
   - a device clock 0.5% fast and slow.
 - `VoiceSpeakerBoundTests`:
