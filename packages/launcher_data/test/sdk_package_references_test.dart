@@ -6,7 +6,11 @@ const _analyzers = 'TopiaForge.Mods.Analyzers';
 const _robotKit = 'TopiaForge.Mods.RobotKit';
 
 /// How long an edit may take on input built to make a scan backtrack.
-const _budget = Duration(milliseconds: 100);
+///
+/// The inputs run to about a megabyte. A linear edit takes about a tenth of
+/// this budget even on a slow CI runner, and a backtracking or copying one
+/// takes minutes, so the budget tells them apart without timing the machine.
+const _budget = Duration(seconds: 1);
 
 String _project(String items) =>
     '<Project Sdk="Microsoft.NET.Sdk">\n$items\n</Project>\n';

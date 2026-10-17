@@ -2,7 +2,11 @@ import 'package:launcher_data/src/msbuild_item_metadata.dart';
 import 'package:test/test.dart';
 
 /// How long a scan may take on input built to make it backtrack or copy.
-const _budget = Duration(milliseconds: 100);
+///
+/// A linear scan of these inputs takes about a tenth of this budget even on
+/// a slow CI runner, and a backtracking or copying one takes minutes, so the
+/// budget tells them apart without timing the machine.
+const _budget = Duration(seconds: 1);
 
 List<String> _elements(String item, String name) => [
   for (final element in metadataElements(item, name))
