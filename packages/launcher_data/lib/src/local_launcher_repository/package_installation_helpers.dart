@@ -16,6 +16,8 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
   ) async {
     final normalized = sources.isEmpty ? _defaultPackageSources() : sources;
     _validatePackageSources(normalized);
+    // A save never writes over sources that could not be read just now.
+    await _recoverAtomicBackupIfMissing(_sourcesFile, label: 'Package sources');
     await _writeJsonFileAtomic(
       _sourcesFile,
       {

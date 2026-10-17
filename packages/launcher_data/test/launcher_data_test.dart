@@ -9,6 +9,8 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'held_file_support.dart';
+
 part 'launcher_data_test_helpers.dart';
 part 'installed_build_provenance_test_part.dart';
 part 'launcher_data_diagnostics_test_part.dart';

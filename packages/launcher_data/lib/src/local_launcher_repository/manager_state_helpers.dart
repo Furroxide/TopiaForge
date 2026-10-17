@@ -370,6 +370,8 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     bool allowMalformedRecords = false,
   }) async {
     final file = _managerStateFile(install);
+    // The game cannot see the backups the launcher's own saves leave.
+    await _recoverAtomicBackupIfMissing(file, label: 'Manager state');
     final type = FileSystemEntity.typeSync(file.path, followLinks: false);
     if (type == FileSystemEntityType.notFound) {
       if (File('${file.path}.bak').existsSync()) {

@@ -82,7 +82,10 @@ void main() {
     'recovers an interrupted atomic settings swap from its backup',
     () async {
       await dataRoot.create(recursive: true);
-      final backup = File(p.join(dataRoot.path, 'settings.json.42.bak'));
+      // The name a launcher save gives the file it moves aside.
+      final backup = File(
+        p.join(dataRoot.path, 'settings.json.4242-1760520615100000.bak'),
+      );
       await backup.writeAsString(
         jsonEncode({'selectedProfileId': 'preserved'}),
       );

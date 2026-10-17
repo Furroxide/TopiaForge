@@ -63,6 +63,11 @@ class _RuntimeRepairTransaction {
     }
     _requireRuntimeDirectory(gameRoot, root, label: 'Runtime transaction');
     final transaction = _RuntimeRepairTransaction._(gameRoot, root);
+    // Rolling back needs the journal an interrupted save moved aside.
+    await _recoverAtomicBackupIfMissing(
+      transaction._journal,
+      label: 'Runtime repair journal',
+    );
     final journalType = FileSystemEntity.typeSync(
       transaction._journal.path,
       followLinks: false,
