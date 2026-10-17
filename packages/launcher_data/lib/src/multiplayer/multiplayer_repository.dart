@@ -166,6 +166,10 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   final DateTime Function() _clock;
   late final JoinDescriptorResolver _resolver;
 
+  /// Counts the calls that decide whether LAN browsing runs, so a start still
+  /// reading the settings yields to a later start, stop or discovery-off save.
+  var _lanDecisions = 0;
+
   @override
   MultiplayerServiceStatus get serviceStatus => _controlPlane.status;
 
@@ -174,7 +178,10 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
 
   @override
   Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings) async {
-    if (!settings.lanDiscoveryEnabled) await _lan.stop(disabled: true);
+    if (!settings.lanDiscoveryEnabled) {
+      _lanDecisions++;
+      await _lan.stop(disabled: true);
+    }
     return _store.saveSettings(settings);
   }
 
@@ -229,7 +236,11 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
 
   @override
   Future<LanBrowseSnapshot> startLanBrowsing() async {
+    final decision = ++_lanDecisions;
     final load = await _store.loadSettings();
+    // A later start, stop or discovery-off save decides instead: the settings
+    // read here may be older than it.
+    if (decision != _lanDecisions) return _lan.snapshot;
     // Settings that cannot be read never count as the defaults, which would
     // turn discovery on for a player who turned it off.
     if (load.recovery == MultiplayerStoreRecovery.unreadable) {
@@ -240,7 +251,10 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   }
 
   @override
-  Future<LanBrowseSnapshot> stopLanBrowsing() => _lan.stop();
+  Future<LanBrowseSnapshot> stopLanBrowsing() {
+    _lanDecisions++;
+    return _lan.stop();
+  }
 
   @override
   Future<InternetBrowseResult> browseInternet({

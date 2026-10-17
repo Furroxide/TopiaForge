@@ -78,7 +78,8 @@ final class MultiplayerStoreException implements Exception {
 /// Where Windows refuses to replace a held file, a write moves the old one
 /// aside as `<name>.<token>.bak` first. A write stopped between its two moves
 /// leaves that backup and no file, so reading restores the newest backup
-/// when the file is missing, as the launcher's own files do.
+/// when the file is missing, as the launcher's own files do. While that
+/// backup cannot be moved, the file counts as one that cannot be read.
 final class MultiplayerStore {
   MultiplayerStore(this.directory, {DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
@@ -269,8 +270,16 @@ final class MultiplayerStore {
     FileSystemEntityType type;
     try {
       type = await FileSystemEntity.type(file.path, followLinks: false);
-      if (type == FileSystemEntityType.notFound && await _restoreBackup(file)) {
-        type = await FileSystemEntity.type(file.path, followLinks: false);
+      if (type == FileSystemEntityType.notFound) {
+        switch (await _restoreBackup(file)) {
+          case _Restore.held:
+            // What the backup holds is unread, not missing.
+            return const _Unreadable();
+          case _Restore.restored:
+            type = await FileSystemEntity.type(file.path, followLinks: false);
+          case _Restore.none:
+            break;
+        }
       }
     } on FileSystemException {
       return const _Unreadable();
@@ -288,9 +297,12 @@ final class MultiplayerStore {
   }
 
   /// Puts back the newest `<name>.<token>.bak` of [file], which a write
-  /// stopped between its two moves left behind, and drops older ones; true
-  /// once one is back. Only regular files count, never a link or a folder.
-  Future<bool> _restoreBackup(File file) async {
+  /// stopped between its two moves left behind, and drops older ones. Only
+  /// regular files count, never a link or a folder. A backup that is still
+  /// there but cannot be moved just now, as when another program holds it,
+  /// is [_Restore.held]: an older one never stands in for it, and nothing is
+  /// dropped.
+  Future<_Restore> _restoreBackup(File file) async {
     final prefix = '${p.basename(file.path)}.';
     final backups = <(File, DateTime)>[];
     try {
@@ -305,22 +317,24 @@ final class MultiplayerStore {
         }
       }
     } on FileSystemException {
-      return false;
+      return _Restore.none;
     }
     backups.sort((left, right) => right.$2.compareTo(left.$2));
     for (final (backup, _) in backups) {
       try {
         await backup.rename(file.path);
       } on FileSystemException {
-        // Try the next one if this one vanished or is held.
+        // One that vanished meanwhile is passed over; one still there is
+        // held, and only it has the latest contents.
+        if (await _exists(backup)) return _Restore.held;
         continue;
       }
       for (final (stale, _) in backups) {
         if (!identical(stale, backup)) await _deleteEntity(stale.path);
       }
-      return true;
+      return _Restore.restored;
     }
-    return false;
+    return _Restore.none;
   }
 
   /// Renames [file] to a damaged copy beside it and keeps the newest
@@ -442,6 +456,18 @@ final class MultiplayerStore {
     }
     return true;
   }
+}
+
+/// What [MultiplayerStore._restoreBackup] did.
+enum _Restore {
+  /// There was no backup to put back.
+  none,
+
+  /// The newest backup is back in the file's place.
+  restored,
+
+  /// The newest backup could not be moved just now.
+  held,
 }
 
 sealed class _ReadResult {

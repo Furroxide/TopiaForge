@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:launcher_domain/launcher_domain.dart'
+    show CanonicalJson, CanonicalJsonException;
+
 import 'cancellation_token.dart';
 import 'public_url.dart';
 

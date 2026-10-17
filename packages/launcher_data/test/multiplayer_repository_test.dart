@@ -7,6 +7,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'multiplayer_lan_rig.dart';
 import 'multiplayer_network_support.dart';
 
 void main() {
@@ -143,6 +144,43 @@ void main() {
         LanDiscoveryStatus.listening,
       );
       expect((await repo.stopLanBrowsing()).status, LanDiscoveryStatus.stopped);
+    });
+
+    group('a start still reading the settings', () {
+      test('yields to turning discovery off', () async {
+        final rig = LanRig.fresh();
+        final repo = repository(lan: rig.client);
+        await repo.saveSettings(MultiplayerSettings());
+        // The start reads settings that still say on.
+        final starting = repo.startLanBrowsing();
+        await repo.saveSettings(MultiplayerSettings().withLanDiscovery(false));
+        await starting;
+        expect(rig.binder.binds, isEmpty);
+        expect(rig.client.isListening, isFalse);
+        expect(repo.lanSnapshot.status, LanDiscoveryStatus.disabled);
+      });
+
+      test('yields to a stop', () async {
+        final rig = LanRig.fresh();
+        final repo = repository(lan: rig.client);
+        await repo.saveSettings(MultiplayerSettings());
+        final starting = repo.startLanBrowsing();
+        await repo.stopLanBrowsing();
+        await starting;
+        expect(rig.binder.binds, isEmpty);
+        expect(repo.lanSnapshot.status, LanDiscoveryStatus.stopped);
+      });
+
+      test('yields to a later start, so browsing opens once', () async {
+        final rig = LanRig.fresh();
+        final repo = repository(lan: rig.client);
+        await repo.saveSettings(MultiplayerSettings());
+        final first = repo.startLanBrowsing();
+        final second = repo.startLanBrowsing();
+        await first;
+        expect((await second).status, LanDiscoveryStatus.listening);
+        expect(rig.binder.binds, hasLength(2));
+      });
     });
   });
 

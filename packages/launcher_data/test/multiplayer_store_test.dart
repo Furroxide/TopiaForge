@@ -76,10 +76,7 @@ void main() {
     for (final (about, text) in [
       ('text that is not JSON', '{"displayName": "Sam"'),
       ('JSON that is not an object', '["Sam"]'),
-      (
-        'a newer schema version',
-        '{"schemaVersion": 2, "displayName": "Sam"}',
-      ),
+      ('a newer schema version', '{"schemaVersion": 2, "displayName": "Sam"}'),
       ('bytes that are not UTF-8', null),
     ]) {
       test('$about is set aside and replaced with the defaults', () async {

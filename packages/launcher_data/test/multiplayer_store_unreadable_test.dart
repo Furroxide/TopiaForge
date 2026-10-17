@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:launcher_data/launcher_data.dart';
@@ -126,7 +127,7 @@ void main() {
       expect(settingsFile().readAsBytesSync(), original);
       expect((await shared.loadSettings()).settings.toJson(), chosen.toJson());
       final renamed = await shared.updateSettings(
-        (settings) => settings.withDisplayName('Charlotte'),
+        (settings) => settings.withDisplayName('Alex'),
       );
       expect(renamed.favorites.entries.single.name, 'Old Favorite');
       expect(renamed.lanDiscoveryEnabled, isFalse);
@@ -164,6 +165,121 @@ void main() {
         );
       },
     );
+  });
+
+  group('a backup that cannot be put back', () {
+    /// What a write stopped between its two moves leaves: the old file as a
+    /// backup, the new one as a temporary file, and no file.
+    File interrupt(File file, String token) {
+      final backup = File('${file.path}.$token.bak');
+      file.renameSync(backup.path);
+      File('${file.path}.$token.tmp').writeAsStringSync('{"unfinished": ');
+      return backup;
+    }
+
+    test('leaves the settings unreadable, never missing', () async {
+      final original = await storeChosen();
+      final backup = interrupt(settingsFile(), '4242-1-1');
+      final shared = store();
+      final release = await holdInPlace(backup);
+      if (release == null) return;
+      final load = await shared.loadSettings();
+      expect(load.recovery, MultiplayerStoreRecovery.unreadable);
+      expect(
+        load.settings.toJson(),
+        MultiplayerStore.unreadableSettings.toJson(),
+      );
+      await expectLater(
+        shared.saveSettings(MultiplayerSettings()),
+        unreadable(),
+      );
+      await expectLater(
+        shared.updateSettings((settings) => settings.withDisplayName('Alex')),
+        unreadable(),
+      );
+      expect(settingsFile().existsSync(), isFalse);
+      await release();
+      expect(backup.readAsBytesSync(), original);
+      // Free again, the backup is put back and nothing was lost.
+      final restored = await shared.loadSettings();
+      expect(restored.recovery, MultiplayerStoreRecovery.none);
+      expect(restored.settings.toJson(), chosen.toJson());
+      expect(settingsFile().readAsBytesSync(), original);
+      expect(backup.existsSync(), isFalse);
+    });
+
+    test('never lets an older backup stand in for it', () async {
+      File backup(String token, MultiplayerSettings settings, int day) =>
+          File(p.join(folder, 'settings.json.$token.bak'))
+            ..writeAsStringSync(jsonEncode(settings.toJson()))
+            ..setLastModifiedSync(DateTime(2026, 10, day));
+      final older = backup(
+        '1000-1-1',
+        MultiplayerSettings(displayName: 'Old'),
+        1,
+      );
+      final newest = backup('9000-9-9', chosen, 3);
+      final release = await holdInPlace(newest);
+      if (release == null) return;
+      final load = await store().loadSettings();
+      expect(load.recovery, MultiplayerStoreRecovery.unreadable);
+      expect(load.settings.displayName, isNot('Old'));
+      expect(settingsFile().existsSync(), isFalse);
+      expect(older.existsSync(), isTrue);
+      await release();
+      final restored = await store().loadSettings();
+      expect(restored.settings.toJson(), chosen.toJson());
+      expect(older.existsSync(), isFalse);
+      expect(newest.existsSync(), isFalse);
+    });
+
+    test('leaves known hosts unreadable, never empty', () async {
+      final typed = JoinAddressTarget(host: '127.0.0.1', port: 27250);
+      await store().updateKnownHosts(
+        (hosts) => hosts.remember(typed, hostAServerId, now),
+      );
+      final original = knownHostsFile().readAsBytesSync();
+      final backup = interrupt(knownHostsFile(), '4242-3-3');
+      final release = await holdInPlace(backup);
+      if (release == null) return;
+      await expectLater(store().loadKnownHosts(), unreadable());
+      await expectLater(
+        store().updateKnownHosts(
+          (hosts) => hosts.remember(
+            JoinAddressTarget(host: '127.0.0.1', port: 27300),
+            hostBServerId,
+            now,
+          ),
+        ),
+        unreadable(),
+      );
+      expect(knownHostsFile().existsSync(), isFalse);
+      await release();
+      expect(
+        (await store().loadKnownHosts()).check(typed, hostBServerId),
+        KnownHostCheck.mismatch,
+      );
+      expect(knownHostsFile().readAsBytesSync(), original);
+    });
+
+    test('opens no LAN socket meanwhile', () async {
+      await storeChosen();
+      final backup = interrupt(settingsFile(), '4242-2-2');
+      final rig = LanRig.fresh();
+      final repo = repository(lan: rig.client);
+      final release = await holdInPlace(backup);
+      if (release == null) return;
+      final snapshot = await repo.startLanBrowsing();
+      expect(rig.binder.binds, isEmpty);
+      expect(snapshot.problem, LanDiscoveryProblem.settingsUnreadable);
+      await release();
+      // Put back, the player's choice holds.
+      expect(
+        (await repo.startLanBrowsing()).status,
+        LanDiscoveryStatus.disabled,
+      );
+      expect(rig.binder.binds, isEmpty);
+    });
   });
 
   group('the repository', () {

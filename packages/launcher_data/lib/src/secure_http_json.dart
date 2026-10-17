@@ -88,8 +88,10 @@ final _headerNamePattern = RegExp(r"^[a-z0-9!#$%&'*+.^_`|~-]{1,64}$");
 ///   URL without credentials, query or fragment; [query] holds at most 16
 ///   parameters with plain keys and printable ASCII values; [headers] holds at
 ///   most 16 lowercase names outside the reserved set, with printable ASCII
-///   values; [body] is JSON of at most [maxRequestBytes] bytes, for POST and
-///   PUT only.
+///   values; [body], for POST and PUT only, is written as canonical JSON of
+///   at most [maxRequestBytes] bytes, the only form the service reads: its
+///   members in ordinal order, integers only, and member names of 1 to 64
+///   ASCII letters and digits.
 /// - Redirects are never followed. The response body is read up to
 ///   [maxResponseBytes], reporting each chunk to [onProgress].
 /// - Any status is returned with its decoded body, so the caller decides what
@@ -329,11 +331,13 @@ List<int>? _jsonPayload(
   }
   final List<int> bytes;
   try {
-    bytes = utf8.encode(jsonEncode(body));
-  } on JsonUnsupportedObjectError {
+    // The service reads a body only when it is already canonical, and
+    // `jsonEncode` keeps insertion order and writes doubles.
+    bytes = CanonicalJson.encode(body);
+  } on CanonicalJsonException {
     throw SecureHttpRequestException(
       SecureHttpFailure.invalidRequest,
-      '$label has a body that is not JSON.',
+      '$label has a body that is not canonical JSON.',
     );
   }
   if (bytes.length > maxRequestBytes) {
