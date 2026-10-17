@@ -483,7 +483,10 @@ answers no and is reported.
   joining is refused with its verdict and text before the provider hears of it, or reaches the provider; leaving is
   never refused, from any realm or phase, stops hosting on its way and keeps an earlier hosting failure on record; a
   missing provider or live sessions switched off is said first; a phase that cannot be read counts as busy; and the
-  census, leaving and phase failures are logged once, redacted.
+  census, leaving and phase failures are logged once, redacted. Over a real orchestrator (`MultiplayerRealmPhaseTests`,
+  and the ModRuntime harness), an idle session that is still changing is busy: while the main menu loads after the
+  player left the game, a join and hosting wait, as a launch does, and go through once it has loaded; so do a native
+  scene change, the orchestrator's own operation alone, and shutdown.
 - **The spawn ledger** (`MultiplayerSpawnLedgerTests`): order, liveness, what a host would baseline, describing an entity
   again in place, descriptions that are refused, the sweep's bound under churn, and offline frames with a thousand
   records, a solo frame, and a client-local spawn, each allocating nothing.
@@ -497,9 +500,11 @@ answers no and is reported.
 - **The replication SPI** (`RuntimeReplicationTests`, `RuntimeReplicationServiceTests`): its enums mirror the runtime's;
   routes and time authority match the tables in every realm; factories, canonical registration, spawn requests,
   commands, references and the microphone, with their bounds, refusals and lifetimes.
-- **Its privacy** (`ReplicationSpiPrivacyTests`): no member, parameter or type of the replication SPI, or of the runtime
-  types behind it, is shaped like an address or names a network type, and nothing the realm and the seam log or answer
-  holds one, however many addresses the failures they report carry.
+- **Its privacy** (`ReplicationSpiPrivacyTests`): no member, parameter or type of the replication SPI (its interfaces, its
+  limits and every internal type they name, transitively), or of the runtime types behind it, is shaped like an address
+  or names a network type, and nothing the realm and the seam log or answer holds one, however many addresses the
+  failures they report carry. Other internal contracts in the namespace, such as the launch contract's session ticket,
+  are held to their own rules.
 
 ## 10. The realm
 
@@ -521,8 +526,13 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   Each answers a `MultiplayerRealmChange`: the rule's verdict and effect, and the control's own result, or the refusal.
   `EvaluateRealmChange(target)` asks the rule alone, so the interface can ask "Leave current game?" before it acts.
 - **What the rule reads.** The realm, the local session's phase, and whether a standalone mod is loaded. ModRuntime
-  points `SessionPhaseSource` at its gamemode session orchestrator; until the session runtime starts, the session is
-  idle. A phase that cannot be read counts as busy, so nothing goes online on a guess, and its failure is logged once.
+  points `SessionPhaseSource` at its gamemode session orchestrator's `RealmPhase`; until the session runtime starts,
+  the session is idle. A phase that cannot be read counts as busy, so nothing goes online on a guess, and its failure is
+  logged once.
+- **Idle means settled.** `RealmPhase` counts an idle session that is still changing as stopping, so the rule says
+  `Busy`: a return to the main menu that has ended the session but still loads the menu, any other operation or native
+  scene change that holds it, and shutdown. The orchestrator refuses to start a session then, and a join replaces the
+  local session, so it waits too. After "Leave current game?", the interface asks again once the menu has loaded.
 - **Refusals**, in this order: a missing provider, or live sessions switched off, first, since no leaving would change
   them; then the rule's verdict:
 

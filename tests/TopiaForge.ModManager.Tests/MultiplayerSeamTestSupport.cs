@@ -8,14 +8,16 @@ using TopiaForge.Mods;
 namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
-    /// Runs the realm and factory-seam suites (WS3.1 and WS3.3): the realm at the runtime, the spawn ledger, the network
-    /// decorators, the profile every context carries, the replication SPI and its privacy.
+    /// Runs the realm and factory-seam suites (WS3.1 and WS3.3): the realm at the runtime and the phase it reads from a real
+    /// orchestrator, the spawn ledger, the network decorators, the profile every context carries, the replication SPI and
+    /// its privacy.
     /// </summary>
     internal static class MultiplayerSeamTests
     {
         internal static void Run(string root)
         {
             MultiplayerRealmRuntimeTests.Run();
+            MultiplayerRealmPhaseTests.Run(System.IO.Path.Combine(root, "multiplayer-realm-phase"));
             MultiplayerSpawnLedgerTests.Run();
             NetGameplayServicesTests.Run();
             ModContextNetProfileTests.Run(System.IO.Path.Combine(root, "multiplayer-profiles"));

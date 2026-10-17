@@ -23,6 +23,7 @@ namespace TopiaForge.ModRuntime.Tests
             TestMultiplayerOfflineFrameAllocatesNothing(root);
             TestMultiplayerFollowsTheRuntimeLifecycle(root);
             TestMultiplayerRealmAndFactorySeam(root);
+            TestTheRealmWaitsForTheMainMenu(root);
             Console.WriteLine("ModRuntime multiplayer composition tests passed.");
         }
 

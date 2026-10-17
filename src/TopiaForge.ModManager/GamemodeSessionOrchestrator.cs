@@ -35,6 +35,22 @@ namespace TopiaForge.ModManager
         }
 
         internal SessionStateSnapshot Current => lifecycle.Current;
+
+        /// <summary>
+        /// Gets the local session's phase as the multiplayer realm rules read it. An idle session still counts as stopping
+        /// while it changes: a return to the main menu that has ended the session but still loads the menu, any other
+        /// operation or native scene change that holds it, and shutdown. The orchestrator refuses to start a session then,
+        /// so a join, which replaces the local session, waits as well.
+        /// </summary>
+        internal SessionPhase RealmPhase
+        {
+            get
+            {
+                var phase = lifecycle.Current.Phase;
+                return phase == SessionPhase.Idle && (shuttingDown || lifecycle.HasOperation || native.IsSceneBusy) ? SessionPhase.Stopping : phase;
+            }
+        }
+
         internal event Action<SessionStateSnapshot>? StateChanged;
         internal event Action<LaunchProgress>? Progress;
         internal event Action<LaunchOutcome>? Outcome;

@@ -63,6 +63,42 @@ namespace TopiaForge.ModRuntime.Tests
         }
 
         /// <summary>
+        /// The realm rules read the runtime's own orchestrator, settled or not: once the player has left the game, the session
+        /// is idle but the main menu still loads, and a join asked for meanwhile waits until the menu has loaded, as a launch
+        /// does.
+        /// </summary>
+        private static void TestTheRealmWaitsForTheMainMenu(string root)
+        {
+            var fixture = NewFixture(root, "multiplayer-menu", "TopiaForge.ValidTestMod.RuntimeSuccessMod");
+            var runtime = CreateMultiplayerRuntime(fixture, new MultiplayerFrameHost());
+            var menuLoad = new TaskCompletionSource<OperationResult<bool>>();
+            var menuLoads = 0;
+            var sessions = runtime.ActivateSessionRuntime(
+                new EffectiveProfile("multiplayer-menu", 1, new[] { new ResolvedPackage(fixture.Manifest.Id, fixture.Manifest.Version, fixture.Manifest) }),
+                (_, _) => { menuLoads++; return menuLoad.Task; });
+            try
+            {
+                runtime.Load(new[] { fixture.Package });
+                var control = new FakeMultiplayerControl();
+                Assert(runtime.Multiplayer.Attach(control), "a provider attaches");
+                var menu = sessions.ReturnToMainMenuAsync();
+                PumpBindingUntil(runtime.NativeDispatcher, () => menuLoads == 1, "the main menu did not start loading");
+                var join = runtime.Multiplayer.Join(new FakeJoinTarget(), new InternalJoinSettings());
+                Assert(sessions.Current.Phase == SessionPhase.Idle && join.Verdict == NetRealmTransitionVerdict.Busy && control.RealmCalls.Count == 0,
+                    "while the main menu loads, a join waits, though the session is idle (" + join + ")");
+                menuLoad.SetResult(OperationResult<bool>.Success(true));
+                PumpBinding(runtime.NativeDispatcher, menu);
+                var joined = runtime.Multiplayer.Join(new FakeJoinTarget(), new InternalJoinSettings());
+                Assert(joined.Succeeded && control.RealmCalls.SequenceEqual(new[] { "join" }), "once the menu has loaded, the join goes through (" + joined + ")");
+            }
+            finally
+            {
+                menuLoad.TrySetResult(OperationResult<bool>.Success(true));
+                runtime.UnloadAll();
+            }
+        }
+
+        /// <summary>
         /// An asset service that spawns whatever it is asked to, as a stand-in for the game's: like the game's, it owns each
         /// spawn for the context's lifetime.
         /// </summary>

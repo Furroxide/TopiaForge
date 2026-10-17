@@ -27,15 +27,17 @@ namespace TopiaForge.ModManager.Tests
             TheRealmAndTheSeamWriteNoAddress();
         }
 
+        private const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
         private static void TheSeamCarriesNoAddress()
         {
-            var spi = typeof(IModContext).Assembly.GetTypes()
-                .Where(type => type.Namespace == "TopiaForge.Mods.Internal" && !type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false))
-                .ToArray();
+            var spi = ReplicationSpi();
             foreach (var expected in new[]
                      {
                          typeof(IInternalReplicationContext), typeof(IRuntimeReplication), typeof(IInternalReplicaFactory), typeof(IInternalMicrophoneLease),
-                         typeof(InternalSpawnDescriptor), typeof(InternalCommand), typeof(InternalNetRef), typeof(InternalReplicationLimits)
+                         typeof(InternalSpawnDescriptor), typeof(InternalCommand), typeof(InternalNetRef), typeof(InternalReplicationLimits),
+                         typeof(InternalNetRealm), typeof(InternalNetworkClass), typeof(InternalExecutionContext), typeof(InternalIntent), typeof(InternalRoute),
+                         typeof(InternalTimeAuthority), typeof(InternalMicrophoneUse), typeof(InternalSpawnSource), typeof(InternalNetRefKind)
                      })
             {
                 That(spi.Contains(expected), "the scan covers " + expected.Name);
@@ -49,7 +51,6 @@ namespace TopiaForge.ModManager.Tests
                 typeof(NetAssetService), typeof(NetEntityService), typeof(NetItemService), typeof(NetUiService), typeof(MultiplayerRuntime)
             };
             var offenders = new List<string>();
-            const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
             foreach (var type in spi.Concat(runtime).Concat(runtime.SelectMany(type => type.GetNestedTypes(All))))
             {
                 if (IsAddressShaped(type.Name)) offenders.Add(type.Name);
@@ -118,6 +119,41 @@ namespace TopiaForge.ModManager.Tests
 
         private static Exception Failure() =>
             new InvalidOperationException("peer [2001:db8::21]:27250 via 203.0.113.21:27250 at play.example.org");
+
+        /// <summary>
+        /// The replication SPI: its context interface and the limits it enforces, with every SDK-internal type their members
+        /// name, transitively, so a type the SPI starts to use is scanned at once. The namespace holds other internal
+        /// contracts too, such as the launch contract's session ticket, which carries a direct target's address to the
+        /// provider by design; they are held to their own rules and are not part of this seam.
+        /// </summary>
+        private static Type[] ReplicationSpi()
+        {
+            var sdk = typeof(IModContext).Assembly;
+            var found = new HashSet<Type>();
+            var pending = new Queue<Type>(new[] { typeof(IInternalReplicationContext), typeof(InternalReplicationLimits) });
+            while (pending.Count > 0)
+            {
+                var type = pending.Dequeue();
+                if (!found.Add(type)) continue;
+                foreach (var nested in type.GetNestedTypes(All)) pending.Enqueue(nested);
+                foreach (var member in type.GetMembers(All))
+                {
+                    foreach (var named in Types(member).SelectMany(Named))
+                    {
+                        if (named.Assembly == sdk && named.Namespace == "TopiaForge.Mods.Internal") pending.Enqueue(named);
+                    }
+                }
+            }
+
+            return found.Where(type => !type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false)).ToArray();
+        }
+
+        /// <summary>A type and every type it is made of: element types of arrays and references, and generic arguments.</summary>
+        private static IEnumerable<Type> Named(Type type)
+        {
+            if (type.HasElementType) return Named(type.GetElementType()!);
+            return type.IsGenericType ? new[] { type }.Concat(type.GetGenericArguments().SelectMany(Named)) : new[] { type };
+        }
 
         private static bool IsAddressShaped(string name)
         {

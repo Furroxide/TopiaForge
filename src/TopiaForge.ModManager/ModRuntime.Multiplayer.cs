@@ -12,7 +12,10 @@ namespace TopiaForge.ModManager
         /// </summary>
         internal MultiplayerReplication Replication => replication ??= new MultiplayerReplication(multiplayer);
 
-        /// <summary>The local session's phase, as the realm rules read it: idle until the session runtime is activated.</summary>
-        private SessionPhase CurrentSessionPhase() => activeSessions?.Current.Phase ?? SessionPhase.Idle;
+        /// <summary>
+        /// The local session's phase, as the realm rules read it: idle until the session runtime is activated, and stopping
+        /// while the orchestrator still changes an idle session, as a return to the main menu does until the menu has loaded.
+        /// </summary>
+        private SessionPhase CurrentSessionPhase() => activeSessions?.RealmPhase ?? SessionPhase.Idle;
     }
 }
