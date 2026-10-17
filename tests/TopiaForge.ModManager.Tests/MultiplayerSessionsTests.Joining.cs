@@ -243,10 +243,17 @@ namespace TopiaForge.ModManager.Tests
             direct.Control.Queries[0].Complete(InternalLiveFailure.None, Server('2', "Typed"));
             direct.Frame();
             Step(direct, InternalJoinPhase.Connecting, null, ConnectingStep.Connecting, "LAN");
-            That(ConnectingStepMap.PathOf(InternalJoinTargetKind.Direct, allowDirect: true) == "Direct" &&
-                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Invite, allowDirect: false) == "Relay" &&
-                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Lan, allowDirect: true) == "LAN",
-                "the Connecting step names the path: LAN, Direct or Relay");
+            var none = InternalConnectionRoute.None;
+            That(ConnectingStepMap.PathOf(InternalJoinTargetKind.Direct, allowDirect: true, none) == "Direct" &&
+                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Direct, allowDirect: false, none) == "LAN" &&
+                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Invite, allowDirect: false, none) == "Relay" &&
+                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Invite, allowDirect: true, none) == "Relay" &&
+                 ConnectingStepMap.PathOf(InternalJoinTargetKind.ListedServer, allowDirect: false, none) == "Relay" &&
+                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Lan, allowDirect: true, none) == "LAN",
+                "before the link is up, the Connecting step names the path the target takes: LAN, Direct or Relay");
+            That(ConnectingStepMap.PathOf(InternalJoinTargetKind.Invite, allowDirect: true, InternalConnectionRoute.Direct) == "Direct" &&
+                 ConnectingStepMap.PathOf(InternalJoinTargetKind.Invite, allowDirect: true, InternalConnectionRoute.Relayed) == "Relay",
+                "and once it is up, the route the status reports");
         }
 
         /// <summary>Puts the join in <paramref name="phase"/> and checks the stepper shows <paramref name="step"/> with <paramref name="detail"/>.</summary>

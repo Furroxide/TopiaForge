@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Sessions
         internal const string LoadingSettings = "Loading multiplayer settings...";
         internal const string SavingSettings = "Saving multiplayer settings...";
         internal const string NameRule = "A name is 2 to 24 printable characters.";
+        internal const string PromptWithdrawn = "The question closed because the game or session it asked about changed. Nothing was done.";
         internal const int MaximumNotices = 16;
         internal const int MaximumPrompts = 4;
 
@@ -33,6 +34,7 @@ namespace TopiaForge.ModManager.Sessions
         private readonly ConnectPresenter connect;
         private readonly SessionPresenter session;
         private readonly Queue<ScreenPrompt> prompts = new Queue<ScreenPrompt>();
+        private readonly List<ScreenPrompt> withdrawing = new List<ScreenPrompt>(MaximumPrompts);
         private readonly Queue<ScreenNotice> notices = new Queue<ScreenNotice>();
         private MultiplayerSubTab selectedTab;
         private string displayName = MultiplayerSettings.DefaultDisplayName;
@@ -92,7 +94,7 @@ namespace TopiaForge.ModManager.Sessions
         {
             get
             {
-                while (prompts.Count > 0 && prompts.Peek().IsAnswered) prompts.Dequeue();
+                if (DropAnswered()) Notify(PromptWithdrawn, ScreenTone.Neutral);
                 return prompts.Count == 0 ? null : prompts.Peek();
             }
         }
@@ -185,6 +187,7 @@ namespace TopiaForge.ModManager.Sessions
             session.Tick();
             if (shown || browse.IsSearching) browse.Tick();
             if (status.Version != statusVersion) RebuildStatus();
+            WithdrawStale();
         }
 
         private void Loaded(MultiplayerSettings loaded)
@@ -249,7 +252,7 @@ namespace TopiaForge.ModManager.Sessions
         /// </summary>
         private void Ask(ScreenPrompt prompt)
         {
-            while (prompts.Count > 0 && prompts.Peek().IsAnswered) prompts.Dequeue();
+            if (DropAnswered()) Notify(PromptWithdrawn, ScreenTone.Neutral);
             if (prompts.Count >= MaximumPrompts)
             {
                 prompt.Answer(false);
@@ -257,6 +260,33 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             prompts.Enqueue(prompt);
+        }
+
+        /// <summary>
+        /// Withdraws every waiting question that stopped applying, as when the game it asks about ended: the view closes the
+        /// one showing, and the player is told once that nothing was done. A frame with nothing to withdraw allocates nothing.
+        /// </summary>
+        private void WithdrawStale()
+        {
+            foreach (var prompt in prompts)
+            {
+                if (!prompt.IsAnswered && !prompt.StillHolds) withdrawing.Add(prompt);
+            }
+
+            // Withdrawing answers no, and what that runs must not change the queue under its own walk.
+            for (var index = 0; index < withdrawing.Count; index++) withdrawing[index].Withdraw();
+            withdrawing.Clear();
+            var told = DropAnswered();
+            foreach (var prompt in prompts) told |= prompt.TakeWithdrawal();
+            if (told) Notify(PromptWithdrawn, ScreenTone.Neutral);
+        }
+
+        /// <summary>Drops the answered questions at the head of the queue; true when one of them was withdrawn.</summary>
+        private bool DropAnswered()
+        {
+            var withdrawn = false;
+            while (prompts.Count > 0 && prompts.Peek().IsAnswered) withdrawn |= prompts.Dequeue().TakeWithdrawal();
+            return withdrawn;
         }
 
         /// <summary>Queues a toast; past the bound the oldest goes, so nothing unshown can pile up.</summary>

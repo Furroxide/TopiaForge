@@ -12,31 +12,31 @@ namespace TopiaForge.ModManager.Sessions
         internal void Tick()
         {
             var tracker = context.Status;
-            var ready = IsReady(tracker);
+            var listed = ListsPlayers(tracker);
             if (tracker.Version != titleVersion || tracker.Role != shownRole)
             {
                 titleVersion = tracker.Version;
                 RebuildTitle(tracker);
             }
 
-            if (ReferenceEquals(tracker.Snapshot, shownSnapshot) && tracker.Role == shownRole && ready == shownReady && !rebuild) return;
+            if (ReferenceEquals(tracker.Snapshot, shownSnapshot) && tracker.Role == shownRole && listed == shownListed && !rebuild) return;
             shownSnapshot = tracker.Snapshot;
             shownRole = tracker.Role;
-            shownReady = ready;
+            shownListed = listed;
             rebuild = false;
-            players = ready ? Rows(tracker) : Array.Empty<PlayerRow>();
+            players = listed ? Rows(tracker) : Array.Empty<PlayerRow>();
 
             // A selection whose id another player now holds, or that left, is dropped rather than carried to them.
             if (selected != null && (!keys.TryGetValue(selected.Id, out var key) || !key.Equals(selected.PlayerKey))) selected = null;
         }
 
         /// <summary>
-        /// Gets whether <paramref name="target"/> still names the player the host chose: the session is Ready, and the current
-        /// snapshot's participant with that id is connected, not this player, and holds the same valid player key.
+        /// Gets whether <paramref name="target"/> still names the player the host chose: the session lists its players, and the
+        /// current snapshot's participant with that id is connected, not this player, and holds the same valid player key.
         /// </summary>
         internal bool StillHolds(MultiplayerSessionSnapshot? snapshot, string id, MultiplayerPlayerKey playerKey)
         {
-            if (snapshot == null || !IsReady(context.Status) || !playerKey.IsValid) return false;
+            if (snapshot == null || !ListsPlayers(context.Status) || !playerKey.IsValid) return false;
             foreach (var participant in snapshot.Participants)
             {
                 if (!string.Equals(participant.Id.Value, id, StringComparison.Ordinal)) continue;
@@ -112,12 +112,17 @@ namespace TopiaForge.ModManager.Sessions
         private void RebuildTitle(MultiplayerStatusTracker tracker)
         {
             var status = tracker.Status;
+            inviteText = string.Empty;
             var name = status.Server == null ? string.Empty : HostText.ForDisplay(status.Server.Name);
             switch (tracker.Role)
             {
                 case InternalSessionRole.ListenHost:
                     title = "Hosting this game";
                     subtitle = HostPresenter.PlayersLine(Math.Max(status.ConnectedPlayers, 1), status.MaxPlayers);
+                    var invite = status.Internet.Invite;
+                    inviteText = invite != null ? InvitePrefix + invite.Display + InviteSuffix
+                        : status.Internet.ListingPhase != InternalListingPhase.Off ? InvitePending
+                        : LanInvite;
                     break;
                 case InternalSessionRole.Client:
                     title = name.Length == 0 ? "Joined a session" : "Joined " + name;

@@ -22,8 +22,12 @@ namespace TopiaForge.ModManager.Sessions
             this.ask = ask ?? throw new ArgumentNullException(nameof(ask));
         }
 
-        /// <summary>Shows the disclosure if this player has not acknowledged its current version, then continues.</summary>
-        internal void EnsureDisclosure(Action proceed, Action abandoned)
+        /// <summary>
+        /// Shows the disclosure if this player has not acknowledged its current version, then continues. While it shows,
+        /// <paramref name="holds"/> says whether what it guards still applies; once it does not, the disclosure is withdrawn
+        /// unacknowledged and <paramref name="abandoned"/> runs.
+        /// </summary>
+        internal void EnsureDisclosure(Action proceed, Action abandoned, Func<bool>? holds = null)
         {
             if (proceed == null) throw new ArgumentNullException(nameof(proceed));
             if (abandoned == null) throw new ArgumentNullException(nameof(abandoned));
@@ -43,14 +47,15 @@ namespace TopiaForge.ModManager.Sessions
 
                 settings.Update(settings.Current.AcknowledgeDisclosure());
                 proceed();
-            }));
+            }, holds));
         }
 
         /// <summary>
         /// Decides whether a session that can only be reached directly may be: at once when Hide my IP is off, otherwise
-        /// only once the player allows it for this session. <paramref name="proceed"/> receives the session's choice.
+        /// only once the player allows it for this session. <paramref name="proceed"/> receives the session's choice. A
+        /// prompt whose <paramref name="holds"/> stops holding is withdrawn, which allows nothing.
         /// </summary>
-        internal void EnsureDirect(Action proceed, Action abandoned)
+        internal void EnsureDirect(Action proceed, Action abandoned, Func<bool>? holds = null)
         {
             if (proceed == null) throw new ArgumentNullException(nameof(proceed));
             if (abandoned == null) throw new ArgumentNullException(nameof(abandoned));
@@ -64,7 +69,7 @@ namespace TopiaForge.ModManager.Sessions
             {
                 if (allowed) proceed();
                 else abandoned();
-            }));
+            }, holds));
         }
 
         /// <summary>

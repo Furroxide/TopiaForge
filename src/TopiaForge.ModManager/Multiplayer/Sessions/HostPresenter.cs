@@ -11,9 +11,10 @@ namespace TopiaForge.ModManager.Sessions
     /// HOST: the session's name, size, password and visibility, the host policy the session engine supports today, and
     /// starting or ending the session. A running solo game is opened to other players in place; at the main menu the chosen
     /// game starts first and opens once it runs. Every step asks the runtime's realm rules, and opening and ending go
-    /// through the runtime, never the control's own hosting. Before anything starts, the disclosure shows if it is due, and
-    /// a Public or Invite session, which in this build can only be reached directly, asks the per-session prompt while Hide
-    /// my IP is on; saying no starts nothing. The password is used once and never kept.
+    /// through the runtime, never the control's own hosting. Before anything starts, the disclosure shows if it is due. A
+    /// Public or Invite session needs the TopiaForge service: with it, players join through the relay, and directly too only
+    /// when the player turned Hide my IP off; without it, HOST offers neither. While such a session runs, HOST says how it
+    /// stands with the service. The password is used once and never kept.
     /// </summary>
     internal sealed partial class HostPresenter : IHostScreen
     {
@@ -21,6 +22,13 @@ namespace TopiaForge.ModManager.Sessions
         internal const string EndTitle = "End session for everyone?";
         internal const string EndBody = "Every player leaves the session. You keep playing on your own.";
         internal const string EndConfirm = "END SESSION";
+        internal const string LanNote = "Players on your local network can find this session and join it.";
+        internal const string PublicNote = "Players find this session in the TopiaForge server list and join it through the service.";
+        internal const string InviteNote = "Players join with the invite code SESSION shows, through the TopiaForge service.";
+        internal const string Registering = "Registering this session with the TopiaForge service...";
+        internal const string Listed = "Listed. Players can find this session in the TopiaForge server list.";
+        internal const string Invited = "Players can join with the invite code SESSION shows.";
+        internal const string Retrying = "This game keeps trying to reach the TopiaForge service by itself.";
 
         private static readonly string[] VisibilityLabels = { "Public", "Invite", "LAN" };
 
@@ -53,6 +61,7 @@ namespace TopiaForge.ModManager.Sessions
         private int visibility = 2;
         private int selectedTarget;
         private bool voice;
+        private int listingVersion = -1;
 
         internal HostPresenter(MultiplayerScreensContext context)
         {
@@ -118,9 +127,11 @@ namespace TopiaForge.ModManager.Sessions
 
         public int Visibility => visibility;
 
-        public string VisibilityNote => VisibilityValues[visibility] == InternalSessionVisibility.Lan
-            ? "Players on your local network can find this session and join it."
-            : "Public listings and invites need the TopiaForge service, which is not configured in this build. You are asked before anyone can connect directly.";
+        public string VisibilityNote =>
+            VisibilityValues[visibility] == InternalSessionVisibility.Lan ? LanNote
+            : !context.HasService ? LiveFailureMessages.NoService
+            : VisibilityValues[visibility] == InternalSessionVisibility.Public ? PublicNote
+            : InviteNote;
 
         public bool Voice => voice;
 
@@ -133,6 +144,9 @@ namespace TopiaForge.ModManager.Sessions
             get
             {
                 if (!context.CanStartSession || !FormEnabled || nameError.Length != 0 || passwordError.Length != 0) return false;
+
+                // Public and Invite sessions need the TopiaForge service; without it only LAN hosting is offered.
+                if (VisibilityValues[visibility] != InternalSessionVisibility.Lan && !context.HasService) return false;
                 var decision = Decision();
                 return decision == RealmDecision.PromoteInPlace || (decision == RealmDecision.StartAsHost && selectedTarget < targets.Count);
             }

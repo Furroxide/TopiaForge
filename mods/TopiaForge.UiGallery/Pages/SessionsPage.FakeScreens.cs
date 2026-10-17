@@ -60,7 +60,7 @@ namespace TopiaForge.UiGallery.Pages
 
         public string VisibilityNote => Visibility == 2
             ? "Players on your local network can find this session and join it."
-            : "Public listings and invites need the TopiaForge service, which is not configured in this build. You are asked before anyone can connect directly.";
+            : "Public and invite-only sessions, invites and listed servers need the TopiaForge service, which this game is not set up to reach. LAN play still works.";
 
         public bool Voice { get; private set; }
 
@@ -141,7 +141,7 @@ namespace TopiaForge.UiGallery.Pages
 
         public string InviteError => InviteCode.Length == 0 || InviteCode.Replace("-", string.Empty).Length == 10 ? string.Empty : "An invite code is 10 letters and digits, such as ABCDE-12345.";
 
-        public string InviteNote => "Invites and listed servers need the TopiaForge service, which is not configured in this build.";
+        public string InviteNote => "This game is not set up to reach the TopiaForge service, so invites and listed servers are unavailable. LAN and direct play still work.";
 
         public bool CanJoinInvite => false;
 
@@ -220,7 +220,7 @@ namespace TopiaForge.UiGallery.Pages
 
         public bool PlayersVisible => owner.HostFake.Hosting && Ready;
 
-        public string PlayersNote => owner.HostFake.Hosting ? "Players appear once the session is ready." : "Host a game or join one to play together.";
+        public string PlayersNote => owner.HostFake.Hosting ? "Players appear once the host lists them." : "Host a game or join one to play together.";
 
         public IReadOnlyList<PlayerRow> Players => PlayersVisible ? Rows : Array.Empty<PlayerRow>();
 

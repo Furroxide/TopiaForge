@@ -7,20 +7,19 @@ using static TopiaForge.ModManager.Tests.SessionAssert;
 
 namespace TopiaForge.ModManager.Tests
 {
-    /// <summary>SESSION: players only once the session is Ready, moderation checked against the current snapshot, and leaving.</summary>
+    /// <summary>SESSION: players once the host lists them, moderation checked against the current snapshot, and leaving.</summary>
     internal static partial class MultiplayerSessionsTests
     {
-        private static void PlayersShowOnlyOnceTheSessionIsReady()
+        private static void PlayersShowOnceTheHostListsThem()
         {
-            // During a join the engine's snapshot can still carry the previous host's players, mislabelled.
+            // A join that has not connected runs no session of its own: what the snapshot lists then is solo play's.
             var rig = new SessionsRig();
             rig.Presenter.SelectTab(MultiplayerSubTab.Session);
-            var stale = SessionsRig.HostSnapshot(MultiplayerSessionState.Ready, "s-old",
-                SessionsRig.Player("p1", "Ada", "key-a"), SessionsRig.Player("p2", "Bo", "key-b"));
-            foreach (var phase in new[] { InternalJoinPhase.Resolving, InternalJoinPhase.Connecting, InternalJoinPhase.Synchronizing, InternalJoinPhase.Reconnecting })
+            var solo = SessionsRig.HostSnapshot(MultiplayerSessionState.Ready, "s-solo", SessionsRig.Player("p1", "Ada", "key-a"));
+            foreach (var phase in new[] { InternalJoinPhase.Resolving, InternalJoinPhase.Connecting })
             {
-                rig.Status(phase == InternalJoinPhase.Synchronizing || phase == InternalJoinPhase.Reconnecting ? InternalSessionRole.Client : InternalSessionRole.Solo, phase);
-                rig.Environment.SessionSnapshot = stale;
+                rig.Status(InternalSessionRole.Solo, phase);
+                rig.Environment.SessionSnapshot = solo;
                 rig.Frame();
                 var session = rig.Presenter.Session;
                 That(!session.PlayersVisible && session.Players.Count == 0 && session.PlayersNote == SessionPresenter.WaitingNote,
@@ -35,15 +34,22 @@ namespace TopiaForge.ModManager.Tests
                     "asking anyway does nothing (" + phase + ")");
             }
 
-            rig.Status(InternalSessionRole.Client, InternalJoinPhase.InSession);
-            rig.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Synchronizing, "s-new", "p1");
+            // Joined: the engine lists nobody until the new host's own list arrives, then lists it, before Ready.
+            rig.Status(InternalSessionRole.Client, InternalJoinPhase.Synchronizing);
+            rig.Environment.SessionSnapshot = new MultiplayerSessionSnapshot(new MultiplayerSessionId("s-new"), MultiplayerSessionState.Synchronizing,
+                MultiplayerProcessKind.Interactive, MultiplayerExecutionSide.Client, null, Array.Empty<MultiplayerParticipant>(),
+                new NetworkTick(1), new SessionSeed(7), null, MultiplayerSessionEndReason.None);
             rig.Frame();
-            That(!rig.Presenter.Session.PlayersVisible, "in session but with the snapshot not Ready, nobody is listed yet");
-            rig.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Ready, "s-new", "p1", SessionsRig.Player("p2", "Cy", "key-c"));
+            That(!rig.Presenter.Session.PlayersVisible && rig.Presenter.Session.PlayersNote == SessionPresenter.WaitingNote,
+                "a join whose host has not listed its players yet lists nobody, only why");
+            rig.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Synchronizing, "s-new", "p1", SessionsRig.Player("p2", "Cy", "key-c"));
             rig.Frame();
             var joined = rig.Presenter.Session;
             That(joined.PlayersVisible && joined.Players.Select(row => row.Name).SequenceEqual(new[] { "Ada", "Sam", "Cy" }) && joined.Players.All(row => !row.CanModerate),
-                "once Ready the session's own players are listed; a joined player moderates nobody");
+                "once the host's list arrives it is listed, before Ready; a joined player moderates nobody");
+            rig.Status(InternalSessionRole.Client, InternalJoinPhase.Reconnecting);
+            rig.Frame();
+            That(rig.Presenter.Session.PlayersVisible && rig.Presenter.Session.Players.Count == 3, "and a lost link that reconnects keeps the list");
 
             var host = new SessionsRig();
             host.Status(InternalSessionRole.ListenHost, host: InternalHostPhase.Hosting);

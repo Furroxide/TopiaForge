@@ -35,9 +35,11 @@ namespace TopiaForge.Mods.UnityUi
         /// Destructive confirmation that also says when it ends without confirming: the cancel button, ESC, or anything
         /// else that closes it. <paramref name="onCancel"/> runs once, after the dialog has closed; confirming never runs it.
         /// With <paramref name="plainText"/>, the title and body render exactly as written, markup unparsed, for text that
-        /// names what another player wrote, such as their name.
+        /// names what another player wrote, such as their name. With <paramref name="persistent"/>, the dialog survives
+        /// scene loads. It returns the dialog, so its owner can close it once the decision no longer applies, which counts
+        /// as cancelling.
         /// </summary>
-        public void Destructive(
+        public TopiaForgeModalInstance Destructive(
             string title,
             string body,
             string confirmLabel,
@@ -52,7 +54,7 @@ namespace TopiaForge.Mods.UnityUi
                 throw new ArgumentNullException(nameof(onCancel));
             }
 
-            Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper, onCancel, plainText, persistent);
+            return Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper, onCancel, plainText, persistent);
         }
 
         /// <summary>HUD-scheme variant for in-gameplay dialogs.</summary>
@@ -81,7 +83,7 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeModalInstance(host, title, scheme, width, showTitle: !string.IsNullOrEmpty(title), persistent: persistent);
         }
 
-        private void Open(
+        private TopiaForgeModalInstance Open(
             string title,
             string body,
             string confirmLabel,
@@ -121,6 +123,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             modal.Show();
+            return modal;
         }
     }
 

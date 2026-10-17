@@ -127,6 +127,16 @@ namespace TopiaForge.ModManager.Tests
             var hidden = new SessionsRig();
             hidden.Presenter.OnHidden();
             Settled("the overlay closed", hidden);
+
+            // A question waits while what it asks about holds, and the screens check that every frame.
+            var ending = HostingWithAda();
+            ending.Presenter.Session.EndForEveryone();
+            Settled("a question about the session waiting", ending);
+            var opening = new SessionsRig(acknowledged: false);
+            opening.Environment.Phase = TopiaForge.ModManager.Core.SessionPhase.Running;
+            opening.Presenter.Host.Host();
+            Settled("a question about the running game waiting", opening);
+            That(ending.Prompt != null && opening.Prompt?.Kind == ScreenPromptKind.Disclosure, "and both questions still wait");
         }
 
         /// <summary>
@@ -183,9 +193,9 @@ namespace TopiaForge.ModManager.Tests
 
             for (var warm = 0; warm < 100; warm++) Frame();
             var reads = presenter.Context.Status.Reads;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var frame = 0; frame < 10_000; frame++) Frame();
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            // Measured as the other zero-allocation checks are, outside what the runtime does as code first runs.
+            var allocated = Seam.Allocated(Frame, 10_000);
             That(allocated == 0, "a settled frame allocates nothing while " + state + " (" + allocated + " bytes over 10,000 frames)");
             That(presenter.Context.Status.Reads == reads, "and reads the control's status not once (" + state + ")");
         }

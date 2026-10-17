@@ -161,31 +161,76 @@ namespace TopiaForge.ModManager.Tests
             That(!standalone.Presenter.Host.CanHost, "an enabled standalone mod refuses hosting");
         }
 
-        private static void PublicHostingAsksForADirectConnection()
+        /// <summary>
+        /// Public and Invite sessions need the TopiaForge service. Without one HOST offers neither: hosting them stays
+        /// disabled, says why, and contacts nothing. With one they go through the relay, with no per-session prompt, and take
+        /// direct connections too only when the player turned Hide my IP off.
+        /// </summary>
+        private static void PublicAndInviteHostingNeedTheService()
         {
-            var rig = new SessionsRig();
-            rig.Environment.Phase = SessionPhase.Running;
-            var host = rig.Presenter.Host;
-            host.SetVisibility(0);
-            host.Host();
-            rig.Frame();
-            That(rig.Prompt?.Kind == ScreenPromptKind.DirectConnection && rig.Prompt.Title == MultiplayerPrivacyText.DirectTitle,
-                "a public session, which in this build only direct connections reach, asks the approved prompt");
-            rig.Answer(ScreenPromptKind.DirectConnection, false);
-            That(rig.Control.NetworkCalls == 0 && rig.Environment.PendingLaunch == null && rig.Presenter.HideMyIp,
-                "cancelling leaves Hide my IP on, and nothing is opened or contacted");
-            host.Host();
-            rig.Answer(ScreenPromptKind.DirectConnection, true);
-            That(rig.Control.LastHost!.AllowDirect && rig.Control.LastHost.Visibility == InternalSessionVisibility.Public, "allowing it opens this session directly");
+            var bare = new SessionsRig();
+            bare.Environment.Phase = SessionPhase.Running;
+            var host = bare.Presenter.Host;
+            foreach (var choice in new[] { 0, 1 })
+            {
+                host.SetVisibility(choice);
+                That(!host.CanHost && host.VisibilityNote == LiveFailureMessages.NoService, host.VisibilityOptions[choice] + " needs the TopiaForge service, and says so");
+                host.Host();
+                bare.Frame();
+                That(bare.Prompt == null && bare.Control.NetworkCalls == 0, "so it opens nothing and asks nothing (" + host.VisibilityOptions[choice] + ")");
+            }
 
-            var hidden = new SessionsRig();
-            hidden.Environment.Phase = SessionPhase.Running;
-            hidden.Presenter.SetHideMyIp(false);
-            hidden.Answer(ScreenPromptKind.Disclosure, true);
-            hidden.Presenter.Host.SetVisibility(1);
-            hidden.Presenter.Host.Host();
-            hidden.Frame();
-            That(hidden.Prompt == null && hidden.Control.LastHost!.AllowDirect, "with Hide my IP turned off by the player, no per-session prompt is needed");
+            host.SetVisibility(2);
+            That(host.CanHost && host.VisibilityNote == HostPresenter.LanNote, "LAN hosting needs no service");
+
+            var relayed = new SessionsRig(service: true);
+            relayed.Environment.Phase = SessionPhase.Running;
+            relayed.Presenter.Host.SetVisibility(0);
+            That(relayed.Presenter.Host.CanHost && relayed.Presenter.Host.VisibilityNote == HostPresenter.PublicNote, "with the service, Public hosting is offered");
+            relayed.Presenter.Host.Host();
+            relayed.Frame();
+            That(relayed.Prompt == null && relayed.Control.LastHost!.Visibility == InternalSessionVisibility.Public && !relayed.Control.LastHost.AllowDirect,
+                "and goes through the relay with no per-session prompt while Hide my IP is on");
+
+            var open = new SessionsRig(service: true);
+            open.Environment.Phase = SessionPhase.Running;
+            open.Presenter.SetHideMyIp(false);
+            open.Answer(ScreenPromptKind.Disclosure, true);
+            open.Presenter.Host.SetVisibility(1);
+            That(open.Presenter.Host.VisibilityNote == HostPresenter.InviteNote, "Invite hosting says players join with its code");
+            open.Presenter.Host.Host();
+            open.Frame();
+            That(open.Prompt == null && open.Control.LastHost!.Visibility == InternalSessionVisibility.Invite && open.Control.LastHost.AllowDirect,
+                "with Hide my IP turned off by the player, it takes direct connections too");
+        }
+
+        /// <summary>A hosted session that the service lists says so; one the service cannot list says why, and keeps hosting.</summary>
+        private static void AHostedSessionSaysHowTheServiceListsIt()
+        {
+            var rig = new SessionsRig(service: true);
+            rig.Environment.Phase = SessionPhase.Running;
+            rig.Presenter.Host.SetVisibility(0);
+            rig.Presenter.Host.Host();
+            rig.Frame();
+            var host = rig.Presenter.Host;
+            void Listing(InternalListingPhase phase, InternalLiveFailure failure = InternalLiveFailure.None, bool listed = false)
+            {
+                rig.Status(InternalSessionRole.ListenHost, host: InternalHostPhase.Hosting);
+                rig.Control.Status.Internet = new InternalInternetStatus { ServiceConfigured = true, ListingPhase = phase, ListingFailure = failure, Listed = listed };
+                rig.Frame(2);
+            }
+
+            Listing(InternalListingPhase.Registering);
+            That(host.ProgressText == HostPresenter.Registering, "registering with the service is shown");
+            Listing(InternalListingPhase.Online, listed: true);
+            That(host.ProgressText == HostPresenter.Listed && host.ProgressTone == ScreenTone.Success, "and so is being listed");
+            Listing(InternalListingPhase.Retrying, InternalLiveFailure.ServiceUnavailable);
+            That(host.ProgressTone == ScreenTone.Warning && host.ProgressText == LiveFailureMessages.ForHost(InternalLiveFailure.ServiceUnavailable).Message,
+                "a service that cannot be reached is said, and hosting goes on");
+            Listing(InternalListingPhase.Online, InternalLiveFailure.RelayUnavailable, listed: true);
+            That(host.ProgressText.Contains("until the relay returns", StringComparison.Ordinal), "a relay-only host without a relay says players cannot reach it yet");
+            Listing(InternalListingPhase.Failed, InternalLiveFailure.ServiceRefused);
+            That(host.ProgressTone == ScreenTone.Danger && host.CanEnd, "a refused listing is shown as failed, and the session can still end");
         }
 
         private static void HostingFailuresAreWordedAndEndingConfirms()

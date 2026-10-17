@@ -12,20 +12,24 @@ namespace TopiaForge.ModManager
     /// <summary>
     /// The multiplayer screens' environment in the game: the runtime's multiplayer composition root and its realm, the
     /// world session, the launch targets, and Unity for links and the clipboard. What a frame reads is cached until its
-    /// source changes, so a settled frame allocates nothing.
+    /// source changes, so a settled frame allocates nothing. The answers to a launch and to a return to the menu arrive
+    /// later, outside the overlay's frame, so they reach the screens through the multiplayer guard too: nothing the
+    /// screens throw there escapes into Unity's frame.
     /// </summary>
     internal sealed class PluginMultiplayerEnvironment : IMultiplayerSessionEnvironment
     {
         private readonly TopiaForgeModManagerPlugin plugin;
+        private readonly MultiplayerFrameGuard guard;
         private IInternalMultiplayerControl? sessionOwner;
         private IMultiplayerSession? session;
         private WorldSessionSnapshot? shownWorld;
         private string currentGameText = string.Empty;
         private HostTargetChoice? currentGame;
 
-        internal PluginMultiplayerEnvironment(TopiaForgeModManagerPlugin plugin)
+        internal PluginMultiplayerEnvironment(TopiaForgeModManagerPlugin plugin, MultiplayerFrameGuard guard)
         {
             this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
+            this.guard = guard ?? throw new ArgumentNullException(nameof(guard));
         }
 
         public IInternalMultiplayerControl? Control => plugin.Multiplayer?.Control;
@@ -118,7 +122,7 @@ namespace TopiaForge.ModManager
                 message = "The game could not start (" + exception.GetType().Name + ").";
             }
 
-            done(ok, message);
+            guard.Run(MultiplayerOverlayFrame.LaunchStage, () => done(ok, message));
         }
 
         public async void ReturnToMainMenu(Action<bool, string> done)
@@ -135,7 +139,7 @@ namespace TopiaForge.ModManager
                 message = "The game could not return to the menu (" + exception.GetType().Name + ").";
             }
 
-            done(ok, message);
+            guard.Run(MultiplayerOverlayFrame.MenuStage, () => done(ok, message));
         }
 
         public void OpenUrl(string url) => Application.OpenURL(url);

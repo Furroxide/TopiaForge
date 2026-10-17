@@ -187,13 +187,19 @@ namespace TopiaForge.ModManager.Sessions
     /// <summary>
     /// A question a screen asks before it acts. The view shows it as a modal and calls <see cref="Answer"/> once: yes for the
     /// confirming button, no for cancel, closing or dismissing. Nothing the question guards has happened before the answer.
+    /// A question about a game or a session holds only while that game or session does: once it does not, the screens
+    /// withdraw it, which answers no, and the view closes its modal. Prompts persist across scene loads, so without that a
+    /// question would outlive its game and act on the next one.
     /// </summary>
     internal sealed class ScreenPrompt
     {
         private readonly Action<bool> answer;
+        private readonly Func<bool>? holds;
         private bool answered;
+        private bool withdrawalTaken;
 
-        internal ScreenPrompt(ScreenPromptKind kind, string title, IReadOnlyList<string> paragraphs, string confirmLabel, string cancelLabel, Action<bool> answer)
+        /// <param name="holds">Whether the question still applies, asked every frame it waits; null for one that always does. It must not allocate.</param>
+        internal ScreenPrompt(ScreenPromptKind kind, string title, IReadOnlyList<string> paragraphs, string confirmLabel, string cancelLabel, Action<bool> answer, Func<bool>? holds = null)
         {
             if (!Enum.IsDefined(typeof(ScreenPromptKind), kind)) throw new ArgumentOutOfRangeException(nameof(kind));
             Kind = kind;
@@ -202,6 +208,7 @@ namespace TopiaForge.ModManager.Sessions
             ConfirmLabel = confirmLabel ?? throw new ArgumentNullException(nameof(confirmLabel));
             CancelLabel = cancelLabel ?? string.Empty;
             this.answer = answer ?? throw new ArgumentNullException(nameof(answer));
+            this.holds = holds;
         }
 
         internal ScreenPromptKind Kind { get; }
@@ -217,12 +224,62 @@ namespace TopiaForge.ModManager.Sessions
 
         internal bool IsAnswered => answered;
 
-        /// <summary>Answers the prompt; only the first answer counts.</summary>
+        /// <summary>
+        /// Gets whether the question still applies: the game or session it asks about is still the one it asked about. One
+        /// that cannot tell counts as not applying, so nothing acts on a guess.
+        /// </summary>
+        internal bool StillHolds
+        {
+            get
+            {
+                if (holds == null) return true;
+                try
+                {
+                    return holds();
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
+        }
+
+        /// <summary>Gets whether the question was withdrawn because it stopped applying, rather than answered.</summary>
+        internal bool IsWithdrawn { get; private set; }
+
+        /// <summary>
+        /// Answers the prompt; only the first answer counts. A yes to a question that stopped applying counts as no, and as
+        /// a withdrawal: a click can land in the frame its game ended, before the screens withdraw the question.
+        /// </summary>
         internal void Answer(bool confirmed)
         {
             if (answered) return;
+            if (confirmed && !StillHolds)
+            {
+                IsWithdrawn = true;
+                confirmed = false;
+            }
+
             answered = true;
             answer(confirmed);
+        }
+
+        /// <summary>Withdraws the question unanswered: it counts as no, so nothing it guards happens. False when it was answered.</summary>
+        internal bool Withdraw()
+        {
+            if (answered) return false;
+            IsWithdrawn = true;
+            answered = true;
+            answer(false);
+            return true;
+        }
+
+        /// <summary>Takes the news that the question was withdrawn, once, so the screens tell the player that nothing was done.</summary>
+        internal bool TakeWithdrawal()
+        {
+            if (!IsWithdrawn || withdrawalTaken) return false;
+            withdrawalTaken = true;
+            return true;
         }
     }
 }

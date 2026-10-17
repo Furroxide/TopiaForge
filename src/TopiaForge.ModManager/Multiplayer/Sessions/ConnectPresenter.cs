@@ -10,7 +10,9 @@ namespace TopiaForge.ModManager.Sessions
     /// disclosure if it is due, then checks the server without joining, under Hide my IP's rule: a host beyond the local
     /// network is not contacted, and the check says so without contacting it. Only then does the per-session prompt ask;
     /// cancelling it leaves Hide my IP on and contacts nothing. A server that fits is joined through the realm rules; one
-    /// that needs mods can be handed to the launcher.
+    /// that needs mods can be handed to the launcher. An invite code, or an invite or server link pasted as the address,
+    /// needs the TopiaForge service: the check then asks the service alone, never the host, and the join goes through the
+    /// relay unless the player turned Hide my IP off. Without a service, neither is offered.
     /// </summary>
     internal sealed partial class ConnectPresenter : IConnectScreen
     {
@@ -20,10 +22,13 @@ namespace TopiaForge.ModManager.Sessions
         internal const string TrustTitle = "Trust this server?";
         internal const string TrustBody = "This address now leads to a different server than it did before. Join it only if you trust it.";
         internal const string TrustConfirm = "TRUST AND JOIN";
+        internal const string InviteHelp = "Paste the invite code a host shared with you. The join goes through the TopiaForge service.";
 
         private readonly MultiplayerScreensContext context;
         private readonly ConnectingPresenter joins;
         private IInternalJoinTarget? target;
+        private IInternalJoinTarget? checking;
+        private string? checkingInvite;
         private IInternalServerQuery? query;
         private bool queryAllowsDirect;
         private string inviteCode = string.Empty;
@@ -49,10 +54,12 @@ namespace TopiaForge.ModManager.Sessions
 
         public string InviteError => inviteError;
 
-        public string InviteNote => LiveFailureMessages.ServiceNotConfigured;
+        public string InviteNote => context.HasService ? InviteHelp : LiveFailureMessages.ServiceNotConfigured;
 
-        /// <summary>Gets false: invites need the TopiaForge service, which a later slice connects.</summary>
-        public bool CanJoinInvite => false;
+        /// <summary>Gets whether the typed invite can be joined: it needs the TopiaForge service, and nothing else may be checking.</summary>
+        public bool CanJoinInvite =>
+            context.HasService && context.CanStartSession && !joins.IsBusy && query == null && inviteError.Length == 0 &&
+            LauncherJoinLink.NormalizeInviteCode(inviteCode) != null;
 
         public string Address => address;
 
@@ -73,14 +80,46 @@ namespace TopiaForge.ModManager.Sessions
 
         public void SetInviteCode(string value)
         {
-            inviteCode = value ?? string.Empty;
+            var next = value ?? string.Empty;
+            if (string.Equals(next, inviteCode, StringComparison.Ordinal)) return;
+            inviteCode = next;
+            if (checkingInvite != null) CancelCheck();
             inviteError = inviteCode.Trim().Length == 0 || LauncherJoinLink.NormalizeInviteCode(inviteCode) != null ? string.Empty : InviteRule;
         }
 
         public void JoinInvite()
         {
-            // Invites resolve through the TopiaForge service, which this build does not reach; nothing is contacted.
-            context.Notify(LiveFailureMessages.ServiceNotConfigured, ScreenTone.Warning);
+            if (!context.HasService)
+            {
+                // Invites resolve through the TopiaForge service, which this game does not reach; nothing is contacted.
+                context.Notify(LiveFailureMessages.ServiceNotConfigured, ScreenTone.Warning);
+                return;
+            }
+
+            if (!CanJoinInvite) return;
+            var code = LauncherJoinLink.NormalizeInviteCode(inviteCode)!;
+            IInternalJoinTarget? parsed = null;
+            var ok = false;
+            try
+            {
+                ok = context.Environment.Control?.TryCreateJoinTarget(code, out parsed) == true;
+            }
+            catch (Exception)
+            {
+                ok = false;
+            }
+
+            if (!ok || parsed == null || parsed.Kind != InternalJoinTargetKind.Invite)
+            {
+                inviteError = InviteRule;
+                return;
+            }
+
+            // The service resolves the invite; it never connects to the host, so the check contacts no one else.
+            var invite = parsed;
+            context.Privacy.EnsureDisclosure(
+                () => Check(invite, allowDirect: false, code),
+                () => Result("Nothing was joined.", ScreenTone.Neutral));
         }
 
         public void SetAddress(string value)
@@ -118,7 +157,7 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
-            if (parsed.Kind == InternalJoinTargetKind.Invite || parsed.Kind == InternalJoinTargetKind.ListedServer)
+            if ((parsed.Kind == InternalJoinTargetKind.Invite || parsed.Kind == InternalJoinTargetKind.ListedServer) && !context.HasService)
             {
                 addressError = LiveFailureMessages.ServiceNotConfigured;
                 return;
@@ -139,7 +178,7 @@ namespace TopiaForge.ModManager.Sessions
             if (!CanJoinAddress) return;
             var chosen = target!;
             context.Privacy.EnsureDisclosure(
-                () => Check(chosen, allowDirect: !context.Settings.Current.HideMyIp),
+                () => Check(chosen, allowDirect: !context.Settings.Current.HideMyIp, null),
                 () => Result("Nothing was joined.", ScreenTone.Neutral));
         }
 
@@ -170,7 +209,8 @@ namespace TopiaForge.ModManager.Sessions
             Checked(running);
         }
 
-        private void Check(IInternalJoinTarget chosen, bool allowDirect)
+        /// <param name="invite">The canonical invite code when <paramref name="chosen"/> came from the invite field; null otherwise.</param>
+        private void Check(IInternalJoinTarget chosen, bool allowDirect, string? invite)
         {
             var control = context.Environment.Control;
             if (control == null) return;
@@ -185,14 +225,18 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
+            checking = chosen;
+            checkingInvite = invite;
             queryAllowsDirect = allowDirect;
-            Result("Checking the server...", ScreenTone.Neutral);
+            Result(invite == null ? "Checking the server..." : "Checking the invite...", ScreenTone.Neutral);
         }
 
         private void CancelCheck()
         {
             var running = query;
             query = null;
+            checking = null;
+            checkingInvite = null;
             try
             {
                 running?.Dispose();

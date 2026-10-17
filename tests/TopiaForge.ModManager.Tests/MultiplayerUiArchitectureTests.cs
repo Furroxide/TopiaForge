@@ -5,8 +5,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Text.RegularExpressions;
 using TopiaForge.ModManager.Sessions;
+using TopiaForge.Mods.Internal;
 using static TopiaForge.ModManager.Tests.SessionAssert;
 
 namespace TopiaForge.ModManager.Tests
@@ -38,6 +40,7 @@ namespace TopiaForge.ModManager.Tests
             OtherPlayersTextRendersPlain(root);
             ModalsSurviveSceneLoadsAndRowsKeepTheirHeight(root);
             PresentersGoOnlineThroughTheRealm(root);
+            TheOverlayFrameRunsThroughTheGuard(root);
             NothingLogs(root);
             UiFilesStayWithinTheirCap(root);
             Console.WriteLine("MultiplayerUiArchitectureTests passed.");
@@ -198,17 +201,107 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>
         /// The presenters host, join and leave only through the runtime's realm, whose rules read the orchestrator's
-        /// RealmPhase; a call straight to the control would skip them, as a join during a main-menu load once did.
+        /// RealmPhase; a call straight to the control would skip them, as a join during a main-menu load once did. The
+        /// check reads the presenters' compiled code, every method, lambda and state machine of their namespace, so no
+        /// spelling hides such a call: a field, a local alias or a null-forgiving dereference all compile to the same call.
+        /// The views name no multiplayer SPI type at all, so they cannot reach the control either.
         /// </summary>
         private static void PresentersGoOnlineThroughTheRealm(string root)
         {
-            var direct = new Regex(@"(?:[Cc]ontrol\??|current\??)\.(?:StartHosting|StopHosting|Join|Leave)\s*\(", RegexOptions.CultureInvariant);
-            var files = Directory.EnumerateFiles(Path.Combine(root, "src", "TopiaForge.ModManager", "Multiplayer", "Sessions"), "*.cs").ToArray();
-            That(files.Length >= 20, "the scan covers the presenters (" + files.Length + " files)");
-            foreach (var file in files)
+            var forbidden = new HashSet<string>(StringComparer.Ordinal) { "StartHosting", "StopHosting", "Join", "Leave", "ReplaceSession" };
+            var types = typeof(MultiplayerSessionsPresenter).Assembly.GetTypes().Where(type => type.Namespace == "TopiaForge.ModManager.Sessions").ToArray();
+            var calls = 0;
+            var controlCalls = 0;
+            var offenders = new List<string>();
+            const BindingFlags Declared = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+            foreach (var type in types)
             {
-                var match = direct.Match(File.ReadAllText(file));
-                That(!match.Success, Path.GetFileName(file) + " goes online and leaves through the runtime's realm, never the control (" + match.Value + ")");
+                foreach (var method in type.GetMethods(Declared).Cast<MethodBase>().Concat(type.GetConstructors(Declared)))
+                {
+                    foreach (var called in CalledMethods(method))
+                    {
+                        calls++;
+                        if (called.DeclaringType != typeof(IInternalMultiplayerControl)) continue;
+                        controlCalls++;
+                        if (forbidden.Contains(called.Name)) offenders.Add(type.Name + "." + method.Name + " calls the control's " + called.Name);
+                    }
+                }
+            }
+
+            That(calls > 1000 && controlCalls >= 8, "the scan reads the presenters' compiled calls (" + calls + ", " + controlCalls + " to the control)");
+            That(offenders.Count == 0, "the presenters go online and leave through the runtime's realm, never the control (" + string.Join("; ", offenders) + ")");
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer"), "*.cs"))
+            {
+                That(File.ReadAllText(file).IndexOf("TopiaForge.Mods.Internal", StringComparison.Ordinal) < 0, Path.GetFileName(file) + " names no multiplayer SPI type");
+            }
+        }
+
+        /// <summary>
+        /// Nothing the interface throws may reach Unity's frame, where the game's crash reporter takes it: the overlay runs
+        /// its multiplayer stages through the frame (<see cref="MultiplayerOverlayFrame"/>), the tab builds and hides through
+        /// the guard, and the game's later answers to a launch or a return to the menu reach the screens through it too.
+        /// </summary>
+        private static void TheOverlayFrameRunsThroughTheGuard(string root)
+        {
+            var overlay = File.ReadAllText(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "ManagerOverlay.cs"));
+            var tick = Regex.Match(overlay, @"public void Tick\(\)\s*\{(?<body>[^}]*)\}", RegexOptions.CultureInvariant);
+            That(tick.Success && Regex.Replace(Regex.Replace(tick.Groups["body"].Value, @"//[^\n]*", string.Empty), @"\s+", string.Empty) == "multiplayerFrame.Tick(Time.unscaledDeltaTime);",
+                "the overlay's frame runs the multiplayer stages only through the guarded frame (" + tick.Value.Trim() + ")");
+            That(Regex.IsMatch(overlay, @"multiplayerGuard\.Run\(MultiplayerOverlayFrame\.StartStage, multiplayer\.Start\)", RegexOptions.CultureInvariant) &&
+                 Regex.IsMatch(overlay, @"multiplayerGuard\.Run\(MultiplayerOverlayFrame\.TeardownStage,", RegexOptions.CultureInvariant),
+                "the overlay starts and closes the multiplayer interface through the guard");
+            var tab = File.ReadAllText(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "MultiplayerTab.cs"));
+            That(tab.Contains("guard.Run(MultiplayerOverlayFrame.BuildStage,", StringComparison.Ordinal) &&
+                 tab.Contains("guard.Run(MultiplayerOverlayFrame.HiddenStage, screens.OnHidden)", StringComparison.Ordinal),
+                "the MULTIPLAYER tab builds and hides through the guard");
+            var environment = File.ReadAllText(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "PluginMultiplayerEnvironment.cs"));
+            var answers = Regex.Matches(environment, @"[^\n]*\bdone\(ok, message\)[^\n]*", RegexOptions.CultureInvariant).Cast<Match>().ToArray();
+            That(answers.Length == 2 && answers.All(answer => answer.Value.Contains("guard.Run(", StringComparison.Ordinal)),
+                "the game's answers to a launch and to a return to the menu reach the screens through the guard (" + answers.Length + ")");
+        }
+
+        /// <summary>The methods <paramref name="method"/>'s IL calls, takes the address of or constructs, read opcode by opcode.</summary>
+        private static IEnumerable<MethodBase> CalledMethods(MethodBase method)
+        {
+            var il = method.GetMethodBody()?.GetILAsByteArray();
+            if (il == null) yield break;
+            var typeArguments = method.DeclaringType != null && method.DeclaringType.IsGenericType ? method.DeclaringType.GetGenericArguments() : null;
+            var methodArguments = method.IsGenericMethod ? method.GetGenericArguments() : null;
+            var position = 0;
+            while (position < il.Length)
+            {
+                int value = il[position++];
+                if (value == 0xFE) value = 0xFE00 | il[position++];
+                if (!OpCodesByValue.TryGetValue((short)value, out var code)) throw new InvalidOperationException("Assertion failed: an unknown opcode in " + method.Name);
+                var operand = position;
+                position += OperandSize(code, il, position);
+                if (code.OperandType != OperandType.InlineMethod) continue;
+                yield return method.Module.ResolveMethod(BitConverter.ToInt32(il, operand), typeArguments, methodArguments)!;
+            }
+        }
+
+        private static readonly Dictionary<short, OpCode> OpCodesByValue = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Select(field => field.GetValue(null)).OfType<OpCode>().ToDictionary(code => code.Value);
+
+        private static int OperandSize(OpCode code, byte[] il, int position)
+        {
+            switch (code.OperandType)
+            {
+                case OperandType.InlineNone:
+                    return 0;
+                case OperandType.ShortInlineBrTarget:
+                case OperandType.ShortInlineI:
+                case OperandType.ShortInlineVar:
+                    return 1;
+                case OperandType.InlineVar:
+                    return 2;
+                case OperandType.InlineI8:
+                case OperandType.InlineR:
+                    return 8;
+                case OperandType.InlineSwitch:
+                    return 4 + (4 * BitConverter.ToInt32(il, position));
+                default:
+                    return 4;
             }
         }
 

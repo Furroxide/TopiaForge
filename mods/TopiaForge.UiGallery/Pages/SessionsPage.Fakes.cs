@@ -166,7 +166,7 @@ namespace TopiaForge.UiGallery.Pages
         public IReadOnlyList<ServerRow> Rows { get; private set; } = Array.Empty<ServerRow>();
 
         public string EmptyText => List == BrowseList.Internet
-            ? "The Internet server list needs the TopiaForge service, which is not configured in this build."
+            ? "The Internet server list needs the TopiaForge service, which this game is not set up to reach."
             : IsSearching ? "No sessions heard on your local network yet." : "Search your local network to find sessions on it.";
 
         public string? SelectedKey { get; private set; }

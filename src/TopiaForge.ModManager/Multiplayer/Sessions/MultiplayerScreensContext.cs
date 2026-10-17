@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Sessions
 {
@@ -23,6 +24,8 @@ namespace TopiaForge.ModManager.Sessions
             this.ask = ask ?? throw new ArgumentNullException(nameof(ask));
             this.notify = notify ?? throw new ArgumentNullException(nameof(notify));
             Privacy = new PrivacyGate(settings, ask);
+            IsHosting = () => Status.Role == InternalSessionRole.ListenHost;
+            IsJoined = () => Status.Role == InternalSessionRole.Client;
         }
 
         internal IMultiplayerSessionEnvironment Environment { get; }
@@ -34,6 +37,18 @@ namespace TopiaForge.ModManager.Sessions
         internal ContentReadinessPresenter Content { get; }
 
         internal PrivacyGate Privacy { get; }
+
+        /// <summary>Gets whether this game hosts a session now: what a question about that session holds while. Made once, so asking allocates nothing.</summary>
+        internal Func<bool> IsHosting { get; }
+
+        /// <summary>Gets whether this game is joined to a session now: what a question about that session holds while.</summary>
+        internal Func<bool> IsJoined { get; }
+
+        /// <summary>
+        /// Gets whether this game reaches a TopiaForge service: then Public and Invite sessions, invites and listed servers
+        /// work, through the relay unless the player allows a direct connection. Without one, only LAN and direct play exist.
+        /// </summary>
+        internal bool HasService => Status.Status.Internet.ServiceConfigured;
 
         /// <summary>Gets whether the player may start anything: live sessions are on and the settings have loaded.</summary>
         internal bool CanAct => Status.IsLiveAvailable && Settings.IsLoaded;

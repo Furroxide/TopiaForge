@@ -6,35 +6,27 @@ namespace TopiaForge.ModManager.Sessions
     /// What the multiplayer screens show outside the tab: their prompts as modals, one at a time, their action results as
     /// toasts, and the connecting overlay. It runs every frame, overlay open or not, so a join is followed while the player
     /// plays. Destructive confirmations use the kit's destructive modal; the privacy prompts use the approved wording,
-    /// verbatim, with the safe choice as the primary button.
+    /// verbatim, with the safe choice as the primary button. A prompt the screens withdraw, because the game or session it
+    /// asked about changed, has its modal closed (<see cref="PromptPresentation"/>).
     /// </summary>
     internal sealed class MultiplayerSessionsUi
     {
         private readonly UiHost host;
         private readonly IMultiplayerScreens screens;
         private readonly ConnectingOverlay connecting;
-        private ScreenPrompt? showing;
+        private readonly PromptPresentation prompts;
 
         internal MultiplayerSessionsUi(UiHost host, IMultiplayerScreens screens)
         {
             this.host = host;
             this.screens = screens;
             connecting = new ConnectingOverlay(host, screens.Connecting);
+            prompts = new PromptPresentation(Show);
         }
 
         internal void Tick()
         {
-            if (showing != null && showing.IsAnswered) showing = null;
-            if (showing == null)
-            {
-                var next = screens.PendingPrompt;
-                if (next != null)
-                {
-                    showing = next;
-                    Show(next);
-                }
-            }
-
+            prompts.Tick(screens);
             ShowNotices(screens);
             connecting.Tick();
         }
@@ -53,14 +45,14 @@ namespace TopiaForge.ModManager.Sessions
             }
         }
 
-        private void Show(ScreenPrompt prompt)
+        private IPromptDialog Show(ScreenPrompt prompt)
         {
             if (prompt.Kind == ScreenPromptKind.Destructive)
             {
                 // A confirmation can name a player by the name they chose, so it renders as plain text. Prompts persist
                 // across scene loads, as a session that ends meanwhile can load another: a prompt destroyed unanswered
-                // would hold the queue for good.
-                host.Modal.Destructive(
+                // would hold the queue for good, and one that no longer applies is closed through its dialog instead.
+                return new PromptDialog(host.Modal.Destructive(
                     prompt.Title,
                     prompt.Paragraphs.Count == 0 ? string.Empty : prompt.Paragraphs[0],
                     prompt.ConfirmLabel,
@@ -68,8 +60,7 @@ namespace TopiaForge.ModManager.Sessions
                     () => prompt.Answer(false),
                     prompt.CancelLabel.Length == 0 ? "CANCEL" : prompt.CancelLabel,
                     plainText: true,
-                    persistent: true);
-                return;
+                    persistent: true));
             }
 
             var modal = host.Modal.Custom(prompt.Title, TopiaForgeScheme.Paper, 560f, persistent: true);
@@ -92,12 +83,26 @@ namespace TopiaForge.ModManager.Sessions
             modal.Closed += () => prompt.Answer(false);
             modal.Show();
             primary.Focus();
+            return new PromptDialog(modal);
         }
 
         private static void Answer(TopiaForgeModalInstance modal, ScreenPrompt prompt, bool confirmed)
         {
             prompt.Answer(confirmed);
             modal.Close();
+        }
+
+        /// <summary>A prompt's kit modal; closing one that already closed does nothing.</summary>
+        private sealed class PromptDialog : IPromptDialog
+        {
+            private readonly TopiaForgeModalInstance modal;
+
+            internal PromptDialog(TopiaForgeModalInstance modal)
+            {
+                this.modal = modal;
+            }
+
+            public void Close() => modal.Close();
         }
     }
 }

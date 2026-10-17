@@ -72,13 +72,18 @@ namespace TopiaForge.ModManager.Sessions
         }
 
         /// <summary>
-        /// Gets how a target is reached, for the Connecting step's line: "LAN", "Direct" or "Relay". A typed host joined with
-        /// Hide my IP on can only be one on the local network, since nothing beyond it is contacted.
+        /// Gets how a join reaches its host, for the Connecting step's line: "LAN", "Direct" or "Relay". Once the link is up,
+        /// the route the status reports says it. Before that the target does: a LAN session, or a typed host joined with Hide
+        /// my IP on, is on the local network, since nothing beyond it is contacted; a typed host the player allowed a direct
+        /// connection is reached directly; an invite or a listed server starts on the relay, even when a direct path may
+        /// take over later.
         /// </summary>
-        internal static string PathOf(InternalJoinTargetKind kind, bool allowDirect)
+        internal static string PathOf(InternalJoinTargetKind kind, bool allowDirect, InternalConnectionRoute route)
         {
+            if (route == InternalConnectionRoute.Direct) return "Direct";
+            if (route == InternalConnectionRoute.Relayed) return "Relay";
             if (kind == InternalJoinTargetKind.Lan || (kind == InternalJoinTargetKind.Direct && !allowDirect)) return "LAN";
-            return kind == InternalJoinTargetKind.Direct || allowDirect ? "Direct" : "Relay";
+            return kind == InternalJoinTargetKind.Direct ? "Direct" : "Relay";
         }
     }
 }

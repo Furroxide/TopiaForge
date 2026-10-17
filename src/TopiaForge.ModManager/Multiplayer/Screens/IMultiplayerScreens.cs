@@ -258,7 +258,7 @@ namespace TopiaForge.ModManager.Sessions
 
         string InviteText { get; }
 
-        /// <summary>Gets whether players are listed: only once the session is Ready, never during a join.</summary>
+        /// <summary>Gets whether players are listed: once the session's host has listed them, never another host's list.</summary>
         bool PlayersVisible { get; }
 
         /// <summary>Gets why no players are listed, while <see cref="PlayersVisible"/> is false.</summary>

@@ -73,16 +73,27 @@ namespace TopiaForge.ModManager.Tests
         {
         }
 
+        /// <summary>Gets or sets whether a TopiaForge service is configured, as every status this control reports says.</summary>
+        internal bool ServiceConfigured { get; set; }
+
         public InternalLiveStatus GetStatus()
         {
             Calls.Add("GetStatus");
+            Status.Internet.ServiceConfigured = ServiceConfigured;
             return Status;
         }
+
+        /// <summary>Gets or sets what hosting throws, as a failing provider might; null to answer <see cref="HostResult"/>.</summary>
+        internal Exception? ThrowOnStartHosting { get; set; }
+
+        /// <summary>Gets or sets what joining throws, as a failing provider might; null to answer <see cref="JoinResult"/>.</summary>
+        internal Exception? ThrowOnJoin { get; set; }
 
         public OperationResult<bool> StartHosting(InternalHostSettings settings)
         {
             Calls.Add("StartHosting");
             LastHost = settings;
+            if (ThrowOnStartHosting != null) throw ThrowOnStartHosting;
             return HostResult;
         }
 
@@ -96,6 +107,10 @@ namespace TopiaForge.ModManager.Tests
             {
                 target = new ScriptedJoinTarget(InternalJoinTargetKind.Invite, "invite " + code);
             }
+            else if (trimmed.StartsWith(LauncherJoinLink.Prefix + "server/", StringComparison.Ordinal) && LauncherJoinLink.IsSessionLink(trimmed))
+            {
+                target = new ScriptedJoinTarget(InternalJoinTargetKind.ListedServer, "listed server", trimmed.Substring(LauncherJoinLink.Prefix.Length + 7));
+            }
             else if (LauncherJoinLink.TryParseHostPort(trimmed, out _, out _) || LauncherJoinLink.IsSessionLink(trimmed))
             {
                 target = new ScriptedJoinTarget(InternalJoinTargetKind.Direct, "direct session");
@@ -108,6 +123,7 @@ namespace TopiaForge.ModManager.Tests
         {
             Calls.Add("Join:" + target.Kind + ":" + (settings.AllowDirect ? "direct" : "relay"));
             LastJoin = settings;
+            if (ThrowOnJoin != null) throw ThrowOnJoin;
 
             // As the provider does, a join that starts reports itself resolving at once, whatever ended before it.
             if (JoinResult.Succeeded) Status = new InternalLiveStatus { Role = Role, IsLiveAvailable = IsLiveAvailable, JoinPhase = InternalJoinPhase.Resolving };
@@ -181,6 +197,18 @@ namespace TopiaForge.ModManager.Tests
         public IDisposable SetAvatarSource(IInternalAvatarSource source) => throw new NotSupportedException();
 
         public InternalMultiplayerStatistics GetStatistics() => new InternalMultiplayerStatistics { Role = Role };
+
+        public OperationResult<bool> CreateInvite()
+        {
+            Calls.Add("CreateInvite");
+            return OperationResult<bool>.Success(true);
+        }
+
+        public OperationResult<bool> RevokeInvite(string code)
+        {
+            Calls.Add("RevokeInvite");
+            return OperationResult<bool>.Success(true);
+        }
     }
 
     internal sealed class ScriptedJoinTarget : IInternalJoinTarget
@@ -270,7 +298,10 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Gets or sets where the runtime reads that phase: <see cref="Phase"/>, or a real orchestrator's <c>RealmPhase</c>.</summary>
         internal Func<SessionPhase> PhaseSource { get; set; }
 
-        public IInternalMultiplayerControl? Control => control;
+        /// <summary>Gets or sets what reading the control throws, as a provider that broke might; null to answer it.</summary>
+        internal Exception? ControlFailure { get; set; }
+
+        public IInternalMultiplayerControl? Control => ControlFailure != null ? throw ControlFailure : control;
 
         public NetRealm Realm => Runtime.Realm;
 
@@ -359,9 +390,9 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>The sessions presenter over the recording control, with file work held until the test runs it.</summary>
     internal sealed class SessionsRig
     {
-        internal SessionsRig(bool acknowledged = true, bool liveAvailable = true, bool withControl = true)
+        internal SessionsRig(bool acknowledged = true, bool liveAvailable = true, bool withControl = true, bool service = false)
         {
-            Control = new RecordingSessionControl { IsLiveAvailable = liveAvailable };
+            Control = new RecordingSessionControl { IsLiveAvailable = liveAvailable, ServiceConfigured = service };
             Control.Status.IsLiveAvailable = liveAvailable;
             Environment = new FakeSessionEnvironment(withControl ? Control : null);
             Store = new MemorySettingsStore { Stored = acknowledged ? MultiplayerSettings.Default.AcknowledgeDisclosure() : MultiplayerSettings.Default };

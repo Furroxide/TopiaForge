@@ -12,16 +12,15 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (!CanHost) return;
 
-            // In this build only the local network can find a session without the TopiaForge service; Public and Invite
-            // sessions can only be reached directly, so they need the player's choice for this session.
-            var needsDirect = VisibilityValues[visibility] != InternalSessionVisibility.Lan;
-            context.Privacy.EnsureDisclosure(
-                () =>
-                {
-                    if (needsDirect) context.Privacy.EnsureDirect(() => Go(direct: true), Abandon);
-                    else Go(direct: false);
-                },
-                Abandon);
+            // A LAN session stays on the local network. A Public or Invite session goes through the TopiaForge service's
+            // relay, and takes direct connections too only when the player turned Hide my IP off, after the disclosure.
+            var internet = VisibilityValues[visibility] != InternalSessionVisibility.Lan;
+
+            // The disclosure asks about what hosting does now, opening this game or starting the chosen one; once that
+            // changes, as when the running game ends, it is withdrawn and nothing starts.
+            var decided = Decision();
+            Func<bool> holds = () => stage == Stage.Idle && Decision() == decided;
+            context.Privacy.EnsureDisclosure(() => Go(direct: internet && !context.Settings.Current.HideMyIp), Abandon, holds);
         }
 
         public void End()
@@ -33,7 +32,7 @@ namespace TopiaForge.ModManager.Sessions
                 stage = Stage.Idle;
                 SetProgress("The session ended for everyone.", ScreenTone.Neutral);
                 context.LeaveOnline("The session ended for everyone.");
-            }));
+            }, context.IsHosting));
         }
 
         /// <summary>Main thread, every frame: follows a game starting, hosting opening, and a session that stops.</summary>
@@ -85,8 +84,14 @@ namespace TopiaForge.ModManager.Sessions
                     if (status.Role != InternalSessionRole.ListenHost)
                     {
                         stage = Stage.Idle;
+                        listingVersion = -1;
                         if (status.Status.HostPhase == InternalHostPhase.Failed) Failed(LiveFailureMessages.ForHost(status.Status.HostFailure));
                         else SetProgress(string.Empty, ScreenTone.Neutral);
+                    }
+                    else if (status.Version != listingVersion)
+                    {
+                        listingVersion = status.Version;
+                        ShowListing(status.Status.Internet);
                     }
 
                     break;
@@ -154,9 +159,11 @@ namespace TopiaForge.ModManager.Sessions
                 // The runtime checks the realm rules again before the provider hears of it.
                 result = context.Environment.OpenToMultiplayer(settings).Result;
             }
-            catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException)
+            catch (Exception exception)
             {
-                result = OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message);
+                // Opening can run from the frame that waited for the game, so whatever the provider throws ends this
+                // attempt here, once, rather than escaping that frame and being tried again on the next.
+                result = LiveFailureMessages.Thrown(exception);
             }
 
             // The password went to the session and is never kept here.
@@ -171,6 +178,28 @@ namespace TopiaForge.ModManager.Sessions
             stage = Stage.Opening;
             SetProgress("Opening this game to other players...", ScreenTone.Neutral);
             context.Status.RequestRefresh();
+        }
+
+        /// <summary>Says how a hosted session stands with the TopiaForge service; a LAN session has nothing to say.</summary>
+        private void ShowListing(InternalInternetStatus internet)
+        {
+            switch (internet.ListingPhase)
+            {
+                case InternalListingPhase.Registering:
+                    SetProgress(Registering, ScreenTone.Neutral);
+                    break;
+                case InternalListingPhase.Online when internet.ListingFailure == InternalLiveFailure.None:
+                    SetProgress(internet.Listed ? Listed : Invited, ScreenTone.Success);
+                    break;
+                case InternalListingPhase.Online:
+                case InternalListingPhase.Retrying:
+                    SetProgress(internet.ListingFailure == InternalLiveFailure.None ? Retrying : LiveFailureMessages.ForHost(internet.ListingFailure).Message, ScreenTone.Warning);
+                    break;
+                case InternalListingPhase.Failed:
+                    var failed = LiveFailureMessages.ForHost(internet.ListingFailure);
+                    SetProgress(failed.Title + ": " + failed.Message, ScreenTone.Danger);
+                    break;
+            }
         }
 
         private void Failed(FailureMessage message)

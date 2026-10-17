@@ -68,6 +68,7 @@ namespace TopiaForge.ModManager.Tests
             var local = new[] { new InternalContentDescriptor("io.example.sandbox", "1.0.0", new string('a', 64), InternalContentMode.ImplicitShared) };
             var host = new[]
             {
+                new InternalHostPackage("io.example.192.0.2.9", "1.0.0", new string('e', 64), InternalHostPackageRole.Implicit),
                 new InternalHostPackage("203.0.113.7", "1.0.0", new string('b', 64), InternalHostPackageRole.Implicit),
                 new InternalHostPackage("io.example.zombies", "0.2.0-198.51.100.4", new string('c', 64), InternalHostPackageRole.Implicit),
                 new InternalHostPackage("io.example.lobby", "1.0.0", new string('d', 64), InternalHostPackageRole.Implicit)

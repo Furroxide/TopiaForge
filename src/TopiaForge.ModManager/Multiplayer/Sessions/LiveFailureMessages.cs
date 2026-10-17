@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Sessions
@@ -34,18 +35,35 @@ namespace TopiaForge.ModManager.Sessions
 
     /// <summary>
     /// Every way hosting or a join can fail, in this game's own words. Nothing here names an address: what the host wrote
-    /// is shown apart, redacted, through <see cref="HostText.HostSays"/>.
+    /// is shown apart, redacted, through <see cref="HostText.HostSays"/>. The TopiaForge service's failures are worded in
+    /// <c>LiveFailureMessages.Internet.cs</c>.
     /// </summary>
-    internal static class LiveFailureMessages
+    internal static partial class LiveFailureMessages
     {
         internal const string UnreadableContent =
             "This game's mods could not be read: a file of one of them is in use or cannot be opened. Close the program using it, then try again.";
 
-        internal const string ServiceNotConfigured = "Invites and listed servers need the TopiaForge service, which is not configured in this build.";
+        internal const string ServiceNotConfigured =
+            "This game is not set up to reach the TopiaForge service, so invites and listed servers are unavailable. LAN and direct play still work.";
 
-        /// <summary>Gets how a join that ended with <paramref name="failure"/> is presented; refusals read the host's code.</summary>
-        internal static FailureMessage ForJoin(InternalLiveFailure failure, InternalAdmissionCode code)
+        /// <summary>
+        /// Reads what the runtime or the provider threw as hosting or a join started as a refusal: a bad setting or state
+        /// keeps its words, which the screens redact before they show them, and anything else is named by its type alone.
+        /// </summary>
+        internal static OperationResult<bool> Thrown(Exception exception) =>
+            exception is ArgumentException || exception is InvalidOperationException
+                ? OperationResult<bool>.Failure(ModErrorCode.InvalidArgument, exception.Message)
+                : OperationResult<bool>.Failure(ModErrorCode.External, "The multiplayer provider failed (" + exception.GetType().Name + ").");
+
+        /// <summary>
+        /// Gets how a join that ended with <paramref name="failure"/> is presented; refusals read the host's code, and an
+        /// unavailable relay reads whether the host takes direct connections, as the status's
+        /// <see cref="InternalInternetStatus.HostAllowsDirect"/> says.
+        /// </summary>
+        internal static FailureMessage ForJoin(InternalLiveFailure failure, InternalAdmissionCode code, bool hostAllowsDirect = false)
         {
+            var internet = InternetJoin(failure, hostAllowsDirect);
+            if (internet != null) return internet;
             switch (failure)
             {
                 case InternalLiveFailure.None:
@@ -90,8 +108,6 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Identity unavailable", "This game's multiplayer identity could not be read or created. Check that TopiaForge can write to its data folder, then try again.", ConnectingStep.Resolving, true);
                 case InternalLiveFailure.NetworkStopped:
                     return new FailureMessage("Network stopped", "The host's network stopped after repeated errors, so the session ended.", ConnectingStep.Resolving, false);
-                case InternalLiveFailure.ServiceUnavailable:
-                    return new FailureMessage("Service not configured", ServiceNotConfigured, ConnectingStep.Resolving, false);
                 case InternalLiveFailure.ContentUnreadable:
                     return new FailureMessage("Mods could not be read", UnreadableContent, ConnectingStep.VerifyingMods, true);
                 default:
@@ -99,9 +115,11 @@ namespace TopiaForge.ModManager.Sessions
             }
         }
 
-        /// <summary>Gets how hosting that stopped with <paramref name="failure"/> is presented.</summary>
+        /// <summary>Gets how hosting that stopped with <paramref name="failure"/> is presented, or a listing with the service that failed.</summary>
         internal static FailureMessage ForHost(InternalLiveFailure failure)
         {
+            var internet = InternetHost(failure);
+            if (internet != null) return internet;
             switch (failure)
             {
                 case InternalLiveFailure.None:
@@ -116,8 +134,6 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Network stopped", "This game's network stopped after repeated errors, so hosting ended and every player left.", ConnectingStep.Resolving, true);
                 case InternalLiveFailure.Rejected:
                     return new FailureMessage("Password not prepared", "The session password could not be prepared, so hosting did not start.", ConnectingStep.Resolving, true);
-                case InternalLiveFailure.ServiceUnavailable:
-                    return new FailureMessage("Service not configured", ServiceNotConfigured, ConnectingStep.Resolving, false);
                 default:
                     return new FailureMessage("Hosting stopped", "Hosting stopped before players could join. Try again.", ConnectingStep.Resolving, true);
             }

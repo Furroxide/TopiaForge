@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -35,6 +36,9 @@ namespace TopiaForge.ModManager.Sessions
         internal string? LauncherLink { get; }
 
         internal JoinRequest Trusting(string serverId) => new JoinRequest(Target, Title, AllowDirect, Password, serverId, LauncherLink);
+
+        /// <summary>The same join with a direct connection allowed, for this session only, as the approved prompt lets it.</summary>
+        internal JoinRequest Direct() => new JoinRequest(Target, Title, allowDirect: true, Password, TrustedServerId, LauncherLink);
     }
 
     /// <summary>
@@ -54,6 +58,9 @@ namespace TopiaForge.ModManager.Sessions
         internal const string PasswordRule = "A password is 1 to 64 characters with no control characters.";
         internal const string WaitingText = "Waiting for the current game to finish starting or stopping...";
 
+        /// <summary>The longest delay the overlay waits out before RETRY, a day, as the runtime keeps the service's own.</summary>
+        internal const int MaximumRetryWaitSeconds = 86_400;
+
         private static readonly string[] Labels =
         {
             "RESOLVING", "CONNECTING", "AUTHENTICATING", "VERIFYING MODS", "LOADING WORLD", "SYNCHRONIZING", "SPAWNING"
@@ -61,6 +68,7 @@ namespace TopiaForge.ModManager.Sessions
 
         private readonly MultiplayerScreensContext context;
         private readonly string[] details = new string[ConnectingSteps.Count];
+        private readonly Func<bool> leaveStillAsked;
         private JoinRequest? request;
         private Stage stage;
         private int readsAtStart;
@@ -68,6 +76,8 @@ namespace TopiaForge.ModManager.Sessions
         private bool cancelRequested;
         private bool held;
         private float linger;
+        private float retryWait;
+        private int shownWait = -1;
         private int reached;
         private int active = -1;
         private int failed = -1;
@@ -89,6 +99,8 @@ namespace TopiaForge.ModManager.Sessions
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             for (var index = 0; index < details.Length; index++) details[index] = string.Empty;
+            leaveStillAsked = () => !IsBusy &&
+                SessionRealmGate.ForJoin(context.Environment.EvaluateRealmChange(NetRealm.Client), context.Environment.Realm) == RealmDecision.ConfirmLeaveGame;
         }
 
         private enum Stage
@@ -132,7 +144,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public string HostSays => hostSays;
 
-        public bool CanRetry => HasFailed && request != null && failure != null && failure.Retryable;
+        public bool CanRetry => HasFailed && request != null && failure != null && failure.Retryable && retryWait <= 0f;
 
         public bool CanOpenLauncher => HasFailed && request?.LauncherLink != null && failure != null && (failure.LauncherHelps || failure.Retryable);
 
@@ -185,6 +197,9 @@ namespace TopiaForge.ModManager.Sessions
                 case Stage.Succeeded:
                     linger += deltaTime > 0f ? deltaTime : 0f;
                     if (linger >= SuccessLingerSeconds) Hide();
+                    break;
+                case Stage.Failed:
+                    if (retryWait > 0f) CountDown(deltaTime);
                     break;
             }
         }

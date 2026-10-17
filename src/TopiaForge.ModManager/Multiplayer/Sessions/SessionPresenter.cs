@@ -7,9 +7,10 @@ namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>
     /// SESSION: the invite, the players, and leaving or ending the session. Players are listed, and kick, ban and mute are
-    /// offered, only once the session is Ready: during a join the engine's snapshot can still carry the previous host's
-    /// participants until the new host's first update, so nothing is shown or acted on before then. Participant ids are
-    /// reused across hosts and restarts, so a selection remembers the player's key as well as its id, and every action
+    /// offered, once the session's host has listed them: a joining player's snapshot lists nobody until the new host's own
+    /// list arrives, before Ready, and keeps it while a lost link reconnects, so a list is always that host's players under
+    /// that host's ids. Participant ids are reused across hosts and restarts, so a selection remembers the player's key as
+    /// well as its id, and every action
     /// checks that key against the current snapshot before it fires: when another player now holds the id, nobody is acted
     /// on and the player is told the list changed. Removing a player or ending the session confirms through the destructive
     /// modal first; leaving is never refused.
@@ -17,9 +18,11 @@ namespace TopiaForge.ModManager.Sessions
     internal sealed partial class SessionPresenter : ISessionScreen
     {
         internal const string KickMessage = "The host removed you from the session.";
-        internal const string WaitingNote = "Players appear once the session is ready.";
+        internal const string WaitingNote = "Players appear once the host lists them.";
         internal const string LanInvite = "Players on your local network find this session in BROWSE, under LAN.";
-        internal const string InviteNeedsService = "Invite codes need the TopiaForge service, which is not configured in this build.";
+        internal const string InvitePending = "The invite code shows here once the TopiaForge service has registered this session.";
+        internal const string InvitePrefix = "Invite code: ";
+        internal const string InviteSuffix = ". Players join with it in CONNECT; share it only with players you want.";
         internal const string ListChanged = "The player list changed, so nothing was done. Select the player again.";
 
         private readonly MultiplayerScreensContext context;
@@ -27,11 +30,12 @@ namespace TopiaForge.ModManager.Sessions
         private IReadOnlyList<PlayerRow> players = Array.Empty<PlayerRow>();
         private MultiplayerSessionSnapshot? shownSnapshot;
         private InternalSessionRole shownRole;
-        private bool shownReady;
+        private bool shownListed;
         private bool rebuild;
         private Selection? selected;
         private string title = "Not in a session";
         private string subtitle = string.Empty;
+        private string inviteText = string.Empty;
         private int titleVersion = -1;
 
         internal SessionPresenter(MultiplayerScreensContext context)
@@ -43,12 +47,13 @@ namespace TopiaForge.ModManager.Sessions
 
         public string Subtitle => subtitle;
 
-        public string InviteText =>
-            context.Status.Role != InternalSessionRole.ListenHost ? string.Empty
-            : context.Settings.Current.HostVisibility == InternalSessionVisibility.Lan ? LanInvite
-            : InviteNeedsService;
+        /// <summary>
+        /// Gets how players reach this session, for its host: the invite code once the TopiaForge service has made one, which
+        /// shows only here and is never logged, or how LAN players find it. Rebuilt only when the status moves.
+        /// </summary>
+        public string InviteText => inviteText;
 
-        public bool PlayersVisible => IsReady(context.Status);
+        public bool PlayersVisible => ListsPlayers(context.Status);
 
         public string PlayersNote =>
             PlayersVisible ? string.Empty
@@ -72,15 +77,16 @@ namespace TopiaForge.ModManager.Sessions
         public bool CanLeave => context.Status.Role == InternalSessionRole.Client;
 
         /// <summary>
-        /// Gets whether the session is Ready: this game hosts it, or joined it and the join is in session, and the session
-        /// snapshot says Ready. Only then do its participants describe this session.
+        /// Gets whether the session's players can be listed: this game hosts the session or is joined to it, and its snapshot
+        /// lists anyone. The engine lists a joining player nobody until the host's own list arrives, so whatever it lists is
+        /// that host's players under that host's ids, before Ready and while a lost link reconnects alike. A join that has
+        /// not connected runs no session of its own: what the snapshot lists then is solo play's.
         /// </summary>
-        internal static bool IsReady(MultiplayerStatusTracker tracker)
+        internal static bool ListsPlayers(MultiplayerStatusTracker tracker)
         {
             var snapshot = tracker.Snapshot;
-            if (snapshot == null || snapshot.State != MultiplayerSessionState.Ready) return false;
-            return tracker.Role == InternalSessionRole.ListenHost ||
-                   (tracker.Role == InternalSessionRole.Client && tracker.Status.JoinPhase == InternalJoinPhase.InSession);
+            if (snapshot == null || snapshot.Participants.Count == 0) return false;
+            return tracker.Role == InternalSessionRole.ListenHost || tracker.Role == InternalSessionRole.Client;
         }
 
         /// <summary>Selects the row with <paramref name="key"/>, remembering which player holds it now.</summary>
@@ -102,7 +108,7 @@ namespace TopiaForge.ModManager.Sessions
             context.Ask(PrivacyPrompts.Destructive("Remove " + target.Name + "?", target.Name + " leaves the session and can join again.", "REMOVE", confirmed =>
             {
                 if (confirmed) Act(target, control => control.Kick(new ParticipantId(target.Id), KickMessage), "Removed " + target.Name + " from the session.");
-            }));
+            }, context.IsHosting));
         }
 
         public void Ban()
@@ -112,7 +118,7 @@ namespace TopiaForge.ModManager.Sessions
             context.Ask(PrivacyPrompts.Destructive("Ban " + target.Name + "?", target.Name + " leaves the session and cannot join it again while you host.", "BAN", confirmed =>
             {
                 if (confirmed) Act(target, control => control.Ban(new ParticipantId(target.Id)), "Banned " + target.Name + " from the session.");
-            }));
+            }, context.IsHosting));
         }
 
         public void ToggleMute()
@@ -129,7 +135,7 @@ namespace TopiaForge.ModManager.Sessions
             context.Ask(PrivacyPrompts.Destructive(HostPresenter.EndTitle, HostPresenter.EndBody, HostPresenter.EndConfirm, confirmed =>
             {
                 if (confirmed) context.LeaveOnline("The session ended for everyone.");
-            }));
+            }, context.IsHosting));
         }
 
         public void Leave()
@@ -138,7 +144,7 @@ namespace TopiaForge.ModManager.Sessions
             context.Ask(PrivacyPrompts.Destructive("Leave server?", "You leave the session and keep playing on your own.", "LEAVE", confirmed =>
             {
                 if (confirmed) context.LeaveOnline("You left the session.");
-            }));
+            }, context.IsJoined));
         }
 
         private PlayerRow? SelectedRow()

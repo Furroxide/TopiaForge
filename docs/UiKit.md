@@ -196,5 +196,28 @@ within 0.6 m and beyond 40 m by default). A handle sets the name, a secondary li
 HOST, and the talking glyph slot. Names, secondary lines and badges are plain text, and a removed
 handle stays inert even after its pooled tag is reused.
 
+### Dialogs, toasts and layout for flows across scenes
+
+These renderer members serve screens that show what other players wrote and follow a flow across
+scene loads, such as the manager's multiplayer screens. Like the widgets above, they are not part of
+the safe `Context.Ui` contract.
+
+- `Modal.Destructive(title, body, confirmLabel, onConfirm, onCancel, ...)` also says when the dialog
+  ends without a confirmation: `onCancel` runs once, after the dialog has closed, whether through its
+  cancel button, ESC or its owner, and never after confirming. With `plainText: true` the title and
+  body render exactly as written, so markup in a player's name shows as typed; with
+  `persistent: true` the dialog survives scene loads. It returns the dialog, so its owner can close
+  it once the decision no longer applies, which counts as cancelling.
+- `Modal.Custom(title, scheme, width, persistent)` makes the empty shell with the same choice. A
+  persistent modal survives scene loads, as a dialog that follows a flow across them must; one that
+  is not is destroyed with the scene it opened in. The owner closes it either way, and disposing the
+  host tears it down.
+- `TopiaForgeToasts.ShowPlain(...)` shows a toast whose text renders as written, markup unparsed.
+  Bound the text first, through `TopiaForgePlainText`.
+- `widget.SetShown(bool)` takes a widget out of its parent's layout, so the rest closes up, or puts
+  it back. It is dirty-checked: a call that changes nothing rebuilds no layout. `SetVisible` keeps a
+  hidden widget's space, which suits a momentary change.
+- `inputField.Password()` masks what is typed; the text itself is unchanged.
+
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.

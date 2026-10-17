@@ -13,6 +13,7 @@ namespace TopiaForge.ModManager.Sessions
         private readonly TopiaForgeInputField invite;
         private readonly TopiaForgeLabel inviteError;
         private readonly TopiaForgeButton joinInvite;
+        private readonly TopiaForgeLabel inviteNote;
         private readonly TopiaForgeInputField address;
         private readonly TopiaForgeLabel addressError;
         private readonly TopiaForgeInputField password;
@@ -33,7 +34,7 @@ namespace TopiaForge.ModManager.Sessions
             invite.SetCharacterLimit(32);
             joinInvite = inviteRow.Button("JOIN", screen.JoinInvite);
             inviteError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
-            MultiplayerViewKit.Note(parent, screen.InviteNote);
+            inviteNote = MultiplayerViewKit.Note(parent, screen.InviteNote);
 
             parent.SectionHeader("ADDRESS");
             address = parent.Input("Host and port, or a topiaforge:// link", screen.Address, screen.SetAddress);
@@ -62,6 +63,7 @@ namespace TopiaForge.ModManager.Sessions
             invite.SetError(screen.InviteError.Length != 0);
             inviteError.SetText(screen.InviteError);
             joinInvite.SetEnabled(screen.CanJoinInvite);
+            inviteNote.SetText(screen.InviteNote);
             address.SyncText(screen.Address);
             address.SetError(screen.AddressError.Length != 0);
             addressError.SetText(screen.AddressError);

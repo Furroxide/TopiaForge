@@ -39,23 +39,27 @@ namespace TopiaForge.ModManager.Sessions
                 }
             }
 
-            var chosen = target;
+            var chosen = checking;
+            var invite = checkingInvite;
+            checking = null;
+            checkingInvite = null;
             if (chosen == null) return;
             switch (failure)
             {
                 case InternalLiveFailure.DirectNotAllowed when !queryAllowsDirect:
                     // Nothing beyond the local network was contacted; only the player's choice for this session may change that.
                     Result("Waiting for your choice.", ScreenTone.Neutral);
-                    context.Privacy.EnsureDirect(() => Check(chosen, allowDirect: true), () => Result(NothingContacted, ScreenTone.Neutral));
+                    context.Privacy.EnsureDirect(() => Check(chosen, allowDirect: true, invite), () => Result(NothingContacted, ScreenTone.Neutral));
                     break;
                 case InternalLiveFailure.None:
-                    launcherLink = LauncherJoinLink.ForTyped(address, server?.ServerId);
-                    var title = server == null ? "Direct session" : HostText.ForDisplay(server.Name);
-                    Result("Joining " + (title.Length == 0 ? "the session" : title) + ".", ScreenTone.Success);
-                    joins.Begin(new JoinRequest(chosen, title.Length == 0 ? "Direct session" : title, queryAllowsDirect, TakePassword(), trustedServerId, launcherLink));
+                    launcherLink = LinkFor(invite, server?.ServerId);
+                    var title = server == null ? string.Empty : HostText.ForDisplay(server.Name);
+                    if (title.Length == 0) title = UnnamedTitle(chosen.Kind);
+                    Result("Joining " + title + ".", ScreenTone.Success);
+                    joins.Begin(new JoinRequest(chosen, title, JoinAllowsDirect(chosen), TakePassword(), trustedServerId, launcherLink));
                     break;
                 case InternalLiveFailure.ContentMismatch:
-                    launcherLink = LauncherJoinLink.ForTyped(address, server?.ServerId);
+                    launcherLink = LinkFor(invite, server?.ServerId);
                     Result(NeedsText(problems), ScreenTone.Warning);
                     break;
                 case InternalLiveFailure.HostIdentityChanged when InternalText.IsServerId(changed):
@@ -74,6 +78,24 @@ namespace TopiaForge.ModManager.Sessions
                     break;
             }
         }
+
+        /// <summary>
+        /// Gets whether the join may take a direct path: a typed host as its check allowed; an invite or a listed server, which
+        /// the service resolves, as the player's Hide my IP says, so it goes through the relay unless the player turned it off.
+        /// </summary>
+        private bool JoinAllowsDirect(IInternalJoinTarget chosen) =>
+            chosen.Kind == InternalJoinTargetKind.Direct ? queryAllowsDirect : !context.Settings.Current.HideMyIp;
+
+        /// <summary>Gets the launcher's link: the invite the player typed, or what they typed as the address, pinned by the server found.</summary>
+        private string? LinkFor(string? invite, string? serverId) =>
+            invite != null ? LauncherJoinLink.ForInvite(invite) : LauncherJoinLink.ForTyped(address, serverId);
+
+        /// <summary>Names a session whose host gave no name, by how it was reached; never by an address or an invite code.</summary>
+        internal static string UnnamedTitle(InternalJoinTargetKind kind) =>
+            kind == InternalJoinTargetKind.Invite ? "Invited session"
+            : kind == InternalJoinTargetKind.ListedServer ? "Listed server"
+            : kind == InternalJoinTargetKind.Lan ? "LAN session"
+            : "Direct session";
 
         /// <summary>Hands the typed password to a join once, then forgets it.</summary>
         private string? TakePassword()

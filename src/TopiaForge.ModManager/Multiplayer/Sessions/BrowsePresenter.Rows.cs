@@ -209,7 +209,8 @@ namespace TopiaForge.ModManager.Sessions
             if (listing == null)
             {
                 return list == BrowseList.Lan ? string.Empty
-                    : "Not on your local network right now. Servers beyond it need the TopiaForge service, which is not configured in this build.";
+                    : context.HasService ? "Not on your local network right now. A public server can be joined from the TopiaForge launcher."
+                    : "Not on your local network right now. Servers beyond it need the TopiaForge service, which this game is not set up to reach.";
             }
 
             var readiness = ReadinessOf(listing);

@@ -9,8 +9,9 @@ namespace TopiaForge.ModManager.Sessions
     /// Follows the control's status for the screens without allocating every frame. The control's
     /// <see cref="IInternalMultiplayerControl.GetStatus"/> builds a new snapshot each call, so it is read only when a cheap
     /// signal moves (the role, live availability, the readiness hold or the session snapshot's identity), when an action
-    /// asks, and at most five times a second while hosting starts or a join runs. In a settled state, solo, hosting or
-    /// joined, a frame reads four fields and allocates nothing. Main thread only.
+    /// asks, and at most five times a second while hosting starts, a join runs, or a hosted session's listing with the
+    /// TopiaForge service registers or retries. In a settled state, solo, hosting or joined, a frame reads four fields and
+    /// allocates nothing. Main thread only.
     /// </summary>
     internal sealed class MultiplayerStatusTracker
     {
@@ -48,10 +49,11 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Asks for a full read at the next tick, as after an action the control has taken.</summary>
         internal void RequestRefresh() => forced = true;
 
-        /// <summary>Gets whether hosting is starting or a join is running, when the status is polled.</summary>
+        /// <summary>Gets whether hosting is starting, a join is running or a listing is not settled yet, when the status is polled.</summary>
         internal static bool IsInFlight(InternalLiveStatus value) =>
             value.HostPhase == InternalHostPhase.Preparing ||
-            (value.JoinPhase != InternalJoinPhase.None && value.JoinPhase != InternalJoinPhase.InSession && value.JoinPhase != InternalJoinPhase.Ended);
+            (value.JoinPhase != InternalJoinPhase.None && value.JoinPhase != InternalJoinPhase.InSession && value.JoinPhase != InternalJoinPhase.Ended) ||
+            value.Internet.ListingPhase == InternalListingPhase.Registering || value.Internet.ListingPhase == InternalListingPhase.Retrying;
 
         internal void Tick(IInternalMultiplayerControl? control, MultiplayerSessionSnapshot? session, float deltaTime)
         {
@@ -119,7 +121,14 @@ namespace TopiaForge.ModManager.Sessions
             !string.Equals(left.ChangedServerId, right.ChangedServerId, StringComparison.Ordinal) ||
             !string.Equals(left.Server?.ServerId, right.Server?.ServerId, StringComparison.Ordinal) ||
             !string.Equals(left.Server?.Name, right.Server?.Name, StringComparison.Ordinal) || left.IsBrowsing != right.IsBrowsing ||
-            left.ConnectedPlayers != right.ConnectedPlayers || left.MaxPlayers != right.MaxPlayers || left.IsReadinessHeld != right.IsReadinessHeld;
+            left.ConnectedPlayers != right.ConnectedPlayers || left.MaxPlayers != right.MaxPlayers || left.IsReadinessHeld != right.IsReadinessHeld ||
+            Differs(left.Internet, right.Internet);
+
+        private static bool Differs(InternalInternetStatus left, InternalInternetStatus right) =>
+            left.ServiceConfigured != right.ServiceConfigured || left.ListingPhase != right.ListingPhase || left.ListingFailure != right.ListingFailure ||
+            !string.Equals(left.Invite?.Code, right.Invite?.Code, StringComparison.Ordinal) || left.InviteFailure != right.InviteFailure ||
+            left.Listed != right.Listed || left.RelayReady != right.RelayReady || left.RetryAfterSeconds != right.RetryAfterSeconds ||
+            left.JoinRoute != right.JoinRoute || left.HostAllowsDirect != right.HostAllowsDirect;
 
         private static bool Same(IReadOnlyList<string> left, IReadOnlyList<string> right)
         {

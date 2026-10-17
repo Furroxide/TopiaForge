@@ -21,7 +21,8 @@ namespace TopiaForge.ModManager.Sessions
         internal const string LanIdle = "Search your local network to find sessions on it.";
         internal const string FavoritesEmpty = "No favorite servers yet. Select a server and add it to your favorites.";
         internal const string HistoryEmpty = "Servers you join appear here.";
-        internal const string InternetEmpty = "The Internet server list needs the TopiaForge service, which is not configured in this build.";
+        internal const string InternetEmpty = "The Internet server list needs the TopiaForge service, which this game is not set up to reach.";
+        internal const string InternetInLauncher = "Public servers are listed in the TopiaForge launcher. Open one there, or paste its server link in CONNECT.";
 
         private readonly MultiplayerScreensContext context;
         private readonly ConnectingPresenter joins;
@@ -54,7 +55,7 @@ namespace TopiaForge.ModManager.Sessions
         public IReadOnlyList<ServerRow> Rows => rows;
 
         public string EmptyText =>
-            list == BrowseList.Internet ? InternetEmpty
+            list == BrowseList.Internet ? (context.HasService ? InternetInLauncher : InternetEmpty)
             : list == BrowseList.Favorites ? FavoritesEmpty
             : list == BrowseList.History ? HistoryEmpty
             : searching ? LanEmpty : LanIdle;

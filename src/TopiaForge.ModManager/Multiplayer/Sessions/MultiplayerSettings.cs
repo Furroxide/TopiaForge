@@ -141,6 +141,9 @@ namespace TopiaForge.ModManager.Sessions
             return Copy(history: next.AsReadOnly());
         }
 
+        /// <summary>Forgets a joined server, as when the service no longer lists it.</summary>
+        internal MultiplayerSettings ForgetJoin(string serverId) => Copy(history: Without(History, serverId).AsReadOnly());
+
         internal MultiplayerSettingsDocument ToDocument()
         {
             return new MultiplayerSettingsDocument

@@ -346,6 +346,8 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerDiagnosticRedactor.cs" Link="Runtime/Multiplayer/MultiplayerDiagnosticRedactor.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentIdentification.cs" Link="Runtime/Multiplayer/MultiplayerContentIdentification.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerWorkScheduler.cs" Link="Runtime/Multiplayer/MultiplayerWorkScheduler.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerFrameGuard.cs" Link="Runtime/Multiplayer/MultiplayerFrameGuard.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerOverlayFrame.cs" Link="Runtime/Multiplayer/MultiplayerOverlayFrame.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakeMultiplayerControl.cs" Link="Multiplayer/FakeMultiplayerControl.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/LoopbackNetPair.cs" Link="Multiplayer/LoopbackNetPair.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/LoopbackChannel.cs" Link="Multiplayer/LoopbackChannel.cs" />

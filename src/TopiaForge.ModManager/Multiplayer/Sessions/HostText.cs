@@ -38,8 +38,10 @@ namespace TopiaForge.ModManager.Sessions
         /// Prepares one of this game's own problem lines, from its check of a host's packages, for display. The words are
         /// this game's, but they name the host's packages by the ids and versions its descriptor gives, and a mod id or a
         /// version may be four dotted numbers: an IPv4 address the host chose, this player's own perhaps. Those go, as the
-        /// redactor removes them. The rest stays readable: the redactor's host-name rule would take every dotted mod id
-        /// with it, and an id cannot hold the other address forms.
+        /// redactor removes them. The rest stays readable. A descriptor's ids and versions hold no colon, slash, at sign
+        /// or bracket, so no IPv6 address, URL or port can be among them; a dotted host name, or an IPv4 address in a
+        /// hexadecimal, octal or shortened form, can. Those stay, because the redactor's rules for them would take every
+        /// dotted mod id, and versions such as 1.0.300, with them.
         /// </summary>
         internal static string ForOwnLine(string? text)
         {

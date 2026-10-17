@@ -4,7 +4,7 @@ using TopiaForge.Mods.UnityUi;
 namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>
-    /// SESSION's kit view: the session, the invite, a virtualized player table shown only once the session is Ready, the
+    /// SESSION's kit view: the session, the invite, a virtualized player table shown once the host has listed its players, the
     /// host's kick, ban and mute, and "End session for everyone" or "Leave server".
     /// </summary>
     internal sealed class MultiplayerSessionView : IMultiplayerSubView
@@ -76,7 +76,7 @@ namespace TopiaForge.ModManager.Sessions
             leave.SetEnabled(screen.CanLeave);
         }
 
-        /// <summary>Players show only once the session is Ready; before that, only why.</summary>
+        /// <summary>Players show once the host has listed them; before that, only why.</summary>
         private void BuildList()
         {
             shownVisible = screen.PlayersVisible;

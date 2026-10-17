@@ -20,6 +20,8 @@ namespace TopiaForge.ModManager
         private readonly ManagerUiState uiState = new ManagerUiState();
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
         private readonly MultiplayerSessionsPresenter multiplayer;
+        private readonly MultiplayerFrameGuard multiplayerGuard;
+        private readonly MultiplayerOverlayFrame multiplayerFrame;
         private UiHost? host;
         private GameObject? root;
         private TopiaForgePanel? shell;
@@ -37,11 +39,16 @@ namespace TopiaForge.ModManager
         {
             this.plugin = plugin;
             this.logger = logger;
+
+            // Nothing the multiplayer interface throws may reach Unity's frame, where the game's crash reporter takes it:
+            // its stages run through this guard, which logs each failure once, redacted, and lets the frame run on.
+            multiplayerGuard = new MultiplayerFrameGuard(message => logger.Error(message));
             multiplayer = new MultiplayerSessionsPresenter(
-                new PluginMultiplayerEnvironment(plugin),
+                new PluginMultiplayerEnvironment(plugin, multiplayerGuard),
                 new FileMultiplayerSettingsStore(plugin.Paths.Data),
                 MultiplayerWorkSchedulers.Background);
-            multiplayer.Start();
+            multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab);
+            multiplayerGuard.Run(MultiplayerOverlayFrame.StartStage, multiplayer.Start);
         }
 
         /// <summary>Gets whether the multiplayer provider is loaded, so the main menu offers MULTIPLAYER.</summary>
@@ -85,22 +92,18 @@ namespace TopiaForge.ModManager
 
         public void Tick()
         {
-            // ESC and cursor are handled by the kit (dismiss stack + per-frame lease).
-            multiplayer.Tick(Time.unscaledDeltaTime);
-            if (multiplayerUi != null) multiplayerUi.Tick();
-            else MultiplayerSessionsUi.ShowNotices(multiplayer);
-
-            // A join's connecting overlay takes over from the manager once it shows.
-            var connecting = multiplayer.Connecting.IsVisible;
-            if (connecting && !connectingShown && root != null && root.activeSelf) Close();
-            connectingShown = connecting;
-            if (root != null && root.activeSelf && tabs[selectedTab] is IManagerLiveTab live) live.Tick();
+            // ESC and cursor are handled by the kit (dismiss stack + per-frame lease). The multiplayer stages run through
+            // their guard, so none of them can break this frame or the plugin's.
+            multiplayerFrame.Tick(Time.unscaledDeltaTime);
         }
 
         public void Dispose()
         {
-            multiplayerUi?.Close();
-            multiplayer.OnHidden();
+            multiplayerGuard.Run(MultiplayerOverlayFrame.TeardownStage, () =>
+            {
+                multiplayerUi?.Close();
+                multiplayer.OnHidden();
+            });
             cursorLease.Release();
             TopiaForgeDismissStack.Remove(this);
             host?.Dispose();
@@ -122,6 +125,22 @@ namespace TopiaForge.ModManager
             nav?.Select(tabIndex);
             SetOpen(true);
             RefreshContent();
+        }
+
+        /// <summary>Shows the multiplayer prompts, toasts and connecting overlay; before the overlay is built, only the toasts.</summary>
+        private void TickMultiplayerOutside()
+        {
+            if (multiplayerUi != null) multiplayerUi.Tick();
+            else MultiplayerSessionsUi.ShowNotices(multiplayer);
+        }
+
+        /// <summary>Hands the screen to a join's connecting overlay once it shows, and ticks the live tab while the overlay shows.</summary>
+        private void TickLiveTab()
+        {
+            var connecting = multiplayer.Connecting.IsVisible;
+            if (connecting && !connectingShown && root != null && root.activeSelf) Close();
+            connectingShown = connecting;
+            if (root != null && root.activeSelf && tabs[selectedTab] is IManagerLiveTab live) live.Tick();
         }
 
         /// <summary>Tells a live tab it no longer shows, as when the overlay closes or another tab is chosen.</summary>
@@ -170,7 +189,7 @@ namespace TopiaForge.ModManager
             tabs = new IManagerTab[]
             {
                 new GamemodesTab(),
-                new MultiplayerTab(multiplayer),
+                new MultiplayerTab(multiplayer, multiplayerGuard),
                 new InstalledTab(uiState),
                 new PackagesTab(uiState),
                 new SettingsTab(),

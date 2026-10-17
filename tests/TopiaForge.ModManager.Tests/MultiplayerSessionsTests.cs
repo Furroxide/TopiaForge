@@ -27,7 +27,8 @@ namespace TopiaForge.ModManager.Tests
             HostingAtTheMenuStartsTheGameThenOpensIt();
             HostOffersOnlyGamesTheMenuCanStart();
             OpeningARunningGamePromotesItInPlace();
-            PublicHostingAsksForADirectConnection();
+            PublicAndInviteHostingNeedTheService();
+            AHostedSessionSaysHowTheServiceListsIt();
             HostingFailuresAreWordedAndEndingConfirms();
             ContentReadinessGatesHostingAndJoining();
             DirectPromptCancellationContactsNothing();
@@ -41,7 +42,7 @@ namespace TopiaForge.ModManager.Tests
             RetryTrustAndTheLauncher();
             CopiedDetailsNeverHoldAnAddress();
             LauncherLinksCarryNoAddressUnlessTyped();
-            PlayersShowOnlyOnceTheSessionIsReady();
+            PlayersShowOnceTheHostListsThem();
             ModerationChecksThePlayerKeyBeforeActing();
             LeavingAndEndingConfirm();
             ASessionThatEndsWhilePlayingIsToasted();
@@ -49,6 +50,13 @@ namespace TopiaForge.ModManager.Tests
             BrowseBoundsWhatHostsList();
             OwnLinesLoseHostAddresses();
             NoScreenShowsAnAddress();
+            InvitesAndListedServersNeedTheService();
+            AnUnavailableRelayOffersTheDirectPrompt();
+            TheServicesFailuresAreHandledAsTheirCodesSay();
+            AHostSeesItsInvite();
+            PromptsCloseWhenTheirGameChanges();
+            PromptsShowOneAtATimeAndCloseWhenWithdrawn();
+            AThrowingProviderEndsTheAttemptOnce();
             SettledFramesAllocateNothing();
             Console.WriteLine("MultiplayerSessionsTests passed.");
         }
