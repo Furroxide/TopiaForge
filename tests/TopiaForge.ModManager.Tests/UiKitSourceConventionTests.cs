@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Tests
         public static void Run()
         {
             AllTmpComponentsCreatedThroughTopiaForgeTmp();
+            TmpFactoryKeepsThinGlyphsDrawn();
             ComponentLookupHonorsUnityNullSemantics();
             CanvasSortingUsesAllocator();
             ProcessWideUiStateHasShutdownPath();
@@ -63,6 +64,45 @@ namespace TopiaForge.ModManager.Tests
             if (!factorySeen)
             {
                 throw new InvalidOperationException("Text/TopiaForgeTmp.cs not found under " + kitRoot + " — did the TMP factory move? Update this test.");
+            }
+        }
+
+        // TMP sizes a glyph's quad to its outline plus 1.25 atlas texels. The body face's thin l and I then get
+        // quads narrower than a pixel at UI scale 1.0, and the GPU skips a quad that covers no pixel centre: the
+        // approved privacy text rendered "defau t" in the game. Every label needs extra padding, and a size set
+        // first, because a deferred Awake restores TMP's defaults over both while the size is still unset.
+        private static void TmpFactoryKeepsThinGlyphsDrawn()
+        {
+            var repoRoot = Program.FindRepoRoot();
+            var factory = File.ReadAllText(Path.Combine(repoRoot, "src", "TopiaForge.Mods.UnityUi", "Text", "TopiaForgeTmp.cs"));
+            var created = factory.IndexOf("AddComponent<TextMeshProUGUI>()", StringComparison.Ordinal);
+            var returned = factory.IndexOf("return tmp;", StringComparison.Ordinal);
+            var sized = Regex.Match(factory, @"\btmp\.fontSize\s*=(?!=)", RegexOptions.CultureInvariant);
+            var padded = Regex.Match(factory, @"\btmp\.extraPadding\s*=\s*true\s*;", RegexOptions.CultureInvariant);
+            if (created < 0 || returned < 0 || !sized.Success || !padded.Success
+                || sized.Index < created || sized.Index > returned || padded.Index < created || padded.Index > returned)
+            {
+                throw new InvalidOperationException(
+                    "TopiaForgeTmp.Create must give every label a size and extra padding before returning it; "
+                    + "without them thin glyphs vanish from small kit text.");
+            }
+
+            var disabled = new Regex(@"\.extraPadding\s*=(?!=)(?!\s*true\b)", RegexOptions.CultureInvariant);
+            foreach (var root in new[]
+            {
+                Path.Combine(repoRoot, "src", "TopiaForge.Mods.UnityUi"),
+                Path.Combine(repoRoot, "src", "TopiaForge.ModManager"),
+                Path.Combine(repoRoot, "mods"),
+            })
+            {
+                foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+                {
+                    if (!IsBuildOutput(file) && disabled.IsMatch(File.ReadAllText(file)))
+                    {
+                        throw new InvalidOperationException(
+                            "TMP extra padding is switched off in " + file + " — kit text keeps it on so thin glyphs stay drawn.");
+                    }
+                }
             }
         }
 
