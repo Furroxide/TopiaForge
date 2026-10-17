@@ -194,7 +194,7 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private sealed class UnityPrefabHandle : IPrefabAsset
+        private sealed class UnityPrefabHandle : IPrefabAsset, IPrefabAssetProvenance
         {
             private UnityAssetBundleHandle? bundle;
             private GameObject? prefab;
@@ -209,10 +209,15 @@ namespace TopiaForge.ModManager
                 this.bundle = bundle;
                 this.prefab = prefab;
                 Name = name;
+                BundlePath = bundle.RelativePath;
             }
 
             public OwnerAssetService Owner { get; }
             public string Name { get; }
+
+            // Where a joined player loads the same prefab from: the bundle's path in the package, and the asset's name.
+            public string BundlePath { get; }
+            public string AssetName => Name;
             public bool IsAlive => prefab != null && bundle != null && bundle.IsAlive;
             public GameObject Prefab => prefab ?? throw new ObjectDisposedException(nameof(UnityPrefabHandle));
 

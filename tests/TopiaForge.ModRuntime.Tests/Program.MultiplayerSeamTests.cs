@@ -38,8 +38,9 @@ namespace TopiaForge.ModRuntime.Tests
                 Assert(records.Count == 1, "the mod's spawn at load is recorded (" + records.Count + " records)");
                 var record = records[0];
                 Assert(record.Description.OwnerModId == fixture.Manifest.Id && record.Description.Kind == MultiplayerSpawnKinds.AssetPrefab &&
-                       record.Description.Profile.Equals(made.Profile) && record.Entity.IsAlive && record.Description.Descriptor is AssetSpawnRequest,
-                    "the mod's spawn at load is recorded at spawn time, offline, with its request");
+                       record.Description.Profile.Equals(made.Profile) && record.Entity.IsAlive &&
+                       record.Description.Descriptor is MultiplayerAssetDescriptor descriptor && !descriptor.IsPortable,
+                    "the mod's spawn at load is recorded at spawn time, offline, described by its prefab (one without a bundle path stays local)");
 
                 Assert(runtime.Multiplayer.SessionPhaseSource() == SessionPhase.Idle, "without a session runtime the local session is idle");
                 var offline = MeasureFrames(runtime, host);

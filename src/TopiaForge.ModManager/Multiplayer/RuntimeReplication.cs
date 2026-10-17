@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager
 
         private readonly MultiplayerReplication services;
         private readonly IModLifetime lifetime;
+        private bool releaseTracked;
 
         internal RuntimeReplication(MultiplayerReplication services, string ownerModId, ModNetProfile profile, IModLifetime lifetime)
         {
@@ -79,7 +80,20 @@ namespace TopiaForge.ModManager
             var refused = Admit<bool>() ?? CheckReserved<bool>(descriptor.Kind);
             if (refused != null) return refused;
             if (!entity.IsAlive) return OperationResult<bool>.Failure(ModErrorCode.InvalidState, "The entity no longer exists.");
-            services.Runtime.Spawns.Record(entity, Describe(descriptor));
+            if (services.Runtime.Realm == NetRealm.Client)
+            {
+                // A joined player records nothing as canonical: its world content binds by key to the host's, and its SDK
+                // spawns are shadows that authority routing (WS3.7) binds by origin.
+                if (descriptor.Source == InternalSpawnSource.WorldContent && TrackRelease())
+                {
+                    services.LocalContent?.RegisterLocalContent(this, descriptor.ContentKey!, entity);
+                }
+
+                return OperationResult<bool>.Success(true);
+            }
+
+            if (!TrackRelease()) return OperationResult<bool>.Failure(ModErrorCode.Cancelled, Stopping);
+            services.Runtime.Spawns.Record(entity, Describe(descriptor), this);
             return OperationResult<bool>.Success(true);
         }
 
@@ -91,9 +105,14 @@ namespace TopiaForge.ModManager
             var refused = Admit<IEntity>() ?? CheckReserved<IEntity>(descriptor.Kind);
             if (refused != null) return refused;
 
-            // Stub until authority routing (WS3.7): the spawn runs here in every realm, exactly as single player does.
+            // Stub until authority routing (WS3.7): the spawn runs here in every realm, exactly as single player does. A
+            // joined player's spawn is a prediction, never recorded as canonical; authority routing forwards it.
             var spawned = spawn() ?? throw new InvalidOperationException("The spawn returned no result.");
-            if (spawned.TryGetValue(out var entity) && entity.IsAlive) services.RecordQuietly(entity, Describe(descriptor));
+            if (services.Runtime.Realm != NetRealm.Client && spawned.TryGetValue(out var entity) && entity.IsAlive)
+            {
+                services.RecordQuietly(entity, Describe(descriptor), this);
+            }
+
             return spawned;
         }
 
@@ -178,13 +197,40 @@ namespace TopiaForge.ModManager
             return OperationResult<IInternalMicrophoneLease>.Success(new MicrophoneLease(hold, tracking));
         }
 
-        /// <summary>Records an asset spawn for a later promotion. A failure is reported, never thrown at the mod whose spawn succeeded.</summary>
+        /// <summary>
+        /// Records an asset spawn for a later promotion, described by its prefab's bundle and asset name rather than by the
+        /// request, whose prefab handle belongs to the spawning scope. A failure is reported, never thrown at the mod whose
+        /// spawn succeeded.
+        /// </summary>
         internal void RecordAssetSpawn(ISpawnedEntity spawned, AssetSpawnRequest request)
         {
             // Client-local and standalone mods are never baselined, so their spawns cost nothing more than before.
             if (!MultiplayerSpawnLedger.Records(Profile)) return;
+
+            // A joined player's spawn is never canonical: authority routing (WS3.7) forwards it to the host.
+            if (services.Runtime.Realm == NetRealm.Client) return;
             services.RecordQuietly(spawned, new MultiplayerSpawnDescription(OwnerModId, Profile, MultiplayerSpawnSource.SdkSpawn,
-                MultiplayerSpawnKinds.AssetPrefab, null, request.Transform, request));
+                MultiplayerSpawnKinds.AssetPrefab, null, request.Transform, MultiplayerAssetDescriptor.Of(request.Prefab)), this);
+        }
+
+        /// <summary>
+        /// Ends this seam's records, and its world content waiting to bind, when its context's lifetime ends: tracked once,
+        /// at the first record. False when the lifetime is already stopping.
+        /// </summary>
+        internal bool TrackRelease()
+        {
+            if (releaseTracked) return true;
+            try
+            {
+                lifetime.Track(new SeamRelease(services, this));
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+
+            releaseTracked = true;
+            return true;
         }
 
         private MultiplayerSpawnDescription Describe(InternalSpawnDescriptor descriptor) =>
@@ -222,6 +268,28 @@ namespace TopiaForge.ModManager
             {
                 // The lifetime began to stop in between, and removed the registration with it.
                 return OperationResult<IDisposable>.Failure(ModErrorCode.Cancelled, Stopping);
+            }
+        }
+
+        /// <summary>Ends a seam's records and its world content waiting to bind, once, when its context's lifetime ends.</summary>
+        private sealed class SeamRelease : IDisposable
+        {
+            private readonly MultiplayerReplication services;
+            private RuntimeReplication? seam;
+
+            internal SeamRelease(MultiplayerReplication services, RuntimeReplication seam)
+            {
+                this.services = services;
+                this.seam = seam;
+            }
+
+            public void Dispose()
+            {
+                var ending = seam;
+                if (ending == null) return;
+                seam = null;
+                services.Runtime.Spawns.ReleaseOwner(ending);
+                services.LocalContent?.ReleaseOwner(ending);
             }
         }
 

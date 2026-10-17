@@ -48,7 +48,17 @@ namespace TopiaForge.ModManager.Tests
                 typeof(MultiplayerRealmChange), typeof(MultiplayerPromotion), typeof(IMultiplayerPromotionCensus), typeof(MultiplayerSpawnRecord),
                 typeof(MultiplayerSpawnDescription), typeof(MultiplayerSpawnLedger), typeof(MultiplayerSpawnKinds), typeof(MultiplayerReplication),
                 typeof(IMultiplayerReferenceSource), typeof(RuntimeReplication), typeof(MultiplayerMicrophoneArbiter), typeof(MultiplayerMicrophoneArbiter.Hold),
-                typeof(NetAssetService), typeof(NetEntityService), typeof(NetItemService), typeof(NetUiService), typeof(MultiplayerRuntime)
+                typeof(NetAssetService), typeof(NetEntityService), typeof(NetItemService), typeof(NetUiService), typeof(MultiplayerRuntime),
+                typeof(IMultiplayerLocalContent), typeof(IMultiplayerRuntimeObserver), typeof(IMultiplayerSpawnObserver),
+
+                // The network world (WS3.6), which carries a hosted session's world to every player.
+                typeof(NetworkWorld), typeof(NetworkWorldHost), typeof(NetworkWorldClient), typeof(NetworkWorldChannel), typeof(IWorldMessageHandler),
+                typeof(HostWorldEntity), typeof(HostWorldPeer), typeof(HostBaseline), typeof(ClientWorldEntity), typeof(AssetReplicaBuild),
+                typeof(SceneObjectIndex), typeof(SceneObjectSlot), typeof(NativeAuthoritySuppressor), typeof(NativeAuthorityRestore),
+                typeof(ReplicaTransformDriver), typeof(WorldWireWriter), typeof(WorldWireReader), typeof(WorldEntry), typeof(WorldEntryCodec),
+                typeof(WorldMessages), typeof(NetworkWorldProgress), typeof(NetworkWorldCounters), typeof(INetworkWorldBackend),
+                typeof(INetworkWorldObject), typeof(INativeAuthoritySwitch), typeof(NetworkSceneObject), typeof(NativeAuthorityTarget), typeof(NetPose),
+                typeof(MultiplayerAssetDescriptor), typeof(IPrefabAssetProvenance), typeof(NetworkWorldIds), typeof(INetworkWorldBackendSource)
             };
             var offenders = new List<string>();
             foreach (var type in spi.Concat(runtime).Concat(runtime.SelectMany(type => type.GetNestedTypes(All))))

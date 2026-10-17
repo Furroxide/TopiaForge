@@ -24,6 +24,7 @@ namespace TopiaForge.ModManager
         private readonly ManifestValidationContext validationContext;
         private readonly IModLoadObserver? loadObserver;
         private readonly MultiplayerRuntime multiplayer;
+        private readonly NetworkWorld networkWorld;
         private readonly List<LoadedMod> loadedMods = new List<LoadedMod>();
         private readonly List<string> loadedModIds = new List<string>();
         private readonly ReadOnlyCollection<string> loadedModIdsView;
@@ -125,6 +126,7 @@ namespace TopiaForge.ModManager
             {
                 SessionPhaseSource = CurrentSessionPhase
             };
+            networkWorld = InstallNetworkWorld();
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
@@ -464,6 +466,7 @@ namespace TopiaForge.ModManager
                 : null;
             PublishSessionSceneLifecycle(loadedLifecycle);
             if (activatedLifecycle != null) PublishSessionSceneLifecycle(activatedLifecycle);
+            NetworkSceneLoaded(sceneInstanceId);
             var count = loadedMods.Count;
             for (var index = 0; index < count; index++)
             {

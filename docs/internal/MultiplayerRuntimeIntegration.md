@@ -1,19 +1,22 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.3 of the live-multiplayer plan) · Date: 2026-10-17 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.3 and WS3.6 of the live-multiplayer plan) · Date: 2026-10-17 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
 joins live sessions is recorded in [MultiplayerLiveSessions.md](MultiplayerLiveSessions.md), and how the session engine
 works in [MultiplayerSessionEngine.md](MultiplayerSessionEngine.md).
 
-The slice lands in two steps:
+The work lands in three steps:
 
 1. **The SPI, the provider's implementation and the composition root** (sections 1 to 9).
 2. **The realm and the factory seam** (sections 10 and 11), which use the replication model's `NetRealm` and
    `ModNetProfile`.
+3. **The network world** (WS3.6, section 13): scene objects, spawns and world content that exist, move and baseline on
+   every player.
 
-Both steps have landed. Section 8 says what each later WS3 slice plugs in where.
+All three have landed. Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where
+authority routing (WS3.7) and session follow (WS3.8) attach to the network world.
 
 ## 1. Shape
 
@@ -25,6 +28,7 @@ Both steps have landed. Section 8 says what each later WS3 slice plugs in where.
 | The composition root and the runtime host | `src/TopiaForge.ModManager/Multiplayer/` |
 | The replication SPI (section 11) | `src/TopiaForge.Mods.Abstractions/Internal/`, namespace `TopiaForge.Mods.Internal` |
 | The realm, the spawn ledger, the replication seam and the network decorators | `src/TopiaForge.ModManager/Multiplayer/` |
+| The network world (section 13) | `src/TopiaForge.ModManager/Multiplayer/World/`, Unity-free; its engine side in `World/Unity/` |
 
 - **Visibility.** Every SPI type is internal. The multiplayer SDK assembly grants its internals to the provider,
   ModManager, the test rig and the three test harnesses that use them. The replication SPI lives in the core SDK
@@ -412,9 +416,9 @@ plug in here:
 | --- | --- |
 | WS3.4 intent tracking | `IntentScope`, fed after the input sample, from UI renderer callbacks, from `OwnerCommandService` and from interaction handlers. `IRuntimeReplication.Route` takes the intent from its caller today; the intent scope makes the current one available to the network decorators and the SPI |
 | WS3.5 core replication model | Landed in Core (`MultiplayerReplicationModel.md`); the slices below drive it |
-| WS3.6 network world | `PromotionCensus`: the scene census (`SceneObjectKeyCensus`) and baselines of the recorded `Spawns` at each promotion. `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`; replicas built through `MultiplayerReplication.TryGetReplicaFactory`; entity references through `MultiplayerReplication.References`; announcing what `RegisterCanonical` records; the `WorldReplication` channel, re-baselined when `GetGeneration` changes; `SetEntityIdentitySource` |
-| WS3.7 authority routing | The `Net*Service` decorators and the SPI's spawn and command stubs, each call routed by `ExecutionRouting.Route(realm, profile, intent)`: spawn adoption, and shadows bound by `NetSpawnOrigin`; `NetEntityMotion` behind `AcquireMotion`; `HeldItemOwnershipTracker` behind `NetItemService`; forwarded commands naming their sender in `InternalCommand.Sender` |
-| WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu |
+| WS3.6 network world | Landed (section 13): `PromotionCensus`, `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`, an observer of the realm, the spawn ledger's observer, the `WorldReplication` channel, `SetEntityIdentitySource`, `MultiplayerReplication.References` and `LocalContent`, and replicas through `TryGetReplicaFactory` |
+| WS3.7 authority routing | The `Net*Service` decorators and the SPI's spawn and command stubs, each call routed by `ExecutionRouting.Route(realm, profile, intent)`: spawn adoption, and shadows bound by `NetSpawnOrigin`; `NetEntityMotion` behind `AcquireMotion`; `HeldItemOwnershipTracker` behind `NetItemService`; forwarded commands naming their sender in `InternalCommand.Sender`. Its traffic is message types 64 to 127 on the network world's channel, and its hooks into the network world are listed in section 13 |
+| WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu. The network world's scene hooks, hold and progress it works beside are listed in section 13 |
 | WS3.9 participant realm | Participant scopes through `CreateChildScopeAsync(..., ModExecutionContext.Participant)` |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
 | WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references |
@@ -501,7 +505,9 @@ answers no and is reported.
   recorded; and a join is refused while a real session runs, and goes through once it stops.
 - **The replication SPI** (`RuntimeReplicationTests`, `RuntimeReplicationServiceTests`): its enums mirror the runtime's;
   routes and time authority match the tables in every realm; factories, canonical registration, spawn requests,
-  commands, references and the microphone, with their bounds, refusals and lifetimes.
+  commands, references and the microphone, with their bounds, refusals and lifetimes; and a joined player's
+  predictions, shadows and asset spawns recorded as nothing.
+- **The network world** (section 13 lists its suites).
 - **Its privacy** (`ReplicationSpiPrivacyTests`): no member, parameter or type of the replication SPI (its interfaces, its
   limits and every internal type they name, transitively), or of the runtime types behind it, is shaped like an address
   or names a network type, and nothing the realm and the seam log or answer holds one, however many addresses the
@@ -569,17 +575,22 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
 
   | Recorded from | Kind | Description |
   | --- | --- | --- |
-  | `Assets.Spawn` that succeeds, through `NetAssetService` | `asset.prefab` | The spawn request |
+  | `Assets.Spawn` that succeeds, through `NetAssetService` | `asset.prefab` | The prefab's bundle path and asset name (`MultiplayerAssetDescriptor`); a prefab that cannot say them is described as unknown, and stays local |
   | `RegisterCanonical` and `RequestSpawn`, from first-party providers | The provider's own | Its `InternalSpawnDescriptor`, world content with its content key |
 
   Each record keeps a sequence that is never reused, the owning mod, the network profile of the context that made it,
-  what it is, its transform when it was made, its description, and the entity. Only what a listen host would baseline
-  is recorded: a client-local mod's spawns, which are never networked, and a standalone mod's, which never go online,
-  are not, and cost nothing. Registering a recorded entity again describes it in place, keeping its place in the order.
-  A record ends when its entity does: dead records are swept as recording goes on, whenever the ledger reaches twice
-  what was alive at the last sweep, or 64, so it never holds more than that. Recording happens only when something
-  spawns, so an offline frame costs nothing: 10,000 frames with a thousand records allocate zero bytes, through the
-  composition root with and without a solo provider, and through `ModRuntime` with a loaded mod's recorded spawn.
+  what it is, its transform when it was made, its description, the entity, and the seam that recorded it. Only what a
+  listen host would baseline is recorded: a client-local mod's spawns, which are never networked, and a standalone
+  mod's, which never go online, are not, and cost nothing. Nor is anything a joined player spawns or registers: its
+  spawns are predictions and shadows of the host's, never canonical (section 13). Registering a recorded entity again
+  describes it in place, keeping its place in the order. A record ends when its entity does: dead records are swept as
+  recording goes on, whenever the ledger reaches twice what was alive at the last sweep, or 64, so it never holds more
+  than that. It also ends, at once, when the context whose seam recorded it ends: the seam tracks one release in its
+  context's lifetime, and an ended record lets go of its entity, so no record keeps an ended session scope reachable.
+  While an observer is set, the network world on a listen host, each new record and each new description is reported
+  to it, so spawns after the census are announced. Recording happens only when something spawns, so an offline frame
+  costs nothing: 10,000 frames with a thousand records allocate zero bytes, through the composition root with and
+  without a solo provider, and through `ModRuntime` with a loaded mod's recorded spawn.
 - **Network classes.** Each loaded package's `ModNetworkClass` comes from its effective manifest
   (`ModNetworkClasses.Classify`): no multiplayer block and `session` are `Shared`, `client-local` is `ClientLocal`,
   `server-only` is `ServerOnly`, and `standalone`, a mode that cannot be read and an unsupported schema are
@@ -622,11 +633,11 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | --- | --- | --- |
   | `Realm`, `NetworkClass`, `ExecutionContext` | The runtime's realm and the context's profile | — |
   | `Route(intent)` | `ExecutionRouting.Route` for the realm, the profile and the given intent | WS3.4 supplies the current intent |
-  | `RegisterReplicaFactory` | Kept, one per kind in the process, never called (stub) | WS3.6 builds replicas through it |
-  | `RegisterCanonical` | Records at once, in every realm | WS3.6 announces on the host; WS3.7 binds shadows on joined players |
-  | `RequestSpawn` | Runs the spawn here and records it, in every realm (stub) | WS3.7 forwards from a joined player, predicts, then adopts or rolls back |
+  | `RegisterReplicaFactory` | Kept, one per kind in the process; a joined player builds the host's entities of that kind through it, and releases them through `ReleaseReplica` | — |
+  | `RegisterCanonical` | Offline and on a host, records at once, and a host announces it. On a joined player records nothing: world content waits to bind by key to the host's | WS3.7 binds a joined player's other registrations as shadows |
+  | `RequestSpawn` | Runs the spawn here in every realm (stub), and records it offline and on a host | WS3.7 forwards from a joined player, predicts, then adopts or rolls back |
   | `RegisterCommand`, `SubmitCommand` | Runs the mod's own handler here at once, in every realm (stub) | WS3.7 forwards from a joined player; the host checks the sender |
-  | `TryCreateRef`, `TryResolveRef` | False until a reference source is set (stub) | WS3.6 names entities, WS3.11 players |
+  | `TryCreateRef`, `TryResolveRef` | The network world names its entities, `world-` and the network id | WS3.11 names players |
   | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | WS3.13 publishes and applies the host's scale |
   | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | WS5 feeds the game's recording and holds voice chat's leases |
 
@@ -688,3 +699,245 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
 - **The core SDK assembly's internals were already granted** to ModManager and the first-party providers, so the
   replication SPI adds no visibility to it. The Core assembly grants its internals to the ModRuntime and multiplayer
   harnesses, which compile and implement the seam's realm and profile types.
+- **The network world's choices** are recorded with it, at the end of section 13.
+
+## 13. The network world
+
+WS3.6 makes a hosted session's objects exist, move and baseline on every player
+(`src/TopiaForge.ModManager/Multiplayer/World/`). The folder is Unity-free, so the ModManager and multiplayer harnesses
+compile all of it. The engine sits behind `INetworkWorldBackend`, which `UnityNetworkWorldBackend` (`World/Unity/`)
+implements over the loaded scenes and the runtime's entity registry, and the tests' `FakeWorldScene` over a fake engine.
+
+| Part | What it does |
+| --- | --- |
+| `NetworkWorld` | Wires the rest to the composition root: the three frame stages, the census seam, the realm's observers, the session's identity source, and the replication seam's references and world content. It owns the `WorldReplication` channel while a provider is attached |
+| `NetworkWorldHost` | The listen host: registering recorded spawns, keying scenes, binding on first motion, announcements, despawns and snapshots |
+| `NetworkWorldHost.Baselines` | The host's players and their chunked baselines |
+| `NetworkWorldClient`, `.Replicas`, `.Assets` | A joined player: its readiness hold, census and suppression, applying what the host sends, and building and releasing replicas |
+| `SceneObjectIndex` | Scene object keys, the replication model's `SceneObjectKey`, with duplicates excluded and binding on first motion |
+| `NativeAuthoritySuppressor` | What a joined player turns off, and the exact restore |
+| `ReplicaTransformDriver` | Host samples into the replication model's `SnapshotInterpolationBuffer`, and replicas moved to them |
+| `NetworkWorldChannel`, `NetworkWorldWire`, `NetworkWorldEntries` | The channel's end, its wire format and its entries |
+| `TopiaForgeNetworkIdentity` | The component that marks a network root with its id. It is not an `IRuntimeEntityIdentityAnchor`, so a `GetComponent` for the anchor never finds two |
+
+### The lifecycle
+
+- **Install.** ModRuntime creates the network world after the composition root, over the gameplay host's backend
+  (`INetworkWorldBackendSource`; a host without one replicates no scene object and adopts no spawn), a monotonic clock
+  in microseconds, and the owning mod's package asset service for replicas. `WorldEvents` runs the host's and the
+  joined player's receive, `HostSnapshots` the host's send, and `ReplicaInterpolation` the joined player's driver.
+- **Attached.** The world opens `WorldReplication` and sets itself as the session's entity identity source. A channel
+  that cannot open is a warning, once; the world then does nothing online.
+- **The realm** (`IMultiplayerRuntimeObserver.RealmChanged`, told after the pump that shows the change, before that
+  frame's world events and before a new host's census): leaving `ListenHost` ends the host's side, which takes every
+  mark off; leaving `Client` ends the joined player's side (below); entering `Client` starts it.
+- **The census** (`PromotionCensus`): becoming a host starts the host's side with the promotion's records.
+- **Detaching** ends both sides, closes the channel and removes the identity source.
+- **Scenes.** ModRuntime tells the world of every scene load, before the mods hear of it, and of every unload. Offline
+  that is one field read.
+
+### The host
+
+- **Promotion.** The promotion's live records are registered in the order they were made, each a network entity with
+  its origin, `{owning mod, record sequence}`, and marked through `Adopt`. Then the loaded scenes are keyed, and the
+  world becomes the spawn ledger's observer, so every later record and description is announced.
+- **Scene objects.** The census walks the loaded scenes for the topmost objects that carry a rigidbody, keyed by their
+  path and `UnityEngine.Rigidbody`, never the local player or a marked root. Keys that repeat are excluded, every copy.
+  A scene is keyed once per load: a census of every scene may meet one whose own load is reported after it.
+- **First motion.** Each downstream tick checks up to 512 unbound objects in turn against the pose the census read, on
+  the quantization grid. One that moved becomes an entity of kind `asset.scene`, is marked and announced; one that is
+  gone is removed, and every player hears its key. Every object is checked before a baseline begins.
+- **Poses before the promotion.** A census at the promotion reads poses the solo session may have moved, so they are
+  not the scene's own. A baseline carries the pose of every object censused then and still unbound, and a joining
+  player places its copy there. A scene loaded while hosting is keyed at its load pose and needs no such entry.
+- **Downstream.** Every frame, the host broadcasts what ended (despawns and removed keys) and what appeared or changed
+  (announcements). Every 100 ms it broadcasts a snapshot of the poses the replication scheduler picks under its
+  800-byte budget, resting entities after their three confirmations dropping out. Every broadcast goes through `Send`,
+  and each player its `skipped` list names gets a new baseline once its window has room.
+- **Players.** The host keeps a player's state only once that player asks for a baseline on its stream, never from the
+  participant list, so nothing acts on a list before the player is Ready. The first request on a stream is always
+  answered. A further one is a resynchronization, which costs 10 tokens of a bucket of 20 that refills one a second, so
+  a player gets two at once and then one every ten seconds. When a stream's generation changes, a player whose stream
+  restarted starts again on the new one, and its baseline under way is abandoned; one whose stream ended is forgotten.
+  At most 256 players keep state.
+- **Baselines.** A baseline's list is fixed when it begins, not when it is asked for, so a player whose window stays
+  full costs nothing but a check: the live entities in order, the removed scene keys, and the poses above. It goes as
+  `BaselineBegin`, chunks of at most 20 KiB, and `BaselineEnd`, at most eight messages per player per frame, and each
+  only while that player's window would also take a whole 32 KiB message. A baseline therefore leaves at least 12 KiB
+  of the window to the broadcasts behind it, and never makes one skip its player. A chunk the window refuses is written
+  again next frame from where it stopped; an entity that ended before its entry was written is left out, since the
+  player hears of its end. A new baseline for the same player supersedes the one under way.
+
+### A joined player
+
+- **Joining.** The world holds readiness ("Loading the host's world"), keys the loaded scenes, turns native authority
+  off, and asks for a baseline, every 250 ms until the channel takes the request, as it will once the stream starts.
+- **Native authority.** Scene rigidbodies become kinematic. Robot brains (`LLMAgent.llmDisabled`, and Behavior
+  Designer's `BehaviorTree`), locomotion (`LocomotionController`), path followers (`NavMeshAgent`) and spawners
+  (`PooledSpawner`) are turned off. The local player's hierarchy is never touched. The suppressor reads each setting,
+  records it, then writes the suppressed value, and keeps each setting once. On leaving it restores the newest first,
+  and only where the value is still the one it wrote, so a change the game made meanwhile stands. It counts what it
+  restored, what had changed, what is gone, what failed and what was never written, so a join that fails part way is
+  restored exactly as far as it went. A scene object the host removed is hidden through the same suppressor.
+- **Applying.** `BaselineBegin` marks every mirrored entity stale, entries and announcements make them current, and
+  `BaselineEnd` removes whatever is still stale. A known entity whose description is unchanged keeps its replica, and
+  a changed one is built again. A baseline's entry is newer than any sample the player buffered before it, so the
+  entity drops those samples and stands at the entry's pose until the next.
+- **Building.** A scene object binds by its key. World content binds by its content key to the entity this player's
+  own world provider registered (`RegisterCanonical` on a joined player). An asset spawn is built through the owning
+  mod's package asset service from its bundle path and asset name: each bundle and prefab is loaded once and shared,
+  polled each frame and never awaited, and a load that takes 30 seconds counts as unbuildable. A provider's spawn is
+  built by its kind's replica factory. Replicas are made kinematic, marked and placed. What cannot be built stays
+  mirrored, is counted, and is tried again only when its description changes; nothing throws. A player mirrors at most
+  16,384 entities.
+- **Before its scene.** An entity whose scene object is not loaded binds when the scene loads, and the keys the host
+  removed and the poses it placed wait for their scene too, up to 65,536 keys. The baseline may therefore arrive before
+  session follow (WS3.8) has loaded the world.
+- **Readiness.** The hold is released once a baseline is applied and no replica is still loading; each finished replica
+  reports progress. A stream that restarts takes the hold again, until its new baseline is in place.
+- **Snapshots.** Each sample goes into its entity's interpolation buffer at the host's time and this player's arrival
+  time. In LateUpdate, before the mods, the driver writes every replica the buffer's pose for now. A replica still
+  being built keeps its samples and moves once it exists.
+- **Leaving.** Every replica is released: asset replicas are disposed, and factory replicas go back through
+  `ReleaseReplica`. Scene objects are unmarked, native settings restored, bundle and prefab handles let go of (a load
+  still running lets go of its result as it lands), and the hold released. Each step runs whatever the one before it
+  did, and a restore that failed is logged once, with its counts.
+
+### Lookups, references and the ledger
+
+- **Ids.** Entities are named `world-` and their network id in decimal, which never collides with the engine's
+  `net-object-` objects. `TryGetNetworkObjectId` and `TryGetEntity`, the session's identity source, and the replication
+  seam's `TryCreateRef` and `TryResolveRef` go through the backend: `UnityEntityRegistry.TryGetGameObject`, then the
+  nearest marked ancestor, so a part of an object names its network root. Only entities this session replicates are
+  named, and an id must be in exactly its canonical form. Player references are left to the players directory (WS3.11).
+- **Later spawns.** The spawn ledger reports each record made after the census, and each new description, to the host.
+- **Ended scopes.** A record keeps the seam that made it, and ends with that seam's context, letting go of its entity. A
+  description holds no handle of the scope: an asset spawn is described by its prefab's bundle path and asset name,
+  which `UnityPrefabHandle` reports (`IPrefabAssetProvenance`), not by its request.
+- **A joined player records nothing as canonical.** This is the choice between the two the plan allowed. Its
+  predictions and shadows never enter the ledger, so nothing needs clearing on joining or leaving, and a promotion
+  after leaving baselines only what this process made while it was its own host or offline.
+
+### The wire
+
+Every message starts `[version 1][type]`, varints are minimal LEB128, and a malformed message is discarded whole and
+counted.
+
+| Type | From | Body |
+| --- | --- | --- |
+| 1 `BaselineBegin` | Host | baseline number, expected entries, host time |
+| 2 `BaselineEntries` | Host | baseline number, count, entries |
+| 3 `BaselineEnd` | Host | baseline number |
+| 4 `Spawn` | Host | count, entries: new entities, and new descriptions |
+| 5 `Despawn` | Host | count, network ids |
+| 6 `Snapshot` | Host | host time, count, then id and transform record each |
+| 7 `SceneRemoved` | Host | count, scene keys |
+| 32 `BaselineRequest` | Player | reason: 0 when a stream starts, 1 to resynchronize |
+| 64 to 127 | Either | Authority routing's (WS3.7) |
+
+An entry starts with its source: a scene object (id, key, pose), an SDK spawn (id, kind, owning mod, origin sequence,
+owner slot, scale, pose, description), world content (id, kind, content key, owning mod, owner slot, scale, pose,
+description), a removed scene object (key), or an unbound scene object's pose (key, pose). A joined player checks every
+field as the runtime checks its own: kinds and mod ids by their token rules, a sequence of at least 1, an owner slot up
+to 255, finite non-zero scales up to 10,000, content keys as world content's, descriptions up to 16 KiB, and transform
+records exact in their flags, length and spare bits. A message is at most 24 KiB and lists at most 4,096 items.
+
+### Privacy and cost
+
+- **Privacy.** Players are named by participant id inside the process and never logged. The world logs fixed texts and
+  counts only, and its counters hold counts. Nothing it sends, keeps or answers holds an address, and the architecture
+  test of section 9 covers its types with the runtime's.
+- **Offline**, every frame hook is one field read, and a scene load or unload one check more; the offline frame still
+  allocates zero bytes over 10,000 frames, through the composition root and the real `ModRuntime`.
+- **Online**, measured over 600 frames: a host and two players with a world at rest allocate nothing per frame; with
+  one body moving, 14 bytes a frame over the loopback channel. Over the real provider the world's stages allocate
+  nothing at rest and 21 bytes a frame with one body moving, its snapshots' share of the channel, beside the provider's
+  own 393 bytes a frame for the two peers.
+
+### Tests
+
+- **ModManager harness** (`--network-world`): `SceneObjectIndexTests` (the model's keys, duplicates against the model's
+  census over 200 seeded hierarchies, first-motion binding, later scenes, keying a scene twice, unloads);
+  `NativeAuthoritySuppressorTests` (exact restore, changes the game made meanwhile, partial and failing suppression,
+  switches that lie); `NetworkWorldWireTests` (round trips, and hostile and truncated bytes); `NetworkWorldCensusTests`
+  (the census over ledger records, later records, ended scopes); `WorldBaselineSyncTests` (a late joiner gets the whole
+  world, the world before its scene, what happens during a baseline, a generation change mid-baseline and in sync, a
+  replacement, a restart that rebuilds nothing, progress into the hold and the overlay, a player a broadcast skipped);
+  `WorldBaselinePacingTests` (chunk bounds, a stalled window resumed from where it stopped without a skipped broadcast,
+  bounded requests, players that never hold each other back, leaving players forgotten); `ReplicaTransformDriverTests`
+  (interpolation timing); `NetworkWorldLifecycleTests` (leaving and detaching restore everything, lookups through the
+  registry, allocation, failures that stay where they happen); `NetworkWorldPrivacyTests` (what a host writes, and
+  players whose ids look like addresses, reach no log or report, and the counters are counts).
+- **ModRuntime harness** (`TestNetworkWorldAcrossRuntimes`): three real runtimes over the loopback network, each loading
+  the same mod. The host's scene objects and its mod's spawns, made before and after it opened, appear on a joined
+  player, which builds the crates through its own copy of the mod; a box moves there under interpolation, smoothly and
+  a little behind; a late joiner gets everything in its baseline before it has loaded the scene; and after leaving, and
+  after shutting down while joined, every native setting is back.
+- **Multiplayer harness** (`NetworkWorldEngineTests`): real providers on the virtual network. The baseline crosses the
+  real channel while the player's hold keeps it short of Ready, motion reaches the player, a link that drops and comes
+  back within the grace starts again from a new baseline that rebuilds nothing the player has, and the world's share of
+  a frame is measured.
+- **Mutation checks**, each applied, run and reverted. The suppressor's suites fail when a restore overwrites a setting
+  the game changed meanwhile, when it writes back the suppressed value instead of the original, and when a change is
+  recorded only once its write returned. The baseline suites fail when a refused chunk is not rewound, when the host
+  goes on with a restarted player's old baseline, when a joined player does not ask again after its stream restarts,
+  and when the reader keeps a field an earlier entry read.
+
+### Where WS3.7 and WS3.8 attach
+
+Authority routing (WS3.7):
+
+- **Messages.** Types 64 to 127 on `NetworkWorld.Channel`, through `NetworkWorldChannel.Register`, beside world
+  replication's own on the same ordered stream. `TrySendTo`, `TrySendToHost` and `Broadcast` keep this section's window
+  and skip rules.
+- **Spawn adoption.** A host's adopted spawn is a ledger record like any other, so it is announced with its origin. The
+  entries already carry an owner slot, zero today, for the participant whose proxy scope owns it. A joined player's
+  `NetworkWorldClient.Build` is where a predicted instance binds in place of a new replica, by whatever provisional id
+  the prediction and the host's announcement share, before `Attach` marks it.
+- **Shadows.** `RegisterCanonical` on a joined player records nothing today; authority routing binds its shadows by
+  `NetSpawnOrigin` at the same point.
+- **Motion.** A body a player holds is simulated there: `ReplicaTransformDriver.Drive` must skip it, its kinematic
+  switch must be handed back to the game for the hold and suppressed again after, and the host must bind an unbound
+  scene object at once when a player acquires it, since today binding waits for first motion (`NetworkWorldHost.Bind`).
+  A hand-back carries `{position, linear velocity, angular velocity}`, and snapshots carry no angular velocity, so the
+  hand-back is one of authority routing's own messages.
+- **Requests.** `SetTransform` and `Destroy` on a joined player become requests; the host's results reach the player as
+  announcements, despawns and snapshots, as now.
+
+Session follow (WS3.8):
+
+- **Its own channel.** `SceneFollow`, re-baselined on its generation changes, as world replication is.
+- **Scenes.** The network world already hears every scene load and unload from ModRuntime's dispatch, online only. A
+  follower loads the host's world after joining, and what the world's baseline names waits for those scenes.
+- **Readiness.** The network world's hold covers its baseline and replicas only; follow holds readiness around
+  LoadingWorld with its own hold and `ReportProgress`, and the player is Ready once both are released.
+- **Progress.** `NetworkWorld.Progress` (`NetworkWorldProgress`: phase, entries received and expected, replicas loading,
+  and a fraction) feeds the connecting overlay beside follow's own.
+- **A new world.** `ReplaceSession` restarts every stream, so every player starts again from a baseline; the host's
+  scene unload ends its bound objects and the new scene is keyed at its load.
+
+### Limits, stated plainly
+
+- **Native spawns** are not replicated: only SDK spawns, world content and scene objects. A joined player's spawners
+  are off, so it makes none of its own.
+- **Before a promotion.** An object the solo session destroyed is unknown to the host, so a joining player keeps its
+  copy. A key carries sibling indices, so a sibling destroyed or reparented before the promotion moves the keys after
+  it: those objects bind to nothing, or, among siblings that share a name, to another copy, which the baseline's poses
+  then place where the host has them.
+- **Objects that never move** are never entities. A joined player keeps them where its scene put them, or where the
+  baseline placed them.
+- **A scene a joined player reloads on its own**, which follow's authority policy prevents, keeps its unbound objects at
+  the scene's poses.
+
+### Choices
+
+- **Baselines are pulled.** A player asks on each stream start, so the host acts on requests and generations, never on
+  the participant list, which may be unreliable during joins.
+- **Lists are fixed when a baseline begins**, so a stalled player costs nothing per skipped broadcast.
+- **Pacing by probe.** The channel answers `CanSend` for one message, at most 32 KiB, so a baseline probes for a whole
+  message and sends at most 20 KiB; no reserve larger than a message could be asked for.
+- **Joined players record nothing** rather than clearing the ledger on joining and leaving: clearing would drop what
+  this process made before it joined, which a later promotion should baseline.
+- **Restores yield to the game.** A setting the game changed while the player was joined is left as the game set it.
+- **Poses, not entities, for what moved before a promotion.** Binding every object censused at the promotion would
+  make each an entity in every snapshot; a pose in the baseline costs 27 bytes once.

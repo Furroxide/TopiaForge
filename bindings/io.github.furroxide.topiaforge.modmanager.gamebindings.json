@@ -496,6 +496,49 @@
         }
       ],
       "returnType": "System.Void"
+    },
+    {
+      "id": "manager.type.LLMAgent",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer: a joined player turns native authority off",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/World/Unity/UnityNetworkWorldBackend.cs"
+    },
+    {
+      "id": "manager.field.llmagent.llmDisabled",
+      "kind": "Field",
+      "assembly": "GameCode",
+      "declaringType": "LLMAgent",
+      "member": "llmDisabled",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer: a joined player turns native authority off",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/World/Unity/UnityNetworkWorldBackend.cs",
+      "returnType": "System.Boolean",
+      "isStatic": false
+    },
+    {
+      "id": "manager.type.LocomotionController",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "LocomotionController",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer: a joined player turns native authority off",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/World/Unity/UnityNetworkWorldBackend.cs"
+    },
+    {
+      "id": "manager.type.PooledSpawner",
+      "kind": "Type",
+      "assembly": "GameCode",
+      "declaringType": "PooledSpawner",
+      "matchMode": "StaticFullName",
+      "criticality": "Degraded",
+      "feature": "Multiplayer: a joined player turns native authority off",
+      "sourceRef": "src/TopiaForge.ModManager/Multiplayer/World/Unity/UnityNetworkWorldBackend.cs"
     }
   ]
 }

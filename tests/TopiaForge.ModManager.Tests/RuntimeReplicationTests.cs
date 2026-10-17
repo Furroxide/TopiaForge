@@ -209,8 +209,15 @@ namespace TopiaForge.ModManager.Tests
             control.Role = InternalSessionRole.Client;
             Frame(runtime);
             var predicted = new SeamEntity();
-            That(robots.RequestSpawn(descriptor, () => OperationResult<IEntity>.Success(predicted)).Succeeded && runtime.Spawns.Find(predicted) != null,
-                "stub: a joined player's spawn still runs here, as in single player, until authority routing forwards it");
+            That(robots.RequestSpawn(descriptor, () => OperationResult<IEntity>.Success(predicted)).Succeeded && runtime.Spawns.Find(predicted) == null,
+                "stub: a joined player's spawn still runs here, as in single player, until authority routing forwards it, but it is a prediction, never recorded as canonical");
+            var shadow = new SeamEntity();
+            var before = runtime.Spawns.Count;
+            That(robots.RegisterCanonical(shadow, descriptor).Succeeded && runtime.Spawns.Find(shadow) == null && runtime.Spawns.Count == before,
+                "a joined player's own registration is a shadow of the host's, never recorded as canonical");
+            var asset = new SeamEntity();
+            robots.RecordAssetSpawn(asset, new AssetSpawnRequest(new SeamPrefab(), TransformState.Identity));
+            That(runtime.Spawns.Find(asset) == null, "and neither is its spawn through the asset service");
             var server = services.Bind("io.example.zombies", new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.GamemodeServer), new OwnerModLifetime());
             var ran = false;
             That(server.RequestSpawn(descriptor, () => { ran = true; return success; }).ErrorCode == ModErrorCode.NotAuthoritative && !ran,
@@ -262,6 +269,10 @@ namespace TopiaForge.ModManager.Tests
             {
                 Calls++;
                 return OperationResult<IEntity>.Success(new SeamEntity());
+            }
+
+            public void ReleaseReplica(IEntity replica)
+            {
             }
         }
     }

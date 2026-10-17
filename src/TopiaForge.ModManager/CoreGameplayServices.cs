@@ -7,7 +7,7 @@ using UnityEngine;
 namespace TopiaForge.ModManager
 {
     /// <summary>Unity-backed manager-owned implementation of the safe V1 gameplay contracts.</summary>
-    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform
+    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource
     {
         private readonly UnityInputRegistry input = new UnityInputRegistry();
         private readonly UnityEntityRegistry entities = new UnityEntityRegistry();
@@ -32,6 +32,7 @@ namespace TopiaForge.ModManager
             this.runtimeOwnershipId = runtimeOwnershipId;
             UnityMainThreadGuard.CaptureCurrentThread();
             physics = new UnityPhysicsBackend(entities);
+            NetworkWorldBackend = new UnityNetworkWorldBackend(entities);
             loopObject = new GameObject("TopiaForge.CoreGameplayLoop");
             UnityEngine.Object.DontDestroyOnLoad(loopObject);
             var loop = loopObject.AddComponent<CoreGameplayLoop>();
@@ -40,6 +41,9 @@ namespace TopiaForge.ModManager
 
         public event Action<GameTimeSample>? FixedUpdate;
         public event Action<GameTimeSample>? LateUpdate;
+
+        /// <summary>Gets the network world's engine side, over the loaded scenes and this host's entity registry.</summary>
+        public INetworkWorldBackend NetworkWorldBackend { get; }
 
         /// <summary>Gets or sets Unity's <c>Application.runInBackground</c>; multiplayer keeps it on while online.</summary>
         public bool RunInBackground
