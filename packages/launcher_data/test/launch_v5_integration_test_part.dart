@@ -117,18 +117,23 @@ void _registerLaunchV5IntegrationTests({
       var running = false;
       var created = 0;
       final stopped = <LaunchProcessIdentity>[];
+      // The launcher owns a started process only when its receipt names the
+      // game image. On Linux and macOS a Windows build starts under the
+      // configured Wine command, so the program started is not the image:
+      // the receipt names the image, so the game is owned on every platform.
+      final image = p.join(gameRoot().path, 'Robotopia.exe');
       final (repo, install) = await _prepareProfileLaunchRepository(
         dataRoot: dataRoot(),
         repositoryRoot: repositoryRoot(),
         gameRoot: gameRoot(),
-        creator: (request) async {
+        creator: (_) async {
           created++;
           running = true;
           final identity = LaunchProcessIdentity(
             pid: 700 + created,
-            executablePath: request.executable,
+            executablePath: image,
             startTimeUtc: DateTime.utc(2026, 10, 16, 0, 0, created),
-            nativeStartToken: 'windows:${800 + created}',
+            nativeStartToken: 'generation:${800 + created}',
           );
           return LaunchProcessReceipt(pid: identity.pid, identity: identity);
         },
@@ -143,6 +148,11 @@ void _registerLaunchV5IntegrationTests({
       await repo.installPackage(_v6Package(root()).path, install);
       final first = await repo.launch(install, _v6Profile());
       expect(first.processStarted, isTrue, reason: first.message);
+      expect(
+        first.process,
+        isNotNull,
+        reason: 'The game must be owned, or no restart could stop it.',
+      );
 
       final hostSession = LaunchSessionRequest.host(
         intentId: 'intent-3',
