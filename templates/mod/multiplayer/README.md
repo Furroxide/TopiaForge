@@ -1,8 +1,9 @@
 # {{DISPLAY_NAME}}
 
-A multiplayer mod for Robotopia ({{MOD_ID}}): a count every player in a session shares. Any player presses **K**
-to add one. The host owns the count, decides every press and replicates the result, so everyone sees the same number
-on their HUD. Solo play, offline included, runs the same code in a one-player session in which you are the host.
+A multiplayer mod for Robotopia ({{MOD_ID}}): a count every player in a session shares. In a world, any player
+presses **K** to add one. The host owns the count, decides every press and replicates the result, so everyone sees the
+same number on their HUD. Solo play, offline included, runs the same code in a one-player session in which you are the
+host.
 
 ## Quick start
 
@@ -10,7 +11,7 @@ on their HUD. Solo play, offline included, runs the same code in a one-player se
 2. Generate the contract lock from the built contract: `topiaforge mod sync multiplayer`
 3. Build and test: `dotnet build` then `dotnet test tests/{{ASSEMBLY_NAME}}.Tests`
 4. Validate and package: `topiaforge check package .` then `topiaforge pack`
-5. Install and play: `topiaforge install` then `topiaforge launch`, and press **K**.
+5. Install and play: `topiaforge install` then `topiaforge launch`, start a world, and press **K**.
 
 The scaffold starts with an empty `topiaforge.multiplayer.lock.json`, which `topiaforge pack` refuses until step 2
 fills it in. Rerun `topiaforge mod sync multiplayer` whenever you change the contract, and commit the lock with
@@ -27,14 +28,18 @@ at exactly this SDK's version; it ships with TopiaForge and must be installed be
 - `[MultiplayerCommand("increment", ...)]` is a press. Its request is empty, so a client can only say that it pressed
   and the host decides what that is worth. Owner prediction moves the presser's count at once; a press the host
   refuses rolls back.
-- The HUD follows the value its own process holds, and refused presses appear as toasts. Presses are submitted
-  without waiting, and their answers are read on a later frame, because waiting would stall the game (TF1008).
+- Each gameplay world gets a HUD of its own when it loads, and the main menu gets none; a press counts only while the
+  HUD is up. Mods load before the game's first scene, and a scene that replaces another takes what was shown in it
+  along, so the HUD is made for each world rather than in `OnLoad`.
+- The HUD follows the value its own process holds. Presses are submitted without waiting, and their answers are read
+  on a later frame, because waiting would stall the game (TF1008). A refused press shows a warning toast, at most one
+  a second, because every mod shares one toast queue.
 
 ## Limits, and why
 
 | Declaration | Value | Why |
 | --- | --- | --- |
-| `MaximumPerSecond` | 10 | About as fast as a person can tap a key, so real presses are rarely refused, while a stuck key, a macro or a modified client cannot flood the host. The host enforces it on its own clock, its own player included. |
+| `MaximumPerSecond` | 10 | About as fast as a person can tap a key, so real presses are rarely refused, while a macro or a modified client cannot flood the host. The host enforces it on its own clock, its own player included. |
 | `MaximumPayloadBytes` | 64 | The request is empty and the response is a 4-byte count; 64 is the smallest limit TopiaForge accepts. The host refuses larger payloads before decoding them. |
 | Inbound total | 640 B/s | 10 x 64 bytes, about 2 percent of the 32 KiB/s per-connection budget that TFMP014 checks across every command and replicated object in the contract. |
 
@@ -56,7 +61,8 @@ key binding.
 - `{{TYPE_NAME}}Mod.cs`: the contract, its limits, the press action and the HUD.
 - `CounterPayloads.cs`: the payload types. To send data with a press, add bounded members to `IncrementRequest`
   and check every one in `Increment`, because a client can send any value the codec accepts.
-- `tests/`: NUnit tests on the multiplayer test rig, covering two players agreeing, a late joiner, a press past the
-  rate limit being refused and rolled back, a new session, and solo play.
+- `tests/`: NUnit tests on the multiplayer test rig, covering the HUD in each world and none at the main menu, two
+  players agreeing, a late joiner, a press past the rate limit being refused and rolled back, one warning for a burst
+  of refusals, a new session, and solo play.
 
 See `docs/Multiplayer.md` and `docs/Diagnostics.md` (the TFMP codes) in the TopiaForge repository.

@@ -179,13 +179,23 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
             )
             .toList()
           ..sort((left, right) => left.path.compareTo(right.path));
+    final sdkPackages = sdk.packages
+        .map((package) => package.id)
+        .where(sdk.containsPackage)
+        .toList();
     for (final project in projects) {
       final isTest = p
           .basenameWithoutExtension(project.path)
           .endsWith('.Tests');
+      final original = await project.readAsString();
       final packages = <String>{
         'TopiaForge.Mods.Abstractions',
         ...modulePackages,
+        // The feed holds no other version of an SDK package, so every SDK
+        // item the project has moves with the SDK too, including those the
+        // manifest's dependencies do not imply: the multiplayer generator,
+        // the Unity interop contracts, or an optional module.
+        ...includedPackageReferences(original, sdkPackages),
       };
       if (!isTest && sdk.containsPackage('TopiaForge.Mods.Analyzers')) {
         packages.add('TopiaForge.Mods.Analyzers');
@@ -193,7 +203,6 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
       if (isTest && sdk.containsPackage('TopiaForge.Mods.Testing')) {
         packages.add('TopiaForge.Mods.Testing');
       }
-      final original = await project.readAsString();
       final updated = _withExactSdkPackageReferences(
         original,
         packages: packages,

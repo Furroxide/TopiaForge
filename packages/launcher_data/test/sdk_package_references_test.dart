@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 
 const _abstractions = 'TopiaForge.Mods.Abstractions';
 const _analyzers = 'TopiaForge.Mods.Analyzers';
+const _generators = 'TopiaForge.Mods.Multiplayer.Generators';
 const _robotKit = 'TopiaForge.Mods.RobotKit';
 
 /// How long an edit may take on input built to make a scan backtrack.
@@ -16,6 +17,40 @@ String _project(String items) =>
     '<Project Sdk="Microsoft.NET.Sdk">\n$items\n</Project>\n';
 
 void main() {
+  group('includedPackageReferences', () {
+    test('finds the items the pin would pin, however they are written', () {
+      // Only an Include item is pinned. A comment sets nothing, and an
+      // Update item changes items written elsewhere. A list is found too, so
+      // the pin refuses it instead of leaving the package on another version.
+      final project = _project(
+        '  <!-- <PackageReference Include="$_robotKit" Version="0.0.1" /> -->\n'
+        '  <ItemGroup>\n'
+        '    <packagereference Include=" topiaforge.mods.abstractions " Version="0.0.1" />\n'
+        '    <PackageReference Update="$_analyzers" Version="0.0.1" />\n'
+        '    <PackageReference Include="Other;$_generators" Version="0.0.1" />\n'
+        '  </ItemGroup>',
+      );
+
+      expect(
+        includedPackageReferences(project, const [
+          _abstractions,
+          _analyzers,
+          _generators,
+          _robotKit,
+        ]),
+        {_abstractions, _generators},
+      );
+      expect(
+        () => withPinnedSdkPackageReferences(
+          project,
+          packages: includedPackageReferences(project, const [_generators]),
+          version: '1.0.0',
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
+
   group('withPinnedSdkPackageReferences', () {
     test('pins each item and adds the missing ones in one ItemGroup', () {
       // `.` in an id matches only itself, so the lookalike stays as it is.

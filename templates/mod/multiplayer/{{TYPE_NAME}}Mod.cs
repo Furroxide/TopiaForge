@@ -5,14 +5,14 @@ using TopiaForge.Mods;
 namespace {{ASSEMBLY_NAME}}
 {
     /// <summary>
-    /// A count every player in a session shares. Any player presses a key to add one; the host owns the count,
-    /// decides every press, and replicates the result, so everyone sees the same number. Solo play, offline
+    /// A count every player in a session shares. In a world, any player presses a key to add one; the host owns the
+    /// count, decides every press, and replicates the result, so everyone sees the same number. Solo play, offline
     /// included, runs this same code in a one-player session in which the local player is the host.
     /// </summary>
     /// <remarks>
-    /// The contract id is this mod's permanent wire identity: generated wire ids, codecs and the checked-in contract
-    /// lock all derive from it, and it deliberately ignores class and namespace renames. Keep it equal to the mod id,
-    /// and never change it after release, because copies from before and after a change refuse to join each other.
+    /// The contract id is this mod's permanent wire identity: the generated wire ids and the checked-in contract lock
+    /// derive from it, and it deliberately ignores class and namespace renames. Keep it equal to the mod id, and never
+    /// change it after release, because copies from before and after a change refuse to join each other.
     /// </remarks>
     [MultiplayerContract(Id = "{{MOD_ID}}")]
     public sealed partial class {{TYPE_NAME}}Mod : TopiaForgeMod
@@ -22,8 +22,8 @@ namespace {{ASSEMBLY_NAME}}
 
         /// <summary>
         /// The most presses the host accepts from one player each second. Ten is about as fast as a person can tap a
-        /// key, so a real press is rarely refused, while a stuck key, a macro or a modified client cannot flood the
-        /// host. The host counts against its own clock, and the limit applies to its own player too.
+        /// key, so a real press is rarely refused, while a macro or a modified client cannot flood the host. The host
+        /// counts against its own clock, and the limit applies to its own player too.
         /// </summary>
         internal const int MaximumPressesPerSecond = 10;
 
@@ -50,6 +50,12 @@ namespace {{ASSEMBLY_NAME}}
         [ReplicatedState("count")]
         private ReplicatedState<CounterState> count = new ReplicatedState<CounterState>(new CounterState());
 
+        // The HUD of the world being played. There is none at the main menu, or before the first world loads.
+        private IUiSurface? hud;
+
+        // When, in unscaled seconds, the last refusal was shown to the player.
+        private double lastRefusalShownAt = double.NegativeInfinity;
+
         /// <inheritdoc/>
         /// <remarks>
         /// TopiaForge binds the generated contract to the session before this runs, so the count is already live
@@ -68,25 +74,14 @@ namespace {{ASSEMBLY_NAME}}
                 return;
             }
 
-            var created = Context.Ui.CreateSurface(new UiSurfaceRequest(
-                "count",
-                "{{DISPLAY_NAME}}",
-                Describe(count.Value),
-                UiSurfaceKind.Hud,
-                width: 260f,
-                height: 96f));
-            if (!created.TryGetValue(out var hud))
-            {
-                Context.Logger.Error("HUD creation failed (" + created.ErrorCode + "): " + created.ErrorMessage);
-                return;
-            }
-
             // The HUD shows the value this process holds, which every player converges on: the presser's prediction at
             // once, the host's canonical value as it arrives, and the declared default when a new session starts.
-            Context.Lifetime.Track(count.SubscribeChanged(state => hud.SetBody(Describe(state))));
+            Context.Lifetime.Track(count.SubscribeChanged(state => hud?.SetBody(Describe(state))));
+            Context.Events.SubscribeSceneLoaded(ShowHudForWorld);
             Context.Events.SubscribeUpdate(_ =>
             {
-                if (pressAction.WasPressed)
+                // A press counts only where the player can see its result: in a world, with the HUD up.
+                if (hud != null && pressAction.WasPressed)
                 {
                     Press();
                 }
@@ -95,7 +90,45 @@ namespace {{ASSEMBLY_NAME}}
             });
 
             Context.Logger.Info(
-                "{{DISPLAY_NAME}} loaded. Press " + DefaultPressKey + " to add one to the count every player shares.");
+                "{{DISPLAY_NAME}} loaded. In a world, press " + DefaultPressKey
+                + " to add one to the count every player shares.");
+        }
+
+        /// <summary>Gives each gameplay world a HUD of its own, and the main menu none.</summary>
+        /// <remarks>
+        /// Robotopia loads its main menu and each world as a scene, and replaces the scene, with everything shown in
+        /// it, when the player moves on. So the HUD is made when a world loads and released when the next one replaces
+        /// it. Making it in <see cref="OnLoad"/> instead would show nothing: mods load before the game's first scene,
+        /// and loading that scene replaces everything shown before it.
+        /// </remarks>
+        private void ShowHudForWorld(SceneLoadEvent scene)
+        {
+            if (!scene.IsWorldReplacement)
+            {
+                return;
+            }
+
+            hud?.Dispose();
+            hud = null;
+            if (GameScenes.IsNonGameplayScene(scene.SceneName))
+            {
+                return;
+            }
+
+            var created = Context.Ui.CreateSurface(new UiSurfaceRequest(
+                "count",
+                "{{DISPLAY_NAME}}",
+                Describe(count.Value),
+                UiSurfaceKind.Hud,
+                width: 260f,
+                height: 96f));
+            if (!created.TryGetValue(out var surface))
+            {
+                Context.Logger.Error("HUD creation failed (" + created.ErrorCode + "): " + created.ErrorMessage);
+                return;
+            }
+
+            hud = surface;
         }
 
         /// <summary>Adds one to the shared count for the player who pressed.</summary>
@@ -110,8 +143,9 @@ namespace {{ASSEMBLY_NAME}}
         /// <para>
         /// Owner prediction runs the press on the presser's machine at once, so their count moves without waiting a
         /// round trip. The host then runs it canonically, and a press it refuses rolls back. Predicted code may only
-        /// update replicated state and build results; the generator rejects clocks, randomness and local services here
-        /// (TFMP005, TFMP006).
+        /// update replicated state and build results; the generator rejects clocks, <c>System.Random</c>, new GUIDs and
+        /// local services here (TFMP005, TFMP006), and <c>command.CreateRandom()</c> is the random source both runs
+        /// agree on.
         /// </para>
         /// <para>
         /// The two limits declare at most 10 presses x 64 bytes = 640 bytes a second from each player, about 2 percent
@@ -163,12 +197,24 @@ namespace {{ASSEMBLY_NAME}}
 
         private void ReportRefusal(ModErrorCode code, string message)
         {
+            if (code == ModErrorCode.Cancelled)
+            {
+                // Withdrawn before the host answered: the connection or the session went away, or this mod is
+                // stopping. The HUD already shows whatever the host counted, so there is nothing to add.
+                return;
+            }
+
+            // Presses faster than the limit are refused in a burst, and every mod shares one toast queue, so a toast
+            // for each refusal would bury other messages for many seconds. One warning a second says enough.
+            var now = Context.Time.Frame.ElapsedTime;
+            if (now - lastRefusalShownAt < 1d)
+            {
+                return;
+            }
+
+            lastRefusalShownAt = now;
             switch (code)
             {
-                case ModErrorCode.Cancelled:
-                    // Withdrawn before the host answered: the connection or the session went away, or this mod is
-                    // stopping. The HUD already shows whatever the host counted, so there is nothing to add.
-                    return;
                 case ModErrorCode.RateLimited:
                     Context.Ui.ShowToast(
                         "Too fast: the host takes at most " + MaximumPressesPerSecond + " presses a second.",

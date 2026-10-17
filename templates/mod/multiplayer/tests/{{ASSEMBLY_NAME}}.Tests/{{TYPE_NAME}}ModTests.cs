@@ -14,6 +14,48 @@ namespace {{ASSEMBLY_NAME}}.Tests
     {
         private const int Allowed = {{TYPE_NAME}}Mod.MaximumPressesPerSecond;
 
+        // A gameplay scene. Any name the game does not use for a menu, boot or loading scene is one.
+        private const string World = "World";
+
+        [Test]
+        public void EachWorldGetsAHudAndTheMainMenuNone()
+        {
+            using var rig = MultiplayerTestRig.CreateStandalone();
+            using var player = new Player(rig.Server, firstScene: null);
+            Assert.That(player.Hud, Is.Null, "mods load before the game's first scene, so nothing is shown yet");
+
+            player.LoadScene(GameScenes.MainMenuSceneName);
+            player.Press();
+            Assert.That(player.Hud, Is.Null, "the main menu has no HUD");
+
+            player.LoadScene(World);
+            Assert.That(player.Hud, Is.EqualTo(Showing(0)), "a press at the main menu does not count");
+            player.Press();
+            var worldHud = player.HudSurface;
+            player.LoadScene("Props", SceneLoadMode.Additive);
+            Assert.Multiple(() =>
+            {
+                Assert.That(player.Hud, Is.EqualTo(Showing(1)));
+                Assert.That(player.HudSurface, Is.SameAs(worldHud), "a scene loaded beside the world keeps its HUD");
+            });
+
+            // An arena loads beside the world and then takes over, as an additive world does.
+            player.LoadScene("Arena", SceneLoadMode.Additive);
+            player.ActivateScene("Arena");
+            Assert.Multiple(() =>
+            {
+                Assert.That(player.Hud, Is.EqualTo(Showing(1)), "the arena's HUD shows the count the session kept");
+                Assert.That(player.HudSurface, Is.Not.SameAs(worldHud), "the arena gets a HUD of its own");
+            });
+
+            player.LoadScene(GameScenes.MainMenuSceneName);
+            Assert.That(player.Hud, Is.Null, "the HUD goes with its world");
+            player.LoadScene(World);
+            Assert.That(player.Hud, Is.EqualTo(Showing(1)));
+
+            player.Unload();
+        }
+
         [Test]
         public void TwoPlayersAgreeOnTheCountTheHostOwns()
         {
@@ -135,11 +177,45 @@ namespace {{ASSEMBLY_NAME}}.Tests
             player.Unload();
         }
 
+        [Test]
+        public void ABurstOfRefusedPressesShowsOneWarningASecond()
+        {
+            using var rig = MultiplayerTestRig.CreateStandalone();
+            using var player = new Player(rig.Server);
+
+            // Five presses past the limit, all within one second on both the host's clock and the player's.
+            for (var press = 0; press < Allowed + 5; press++)
+            {
+                player.Press();
+            }
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(player.Hud, Is.EqualTo(Showing(Allowed)));
+                Assert.That(player.Toasts, Has.Count.EqualTo(1), "one warning for the burst, not one for each refusal");
+            });
+
+            rig.AdvanceTime(TimeSpan.FromSeconds(1));
+            player.Wait(TimeSpan.FromSeconds(1));
+            for (var press = 0; press <= Allowed; press++)
+            {
+                player.Press();
+            }
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(player.Hud, Is.EqualTo(Showing(2 * Allowed)));
+                Assert.That(player.Toasts, Has.Count.EqualTo(2), "a burst a second later warns again");
+            });
+
+            player.Unload();
+        }
+
         private static string Showing(int count) => "Shared count: " + count;
 
         /// <summary>
         /// One player's game: the mod loaded as TopiaForge loads it, with the generated contract bound to that player's
-        /// session before OnLoad runs and released with the mod's lifetime.
+        /// session before OnLoad runs and released with the mod's lifetime, and then, unless told otherwise, a world.
         /// </summary>
         private sealed class Player : IDisposable
         {
@@ -147,7 +223,7 @@ namespace {{ASSEMBLY_NAME}}.Tests
             private readonly FakeModContext context = new FakeModContext();
             private readonly ModLifecycleRunner runner;
 
-            internal Player(MultiplayerTestNode node)
+            internal Player(MultiplayerTestNode node, string? firstScene = World)
             {
                 var mod = new {{TYPE_NAME}}Mod();
                 var bound = mod.BindMultiplayer(node.Session);
@@ -159,11 +235,25 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 context.Lifetime.Track(binding);
                 runner = new ModLifecycleRunner(mod, context);
                 runner.Load();
+                if (firstScene != null)
+                {
+                    LoadScene(firstScene);
+                }
             }
 
-            internal string Hud => context.Ui.Surfaces[0].Body;
+            /// <summary>Gets the HUD's text, or null while no HUD is shown.</summary>
+            internal string? Hud => HudSurface?.Body;
+
+            internal FakeUiSurface? HudSurface => context.Ui.Surfaces.Count == 0 ? null : context.Ui.Surfaces[0];
 
             internal IReadOnlyList<FakeToast> Toasts => context.Ui.Toasts;
+
+            /// <summary>Loads a scene as the game does: a single load replaces the scenes before it.</summary>
+            internal void LoadScene(string name, SceneLoadMode mode = SceneLoadMode.Single) =>
+                context.Scenes.Load(name, mode);
+
+            /// <summary>Makes a scene loaded beside the others the active one.</summary>
+            internal void ActivateScene(string name) => context.Scenes.Activate(name);
 
             /// <summary>Taps the press key: down for one frame, up for the next.</summary>
             internal void Press()
@@ -176,6 +266,9 @@ namespace {{ASSEMBLY_NAME}}.Tests
 
             /// <summary>Runs one frame, which is when the mod reads the host's answers.</summary>
             internal void NextFrame() => context.AdvanceFrame(Frame);
+
+            /// <summary>Lets time pass on this player's clock, in one frame.</summary>
+            internal void Wait(TimeSpan duration) => context.AdvanceFrame(duration);
 
             /// <summary>Unloads the mod and checks that it released everything it held.</summary>
             internal void Unload()

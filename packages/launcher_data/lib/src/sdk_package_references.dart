@@ -75,6 +75,20 @@ String withPinnedSdkPackageReferences(
       '  </ItemGroup>\n${result.substring(close)}';
 }
 
+/// The ids in [packages] that a `PackageReference` item of [project]
+/// includes, found as [withPinnedSdkPackageReferences] finds the item it
+/// pins.
+///
+/// An SDK's feed carries one version of each of its packages, so an item
+/// that names one must be pinned with the rest, whatever added it.
+Set<String> includedPackageReferences(
+  String project,
+  Iterable<String> packages,
+) => {
+  for (final package in packages)
+    if (firstPackageReference(project, package) != null) package,
+};
+
 /// [project] without its first `PackageReference` item for [package], or
 /// [project] itself when it has none.
 ///
