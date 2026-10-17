@@ -32,7 +32,7 @@ namespace TopiaForge.ModManager.Sessions
             lists = bar.Tabs(Lists);
             lists.Select((int)screen.List);
             lists.OnSelected(index => screen.SelectList((BrowseList)index));
-            bar.Spacer();
+            bar.Spacer().Flex(1f, 0f);
             search = bar.Button("SEARCH LAN", ToggleSearch, TopiaForgeButtonStyle.Outline);
             refresh = bar.Button("REFRESH", screen.Refresh, TopiaForgeButtonStyle.Ghost);
             readiness = new ContentReadinessStrip(parent, screen.Content);
@@ -59,7 +59,7 @@ namespace TopiaForge.ModManager.Sessions
             actions.FixedHeight(TopiaForgeTokens.ControlHeight);
             join = actions.Button("JOIN", screen.Join);
             install = actions.Button("INSTALL & JOIN IN LAUNCHER", screen.InstallInLauncher, TopiaForgeButtonStyle.Outline);
-            actions.Spacer();
+            actions.Spacer().Flex(1f, 0f);
             favorite = actions.Button("ADD TO FAVORITES", screen.ToggleFavorite, TopiaForgeButtonStyle.Ghost);
             Tick();
         }

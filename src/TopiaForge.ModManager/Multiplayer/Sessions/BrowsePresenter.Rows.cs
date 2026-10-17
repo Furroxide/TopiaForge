@@ -28,6 +28,7 @@ namespace TopiaForge.ModManager.Sessions
                 if (!ReferenceEquals(heard, listings))
                 {
                     listings = heard;
+                    ForgetUnheard();
                     dirty = true;
                 }
 
@@ -108,9 +109,11 @@ namespace TopiaForge.ModManager.Sessions
                 case InternalLiveFailure.None:
                     return new Readiness(ServerReadiness.Ready, "Ready", Array.Empty<string>());
                 case InternalLiveFailure.ContentMismatch:
-                    var lines = new List<string>(problems.Count);
-                    foreach (var problem in problems) lines.Add(TopiaForge.Mods.UnityUi.TopiaForgePlainText.Sanitize(problem, HostText.LineChars));
-                    return new Readiness(ServerReadiness.Needs, "Needs " + Math.Max(lines.Count, 1).ToString(CultureInfo.InvariantCulture), lines.AsReadOnly());
+                    // A host may list 512 packages this game lacks: the selection names a few and counts the rest.
+                    var lines = new List<string>(Math.Min(problems.Count, MaximumNeedsLines) + 1);
+                    for (var index = 0; index < problems.Count && index < MaximumNeedsLines; index++) lines.Add(HostText.ForOwnLine(problems[index]));
+                    if (problems.Count > MaximumNeedsLines) lines.Add("And " + (problems.Count - MaximumNeedsLines).ToString(CultureInfo.InvariantCulture) + " more.");
+                    return new Readiness(ServerReadiness.Needs, "Needs " + Math.Max(problems.Count, 1).ToString(CultureInfo.InvariantCulture), lines.AsReadOnly());
                 case InternalLiveFailure.WrongGameBuild:
                 case InternalLiveFailure.ProtocolMismatch:
                     return new Readiness(ServerReadiness.Incompatible, "Incompatible", new[] { LiveFailureMessages.ForJoin(failure, InternalAdmissionCode.Other).Message });
@@ -220,6 +223,24 @@ namespace TopiaForge.ModManager.Sessions
                 default:
                     return string.Empty;
             }
+        }
+
+        /// <summary>
+        /// Forgets the checks of servers the local network no longer lists. A host can announce a new server id as each
+        /// old one falls silent, so without this the cache would grow for as long as the player browses; with it, it holds
+        /// at most what the provider lists.
+        /// </summary>
+        private void ForgetUnheard()
+        {
+            if (checks.Count == 0) return;
+            List<string>? gone = null;
+            foreach (var serverId in checks.Keys)
+            {
+                if (Find(serverId) == null) (gone ??= new List<string>()).Add(serverId);
+            }
+
+            if (gone == null) return;
+            foreach (var serverId in gone) checks.Remove(serverId);
         }
 
         private bool IsQuerying(string serverId)

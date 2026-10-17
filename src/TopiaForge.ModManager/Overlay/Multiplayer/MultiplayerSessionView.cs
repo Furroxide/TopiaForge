@@ -42,7 +42,7 @@ namespace TopiaForge.ModManager.Sessions
             kick = actions.Button("KICK", screen.Kick, TopiaForgeButtonStyle.Outline);
             ban = actions.Button("BAN", screen.Ban, TopiaForgeButtonStyle.Danger);
             mute = actions.Button("MUTE", screen.ToggleMute, TopiaForgeButtonStyle.Ghost);
-            actions.Spacer();
+            actions.Spacer().Flex(1f, 0f);
             end = actions.Button("END SESSION FOR EVERYONE", screen.EndForEveryone, TopiaForgeButtonStyle.Danger);
             leave = actions.Button("LEAVE SERVER", screen.Leave, TopiaForgeButtonStyle.Danger);
             Tick();

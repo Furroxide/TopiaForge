@@ -35,6 +35,9 @@ namespace TopiaForge.ModManager.Tests
             var root = Program.FindRepoRoot();
             PresentersCarryNoAddress();
             ViewsUseTheKitOnly(root);
+            OtherPlayersTextRendersPlain(root);
+            ModalsSurviveSceneLoadsAndRowsKeepTheirHeight(root);
+            PresentersGoOnlineThroughTheRealm(root);
             NothingLogs(root);
             UiFilesStayWithinTheirCap(root);
             Console.WriteLine("MultiplayerUiArchitectureTests passed.");
@@ -108,7 +111,9 @@ namespace TopiaForge.ModManager.Tests
                 new Regex(@"\.sortingOrder\b", RegexOptions.CultureInvariant),
                 new Regex(@"#[0-9A-Fa-f]{6}\b", RegexOptions.CultureInvariant),
                 new Regex(@"\bnew\s+Color(?:32)?\s*\(", RegexOptions.CultureInvariant),
-                new Regex(@"\.Rect\b", RegexOptions.CultureInvariant)
+                new Regex(@"\.Rect\b", RegexOptions.CultureInvariant),
+                // A widget's GameObject is a Unity type, and the UI Gallery compiles these views with no Unity reference.
+                new Regex(@"\.Go\b", RegexOptions.CultureInvariant)
             };
             foreach (var file in views)
             {
@@ -127,6 +132,83 @@ namespace TopiaForge.ModManager.Tests
                     That(!forbidden[0].IsMatch(source) && !forbidden[1].IsMatch(source), Path.GetFileName(file) + " stays free of Unity");
                     if (folder == "Screens") That(source.IndexOf("TopiaForge.Mods.Internal", StringComparison.Ordinal) < 0, Path.GetFileName(file) + " names no multiplayer SPI type, so the gallery compiles it");
                 }
+            }
+        }
+
+        /// <summary>
+        /// A host writes its server's name and its kick messages, and a player chooses their name, and the screens show those
+        /// words. Rich text would let them restyle or hide what this game says, so every label the views make with text that
+        /// is not a literal renders plain, toasts show plain, and destructive confirmations, which can name a player, too.
+        /// </summary>
+        private static void OtherPlayersTextRendersPlain(string root)
+        {
+            var label = new Regex(@"\.Label\(\s*(?<text>[^,]+),[^;]*;", RegexOptions.CultureInvariant);
+            var labels = 0;
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer"), "*.cs"))
+            {
+                var source = File.ReadAllText(file);
+                foreach (Match match in label.Matches(source))
+                {
+                    labels++;
+                    var text = match.Groups["text"].Value.Trim();
+                    if (text.StartsWith("\"", StringComparison.Ordinal)) continue;
+                    That(match.Value.Contains(".PlainText()", StringComparison.Ordinal), Path.GetFileName(file) + " renders a label of screen text as plain text: " + match.Value.Trim());
+                }
+
+                That(!source.Contains("TopiaForgeToasts.Show(", StringComparison.Ordinal), Path.GetFileName(file) + " shows toasts as plain text, never with markup");
+                var destructive = Regex.Matches(source, @"Modal\.Destructive\([^;]*;", RegexOptions.CultureInvariant | RegexOptions.Singleline);
+                foreach (Match call in destructive)
+                {
+                    That(call.Value.Contains("plainText: true", StringComparison.Ordinal), Path.GetFileName(file) + " shows destructive confirmations as plain text");
+                }
+            }
+
+            That(labels >= 25, "the scan covers the views' labels (" + labels + ")");
+        }
+
+        /// <summary>
+        /// Seen in the game: "Leave current game?" returns to the main menu with the connecting overlay open, and a modal
+        /// that is not persistent is destroyed with the scene it opened in, so the join went on with no overlay, its
+        /// failure never showed, and the view threw from the plugin's frame. Every modal the views open persists. Also seen:
+        /// a kit spacer flexes both ways, so a row holding one took a share of the screen's height and squeezed HOST's form
+        /// into a sliver at the largest UI scale; the views' spacers flex across only.
+        /// </summary>
+        private static void ModalsSurviveSceneLoadsAndRowsKeepTheirHeight(string root)
+        {
+            var modals = 0;
+            var spacers = 0;
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer"), "*.cs"))
+            {
+                var source = File.ReadAllText(file);
+                foreach (Match call in Regex.Matches(source, @"Modal\.(?:Custom|Destructive|Confirm|ConfirmHud)\([^;]*;", RegexOptions.CultureInvariant | RegexOptions.Singleline))
+                {
+                    modals++;
+                    That(call.Value.Contains("persistent: true", StringComparison.Ordinal), Path.GetFileName(file) + " opens a modal that survives scene loads: " + call.Value.Trim());
+                }
+
+                foreach (Match spacer in Regex.Matches(source, @"\.Spacer\([^)]*\)[^;]*;", RegexOptions.CultureInvariant))
+                {
+                    spacers++;
+                    That(spacer.Value.Contains(".Flex(1f, 0f)", StringComparison.Ordinal), Path.GetFileName(file) + " keeps a spacer from stretching its row's height: " + spacer.Value.Trim());
+                }
+            }
+
+            That(modals >= 3 && spacers >= 6, "the scan covers the views' modals and spacers (" + modals + ", " + spacers + ")");
+        }
+
+        /// <summary>
+        /// The presenters host, join and leave only through the runtime's realm, whose rules read the orchestrator's
+        /// RealmPhase; a call straight to the control would skip them, as a join during a main-menu load once did.
+        /// </summary>
+        private static void PresentersGoOnlineThroughTheRealm(string root)
+        {
+            var direct = new Regex(@"(?:[Cc]ontrol\??|current\??)\.(?:StartHosting|StopHosting|Join|Leave)\s*\(", RegexOptions.CultureInvariant);
+            var files = Directory.EnumerateFiles(Path.Combine(root, "src", "TopiaForge.ModManager", "Multiplayer", "Sessions"), "*.cs").ToArray();
+            That(files.Length >= 20, "the scan covers the presenters (" + files.Length + " files)");
+            foreach (var file in files)
+            {
+                var match = direct.Match(File.ReadAllText(file));
+                That(!match.Success, Path.GetFileName(file) + " goes online and leaves through the runtime's realm, never the control (" + match.Value + ")");
             }
         }
 

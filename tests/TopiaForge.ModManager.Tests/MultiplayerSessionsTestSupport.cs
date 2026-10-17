@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
@@ -92,11 +94,11 @@ namespace TopiaForge.ModManager.Tests
             var trimmed = text.Trim();
             if (LauncherJoinLink.NormalizeInviteCode(trimmed) is { } code)
             {
-                target = new FakeJoinTarget(InternalJoinTargetKind.Invite, "invite " + code);
+                target = new ScriptedJoinTarget(InternalJoinTargetKind.Invite, "invite " + code);
             }
             else if (LauncherJoinLink.TryParseHostPort(trimmed, out _, out _) || LauncherJoinLink.IsSessionLink(trimmed))
             {
-                target = new FakeJoinTarget(InternalJoinTargetKind.Direct, "direct session");
+                target = new ScriptedJoinTarget(InternalJoinTargetKind.Direct, "direct session");
             }
 
             return target != null;
@@ -118,7 +120,14 @@ namespace TopiaForge.ModManager.Tests
             return OperationResult<bool>.Success(true);
         }
 
-        public void Leave() => Calls.Add("Leave");
+        /// <summary>Gets or sets whether leaving throws, as a failing provider might, with an address in its message.</summary>
+        internal bool ThrowOnLeave { get; set; }
+
+        public void Leave()
+        {
+            Calls.Add("Leave");
+            if (ThrowOnLeave) throw new InvalidOperationException("the link to 203.0.113.7:27250 could not close");
+        }
 
         public IInternalServerQuery Query(IInternalJoinTarget target, bool allowDirect)
         {
@@ -174,9 +183,9 @@ namespace TopiaForge.ModManager.Tests
         public InternalMultiplayerStatistics GetStatistics() => new InternalMultiplayerStatistics { Role = Role };
     }
 
-    internal sealed class FakeJoinTarget : IInternalJoinTarget
+    internal sealed class ScriptedJoinTarget : IInternalJoinTarget
     {
-        internal FakeJoinTarget(InternalJoinTargetKind kind, string description, string? serverId = null)
+        internal ScriptedJoinTarget(InternalJoinTargetKind kind, string description, string? serverId = null)
         {
             Kind = kind;
             Description = description;
@@ -226,15 +235,46 @@ namespace TopiaForge.ModManager.Tests
         public void Dispose() => Disposed = true;
     }
 
-    /// <summary>The game around the screens, scripted by the test.</summary>
+    /// <summary>
+    /// The game around the screens, scripted by the test, over the real composition root: hosting, joining and leaving go
+    /// through <see cref="MultiplayerRuntime"/>'s realm, which reads <see cref="Phase"/> as ModRuntime's points it at the
+    /// session orchestrator's <c>RealmPhase</c>, and follows the control's role at each <see cref="Pump"/>.
+    /// </summary>
     internal sealed class FakeSessionEnvironment : IMultiplayerSessionEnvironment
     {
+        private readonly RecordingSessionControl? control;
+
         internal FakeSessionEnvironment(RecordingSessionControl? control)
         {
-            Control = control;
+            this.control = control;
+            PhaseSource = () => Phase;
+            Log = new RecordingRuntimeLog();
+            Runtime = new MultiplayerRuntime(() => this.control, new MultiplayerRuntimeHost("2545", "0.2.0", Log, contentScheduler: new ManualWorkScheduler()), Log)
+            {
+                SessionPhaseSource = () => PhaseSource()
+            };
+            Runtime.Connect();
         }
 
-        public IInternalMultiplayerControl? Control { get; set; }
+        /// <summary>Gets the composition root whose realm the screens ask.</summary>
+        internal MultiplayerRuntime Runtime { get; }
+
+        internal RecordingRuntimeLog Log { get; }
+
+        /// <summary>
+        /// Gets or sets the local session's phase as the realm rules read it: the orchestrator's <c>RealmPhase</c>, which says
+        /// stopping for an idle session that is still changing, as while the main menu loads.
+        /// </summary>
+        internal SessionPhase Phase { get; set; } = SessionPhase.Idle;
+
+        /// <summary>Gets or sets where the runtime reads that phase: <see cref="Phase"/>, or a real orchestrator's <c>RealmPhase</c>.</summary>
+        internal Func<SessionPhase> PhaseSource { get; set; }
+
+        public IInternalMultiplayerControl? Control => control;
+
+        public NetRealm Realm => Runtime.Realm;
+
+        public IReadOnlyList<string> StandaloneMods => Runtime.StandaloneMods;
 
         public MultiplayerSessionSnapshot? SessionSnapshot { get; set; }
 
@@ -243,10 +283,6 @@ namespace TopiaForge.ModManager.Tests
         internal int Retries { get; private set; }
 
         public string DisplayName { get; set; } = "Player";
-
-        public string? StandaloneModName { get; set; }
-
-        public WorldSessionPhase GamePhase { get; set; } = WorldSessionPhase.Idle;
 
         public string CurrentGameText { get; set; } = string.Empty;
 
@@ -267,6 +303,20 @@ namespace TopiaForge.ModManager.Tests
         public string RuntimeVersion => "0.2.0";
 
         public long UnixSeconds => 1_800_000_000;
+
+        public NetRealmTransition EvaluateRealmChange(NetRealm target) => Runtime.EvaluateRealmChange(target);
+
+        public MultiplayerRealmChange OpenToMultiplayer(InternalHostSettings settings) => Runtime.OpenToMultiplayer(settings);
+
+        public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings) => Runtime.Join(target, settings);
+
+        public MultiplayerRealmChange Leave() => Runtime.Leave();
+
+        /// <summary>One pump of the composition root, as ModRuntime runs it each frame: the realm follows the control's role.</summary>
+        internal void Pump() => Runtime.BeforeModsUpdate(0.016f);
+
+        /// <summary>Loads a package into the runtime's inventory, as ModRuntime records each mod it loads.</summary>
+        internal void Load(string id, string? mode = null) => Runtime.Host.Inventory.Add(Seam.Manifest(id, mode), "packages/" + id);
 
         public void RetryContentIdentification() => Retries++;
 
@@ -336,12 +386,13 @@ namespace TopiaForge.ModManager.Tests
 
         internal ScreenPrompt? Prompt => Presenter.PendingPrompt;
 
-        /// <summary>Runs one frame: the presenter, its finished file work, and the toasts it raised.</summary>
+        /// <summary>Runs one frame: the composition root's pump, the presenter, its finished file work, and the toasts it raised.</summary>
         internal void Frame(int count = 1, float deltaTime = 0.05f)
         {
             for (var index = 0; index < count; index++)
             {
                 Work.RunAll();
+                Environment.Pump();
                 Presenter.Tick(deltaTime);
                 while (Presenter.TryTakeNotice(out var notice)) Notices.Add(notice);
             }

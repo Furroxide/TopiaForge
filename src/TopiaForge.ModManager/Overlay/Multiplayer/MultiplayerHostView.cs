@@ -19,7 +19,6 @@ namespace TopiaForge.ModManager.Sessions
         private readonly TopiaForgeInputField name;
         private readonly TopiaForgeLabel nameError;
         private readonly TopiaForgeSlider players;
-        private readonly TopiaForgeLabel playersValue;
         private readonly TopiaForgeInputField password;
         private readonly TopiaForgeLabel passwordError;
         private readonly TopiaForgeDropdown visibility;
@@ -48,15 +47,14 @@ namespace TopiaForge.ModManager.Sessions
             form.SectionHeader("SESSION");
             name = form.Input("Server name", screen.Name, screen.SetName);
             name.SetCharacterLimit(48);
-            nameError = form.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
+            nameError = form.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
             var size = form.Row(TopiaForgeGap.Md);
             size.FixedHeight(TopiaForgeTokens.ControlHeight);
             players = size.Slider("Max players", screen.MinimumPlayers, screen.MaximumPlayers, screen.MaxPlayers, value => screen.SetMaxPlayers((int)Math.Round(value)));
             players.Flex(1f, 0f);
-            playersValue = size.Label(string.Empty, TopiaForgeTextStyle.Numeral).NoWrap();
             password = form.Input("Password (optional)", screen.Password, screen.SetPassword).Password();
             password.SetCharacterLimit(64);
-            passwordError = form.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
+            passwordError = form.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
             visibility = form.Dropdown(screen.VisibilityOptions, screen.Visibility, screen.SetVisibility);
             visibilityNote = MultiplayerViewKit.Note(form);
 
@@ -72,9 +70,9 @@ namespace TopiaForge.ModManager.Sessions
             var actions = parent.Row(TopiaForgeGap.Sm);
             actions.FixedHeight(TopiaForgeTokens.ControlHeight);
             start = actions.Button(screen.HostLabel, screen.Host);
-            actions.Spacer();
+            actions.Spacer().Flex(1f, 0f);
             end = actions.Button("END SESSION FOR EVERYONE", screen.End, TopiaForgeButtonStyle.Danger);
-            progress = parent.Label(string.Empty, TopiaForgeTextStyle.Caption);
+            progress = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).PlainText();
             Tick();
         }
 
@@ -97,7 +95,6 @@ namespace TopiaForge.ModManager.Sessions
             nameError.SetText(screen.NameError);
             players.SetValue(screen.MaxPlayers);
             players.SetEnabled(editable);
-            playersValue.SetText(string.Empty, screen.MaxPlayers);
             password.SyncText(screen.Password);
             password.SetEnabled(editable);
             password.SetError(screen.PasswordError.Length != 0);
@@ -134,7 +131,7 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
-            current = game.Label(screen.CurrentGameText, TopiaForgeTextStyle.Body).Ellipsis();
+            current = game.Label(screen.CurrentGameText, TopiaForgeTextStyle.Body).PlainText().Ellipsis();
         }
     }
 }

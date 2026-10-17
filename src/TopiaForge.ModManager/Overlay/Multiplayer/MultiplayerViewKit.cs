@@ -36,9 +36,9 @@ namespace TopiaForge.ModManager.Sessions
             }
         }
 
-        /// <summary>A caption that wraps, for notes and results.</summary>
+        /// <summary>A caption that wraps, for notes and results, as plain text: a note can name what another player wrote.</summary>
         internal static TopiaForgeLabel Note(TopiaForgeContainer parent, string text = "") =>
-            parent.Label(text, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted);
+            parent.Label(text, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).PlainText();
     }
 
     /// <summary>The readiness line HOST, BROWSE and CONNECT show while this game's mods are identified, with a retry on failure.</summary>
@@ -55,7 +55,7 @@ namespace TopiaForge.ModManager.Sessions
             this.screen = screen;
             root = parent.Row(TopiaForgeGap.Sm);
             root.FixedHeight(TopiaForgeTokens.ControlHeight);
-            text = root.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning).Ellipsis();
+            text = root.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Warning).PlainText().Ellipsis();
             text.Flex(1f, 0f);
             progress = root.ProgressBar();
             progress.FixedWidth(160f);
@@ -66,7 +66,8 @@ namespace TopiaForge.ModManager.Sessions
         internal void Bind()
         {
             var state = screen.State;
-            root.SetVisible(state != ContentReadinessState.Ready);
+            // Absent once this game's mods are identified, so the screen below closes up instead of sitting under a gap.
+            root.SetShown(state != ContentReadinessState.Ready);
             text.SetText(screen.Text);
             text.SetTone(state == ContentReadinessState.Unreadable ? TopiaForgeTone.Danger : TopiaForgeTone.Warning);
             progress.SetVisible(state == ContentReadinessState.Pending);

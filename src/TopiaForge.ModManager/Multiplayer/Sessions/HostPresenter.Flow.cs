@@ -30,19 +30,9 @@ namespace TopiaForge.ModManager.Sessions
             context.Ask(PrivacyPrompts.Destructive(EndTitle, EndBody, EndConfirm, confirmed =>
             {
                 if (!confirmed) return;
-                try
-                {
-                    context.Environment.Control?.StopHosting();
-                }
-                catch (Exception)
-                {
-                    // Ending is never refused; a control that throws has no session left to end.
-                }
-
                 stage = Stage.Idle;
                 SetProgress("The session ended for everyone.", ScreenTone.Neutral);
-                context.Status.RequestRefresh();
-                context.Notify("The session ended for everyone.");
+                context.LeaveOnline("The session ended for everyone.");
             }));
         }
 
@@ -53,17 +43,28 @@ namespace TopiaForge.ModManager.Sessions
             switch (stage)
             {
                 case Stage.WaitingForGame:
-                    var phase = context.Environment.GamePhase;
-                    if (phase == WorldSessionPhase.Running)
+                    // The runtime's rules say when the started game has settled: busy while it starts, then open in place.
+                    var decision = Decision();
+                    if (decision == RealmDecision.PromoteInPlace)
                     {
                         Open(launching?.Gamemode, launching?.World);
                     }
-                    else if (phase == WorldSessionPhase.Idle)
+                    else if (decision == RealmDecision.StartAsHost)
                     {
                         // The game started and stopped again before it could be opened: nothing is hosted.
                         launching = null;
                         stage = Stage.Idle;
                         SetProgress("The game stopped before it could be opened to other players.", ScreenTone.Warning);
+                    }
+                    else if (decision == RealmDecision.AlreadyThere)
+                    {
+                        launching = null;
+                        stage = Stage.Hosting;
+                    }
+                    else if (decision != RealmDecision.Busy)
+                    {
+                        launching = null;
+                        Failed(new FailureMessage("Hosting did not start", ModeText, ConnectingStep.Resolving, true));
                     }
 
                     break;
@@ -138,13 +139,6 @@ namespace TopiaForge.ModManager.Sessions
         private void Open(string? gamemode, string? world)
         {
             launching = null;
-            var control = context.Environment.Control;
-            if (control == null)
-            {
-                Failed(new FailureMessage("Multiplayer is not available", "The multiplayer provider is not loaded.", ConnectingStep.Resolving, false));
-                return;
-            }
-
             OperationResult<bool> result;
             try
             {
@@ -156,7 +150,9 @@ namespace TopiaForge.ModManager.Sessions
                     Gamemode = Announced(gamemode),
                     World = Announced(world)
                 };
-                result = control.StartHosting(settings);
+
+                // The runtime checks the realm rules again before the provider hears of it.
+                result = context.Environment.OpenToMultiplayer(settings).Result;
             }
             catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException)
             {

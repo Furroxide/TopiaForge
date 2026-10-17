@@ -97,10 +97,11 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Asks the realm rules whether this process may move to <paramref name="target"/> now, without acting. The interface
-        /// asks before it offers a choice, so it can ask "Leave current game?" first.
+        /// asks before it offers a choice, so it can ask "Leave current game?" first, and asks every frame its views bind a
+        /// choice, so it allocates nothing.
         /// </summary>
         internal NetRealmTransition EvaluateRealmChange(NetRealm target) =>
-            NetRealms.EvaluateTransition(Realm, target, ReadSessionPhase(), StandaloneMods.Count > 0);
+            NetRealms.EvaluateTransition(Realm, target, ReadSessionPhase(), HasStandaloneMod());
 
         /// <summary>
         /// Opens this game to other players. In single player with a world running, the running session is promoted in place
@@ -204,6 +205,18 @@ namespace TopiaForge.ModManager
                 if (!censusFailureLogged) log.Error("Multiplayer: the census at promotion failed: " + Describe(exception));
                 censusFailureLogged = true;
             }
+        }
+
+        /// <summary>Gets whether a loaded mod is standalone, by index: enumerating the list through its interface would allocate.</summary>
+        private bool HasStandaloneMod()
+        {
+            var packages = Host.Inventory.Packages;
+            for (var index = 0; index < packages.Count; index++)
+            {
+                if (packages[index].NetworkClass == ModNetworkClass.Standalone) return true;
+            }
+
+            return false;
         }
 
         /// <summary>Reads the local session's phase; one that cannot be read counts as busy, so nothing goes online on a guess.</summary>

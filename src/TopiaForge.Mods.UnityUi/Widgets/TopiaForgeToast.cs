@@ -36,6 +36,7 @@ namespace TopiaForge.Mods.UnityUi
             public string Text;
             public TopiaForgeTone Tone;
             public float Duration;
+            public bool Plain;
         }
 
         private static readonly List<ToastView> Views = new List<ToastView>();
@@ -45,6 +46,20 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>Shows a toast (queues when 4 are already visible).</summary>
         public static void Show(string text, TopiaForgeTone tone = TopiaForgeTone.Neutral, float duration = DefaultDuration)
+        {
+            Enqueue(text, tone, duration, plain: false);
+        }
+
+        /// <summary>
+        /// Shows a toast whose text renders exactly as written: markup in it is not parsed. Use it for text another player
+        /// wrote, such as a name or a message, once <see cref="TopiaForgePlainText"/> has bounded it.
+        /// </summary>
+        public static void ShowPlain(string text, TopiaForgeTone tone = TopiaForgeTone.Neutral, float duration = DefaultDuration)
+        {
+            Enqueue(text, tone, duration, plain: true);
+        }
+
+        private static void Enqueue(string text, TopiaForgeTone tone, float duration, bool plain)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -67,6 +82,7 @@ namespace TopiaForge.Mods.UnityUi
                 Text = text.Length > MaxTextChars ? text.Substring(0, MaxTextChars) : text,
                 Tone = tone,
                 Duration = Mathf.Clamp(duration, 0.25f, 30f),
+                Plain = plain,
             });
             Pump();
         }
@@ -200,7 +216,11 @@ namespace TopiaForge.Mods.UnityUi
             view.Leaving = false;
             view.RemainingSeconds = pending.Duration;
             view.Root.Go.SetActive(true);
-            view.Label!.text = pending.Text;
+
+            // Views are pooled, so each presentation says whether its text may hold markup.
+            view.Label!.richText = !pending.Plain;
+            view.Label.parseCtrlCharacters = !pending.Plain;
+            view.Label.text = pending.Text;
 
             // Dark chip styling with a tone-colored ring; readable over anything.
             var hudTheme = new TopiaForgeResolvedTheme(TopiaForgeScheme.Hud, null);

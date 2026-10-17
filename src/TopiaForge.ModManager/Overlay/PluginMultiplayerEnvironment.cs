@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -9,9 +10,9 @@ using UnityEngine;
 namespace TopiaForge.ModManager
 {
     /// <summary>
-    /// The multiplayer screens' environment in the game: the runtime's multiplayer composition root, the world session,
-    /// the launch targets, and Unity for links and the clipboard. What a frame reads is cached until its source changes, so
-    /// a settled frame allocates nothing.
+    /// The multiplayer screens' environment in the game: the runtime's multiplayer composition root and its realm, the
+    /// world session, the launch targets, and Unity for links and the clipboard. What a frame reads is cached until its
+    /// source changes, so a settled frame allocates nothing.
     /// </summary>
     internal sealed class PluginMultiplayerEnvironment : IMultiplayerSessionEnvironment
     {
@@ -21,8 +22,6 @@ namespace TopiaForge.ModManager
         private WorldSessionSnapshot? shownWorld;
         private string currentGameText = string.Empty;
         private HostTargetChoice? currentGame;
-        private int standalonePackages = -1;
-        private string? standaloneName;
 
         internal PluginMultiplayerEnvironment(TopiaForgeModManagerPlugin plugin)
         {
@@ -30,6 +29,24 @@ namespace TopiaForge.ModManager
         }
 
         public IInternalMultiplayerControl? Control => plugin.Multiplayer?.Control;
+
+        public NetRealm Realm => plugin.Multiplayer?.Realm ?? NetRealm.Offline;
+
+        public IReadOnlyList<string> StandaloneMods => plugin.Multiplayer?.StandaloneMods ?? (IReadOnlyList<string>)Array.Empty<string>();
+
+        /// <summary>Asks the runtime's rules; before the runtime exists nothing has settled, so the answer is busy, as a phase that cannot be read is.</summary>
+        public NetRealmTransition EvaluateRealmChange(NetRealm target) =>
+            plugin.Multiplayer?.EvaluateRealmChange(target) ?? new NetRealmTransition(NetRealmTransitionVerdict.Busy, NetRealmTransitionEffect.None);
+
+        public MultiplayerRealmChange OpenToMultiplayer(InternalHostSettings settings) =>
+            plugin.Multiplayer?.OpenToMultiplayer(settings) ?? Unavailable(NetRealm.ListenHost);
+
+        public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings) =>
+            plugin.Multiplayer?.Join(target, settings) ?? Unavailable(NetRealm.Client);
+
+        public MultiplayerRealmChange Leave() =>
+            plugin.Multiplayer?.Leave() ??
+            new MultiplayerRealmChange(NetRealms.EvaluateTransition(NetRealm.Offline, NetRealm.Offline, SessionPhase.Idle, false), OperationResult<bool>.Success(true));
 
         public MultiplayerSessionSnapshot? SessionSnapshot
         {
@@ -60,30 +77,6 @@ namespace TopiaForge.ModManager
             }
         }
 
-        public string? StandaloneModName
-        {
-            get
-            {
-                var packages = plugin.Multiplayer?.Host.Inventory.Packages;
-                if (packages == null) return null;
-                if (packages.Count == standalonePackages) return standaloneName;
-                standalonePackages = packages.Count;
-                standaloneName = null;
-                foreach (var package in packages)
-                {
-                    if (package.Manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.Standalone)
-                    {
-                        standaloneName = package.Name;
-                        break;
-                    }
-                }
-
-                return standaloneName;
-            }
-        }
-
-        public WorldSessionPhase GamePhase => plugin.GetSessionService()?.Current.Phase ?? WorldSessionPhase.Idle;
-
         public string CurrentGameText
         {
             get
@@ -108,19 +101,7 @@ namespace TopiaForge.ModManager
 
         public long UnixSeconds => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        public IReadOnlyList<HostTargetChoice> ReadHostTargets()
-        {
-            var choices = new List<HostTargetChoice>();
-            foreach (var preview in plugin.GetLaunchPreviews())
-            {
-                foreach (var choice in preview.Choices)
-                {
-                    choices.Add(new HostTargetChoice(preview.Title + " · " + choice.WorldId, choice.Request, preview.Title, choice.WorldId));
-                }
-            }
-
-            return choices.AsReadOnly();
-        }
+        public IReadOnlyList<HostTargetChoice> ReadHostTargets() => HostTargets.AtTheMenu(plugin.GetLaunchPreviews());
 
         public async void Launch(HostTargetChoice choice, Action<bool, string> done)
         {
@@ -160,6 +141,11 @@ namespace TopiaForge.ModManager
         public void OpenUrl(string url) => Application.OpenURL(url);
 
         public void CopyToClipboard(string text) => GUIUtility.systemCopyBuffer = text;
+
+        /// <summary>What hosting or joining answers before the runtime exists: unavailable, as the runtime says without a provider.</summary>
+        private static MultiplayerRealmChange Unavailable(NetRealm target) =>
+            new MultiplayerRealmChange(NetRealms.EvaluateTransition(NetRealm.Offline, target, SessionPhase.Idle, false),
+                OperationResult<bool>.Failure(ModErrorCode.Unavailable, MultiplayerRuntime.ProviderMissing));
 
         private void RefreshCurrentGame()
         {

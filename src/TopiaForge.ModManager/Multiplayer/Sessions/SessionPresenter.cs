@@ -128,18 +128,7 @@ namespace TopiaForge.ModManager.Sessions
             if (!CanEnd) return;
             context.Ask(PrivacyPrompts.Destructive(HostPresenter.EndTitle, HostPresenter.EndBody, HostPresenter.EndConfirm, confirmed =>
             {
-                if (!confirmed) return;
-                try
-                {
-                    context.Environment.Control?.StopHosting();
-                }
-                catch (Exception)
-                {
-                    // Ending is never refused; a control that throws has no session left to end.
-                }
-
-                context.Status.RequestRefresh();
-                context.Notify("The session ended for everyone.");
+                if (confirmed) context.LeaveOnline("The session ended for everyone.");
             }));
         }
 
@@ -148,18 +137,7 @@ namespace TopiaForge.ModManager.Sessions
             if (!CanLeave) return;
             context.Ask(PrivacyPrompts.Destructive("Leave server?", "You leave the session and keep playing on your own.", "LEAVE", confirmed =>
             {
-                if (!confirmed) return;
-                try
-                {
-                    context.Environment.Control?.Leave();
-                }
-                catch (Exception)
-                {
-                    // Leaving is never refused; a control that throws has nothing left to leave.
-                }
-
-                context.Status.RequestRefresh();
-                context.Notify("You left the session.");
+                if (confirmed) context.LeaveOnline("You left the session.");
             }));
         }
 

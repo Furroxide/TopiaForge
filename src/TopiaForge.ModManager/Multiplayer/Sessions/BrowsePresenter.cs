@@ -14,6 +14,9 @@ namespace TopiaForge.ModManager.Sessions
     internal sealed partial class BrowsePresenter : IBrowseScreen
     {
         internal const int MaximumQueries = 2;
+
+        /// <summary>The most problem lines a server's check keeps for the selection; a host may list 512 packages.</summary>
+        internal const int MaximumNeedsLines = 4;
         internal const string LanEmpty = "No sessions heard on your local network yet. Hosts on it appear here while searching.";
         internal const string LanIdle = "Search your local network to find sessions on it.";
         internal const string FavoritesEmpty = "No favorite servers yet. Select a server and add it to your favorites.";
@@ -68,6 +71,9 @@ namespace TopiaForge.ModManager.Sessions
 
         public bool IsFavorite => selectedKey != null && context.Settings.Current.IsFavorite(selectedKey);
 
+        /// <summary>Gets how many servers' checks are kept, for tests: never more than the local network lists.</summary>
+        internal int CachedChecks => checks.Count;
+
         public void SelectList(BrowseList next)
         {
             if (!Enum.IsDefined(typeof(BrowseList), next) || next == list) return;
@@ -111,6 +117,7 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             listings = Array.Empty<InternalLanListing>();
+            checks.Clear();
             dirty = true;
         }
 

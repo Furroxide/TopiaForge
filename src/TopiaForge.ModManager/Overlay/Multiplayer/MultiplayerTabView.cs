@@ -38,9 +38,10 @@ namespace TopiaForge.ModManager.Sessions
         internal void Build(TopiaForgeContainer content)
         {
             content.Label("MULTIPLAYER", TopiaForgeTextStyle.Display).FixedHeight(34f);
-            status = content.Label(screens.StatusText, TopiaForgeTextStyle.Caption).Ellipsis();
+            // The status names the joined server as its host wrote it, so it renders as plain text.
+            status = content.Label(screens.StatusText, TopiaForgeTextStyle.Caption).PlainText().Ellipsis();
             status.FixedHeight(22f);
-            unavailable = content.Label(string.Empty, TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Warning);
+            unavailable = content.Label(string.Empty, TopiaForgeTextStyle.Body).Tone(TopiaForgeTone.Warning).PlainText();
 
             header = content.Row(TopiaForgeGap.Md);
             header.FixedHeight(TopiaForgeTokens.ControlHeight);
@@ -53,9 +54,9 @@ namespace TopiaForge.ModManager.Sessions
             name = header.Input("2 to 24 characters", screens.DisplayName, screens.SetDisplayName);
             name.SetCharacterLimit(24);
             name.FixedWidth(220f);
-            nameError = header.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).Ellipsis();
+            nameError = header.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText().Ellipsis();
             nameError.Flex(1f, 0f);
-            settingsNote = header.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).NoWrap();
+            settingsNote = header.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).NoWrap().PlainText();
 
             tabs = content.Tabs(SubTabs);
             tabs.Select((int)screens.SelectedTab);
@@ -75,9 +76,10 @@ namespace TopiaForge.ModManager.Sessions
             status!.SetText(screens.StatusText);
             status.SetTone(MultiplayerViewKit.Tone(screens.StatusTone));
             unavailable!.SetText(screens.AvailabilityText);
-            unavailable.SetVisible(!available);
-            header!.SetVisible(available);
-            tabs!.SetVisible(available);
+            unavailable.SetShown(!available);
+            header!.SetShown(available);
+            var subTabs = tabs!;
+            subTabs.SetShown(available);
             hideMyIp!.SetValue(screens.HideMyIp);
             name!.SyncText(screens.DisplayName);
             name.SetError(screens.DisplayNameError.Length != 0);
@@ -85,7 +87,7 @@ namespace TopiaForge.ModManager.Sessions
             settingsNote!.SetText(screens.SettingsNote);
             if (available != shownAvailable || screens.SelectedTab != shownTab)
             {
-                tabs.Select((int)screens.SelectedTab);
+                subTabs.Select((int)screens.SelectedTab);
                 ShowSubTab(screens.SelectedTab);
             }
 

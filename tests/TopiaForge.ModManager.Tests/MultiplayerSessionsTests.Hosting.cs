@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -62,7 +63,7 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             That(rig.Environment.PendingLaunch != null && !rig.Control.Calls.Contains("StartHosting"), "the game starts first; nothing is opened yet");
             That(!host.CanHost && !host.FormEnabled, "and the form waits");
-            rig.Environment.GamePhase = WorldSessionPhase.Running;
+            rig.Environment.Phase = SessionPhase.Running;
             rig.Environment.PendingLaunch!(true, "Launch target reached Running.");
             rig.Frame();
             var settings = rig.Control.LastHost;
@@ -88,20 +89,51 @@ namespace TopiaForge.ModManager.Tests
             ReadyHost(stopped);
             stopped.Presenter.Host.Host();
             stopped.Environment.PendingLaunch!(true, "Launch target reached Running.");
-            stopped.Environment.GamePhase = WorldSessionPhase.Stopping;
+            stopped.Environment.Phase = SessionPhase.Stopping;
             stopped.Frame();
             That(!stopped.Presenter.Host.FormEnabled && !stopped.Control.Calls.Contains("StartHosting"), "a game that stops at once is waited on while it stops");
-            stopped.Environment.GamePhase = WorldSessionPhase.Idle;
+            stopped.Environment.Phase = SessionPhase.Idle;
             stopped.Frame();
             That(!stopped.Control.Calls.Contains("StartHosting") && stopped.Presenter.Host.ProgressTone == ScreenTone.Warning &&
                  stopped.Presenter.Host.FormEnabled && stopped.Presenter.Host.CanHost,
                 "and once it stopped, nothing is opened and HOST can start again");
         }
 
+        /// <summary>
+        /// At the main menu HOST offers only games the menu can start: a choice that adds an arena to a running game is
+        /// refused there ("An additive arena requires an existing loaded gameplay scene"), and HOST selects its first
+        /// choice by default.
+        /// </summary>
+        private static void HostOffersOnlyGamesTheMenuCanStart()
+        {
+            using var fixture = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(Program.FindRepoRoot(),
+                "tests", "fixtures", "gamemode-v6", "resolution", "player-choice-honours-an-offered-transition.json")));
+            var manifest = ModManifestJson.Deserialize(
+                fixture.RootElement.GetProperty("profile").GetProperty("packages")[0].GetProperty("manifest").GetRawText());
+            var profile = new EffectiveProfile("host-targets", 1, new[] { new ResolvedPackage(manifest.Id, manifest.Version, manifest) });
+            var previews = LaunchTargetPreviewBuilder.Build(profile);
+            var all = previews.SelectMany(preview => preview.Choices).ToArray();
+            That(all.Any(choice => choice.Transition == ModTransitions.AdditiveArena) && all.Any(choice => choice.Transition == ModTransitions.SceneReplacement),
+                "the declared target offers both a scene and an arena");
+
+            var offered = HostTargets.AtTheMenu(previews);
+            var startable = all.Where(choice => choice.Transition != ModTransitions.AdditiveArena).ToArray();
+            That(offered.Count == startable.Length && offered.Count > 0 &&
+                 offered.All(target => startable.Any(choice => ReferenceEquals(choice.Request, target.Request))),
+                "HOST offers every choice that replaces the scene, and no arena choice (" + offered.Count + " of " + all.Length + ")");
+
+            var rig = new SessionsRig();
+            rig.Environment.Targets.AddRange(offered);
+            rig.Presenter.SelectTab(MultiplayerSubTab.Host);
+            rig.Frame();
+            That(rig.Presenter.Host.ChoosesTarget && rig.Presenter.Host.TargetOptions.Count == offered.Count && rig.Presenter.Host.CanHost,
+                "and its first, default, choice is one the menu can start");
+        }
+
         private static void OpeningARunningGamePromotesItInPlace()
         {
             var rig = new SessionsRig();
-            rig.Environment.GamePhase = WorldSessionPhase.Running;
+            rig.Environment.Phase = SessionPhase.Running;
             rig.Environment.CurrentGameText = "This game: Sandbox · open-sandbox";
             rig.Environment.CurrentGame = new HostTargetChoice("Sandbox", new TopiaForge.ModManager.Core.LaunchRequest("io.example.sandbox"), "Sandbox", "open-sandbox");
             rig.Presenter.SelectTab(MultiplayerSubTab.Host);
@@ -113,10 +145,10 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Control.Calls.Contains("StartHosting") && rig.Environment.PendingLaunch == null && rig.Control.LastHost!.World == "open-sandbox",
                 "promoting starts no other game");
 
-            foreach (var phase in new[] { WorldSessionPhase.Preparing, WorldSessionPhase.LoadingWorld, WorldSessionPhase.StartingMode, WorldSessionPhase.Stopping })
+            foreach (var phase in new[] { SessionPhase.Preparing, SessionPhase.LoadingWorld, SessionPhase.StartingMode, SessionPhase.Stopping })
             {
                 var busy = new SessionsRig();
-                busy.Environment.GamePhase = phase;
+                busy.Environment.Phase = phase;
                 That(!busy.Presenter.Host.CanHost && busy.Presenter.Host.ModeText.StartsWith("Wait", StringComparison.Ordinal), "a game that is " + phase + " cannot be opened yet");
             }
 
@@ -125,14 +157,14 @@ namespace TopiaForge.ModManager.Tests
             joined.Frame();
             That(!joined.Presenter.Host.CanHost && joined.Presenter.Host.ModeText.StartsWith("Leave the joined", StringComparison.Ordinal), "a joined player leaves before hosting");
             var standalone = new SessionsRig();
-            standalone.Environment.StandaloneModName = "Solo";
+            standalone.Environment.Load("io.example.solo", "standalone");
             That(!standalone.Presenter.Host.CanHost, "an enabled standalone mod refuses hosting");
         }
 
         private static void PublicHostingAsksForADirectConnection()
         {
             var rig = new SessionsRig();
-            rig.Environment.GamePhase = WorldSessionPhase.Running;
+            rig.Environment.Phase = SessionPhase.Running;
             var host = rig.Presenter.Host;
             host.SetVisibility(0);
             host.Host();
@@ -147,7 +179,7 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Control.LastHost!.AllowDirect && rig.Control.LastHost.Visibility == InternalSessionVisibility.Public, "allowing it opens this session directly");
 
             var hidden = new SessionsRig();
-            hidden.Environment.GamePhase = WorldSessionPhase.Running;
+            hidden.Environment.Phase = SessionPhase.Running;
             hidden.Presenter.SetHideMyIp(false);
             hidden.Answer(ScreenPromptKind.Disclosure, true);
             hidden.Presenter.Host.SetVisibility(1);
@@ -159,14 +191,14 @@ namespace TopiaForge.ModManager.Tests
         private static void HostingFailuresAreWordedAndEndingConfirms()
         {
             var refused = new SessionsRig();
-            refused.Environment.GamePhase = WorldSessionPhase.Running;
+            refused.Environment.Phase = SessionPhase.Running;
             refused.Control.HostResult = OperationResult<bool>.Failure(ModErrorCode.InvalidState, "Leave the joined session before hosting.");
             refused.Presenter.Host.Host();
             refused.Frame();
             That(refused.Presenter.Host.ProgressTone == ScreenTone.Danger && refused.Noticed("Hosting did not start"), "a refusal is shown and toasted");
 
             var failing = new SessionsRig();
-            failing.Environment.GamePhase = WorldSessionPhase.Running;
+            failing.Environment.Phase = SessionPhase.Running;
             failing.Presenter.Host.Host();
             failing.Frame();
             failing.Status(InternalSessionRole.Solo, host: InternalHostPhase.Failed);
@@ -192,7 +224,7 @@ namespace TopiaForge.ModManager.Tests
         private static void ContentReadinessGatesHostingAndJoining()
         {
             var rig = new SessionsRig();
-            rig.Environment.GamePhase = WorldSessionPhase.Running;
+            rig.Environment.Phase = SessionPhase.Running;
             rig.Environment.ContentReadiness = new InternalContentReadiness(InternalContentState.Pending, 1, 4, 41, 100);
             rig.Frame();
             var content = rig.Presenter.Host.Content;

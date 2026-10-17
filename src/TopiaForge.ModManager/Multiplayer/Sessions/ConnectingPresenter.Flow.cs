@@ -1,17 +1,86 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Sessions
 {
-    /// <summary>The connecting presenter's flow: starting, following the status, and ending in success or the failure view.</summary>
+    /// <summary>The connecting presenter's flow: the realm verdict, starting, following the status, and ending in success or the failure view.</summary>
     internal sealed partial class ConnectingPresenter
     {
         private const int MaximumFailureLines = 8;
 
+        /// <summary>
+        /// Acts on the runtime's realm verdict for <paramref name="join"/>: joins, asks "Leave current game?", waits on the
+        /// overlay while the game is starting or stopping, or says why not. <paramref name="fromWait"/> is set when a wait on
+        /// the overlay asks again; a verdict other than busy or a join then takes the overlay down first.
+        /// </summary>
+        private void Decide(JoinRequest join, bool fromWait)
+        {
+            var environment = context.Environment;
+            var realm = environment.Realm;
+            switch (SessionRealmGate.ForJoin(environment.EvaluateRealmChange(NetRealm.Client), realm))
+            {
+                case RealmDecision.Join:
+                    Start(join);
+                    return;
+                case RealmDecision.Busy:
+                    if (!fromWait) Wait(join);
+                    return;
+                case RealmDecision.ConfirmLeaveGame:
+                    if (fromWait) Hide();
+                    context.Ask(PrivacyPrompts.Destructive(LeaveTitle, LeaveBody, LeaveConfirm, confirmed =>
+                    {
+                        if (confirmed) LeaveThenJoin(join);
+                    }));
+                    return;
+                case RealmDecision.StandaloneRefused:
+                    if (fromWait) Hide();
+                    context.Notify(MultiplayerRuntime.StandaloneRefusal(environment.StandaloneMods, "join"), ScreenTone.Warning);
+                    return;
+                default:
+                    if (fromWait) Hide();
+                    context.Notify(realm == NetRealm.ListenHost
+                        ? "Stop hosting before you join another session."
+                        : "Leave this session before you join another.", ScreenTone.Warning);
+                    return;
+            }
+        }
+
+        /// <summary>
+        /// Asks the realm rules again while the overlay waits: the join starts once they allow it, and never before. After
+        /// "Leave current game?" the game is still leaving while the rules say it runs or is busy: the session ending, then
+        /// the main menu loading, which the runtime counts as busy until it has loaded.
+        /// </summary>
+        private void Settle()
+        {
+            var join = request!;
+            if (stage == Stage.Leaving)
+            {
+                var decision = SessionRealmGate.ForJoin(context.Environment.EvaluateRealmChange(NetRealm.Client), context.Environment.Realm);
+                if (decision == RealmDecision.Busy || decision == RealmDecision.ConfirmLeaveGame) return;
+            }
+
+            Decide(join, fromWait: true);
+        }
+
+        /// <summary>Shows the overlay waiting for the current game to settle; Cancel works meanwhile.</summary>
+        private void Wait(JoinRequest join)
+        {
+            Show(join, Stage.Waiting);
+            details[(int)ConnectingStep.Resolving] = ConnectingStepMap.WaitingForGame;
+            statusText = WaitingText;
+        }
+
         private void LeaveThenJoin(JoinRequest join)
         {
+            if (IsBusy)
+            {
+                context.Notify("A join is already running.", ScreenTone.Warning);
+                return;
+            }
+
             Show(join, Stage.Leaving);
             details[(int)ConnectingStep.Resolving] = ConnectingStepMap.LeavingGame;
             statusText = ConnectingStepMap.LeavingGame + "...";
@@ -31,19 +100,21 @@ namespace TopiaForge.ModManager.Sessions
 
         private void Start(JoinRequest join)
         {
-            var control = context.Environment.Control;
-            if (control == null)
-            {
-                Show(join, Stage.Joining);
-                FailLocal("Multiplayer is not available", "The multiplayer provider is not loaded.");
-                return;
-            }
-
             OperationResult<bool> result;
             try
             {
                 var settings = new InternalJoinSettings { Password = join.Password, AllowDirect = join.AllowDirect, TrustedServerId = join.TrustedServerId };
-                result = control.Join(join.Target, settings);
+
+                // The runtime asks the realm rules again before the provider hears of the join; a game that began to change
+                // meanwhile is waited for, never joined.
+                var change = context.Environment.Join(join.Target, settings);
+                if (change.Verdict == NetRealmTransitionVerdict.Busy)
+                {
+                    Wait(join);
+                    return;
+                }
+
+                result = change.Result;
             }
             catch (Exception exception) when (exception is ArgumentException || exception is InvalidOperationException)
             {
@@ -191,7 +262,10 @@ namespace TopiaForge.ModManager.Sessions
             context.Settings.Update(context.Settings.Current.RecordJoin(new ServerBookmark(server.ServerId, server.Name, context.Environment.UnixSeconds)));
         }
 
-        /// <summary>The failure's detail lines: the host's are redacted, this game's own are bounded.</summary>
+        /// <summary>
+        /// The failure's detail lines: the host's are redacted; this game's own, which name the host's packages by the ids
+        /// and versions it gave, lose any address in those, and are bounded.
+        /// </summary>
         private static IReadOnlyList<string> Lines(InternalLiveStatus status)
         {
             var problems = status.ContentProblems;
@@ -201,7 +275,7 @@ namespace TopiaForge.ModManager.Sessions
             {
                 lines.Add(status.ContentProblemsFromHost
                     ? HostText.ForDisplay(problems[index], HostText.LineChars)
-                    : TopiaForge.Mods.UnityUi.TopiaForgePlainText.Sanitize(problems[index], HostText.LineChars));
+                    : HostText.ForOwnLine(problems[index]));
             }
 
             if (problems.Count > MaximumFailureLines) lines.Add("And " + (problems.Count - MaximumFailureLines) + " more.");

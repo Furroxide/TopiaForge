@@ -499,7 +499,7 @@ namespace TopiaForge.ModManager.Tests
         {
             MultiplayerContentIdentificationTests.Run(root);
             MultiplayerPrivacyTextTests.Run();
-            MultiplayerSessionsTests.Run();
+            MultiplayerSessionsTests.Run(Path.Combine(root, "multiplayer-sessions"));
             ManagerTabLookupTests.Run();
             MultiplayerUiArchitectureTests.Run();
         }

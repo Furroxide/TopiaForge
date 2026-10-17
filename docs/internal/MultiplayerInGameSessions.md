@@ -34,14 +34,18 @@ developer switch until the release enables them: with them off, the tab says so 
 | Sub-tab | Contents |
 | --- | --- |
 | BROWSE | LAN, Internet, Favorites and History, in a sortable, virtualized table: lock, name, gamemode, world, players, ping and mods (Ready, Needs N, Incompatible). JOIN, INSTALL & JOIN IN LAUNCHER, and favorites |
-| HOST | The game to host (chosen at the menu, the running one otherwise), name (1 to 48 characters), players (2 to 16, 8 by default), password (optional, never kept), visibility (Public, Invite or LAN), and the host policy |
+| HOST | The game to host (chosen at the menu from the games it can start, the running one otherwise), name (1 to 48 characters), players (2 to 16, 8 by default), password (optional, never kept), visibility (Public, Invite or LAN), and the host policy |
 | CONNECT | An invite code, which needs the TopiaForge service, or an address and password the player types |
 | VOICE | A slot the voice slice fills (`IMultiplayerVoiceSlot`) |
 | SESSION | The invite, the players with kick, ban and mute for the host, and "End session for everyone" or "Leave server" |
 
 - **Searching** the local network starts only when the player presses SEARCH LAN, and stops when they leave BROWSE or
   close the overlay. While it runs, each session heard is checked once, over the local network only, at most two at a
-  time, for whether this game's mods fit.
+  time, for whether this game's mods fit. A host may list 512 packages this game lacks, so the selection names four
+  problems and counts the rest; and a host may announce a new server id as each old one falls silent, so a check is
+  kept only while the local network lists its server.
+- **Games to host.** At the main menu HOST offers each launch choice that replaces the scene. A choice that adds an
+  arena to a running game needs that game, and its launch is refused at the menu, so HOST leaves it out.
 - **The Internet list** says the TopiaForge service is not configured; a later slice fills it.
 - **Host policy.** The session engine supports offering voice chat today. Guests building, prop protection and per-player
   quotas are named seams the HOST view shows as not available yet.
@@ -77,7 +81,11 @@ interface reads readiness only once the player opened the tab, since the first r
 - **Addresses.** No label, toast, log, copied detail or diagnostic holds an address. The only exceptions are the address
   the player types in CONNECT and the direct link handed to the launcher for it. Text another player wrote (a server's
   name, gamemode and world, a kick message, the host's admission lines, player names) is run through the runtime's
-  redactor and shown as plain text, attributed to the host where it is the host's own words.
+  redactor, attributed to the host where it is the host's own words. This game's own problem lines name the host's
+  packages by the ids and versions its descriptor gives, and an id or a version may be four dotted numbers, an address
+  the host chose; the screens drop those as the redactor does, and keep the real mod ids readable.
+- **Plain text.** Every label the views make from screen text, every toast and every destructive confirmation renders
+  as plain text, so markup a host or player writes shows as written and cannot restyle or hide this game's words.
 - **Copy details** holds the failure's name and step, this game's words, the host's admission code and lines, what the
   host said, and the game and TopiaForge versions. Every line is redacted; the target and anything typed are not part of
   it.
@@ -107,19 +115,30 @@ has its own words. The failure view offers Retry where trying again can help, Op
 take the join over, Copy details, and Trust for a typed host that now serves a different server. Cancel, the close
 button and ESC stop a running join at any step, and leaving is never refused.
 
+The overlay and the prompts are persistent modals: joining from a running game returns to the main menu first, and a
+modal that is not persistent is destroyed with the scene it opened in, which in the game left the join running with no
+overlay and its failure unseen.
+
 ## 6. The realm rules
 
-Until the runtime holds the realm (WS3 step 2), `SessionRealmGate` applies `NetRealms.EvaluateTransition` to the
-control's role and the local game's phase:
+The runtime holds the realm ([MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md), section 10). The
+interface keeps no verdict of its own: it asks `EvaluateRealmChange` before it offers a choice, and goes online and
+leaves only through `OpenToMultiplayer`, `Join` and `Leave`, never the control's own hosting and joining.
+`SessionRealmGate` only reads the runtime's verdict as what to do next. The rules read the session orchestrator's
+`RealmPhase`, which counts an idle session that is still changing as busy: a return to the main menu until the menu
+has loaded, a native scene change, any other operation that holds the session, and shutdown.
 
 - **Joining** from a running game asks "Leave current game?" through the destructive modal; confirming returns to the
-  menu, and the join starts once the game is idle. A host or a joined player ends that session first.
+  menu, and the join starts once the rules allow it, after the menu has loaded. A join asked for while the game is
+  starting or stopping, the main menu loading included, waits on the connecting overlay, with Cancel, until the rules
+  allow it; a game that runs by then asks "Leave current game?" first. The runtime asks the rules again as the join
+  starts, so a game that began to change meanwhile is waited for, never joined. A host or a joined player ends that
+  session first.
 - **Hosting** a running solo game opens it in place. At the main menu the chosen game starts first, and hosting opens
-  it once it runs.
-- **Leaving** is never refused.
-- **What step 2 changes.** The runtime will hold the `NetRealm` and check these rules before the control acts. The gate
-  then asks the runtime for the realm instead of deriving it, and starting a game to host becomes one runtime transition
-  rather than a launch followed by hosting.
+  it once the rules say the game runs; one that stops first opens nothing.
+- **Leaving** is never refused, busy or not: ending the session, leaving it and cancelling a join all go through the
+  runtime's `Leave`. A provider that fails while leaving is said in this game's own words.
+- **Frame cost.** HOST's labels ask the rules each frame, so `EvaluateRealmChange` allocates nothing.
 
 ## 7. Players and moderation
 
@@ -157,13 +176,18 @@ control's role and the local game's phase:
 
 ## 10. Tests
 
-- **Presenters** (`MultiplayerSessionsTests`): every sub-tab's states and transitions, the name, server name, player and
-  password bounds, the disclosure's versioning and Hide my IP, the direct prompt contacting nothing when cancelled, the
-  realm rules and "Leave current game?", every phase of the stepper, every failure's words and step, cancelling at every
-  phase, retry, trust, the launcher hand-off and its links, copied details without an address, players only once Ready,
-  moderation checked against the current snapshot's player key, the address sweep over every screen, and settled frames
-  allocating nothing.
+- **Presenters** (`MultiplayerSessionsTests`, over the real `MultiplayerRuntime`): every sub-tab's states and
+  transitions, the name, server name, player and password bounds, the disclosure's versioning and Hide my IP, the direct
+  prompt contacting nothing when cancelled, the realm rules and "Leave current game?", a join asked for during a
+  main-menu load waiting on the overlay until the menu has loaded, over a real session orchestrator, leaving never
+  refused in any phase, every phase of the stepper, every failure's words and step, cancelling at every phase, retry,
+  trust, the launcher hand-off and its links, copied details without an address, players only once Ready, moderation
+  checked against the current snapshot's player key, HOST offering only games the menu can start, BROWSE bounding what
+  a host lists, this game's own problem lines dropping addresses a host put in ids and versions, the address sweep over
+  every screen, and settled frames allocating nothing with mods loaded.
 - **Wording** (`MultiplayerPrivacyTextTests`): the constants against the approved document, parsed.
 - **Architecture** (`MultiplayerUiArchitectureTests`): no address-shaped member or network type beyond the typed address,
-  kit-only views, Unity-free presenters, no logging, and the 400-line cap on every file of the interface and the overlay.
+  kit-only views, Unity-free presenters, plain text for every label of screen text, every toast and every destructive
+  confirmation, persistent modals, spacers that never stretch a row's height, going online and leaving only through the
+  runtime's realm, no logging, and the 400-line cap on every file of the interface and the overlay.
 - **Tabs** (`ManagerTabLookupTests`): name-based lookup and the entry points that use it.

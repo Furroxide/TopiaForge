@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -14,7 +15,7 @@ namespace TopiaForge.ModManager.Tests
     /// </summary>
     internal static partial class MultiplayerSessionsTests
     {
-        internal static void Run()
+        internal static void Run(string root)
         {
             NothingReachesTheNetworkUntilThePlayerActs();
             UnavailableStatesSayWhy();
@@ -24,12 +25,15 @@ namespace TopiaForge.ModManager.Tests
             SettingsAreWrittenOffTheMainThread();
             HostSettingsAreBounded();
             HostingAtTheMenuStartsTheGameThenOpensIt();
+            HostOffersOnlyGamesTheMenuCanStart();
             OpeningARunningGamePromotesItInPlace();
             PublicHostingAsksForADirectConnection();
             HostingFailuresAreWordedAndEndingConfirms();
             ContentReadinessGatesHostingAndJoining();
             DirectPromptCancellationContactsNothing();
             JoiningWhileInAGameAsksToLeaveFirst();
+            AJoinDuringAMainMenuLoadWaits(root);
+            LeavingIsNeverRefused();
             ConnectingWalksThePhases();
             EveryFailureHasAClearMessage();
             FailuresStopAtTheirStep();
@@ -42,6 +46,8 @@ namespace TopiaForge.ModManager.Tests
             LeavingAndEndingConfirm();
             ASessionThatEndsWhilePlayingIsToasted();
             BrowseListsChecksAndFavorites();
+            BrowseBoundsWhatHostsList();
+            OwnLinesLoseHostAddresses();
             NoScreenShowsAnAddress();
             SettledFramesAllocateNothing();
             Console.WriteLine("MultiplayerSessionsTests passed.");
@@ -112,7 +118,7 @@ namespace TopiaForge.ModManager.Tests
         {
             var rig = new SessionsRig(acknowledged: false);
             ReadyHost(rig);
-            rig.Environment.GamePhase = WorldSessionPhase.Running;
+            rig.Environment.Phase = SessionPhase.Running;
             rig.Presenter.Host.Host();
             rig.Frame();
             That(rig.Prompt?.Kind == ScreenPromptKind.Disclosure && rig.Prompt.Title == MultiplayerPrivacyText.DisclosureTitle,
@@ -200,7 +206,7 @@ namespace TopiaForge.ModManager.Tests
         }
 
         internal static InternalLanListing Listing(char id, string name, int players = 2, bool password = false, bool incompatible = false) =>
-            new InternalLanListing(new FakeJoinTarget(InternalJoinTargetKind.Lan, "LAN session", new string(id, 64)), new string(id, 64))
+            new InternalLanListing(new ScriptedJoinTarget(InternalJoinTargetKind.Lan, "LAN session", new string(id, 64)), new string(id, 64))
             {
                 HasInfo = true,
                 Name = name,

@@ -41,12 +41,15 @@ namespace TopiaForge.ModManager.Sessions
 
         internal void Close() => connecting.Close();
 
-        /// <summary>Shows the screens' action results as toasts; it needs no host, so it runs before the overlay is built.</summary>
+        /// <summary>
+        /// Shows the screens' action results as toasts; it needs no host, so it runs before the overlay is built. A result can
+        /// name what another player wrote, a server's name or a kick message, so toasts render as plain text.
+        /// </summary>
         internal static void ShowNotices(IMultiplayerScreens screens)
         {
             while (screens.TryTakeNotice(out var notice))
             {
-                TopiaForgeToasts.Show(notice.Text, MultiplayerViewKit.Tone(notice.Tone), notice.Tone == ScreenTone.Danger ? 5f : 3.5f);
+                TopiaForgeToasts.ShowPlain(notice.Text, MultiplayerViewKit.Tone(notice.Tone), notice.Tone == ScreenTone.Danger ? 5f : 3.5f);
             }
         }
 
@@ -54,20 +57,25 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (prompt.Kind == ScreenPromptKind.Destructive)
             {
+                // A confirmation can name a player by the name they chose, so it renders as plain text. Prompts persist
+                // across scene loads, as a session that ends meanwhile can load another: a prompt destroyed unanswered
+                // would hold the queue for good.
                 host.Modal.Destructive(
                     prompt.Title,
                     prompt.Paragraphs.Count == 0 ? string.Empty : prompt.Paragraphs[0],
                     prompt.ConfirmLabel,
                     () => prompt.Answer(true),
                     () => prompt.Answer(false),
-                    prompt.CancelLabel.Length == 0 ? "CANCEL" : prompt.CancelLabel);
+                    prompt.CancelLabel.Length == 0 ? "CANCEL" : prompt.CancelLabel,
+                    plainText: true,
+                    persistent: true);
                 return;
             }
 
-            var modal = host.Modal.Custom(prompt.Title, TopiaForgeScheme.Paper, 560f);
-            foreach (var paragraph in prompt.Paragraphs) modal.Content.Label(paragraph, TopiaForgeTextStyle.Body);
+            var modal = host.Modal.Custom(prompt.Title, TopiaForgeScheme.Paper, 560f, persistent: true);
+            foreach (var paragraph in prompt.Paragraphs) modal.Content.Label(paragraph, TopiaForgeTextStyle.Body).PlainText();
             var row = modal.Content.Row(TopiaForgeGap.Sm);
-            row.Spacer();
+            row.Spacer().Flex(1f, 0f);
             TopiaForgeButton primary;
             if (prompt.CancelLabel.Length == 0)
             {

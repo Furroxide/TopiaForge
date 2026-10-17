@@ -32,23 +32,23 @@ namespace TopiaForge.ModManager.Sessions
             invite = inviteRow.Input("ABCDE-12345", screen.InviteCode, screen.SetInviteCode);
             invite.SetCharacterLimit(32);
             joinInvite = inviteRow.Button("JOIN", screen.JoinInvite);
-            inviteError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
+            inviteError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
             MultiplayerViewKit.Note(parent, screen.InviteNote);
 
             parent.SectionHeader("ADDRESS");
             address = parent.Input("Host and port, or a topiaforge:// link", screen.Address, screen.SetAddress);
             address.SetCharacterLimit(512);
             address.OnSubmit(_ => screen.JoinAddress());
-            addressError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
+            addressError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
             var passwordRow = parent.Row(TopiaForgeGap.Sm);
             passwordRow.FixedHeight(TopiaForgeTokens.ControlHeight);
             password = passwordRow.Input("Password, if the session has one", screen.Password, screen.SetPassword).Password();
             password.SetCharacterLimit(64);
             password.OnSubmit(_ => screen.JoinAddress());
             joinAddress = passwordRow.Button("JOIN", screen.JoinAddress);
-            passwordError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
+            passwordError = parent.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
 
-            result = parent.Label(string.Empty, TopiaForgeTextStyle.Body);
+            result = parent.Label(string.Empty, TopiaForgeTextStyle.Body).PlainText();
             var actions = parent.Row(TopiaForgeGap.Sm);
             actions.FixedHeight(TopiaForgeTokens.ControlHeight);
             install = actions.Button("INSTALL & JOIN IN LAUNCHER", screen.InstallInLauncher, TopiaForgeButtonStyle.Outline);

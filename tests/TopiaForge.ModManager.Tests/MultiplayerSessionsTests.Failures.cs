@@ -105,13 +105,13 @@ namespace TopiaForge.ModManager.Tests
             }
 
             var leaving = BrowsingRig(ready: true);
-            leaving.Environment.GamePhase = TopiaForge.Mods.WorldSessionPhase.Running;
+            leaving.Environment.Phase = TopiaForge.ModManager.Core.SessionPhase.Running;
             leaving.Presenter.Browse.Select(new string('1', 64));
             leaving.Presenter.Browse.Join();
             leaving.Answer(ScreenPromptKind.Destructive, true);
             leaving.Presenter.Connecting.Dismiss();
             leaving.Environment.PendingMenu!(true, "Returned to the main menu.");
-            leaving.Environment.GamePhase = TopiaForge.Mods.WorldSessionPhase.Idle;
+            leaving.Environment.Phase = TopiaForge.ModManager.Core.SessionPhase.Idle;
             leaving.Frame(5);
             That(!leaving.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)) && !leaving.Presenter.Connecting.IsVisible,
                 "dismissing while the game closes cancels the join that was to follow");

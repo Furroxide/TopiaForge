@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using TopiaForge.Mods.Internal;
-using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.ModManager.Sessions
 {
@@ -89,7 +88,7 @@ namespace TopiaForge.ModManager.Sessions
         {
             var count = Math.Max(problems.Count, 1);
             var lines = new List<string>(Math.Min(problems.Count, 4));
-            for (var index = 0; index < problems.Count && index < 4; index++) lines.Add(TopiaForgePlainText.Sanitize(problems[index], HostText.LineChars));
+            for (var index = 0; index < problems.Count && index < 4; index++) lines.Add(HostText.ForOwnLine(problems[index]));
             var more = problems.Count > 4 ? " And " + (problems.Count - 4) + " more." : string.Empty;
             return "Needs " + Plural(count, "change", "changes") + ": " + string.Join(" ", lines) + more +
                    " The TopiaForge launcher can install the host's exact mods.";

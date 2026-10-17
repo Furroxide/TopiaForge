@@ -71,6 +71,19 @@ namespace TopiaForge.Mods.UnityUi
             visibilityGroup.blocksRaycasts = value;
         }
 
+        /// <summary>
+        /// Shows the widget, or takes it out of the layout so the rest of its parent closes up, through its GameObject's
+        /// active state. <see cref="SetVisible"/> keeps a hidden widget's space, which suits a momentary change; this suits
+        /// content that is absent. Dirty-checked: a call that changes nothing rebuilds no layout.
+        /// </summary>
+        public void SetShown(bool value)
+        {
+            if (Go.activeSelf != value)
+            {
+                Go.SetActive(value);
+            }
+        }
+
         /// <summary>Destroys the widget's GameObject and unregisters it from theming.</summary>
         public void Destroy()
         {

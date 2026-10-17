@@ -553,7 +553,9 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | `Leave()` | to `Offline`, never refused | `StopHosting` while hosting, or while hosting starts, then `Leave`, which also stops a join on its way |
 
   Each answers a `MultiplayerRealmChange`: the rule's verdict and effect, and the control's own result, or the refusal.
-  `EvaluateRealmChange(target)` asks the rule alone, so the interface can ask "Leave current game?" before it acts.
+  `EvaluateRealmChange(target)` asks the rule alone, so the interface can ask "Leave current game?" before it acts. It
+  allocates nothing, as the interface asks it every frame its views bind a choice
+  ([MultiplayerInGameSessions.md](MultiplayerInGameSessions.md), section 6).
 - **What the rule reads.** The realm, the local session's phase, and whether a standalone mod is loaded. ModRuntime
   points `SessionPhaseSource` at its gamemode session orchestrator's `RealmPhase`; until the session runtime starts,
   the session is idle. A phase that cannot be read counts as busy, so nothing goes online on a guess, and its failure is

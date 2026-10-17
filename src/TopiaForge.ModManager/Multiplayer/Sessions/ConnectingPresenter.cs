@@ -38,10 +38,12 @@ namespace TopiaForge.ModManager.Sessions
     }
 
     /// <summary>
-    /// Runs a join the screens ask for and presents it on the connecting overlay. It applies the realm rules first: a game
-    /// that is running is left only after "Leave current game?" is confirmed. Then it follows the control's status onto the
-    /// stepper (<see cref="ConnectingStepMap"/>), asks for a password when the session needs one, and on failure shows the
-    /// failure view with Retry, Open launcher and Copy details. Cancel works throughout, and leaving is never refused.
+    /// Runs a join the screens ask for and presents it on the connecting overlay. It asks the runtime's realm rules first,
+    /// and joins only through the runtime: a game that is running is left only after "Leave current game?" is confirmed,
+    /// and a game that is starting or stopping, the main menu loading after leaving a game included, is waited for on the
+    /// overlay until the rules let the join through. Then it follows the control's status onto the stepper
+    /// (<see cref="ConnectingStepMap"/>), asks for a password when the session needs one, and on failure shows the failure
+    /// view with Retry, Open launcher and Copy details. Cancel works throughout, and leaving is never refused.
     /// </summary>
     internal sealed partial class ConnectingPresenter : IConnectingScreen
     {
@@ -50,6 +52,7 @@ namespace TopiaForge.ModManager.Sessions
         internal const string LeaveBody = "Joining this session ends the game you are playing. Anything you have not saved is lost.";
         internal const string LeaveConfirm = "LEAVE AND JOIN";
         internal const string PasswordRule = "A password is 1 to 64 characters with no control characters.";
+        internal const string WaitingText = "Waiting for the current game to finish starting or stopping...";
 
         private static readonly string[] Labels =
         {
@@ -91,14 +94,19 @@ namespace TopiaForge.ModManager.Sessions
         private enum Stage
         {
             Hidden,
+
+            /// <summary>Returning to the main menu after "Leave current game?", before the join.</summary>
             Leaving,
+
+            /// <summary>Waiting for a game that is starting or stopping to settle, before the join.</summary>
+            Waiting,
             Joining,
             Succeeded,
             Failed
         }
 
         /// <summary>Gets whether a join is being prepared or running, so no other may start.</summary>
-        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Joining;
+        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Waiting || stage == Stage.Joining;
 
         public bool IsVisible => stage != Stage.Hidden;
 
@@ -136,7 +144,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public string DetailOf(int step) => step >= 0 && step < details.Length ? details[step] : string.Empty;
 
-        /// <summary>Starts a join through the realm rules; a running game is left only once the player confirms.</summary>
+        /// <summary>Starts a join through the runtime's realm rules; a running game is left only once the player confirms.</summary>
         internal void Begin(JoinRequest join)
         {
             if (join == null) throw new ArgumentNullException(nameof(join));
@@ -156,40 +164,20 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
-            var environment = context.Environment;
-            var standalone = environment.StandaloneModName;
-            switch (SessionRealmGate.ForJoin(context.Status.Role, environment.GamePhase, standalone != null))
-            {
-                case RealmDecision.Join:
-                    Start(join);
-                    break;
-                case RealmDecision.ConfirmLeaveGame:
-                    context.Ask(PrivacyPrompts.Destructive(LeaveTitle, LeaveBody, LeaveConfirm, confirmed =>
-                    {
-                        if (confirmed) LeaveThenJoin(join);
-                    }));
-                    break;
-                case RealmDecision.Busy:
-                    context.Notify("Wait for the current game to finish starting or stopping, then join.", ScreenTone.Warning);
-                    break;
-                case RealmDecision.StandaloneRefused:
-                    context.Notify(HostText.ForDisplay(standalone) + " refuses multiplayer; disable it to join.", ScreenTone.Warning);
-                    break;
-                default:
-                    context.Notify(context.Status.Role == InternalSessionRole.ListenHost
-                        ? "Stop hosting before you join another session."
-                        : "Leave this session before you join another.", ScreenTone.Warning);
-                    break;
-            }
+            Decide(join, fromWait: false);
         }
 
-        /// <summary>Main thread, every frame: follows the join, or the return to the menu before it.</summary>
+        /// <summary>Main thread, every frame: follows the join, or what comes before it: the return to the menu, or a wait.</summary>
         internal void Tick(float deltaTime)
         {
             switch (stage)
             {
                 case Stage.Leaving:
-                    if (menuReturned && context.Environment.GamePhase == WorldSessionPhase.Idle) Start(request!);
+                    // The menu may still load after the game ended; the runtime's rules say busy until it has.
+                    if (menuReturned) Settle();
+                    break;
+                case Stage.Waiting:
+                    Settle();
                     break;
                 case Stage.Joining:
                     Follow();
@@ -272,19 +260,12 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (stage == Stage.Joining)
             {
+                // Leaving is never refused: the runtime stops the join on its way, whatever the provider says.
                 cancelRequested = true;
-                try
-                {
-                    context.Environment.Control?.Leave();
-                }
-                catch (Exception)
-                {
-                    // Leaving is never refused; a control that throws has nothing left to leave.
-                }
-
+                context.Environment.Leave();
                 context.Status.RequestRefresh();
             }
-            else if (stage != Stage.Leaving)
+            else if (stage != Stage.Leaving && stage != Stage.Waiting)
             {
                 return;
             }

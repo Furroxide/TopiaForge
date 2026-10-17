@@ -1,5 +1,8 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -79,7 +82,7 @@ namespace TopiaForge.ModManager.Tests
         private static void JoiningWhileInAGameAsksToLeaveFirst()
         {
             var rig = BrowsingRig(ready: true);
-            rig.Environment.GamePhase = WorldSessionPhase.Running;
+            rig.Environment.Phase = SessionPhase.Running;
             rig.Presenter.Browse.Select(new string('1', 64));
             rig.Presenter.Browse.Join();
             rig.Frame();
@@ -95,38 +98,109 @@ namespace TopiaForge.ModManager.Tests
                 "confirming leaves the game first, on the overlay");
             rig.Environment.PendingMenu!(true, "Returned to the main menu.");
             rig.Frame();
-            That(!rig.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)), "the join waits until the game is idle");
-            rig.Environment.GamePhase = WorldSessionPhase.Idle;
+            That(!Joined(rig) && rig.Prompt == null, "the join waits while the game still runs, and asks nothing again");
+            rig.Environment.Phase = SessionPhase.Stopping;
+            rig.Frame(3);
+            That(!Joined(rig) && rig.Presenter.Connecting.IsVisible && rig.Presenter.Connecting.DetailOf(0) == ConnectingStepMap.LeavingGame,
+                "and while the session has ended but the main menu still loads, which the runtime's rules count as busy");
+            rig.Environment.Phase = SessionPhase.Idle;
             rig.Frame();
-            That(rig.Control.Calls.Contains("Join:Lan:relay"), "then joins the LAN session, never directly");
+            That(rig.Control.Calls.Contains("Join:Lan:relay") && rig.Control.Calls.Count(call => call.StartsWith("Join", StringComparison.Ordinal)) == 1,
+                "then joins the LAN session once, never directly");
 
             var busy = BrowsingRig(ready: true);
-            busy.Environment.GamePhase = WorldSessionPhase.LoadingWorld;
+            busy.Environment.Phase = SessionPhase.LoadingWorld;
             busy.Presenter.Browse.Select(new string('1', 64));
             busy.Presenter.Browse.Join();
+            busy.Frame(3);
+            That(busy.Prompt == null && busy.Presenter.Connecting.IsVisible && busy.Presenter.Connecting.DetailOf(0) == ConnectingStepMap.WaitingForGame &&
+                 busy.Presenter.Connecting.CanCancel && !Joined(busy), "a game still loading is waited for on the overlay, and nothing is joined");
+            busy.Environment.Phase = SessionPhase.Running;
             busy.Frame();
-            That(busy.Prompt == null && busy.Noticed("Wait for the current game") && !busy.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)),
-                "a game still loading is waited for");
+            That(busy.Prompt?.Title == ConnectingPresenter.LeaveTitle && !busy.Presenter.Connecting.IsVisible && !Joined(busy),
+                "once it runs, the join asks to leave it first");
+            busy.Answer(ScreenPromptKind.Destructive, false);
+            That(!Joined(busy) && busy.Environment.PendingMenu == null, "and saying no joins nothing");
+
             var hosting = BrowsingRig(ready: true);
             hosting.Status(InternalSessionRole.ListenHost, host: InternalHostPhase.Hosting);
             hosting.Frame();
             hosting.Presenter.Browse.Select(new string('1', 64));
             hosting.Presenter.Browse.Join();
             hosting.Frame();
-            That(hosting.Noticed("Stop hosting before you join") && !hosting.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)),
-                "a host stops hosting before joining another session");
-            var decision = SessionRealmGate.ForJoin(InternalSessionRole.ListenHost, WorldSessionPhase.Running, false);
-            That(decision == RealmDecision.LeaveSessionFirst && SessionRealmGate.ForJoin(InternalSessionRole.Client, WorldSessionPhase.Running, false) == RealmDecision.LeaveSessionFirst,
-                "a host or a joined player ends that session before joining another");
-            That(SessionRealmGate.ForHost(InternalSessionRole.Solo, WorldSessionPhase.Running, false) == RealmDecision.PromoteInPlace &&
-                 SessionRealmGate.ForHost(InternalSessionRole.Solo, WorldSessionPhase.Idle, false) == RealmDecision.StartAsHost &&
-                 SessionRealmGate.ForJoin(InternalSessionRole.Solo, WorldSessionPhase.Idle, true) == RealmDecision.StandaloneRefused,
-                "a solo game opens in place, the menu starts one, and a standalone mod refuses both");
-            foreach (InternalSessionRole role in Enum.GetValues(typeof(InternalSessionRole)))
-            {
-                That(SessionRealmGate.MayLeave(role), "leaving is never refused (" + role + ")");
-            }
+            That(hosting.Noticed("Stop hosting before you join") && !Joined(hosting), "a host stops hosting before joining another session");
+
+            var standalone = BrowsingRig(ready: true);
+            standalone.Environment.Load("io.example.solo", "standalone");
+            standalone.Presenter.Browse.Select(new string('1', 64));
+            standalone.Presenter.Browse.Join();
+            standalone.Frame();
+            That(standalone.Noticed("Solo refuses multiplayer; disable it to join.") && !Joined(standalone), "a standalone mod refuses the join, by name");
         }
+
+        /// <summary>
+        /// The realm comes from the runtime, which reads a real orchestrator's <c>RealmPhase</c>: while the main menu loads,
+        /// the world session is already idle, and a gate over that raw phase let a join through during the load (#224's fixed
+        /// bug). Through the presenters, a join asked for then waits on the overlay, and the provider hears of it only once
+        /// the menu has loaded.
+        /// </summary>
+        private static void AJoinDuringAMainMenuLoadWaits(string root)
+        {
+            using var fixture = new SessionFixture(Path.Combine(root, "menu-load"));
+            var rig = BrowsingRig(ready: true);
+            rig.Environment.PhaseSource = () => fixture.Hosted.RealmPhase;
+            var menuLoad = new TaskCompletionSource<OperationResult<bool>>();
+            fixture.Menu = _ => menuLoad.Task;
+            var menu = fixture.Hosted.ReturnToMainMenuAsync();
+            fixture.Until(() => fixture.MenuLoads == 1);
+            That(fixture.Hosted.Current.Phase == SessionPhase.Idle && fixture.Hosted.RealmPhase == SessionPhase.Stopping,
+                "the main menu is loading: the session is idle, but still changing");
+            rig.Presenter.Browse.Select(new string('1', 64));
+            rig.Presenter.Browse.Join();
+            rig.Frame(5);
+            That(!Joined(rig) && rig.Prompt == null && rig.Presenter.Connecting.IsVisible && rig.Presenter.Connecting.DetailOf(0) == ConnectingStepMap.WaitingForGame,
+                "a join asked for during the load waits on the overlay, and is not allowed (" + string.Join(", ", rig.Control.Calls.Distinct()) + ")");
+            rig.Presenter.Host.SetName("Early");
+            That(!rig.Presenter.Host.CanHost && rig.Presenter.Host.ModeText.StartsWith("Wait", StringComparison.Ordinal), "nor can hosting start meanwhile");
+
+            menuLoad.SetResult(OperationResult<bool>.Success(true));
+            fixture.Wait(menu);
+            That(fixture.Hosted.RealmPhase == SessionPhase.Idle, "the menu has loaded");
+            rig.Frame();
+            That(rig.Control.Calls.Count(call => call.StartsWith("Join", StringComparison.Ordinal)) == 1 && rig.Control.Calls.Contains("Join:Lan:relay"),
+                "then the join goes through, once");
+        }
+
+        /// <summary>Leaving, ending and cancelling go through the runtime's realm, which never refuses, busy or not.</summary>
+        private static void LeavingIsNeverRefused()
+        {
+            foreach (var phase in Seam.Phases)
+            {
+                var joined = new SessionsRig();
+                joined.Status(InternalSessionRole.Client, InternalJoinPhase.InSession);
+                joined.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Ready, "s-leave", "p1");
+                joined.Frame();
+                joined.Environment.Phase = phase;
+                joined.Presenter.Session.Leave();
+                joined.Answer(ScreenPromptKind.Destructive, true);
+                That(joined.Control.Calls.Contains("Leave") && joined.Noticed("You left the session."), "a joined player leaves while the game is " + phase);
+
+                var host = HostingWithAda();
+                host.Environment.Phase = phase;
+                host.Presenter.Session.EndForEveryone();
+                host.Answer(ScreenPromptKind.Destructive, true);
+                That(host.Control.Calls.Contains("StopHosting") && host.Control.Calls.Contains("Leave"), "a host ends the session while the game is " + phase);
+            }
+
+            var throwing = HostingWithAda();
+            throwing.Control.ThrowOnLeave = true;
+            throwing.Presenter.Session.EndForEveryone();
+            throwing.Answer(ScreenPromptKind.Destructive, true);
+            That(throwing.Noticed("The session ended for everyone. The multiplayer provider failed while leaving") && !throwing.Notices.Any(notice => Shows(notice.Text)),
+                "a provider that throws while leaving is said in this game's words, with no address");
+        }
+
+        private static bool Joined(SessionsRig rig) => rig.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal));
 
         private static void ConnectingWalksThePhases()
         {

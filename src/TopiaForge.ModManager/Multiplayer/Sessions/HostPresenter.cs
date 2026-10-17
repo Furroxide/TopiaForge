@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.UnityUi;
@@ -9,9 +10,10 @@ namespace TopiaForge.ModManager.Sessions
     /// <summary>
     /// HOST: the session's name, size, password and visibility, the host policy the session engine supports today, and
     /// starting or ending the session. A running solo game is opened to other players in place; at the main menu the chosen
-    /// game starts first and opens once it runs. Before anything starts, the disclosure shows if it is due, and a Public or
-    /// Invite session, which in this build can only be reached directly, asks the per-session prompt while Hide my IP is on;
-    /// saying no starts nothing. The password is used once and never kept.
+    /// game starts first and opens once it runs. Every step asks the runtime's realm rules, and opening and ending go
+    /// through the runtime, never the control's own hosting. Before anything starts, the disclosure shows if it is due, and
+    /// a Public or Invite session, which in this build can only be reached directly, asks the per-session prompt while Hide
+    /// my IP is on; saying no starts nothing. The password is used once and never kept.
     /// </summary>
     internal sealed partial class HostPresenter : IHostScreen
     {
@@ -221,8 +223,7 @@ namespace TopiaForge.ModManager.Sessions
             return InternalText.IsDisplayText(proposed, InternalHostSettings.MaximumNameLength) ? proposed : "TopiaForge session";
         }
 
-        private RealmDecision Decision() =>
-            SessionRealmGate.ForHost(context.Status.Role, context.Environment.GamePhase, context.Environment.StandaloneModName != null);
+        private RealmDecision Decision() => SessionRealmGate.ForHost(context.Environment.EvaluateRealmChange(NetRealm.ListenHost));
 
         /// <summary>Bounds a gamemode or world name to what a session announces, or null when there is none.</summary>
         private static string? Announced(string? value)

@@ -15,6 +15,7 @@ namespace TopiaForge.ModManager.Sessions
     {
         internal const string FindingHost = "Finding the host";
         internal const string LeavingGame = "Leaving your game";
+        internal const string WaitingForGame = "Waiting for your game";
         internal const string PasswordNeeded = "Password needed";
         internal const string PreparingPassword = "Preparing the password";
         internal const string Reconnecting = "Reconnecting";

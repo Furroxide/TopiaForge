@@ -135,6 +135,9 @@ namespace TopiaForge.ModManager.Tests
         /// </summary>
         private static void Settled(string state, SessionsRig rig)
         {
+            // The game always runs some mods, and the realm rules look through them for one that refuses multiplayer.
+            rig.Environment.Load("io.example.sandbox");
+            rig.Environment.Load("io.example.cosmetics", "client-local");
             rig.Frame(60);
             var presenter = rig.Presenter;
             void Frame()

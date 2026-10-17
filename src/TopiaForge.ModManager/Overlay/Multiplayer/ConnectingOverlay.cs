@@ -55,7 +55,9 @@ namespace TopiaForge.ModManager.Sessions
 
         private void Open()
         {
-            var opened = host.Modal.Custom(string.Empty, TopiaForgeScheme.Paper, 680f);
+            // Persistent: joining from a running game returns to the main menu first, and the overlay follows the join
+            // through that scene load, and later through loading the host's world.
+            var opened = host.Modal.Custom(string.Empty, TopiaForgeScheme.Paper, 680f, persistent: true);
             modal = opened;
             title = opened.Content.Label(screen.Title, TopiaForgeTextStyle.Title).PlainText().Ellipsis();
             stepper = opened.Content.PhaseStepper(ToArray(screen.StepLabels));
@@ -98,17 +100,17 @@ namespace TopiaForge.ModManager.Sessions
                     password.SetCharacterLimit(64);
                     password.OnSubmit(_ => SubmitPassword());
                     entry.Button("SUBMIT", SubmitPassword);
-                    passwordError = passwordRow.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger);
+                    passwordError = passwordRow.Label(string.Empty, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Danger).PlainText();
                 }
 
                 var actions = body!.Row(TopiaForgeGap.Sm);
-                actions.Spacer();
+                actions.Spacer().Flex(1f, 0f);
                 actions.Button("CANCEL", screen.Cancel, TopiaForgeButtonStyle.Outline).Focus();
                 return;
             }
 
-            body!.Label(screen.FailureTitle, TopiaForgeTextStyle.Heading).Tone(TopiaForgeTone.Danger);
-            body.Label(screen.FailureMessage, TopiaForgeTextStyle.Body);
+            body!.Label(screen.FailureTitle, TopiaForgeTextStyle.Heading).Tone(TopiaForgeTone.Danger).PlainText();
+            body.Label(screen.FailureMessage, TopiaForgeTextStyle.Body).PlainText();
             lines = body.Label(string.Empty, TopiaForgeTextStyle.Caption).PlainText();
             body.Label(screen.HostSays, TopiaForgeTextStyle.Caption).Tone(TopiaForgeTone.Muted).PlainText();
             var buttons = body.Row(TopiaForgeGap.Sm);
@@ -116,7 +118,7 @@ namespace TopiaForge.ModManager.Sessions
             launcher = buttons.Button("OPEN LAUNCHER", screen.OpenLauncher, TopiaForgeButtonStyle.Outline);
             copy = buttons.Button("COPY DETAILS", screen.CopyDetails, TopiaForgeButtonStyle.Ghost);
             trust = buttons.Button("TRUST AND JOIN", screen.Trust, TopiaForgeButtonStyle.Outline);
-            buttons.Spacer();
+            buttons.Spacer().Flex(1f, 0f);
             buttons.Button("CLOSE", screen.Dismiss, TopiaForgeButtonStyle.Ghost).Focus();
         }
 

@@ -44,5 +44,17 @@ namespace TopiaForge.ModManager.Sessions
         internal void Ask(ScreenPrompt prompt) => ask(prompt);
 
         internal void Notify(string text, ScreenTone tone = ScreenTone.Neutral) => notify(text, tone);
+
+        /// <summary>
+        /// Leaves through the runtime, which never refuses: it stops hosting, or a join, on its way. A provider that failed
+        /// while leaving is said in this game's own words, after <paramref name="done"/>; the session is over either way.
+        /// </summary>
+        internal void LeaveOnline(string done)
+        {
+            var change = Environment.Leave();
+            Status.RequestRefresh();
+            if (change.Succeeded) Notify(done);
+            else Notify(done + " " + HostText.ForDisplay(change.Result.ErrorMessage, HostText.LineChars), ScreenTone.Warning);
+        }
     }
 }
