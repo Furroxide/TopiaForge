@@ -104,4 +104,73 @@ void _registerDiagnosticDataTests({
       isEmpty,
     );
   });
+
+  test('diagnostic bundles never include the multiplayer folder', () async {
+    final install = await repository().selectGameDirectory(gameRoot().path);
+    // The folder holds the player's name and favorites, and known-hosts
+    // keys: unsalted hashes of typed `host:port` targets, from which a LAN
+    // address is recovered in milliseconds.
+    final folder = p.join(
+      dataRoot().path,
+      LocalMultiplayerRepository.folderName,
+    );
+    final store = MultiplayerStore(folder);
+    const serverId =
+        'c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3';
+    await store.saveSettings(
+      MultiplayerSettings(
+        displayName: 'Bundle Probe',
+        favorites: ServerFavorites([
+          ServerBookmark(
+            serverId: serverId,
+            name: 'Probe Favorite',
+            savedAt: DateTime.utc(2026, 10, 15),
+          ),
+        ]),
+      ),
+    );
+    final typed = JoinAddressTarget(host: '192.168.50.7', port: 27250);
+    await store.updateKnownHosts(
+      (hosts) => hosts.remember(typed, serverId, DateTime.utc(2026, 10, 15)),
+    );
+    final key = KnownHosts.targetKey(typed.host, typed.port);
+    expect(
+      File(p.join(folder, 'known-hosts.json')).readAsStringSync(),
+      contains(key),
+    );
+    File(
+      p.join(folder, 'notes.json'),
+    ).writeAsStringSync('{"probe": "multiplayer-folder-sentinel"}');
+
+    final bundle = await repository().createDiagnosticBundle(
+      install,
+      const DependencyPlanner().resolveInstalled(const []),
+    );
+    final archive = ZipDecoder().decodeBytes(
+      File(bundle.path).readAsBytesSync(),
+      verify: true,
+    );
+    final contents = archive.files
+        .where((file) => file.isFile)
+        .map((file) => utf8.decode(file.content as List<int>))
+        .join('\n');
+    for (final name in [
+      for (final file in archive.files) file.name,
+      ...bundle.includedFiles,
+    ]) {
+      expect(name, isNot(contains('multiplayer')));
+      expect(name, isNot(contains('known-hosts')));
+    }
+    for (final secret in [
+      key,
+      serverId,
+      'Bundle Probe',
+      'Probe Favorite',
+      KnownHosts.schema,
+      'multiplayer-folder-sentinel',
+      '192.168.50.7',
+    ]) {
+      expect(contents, isNot(contains(secret)), reason: secret);
+    }
+  });
 }
