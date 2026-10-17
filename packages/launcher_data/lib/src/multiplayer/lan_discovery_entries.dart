@@ -50,6 +50,10 @@ final class _Query {
       otherPort == port && _sameAddress(other, address);
 }
 
+/// How many of [entries] were last heard from [address], on any port.
+int _sessionsAt(Iterable<_Entry> entries, InternetAddress address) =>
+    entries.where((entry) => _sameAddress(entry.address, address)).length;
+
 bool _sameAddress(InternetAddress left, InternetAddress right) {
   final a = left.rawAddress;
   final b = right.rawAddress;

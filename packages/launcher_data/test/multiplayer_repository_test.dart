@@ -182,6 +182,33 @@ void main() {
         expect(rig.binder.binds, hasLength(2));
       });
     });
+
+    group('a start called while a save is still being written', () {
+      test('reads discovery turned off', () async {
+        final rig = LanRig.fresh();
+        final repo = repository(lan: rig.client);
+        await repo.saveSettings(MultiplayerSettings());
+        final saving = repo.saveSettings(
+          MultiplayerSettings().withLanDiscovery(false),
+        );
+        final started = await repo.startLanBrowsing();
+        await saving;
+        expect(rig.binder.binds, isEmpty);
+        expect(rig.client.isListening, isFalse);
+        expect(started.status, LanDiscoveryStatus.disabled);
+      });
+
+      test('reads discovery turned on', () async {
+        final rig = LanRig.fresh();
+        final repo = repository(lan: rig.client);
+        await repo.saveSettings(MultiplayerSettings().withLanDiscovery(false));
+        final saving = repo.saveSettings(MultiplayerSettings());
+        final started = await repo.startLanBrowsing();
+        await saving;
+        expect(started.status, LanDiscoveryStatus.listening);
+        expect(rig.client.isListening, isTrue);
+      });
+    });
   });
 
   group('the multiplayer service', () {

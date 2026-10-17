@@ -30,21 +30,86 @@ void main() {
   test('limits queries per host and overall', () async {
     final rig = LanRig.fresh();
     await rig.client.start();
-    for (var index = 0; index < 20; index++) {
+    const share = LanDiscoveryClient.maximumServersPerHost;
+    for (var index = 0; index < share; index++) {
       rig.beacon(serverIdOf(index), lanHost);
     }
     expect(
       rig.querier.sent,
       hasLength(LanDiscoveryClient.maximumQueriesPerHost),
     );
-    for (var index = 20; index < 64; index++) {
+    // Moved to new ports at once, they wait for the host's next window.
+    for (var index = 0; index < share; index++) {
+      rig.beacon(serverIdOf(index), lanHost, gamePort: 27300);
+    }
+    expect(
+      rig.querier.sent,
+      hasLength(LanDiscoveryClient.maximumQueriesPerHost),
+    );
+    expect(rig.client.snapshot.counters.queriesThrottled, share);
+    for (var index = share; index < 64; index++) {
       rig.beacon(serverIdOf(index), InternetAddress('10.1.0.$index'));
     }
     expect(
       rig.querier.sent,
       hasLength(LanDiscoveryClient.maximumQueriesPerSecond),
     );
-    expect(rig.client.snapshot.counters.queriesThrottled, 64 - 32);
+    expect(rig.client.snapshot.counters.queriesThrottled, 64 - 32 + share);
+  });
+
+  group('one sender', () {
+    const share = LanDiscoveryClient.maximumServersPerHost;
+
+    test('holds at most its share, so every other host still fits', () async {
+      final rig = LanRig.fresh();
+      await rig.client.start();
+      for (var index = 0; index < LanDiscoveryClient.maximumServers; index++) {
+        rig.beacon(serverIdOf(index), lanHost);
+      }
+      expect(rig.client.snapshot.pending, share);
+      expect(
+        rig.client.snapshot.counters.serversDropped,
+        LanDiscoveryClient.maximumServers - share,
+      );
+      final room = LanDiscoveryClient.maximumServers - share;
+      for (var index = 0; index <= room; index++) {
+        rig.beacon(serverIdOf(100 + index), InternetAddress('10.4.0.$index'));
+      }
+      expect(rig.client.snapshot.pending, LanDiscoveryClient.maximumServers);
+      expect(
+        rig.client.snapshot.counters.serversDropped,
+        LanDiscoveryClient.maximumServers - share + 1,
+      );
+    });
+
+    test('at its share cannot take another host\'s session', () async {
+      final rig = LanRig.fresh();
+      await rig.client.start();
+      rig.beacon(hostAServerId, otherLanHost);
+      rig.answer(typical);
+      for (var index = 0; index < share; index++) {
+        rig.beacon(serverIdOf(index), lanHost);
+      }
+      rig.beacon(hostAServerId, lanHost);
+      final snapshot = rig.client.snapshot;
+      expect(snapshot.counters.serversDropped, 1);
+      expect(snapshot.listings.single.serverId, hostAServerId);
+      expect(snapshot.pending, share);
+    });
+
+    test('at its share keeps a session that moves to a new port', () async {
+      final rig = LanRig.fresh();
+      await rig.client.start();
+      for (var index = 0; index < share; index++) {
+        rig.beacon(serverIdOf(index), lanHost);
+      }
+      rig.beacon(serverIdOf(3), lanHost, gamePort: 27300);
+      expect(rig.client.snapshot.counters.serversDropped, 0);
+      rig.clock.advance(LanDiscoveryClient.requery);
+      rig.beacon(serverIdOf(3), lanHost, gamePort: 27300);
+      expect(rig.querier.sent.last.port, 27300);
+      expect(rig.client.snapshot.pending, share);
+    });
   });
 
   test('keeps at most 64 queries outstanding, forgetting the oldest', () async {

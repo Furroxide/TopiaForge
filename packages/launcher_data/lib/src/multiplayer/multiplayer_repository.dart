@@ -36,7 +36,8 @@ abstract interface class MultiplayerRepository {
   Future<MultiplayerSettingsLoad> loadSettings();
 
   /// Saves [settings]. Turning LAN discovery off stops browsing at once,
-  /// even when the save then fails.
+  /// even when the save then fails, and a LAN start called after this reads
+  /// these settings, even before they are written.
   Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings);
 
   /// Adds a favorite, or refreshes its name. Throws [StateError] when the
@@ -177,12 +178,16 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   Future<MultiplayerSettingsLoad> loadSettings() => _store.loadSettings();
 
   @override
-  Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings) async {
+  Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings) {
+    // Queued before anything else runs, so a start called after this reads
+    // these settings, never the ones they replace.
+    final saving = _store.saveSettings(settings);
     if (!settings.lanDiscoveryEnabled) {
       _lanDecisions++;
-      await _lan.stop(disabled: true);
+      // Stopping takes effect before this returns, even when the save fails.
+      unawaited(_lan.stop(disabled: true));
     }
-    return _store.saveSettings(settings);
+    return saving;
   }
 
   @override

@@ -25,12 +25,15 @@ void main() {
   JoinDescriptorResolver resolver({
     required DescriptorClient descriptors,
     List<InternetAddress>? resolved,
+    HostLookup? lookup,
     NetworkPresence? networkPresence,
     DescriptorTimer? timer,
   }) => JoinDescriptorResolver(
     descriptors: descriptors,
     store: MultiplayerStore(p.join(root.path, 'multiplayer')),
-    lookup: (host) async => resolved ?? [lanHost, otherLanHost, thirdLanHost],
+    lookup:
+        lookup ??
+        (host) async => resolved ?? [lanHost, otherLanHost, thirdLanHost],
     networkPresence:
         networkPresence ??
         () async => throw StateError('No presence check expected.'),
@@ -138,6 +141,109 @@ void main() {
           );
       expect(event, isA<JoinDescriptorVerified>());
       expect(connects, [lanHost, InternetAddress.loopbackIPv4]);
+    });
+  });
+
+  group('looking the name up', () {
+    test(
+      'runs within the budget, which ends a lookup that never answers',
+      () async {
+        final connects = <InternetAddress>[];
+        final budget = ManualTimers();
+        final lookup = Completer<List<InternetAddress>>();
+        var answered = false;
+        final answering = resolver(
+          descriptors: hanging(connects, ManualTimers()),
+          lookup: (host) => lookup.future,
+          timer: budget.call,
+        ).answer(request(byName));
+        unawaited(answering.then((_) => answered = true));
+        await pumpEventQueue();
+        expect(budget.timers.single.delay, JoinDescriptorResolver.fetchBudget);
+        expect(answered, isFalse);
+
+        budget.fireLatest();
+        await pumpEventQueue();
+        expect(answered, isTrue);
+        final event = await answering as JoinFailed;
+        expect(event.code, JoinFailureCode.unreachable);
+        expect(event.detail, contains('could not be looked up in time'));
+        // An answer that comes later contacts nothing.
+        lookup.complete([lanHost]);
+        await pumpEventQueue();
+        expect(connects, isEmpty);
+      },
+    );
+
+    test('is not waited for once the join is cancelled', () async {
+      final connects = <InternetAddress>[];
+      final budget = ManualTimers();
+      final lookup = Completer<List<InternetAddress>>();
+      final cancellation = CancellationToken();
+      var answered = false;
+      final answering = resolver(
+        descriptors: hanging(connects, ManualTimers()),
+        lookup: (host) => lookup.future,
+        timer: budget.call,
+      ).answer(request(byName), cancellation: cancellation);
+      unawaited(answering.then((_) => answered = true));
+      await pumpEventQueue();
+      cancellation.cancel();
+      await pumpEventQueue();
+      expect(answered, isTrue);
+      expect(await answering, isNull);
+      expect(budget.timers.single.isActive, isFalse);
+      // A lookup that fails afterwards is not heard, nor reported unhandled.
+      lookup.completeError(const SocketException('Lookup failed late.'));
+      await pumpEventQueue();
+      expect(connects, isEmpty);
+    });
+
+    test('that fails is unreachable at once', () async {
+      for (final lookup in <HostLookup>[
+        (host) async => throw const SocketException('No such host.'),
+        (host) => throw const SocketException('No such host.'),
+      ]) {
+        final connects = <InternetAddress>[];
+        final budget = ManualTimers();
+        var answered = false;
+        final answering = resolver(
+          descriptors: hanging(connects, ManualTimers()),
+          lookup: lookup,
+          timer: budget.call,
+        ).answer(request(byName));
+        unawaited(answering.then((_) => answered = true));
+        await pumpEventQueue();
+        expect(answered, isTrue);
+        final event = await answering as JoinFailed;
+        expect(event.code, JoinFailureCode.unreachable);
+        expect(event.detail, 'The host name could not be found.');
+        expect(budget.timers.single.isActive, isFalse);
+        expect(connects, isEmpty);
+      }
+    });
+
+    test('leaves the addresses what remains of the same budget', () async {
+      final connects = <InternetAddress>[];
+      final fetchTimers = ManualTimers();
+      final budget = ManualTimers();
+      final lookup = Completer<List<InternetAddress>>();
+      final answering = resolver(
+        descriptors: hanging(connects, fetchTimers),
+        lookup: (host) => lookup.future,
+        timer: budget.call,
+      ).answer(request(byName));
+      await pumpEventQueue();
+      lookup.complete([lanHost, otherLanHost]);
+      await pumpEventQueue();
+      expect(connects, [lanHost]);
+      // No second budget starts for the addresses.
+      expect(budget.timers, hasLength(1));
+      budget.fireLatest();
+      final event = await answering as JoinFailed;
+      expect(event.detail, contains('did not answer in time'));
+      expect(connects, [lanHost]);
+      expect(fetchTimers.timers.where((timer) => timer.isActive), isEmpty);
     });
   });
 

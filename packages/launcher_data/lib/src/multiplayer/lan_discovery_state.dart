@@ -76,7 +76,8 @@ final class LanDiscoveryCounters {
   /// Matched replies whose info did not read or named another server.
   final int unusableInfo;
 
-  /// Beacons ignored because the list was full.
+  /// Beacons ignored because the list, or their sender's share of it, was
+  /// full.
   final int serversDropped;
 
   /// Datagrams whose handling failed unexpectedly; each was dropped.

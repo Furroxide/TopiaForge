@@ -39,8 +39,9 @@ Future<bool> _anyNetworkUp() async {
 /// - A direct link or typed address that is an IP literal is contacted only
 ///   when the rules allow it. A name is looked up only when relay-only allows
 ///   it (a local name), and of what it resolves to only the addresses the
-///   rules allow are contacted, IPv4 first, within [fetchBudget] for them
-///   all. A local name that resolves only beyond the local network is
+///   rules allow are contacted, IPv4 first. The lookup and those addresses
+///   share [fetchBudget], and cancelling stops waiting for the lookup at
+///   once. A local name that resolves only beyond the local network is
 ///   refused before any connection.
 /// - A typed address names no server, so the first server it serves is
 ///   remembered, and a different one later is an identity change unless the
@@ -67,9 +68,9 @@ final class JoinDescriptorResolver {
        _timer = timer ?? Timer.new,
        _clock = clock ?? DateTime.now;
 
-  /// The longest the addresses of one target are tried, however many a name
-  /// has: one address's connect and response deadlines, and a connect
-  /// deadline more for the next address.
+  /// The longest one target takes, however many addresses its name has: its
+  /// lookup and then the addresses, within one address's connect and response
+  /// deadlines and a connect deadline more for the next.
   static const fetchBudget = Duration(seconds: 15);
 
   final DescriptorClient _descriptors;
@@ -119,82 +120,102 @@ final class JoinDescriptorResolver {
     int port,
     CancellationToken? cancellation,
   ) async {
-    final List<InternetAddress> candidates;
     final literal = InternetAddress.tryParse(host);
-    if (literal != null) {
-      candidates = _contactable(request, [literal]);
-      if (candidates.isEmpty) return _directNotAllowed;
-    } else {
-      // Looking a name up asks DNS servers its author chose, which can learn
-      // the player's resolver or subnet; relay-only looks up local names only.
-      if (!request.allowsDirect && !_isLocalName(host)) {
-        return const DescriptorFetchFailed(
-          DescriptorFetchFailure.directNotAllowed,
-          'Looking up this name would reach servers its author chose. Allow '
-          'a direct path for this session to use it.',
-        );
-      }
-      final List<InternetAddress> resolved;
-      try {
-        resolved = await _lookup(host);
-      } on Object {
-        return const DescriptorFetchFailed(
-          DescriptorFetchFailure.unreachable,
-          'The host name could not be found.',
-        );
-      }
-      if (cancellation?.isCancelled ?? false) return _cancelled;
-      candidates = _contactable(request, resolved);
-      if (candidates.isEmpty) {
-        return resolved.isEmpty
-            ? const DescriptorFetchFailed(
-                DescriptorFetchFailure.unreachable,
-                'The host name has no usable address.',
-              )
-            : _directNotAllowed;
-      }
+    final allowed = literal == null ? null : _contactable(request, [literal]);
+    if (allowed != null && allowed.isEmpty) return _directNotAllowed;
+    // Looking a name up asks DNS servers its author chose, which can learn
+    // the player's resolver or subnet; relay-only looks up local names only.
+    if (literal == null && !request.allowsDirect && !_isLocalName(host)) {
+      return const DescriptorFetchFailed(
+        DescriptorFetchFailure.directNotAllowed,
+        'Looking up this name would reach servers its author chose. Allow '
+        'a direct path for this session to use it.',
+      );
     }
-    return _fetchFirst(request, candidates, port, cancellation);
+    final budget = _FetchBudget(_timer, fetchBudget, cancellation);
+    try {
+      final List<InternetAddress> candidates;
+      if (allowed != null) {
+        candidates = allowed;
+      } else {
+        final List<InternetAddress>? resolved;
+        try {
+          resolved = await _lookupWithin(host, budget.token);
+        } on Object {
+          return const DescriptorFetchFailed(
+            DescriptorFetchFailure.unreachable,
+            'The host name could not be found.',
+          );
+        }
+        if (cancellation?.isCancelled ?? false) return _cancelled;
+        if (resolved == null) return _lookupOutOfTime;
+        candidates = _contactable(request, resolved);
+        if (candidates.isEmpty) {
+          return resolved.isEmpty
+              ? const DescriptorFetchFailed(
+                  DescriptorFetchFailure.unreachable,
+                  'The host name has no usable address.',
+                )
+              : _directNotAllowed;
+        }
+      }
+      return await _fetchFirst(request, candidates, port, budget, cancellation);
+    } finally {
+      budget.dispose();
+    }
   }
 
-  /// Tries [candidates] in order within [fetchBudget], stopping at the first
-  /// descriptor. The budget cancels a fetch still running when it ends.
+  /// Looks [host] up until [budget] is cancelled; null when it is first. A
+  /// lookup cannot be stopped, so one still running then finishes unheard.
+  Future<List<InternetAddress>?> _lookupWithin(
+    String host,
+    CancellationToken budget,
+  ) {
+    if (budget.isCancelled) return Future.value();
+    final outcome = Completer<List<InternetAddress>?>();
+    final registration = budget.register(() {
+      if (!outcome.isCompleted) outcome.complete();
+    });
+    Future.sync(() => _lookup(host)).then(
+      (resolved) {
+        if (!outcome.isCompleted) outcome.complete(resolved);
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!outcome.isCompleted) outcome.completeError(error, stack);
+      },
+    );
+    return outcome.future.whenComplete(registration.dispose);
+  }
+
+  /// Tries [candidates] in order with what remains of [budget], stopping at
+  /// the first descriptor. The budget cancels a fetch still running when it
+  /// ends.
   Future<DescriptorFetch> _fetchFirst(
     JoinDescriptorRequest request,
     List<InternetAddress> candidates,
     int port,
+    _FetchBudget budget,
     CancellationToken? cancellation,
   ) async {
-    final budget = CancellationToken();
-    var expired = false;
-    final deadline = _timer(fetchBudget, () {
-      expired = true;
-      budget.cancel();
-    });
-    final linked = cancellation?.register(budget.cancel);
     DescriptorFetchFailed? reported;
-    try {
-      for (final address in candidates) {
-        if (budget.isCancelled) break;
-        final fetch = await _descriptors.fetchFrom(
-          address,
-          port,
-          allowDirect: request.allowsDirect,
-          expectedServerId: request.expectedServerId,
-          cancellation: budget,
-        );
-        if (fetch is! DescriptorFetchFailed) return fetch;
-        if (fetch.failure == DescriptorFetchFailure.cancelled) break;
-        if (reported == null || _rank(fetch) > _rank(reported)) {
-          reported = fetch;
-        }
+    for (final address in candidates) {
+      if (budget.token.isCancelled) break;
+      final fetch = await _descriptors.fetchFrom(
+        address,
+        port,
+        allowDirect: request.allowsDirect,
+        expectedServerId: request.expectedServerId,
+        cancellation: budget.token,
+      );
+      if (fetch is! DescriptorFetchFailed) return fetch;
+      if (fetch.failure == DescriptorFetchFailure.cancelled) break;
+      if (reported == null || _rank(fetch) > _rank(reported)) {
+        reported = fetch;
       }
-    } finally {
-      deadline.cancel();
-      linked?.dispose();
     }
     if (cancellation?.isCancelled ?? false) return _cancelled;
-    if (expired && (reported == null || _rank(_outOfTime) > _rank(reported))) {
+    if (budget.expired &&
+        (reported == null || _rank(_outOfTime) > _rank(reported))) {
       reported = _outOfTime;
     }
     return reported ?? _outOfTime;
@@ -397,4 +418,36 @@ final class JoinDescriptorResolver {
     DescriptorFetchFailure.timedOut,
     'The host did not answer in time.',
   );
+
+  static const _lookupOutOfTime = DescriptorFetchFailed(
+    DescriptorFetchFailure.timedOut,
+    'The host name could not be looked up in time.',
+  );
+}
+
+/// The time every step of one target shares: its name's lookup and each
+/// address's fetch. [token] is cancelled when the time runs out, which sets
+/// [expired], or when the join is cancelled.
+final class _FetchBudget {
+  _FetchBudget(
+    DescriptorTimer timer,
+    Duration length,
+    CancellationToken? join,
+  ) {
+    _deadline = timer(length, () {
+      expired = true;
+      token.cancel();
+    });
+    _linked = join?.register(token.cancel);
+  }
+
+  final token = CancellationToken();
+  var expired = false;
+  late final Timer _deadline;
+  CancellationRegistration? _linked;
+
+  void dispose() {
+    _deadline.cancel();
+    _linked?.dispose();
+  }
 }

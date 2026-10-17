@@ -34,10 +34,11 @@ typedef LanTicker = Timer Function(Duration interval, void Function() tick);
 ///   [fetchDescriptor] uses it.
 /// - **Bounds.** A reply is accepted only when it is no larger than the
 ///   query, carries the id of a query still outstanding, and comes from the
-///   socket that query went to. At most [maximumServers] sessions and
+///   socket that query went to. At most [maximumServers] sessions, of them
+///   at most [maximumServersPerHost] from one sender, and
 ///   [maximumOutstandingQueries] queries are kept, and queries are rate
 ///   limited overall and per host, so a flood of forged beacons cannot turn
-///   the browser into an amplifier.
+///   the browser into an amplifier, and one host cannot hide the others.
 /// - **Robustness.** Datagrams are hostile input: nothing on the network path
 ///   throws, and anything malformed is dropped and counted.
 /// - **Sockets.** The listener binds [LanBeacon.discoveryPort] with address
@@ -71,6 +72,10 @@ final class LanDiscoveryClient {
   static const queryLifetime = Duration(seconds: 5);
   static const sweepInterval = Duration(seconds: 1);
   static const maximumServers = 64;
+
+  /// Sessions one sender may hold in the list: as many as it may be asked
+  /// about per [requery] window, enough for a machine running several peers.
+  static const maximumServersPerHost = 8;
   static const maximumOutstandingQueries = 64;
   static const maximumQueriesPerSecond = 32;
 
@@ -250,11 +255,16 @@ final class LanDiscoveryClient {
   bool _heard(LanBeacon beacon, InternetAddress sender, int now) {
     var entry = _entries[beacon.serverId];
     final fresh = entry == null;
+    // A sender holds no more than its share of the list, so one host naming
+    // many servers never crowds the others out.
+    final arriving = entry == null || !_sameAddress(entry.address, sender);
+    if (arriving &&
+        ((fresh && _entries.length >= maximumServers) ||
+            _sessionsAt(_entries.values, sender) >= maximumServersPerHost)) {
+      _counters.serversDropped++;
+      return false;
+    }
     if (entry == null) {
-      if (_entries.length >= maximumServers) {
-        _counters.serversDropped++;
-        return false;
-      }
       entry = _Entry(beacon.serverId, sender, beacon.gamePort);
       _entries[beacon.serverId] = entry;
     }

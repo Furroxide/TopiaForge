@@ -11,6 +11,8 @@ import 'package:path/path.dart' as p;
 
 import 'multiplayer_store_salvage.dart';
 
+part 'multiplayer_store_files.dart';
+
 /// What loading did about a stored file.
 enum MultiplayerStoreRecovery {
   /// It read cleanly, or did not exist yet.
@@ -79,10 +81,23 @@ final class MultiplayerStoreException implements Exception {
 /// aside as `<name>.<token>.bak` first. A write stopped between its two moves
 /// leaves that backup and no file, so reading restores the newest backup
 /// when the file is missing, as the launcher's own files do. While that
-/// backup cannot be moved, the file counts as one that cannot be read.
+/// backup cannot be moved, or the folder cannot be searched for one, the file
+/// counts as one that cannot be read.
+///
+/// A write stopped part way can also leave its `<name>.<token>.tmp`. Each
+/// store sweeps those once, before its first read or write, but only once
+/// they are [staleTemporaryAge] old and never while a write in this isolate
+/// uses one, so a write still running elsewhere keeps its own. The token is
+/// `<process id>-<microseconds>-<random>`, and only names the store gives its
+/// own files are ever put back or swept: a copy the player keeps beside a
+/// file under another name is never touched.
+///
+/// One launcher process uses the folder at a time, since the launcher runs as
+/// a single instance. Two processes sharing it could race while a backup is
+/// put back.
 final class MultiplayerStore {
   MultiplayerStore(this.directory, {DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+    : _files = _StoreFiles(directory, clock ?? DateTime.now);
 
   static const settingsFileName = 'settings.json';
   static const knownHostsFileName = 'known-hosts.json';
@@ -90,6 +105,10 @@ final class MultiplayerStore {
   /// Settings larger than this are damaged; a full store is a few kilobytes.
   static const maximumSettingsBytes = 256 * 1024;
   static const keptDamagedCopies = 3;
+
+  /// How old a temporary file of this store must be before a sweep deletes
+  /// it. A write still running made its own moments ago.
+  static const staleTemporaryAge = Duration(hours: 1);
 
   /// What stands in for settings that cannot be read. Everything that
   /// reaches the network or changes this computer is off, and nothing is
@@ -102,9 +121,9 @@ final class MultiplayerStore {
   );
 
   final String directory;
-  final DateTime Function() _clock;
-  final Random _random = Random();
+  final _StoreFiles _files;
   Future<void> _tail = Future.value();
+  var _swept = false;
 
   File get _settingsFile => File(p.join(directory, settingsFileName));
   File get _knownHostsFile => File(p.join(directory, knownHostsFileName));
@@ -151,20 +170,31 @@ final class MultiplayerStore {
     final next = change(current);
     final encoded = next.encode();
     if (!_sameBytes(encoded, current.encode())) {
-      await _write(_knownHostsFile, encoded, 'known hosts');
+      await _files.write(_knownHostsFile, encoded, 'known hosts');
     }
     return next;
   });
 
+  /// Runs [action] after every earlier one, the first of them after the
+  /// sweep of stale temporary files.
   Future<T> _serial<T>(Future<T> Function() action) {
-    final result = _tail.then((_) => action());
+    final result = _tail.then((_) async {
+      if (!_swept) {
+        _swept = true;
+        await _files.sweepTemporaries(const [
+          settingsFileName,
+          knownHostsFileName,
+        ], staleTemporaryAge);
+      }
+      return action();
+    });
     _tail = result.then((_) {}, onError: (Object _) {});
     return result;
   }
 
   Future<MultiplayerSettingsLoad> _loadSettings() async {
     final file = _settingsFile;
-    final read = await _readBounded(file, maximumSettingsBytes);
+    final read = await _files.read(file, maximumSettingsBytes);
     switch (read) {
       case _Missing():
         return MultiplayerSettingsLoad(
@@ -204,7 +234,7 @@ final class MultiplayerStore {
     final recovery = kept == null
         ? MultiplayerStoreRecovery.reset
         : MultiplayerStoreRecovery.salvaged;
-    if (await _setAside(file)) {
+    if (await _files.setAside(file)) {
       try {
         await _writeSettings(settings);
       } on MultiplayerStoreException {
@@ -233,23 +263,23 @@ final class MultiplayerStore {
 
   Future<KnownHosts> _loadKnownHosts() async {
     final file = _knownHostsFile;
-    final read = await _readBounded(file, KnownHosts.maximumBytes);
+    final read = await _files.read(file, KnownHosts.maximumBytes);
     switch (read) {
       case _Missing():
         return KnownHosts.empty();
       case _Unreadable():
         throw _unreadable('known hosts');
       case _Damaged():
-        await _setAside(file);
+        await _files.setAside(file);
         return KnownHosts.empty();
       case _Read(:final bytes):
         // The domain keeps what is valid; anything it had to drop means the
         // file was damaged, so the original is kept aside for inspection.
         final hosts = KnownHosts.decode(bytes);
         final encoded = hosts.encode();
-        if (!_sameBytes(encoded, bytes) && await _setAside(file)) {
+        if (!_sameBytes(encoded, bytes) && await _files.setAside(file)) {
           try {
-            await _write(file, encoded, 'known hosts');
+            await _files.write(file, encoded, 'known hosts');
           } on MultiplayerStoreException {
             // The next change writes it again.
           }
@@ -258,236 +288,11 @@ final class MultiplayerStore {
     }
   }
 
-  Future<void> _writeSettings(MultiplayerSettings settings) => _write(
+  Future<void> _writeSettings(MultiplayerSettings settings) => _files.write(
     _settingsFile,
     utf8.encode(
       '${const JsonEncoder.withIndent('  ').convert(settings.toJson())}\n',
     ),
     'multiplayer settings',
   );
-
-  Future<_ReadResult> _readBounded(File file, int maximumBytes) async {
-    FileSystemEntityType type;
-    try {
-      type = await FileSystemEntity.type(file.path, followLinks: false);
-      if (type == FileSystemEntityType.notFound) {
-        switch (await _restoreBackup(file)) {
-          case _Restore.held:
-            // What the backup holds is unread, not missing.
-            return const _Unreadable();
-          case _Restore.restored:
-            type = await FileSystemEntity.type(file.path, followLinks: false);
-          case _Restore.none:
-            break;
-        }
-      }
-    } on FileSystemException {
-      return const _Unreadable();
-    }
-    if (type == FileSystemEntityType.notFound) return const _Missing();
-    // A link or a folder in a file's place is set aside, never followed.
-    if (type != FileSystemEntityType.file) return const _Damaged();
-    try {
-      if (await file.length() > maximumBytes) return const _Damaged();
-      final bytes = await file.readAsBytes();
-      return bytes.length > maximumBytes ? const _Damaged() : _Read(bytes);
-    } on FileSystemException {
-      return const _Unreadable();
-    }
-  }
-
-  /// Puts back the newest `<name>.<token>.bak` of [file], which a write
-  /// stopped between its two moves left behind, and drops older ones. Only
-  /// regular files count, never a link or a folder. A backup that is still
-  /// there but cannot be moved just now, as when another program holds it,
-  /// is [_Restore.held]: an older one never stands in for it, and nothing is
-  /// dropped.
-  Future<_Restore> _restoreBackup(File file) async {
-    final prefix = '${p.basename(file.path)}.';
-    final backups = <(File, DateTime)>[];
-    try {
-      await for (final entity in Directory(
-        directory,
-      ).list(followLinks: false)) {
-        final name = p.basename(entity.path);
-        if (entity is File &&
-            name.startsWith(prefix) &&
-            name.endsWith('.bak')) {
-          backups.add((entity, (await entity.stat()).modified));
-        }
-      }
-    } on FileSystemException {
-      return _Restore.none;
-    }
-    backups.sort((left, right) => right.$2.compareTo(left.$2));
-    for (final (backup, _) in backups) {
-      try {
-        await backup.rename(file.path);
-      } on FileSystemException {
-        // One that vanished meanwhile is passed over; one still there is
-        // held, and only it has the latest contents.
-        if (await _exists(backup)) return _Restore.held;
-        continue;
-      }
-      for (final (stale, _) in backups) {
-        if (!identical(stale, backup)) await _deleteEntity(stale.path);
-      }
-      return _Restore.restored;
-    }
-    return _Restore.none;
-  }
-
-  /// Renames [file] to a damaged copy beside it and keeps the newest
-  /// [keptDamagedCopies]; false when it could not be moved.
-  Future<bool> _setAside(File file) async {
-    final stem = p.basenameWithoutExtension(file.path);
-    final stamp = _clock().toUtc().toIso8601String().replaceAll(
-      RegExp(r'[^0-9TZ]'),
-      '',
-    );
-    var target = File(p.join(directory, '$stem.damaged-$stamp.json'));
-    for (var attempt = 2; await _exists(target) && attempt < 100; attempt++) {
-      target = File(p.join(directory, '$stem.damaged-$stamp-$attempt.json'));
-    }
-    try {
-      final type = await FileSystemEntity.type(file.path, followLinks: false);
-      if (type == FileSystemEntityType.link) {
-        await Link(file.path).rename(target.path);
-      } else if (type == FileSystemEntityType.directory) {
-        await Directory(file.path).rename(target.path);
-      } else {
-        await file.rename(target.path);
-      }
-    } on FileSystemException {
-      return false;
-    }
-    await _pruneDamaged(stem);
-    return true;
-  }
-
-  Future<void> _pruneDamaged(String stem) async {
-    try {
-      final copies = <String>[];
-      await for (final entity in Directory(
-        directory,
-      ).list(followLinks: false)) {
-        final name = p.basename(entity.path);
-        if (name.startsWith('$stem.damaged-') && name.endsWith('.json')) {
-          copies.add(entity.path);
-        }
-      }
-      copies.sort();
-      for (final path in copies.take(
-        max(0, copies.length - keptDamagedCopies),
-      )) {
-        await _deleteEntity(path);
-      }
-    } on FileSystemException {
-      // Old copies are only tidied; leaving one costs nothing.
-    }
-  }
-
-  /// Writes [bytes] to a temporary file beside [file] and moves it into
-  /// place, so a reader sees the old file or the new one, never a mix.
-  Future<void> _write(File file, List<int> bytes, String label) async {
-    final token =
-        '$pid-${_clock().microsecondsSinceEpoch}-${_random.nextInt(1 << 30)}';
-    final temporary = File('${file.path}.$token.tmp');
-    try {
-      await Directory(directory).create(recursive: true);
-      final type = await FileSystemEntity.type(file.path, followLinks: false);
-      if (type != FileSystemEntityType.notFound &&
-          type != FileSystemEntityType.file &&
-          !await _setAside(file)) {
-        throw const FileSystemException('Not a regular file.');
-      }
-      await temporary.writeAsBytes(bytes, flush: true);
-      await _moveIntoPlace(temporary, file, token);
-    } on FileSystemException {
-      throw MultiplayerStoreException('The $label could not be saved.');
-    } finally {
-      await _deleteEntity(temporary.path);
-    }
-  }
-
-  Future<void> _moveIntoPlace(File temporary, File file, String token) async {
-    try {
-      await temporary.rename(file.path);
-      return;
-    } on FileSystemException {
-      if (!await _exists(file)) rethrow;
-    }
-    // Windows can refuse to replace a file another program holds for a
-    // moment: move it out of the way, put the new one in, then drop it.
-    final backup = File('${file.path}.$token.bak');
-    await file.rename(backup.path);
-    try {
-      await temporary.rename(file.path);
-    } on FileSystemException {
-      if (!await _exists(file)) await backup.rename(file.path);
-      rethrow;
-    }
-    await _deleteEntity(backup.path);
-  }
-
-  static Future<bool> _exists(File file) async =>
-      await FileSystemEntity.type(file.path, followLinks: false) !=
-      FileSystemEntityType.notFound;
-
-  /// Deletes a file or a link itself. A folder is left alone: the store
-  /// never deletes anything it did not write.
-  static Future<void> _deleteEntity(String path) async {
-    try {
-      final type = await FileSystemEntity.type(path, followLinks: false);
-      if (type == FileSystemEntityType.link) {
-        await Link(path).delete();
-      } else if (type == FileSystemEntityType.file) {
-        await File(path).delete();
-      }
-    } on FileSystemException {
-      // Best effort: a leftover temporary file or old copy is harmless.
-    }
-  }
-
-  static bool _sameBytes(List<int> left, List<int> right) {
-    if (left.length != right.length) return false;
-    for (var index = 0; index < left.length; index++) {
-      if (left[index] != right[index]) return false;
-    }
-    return true;
-  }
-}
-
-/// What [MultiplayerStore._restoreBackup] did.
-enum _Restore {
-  /// There was no backup to put back.
-  none,
-
-  /// The newest backup is back in the file's place.
-  restored,
-
-  /// The newest backup could not be moved just now.
-  held,
-}
-
-sealed class _ReadResult {
-  const _ReadResult();
-}
-
-final class _Missing extends _ReadResult {
-  const _Missing();
-}
-
-final class _Unreadable extends _ReadResult {
-  const _Unreadable();
-}
-
-final class _Damaged extends _ReadResult {
-  const _Damaged();
-}
-
-final class _Read extends _ReadResult {
-  const _Read(this.bytes);
-
-  final List<int> bytes;
 }

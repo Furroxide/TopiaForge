@@ -20,7 +20,9 @@ Future<Future<void> Function()?> holdUnreadable(File file) => _hold(
 /// Keeps [file] where it is until the test ends, the way another program can
 /// hold it open without delete sharing: it can still be read, but neither
 /// moved nor deleted. On Windows a child process opens it with read sharing
-/// only; elsewhere its folder's mode denies changes. Returns the release as
+/// only; elsewhere its folder's mode denies changes, which holds every other
+/// file in the folder in place too, so there a test cannot show that the
+/// others stay free to move or delete. Returns the release as
 /// [holdUnreadable] does, or null after marking the test skipped where that
 /// cannot be done.
 Future<Future<void> Function()?> holdInPlace(File file) => _hold(
