@@ -334,13 +334,11 @@ String _withExactSdkPackageReferences(
   required String devPropsPath,
 }) {
   var result = project;
-  final projectElement = RegExp(r'<Project(?:\s[^>]*)?>').firstMatch(result);
+  final projectElement = firstStartTag(result, 'Project');
   if (projectElement == null) {
     throw StateError('TopiaForge C# project has no Project element.');
   }
-  if (!RegExp(
-    r'<Import\s+Project="[^"]*topiaforge\.dev\.props"',
-  ).hasMatch(result)) {
+  if (!_importsDevProps(result)) {
     final offset = projectElement.end;
     result =
         '${result.substring(0, offset)}\n'
@@ -348,12 +346,11 @@ String _withExactSdkPackageReferences(
         'Condition="Exists(\'$devPropsPath\')" />'
         '${result.substring(offset)}';
   }
-  final safePattern = RegExp(
-    r'<TopiaForgeSafeProject(?:\s[^>]*)?>[^<]*</TopiaForgeSafeProject>',
-  );
-  if (safePattern.hasMatch(result)) {
-    result = result.replaceFirst(
-      safePattern,
+  final safeElement = firstTextElement(result, 'TopiaForgeSafeProject');
+  if (safeElement != null) {
+    result = result.replaceRange(
+      safeElement.start,
+      safeElement.end,
       '<TopiaForgeSafeProject>${safeProject ? 'true' : 'false'}</TopiaForgeSafeProject>',
     );
   }
@@ -363,16 +360,13 @@ String _withExactSdkPackageReferences(
         "\$(ContinuousIntegrationBuild) == 'true' and Exists('\$(MSBuildProjectDirectory)/packages.lock.json')",
     'TopiaForgeSafeProject': safeProject ? 'true' : 'false',
   };
-  final firstPropertyGroup = RegExp(
-    r'<PropertyGroup(?:\s[^>]*)?>',
-  ).firstMatch(result);
+  final firstPropertyGroup = firstStartTag(result, 'PropertyGroup');
   if (firstPropertyGroup == null) {
     throw StateError('TopiaForge C# project has no PropertyGroup.');
   }
   final propertyLines = <String>[];
   for (final entry in properties.entries) {
-    final existing = RegExp('<${entry.key}(?:\\s[^>]*)?>');
-    if (existing.hasMatch(result)) continue;
+    if (firstStartTag(result, entry.key) != null) continue;
     if (entry.key == 'RestoreLockedMode') {
       propertyLines.add(
         '    <RestoreLockedMode Condition="${entry.value}">true</RestoreLockedMode>',
@@ -388,50 +382,22 @@ String _withExactSdkPackageReferences(
         '${result.substring(offset)}';
   }
 
-  final missing = <String>[];
-  for (final package in packages.toList()..sort()) {
-    final pattern = RegExp(
-      '<PackageReference\\s+Include=["\\\']${RegExp.escape(package)}["\\\'][^>]*(?:/>|>.*?</PackageReference>)',
-      dotAll: true,
-    );
-    final match = pattern.firstMatch(result);
-    if (match == null) {
-      missing.add(package);
-      continue;
-    }
-    var item = match.group(0)!;
-    final versionPattern = RegExp(r'\sVersion="[^"]*"');
-    if (versionPattern.hasMatch(item)) {
-      item = item.replaceFirst(versionPattern, ' Version="$version"');
-    } else {
-      item = item.replaceFirst(
-        '<PackageReference ',
-        '<PackageReference Version="$version" ',
-      );
-    }
-    if (topiaForgeAnalyzerPackageIds.contains(package) &&
-        !item.contains('PrivateAssets=')) {
-      item = item.replaceFirst(
-        '<PackageReference ',
-        '<PackageReference PrivateAssets="all" ',
-      );
-    }
-    result = result.replaceRange(match.start, match.end, item);
-  }
-  if (missing.isNotEmpty) {
-    final items = missing
-        .map((package) {
-          final private = topiaForgeAnalyzerPackageIds.contains(package)
-              ? ' PrivateAssets="all"'
-              : '';
-          return '    <PackageReference Include="$package" Version="$version"$private />';
-        })
-        .join('\n');
-    final close = result.lastIndexOf('</Project>');
-    if (close < 0) throw StateError('TopiaForge C# project is malformed.');
-    result =
-        '${result.substring(0, close)}  <ItemGroup>\n$items\n'
-        '  </ItemGroup>\n${result.substring(close)}';
-  }
-  return result;
+  return withPinnedSdkPackageReferences(
+    result,
+    packages: packages,
+    version: version,
+  );
 }
+
+/// Whether [project] has an `<Import>` outside comments whose `Project`
+/// attribute, in either quote and among any others, ends in
+/// `topiaforge.dev.props`.
+bool _importsDevProps(String project) => startTags(project, 'Import').any(
+  (found) => found.tag.attributes.any((attribute) {
+    if (!isAttributeNamed(project, attribute, 'Project')) return false;
+    final value = trimmedAttributeValue(project, attribute);
+    return project
+        .substring(value.start, value.end)
+        .endsWith('topiaforge.dev.props');
+  }),
+);

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
+import 'linear_text_scan.dart';
 import 'tomato_cake_launcher_state.dart';
 
 part 'steam_game_install_discovery.dart';

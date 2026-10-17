@@ -126,18 +126,15 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
       projectFile,
       maxBytes: CliFileLimits.metadata,
     );
-    var updatedProject = originalProject;
-    for (final packageId in <String>[
-      module.packageId,
-      ...module.additionalPackageIds,
-    ]) {
-      updatedProject = _editSdkPackageReference(
-        updatedProject,
-        packageId: packageId,
-        version: TopiaForgeRuntimeVersions.sdkVersion,
-        add: add,
-      );
-    }
+    // Mod scaffolding pins SDK items with the same rewrite.
+    final packageIds = [module.packageId, ...module.additionalPackageIds];
+    final updatedProject = add
+        ? withPinnedSdkPackageReferences(
+            originalProject,
+            packages: packageIds,
+            version: TopiaForgeRuntimeVersions.sdkVersion,
+          )
+        : packageIds.fold(originalProject, withoutPackageReference);
     final updates = <File, String?>{
       manifestFile:
           '${const JsonEncoder.withIndent('  ').convert(updatedManifest.toJson())}\n',
@@ -207,49 +204,6 @@ extension _TopiaForgeModModuleCommands on _TopiaForgeCli {
       );
     }
     return projects.single;
-  }
-
-  String _editSdkPackageReference(
-    String project, {
-    required String packageId,
-    required String version,
-    required bool add,
-  }) {
-    final pattern = RegExp(
-      '<PackageReference\\s+Include="$packageId"[^>]*(?:/>|>.*?</PackageReference>)',
-      dotAll: true,
-    );
-    final match = pattern.firstMatch(project);
-    if (!add) {
-      if (match == null) return project;
-      return project.replaceRange(match.start, match.end, '');
-    }
-    if (match != null) {
-      var item = match.group(0)!;
-      final versionPattern = RegExp(r'\sVersion="[^"]*"');
-      item = versionPattern.hasMatch(item)
-          ? item.replaceFirst(versionPattern, ' Version="$version"')
-          : item.replaceFirst(
-              '<PackageReference ',
-              '<PackageReference Version="$version" ',
-            );
-      if (topiaForgeAnalyzerPackageIds.contains(packageId) &&
-          !item.contains('PrivateAssets=')) {
-        item = item.replaceFirst(
-          '<PackageReference ',
-          '<PackageReference PrivateAssets="all" ',
-        );
-      }
-      return project.replaceRange(match.start, match.end, item);
-    }
-    final close = project.lastIndexOf('</Project>');
-    if (close < 0) throw StateError('The C# project is malformed.');
-    final privateAssets = topiaForgeAnalyzerPackageIds.contains(packageId)
-        ? ' PrivateAssets="all"'
-        : '';
-    return '${project.substring(0, close)}  <ItemGroup>\n'
-        '    <PackageReference Include="$packageId" Version="$version"$privateAssets />\n'
-        '  </ItemGroup>\n${project.substring(close)}';
   }
 
   Future<void> _writeModuleFilesAtomically(Map<File, String?> updates) async {

@@ -12,10 +12,12 @@ import 'agpl_3_0_text.g.dart';
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
+import 'linear_text_scan.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'safe_zip_archive.dart';
 import 'secure_http.dart';
+import 'sdk_package_references.dart';
 import 'sdk_reference_pack.dart';
 
 part 'local_developer_repository/io_helpers.dart';
