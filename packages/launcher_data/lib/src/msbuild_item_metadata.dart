@@ -22,12 +22,12 @@ const _greaterThan = 0x3E;
 /// The bounds of each child element of the MSBuild [item] that sets the
 /// metadata [name], in order.
 ///
-/// [item] runs from its start tag to its own `/>` or end tag, as
-/// [firstPackageReference] bounds one. [name] holds only ASCII letters, and
-/// a child matches it in any case. Comments are skipped. A child's start tag
-/// ends at the first `>` outside its quoted values, and an element child at
-/// the next end tag, since metadata hold only text. The search stops at a
-/// child that is left open.
+/// [item] runs from its start tag to its own `/>` or end tag, as the item
+/// finder bounds one. [name] holds only ASCII letters, and a child matches
+/// it in any case. Comments and CDATA sections are skipped. A child's start
+/// tag ends at the first `>` outside its quoted values, and an element child
+/// at the next end tag outside comments and CDATA sections, since metadata
+/// hold only text. The search stops at a child that is left open.
 Iterable<({int start, int end})> metadataElements(
   String item,
   String name,
@@ -35,34 +35,48 @@ Iterable<({int start, int end})> metadataElements(
   // Only the item's own end tag can follow its children. A self-closing
   // item has no end tag, and no children.
   final itemEnd = item.lastIndexOf('</');
-  var open = item.indexOf('<', 1);
+  var open = _markup(item, item.indexOf('<', 1));
   while (open >= 0 && open < itemEnd) {
-    if (item.startsWith('<!--', open)) {
-      final close = item.indexOf('-->', open + 4);
-      if (close < 0) return;
-      open = item.indexOf('<', close + 3);
-      continue;
-    }
     var nameEnd = open + 1;
     while (nameEnd < itemEnd && !_endsName(item.codeUnitAt(nameEnd))) {
       nameEnd++;
     }
     if (!_isName(item, open + 1, nameEnd, name)) {
-      open = item.indexOf('<', nameEnd);
+      open = _markup(item, item.indexOf('<', nameEnd));
       continue;
     }
     final tagEnd = _startTagEnd(item, nameEnd);
     if (tagEnd < 0 || tagEnd >= itemEnd) return;
     var end = tagEnd + 1;
     if (item.codeUnitAt(tagEnd - 1) != _slash) {
-      final endTag = item.indexOf('</', end);
-      final close = endTag < itemEnd ? item.indexOf('>', endTag) : -1;
+      var endTag = _markup(item, item.indexOf('<', end));
+      while (endTag >= 0 &&
+          endTag < itemEnd &&
+          !item.startsWith('</', endTag)) {
+        endTag = _markup(item, item.indexOf('<', endTag + 1));
+      }
+      final close = endTag >= 0 && endTag < itemEnd
+          ? item.indexOf('>', endTag)
+          : -1;
       if (close < 0 || close >= itemEnd) return;
       end = close + 1;
     }
     yield (start: open, end: end);
-    open = item.indexOf('<', end);
+    open = _markup(item, item.indexOf('<', end));
   }
+}
+
+/// The first `<` in [text] at or after [open] that opens markup rather than
+/// a comment or CDATA section, or -1, also when one of those does not close.
+int _markup(String text, int open) {
+  var cursor = open;
+  while (cursor >= 0) {
+    final unparsedEnd = unparsedSectionEnd(text, cursor);
+    if (unparsedEnd == null) return cursor;
+    if (unparsedEnd < 0) return -1;
+    cursor = text.indexOf('<', unparsedEnd);
+  }
+  return -1;
 }
 
 /// [item] without the child elements that set the metadata [name], each
@@ -87,8 +101,8 @@ String withoutMetadataElements(String item, String name) {
 /// The bounds of each attribute of the MSBuild [item]'s start tag that sets
 /// the metadata [name], in order.
 ///
-/// [item] starts with its start tag, as [firstPackageReference] bounds one,
-/// and [readStartTag] reads that tag. [name] holds only ASCII letters, and
+/// [item] starts with its start tag, as the item finder bounds one, and
+/// [readStartTag] reads that tag. [name] holds only ASCII letters, and
 /// an attribute matches it in any case. An attribute runs from its name to
 /// its closing quote: white space may surround its `=`, and its value may
 /// take either quote, so a `>` inside the value does not end the tag.

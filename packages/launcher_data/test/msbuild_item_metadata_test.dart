@@ -58,6 +58,19 @@ void main() {
         expect(_elements(item, 'Version'), isEmpty, reason: item);
       }
     });
+
+    test('skips CDATA sections, and ends a child outside them', () {
+      // A CDATA section holds text, even text that reads as a child, a
+      // comment or an end tag.
+      const item =
+          '<PackageReference Include="X">\n'
+          '  <Description><![CDATA[<Version>1</Version> <!--]]></Description>\n'
+          '  <Version><![CDATA[2</Version>]]></Version>\n'
+          '</PackageReference>';
+      expect(_elements(item, 'Version'), [
+        '<Version><![CDATA[2</Version>]]></Version>',
+      ]);
+    });
   });
 
   group('withoutMetadataElements', () {
@@ -84,6 +97,8 @@ void main() {
         '<Version a="' * 20000,
         '<!--' * 20000,
         '<a' * 20000,
+        '<![CDATA[' * 20000,
+        '<Version><![CDATA[]]>' * 20000,
       ]) {
         final item =
             '<PackageReference Include="X">$children</PackageReference>';

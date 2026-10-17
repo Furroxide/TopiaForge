@@ -8,12 +8,11 @@
 /// times. `test/linear_text_scan_test.dart` checks each scanner against the
 /// pattern it replaced.
 ///
-/// [readStartTag], [startTags], [packageReferences] and
-/// [firstPackageReference] read start tags the way XML writes them instead:
-/// attributes in any order, white space around `=`, values in either quote,
-/// and comments skipped.
-/// `test/start_tag_scan_test.dart` checks [firstPackageReference] against a
-/// pattern written to that grammar.
+/// [readStartTag], [startTags] and [packageReferences] read start tags the
+/// way XML writes them instead: attributes in any order, white space around
+/// `=`, values in either quote, and comments and CDATA sections skipped.
+/// `test/start_tag_scan_test.dart` checks the package items they find
+/// against a pattern written to that grammar.
 library;
 
 const _quote = 0x22;
@@ -214,13 +213,28 @@ StartTag? readStartTag(String text, int start) {
   }
 }
 
+/// The end of the comment or CDATA section that opens at the `<` at [open]
+/// in [text], whose text is not markup, -1 when it does not close, which
+/// hides the rest of [text], or null when neither opens there.
+int? unparsedSectionEnd(String text, int open) {
+  for (final (opener, closer) in const [
+    ('<!--', '-->'),
+    ('<![CDATA[', ']]>'),
+  ]) {
+    if (!text.startsWith(opener, open)) continue;
+    final close = text.indexOf(closer, open + opener.length);
+    return close < 0 ? -1 : close + closer.length;
+  }
+  return null;
+}
+
 /// The start tags in [text] whose element name is [name], outside comments
-/// and in order, each with the offset of its `<`.
+/// and CDATA sections and in order, each with the offset of its `<`.
 ///
 /// Each is read by [readStartTag], and one it cannot read is skipped. With
 /// [anyCase], the name matches in any ASCII case, as MSBuild matches item
 /// types. [name] holds only ASCII letters. The search begins at [start],
-/// which must not be inside a comment.
+/// which must not be inside a comment or CDATA section.
 Iterable<({int start, StartTag tag})> startTags(
   String text,
   String name, {
@@ -229,11 +243,10 @@ Iterable<({int start, StartTag tag})> startTags(
 }) sync* {
   var open = text.indexOf('<', start);
   while (open >= 0) {
-    if (text.startsWith('<!--', open)) {
-      final close = text.indexOf('-->', open + 4);
-      // An unclosed comment hides the rest of the file.
-      if (close < 0) return;
-      open = text.indexOf('<', close + 3);
+    final unparsedEnd = unparsedSectionEnd(text, open);
+    if (unparsedEnd != null) {
+      if (unparsedEnd < 0) return;
+      open = text.indexOf('<', unparsedEnd);
       continue;
     }
     if (_isNameAt(text, open + 1, name, anyCase)) {
@@ -267,14 +280,14 @@ bool isAttributeNamed(String text, TagAttribute attribute, String name) =>
 }
 
 /// The `PackageReference` items in [text] from [start] on, outside comments
-/// and in order, each with its bounds and its start tag.
+/// and CDATA sections and in order, each with its bounds and its start tag.
 ///
 /// The items are the start tags that [startTags] finds, with their element
 /// name in any ASCII case. A self-closing item ends at its own `/>`. An
 /// element item ends at the first `</PackageReference>` after its start
-/// tag, in any case and outside comments, with optional white space before
-/// the `>`; one with no such end tag is skipped. [start] must not be inside
-/// a comment.
+/// tag, in any case and outside comments and CDATA sections, with optional
+/// white space before the `>`; one with no such end tag is skipped. [start]
+/// must not be inside a comment or CDATA section.
 Iterable<({int start, int end, StartTag tag})> packageReferences(
   String text, {
   int start = 0,
@@ -302,51 +315,17 @@ Iterable<({int start, int end, StartTag tag})> packageReferences(
   }
 }
 
-/// Whether the start [tag] in [text] has an attribute named exactly
-/// [attribute] whose value, without the white space at either end, is
-/// [package] in any ASCII case, as NuGet matches ids.
-///
-/// MSBuild requires the exact case of an item's `Include`, `Update` and
-/// `Remove` attributes, and reads a value that names several ids or a
-/// pattern as more than one, so neither names [package] here.
-bool namesPackage(
-  String text,
-  StartTag tag,
-  String attribute,
-  String package,
-) => tag.attributes.any((candidate) {
-  if (!isAttributeNamed(text, candidate, attribute)) return false;
-  final value = trimmedAttributeValue(text, candidate);
-  return value.end - value.start == package.length &&
-      _equalsIgnoringAsciiCase(text, value.start, package);
-});
-
-/// The bounds of the first `PackageReference` item for [package] in [text],
-/// outside comments, or null.
-///
-/// It is the first of [packageReferences] whose `Include` attribute
-/// [namesPackage]. `Include` may be any of the attributes. [package] is a
-/// NuGet id.
-({int start, int end})? firstPackageReference(String text, String package) {
-  for (final item in packageReferences(text)) {
-    if (namesPackage(text, item.tag, 'Include', package)) {
-      return (start: item.start, end: item.end);
-    }
-  }
-  return null;
-}
-
 /// The bounds of the first `</name>` end tag at or after [index] in
-/// [text], outside comments, or null.
+/// [text], outside comments and CDATA sections, or null.
 ///
 /// [name] matches in any ASCII case, and white space may come before `>`.
 ({int start, int end})? _endTag(String text, String name, int index) {
   var open = text.indexOf('<', index);
   while (open >= 0) {
-    if (text.startsWith('<!--', open)) {
-      final close = text.indexOf('-->', open + 4);
-      if (close < 0) return null;
-      open = text.indexOf('<', close + 3);
+    final unparsedEnd = unparsedSectionEnd(text, open);
+    if (unparsedEnd != null) {
+      if (unparsedEnd < 0) return null;
+      open = text.indexOf('<', unparsedEnd);
       continue;
     }
     if (text.startsWith('/', open + 1) &&

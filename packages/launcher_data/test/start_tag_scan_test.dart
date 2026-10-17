@@ -1,4 +1,5 @@
 import 'package:launcher_data/src/linear_text_scan.dart';
+import 'package:launcher_data/src/msbuild_item_spec.dart';
 import 'package:test/test.dart';
 
 import 'scan_agreement.dart';
@@ -14,14 +15,16 @@ String _anyCase(String literal) => [
 ].join();
 
 // An attribute as readStartTag reads one, and text outside markup with
-// each comment taken whole. A comment ends at its first `-->`, so a lazy
-// `<!--.*?-->` will not do: it stretches to a later `-->` when that lets
-// the rest match.
+// each comment and CDATA section taken whole. A comment ends at its first
+// `-->`, so a lazy `<!--.*?-->` will not do: it stretches to a later `-->`
+// when that lets the rest match.
 const _attribute = r'''\s+[^\s=/<>"']+\s*=\s*(?:"[^"<]*"|'[^'<]*')''';
-const _content = '(?:<!--(?:(?!-->).)*-->|(?!<!--).)';
+const _content =
+    r'(?:<!--(?:(?!-->).)*-->|<!\[CDATA\[(?:(?!\]\]>).)*\]\]>'
+    r'|(?!<!--|<!\[CDATA\[).)';
 
-/// What [firstPackageReference] finds for [package], written as a pattern
-/// whose group 1 is the item.
+/// What [firstPackageReference] finds for [package] alone in an `Include`,
+/// written as a pattern whose group 1 is the item.
 RegExp _packageReferencePattern(String package) {
   final element = _anyCase('PackageReference');
   final id = '\\s*${_anyCase(package)}\\s*';
@@ -39,6 +42,15 @@ RegExp _packageReferencePattern(String package) {
   return item == null
       ? null
       : (start: match!.end - item.length, end: match.end);
+}
+
+/// The bounds of the item that [firstPackageReference] finds for [package]
+/// in [text], which must include it alone, or null.
+({int start, int end})? _found(String text, String package) {
+  final found = firstPackageReference(text, package);
+  if (found == null) return null;
+  expect(found.shared, isFalse, reason: text);
+  return (start: found.start, end: found.end);
 }
 
 List<String> _attributes(String text, StartTag tag) => [
@@ -109,6 +121,16 @@ void main() {
       const text = '<Import Project="a" /><!-- <Import Project="b" />';
       expect(startTags(text, 'Import'), hasLength(1));
     });
+
+    test('skips CDATA sections, whose text is not markup', () {
+      const text =
+          '<![CDATA[<Import Project="a" /> <!-- ]]>'
+          '<Import Project="b" /><![CDATA[ <Import Project="c" />';
+      expect(
+        [for (final found in startTags(text, 'Import')) found.start],
+        [text.indexOf('<Import Project="b"')],
+      );
+    });
   });
 
   group('packageReferences', () {
@@ -125,30 +147,6 @@ void main() {
       ];
       expect(items, [closed, '$outer$inner$end', inner, closed]);
       expect(packageReferences(text, start: text.indexOf(inner)), hasLength(2));
-    });
-
-    test('names a package by one attribute and one id', () {
-      bool names(String tag, String attribute) =>
-          namesPackage(tag, readStartTag(tag, 0)!, attribute, _abstractions);
-      expect(
-        names('<PackageReference Update=" $_abstractions " />', 'Update'),
-        isTrue,
-      );
-      expect(
-        names(
-          '<PackageReference Remove="topiaforge.mods.abstractions"/>',
-          'Remove',
-        ),
-        isTrue,
-      );
-      for (final tag in const [
-        '<PackageReference update="$_abstractions" />',
-        '<PackageReference Update="$_abstractions;Other" />',
-        '<PackageReference Update="TopiaForge.Mods.*" />',
-        '<PackageReference Update="@(PackageReference)" />',
-      ]) {
-        expect(names(tag, 'Update'), isFalse, reason: tag);
-      }
     });
 
     test('finishes nested or unclosed items within the budget', () {
@@ -177,7 +175,7 @@ void main() {
         '<PackageReference Include="$_abstractions" Label="a > b"/>',
         '<packagereference Include="$_abstractions">\n</PACKAGEREFERENCE >',
       ]) {
-        expect(firstPackageReference('  $item\n<Other />', _abstractions), (
+        expect(_found('  $item\n<Other />', _abstractions), (
           start: 2,
           end: item.length + 2,
         ), reason: item);
@@ -190,14 +188,14 @@ void main() {
         '<PackageReference include="$_abstractions" />',
         '<PackageReference Update="$_abstractions" Version="1" />',
         '<PackageReference Include="TopiaForge-Mods-Abstractions" />',
-        '<PackageReference Include="$_abstractions;Other" />',
+        '<![CDATA[<PackageReference Include="$_abstractions" />]]>',
         '<PackageReferences Include="$_abstractions" />',
         '<PackageReference Include="$_abstractions" Label="<" />',
       ]) {
-        expect(firstPackageReference(text, _abstractions), isNull);
+        expect(_found(text, _abstractions), isNull, reason: text);
       }
       expect(
-        firstPackageReference(
+        _found(
           '<PackageReference Include="$_abstractions" />',
           'TopiaForge.Mods',
         ),
@@ -208,8 +206,8 @@ void main() {
     test('ends each item at its own `/>` or end tag', () {
       // The first scanner ran a self-closing item on to the next
       // `</PackageReference>`, and the one after it ended a start tag at a
-      // `>` inside a value, with the same effect. An end tag in a comment
-      // does not end the item.
+      // `>` inside a value, with the same effect. An end tag in a comment or
+      // a CDATA section does not end the item.
       const later =
           '\n<PackageReference Include="Other" Version="1">\n'
           '</PackageReference>';
@@ -220,8 +218,11 @@ void main() {
         '<PackageReference Include="$_abstractions">\n'
             '  <!-- </PackageReference> -->\n'
             '</PackageReference>',
+        '<PackageReference Include="$_abstractions">\n'
+            '  <Description><![CDATA[</PackageReference>]]></Description>\n'
+            '</PackageReference>',
       ]) {
-        expect(firstPackageReference('$item$later', _abstractions), (
+        expect(_found('$item$later', _abstractions), (
           start: 0,
           end: item.length,
         ), reason: item);
@@ -229,9 +230,13 @@ void main() {
     });
 
     test('agrees with the pattern on generated input', () {
+      // The two plain item starts are listed twice, so that enough samples
+      // hold an item next to the comments and CDATA sections.
       final samples = generatedSamples(const [
         '<PackageReference Include="$_abstractions"',
         '<PackageReference Include="TopiaForge.Mods"',
+        '<PackageReference Include="TopiaForge.Mods"',
+        '<PackageReference Include="$_abstractions"',
         "<packagereference Version='1' Include = ' topiaforge.mods.abstractions '",
         "<PACKAGEREFERENCE Label='a > b' Include='topiaforge.mods'",
         '<PackageReference',
@@ -251,13 +256,16 @@ void main() {
         '<!-- </PackageReference> -->',
         '<!--',
         '-->',
+        '<![CDATA[</PackageReference>]]>',
+        '<![CDATA[',
+        ']]>',
         'x',
       ], seed: 4);
       for (final package in const [_abstractions, 'TopiaForge.Mods']) {
         final pattern = _packageReferencePattern(package);
         expectAgreement(
           samples,
-          (text) => firstPackageReference(text, package),
+          (text) => _found(text, package),
           (text) => _itemBounds(pattern.firstMatch(text)),
         );
       }

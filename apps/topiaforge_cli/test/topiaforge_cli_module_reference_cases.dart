@@ -243,6 +243,43 @@ void _moduleReferenceCliTests(_CliTestHarness Function() currentHarness) {
     );
   });
 
+  test('mod add and remove refuse an item shared with other packages', () async {
+    // MSBuild includes each id of a list, and NuGet keeps the first item for
+    // a package, so a pinned copy left the listed version in effect. An edit
+    // to the list itself would change Newtonsoft.Json too.
+    const original =
+        '<Project Sdk="Microsoft.NET.Sdk">\n'
+        '  <ItemGroup>\n'
+        '    <PackageReference Include="TopiaForge.Mods.RobotKit;Newtonsoft.Json" Version="0.0.1" />\n'
+        '  </ItemGroup>\n'
+        '</Project>\n';
+    final harness = currentHarness();
+    final project = await _scaffoldModProject(harness, 't.shared', original);
+    final manifest = File(p.join(project.parent.path, 'topiaforge.mod.json'));
+    final scaffolded = manifest.readAsStringSync();
+
+    for (final verb in const ['add', 'remove']) {
+      final result = await harness.runCli([
+        'mod',
+        verb,
+        'robotkit',
+        '--project',
+        project.parent.path,
+      ]);
+
+      expect(result.exitCode, 1, reason: '${result.stdout}\n${result.stderr}');
+      expect(
+        '${result.stderr}',
+        allOf(
+          contains('TopiaForge.Mods.RobotKit cannot be'),
+          contains('Include="TopiaForge.Mods.RobotKit;Newtonsoft.Json"'),
+        ),
+      );
+      expect(project.readAsStringSync(), original);
+      expect(manifest.readAsStringSync(), scaffolded);
+    }
+  });
+
   test(
     'mod add and remove finish a malformed project within the budget',
     () async {
