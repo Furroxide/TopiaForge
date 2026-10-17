@@ -140,6 +140,8 @@ timings, compatibility decisions, outcomes, root exception chains, and recovery 
 receipts detect modified package bytes before execution. Startup recovery quarantines a mod only
 when the journal proves the process stopped inside that mod's load callback. Any other unclean exit
 uses one-shot safe mode without assigning blame; only an explicit clean-exit record skips recovery.
+Unity runs no frame once a quit starts destroying objects, so the manager holds the game's quit, for
+at most 10 seconds, while its teardown unloads every mod and writes that record.
 
 ## Development-loop diagnostics
 

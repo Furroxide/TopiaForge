@@ -49,6 +49,12 @@ namespace TopiaForge.ModManager
         private bool startupCompleted;
         private bool ready;
         private readonly PluginInitializationLifetime initializationLifetime = new PluginInitializationLifetime();
+        // Long enough for session, package and UI cleanup to drain over a few frames; short enough that a stuck
+        // cleanup cannot keep the game open after the player quits.
+        private static readonly TimeSpan QuitTeardownLimit = TimeSpan.FromSeconds(10);
+        private PluginQuitCoordinator? quitCoordinator;
+        private bool teardownFinished;
+        private bool quitDeadlineLogged;
 
         public ManagerPaths Paths => paths;
         public ManagerState State => state;
@@ -74,6 +80,13 @@ namespace TopiaForge.ModManager
                 });
             }
             catch (Exception error) { Logger.LogError("TopiaForge storage was rejected: " + error); return; }
+
+            // Unity runs no frame once a quit starts destroying objects, and cleanup begun in OnDestroy needs
+            // later frames, so a quit is held until the teardown it starts has finished.
+            quitCoordinator = new PluginQuitCoordinator(BeginPluginTeardown, () => teardownFinished,
+                () => startupStopwatch.Elapsed, QuitTeardownLimit,
+                error => LogCleanupFailure(error, "TopiaForge teardown could not start when the game quit."));
+            Application.wantsToQuit += OnWantsToQuit;
 
             try
             {
@@ -214,6 +227,13 @@ namespace TopiaForge.ModManager
         private void Update()
         {
             RequestProvisioningQuitOnUpdate();
+            if (quitCoordinator?.ShouldResumeQuit() == true)
+            {
+                LogQuitDeadline();
+                Application.Quit();
+                return;
+            }
+
             if (!ready)
             {
                 return;
@@ -234,6 +254,31 @@ namespace TopiaForge.ModManager
         private void OnDestroy()
         {
             LogProvisioningDestroyPhase();
+            Application.wantsToQuit -= OnWantsToQuit;
+            BeginPluginTeardown();
+        }
+
+        private bool OnWantsToQuit()
+        {
+            var proceed = quitCoordinator?.RequestQuit() ?? true;
+            if (proceed) LogQuitDeadline();
+            return proceed;
+        }
+
+        private void LogQuitDeadline()
+        {
+            if (quitDeadlineLogged || quitCoordinator?.DeadlinePassed != true) return;
+            quitDeadlineLogged = true;
+            try
+            {
+                managerLogger?.Warn("TopiaForge cleanup did not finish within " + QuitTeardownLimit.TotalSeconds
+                    + " seconds of quitting; the game quits without a clean-exit record, so the next start opens in safe mode.");
+            }
+            catch { /* The quit goes ahead even when logging has stopped. */ }
+        }
+
+        private void BeginPluginTeardown()
+        {
             if (!initializationLifetime.TryBeginTeardown()) return;
             ready = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;
@@ -320,6 +365,8 @@ namespace TopiaForge.ModManager
             {
                 // All independent log sinks are already tearing down.
             }
+
+            teardownFinished = true;
         }
 
         private void LogCleanupFailure(Exception exception, string message)

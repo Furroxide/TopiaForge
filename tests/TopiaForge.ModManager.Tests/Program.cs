@@ -462,6 +462,7 @@ namespace TopiaForge.ModManager.Tests
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
+                PluginQuitCoordinatorTests.Run(root);
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }
