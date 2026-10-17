@@ -153,7 +153,12 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     DeveloperModeToggled event,
     Emitter<LauncherState> emit,
   ) async {
-    await _repository.setDeveloperMode(event.enabled);
+    if (!await _savedSetting(
+      emit,
+      () => _repository.setDeveloperMode(event.enabled),
+    )) {
+      return;
+    }
     // Don't strand the user on a now-hidden tab.
     final section = !event.enabled && state.section == LauncherSection.developer
         ? LauncherSection.home
@@ -178,12 +183,20 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     LauncherUpdateSettingsChanged event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, 'Update settings could not be saved.')) {
+      return;
+    }
     final settings = state.launcherUpdates.copyWith(
       enabled: event.enabled,
       checkAutomatically: event.checkAutomatically,
       channel: event.channel,
     );
-    await _repository.saveLauncherUpdateSettings(settings);
+    if (!await _savedSetting(
+      emit,
+      () => _repository.saveLauncherUpdateSettings(settings),
+    )) {
+      return;
+    }
     emit(
       state.copyWith(
         launcherUpdates: settings,

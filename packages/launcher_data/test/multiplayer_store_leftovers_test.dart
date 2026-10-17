@@ -7,6 +7,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'held_file_support.dart';
 import 'multiplayer_network_support.dart';
 
 /// What interrupted writes leave beside the store's files: backups are put
@@ -143,8 +144,8 @@ void main() {
             MultiplayerStore.settingsFileName,
           ).renameSync(p.join(folder, 'settings.json.4242-1-1.bak'));
         }
-        final release = await _denySearching(
-          folder,
+        final release = await denySearching(
+          Directory(folder),
           inFolder(MultiplayerStore.knownHostsFileName),
         );
         if (release == null) return;
@@ -271,38 +272,6 @@ void main() {
       expect(names(), [MultiplayerStore.settingsFileName]);
     });
   });
-}
-
-/// Lets [folder] be listed but not searched until the test ends, as
-/// `chmod 444` does, and returns the release; null, after marking the test
-/// skipped, where that cannot be done or does not hold: on Windows, and for
-/// an account that searches any folder, as root does. [inside] is a file in
-/// the folder, which must then look missing.
-Future<Future<void> Function()?> _denySearching(
-  String folder,
-  File inside,
-) async {
-  if (Platform.isWindows) {
-    markTestSkipped('Folder modes are POSIX.');
-    return null;
-  }
-  final mode = (Directory(folder).statSync().mode & 0x1FF).toRadixString(8);
-  Future<void> release() async {
-    await Process.run('chmod', [mode, folder]);
-  }
-
-  if ((await Process.run('chmod', ['444', folder])).exitCode != 0) {
-    markTestSkipped('The folder\'s mode could not be changed.');
-    return null;
-  }
-  addTearDown(release);
-  if (FileSystemEntity.typeSync(inside.path, followLinks: false) !=
-      FileSystemEntityType.notFound) {
-    await release();
-    markTestSkipped('This account can search any folder.');
-    return null;
-  }
-  return release;
 }
 
 /// The store's folder as one that cannot be listed just now, as when its

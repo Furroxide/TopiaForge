@@ -1,9 +1,11 @@
 /// Makes a file or a folder behave the way another program, or a folder's
-/// permissions, can make it behave, for tests of what the launcher does then.
+/// permissions, can make it behave, for tests of what the launcher and its
+/// stores do then.
 ///
-/// Each helper returns its release, which also runs when the test ends, or
-/// null after marking the test skipped where the condition cannot be made or
-/// does not hold, as for an account such as root that bypasses permissions.
+/// Each helper returns its release, which the test may also call itself and
+/// which runs when the test ends, or null after marking the test skipped
+/// where the condition cannot be made or does not hold, as for an account
+/// such as root that bypasses permissions.
 library;
 
 import 'dart:async';
@@ -12,6 +14,16 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+
+/// Makes [file] unreadable, the way another program can hold it: on Windows
+/// a child process opens it with delete sharing only, so it can still be
+/// replaced but not read; elsewhere its mode denies reading.
+Future<Future<void> Function()?> holdUnreadable(File file) => _releasedAtEnd(
+  Platform.isWindows
+      ? _holdOnWindows(file, access: 'ReadWrite', share: 'Delete')
+      : _denyReading(file),
+  'This account can read any file.',
+);
 
 /// Keeps [file] where it is, the way another program that holds it open
 /// without delete sharing does: it can still be read, but neither moved nor
@@ -22,7 +34,9 @@ import 'package:test/test.dart';
 /// folder in place too, so there a test cannot show that the others stay
 /// free to move or delete.
 Future<Future<void> Function()?> holdInPlace(File file) => _releasedAtEnd(
-  Platform.isWindows ? _openWithReadSharing(file) : _freezeFolder(file),
+  Platform.isWindows
+      ? _holdOnWindows(file, access: 'Read', share: 'Read')
+      : _freezeFolder(file),
   'This account can move any file.',
 );
 
@@ -79,16 +93,17 @@ Future<Future<void> Function()?> _releasedAtEnd(
   return once;
 }
 
-/// Opens the file named by `TOPIAFORGE_TEST_HOLD` for reading with read
-/// sharing only, says so, and keeps it open until the file named by
-/// `TOPIAFORGE_TEST_RELEASE` appears.
+/// Opens the file named by `TOPIAFORGE_TEST_HOLD` with the access and sharing
+/// named by `TOPIAFORGE_TEST_ACCESS` and `TOPIAFORGE_TEST_SHARE`, says so,
+/// and keeps it open until the file named by `TOPIAFORGE_TEST_RELEASE`
+/// appears.
 const _holder = r'''
 $ErrorActionPreference = 'Stop'
 $file = [IO.File]::Open(
   $env:TOPIAFORGE_TEST_HOLD,
   [IO.FileMode]::Open,
-  [IO.FileAccess]::Read,
-  [IO.FileShare]::Read)
+  [IO.FileAccess]$env:TOPIAFORGE_TEST_ACCESS,
+  [IO.FileShare]$env:TOPIAFORGE_TEST_SHARE)
 try {
   [Console]::Out.WriteLine('held')
   [Console]::Out.Flush()
@@ -99,7 +114,11 @@ try {
 finally { $file.Dispose() }
 ''';
 
-Future<Future<void> Function()?> _openWithReadSharing(File file) async {
+Future<Future<void> Function()?> _holdOnWindows(
+  File file, {
+  required String access,
+  required String share,
+}) async {
   final flags = Directory.systemTemp.createTempSync('tf-held-');
   final releaseFlag = File(p.join(flags.path, 'release'));
   final process = await Process.start(
@@ -113,6 +132,8 @@ Future<Future<void> Function()?> _openWithReadSharing(File file) async {
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', _holder],
     environment: {
       'TOPIAFORGE_TEST_HOLD': file.path,
+      'TOPIAFORGE_TEST_ACCESS': access,
+      'TOPIAFORGE_TEST_SHARE': share,
       'TOPIAFORGE_TEST_RELEASE': releaseFlag.path,
     },
   );
@@ -143,6 +164,25 @@ Future<Future<void> Function()?> _openWithReadSharing(File file) async {
     throw StateError('The file could not be held: ${await errors}');
   }
   return release;
+}
+
+/// Denies reading [file]; null, with its mode put back, where it can still
+/// be read, as for root.
+Future<Future<void> Function()?> _denyReading(File file) async {
+  if ((await Process.run('chmod', ['000', file.path])).exitCode != 0) {
+    return null;
+  }
+  Future<void> restore() async {
+    await Process.run('chmod', ['600', file.path]);
+  }
+
+  try {
+    await file.readAsBytes();
+  } on FileSystemException {
+    return restore;
+  }
+  await restore();
+  return null;
 }
 
 /// Denies changes in [file]'s folder; null, with the mode put back, where

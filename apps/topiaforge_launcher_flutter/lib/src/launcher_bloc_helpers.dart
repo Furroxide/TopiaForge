@@ -59,7 +59,48 @@ extension LauncherBlocHelpers on LauncherBloc {
       clearSelectedMod: selected == null,
       developerMode: snapshot.developerMode,
       clearError: true,
+      snapshotLoaded: true,
     );
+  }
+
+  /// Whether a save may be built from the state's profiles, package sources
+  /// or update settings. Each such save replaces what is on disk, so until a
+  /// snapshot has loaded it is refused: one built from the stand-ins would
+  /// replace the player's own.
+  bool _canSaveFromState(Emitter<LauncherState> emit, String statusMessage) {
+    if (state.snapshotLoaded) return true;
+    emit(
+      state.copyWith(
+        isBusy: false,
+        statusMessage: statusMessage,
+        statusSeverity: IssueSeverity.error,
+        errorMessage:
+            'The launcher state has not loaded, so nothing was changed. '
+            'Refresh it, then try again.',
+      ),
+    );
+    return false;
+  }
+
+  /// Runs [save] and says whether it succeeded. A failure shows its message,
+  /// as when the settings file cannot be read just now, and changes nothing.
+  Future<bool> _savedSetting(
+    Emitter<LauncherState> emit,
+    Future<void> Function() save,
+  ) async {
+    try {
+      await save();
+      return true;
+    } on Object catch (error) {
+      emit(
+        state.copyWith(
+          statusMessage: 'Action failed.',
+          statusSeverity: IssueSeverity.error,
+          errorMessage: error.toString(),
+        ),
+      );
+      return false;
+    }
   }
 
   Future<void> _guard(

@@ -55,7 +55,7 @@ final class _LauncherFileUnreadable extends FileSystemException {
 /// The desktop launcher and the command line share these files, so the file
 /// can come back while this looks, when a save in the other process ends or
 /// the other process puts the same backup back. A file that is there is read
-/// as it is, and no backup is ever moved over it.
+/// as it is, and no backup is moved over it: see [_putBack].
 Future<_AtomicFileState> _recoverAtomicBackupIfMissing(
   File file, {
   required String label,
@@ -77,11 +77,11 @@ Future<_AtomicFileState> _recoverAtomicBackupIfMissing(
   });
   for (final backup in backups) {
     if (_isThere(file)) return _AtomicFileState.present;
-    try {
-      await backup.file.rename(file.path);
-    } on FileSystemException {
-      // One that vanished meanwhile is passed over. One still there holds
-      // the latest version, and nothing older may stand in for it.
+    if (!await _putBack(backup.file, file)) {
+      // A file that came back meanwhile is read as it is, and a backup that
+      // vanished meanwhile is passed over. One still there holds the latest
+      // version, and nothing older may stand in for it.
+      if (_isThere(file)) return _AtomicFileState.present;
       if (_isThere(backup.file)) {
         throw _LauncherFileUnreadable.heldBackup(label);
       }
@@ -93,6 +93,27 @@ Future<_AtomicFileState> _recoverAtomicBackupIfMissing(
     return _AtomicFileState.present;
   }
   return _AtomicFileState.missing;
+}
+
+/// Moves [backup] to [file]'s name, and says whether it moved.
+///
+/// On Windows a save moves the file aside whenever it cannot replace it in
+/// one move, as while another program reads it, so another process can find
+/// the file missing and that save's backup beside it just before the save
+/// moves the new file in. There the move refuses, in the same step, to
+/// replace a file that came back. `rename(2)` cannot refuse, but there a save
+/// never leaves the file missing: its first move replaces the file in one
+/// step, and whatever stops that move stops the move aside as well.
+Future<bool> _putBack(File backup, File file) async {
+  if (Platform.isWindows) {
+    return moveFileWithoutReplacingOnWindows(backup.path, file.path);
+  }
+  try {
+    await backup.rename(file.path);
+    return true;
+  } on FileSystemException {
+    return false;
+  }
 }
 
 bool _isThere(File file) =>
