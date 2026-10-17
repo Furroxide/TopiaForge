@@ -95,7 +95,7 @@ namespace TopiaForge.Multiplayer.Network
             if (!status.StartsWith("TFD1 200 ", StringComparison.Ordinal))
             {
                 return status.StartsWith("TFD1 ", StringComparison.Ordinal) && status.Length == 8
-                    ? new DescriptorFetch(DescriptorFetchOutcome.Refused, null, "The host refused the request (" + status.Substring(5) + ").")
+                    ? new DescriptorFetch(DescriptorFetchOutcome.Refused, null, RefusalDetail(status.Substring(5)))
                     : Invalid("The host's answer did not start with a status line.");
             }
 
@@ -121,5 +121,20 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         private static DescriptorFetch Invalid(string detail) => new DescriptorFetch(DescriptorFetchOutcome.Invalid, null, detail);
+
+        /// <summary>Says why the host refused, in this game's own words: the host's status is matched, never repeated.</summary>
+        private static string RefusalDetail(string status)
+        {
+            switch (status)
+            {
+                case "404":
+                    return "The host is not serving a session.";
+                case "429":
+                case "503":
+                    return "The host is busy; try again shortly.";
+                default:
+                    return "The host refused the request.";
+            }
+        }
     }
 }

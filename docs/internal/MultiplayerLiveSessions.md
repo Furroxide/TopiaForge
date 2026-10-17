@@ -420,29 +420,31 @@ the identity, bans and known hosts they share.
   through the engine's `AfterClientSessionEnds` hook (`MultiplayerSessionEngine.md`, "Role changes"), with a fresh
   solo session id.
 - **Failures** are a `LiveFailure` and a sentence for the player. Neither ever names an address. A host that cannot
-  start reports why (`PortInUse`, `IdentityUnavailable`, …) and may simply be started again.
+  start reports why (`PortInUse`, `IdentityUnavailable`, `ContentUnreadable`, …) and may simply be started again.
 
 ## 18. Hosting
 
 `LiveHost` turns the running solo session into a listen host. The engine keeps the same session throughout: hosting
 adds links to it, and stopping closes them while the host plays on.
 
-1. **Binding.** The game socket binds UDP 27250, or any free port when that is taken and the settings allow it. The
+1. **Packages.** The packages the descriptor lists are read from the runtime first. A host whose packages cannot be
+   read fails as `ContentUnreadable` before anything binds, rather than serve a descriptor that lists none.
+2. **Binding.** The game socket binds UDP 27250, or any free port when that is taken and the settings allow it. The
    descriptor endpoint then binds TCP on the same port number; if that number is taken, the pair is tried again, four
    times at most.
-2. **Relay-only.** Unless the host allowed direct play, its transport is relay-only and its descriptor endpoint serves
+3. **Relay-only.** Unless the host allowed direct play, its transport is relay-only and its descriptor endpoint serves
    only LAN addresses, so nobody beyond the local network learns its address. Until the relay exists (WS7) such a
    host is reachable on the LAN only.
-3. **Slots.** The transport holds twice as many connections as players, four at least. A link that has not asked to
+4. **Slots.** The transport holds twice as many connections as players, four at least. A link that has not asked to
    join within 10 seconds is closed, so peers that connect and say nothing cannot keep players out on keepalives
    alone. One address holds at most four links, enough for a household behind one router; paths whose source cannot
    be told apart, such as a relay's, are not capped.
-4. **Serving.** The host signs its descriptor (packages from the runtime, `hostServesPackages` false) and serves it.
+5. **Serving.** The host signs its descriptor (the packages it read, `hostServesPackages` false) and serves it.
    It sets the engine's capacity and join policy, and keeps its session info current as players come and go. A host
    with LAN or public visibility also announces itself on the LAN; an invite-only host does not.
-5. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
+6. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
    (section 19) and ends their session.
-6. **Stopping** ends every player's session with `HostEnded`, gives the closing messages 250 ms to leave, and stops
+7. **Stopping** ends every player's session with `HostEnded`, gives the closing messages 250 ms to leave, and stops
    the network, and the password key is wiped. The host plays on alone in the same session. A network that gives up
    on its own (section 11) stops the host the same way, reported as `NetworkStopped`, and the player may host again.
 
@@ -484,11 +486,11 @@ host is up, so any failure before that leaves the player's own session untouched
 | Phase | What happens |
 | --- | --- |
 | Resolving | The target becomes a path and a verified descriptor, off the main thread. A LAN target comes from the browser. A typed address is looked up, IPv4 first, and trusted on first use (section 8). |
-| Checking | The game build, the protocol's major version, the path against the player's privacy choice, and the content must all agree. |
+| Checking | The game build, the protocol's major version, the path against the player's privacy choice, and the content must all agree. Packages of this game's own that cannot be read end the join as `ContentUnreadable`. |
 | AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
 | PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |
 | Connecting | The transport connects with the descriptor's transport key pinned. Once the link is up, the engine switches to the host's session and sends the join with a proof bound to this link. |
-| Synchronizing, InSession | The engine joins and plays. The host has two minutes to admit the player and send the session. A link lost before the first Ready ends the join, back in solo play. |
+| Synchronizing, InSession | The engine joins and plays. The host has two minutes to admit the player and send the session, and two more for each replacement that asks for a new snapshot; after that, the runtime's readiness holds may keep the player waiting a minute without progress and five minutes from the first hold, and the player waits seven minutes in all, however often the host replaces the session, until it has been Ready. A session the host replaces later is synchronized again within the same bounds. A link lost before the first Ready ends the join, back in solo play. |
 | Reconnecting | A link lost in session is retried every two seconds for 30 seconds, each time with a new proof for the new link; a retry whose link drops before Ready keeps the same window. The host keeps the player's place for its grace period, so the player comes back as the same participant. |
 | Ended | The join failed or the session ended; the process is in solo play again. |
 
@@ -508,6 +510,9 @@ host is up, so any failure before that leaves the player's own session untouched
   host's admission report, a host that never answered (a timeout, never mistaken for a failed proof), a network that
   could not open, or the connection lost after the reconnect window. The password key is wiped however the join
   ends, a key still being derived included.
+- **The host's words are kept apart.** `Detail` is always this game's own text; what the host said, such as a kick
+  message, is `HostMessage`, which may hold anything and is never logged. A refused descriptor request is described
+  from its status, never by repeating what the host sent. The developer switch logs the failure's name only.
 
 ## 21. Persistence
 
@@ -549,6 +554,10 @@ These choices differ from the plan:
 
 - **Resume tokens** are replaced by identity-keyed resume. The host's engine already recognises a returning transport
   key within its grace period, and that key is proved by the handshake, so a token would add nothing.
-- **Content** goes through `ILiveSessionContent`. Until WS3 supplies the runtime's content descriptors,
-  `ProviderOnlyContent` stands in: no packages, nothing presented, everyone admitted, always ready.
-- **Driving it.** The developer switch stands in for the interface until WS5.
+- **Content** goes through `ILiveSessionContent`. `RuntimeContent` implements it over the runtime attached through the
+  internal control: the host's packages from the runtime's content descriptors, admission through the runtime's
+  planner, and the joining player's own check. Without an attached runtime nothing is announced and nobody is admitted,
+  and packages the runtime cannot read stop hosting and joining. [MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md)
+  records it.
+- **Driving it.** The developer switch stands in for the interface until WS5, which drives live sessions through the
+  internal control instead.

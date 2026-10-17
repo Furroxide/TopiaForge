@@ -26,7 +26,8 @@ namespace TopiaForge.Multiplayer
         private HostPhase lastHostPhase;
         private JoinPhase? lastJoinPhase;
 
-        private DeveloperSessions(LiveSessions live, IModLogger logger, string? hostName, JoinTarget? joinTarget, string displayName, int port)
+        /// <summary>Drives live sessions as the developer variables ask; <see cref="Create"/> reads them, and tests pass them.</summary>
+        internal DeveloperSessions(LiveSessions live, IModLogger logger, string? hostName, JoinTarget? joinTarget, string displayName, int port)
         {
             this.live = live;
             this.logger = logger;
@@ -108,7 +109,9 @@ namespace TopiaForge.Multiplayer
             if (join != null && join.Phase != lastJoinPhase)
             {
                 lastJoinPhase = join.Phase;
-                var detail = join.Phase == JoinPhase.Ended ? " (" + join.Failure + (join.Detail.Length > 0 ? ": " + join.Detail : string.Empty) + ")" : string.Empty;
+
+                // The failure's name only: a kick's or a refusal's words are the host's own and may hold anything.
+                var detail = join.Phase == JoinPhase.Ended ? " (" + join.Failure + ")" : string.Empty;
                 logger.Info("Multiplayer: the join is " + join.Phase + detail + ".");
             }
         }

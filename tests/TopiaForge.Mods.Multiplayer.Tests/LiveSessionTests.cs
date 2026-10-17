@@ -108,8 +108,8 @@ internal static class LiveSessionTests
 
         var firstId = rig.Host.Snapshot.Participants.Single(participant => participant.DisplayName == "First").Id;
         That(rig.Host.Live!.Host!.Kick(firstId, "Mind your manners."), "the host kicks a player");
-        That(rig.Run(() => joins[0].Phase == JoinPhase.Ended) && joins[0].Failure == LiveFailure.Kicked && joins[0].Detail == "Mind your manners." &&
-             first.Snapshot.IsSoloHost(), "the kicked player hears why and returns to solo play");
+        That(rig.Run(() => joins[0].Phase == JoinPhase.Ended) && joins[0].Failure == LiveFailure.Kicked && joins[0].HostMessage == "Mind your manners." &&
+             first.Snapshot.IsSoloHost(), "the kicked player hears why, in the host's words, and returns to solo play");
 
         var secondId = rig.Host.Snapshot.Participants.Single(participant => participant.DisplayName == "Second").Id;
         That(rig.Host.Live.Ban(secondId, "Second"), "the host bans a player");

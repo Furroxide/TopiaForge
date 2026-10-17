@@ -49,6 +49,37 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets the path state the host last reported in the participant list.</summary>
         internal EngineLinkState ReportedLinkState { get; set; } = EngineLinkState.Open;
 
+        /// <summary>Gets or sets the join generation this connection was accepted with, stamped on its system-channel traffic.</summary>
+        internal ulong JoinGeneration { get; set; }
+
+        /// <summary>Gets or sets the generation the system channels report for this connection's streams; it changes on every restart.</summary>
+        internal ulong StreamGeneration { get; set; }
+
+        /// <summary>Gets this connection's system-channel streams.</summary>
+        internal SystemStreamSet Streams { get; } = new SystemStreamSet();
+
+        /// <summary>Gets or sets the rate at which the player may send system messages, enforced as they arrive.</summary>
+        internal TokenBucket? SystemIngress { get; set; }
+
+        /// <summary>Gets or sets the allowance within which the host counts the player's stale system messages.</summary>
+        internal TokenBucket? StaleSystemIngress { get; set; }
+
+        /// <summary>
+        /// Gets or sets when the host began waiting for this connection to acknowledge a snapshot and become Ready: its
+        /// acceptance, or the replacement that took it out of Ready, or the player's report that this replacement reached
+        /// it. A replacement while the player is still joining starts nothing over.
+        /// </summary>
+        internal long SnapshotSentAtMicros { get; set; }
+
+        /// <summary>
+        /// Gets or sets the epoch of the replacement that took this player out of Ready, while the host still waits for the
+        /// player's report that it arrived; zero otherwise.
+        /// </summary>
+        internal ulong AwaitedReceiptEpoch { get; set; }
+
+        /// <summary>Gets or sets when the player last acknowledged a snapshot and became Ready.</summary>
+        internal long ReadyAtMicros { get; set; }
+
         internal bool IsJoined => Phase == HostConnectionPhase.Accepted || Phase == HostConnectionPhase.Ready;
 
         /// <summary>Gets or sets the speakers this client asked not to have relayed, by participant id.</summary>
@@ -57,7 +88,10 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets whether this client asked for no voice at all.</summary>
         internal bool VoiceMuteAll { get; set; }
 
-        internal bool HasOutbound => Queue.Count > 0 || CommitNeeded || CloseAfterFlush;
+        internal bool HasOutbound => Queue.Count > 0 || CommitNeeded || CloseAfterFlush || Streams.CreditsDue;
+
+        /// <summary>Starts every system-channel stream again, as a session replacement does.</summary>
+        internal void RestartStreams() => Streams.Restart();
 
         internal bool HasPendingDeltas => PendingStates.Count > 0 || PendingObjects.Count > 0;
 

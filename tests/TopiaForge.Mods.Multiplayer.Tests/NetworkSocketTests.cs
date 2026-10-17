@@ -79,6 +79,9 @@ internal static class NetworkSocketTests
         // so the network thread counts it against its turn. The next one still arrives.
         using (var raw = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
         {
+            // Bound to loopback first: a socket that sends unbound binds every interface, which raises a firewall prompt.
+            raw.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            That(raw.LocalEndPoint is IPEndPoint bound && bound.Address.Equals(IPAddress.Loopback), "the raw sender listens on loopback only");
             raw.SendTo(new byte[1_500], new IPEndPoint(IPAddress.Loopback, second.LocalPort));
             raw.SendTo(new byte[] { 5 }, new IPEndPoint(IPAddress.Loopback, second.LocalPort));
         }

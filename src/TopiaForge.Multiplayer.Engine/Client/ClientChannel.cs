@@ -36,6 +36,24 @@ namespace TopiaForge.Multiplayer.Engine
         internal SnapshotStaging? Staging { get; set; }
         internal bool SnapshotCompleted { get; set; }
 
+        /// <summary>Gets or sets whether the snapshot is complete but a readiness hold keeps the client short of Ready.</summary>
+        internal bool ReadinessHeld { get; set; }
+
+        /// <summary>Gets or sets whether the host must hear that its replacement reached this player.</summary>
+        internal bool ReplacementReceivedPending { get; set; }
+
+        /// <summary>Gets the system messages queued for the host since the last flush.</summary>
+        internal List<SystemWireMessage> SystemOutbox { get; } = new List<SystemWireMessage>();
+
+        /// <summary>Gets or sets the join generation the host accepted this connection with.</summary>
+        internal ulong JoinGeneration { get; set; }
+
+        /// <summary>Gets this connection's system-channel streams with the host.</summary>
+        internal SystemStreamSet Streams { get; } = new SystemStreamSet();
+
+        /// <summary>Gets or sets the rate this player keeps to, so its host never has to refuse it.</summary>
+        internal TokenBucket? SystemSendRate { get; set; }
+
         /// <summary>
         /// Gets or sets whether a host flush has started arriving without its closing <c>Commit</c>. Confirmed values
         /// are then only partly updated, so reconciliation waits for the <c>Commit</c>.
@@ -45,7 +63,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets or sets whether the local listener mute set must be sent to the host.</summary>
         internal bool VoiceMutesPending { get; set; }
 
-        internal bool HasOutbound => JoinPending || ReadyAckPending || Unsent.Count > 0 || PendingClockReply.HasValue || VoiceMutesPending;
+        internal bool HasOutbound =>
+            JoinPending || ReadyAckPending || ReplacementReceivedPending || Unsent.Count > 0 || PendingClockReply.HasValue || VoiceMutesPending ||
+            SystemOutbox.Count > 0 || Streams.CreditsDue;
+
+        /// <summary>Starts every system-channel stream again, as a session replacement does.</summary>
+        internal void RestartStreams() => Streams.Restart();
     }
 
     /// <summary>Canonical values received between <c>SnapshotBegin</c> and <c>SnapshotEnd</c>.</summary>

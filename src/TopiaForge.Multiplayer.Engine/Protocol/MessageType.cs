@@ -30,6 +30,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Reserved for runtime system channels (world replication, avatars, chat, scene follow).</summary>
         internal const byte SystemMessage = 0x20;
 
+        /// <summary>A receiver's report of how much of a system channel's stream its owner consumed, which opens the sender's window.</summary>
+        internal const byte SystemCredit = 0x21;
+
         /// <summary>Host to client: speaker indexes, whose they are, and who the host muted. Voice itself uses the Voice channel.</summary>
         internal const byte VoiceRoster = 0x30;
 
@@ -38,6 +41,12 @@ namespace TopiaForge.Multiplayer.Engine
 
         internal const byte ClockSync = 0x40;
         internal const byte ClockSyncReply = 0x41;
+
+        /// <summary>
+        /// Client to host: a session replacement reached this player (the new epoch). A host counts its wait for the new
+        /// acknowledgement from here, since the replacement can wait behind a full link. Ignorable, so an older host skips it.
+        /// </summary>
+        internal const byte ReplacementReceived = 0x42;
 
         internal const byte LastCritical = 0x3F;
         internal const byte LastIgnorable = 0x7F;

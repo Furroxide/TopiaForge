@@ -66,6 +66,17 @@ namespace TopiaForge.Multiplayer.Network
             lock (gate) return entries.RemoveAll(entry => entry.Identity == identity) > 0;
         }
 
+        /// <summary>Gets a copy of the bans, oldest first.</summary>
+        internal IReadOnlyList<BanRecord> Records()
+        {
+            lock (gate)
+            {
+                var copy = new BanRecord[entries.Count];
+                for (var index = 0; index < copy.Length; index++) copy[index] = new BanRecord(entries[index].Identity, entries[index].Name, entries[index].BannedAt);
+                return copy;
+            }
+        }
+
         internal byte[] Serialize()
         {
             var items = new List<JsonNode>();
@@ -120,6 +131,21 @@ namespace TopiaForge.Multiplayer.Network
             internal string Name { get; }
             internal long BannedAt { get; }
         }
+    }
+
+    /// <summary>One ban: the banned transport key in hexadecimal, the name it had, and when.</summary>
+    internal readonly struct BanRecord
+    {
+        internal BanRecord(string identity, string name, long bannedAt)
+        {
+            Identity = identity;
+            Name = name;
+            BannedAt = bannedAt;
+        }
+
+        internal string Identity { get; }
+        internal string Name { get; }
+        internal long BannedAt { get; }
     }
 
     /// <summary>
@@ -223,6 +249,11 @@ namespace TopiaForge.Multiplayer.Network
             var verdict = content.Admit(clientContent);
             if (verdict != null && verdict.IsAdmitted) return JoinDecision.Accept();
             var problems = verdict?.Problems ?? Array.Empty<string>();
+            if (verdict?.Code == AdmissionCode.NotReady)
+            {
+                return JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "The host is not ready for players yet.", AdmissionReport.Encode(AdmissionCode.NotReady, problems));
+            }
+
             return verdict?.Code == AdmissionCode.Protocol
                 ? JoinDecision.Reject(MultiplayerSessionEndReason.ProtocolMismatch, "Your version of TopiaForge cannot join this session.", AdmissionReport.Encode(AdmissionCode.Protocol, problems))
                 : JoinDecision.Reject(MultiplayerSessionEndReason.AdmissionRejected, "Your packages do not match this session's.", AdmissionReport.Encode(AdmissionCode.Content, problems));

@@ -191,7 +191,13 @@ namespace TopiaForge.Multiplayer.Network
         IdentityUnavailable = 19,
 
         /// <summary>The host's network stopped after too many failures in a row, ending every player's session.</summary>
-        NetworkStopped = 20
+        NetworkStopped = 20,
+
+        /// <summary>
+        /// This game's packages could not be read, as when another program holds a file of one open, so hosting or the join
+        /// stopped before anything connected. It has the internal control's number, whose 21 is a failure of its own.
+        /// </summary>
+        ContentUnreadable = 22
     }
 
     /// <summary>What a content check found missing or different before a join, for the player to see.</summary>
@@ -199,14 +205,19 @@ namespace TopiaForge.Multiplayer.Network
     {
         internal static readonly ContentCheck Ready = new ContentCheck(Array.Empty<string>());
 
-        internal ContentCheck(IReadOnlyList<string> problems)
+        internal ContentCheck(IReadOnlyList<string> problems, bool unreadable = false)
         {
             Problems = problems ?? throw new ArgumentNullException(nameof(problems));
+            if (unreadable && problems.Count == 0) throw new ArgumentException("An unreadable check says why.", nameof(problems));
+            IsUnreadable = unreadable;
         }
 
         /// <summary>Gets one line per package that is missing or differs; empty when the player can join.</summary>
         internal IReadOnlyList<string> Problems { get; }
 
         internal bool IsReady => Problems.Count == 0;
+
+        /// <summary>Gets whether this game's own packages could not be read, so nothing could be compared.</summary>
+        internal bool IsUnreadable { get; }
     }
 }

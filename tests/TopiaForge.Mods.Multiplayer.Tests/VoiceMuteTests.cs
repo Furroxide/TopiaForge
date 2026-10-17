@@ -12,8 +12,9 @@ internal static class VoiceMuteTests
 {
     internal static void JoinAcceptedSaysWhetherTheHostKeptTheRecord()
     {
-        // Session "s", seed 7, epoch 1, participant "p1", host "h", tick 5, 20 Hz, next sequence 3, record kept, no report.
-        var vector = new byte[] { 0x02, 0x0F, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00 };
+        // Session "s", seed 7, epoch 1, participant "p1", host "h", tick 5, 20 Hz, next sequence 3, record kept, no report,
+        // join generation 0.
+        var vector = new byte[] { 0x02, 0x10, 0x01, 0x73, 0x07, 0x01, 0x02, 0x70, 0x31, 0x01, 0x01, 0x68, 0x05, 0x14, 0x03, 0x01, 0x00, 0x00 };
         var frame = new ProtocolWriter();
         var body = new ProtocolWriter();
         JoinMessages.WriteJoinAccepted(frame, body, new JoinAcceptedMessage

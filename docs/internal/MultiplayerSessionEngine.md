@@ -206,7 +206,7 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | Type | Direction | Message |
 | --- | --- | --- |
 | `0x01` | client → host | `JoinRequest`: protocol version, display name, registered contracts, opaque content descriptor |
-| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report |
+| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report, join generation |
 | `0x03` | host → client | `JoinRejected`: end reason, message, opaque admission report |
 | `0x04`, `0x05` | host → client | `SnapshotBegin` (epoch), `SnapshotEnd` |
 | `0x06` | client → host | `ReadyAck` (epoch) |
@@ -220,10 +220,12 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | `0x14` | host → client | `StateDelta` |
 | `0x15`–`0x17` | host → client | `ObjectSpawned`, `ObjectChanged`, `ObjectDespawned` |
 | `0x18` | host → client | `PresentationEvent` |
-| `0x20` | both | `SystemMessage`, reserved for WS3 |
+| `0x20` | both | `SystemMessage`: epoch, join generation, channel, payload, for the runtime's own channels (see Runtime support) |
+| `0x21` | both | `SystemCredit`: epoch, join generation, channel, messages and bytes the receiver's owner consumed |
 | `0x30` | host → client | `VoiceRoster`: each speaker index, its participant, and whether the host muted it |
 | `0x31` | client → host | `VoiceMutes`: whom the client's player does not want to hear, or everyone |
 | `0x40`, `0x41` | both | `ClockSync`, `ClockSyncReply` |
+| `0x42` | client → host | `ReplacementReceived` (epoch): a session replacement reached the player (see Runtime support) |
 
 Submissions carry the session epoch. The host answers a submission from an earlier epoch, or one whose sequence does
 not increase, with `Conflict`. Malformed frames, bound violations and unknown critical types end that connection with
@@ -263,3 +265,49 @@ Behaviour that changes on purpose:
   the new ones spawn.
 - **Stable node identity.** `MultiplayerTestNode.ParticipantId` reports the id the rig assigned, because a client
   learns its participant only when the host accepts it.
+
+## Runtime support
+
+TopiaForge's runtime drives the provider's engine through the internal SPI
+([MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md)). The engine's part of it lives in
+`Core/SessionEngine.System.cs`, `Core/SessionEngine.Runtime.cs` and `System/`:
+
+- **System channels.** `OpenSystemChannel` opens one of the runtime's channels, one owner each. `SystemMessage` carries
+  the epoch, the connection's join generation, the channel and a payload of at most 32 KiB, reliably and in order with
+  the session's traffic. A host sends to joined connections, players still synchronizing included; a client sends to its
+  host, and hears a host without a player of its own as `InternalSystemMessage.HeadlessHostSender`. Unknown kinds are
+  left unclaimed and credited as taken, never a violation, so a minor version can add one; an oversized payload, or a
+  system message before joining, is one. Sending inside a transaction is refused.
+- **Streams and generations.** The host gives every accepted connection a join generation in `JoinAccepted`. A message
+  stamped with another epoch or generation is dropped and counted. A rejoin within the grace period keeps the session and
+  its epoch but restarts every stream: each side drops what its channels held from the old one, counts what its lost
+  link never sent, and reports a new generation, so the channels' owners start again from a baseline.
+- **Windows and credits.** A host may have 1,024 messages and 1 MiB outstanding to each player on each channel, and a
+  player 64 messages and 64 KiB to its host: messages sent but not yet consumed by the receiving owner. The receiver
+  reports what it consumed in `SystemCredit`, cumulative per stream. A host's message to several players goes to each one
+  with room and names the others it skipped; a message to one peer that would pass its window is refused with
+  `RateLimited`. A peer that passes its window, or credits what it was never sent, breaks the protocol, and so does a
+  Ready player whose window stays full for two minutes while the host waits to send.
+- **Rate.** A joined player keeps to 256 messages a second over all channels, after a burst of 256; its host allows
+  twice that, a burst of 1,024 and 512 a second, so arrival bunching never trips an honest player, and ends a player that
+  floods. Only messages for the current streams count; stale ones have their own allowance and never end their sender.
+- **Readiness holds.** `HoldReadiness` keeps a client that has the host's snapshot `Synchronizing`, without
+  acknowledging, until the last hold is released. A host's holds change nothing. The engine records when holds first
+  applied since the client was last Ready, however many replacements followed, the latest progress (a snapshot, a host
+  system message, or the runtime's report) and how many replacements arrived, which the live join bounds. A host ends a
+  connection that has not acknowledged its snapshot `ReadyTimeoutMicros` (8 minutes, `InternalReadinessLimits.HostSeconds`)
+  after the join's acceptance, or after the replacement that took a Ready player out of the session; a client reports
+  each replacement's arrival in `ReplacementReceived`, and the first report since that replacement starts the host's wait
+  again, once, since a replacement can wait behind a full link. Replacements while the player is still joining start
+  nothing over, and neither do that player's reports. The wait is longer than a joining player's whole allowance. A host
+  without the message skips it as an ignorable type and counts from the replacement alone, as every host does for a
+  client that never reports.
+- **The host's words.** A pending submission that a session end cancels fails with the engine's own text, never the
+  host's message.
+- **World sources.** The facade's `TryGetNetworkObjectId`, `TryGetEntity`, `TryGetAvatar` and `TryGetPose` ask the
+  runtime's sources, on the owner thread only, and answer no until one is set. A source that throws answers no and is
+  reported.
+- **The frame's end.** `FlushOutbound` sends what is queued without receiving or stepping; a host keeps its downstream
+  cadence.
+- **The local name.** `SetLocalDisplayName` renames a hosting engine's own player; every joined player hears it at the
+  next flush.

@@ -47,6 +47,9 @@ namespace TopiaForge.Multiplayer.Engine
             if (ended) throw new ObjectDisposedException(nameof(SessionEngine));
             if (scope.IsOpen) throw new InvalidOperationException("A client cannot reconnect from inside a transaction.");
             if (channel != null) LoseLink("The client began reconnect synchronization.");
+
+            // A new join starts the readiness holds' total again; a rejoin before the player was Ready keeps counting it.
+            if (!joinedBefore) readinessAnchored = false;
             channel = new ClientChannel(link, displayName, content ?? Array.Empty<byte>());
             state = MultiplayerSessionState.Connecting;
             MarkSessionChanged();
@@ -138,8 +141,9 @@ namespace TopiaForge.Multiplayer.Engine
                 throw new ProtocolException("The host sent session traffic before accepting the join.");
             }
 
-            // Every host flush ends with a Commit; until it arrives, the flush's changes are only partly applied.
-            if (type != MessageType.Commit) current.FlushOpen = true;
+            // Every host flush ends with a Commit; until it arrives, the flush's changes are only partly applied. A credit
+            // changes no session value, so it may travel without one.
+            if (type != MessageType.Commit && type != MessageType.SystemCredit) current.FlushOpen = true;
             switch (type)
             {
                 case MessageType.JoinAccepted:
@@ -202,6 +206,12 @@ namespace TopiaForge.Multiplayer.Engine
                 case MessageType.VoiceRoster:
                     ApplyVoiceRoster(body);
                     break;
+                case MessageType.SystemMessage:
+                    HandleSystemFromHost(current, body);
+                    break;
+                case MessageType.SystemCredit:
+                    HandleSystemCreditFromHost(current, body);
+                    break;
                 case MessageType.ClockSync:
                     var hostMicros = body.ReadVarUInt();
                     ObserveHostTick(body.ReadVarUInt());
@@ -223,6 +233,12 @@ namespace TopiaForge.Multiplayer.Engine
 
             // Listener mutes follow the people, not the session id: see AdoptListenerMutes.
             AdoptListenerMutes(current.Link.PeerIdentity, message.RecordKept);
+
+            // A rejoin keeps the session and its epoch but restarts every system stream: what the old link carried is gone,
+            // so what the channels still hold from it goes too, and the new generation tells their owners to start again.
+            if (joinedBefore) DropPendingSystemMessages();
+            current.JoinGeneration = message.Generation;
+            clientStreamGeneration = ++systemGeneration;
             sessionId = newSession;
             seed = new SessionSeed(message.Seed);
             epoch = message.Epoch;
@@ -246,10 +262,10 @@ namespace TopiaForge.Multiplayer.Engine
             if (current.SnapshotCompleted)
             {
                 current.SnapshotCompleted = false;
-                current.Phase = ClientPhase.Ready;
-                current.ReadyAckPending = true;
-                state = MultiplayerSessionState.Ready;
-                MarkSessionChanged();
+
+                // The runtime may still be loading the host's world: it stays Synchronizing until the last hold goes.
+                if (readinessHolds > 0) EnterReadinessHeld(current);
+                else EnterClientReady(current);
             }
 
             // A result's effects are part of the confirmed values once its flush commits. A submission its caller
@@ -410,9 +426,10 @@ namespace TopiaForge.Multiplayer.Engine
 
         private void CreateRemoteObject(ObjectTypeBinding binding, ObjectWireMessage message)
         {
+            // A diagnostic names the type this game registered, never the id the host chose.
             if (!binding.CanDecodeState(message.Bytes))
             {
-                FailContract("replicated object '" + message.ObjectId + "'");
+                FailContract("a replicated object of type '" + binding.Key + "'");
                 return;
             }
 
@@ -442,7 +459,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (message.Version < record.ConfirmedVersion || (message.Version == record.ConfirmedVersion && !ownerChanged)) return;
             if (!record.Type.CanDecodeState(message.Bytes))
             {
-                FailContract("replicated object '" + message.ObjectId + "'");
+                FailContract("a replicated object of type '" + record.Type.Key + "'");
                 return;
             }
 
@@ -461,7 +478,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (!objects.TryGetValue(message.ObjectId, out var record)) return;
             if (!record.Type.CanDecodeState(message.Bytes))
             {
-                FailContract("replicated object '" + message.ObjectId + "'");
+                FailContract("a replicated object of type '" + record.Type.Key + "'");
                 return;
             }
 
@@ -571,11 +588,16 @@ namespace TopiaForge.Multiplayer.Engine
         private void BeginReplacement(ClientChannel current, SessionReplacedMessage message)
         {
             ResetLocalSession(new MultiplayerSessionId(message.SessionId), new SessionSeed(message.Seed), message.Epoch, "The multiplayer session was replaced.");
+            current.RestartStreams();
+            clientStreamGeneration = ++systemGeneration;
             current.Phase = ClientPhase.Synchronizing;
             current.Staging = null;
             current.SnapshotCompleted = false;
+            current.ReadinessHeld = false;
             current.ReadyAckPending = false;
+            current.ReplacementReceivedPending = true;
             state = MultiplayerSessionState.Synchronizing;
+            sessionReplacementsReceived++;
             MarkSessionChanged();
         }
 
@@ -601,6 +623,7 @@ namespace TopiaForge.Multiplayer.Engine
             unboundObjects.Clear();
             tombstones.Clear();
             presentationDeliveries.Clear();
+            DropPendingSystemMessages();
             // Sequences keep counting across sessions, so a late result from the old session can never match a
             // submission made in the new one.
             MarkSessionChanged();
@@ -610,7 +633,13 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var lost = channel;
             channel = null;
-            if (lost != null && lost.Link.State != EngineLinkState.Closed) lost.Link.Close();
+            if (lost != null)
+            {
+                if (lost.Link.State != EngineLinkState.Closed) lost.Link.Close();
+                CountUnsentSystem(lost);
+                systemGeneration++;
+            }
+
             ResetClientVoice();
             CancelAllPending(message);
             localParticipantId = null;
@@ -622,9 +651,17 @@ namespace TopiaForge.Multiplayer.Engine
         {
             var lost = channel;
             channel = null;
-            lost?.Link.Close();
+            if (lost != null)
+            {
+                lost.Link.Close();
+                CountUnsentSystem(lost);
+                systemGeneration++;
+            }
+
             ResetClientVoice();
-            CancelAllPending(string.IsNullOrEmpty(message) ? "The multiplayer session ended." : message);
+
+            // The host's own words go to the runtime alone: mods see this game's text, never what a host wrote.
+            CancelAllPending("The multiplayer session ended.");
             localParticipantId = null;
             FinishClientSession(new ClientSessionEnd(reason, message, report));
         }
@@ -644,6 +681,12 @@ namespace TopiaForge.Multiplayer.Engine
                 SessionMessages.WriteEmpty(clientFrame, clientBody, MessageType.Leave);
                 current.Link.Send(EngineChannel.Session, clientFrame.AsSegment());
                 current.Link.Close();
+            }
+
+            if (current != null)
+            {
+                CountUnsentSystem(current);
+                systemGeneration++;
             }
 
             channel = null;
@@ -681,6 +724,7 @@ namespace TopiaForge.Multiplayer.Engine
                     new JoinRequestMessage(ProtocolVersion, current.DisplayName, RegisteredContracts(), current.Content));
             }
 
+            WriteReplacementReceived(current);
             if (current.ReadyAckPending)
             {
                 current.ReadyAckPending = false;
@@ -695,6 +739,7 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             current.Unsent.Clear();
+            WriteSystemOutbox(current);
             if (current.PendingClockReply.HasValue)
             {
                 SessionMessages.WriteClockSyncReply(clientFrame, clientBody, current.PendingClockReply.Value);

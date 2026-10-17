@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Sockets;
 using TopiaForge.Mods;
 using TopiaForge.Multiplayer.Engine;
@@ -123,13 +124,16 @@ namespace TopiaForge.Multiplayer.Network
         internal LiveFailure Failure { get; private set; }
 
         /// <summary>
-        /// Binds the network and starts serving. Returns <see cref="LiveFailure.PortInUse"/> when no port could be bound;
-        /// the session is then untouched.
+        /// Binds the network and starts serving. Returns <see cref="LiveFailure.ContentUnreadable"/> when this game's
+        /// packages cannot be read, before anything binds, and <see cref="LiveFailure.PortInUse"/> when no port could be
+        /// bound; the session is then untouched.
         /// </summary>
         internal LiveFailure Start(INetworkFactory factory)
         {
             if (factory == null) throw new ArgumentNullException(nameof(factory));
             if (network != null) throw new InvalidOperationException("The host has already started.");
+            var packages = content.HostPackages();
+            if (packages == null) return LiveFailure.ContentUnreadable;
             var port = settings.Port;
             for (var attempt = 0; attempt < PortAttempts && network == null; attempt++)
             {
@@ -139,7 +143,7 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             if (network == null) return LiveFailure.PortInUse;
-            Descriptor = Sign();
+            Descriptor = Sign(packages);
             descriptorEndpoint?.SetDescriptor(Descriptor);
             if (settings.Visibility != ServerVisibility.Invite)
             {
@@ -239,7 +243,7 @@ namespace TopiaForge.Multiplayer.Network
             return true;
         }
 
-        private SignedServerDescriptor Sign()
+        private SignedServerDescriptor Sign(IReadOnlyList<DescriptorPackage> packages)
         {
             var descriptor = new ServerDescriptor(
                 identity.SigningPublicKey,
@@ -256,7 +260,7 @@ namespace TopiaForge.Multiplayer.Network
                 false,
                 settings.Gamemode,
                 settings.World,
-                content.HostPackages());
+                packages);
             var seed = identity.CopySigningSeed();
             try
             {

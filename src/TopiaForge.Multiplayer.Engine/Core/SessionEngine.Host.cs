@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Multiplayer.Engine
 {
@@ -81,14 +82,19 @@ namespace TopiaForge.Multiplayer.Engine
             nextObjectNumber = 0;
             foreach (var binding in commands.Values) binding.ResetForNewSession();
             presentationDeliveries.Clear();
+            DropPendingSystemMessages();
             // Submission sequences keep counting, so nothing sent in the old session can pass for the new one. Results
             // already queued still reach their clients ahead of the replacement.
             var replaced = new SessionReplacedMessage(sessionId.Value, seed.Value, epoch);
             SnapshotItem? snapshotItem = null;
+            var generation = ++systemGeneration;
             foreach (var connection in connections)
             {
                 if (!connection.IsJoined) continue;
+                StartWaitingAfterReplacement(connection);
                 connection.ResetForNewSession();
+                connection.RestartStreams();
+                connection.StreamGeneration = generation;
                 connection.Enqueue(new SessionReplacedItem(replaced));
                 connection.Enqueue(snapshotItem ??= CaptureSnapshot());
                 connection.Phase = HostConnectionPhase.Accepted;
@@ -276,6 +282,12 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
+            if (ExpireUnreadyConnection(connection) || ExpireStalledConnection(connection))
+            {
+                Settle();
+                return;
+            }
+
             if (connection.Phase != HostConnectionPhase.Closed && connection.Link.State == EngineLinkState.Closed)
             {
                 DropConnection(connection);
@@ -320,7 +332,15 @@ namespace TopiaForge.Multiplayer.Engine
                     HandleJoin(connection, JoinMessages.ReadJoinRequest(body));
                     break;
                 case MessageType.ReadyAck:
-                    if (body.ReadVarUInt() == epoch && connection.Phase == HostConnectionPhase.Accepted) connection.Phase = HostConnectionPhase.Ready;
+                    if (body.ReadVarUInt() == epoch && connection.Phase == HostConnectionPhase.Accepted)
+                    {
+                        connection.Phase = HostConnectionPhase.Ready;
+                        connection.ReadyAtMicros = nowMicros;
+                    }
+
+                    break;
+                case MessageType.ReplacementReceived:
+                    TakeReplacementReceipt(connection, body.ReadVarUInt());
                     break;
                 case MessageType.Command:
                     HandleSubmission(connection, ReplicationMessages.ReadCommand(body, connection.InIntern), isCommand: true);
@@ -336,6 +356,12 @@ namespace TopiaForge.Multiplayer.Engine
                     break;
                 case MessageType.VoiceMutes:
                     ApplyVoiceMutes(connection, body);
+                    break;
+                case MessageType.SystemMessage:
+                    HandleSystemFromClient(connection, body);
+                    break;
+                case MessageType.SystemCredit:
+                    HandleSystemCreditFromClient(connection, body);
                     break;
                 default:
                     if (!MessageType.IsIgnorable(type)) throw new ProtocolException("A client sent an unknown critical message.");
@@ -376,6 +402,8 @@ namespace TopiaForge.Multiplayer.Engine
                 return;
             }
 
+            // A returning player's streams restart on its new connection: whatever its old one left waiting goes now.
+            if (recordKept) DropSystemMessagesFrom(record.Id);
             record.DisplayName = request.DisplayName;
             record.Connection = connection;
             record.IsConnected = true;
@@ -387,6 +415,9 @@ namespace TopiaForge.Multiplayer.Engine
             // A new connection starts a new voice stream, numbered from the start again, and needs the roster.
             StartVoiceStream(record.Voice);
             MarkVoiceRosterDirty();
+            connection.JoinGeneration = ++nextJoinGeneration;
+            connection.StreamGeneration = ++systemGeneration;
+            connection.SnapshotSentAtMicros = nowMicros;
             connection.Enqueue(new JoinAcceptedItem(new JoinAcceptedMessage
             {
                 SessionId = sessionId.Value,
@@ -398,7 +429,8 @@ namespace TopiaForge.Multiplayer.Engine
                 StepRateHz = Clock.RateHz,
                 NextSequence = record.LastSequence + 1,
                 RecordKept = recordKept,
-                Report = decision.Report
+                Report = decision.Report,
+                Generation = connection.JoinGeneration
             }));
             connection.Enqueue(CaptureSnapshot());
             connection.ClearPendingDeltas();
@@ -471,7 +503,8 @@ namespace TopiaForge.Multiplayer.Engine
                 while (FindParticipant(id) != null);
             }
 
-            return id.IsValid && FindParticipant(id) == null ? id : (ParticipantId?)null;
+            // The headless host's sender id names no player, so a player's system messages can never pass for the host's.
+            return id.IsValid && FindParticipant(id) == null && !id.Equals(InternalSystemMessage.HeadlessHostSender) ? id : (ParticipantId?)null;
         }
 
         private ParticipantRecord? FindParticipant(ParticipantId id)
@@ -586,6 +619,9 @@ namespace TopiaForge.Multiplayer.Engine
             connection.Phase = HostConnectionPhase.Closed;
             connections.Remove(connection);
             if (connection.Link.State != EngineLinkState.Closed) connection.Link.Close();
+            CountUnsentSystem(connection);
+            connection.Queue.Clear();
+            if (wasJoined) systemGeneration++;
             var record = connection.Participant;
             if (!wasJoined || record == null || !ReferenceEquals(record.Connection, connection)) return;
             record.Connection = null;

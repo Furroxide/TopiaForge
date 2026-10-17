@@ -165,6 +165,22 @@ namespace TopiaForge.ValidTestMod
         }
     }
 
+    /// <summary>Traces its Update and LateUpdate, so a test can see where the runtime's own frame steps fall.</summary>
+    public sealed class RuntimeFrameOrderMod : TopiaForgeMod
+    {
+        protected override void OnLoad()
+        {
+            RuntimeTrace.Write("load");
+            Context.Events.SubscribeUpdate(_ => RuntimeTrace.Write("mod-update"));
+            Context.Events.SubscribeLateUpdate(_ => RuntimeTrace.Write("mod-late"));
+        }
+
+        protected override void OnUnload()
+        {
+            RuntimeTrace.Write("unload");
+        }
+    }
+
     internal static class RuntimeTrace
     {
         public static void Write(string value)
