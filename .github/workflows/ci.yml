@@ -584,7 +584,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        template: [minimal, gameplay, gamemode, service, ui, asset, world]
+        template: [minimal, gameplay, gamemode, service, ui, asset, world, multiplayer]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -645,6 +645,13 @@ jobs:
           rm -rf "$extracted"
           "$relocated_cli" check scaffold "$project" \
             --forbid "$extracted" --forbid "$GITHUB_WORKSPACE"
+
+          # A multiplayer scaffold ships the empty contract lock that
+          # `topiaforge mod add multiplayer` writes. Generate it from the built
+          # contract, as an author does after restore, so pack can verify it.
+          if [ -f "$project/topiaforge.multiplayer.lock.json" ]; then
+            "$relocated_cli" mod sync multiplayer --project "$project"
+          fi
 
           entry=$(find "$project" -maxdepth 1 -name '*.csproj' -print -quit)
           test -n "$entry"

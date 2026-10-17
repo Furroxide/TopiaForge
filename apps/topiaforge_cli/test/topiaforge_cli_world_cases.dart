@@ -30,10 +30,25 @@ void _worldCliTests(_CliTestHarness Function() currentHarness) {
       'ui',
       'asset',
       'world',
+      'multiplayer',
     ]) {
       expect(output, contains('--template $template'));
     }
     expect(output, contains('unity-world'));
+    // Ids are padded to the longest one, so every label starts in one column.
+    final labelColumns = output
+        .split(RegExp(r'\r?\n'))
+        .where(
+          (line) =>
+              line.startsWith('mod --template ') ||
+              line.startsWith('unity-world '),
+        )
+        .map(
+          (line) => RegExp(r'^(?:mod --template )?\S+ +').firstMatch(line)!.end,
+        )
+        .toList();
+    expect(labelColumns, hasLength(9), reason: output);
+    expect(labelColumns.toSet(), hasLength(1), reason: output);
   });
 
   test('help covers the world authoring commands', () async {

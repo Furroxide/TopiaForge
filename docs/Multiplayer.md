@@ -48,6 +48,16 @@ var multiplayer = Context.RequireMultiplayer();
 Do not add sockets, Unity Netcode types, raw RPC numbers, transport objects, or separate client/server assemblies to a
 mod. The same class and generated contract run on the appropriate logical side.
 
+To start a new mod from a working contract instead, scaffold the `multiplayer` template:
+
+```sh
+topiaforge new mod example.counter --template multiplayer --name "Counter" --author "You" --license AGPL-3.0-or-later
+```
+
+It shares a host-owned count through one replicated state and one owner-predicted command with explicit rate and
+payload limits, and its tests play two peers, a late joiner, a new session and solo play on the test rig. Run
+`topiaforge restore` and then `topiaforge mod sync multiplayer` before you pack it.
+
 ## Generated authoring model
 
 Mark one top-level partial class with `[MultiplayerContract(Id = "...")]`; the explicit ID is a permanent wire identity
