@@ -586,6 +586,9 @@ internal static class Program
             InternetPrivacyTests.NothingTheInternetFlowsReportNamesAnAddress();
             InternetPrivacyTests.TheClientsTypesPrintOnlyTheirKind();
             NetworkWorldEngineTests.AJoiningPlayersWorldCrossesTheRealChannel();
+            RuntimeContentReadinessTests.PendingContentIsNeitherAnnouncedNorAdmitted();
+            RuntimeContentReadinessTests.HostingWaitsForIdentification();
+            RuntimeContentReadinessTests.JoinsAndTheDeveloperSwitchWaitForIdentification();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

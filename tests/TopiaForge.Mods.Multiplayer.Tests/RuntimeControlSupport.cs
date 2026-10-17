@@ -16,6 +16,12 @@ internal sealed record PackageSpec(string Id, string Version, string Sha256, str
 {
     internal const string LockFile = ModMultiplayerMetadata.ContractLockFileName;
 
+    /// <summary>Gets whether the package is installed with a receipt; without one, the runtime hashes its files.</summary>
+    internal bool Receipted { get; init; } = true;
+
+    /// <summary>The same package copied in by hand: identical files on every peer, and no install receipt.</summary>
+    internal PackageSpec WithoutReceipt() => this with { Receipted = false };
+
     /// <summary>A mod without a multiplayer block, shared implicitly.</summary>
     internal static PackageSpec Implicit(string id, string version, char hash) => new(id, version, new string(hash, 64));
 
@@ -50,11 +56,20 @@ internal sealed record PackageSpec(string Id, string Version, string Sha256, str
         }
     }
 
-    /// <summary>Writes the installed package: a folder with an install receipt naming its archive's hash.</summary>
+    /// <summary>
+    /// Writes the installed package: a folder with an install receipt naming its archive's hash or, for a package copied in
+    /// by hand, a file whose bytes follow from the package alone, so every peer hashes it alike.
+    /// </summary>
     internal string Install(string root)
     {
         var folder = Path.Combine(root, Id + "-" + Version + "-" + Sha256.Substring(0, 8));
         Directory.CreateDirectory(folder);
+        if (!Receipted)
+        {
+            File.WriteAllText(Path.Combine(folder, "Mod.dll"), Id + " " + Version + " " + Sha256);
+            return folder;
+        }
+
         JsonUtil.SaveFile(Path.Combine(folder, PackageInstallReceipt.FileName), new PackageInstallReceipt
         {
             ModId = Id,
@@ -134,6 +149,8 @@ internal sealed class UncheckedRuntimeHost : IInternalMultiplayerRuntimeHost
 
     public IReadOnlyList<InternalContentDescriptor> LocalContent => inner.LocalContent;
 
+    public InternalContentReadiness ContentReadiness => inner.ContentReadiness;
+
     public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => inner.EvaluateAdmission(offer);
 
     public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) => InternalContentVerdict.Admitted;
@@ -159,22 +176,26 @@ internal sealed class ControlPeer
         IReadOnlyList<PackageSpec> packages,
         bool live = true,
         LiveJoinTimings? timings = null,
-        string gameBuild = "2545")
+        string gameBuild = "2545",
+        IMultiplayerWorkScheduler? contentScheduler = null)
     {
         Name = name;
         Factory = new SteppedNetworkFactory(network, name);
-        var content = new RuntimeContent(gameBuild, "0.2.0");
+        Content = new RuntimeContent(gameBuild, "0.2.0");
         var diagnostics = new RoutedDiagnostics(null);
-        var setup = live ? new LiveSessionsSetup(Files, content) { Factory = Factory, Resolver = resolver, JoinTimings = timings } : null;
+        var setup = live ? new LiveSessionsSetup(Files, Content) { Factory = Factory, Resolver = resolver, JoinTimings = timings } : null;
         Provider = new Provider(LiveRig.ProviderId, diagnostics, () => network.Now, setup);
-        Control = new Control(Provider, content, diagnostics);
-        Runtime = new MultiplayerRuntimeHost(gameBuild, "0.2.0", Log, Platform);
+        Control = new Control(Provider, Content, diagnostics);
+
+        // Packages are identified inline unless a test holds the work back, as a worker thread that has not finished would.
+        Runtime = new MultiplayerRuntimeHost(gameBuild, "0.2.0", Log, Platform, contentScheduler ?? MultiplayerWorkSchedulers.Inline);
         foreach (var package in packages) Runtime.Inventory.Add(package.ToManifest(), package.Install(Path.Combine(packageRoot, name)));
         Composition = new MultiplayerRuntime(() => Control, Runtime, Log);
     }
 
     internal string Name { get; }
     internal SteppedNetworkFactory Factory { get; }
+    internal RuntimeContent Content { get; }
     internal MemoryDataFiles Files { get; } = new();
     internal Provider Provider { get; }
     internal Control Control { get; }
@@ -253,6 +274,9 @@ internal sealed class ControlRig : IDisposable
     /// <summary>Gets or sets how long the peers added from now on wait for their host; null uses the production waits.</summary>
     internal LiveJoinTimings? Timings { get; set; }
 
+    /// <summary>Gets or sets where the peers added from now on identify their packages; null identifies them inline.</summary>
+    internal IMultiplayerWorkScheduler? ContentScheduler { get; set; }
+
     internal ControlPeer AddPeer(string name, params PackageSpec[] packages) => Add(name, packages, "2545");
 
     /// <summary>
@@ -321,7 +345,7 @@ internal sealed class ControlRig : IDisposable
 
     private ControlPeer Add(string name, PackageSpec[] packages, string gameBuild)
     {
-        var peer = new ControlPeer(name, Network, Resolver, packageRoot, packages, timings: Timings, gameBuild: gameBuild);
+        var peer = new ControlPeer(name, Network, Resolver, packageRoot, packages, timings: Timings, gameBuild: gameBuild, contentScheduler: ContentScheduler);
         if (!peer.Composition.Connect()) throw new InvalidOperationException("Assertion failed: the runtime attaches to " + name);
         if (name != "host") Peers.Add(peer);
         return peer;

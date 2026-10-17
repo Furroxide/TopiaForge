@@ -11,7 +11,8 @@ using UnityEngine.UI;
 namespace TopiaForge.ModManager
 {
     /// <summary>
-    /// Puts the manager's GAMEMODES and TOPIAFORGE buttons on the game's main menu.
+    /// Puts the manager's MULTIPLAYER, GAMEMODES and TOPIAFORGE buttons on the game's main menu. MULTIPLAYER shows when the
+    /// multiplayer provider is loaded and opens the overlay on its tab, which says when live sessions are switched off.
     /// <para>
     /// The buttons live on the kit's own band-allocated canvas rather than being parented onto one of
     /// the game's canvases. That is the whole fix for their previous absence: Robotopia's main menu is
@@ -37,6 +38,7 @@ namespace TopiaForge.ModManager
         private float nextAttemptTime;
         private int attempts;
         private bool mounted;
+        private bool mountedWithMultiplayer;
         private bool censusLogged;
         private bool warningLogged;
 
@@ -87,8 +89,9 @@ namespace TopiaForge.ModManager
             }
 
             // No permanent "done" latch: if our canvas is torn down within the scene, the throttled retry
-            // and the per-button presence check below rebuild it.
-            if (mounted && HasLiveButtons())
+            // and the per-button presence check below rebuild it, as they do when the multiplayer provider
+            // attaches after the buttons went up.
+            if (mounted && HasLiveButtons() && overlay.HasMultiplayer == mountedWithMultiplayer)
             {
                 return;
             }
@@ -143,6 +146,12 @@ namespace TopiaForge.ModManager
                     TopiaForgeScheme.Paper,
                     interactive: true,
                     persistent: true);
+
+                mountedWithMultiplayer = overlay.HasMultiplayer;
+                if (mountedWithMultiplayer)
+                {
+                    AddButton("TopiaForgeMultiplayerMenuButton", "MULTIPLAYER", () => overlay.ShowMultiplayer(), 124f);
+                }
 
                 AddButton("TopiaForgeGamemodesMenuButton", "GAMEMODES", () => overlay.ShowGamemodes(), 74f);
                 AddButton("TopiaForgeModManagerMenuButton", "TOPIAFORGE", () => overlay.Show(), 24f);

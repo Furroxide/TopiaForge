@@ -1,0 +1,312 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
+
+namespace TopiaForge.ModManager.Sessions
+{
+    /// <summary>One join the player asked for: where it goes, how the overlay names it, and the choices made for it.</summary>
+    internal sealed class JoinRequest
+    {
+        internal JoinRequest(IInternalJoinTarget target, string title, bool allowDirect, string? password = null, string? trustedServerId = null, string? launcherLink = null)
+        {
+            Target = target ?? throw new ArgumentNullException(nameof(target));
+            Title = title ?? string.Empty;
+            AllowDirect = allowDirect;
+            Password = password;
+            TrustedServerId = trustedServerId;
+            LauncherLink = launcherLink;
+        }
+
+        internal IInternalJoinTarget Target { get; }
+
+        /// <summary>Gets the server's name as the overlay shows it, already redacted.</summary>
+        internal string Title { get; }
+
+        /// <summary>Gets the player's choice for this session: a direct path, allowed through the approved prompt.</summary>
+        internal bool AllowDirect { get; }
+
+        internal string? Password { get; }
+
+        internal string? TrustedServerId { get; }
+
+        /// <summary>Gets the link the launcher can take this join over with; null when there is none.</summary>
+        internal string? LauncherLink { get; }
+
+        internal JoinRequest Trusting(string serverId) => new JoinRequest(Target, Title, AllowDirect, Password, serverId, LauncherLink);
+    }
+
+    /// <summary>
+    /// Runs a join the screens ask for and presents it on the connecting overlay. It applies the realm rules first: a game
+    /// that is running is left only after "Leave current game?" is confirmed. Then it follows the control's status onto the
+    /// stepper (<see cref="ConnectingStepMap"/>), asks for a password when the session needs one, and on failure shows the
+    /// failure view with Retry, Open launcher and Copy details. Cancel works throughout, and leaving is never refused.
+    /// </summary>
+    internal sealed partial class ConnectingPresenter : IConnectingScreen
+    {
+        internal const float SuccessLingerSeconds = 0.75f;
+        internal const string LeaveTitle = "Leave current game?";
+        internal const string LeaveBody = "Joining this session ends the game you are playing. Anything you have not saved is lost.";
+        internal const string LeaveConfirm = "LEAVE AND JOIN";
+        internal const string PasswordRule = "A password is 1 to 64 characters with no control characters.";
+
+        private static readonly string[] Labels =
+        {
+            "RESOLVING", "CONNECTING", "AUTHENTICATING", "VERIFYING MODS", "LOADING WORLD", "SYNCHRONIZING", "SPAWNING"
+        };
+
+        private readonly MultiplayerScreensContext context;
+        private readonly string[] details = new string[ConnectingSteps.Count];
+        private JoinRequest? request;
+        private Stage stage;
+        private int readsAtStart;
+        private bool menuReturned;
+        private bool cancelRequested;
+        private bool held;
+        private float linger;
+        private int reached;
+        private int active = -1;
+        private int failed = -1;
+        private bool complete;
+        private int skipped;
+        private int version;
+        private ConnectingSteps steps;
+        private FailureMessage? failure;
+        private InternalLiveFailure failureCode;
+        private InternalLiveStatus? failureStatus;
+        private string? changedServerId;
+        private IReadOnlyList<string> failureLines = Array.Empty<string>();
+        private string hostSays = string.Empty;
+        private string title = string.Empty;
+        private string statusText = string.Empty;
+        private string passwordError = string.Empty;
+
+        internal ConnectingPresenter(MultiplayerScreensContext context)
+        {
+            this.context = context ?? throw new ArgumentNullException(nameof(context));
+            for (var index = 0; index < details.Length; index++) details[index] = string.Empty;
+        }
+
+        private enum Stage
+        {
+            Hidden,
+            Leaving,
+            Joining,
+            Succeeded,
+            Failed
+        }
+
+        /// <summary>Gets whether a join is being prepared or running, so no other may start.</summary>
+        internal bool IsBusy => stage == Stage.Leaving || stage == Stage.Joining;
+
+        public bool IsVisible => stage != Stage.Hidden;
+
+        public string Title => title;
+
+        public IReadOnlyList<string> StepLabels => Labels;
+
+        public ConnectingSteps Steps => steps;
+
+        public string StatusText => statusText;
+
+        public bool NeedsPassword => stage == Stage.Joining && context.Status.Reads > readsAtStart && context.Status.Status.JoinPhase == InternalJoinPhase.AwaitingPassword;
+
+        public string PasswordError => passwordError;
+
+        public bool HasFailed => stage == Stage.Failed;
+
+        public string FailureTitle => failure?.Title ?? string.Empty;
+
+        public string FailureMessage => failure?.Message ?? string.Empty;
+
+        public IReadOnlyList<string> FailureLines => failureLines;
+
+        public string HostSays => hostSays;
+
+        public bool CanRetry => HasFailed && request != null && failure != null && failure.Retryable;
+
+        public bool CanOpenLauncher => HasFailed && request?.LauncherLink != null && failure != null && (failure.LauncherHelps || failure.Retryable);
+
+        public bool CanCopyDetails => HasFailed && failureStatus != null;
+
+        public bool CanTrust => HasFailed && failure != null && failure.CanTrust && changedServerId != null && request != null;
+
+        public bool CanCancel => IsBusy;
+
+        public string DetailOf(int step) => step >= 0 && step < details.Length ? details[step] : string.Empty;
+
+        /// <summary>Starts a join through the realm rules; a running game is left only once the player confirms.</summary>
+        internal void Begin(JoinRequest join)
+        {
+            if (join == null) throw new ArgumentNullException(nameof(join));
+            if (IsBusy)
+            {
+                context.Notify("A join is already running.", ScreenTone.Warning);
+                return;
+            }
+
+            if (!context.CanStartSession)
+            {
+                context.Notify(
+                    !context.Status.IsLiveAvailable ? "Live multiplayer is not available."
+                    : !context.Settings.IsLoaded ? MultiplayerSessionsPresenter.LoadingSettings
+                    : ContentReadinessPresenter.PendingText,
+                    ScreenTone.Warning);
+                return;
+            }
+
+            var environment = context.Environment;
+            var standalone = environment.StandaloneModName;
+            switch (SessionRealmGate.ForJoin(context.Status.Role, environment.GamePhase, standalone != null))
+            {
+                case RealmDecision.Join:
+                    Start(join);
+                    break;
+                case RealmDecision.ConfirmLeaveGame:
+                    context.Ask(PrivacyPrompts.Destructive(LeaveTitle, LeaveBody, LeaveConfirm, confirmed =>
+                    {
+                        if (confirmed) LeaveThenJoin(join);
+                    }));
+                    break;
+                case RealmDecision.Busy:
+                    context.Notify("Wait for the current game to finish starting or stopping, then join.", ScreenTone.Warning);
+                    break;
+                case RealmDecision.StandaloneRefused:
+                    context.Notify(HostText.ForDisplay(standalone) + " refuses multiplayer; disable it to join.", ScreenTone.Warning);
+                    break;
+                default:
+                    context.Notify(context.Status.Role == InternalSessionRole.ListenHost
+                        ? "Stop hosting before you join another session."
+                        : "Leave this session before you join another.", ScreenTone.Warning);
+                    break;
+            }
+        }
+
+        /// <summary>Main thread, every frame: follows the join, or the return to the menu before it.</summary>
+        internal void Tick(float deltaTime)
+        {
+            switch (stage)
+            {
+                case Stage.Leaving:
+                    if (menuReturned && context.Environment.GamePhase == WorldSessionPhase.Idle) Start(request!);
+                    break;
+                case Stage.Joining:
+                    Follow();
+                    break;
+                case Stage.Succeeded:
+                    linger += deltaTime > 0f ? deltaTime : 0f;
+                    if (linger >= SuccessLingerSeconds) Hide();
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Shows the world synchronizing n of m, for the network world's baseline once it reports it (WS3.6); until then the
+        /// step reads "Receiving the world".
+        /// </summary>
+        internal void ReportSynchronization(int done, int total)
+        {
+            if (stage != Stage.Joining || total <= 0) return;
+            var clamped = Math.Min(Math.Max(done, 0), total);
+            details[(int)ConnectingStep.Synchronizing] = clamped.ToString(CultureInfo.InvariantCulture) + "/" + total.ToString(CultureInfo.InvariantCulture);
+        }
+
+        public void SubmitPassword(string value)
+        {
+            if (!NeedsPassword) return;
+            if (string.IsNullOrEmpty(value) || value.Length > 64 || HasControl(value))
+            {
+                passwordError = PasswordRule;
+                return;
+            }
+
+            OperationResult<bool> result;
+            try
+            {
+                result = context.Environment.Control?.SupplyPassword(value) ?? OperationResult<bool>.Failure(ModErrorCode.Unavailable, "Multiplayer is not available.");
+            }
+            catch (Exception exception)
+            {
+                result = OperationResult<bool>.Failure(ModErrorCode.Unavailable, exception.GetType().Name);
+            }
+
+            passwordError = result.Succeeded ? string.Empty : HostText.ForDisplay(result.ErrorMessage, HostText.LineChars);
+            context.Status.RequestRefresh();
+        }
+
+        public void Retry()
+        {
+            if (!CanRetry) return;
+            var again = request!;
+            Hide();
+            Begin(again);
+        }
+
+        public void Trust()
+        {
+            if (!CanTrust) return;
+            var trusted = request!.Trusting(changedServerId!);
+            Hide();
+            Begin(trusted);
+        }
+
+        public void OpenLauncher()
+        {
+            if (!CanOpenLauncher) return;
+            context.Environment.OpenUrl(request!.LauncherLink!);
+            context.Notify("Handed the join to the TopiaForge launcher.", ScreenTone.Success);
+            Hide();
+        }
+
+        public void CopyDetails()
+        {
+            if (!CanCopyDetails) return;
+            var step = (ConnectingStep)Math.Max(failed, 0);
+            context.Environment.CopyToClipboard(FailureDetails.Build(
+                failureCode, step, Labels[(int)step], failureStatus!, context.Environment.GameBuild, context.Environment.RuntimeVersion));
+            context.Notify("Copied the failure details.", ScreenTone.Success);
+        }
+
+        public void Cancel()
+        {
+            if (stage == Stage.Joining)
+            {
+                cancelRequested = true;
+                try
+                {
+                    context.Environment.Control?.Leave();
+                }
+                catch (Exception)
+                {
+                    // Leaving is never refused; a control that throws has nothing left to leave.
+                }
+
+                context.Status.RequestRefresh();
+            }
+            else if (stage != Stage.Leaving)
+            {
+                return;
+            }
+
+            Hide();
+            context.Notify("Join cancelled.");
+        }
+
+        public void Dismiss()
+        {
+            if (IsBusy) Cancel();
+            else Hide();
+        }
+
+        private static bool HasControl(string value)
+        {
+            foreach (var character in value)
+            {
+                if (char.IsControl(character)) return true;
+            }
+
+            return false;
+        }
+    }
+}
