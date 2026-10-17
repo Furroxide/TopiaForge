@@ -533,6 +533,9 @@ internal static class Program
             VoiceMuteTests.MutesFromBeforeARestartStayBehindWhenItsFirstAnswerIsLost();
             VoiceMuteTests.AJoinReplacedBeforeItsRequestLeftKeepsTheMutes();
             VoiceMuteTests.NamesGivenBeforeTheSameHostListsAgainStay();
+            RuntimeContentReadinessTests.PendingContentIsNeitherAnnouncedNorAdmitted();
+            RuntimeContentReadinessTests.HostingWaitsForIdentification();
+            RuntimeContentReadinessTests.JoinsAndTheDeveloperSwitchWaitForIdentification();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

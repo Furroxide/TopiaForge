@@ -65,6 +65,8 @@
     <Reference Include="UnityEngine" HintPath="$(RobotopiaManagedDir)\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.AudioModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AudioModule.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <!-- GUIUtility.systemCopyBuffer: the multiplayer failure view's "Copy details". -->
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.InputLegacyModule.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />

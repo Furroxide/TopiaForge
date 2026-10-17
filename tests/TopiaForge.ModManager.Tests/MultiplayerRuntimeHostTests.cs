@@ -34,7 +34,7 @@ namespace TopiaForge.ModManager.Tests
 
         private static void DescriptorsFollowTheManifests()
         {
-            var inventory = new MultiplayerContentInventory();
+            var inventory = new MultiplayerContentInventory(MultiplayerWorkSchedulers.Inline);
             inventory.Add(Manifest("io.example.zeta", "1.0.0"), "unused-a");
             inventory.Add(Session("io.example.lobby", "2.0.0", "optional", ">=2.0.0 <3.0.0", Lock, new string('A', 64)), "unused-b");
             inventory.Add(Mode("io.example.cosmetic", ModMultiplayerMetadata.ClientLocalMode), "unused-c");
@@ -99,11 +99,12 @@ namespace TopiaForge.ModManager.Tests
 
         private static void UnreadablePackagesAreNamedAndReadAgain(string root)
         {
-            // A package without a receipt whose file another program holds open while the runtime hashes it.
+            // A package without a receipt whose file another program holds open while the runtime hashes it. Inline
+            // identification keeps the old order here; MultiplayerContentIdentificationTests covers the worker.
             var folder = Directory.CreateDirectory(Path.Combine(root, "devtools")).FullName;
             var file = Path.Combine(folder, "Devtools.dll");
             File.WriteAllText(file, "code");
-            var inventory = new MultiplayerContentInventory();
+            var inventory = new MultiplayerContentInventory(MultiplayerWorkSchedulers.Inline);
             inventory.Add(Manifest("io.example.devtools", "0.1.0"), folder);
             using (new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {

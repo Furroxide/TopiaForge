@@ -333,6 +333,17 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentInventory.cs" Link="Runtime/Multiplayer/MultiplayerContentInventory.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentAdmission.cs" Link="Runtime/Multiplayer/MultiplayerContentAdmission.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerDiagnosticRedactor.cs" Link="Runtime/Multiplayer/MultiplayerDiagnosticRedactor.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentIdentification.cs" Link="Runtime/Multiplayer/MultiplayerContentIdentification.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerWorkScheduler.cs" Link="Runtime/Multiplayer/MultiplayerWorkScheduler.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakeMultiplayerControl.cs" Link="Multiplayer/FakeMultiplayerControl.cs" />
+  </ItemGroup>
+
+  <!-- The in-game sessions interface keeps its logic in Unity-free presenters behind SPI-free screens; globbed, so a
+       presenter added later cannot fall out of test scope, and compiling them here keeps them Unity-free. The kit views
+       over them need Unity and are covered by source checks instead. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Screens/*.cs" Link="Runtime/Multiplayer/Screens/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Sessions/*.cs" Link="Runtime/Multiplayer/Sessions/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/Overlay/ManagerTabLookup.cs" Link="Runtime/ManagerTabLookup.cs" />
   </ItemGroup>
 </Project>

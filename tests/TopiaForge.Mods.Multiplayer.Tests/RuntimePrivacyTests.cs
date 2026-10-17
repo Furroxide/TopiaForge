@@ -416,6 +416,8 @@ internal static class RuntimePrivacyTests
 
         public IReadOnlyList<InternalContentDescriptor> LocalContent => inner.LocalContent;
 
+        public InternalContentReadiness ContentReadiness => inner.ContentReadiness;
+
         public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => inner.EvaluateAdmission(offer);
 
         public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) => inner.CheckHostContent(hostPackages);

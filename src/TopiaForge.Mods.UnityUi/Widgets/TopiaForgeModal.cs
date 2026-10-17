@@ -31,6 +31,20 @@ namespace TopiaForge.Mods.UnityUi
             Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper);
         }
 
+        /// <summary>
+        /// Destructive confirmation that also says when it ends without confirming: the cancel button, ESC, or anything
+        /// else that closes it. <paramref name="onCancel"/> runs once, after the dialog has closed; confirming never runs it.
+        /// </summary>
+        public void Destructive(string title, string body, string confirmLabel, Action onConfirm, Action onCancel, string cancelLabel = "CANCEL")
+        {
+            if (onCancel == null)
+            {
+                throw new ArgumentNullException(nameof(onCancel));
+            }
+
+            Open(title, body, confirmLabel, onConfirm, cancelLabel, destructive: true, TopiaForgeScheme.Paper, onCancel);
+        }
+
         /// <summary>HUD-scheme variant for in-gameplay dialogs.</summary>
         public void ConfirmHud(string title, string body, string confirmLabel, Action onConfirm, string cancelLabel = "CANCEL")
         {
@@ -46,18 +60,31 @@ namespace TopiaForge.Mods.UnityUi
             return new TopiaForgeModalInstance(host, title, scheme, width, showTitle: !string.IsNullOrEmpty(title));
         }
 
-        private void Open(string title, string body, string confirmLabel, Action onConfirm, string cancelLabel, bool destructive, TopiaForgeScheme scheme)
+        private void Open(string title, string body, string confirmLabel, Action onConfirm, string cancelLabel, bool destructive, TopiaForgeScheme scheme, Action? onCancel = null)
         {
             var modal = new TopiaForgeModalInstance(host, title, scheme, 480f, showTitle: true);
+            var confirmed = false;
             modal.Content.Label(body, TopiaForgeTextStyle.Body);
             var row = modal.Content.Row(TopiaForgeGap.Sm);
             row.Spacer();
             row.Button(cancelLabel, modal.Close, TopiaForgeButtonStyle.Ghost);
             row.Button(confirmLabel, () =>
             {
+                confirmed = true;
                 modal.Close();
                 TopiaForgeCallbacks.Invoke(onConfirm, "Modal confirmation");
             }, destructive ? TopiaForgeButtonStyle.Danger : TopiaForgeButtonStyle.Filled);
+            if (onCancel != null)
+            {
+                modal.Closed += () =>
+                {
+                    if (!confirmed)
+                    {
+                        TopiaForgeCallbacks.Invoke(onCancel, "Modal cancellation");
+                    }
+                };
+            }
+
             modal.Show();
         }
     }

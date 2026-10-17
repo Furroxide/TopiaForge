@@ -126,8 +126,9 @@ namespace TopiaForge.Multiplayer
                 return Fail(ModErrorCode.InvalidArgument, "A password is 1 to 64 characters with no control characters.");
             }
 
-            // This game's packages are read, and hashed where they have no receipt, before anything opens: packages that cannot
-            // be read stop hosting here, and the failure is reported.
+            // This game's packages are read, and hashed off the main thread where they have no receipt, before anything opens:
+            // hosting waits while that runs, and packages that cannot be read stop hosting here, with the failure reported.
+            if (content.IsLocalContentPending) return Fail(ModErrorCode.Unavailable, RuntimeContent.ContentNotReady);
             var local = content.ReadLocalContent();
             if (local == null) return Fail(ModErrorCode.Io, RuntimeContent.ContentUnreadable);
             foreach (var descriptor in local)
@@ -335,7 +336,11 @@ namespace TopiaForge.Multiplayer
         private bool IsLocal(ParticipantId participant) =>
             engine.LocalParticipantId.HasValue && engine.LocalParticipantId.Value.Equals(participant);
 
-        /// <summary>Starts a join the player asked for once the identity it proves has loaded, or ends it if the identity cannot load.</summary>
+        /// <summary>
+        /// Starts a join the player asked for once the identity it proves has loaded, or ends it if the identity cannot load.
+        /// It also waits while the runtime identifies this game's packages off the main thread, so the join's own content
+        /// check sees them identified, or unreadable.
+        /// </summary>
         private void StartPendingJoin()
         {
             var pending = pendingJoin;
@@ -356,6 +361,7 @@ namespace TopiaForge.Multiplayer
                 return;
             }
 
+            if (content.IsLocalContentPending) return;
             pendingJoin = null;
             try
             {
