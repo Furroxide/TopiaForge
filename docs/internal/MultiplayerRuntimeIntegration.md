@@ -133,7 +133,8 @@ runtime nothing is announced and nobody is admitted.
 | `GameBuild` | The game version's patch number, such as `2545`; `unknown` when the version is not known |
 | `RuntimeVersion` | The loader's semantic version |
 | `DisplayName` | The player's name, 1 to 24 printable characters, `Player` until the settings set one |
-| `LocalContent` | One descriptor per loaded package, sorted by id; the first read can fail when a package cannot be read |
+| `LocalContent` | One descriptor per loaded package, sorted by id; it answers once the packages are identified, off the main thread |
+| `ContentReadiness` | Whether the packages are identified yet: pending with progress, ready, or unreadable; it never blocks |
 | `EvaluateAdmission` | The host's decision on a player's offer |
 | `CheckHostContent` | A joining player's check of the host's packages |
 | `SetRunInBackground` | On while online; off restores the game's own setting |
@@ -150,10 +151,25 @@ Each loaded package is described from its manifest and the hash multiplayer comp
   hash of the installed files stands in: each file's portable path, a zero byte, its length and its SHA-256, in ordinal
   order, under a label. The receipt is left out and links are not followed. A hand-copied development build therefore
   matches only the identical files elsewhere.
-- **Packages that cannot be read.** Those files are hashed at the first read of `LocalContent`, on the main thread. A
-  file that cannot be read then, as when another program holds it open, fails the read with an `IOException` that names
-  the package, never its folder, and the next read tries again. The provider treats this game's content as unreadable,
-  reports `content.read-failed`, and nothing connects:
+- **Identification, off the main thread.** The first look at `ContentReadiness` or `LocalContent` reads each package's
+  install receipt, one small file, on the thread that asks, so a game whose packages all carry receipts is ready at
+  once, and a player who never opens multiplayer pays nothing. Hashing the files of packages without a usable receipt
+  runs on a background thread at below-normal priority (`MultiplayerContentIdentification`), never on the thread that
+  asks. Until it finishes, `ContentReadiness` is pending, with progress in packages and in bytes hashed, and
+  `LocalContent` throws `InternalContentNotReadyException`. Nothing failed, so nothing is reported, and the provider
+  waits:
+  - hosting through the control returns `Unavailable` with "This game is still identifying its mods for multiplayer; try
+    again in a moment.";
+  - a join through the control waits before it starts, as it waits for the identity, and so does the developer switch;
+  - nothing is announced, offered or admitted meanwhile; a host is refused as `not-ready`, "The host is not ready to
+    admit players yet.".
+
+  The HOST and BROWSE views show the progress, and hosting and joining stay disabled until the mods are identified. A
+  run whose packages change before it finishes is dropped, and the next look starts a new one.
+- **Packages that cannot be read.** A file that identification cannot read, as when another program holds it open,
+  makes the content unreadable. `ContentReadiness` says so until `LocalContent` is read again; that read throws an
+  `IOException` that names the package, never its folder, and starts identifying again. The interface's retry does the
+  same. The provider treats this game's content as unreadable, reports `content.read-failed`, and nothing connects:
   - hosting through the control returns `Io` with "This game's mods could not be read: a file of one of them is in use
     or cannot be opened.";
   - a live host started directly, as the developer switch does, fails as `ContentUnreadable` before anything binds;
@@ -161,9 +177,9 @@ Each loaded package is described from its manifest and the hash multiplayer comp
     as its content problem;
   - a running host refuses every player as `not-ready`, with "The host could not read its own mods.".
 - **The hash's cost.** On a Windows 11 x64 machine with the files cached, 512 MiB in 64 files hashed in 0.44 s on
-  .NET 10 and in 3.9 s on Mono 6.13, whose SHA-256 is managed code, and 20,000 files of 4 KiB in 1.2 s and 3.2 s. A
-  large hand-copied package can therefore hold the game's frame for seconds the first time multiplayer reads it. Installed
-  packages carry a receipt and cost one small read each. Hashing off the main thread is later work (section 12).
+  .NET 10 and in 3.9 s on Mono 6.13, whose SHA-256 is managed code, and 20,000 files of 4 KiB in 1.2 s and 3.2 s. That
+  time is spent on the background thread; the frame only reads the progress. Installed packages carry a receipt and cost
+  one small read each, at the first look.
 - **The host's descriptor** lists implicit mods as `implicit` and session mods as `session-required` or
   `session-optional`. Client-local, server-only and standalone mods are never listed.
 
@@ -404,7 +420,7 @@ The frame:
 | WS3.6 network world | `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`; the `WorldReplication` channel, paced by `CanSend` and re-baselined when `GetGeneration` changes; `SetEntityIdentitySource` |
 | WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
-| WS5 interface | `GetStatus`, hosting, joining, targets, `Query`, LAN listings, moderation, and `PreferredDisplayName`, with the host-authored text rules of section 2 |
+| WS5 interface | `GetStatus`, hosting, joining, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
 | WS5 voice | `IInternalVoiceService` from the provider's voice service, `SubmitCapture` from `PresenceSend`'s capture, and each speaker's `IVoicePlaybackStream` in an audio callback |
 
@@ -425,6 +441,11 @@ answers no and is reported.
   without a runtime, and a package whose only file another handle holds open: hosting through the control and through
   the live sessions refused before anything binds, a joining player stopped before anything connects, a running host
   refusing every player, every failure reported naming the package and never its folder, and no frame failing.
+- **Identification** (`MultiplayerContentIdentificationTests`, `RuntimeContentReadinessTests`): nothing hashes on the
+  calling thread; progress counts packages and bytes; an unreadable package stays unreadable until read or retried, and a
+  run whose packages change is dropped; the production thread identifies a package; settled readiness allocates nothing;
+  and while identification runs, hosting is refused as not ready, a join and the developer switch wait, and nothing is
+  announced, admitted or opened.
 - **The engine** (`SystemChannelTests`): channels both ways and in order, stale epochs and generations, windows and
   ownership, hostile peers, readiness holds and their progress, the host's bound on players that never become Ready, the
   world sources and the end-of-frame flush.
@@ -463,6 +484,12 @@ The runtime will hold the process's `NetRealm` (`Offline`, `ListenHost` or `Clie
   game?";
 - leaving is never refused.
 
+Until this step lands, the in-game interface applies the same rules itself (`SessionRealmGate`): it reads the realm from
+the control's `Role` and the local game's phase, asks "Leave current game?" before a join from a running game, opens a
+running game in place, and starts a game first at the main menu. When the runtime holds the realm, the gate asks the
+runtime instead, and starting a game to host becomes the runtime's own transition rather than a launch followed by
+hosting ([MultiplayerInGameSessions.md](MultiplayerInGameSessions.md), section 6).
+
 ## 11. The factory seam (step 2)
 
 `ModNetProfile` will be threaded through `CoreGameplayServices.Create`, `ModContext` and its scopes, with pass-through
@@ -492,9 +519,8 @@ authority and the microphone arbiter.
 - **The joining check is exact for implicit mods only**, and checks presence for required session mods, leaving the
   rest to the host's planner, as section 4 explains.
 - **The offer is binary**, not canonical JSON: it never leaves C#, and 512 packages fit in the join request's field.
-- **Packages without a receipt are hashed at first use, on the main thread**, so a player who never plays online pays
-  nothing. Hand-copied builds are development work, and section 4 measures the cost; before the in-game interface offers
-  hosting and joining to players, that hashing moves off the main thread, with content reported as not ready until it
-  is done.
+- **Packages without a receipt are hashed at first use, off the main thread**, so a player who never plays online pays
+  nothing and a frame never waits for it. Hand-copied builds are development work, and section 4 measures the cost;
+  content reports as pending, with its progress, until the work is done.
 - **Bans are listed by id, not by key**, so the interface never holds a player's key.
 - **Voice is null** until the voice lane adapts the provider's voice service to `IInternalVoiceService`.

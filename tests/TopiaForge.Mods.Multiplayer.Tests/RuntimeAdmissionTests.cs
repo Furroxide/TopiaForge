@@ -223,7 +223,7 @@ internal static class RuntimeAdmissionTests
         var root = Directory.CreateTempSubdirectory("TopiaForgeOffer-").FullName;
         try
         {
-            var runtime = new MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog());
+            var runtime = new MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog(), contentScheduler: MultiplayerWorkSchedulers.Inline);
             var content = new RuntimeContent("2545", "0.2.0") { Runtime = runtime };
             var empty = content.ClientContent();
             That(ContentOfferCodec.TryDecode(empty, out var none) && none!.Mods.Count == 0, "a runtime without packages offers none");
@@ -273,6 +273,8 @@ internal static class RuntimeAdmissionTests
 
         public IReadOnlyList<InternalContentDescriptor> LocalContent => throw new IOException("Devtools 0.1.0 could not be read to identify it for multiplayer (IOException).");
 
+        public InternalContentReadiness ContentReadiness => new InternalContentReadiness(InternalContentState.Unreadable, 0, 0, 0, 0);
+
         public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => inner.EvaluateAdmission(offer);
 
         public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) => inner.CheckHostContent(hostPackages);
@@ -299,6 +301,8 @@ internal static class RuntimeAdmissionTests
         public string DisplayName => inner.DisplayName;
 
         public IReadOnlyList<InternalContentDescriptor> LocalContent => inner.LocalContent;
+
+        public InternalContentReadiness ContentReadiness => inner.ContentReadiness;
 
         public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => throw new InvalidOperationException("broken planner");
 

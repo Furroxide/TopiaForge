@@ -27,5 +27,12 @@
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!-- The manager's in-game multiplayer screens, compiled in so the SESSIONS page shows the real views over fake data:
+       the screens' contracts, which name no multiplayer SPI type, and the views, which use the kit and nothing else. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Screens\*.cs" Link="Sessions\Screens\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Overlay\Multiplayer\*.cs" Link="Sessions\Views\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />
 </Project>

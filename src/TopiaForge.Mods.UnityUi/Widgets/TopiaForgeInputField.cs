@@ -89,6 +89,14 @@ namespace TopiaForge.Mods.UnityUi
             return this;
         }
 
+        /// <summary>Masks what is typed, as a password field does; the text itself is unchanged.</summary>
+        public TopiaForgeInputField Password()
+        {
+            input.contentType = TMP_InputField.ContentType.Password;
+            input.ForceLabelUpdate();
+            return this;
+        }
+
         /// <summary>Search affordance: magnifier icon and a clear (×) button when non-empty.</summary>
         public TopiaForgeInputField Search()
         {

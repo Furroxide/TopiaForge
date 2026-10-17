@@ -10,21 +10,63 @@ namespace TopiaForge.ModManager
 {
     /// <summary>
     /// The packages this process runs, as multiplayer admission sees them. Each loaded package is described once, from its
-    /// manifest and the SHA-256 of the archive its install receipt records. A package whose receipt cannot be read gets a
-    /// deterministic hash of its installed files instead, so a hand-copied development build still has a stable identity
-    /// that matches only the identical files elsewhere. Main thread only.
+    /// manifest and the SHA-256 of the archive its install receipt records. The first look reads the receipts, one small
+    /// file each, on the calling thread. A package whose receipt cannot be read gets a deterministic hash of its installed
+    /// files instead, so a hand-copied development build still has a stable identity that matches only the identical files
+    /// elsewhere. That hashing can take seconds, so it never runs on the calling thread: <see cref="Readiness"/> starts a
+    /// <see cref="MultiplayerContentIdentification"/> on the scheduler, and the description answers once it finishes. Main
+    /// thread only.
     /// </summary>
     internal sealed class MultiplayerContentInventory
     {
+        private const int ChunkBytes = 64 * 1024;
+
         private readonly List<LoadedPackage> packages = new List<LoadedPackage>();
+        private readonly IMultiplayerWorkScheduler scheduler;
         private IReadOnlyList<InternalContentDescriptor>? descriptors;
         private IReadOnlyList<MultiplayerAdmissionMod>? admissionMods;
+        private MultiplayerContentIdentification? running;
+        private IOException? lastFailure;
+        private int generation;
+
+        /// <param name="scheduler">Where identification runs: a background thread in the game.</param>
+        internal MultiplayerContentInventory(IMultiplayerWorkScheduler scheduler)
+        {
+            this.scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+        }
 
         /// <summary>Gets the loaded packages, in load order.</summary>
         internal IReadOnlyList<LoadedPackage> Packages => packages;
 
         /// <summary>Gets the ids of packages the last description left out because their manifests exceed its bounds.</summary>
         internal IReadOnlyList<string> Skipped { get; private set; } = Array.Empty<string>();
+
+        /// <summary>Gets how many identifications have started, for tests and diagnostics.</summary>
+        internal int IdentificationsStarted { get; private set; }
+
+        /// <summary>
+        /// Gets whether every package is identified. Reading it starts identifying the packages that are not, when nothing
+        /// has started yet: the first read after the packages change reads their receipts, and only packages without one
+        /// are hashed, off this thread. A failure stays <see cref="InternalContentState.Unreadable"/> until
+        /// <see cref="Descriptors"/> is read again or <see cref="RetryIdentification"/> runs. It never hashes or throws, and
+        /// a settled read allocates nothing.
+        /// </summary>
+        internal InternalContentReadiness Readiness
+        {
+            get
+            {
+                if (descriptors != null) return InternalContentReadiness.Ready;
+                Adopt();
+                if (lastFailure != null) return Unreadable();
+                IdentifyReceipted();
+                if (AllIdentified()) return InternalContentReadiness.Ready;
+                if (running == null) StartIdentification();
+                Adopt();
+                if (lastFailure != null) return Unreadable();
+                if (AllIdentified()) return InternalContentReadiness.Ready;
+                return running?.Progress ?? new InternalContentReadiness(InternalContentState.Pending, 0, 0, 0, 0);
+            }
+        }
 
         /// <summary>Records a package that loaded. A package loaded again under the same id replaces the earlier record.</summary>
         internal void Add(ModManifest manifest, string packagePath)
@@ -33,28 +75,38 @@ namespace TopiaForge.ModManager
             if (string.IsNullOrEmpty(packagePath)) throw new ArgumentException("A package path is required.", nameof(packagePath));
             Remove(manifest.Id);
             packages.Add(new LoadedPackage(manifest, packagePath));
-            descriptors = null;
-            admissionMods = null;
+            Changed();
         }
 
         /// <summary>Forgets a package, as when its load failed after it was recorded.</summary>
         internal void Remove(string modId)
         {
             if (packages.RemoveAll(item => string.Equals(item.Manifest.Id, modId, StringComparison.OrdinalIgnoreCase)) == 0) return;
-            descriptors = null;
-            admissionMods = null;
+            Changed();
+        }
+
+        /// <summary>Forgets an identification failure and identifies again, receipts included, as the player's retry asks.</summary>
+        internal void RetryIdentification()
+        {
+            lastFailure = null;
+            if (descriptors != null || running != null) return;
+            foreach (var package in packages) package.ReceiptTried = package.IsIdentified;
+            IdentifyReceipted();
+            if (!AllIdentified()) StartIdentification();
         }
 
         /// <summary>
-        /// Gets one descriptor per loaded package, sorted by id; computed once and kept until the packages change. The first
-        /// read hashes the packages without a receipt; one whose files cannot be read throws an <see cref="IOException"/>, and
-        /// the next read tries again.
+        /// Gets one descriptor per loaded package, sorted by id; computed once every package is identified and kept until the
+        /// packages change. Until then it throws <see cref="InternalContentNotReadyException"/>, never hashing on this thread.
+        /// After a failed identification it throws an <see cref="IOException"/> that names the package and not its folder,
+        /// once: the next read starts identifying again.
         /// </summary>
         internal IReadOnlyList<InternalContentDescriptor> Descriptors
         {
             get
             {
                 if (descriptors != null) return descriptors;
+                RequireIdentified();
                 var list = new List<InternalContentDescriptor>(packages.Count);
                 var skipped = new List<string>();
                 foreach (var package in packages)
@@ -77,12 +129,16 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>Gets the server profile's mods for the admission planner: the real manifests with their archive hashes.</summary>
+        /// <summary>
+        /// Gets the server profile's mods for the admission planner: the real manifests with their archive hashes. Like
+        /// <see cref="Descriptors"/>, it answers only once every package is identified.
+        /// </summary>
         internal IReadOnlyList<MultiplayerAdmissionMod> AdmissionMods
         {
             get
             {
                 if (admissionMods != null) return admissionMods;
+                RequireIdentified();
                 var list = new List<MultiplayerAdmissionMod>(packages.Count);
                 foreach (var package in packages) list.Add(new MultiplayerAdmissionMod(package.Manifest, package.Sha256));
                 admissionMods = list.AsReadOnly();
@@ -118,21 +174,28 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Gets a package's archive hash from its install receipt, or a deterministic hash of its files when the receipt is
-        /// missing or unreadable.
+        /// missing or unreadable. It runs on the calling thread, so the runtime calls it only from identification.
         /// </summary>
         internal static string PackageSha256(string packagePath)
         {
+            string? receipted = null;
             try
             {
-                var receipt = JsonUtil.LoadFile<PackageInstallReceipt?>(Path.Combine(packagePath, PackageInstallReceipt.FileName), null);
-                if (receipt != null && InternalText.IsSha256(receipt.SourceSha256)) return receipt.SourceSha256;
+                receipted = ReceiptSha256(packagePath);
             }
             catch (Exception)
             {
                 // An unreadable receipt, whatever the reason, falls back to the files themselves.
             }
 
-            return PayloadSha256(packagePath);
+            return receipted ?? PayloadSha256(packagePath);
+        }
+
+        /// <summary>Gets the archive hash a package's install receipt records, or null when there is no usable receipt.</summary>
+        internal static string? ReceiptSha256(string packagePath)
+        {
+            var receipt = JsonUtil.LoadFile<PackageInstallReceipt?>(Path.Combine(packagePath, PackageInstallReceipt.FileName), null);
+            return receipt != null && InternalText.IsSha256(receipt.SourceSha256) ? receipt.SourceSha256 : null;
         }
 
         /// <summary>
@@ -140,33 +203,64 @@ namespace TopiaForge.ModManager
         /// a zero byte, its length and its SHA-256, all under a label so the value can pass for no other hash. Links are
         /// not followed, as the receipt's own inventory refuses them, so nothing outside the package is ever read.
         /// </summary>
-        internal static string PayloadSha256(string packagePath)
+        internal static string PayloadSha256(string packagePath) => PayloadSha256(packagePath, ListPayloadFiles(packagePath), null, null);
+
+        /// <summary>Lists the files <see cref="PayloadSha256(string)"/> hashes, in its order, with their lengths for progress.</summary>
+        internal static IReadOnlyList<PayloadFile> ListPayloadFiles(string packagePath)
         {
             var root = Path.GetFullPath(packagePath);
-            var files = new List<string>();
-            if (Directory.Exists(root)) CollectFiles(root, root, files);
-            files.Sort(StringComparer.Ordinal);
+            var relatives = new List<string>();
+            if (Directory.Exists(root)) CollectFiles(root, root, relatives);
+            relatives.Sort(StringComparer.Ordinal);
+            var files = new PayloadFile[relatives.Count];
+            for (var index = 0; index < files.Length; index++)
+            {
+                var info = new FileInfo(Path.Combine(root, relatives[index]));
+                files[index] = new PayloadFile(relatives[index], info.Exists ? info.Length : 0);
+            }
+
+            return files;
+        }
+
+        /// <summary>
+        /// Hashes <paramref name="files"/> as <see cref="PayloadSha256(string)"/> does, a chunk at a time, reporting each
+        /// chunk's bytes to <paramref name="progress"/> and stopping with <see cref="OperationCanceledException"/> once
+        /// <paramref name="cancelled"/> says so.
+        /// </summary>
+        internal static string PayloadSha256(string packagePath, IReadOnlyList<PayloadFile> files, Action<long>? progress, Func<bool>? cancelled)
+        {
+            var root = Path.GetFullPath(packagePath);
+            var buffer = new byte[ChunkBytes];
             using (var outer = SHA256.Create())
             using (var inner = SHA256.Create())
             {
                 var label = Encoding.UTF8.GetBytes("TopiaForge package files v1\n");
                 outer.TransformBlock(label, 0, label.Length, null, 0);
-                foreach (var relative in files)
+                foreach (var file in files)
                 {
-                    var path = Encoding.UTF8.GetBytes(relative);
+                    var path = Encoding.UTF8.GetBytes(file.RelativePath);
                     outer.TransformBlock(path, 0, path.Length, null, 0);
                     outer.TransformBlock(new byte[1], 0, 1, null, 0);
-                    byte[] digest;
                     long length;
-                    using (var stream = File.OpenRead(Path.Combine(root, relative)))
+                    inner.Initialize();
+                    using (var stream = File.OpenRead(Path.Combine(root, file.RelativePath)))
                     {
                         length = stream.Length;
-                        digest = inner.ComputeHash(stream);
+                        int read;
+                        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            if (cancelled != null && cancelled()) throw new OperationCanceledException();
+                            inner.TransformBlock(buffer, 0, read, null, 0);
+                            progress?.Invoke(read);
+                        }
+
+                        inner.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
                     }
 
                     var lengthBytes = BitConverter.GetBytes(length);
                     if (!BitConverter.IsLittleEndian) Array.Reverse(lengthBytes);
                     outer.TransformBlock(lengthBytes, 0, lengthBytes.Length, null, 0);
+                    var digest = inner.Hash!;
                     outer.TransformBlock(digest, 0, digest.Length, null, 0);
                 }
 
@@ -174,6 +268,133 @@ namespace TopiaForge.ModManager
                 return ToHex(outer.Hash!);
             }
         }
+
+        private void Changed()
+        {
+            descriptors = null;
+            admissionMods = null;
+            lastFailure = null;
+            generation++;
+            running?.Cancel();
+            running = null;
+        }
+
+        /// <summary>
+        /// Identifies, on this thread, the packages whose install receipt records their archive hash: one small file each,
+        /// read once per package, as the description always read it. Only packages without a usable receipt are left for
+        /// <see cref="StartIdentification"/>. A settled pass allocates nothing.
+        /// </summary>
+        private void IdentifyReceipted()
+        {
+            for (var index = 0; index < packages.Count; index++)
+            {
+                var package = packages[index];
+                if (package.IsIdentified || package.ReceiptTried) continue;
+                package.ReceiptTried = true;
+                string? hash = null;
+                try
+                {
+                    hash = ReceiptSha256(package.PackagePath);
+                }
+                catch (Exception)
+                {
+                    // An unreadable receipt, whatever the reason, falls back to the files themselves.
+                }
+
+                if (hash != null) package.Identify(hash);
+            }
+        }
+
+        private bool AllIdentified()
+        {
+            for (var index = 0; index < packages.Count; index++)
+            {
+                if (!packages[index].IsIdentified) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>Takes the finished identification's results on this thread; a stale or cancelled run is dropped.</summary>
+        private void Adopt()
+        {
+            var finished = running;
+            if (finished == null || !finished.IsCompleted) return;
+            running = null;
+            if (finished.Generation != generation || finished.IsCancelled) return;
+            var pending = PendingPackages();
+            if (pending.Count != finished.Count) return;
+            for (var index = 0; index < pending.Count; index++)
+            {
+                var hash = finished.HashOf(index);
+                if (hash != null) pending[index].Identify(hash);
+            }
+
+            lastFailure = finished.Failure;
+        }
+
+        private void StartIdentification()
+        {
+            var pending = PendingPackages();
+            if (pending.Count == 0) return;
+            var paths = new string[pending.Count];
+            var names = new string[pending.Count];
+            for (var index = 0; index < pending.Count; index++)
+            {
+                paths[index] = pending[index].PackagePath;
+                names[index] = pending[index].Name + " " + pending[index].Manifest.Version;
+            }
+
+            var identification = new MultiplayerContentIdentification(generation, paths, names);
+            running = identification;
+            IdentificationsStarted++;
+            try
+            {
+                scheduler.Schedule(identification.Run);
+            }
+            catch (Exception exception)
+            {
+                // Nothing may hash on this thread instead; the content is unreadable until a retry can start the work.
+                running = null;
+                lastFailure = new IOException("This game's mods could not be identified for multiplayer (" + exception.GetType().Name + ").", exception);
+            }
+        }
+
+        /// <summary>Throws unless every package is identified, starting or adopting identification on the way.</summary>
+        private void RequireIdentified()
+        {
+            Adopt();
+            ThrowFailure();
+            IdentifyReceipted();
+            if (AllIdentified()) return;
+            if (running == null) StartIdentification();
+            Adopt();
+            ThrowFailure();
+            if (!AllIdentified()) throw new InternalContentNotReadyException();
+        }
+
+        /// <summary>Throws a recorded failure once, as a fresh exception, so the next read identifies again.</summary>
+        private void ThrowFailure()
+        {
+            var failure = lastFailure;
+            if (failure == null) return;
+            lastFailure = null;
+            throw new IOException(failure.Message, failure.InnerException ?? failure);
+        }
+
+        private List<LoadedPackage> PendingPackages()
+        {
+            var pending = new List<LoadedPackage>();
+            foreach (var package in packages)
+            {
+                if (!package.IsIdentified) pending.Add(package);
+            }
+
+            return pending;
+        }
+
+        private InternalContentReadiness Unreadable() =>
+            new InternalContentReadiness(InternalContentState.Unreadable, 0, 0, 0, 0);
 
         private static void CollectFiles(string root, string directory, List<string> files)
         {
@@ -222,7 +443,21 @@ namespace TopiaForge.ModManager
             return builder.ToString();
         }
 
-        /// <summary>One loaded package: its manifest and the hash multiplayer compares it by.</summary>
+        /// <summary>One file a payload hash covers: its portable path and its length when listed.</summary>
+        internal readonly struct PayloadFile
+        {
+            internal PayloadFile(string relativePath, long length)
+            {
+                RelativePath = relativePath;
+                Length = length;
+            }
+
+            internal string RelativePath { get; }
+
+            internal long Length { get; }
+        }
+
+        /// <summary>One loaded package: its manifest and, once identified, the hash multiplayer compares it by.</summary>
         internal sealed class LoadedPackage
         {
             private string? sha256;
@@ -231,35 +466,26 @@ namespace TopiaForge.ModManager
             {
                 Manifest = manifest;
                 PackagePath = packagePath;
+                Name = string.IsNullOrWhiteSpace(manifest.Name) ? manifest.Id : manifest.Name.Trim();
             }
 
             internal ModManifest Manifest { get; }
 
             internal string PackagePath { get; }
 
-            /// <summary>
-            /// Gets the package hash, read when first needed. Files that cannot be read, as when another program holds one open,
-            /// throw an <see cref="IOException"/> that names the package and not its folder, which names this player's own
-            /// folders; the next read tries again.
-            /// </summary>
-            internal string Sha256
-            {
-                get
-                {
-                    if (sha256 != null) return sha256;
-                    try
-                    {
-                        sha256 = PackageSha256(PackagePath);
-                    }
-                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
-                    {
-                        var name = string.IsNullOrWhiteSpace(Manifest.Name) ? Manifest.Id : Manifest.Name.Trim();
-                        throw new IOException(name + " " + Manifest.Version + " could not be read to identify it for multiplayer (" + exception.GetType().Name + ").", exception);
-                    }
+            /// <summary>Gets the name a failure gives the package: its display name, never its folder.</summary>
+            internal string Name { get; }
 
-                    return sha256;
-                }
-            }
+            /// <summary>Gets whether identification found the package's hash.</summary>
+            internal bool IsIdentified => sha256 != null;
+
+            /// <summary>Gets or sets whether the package's receipt was read on the main thread since it was last asked to.</summary>
+            internal bool ReceiptTried { get; set; }
+
+            /// <summary>Gets the package hash. Only identified packages have one; the inventory checks before it asks.</summary>
+            internal string Sha256 => sha256 ?? throw new InternalContentNotReadyException();
+
+            internal void Identify(string hash) => sha256 = hash;
         }
     }
 }

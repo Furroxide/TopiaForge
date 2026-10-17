@@ -22,11 +22,22 @@ namespace TopiaForge.Mods.Internal
         /// <summary>
         /// Gets the packages this process runs, as multiplayer admission sees them, sorted by id. The same list comes back
         /// until the packages change, so a caller may keep what it derives from the list for as long as it gets that list.
-        /// The first read hashes the files of packages without an install receipt, on the calling thread, and throws an
-        /// <see cref="System.IO.IOException"/> when one cannot be read; the provider then treats this player's content as
-        /// unreadable, so it neither hosts nor joins with it, and the next read tries again.
+        /// Installed packages are identified by their install receipts, one small file each, at the first read. Packages
+        /// without one are identified by hashing their files off the main thread (<see cref="ContentReadiness"/>), never on
+        /// the calling thread: until that finishes, a read throws <see cref="InternalContentNotReadyException"/>. When a
+        /// package could not be read, the read after that work throws an <see cref="System.IO.IOException"/> that names it;
+        /// the provider then treats this player's content as unreadable, so it neither hosts nor joins with it, and the next
+        /// read starts identifying again.
         /// </summary>
         IReadOnlyList<InternalContentDescriptor> LocalContent { get; }
+
+        /// <summary>
+        /// Gets how far the runtime is in identifying this game's packages for multiplayer. Reading it starts that work when
+        /// nothing has started it yet: the first read after the packages change reads their receipts, and the hashing runs
+        /// off the main thread. It never hashes or throws, and a settled read allocates nothing, so a frame may read it.
+        /// <see cref="InternalContentState.Unreadable"/> stays until <see cref="LocalContent"/> is read again.
+        /// </summary>
+        InternalContentReadiness ContentReadiness { get; }
 
         /// <summary>
         /// Decides, on a listen host, whether a player presenting <paramref name="offer"/> may join. The runtime runs its
@@ -48,6 +59,70 @@ namespace TopiaForge.Mods.Internal
         /// diagnostics bundle or a crash report, so this is safe for any text the provider holds.
         /// </summary>
         void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic);
+    }
+
+    /// <summary>Whether this game's packages are identified for multiplayer.</summary>
+    internal enum InternalContentState
+    {
+        /// <summary>Identifying, off the main thread; hosting and joining wait for it.</summary>
+        Pending = 0,
+
+        /// <summary>Every package has its hash; <see cref="IInternalMultiplayerRuntimeHost.LocalContent"/> answers.</summary>
+        Ready = 1,
+
+        /// <summary>A package could not be read, as when another program holds one of its files open.</summary>
+        Unreadable = 2
+    }
+
+    /// <summary>
+    /// How far the runtime is in identifying this game's packages: its state and the progress of the work, in packages and
+    /// in bytes of files hashed. The counts only grow while one identification runs.
+    /// </summary>
+    internal readonly struct InternalContentReadiness
+    {
+        internal InternalContentReadiness(InternalContentState state, int packagesDone, int packagesTotal, long bytesDone, long bytesTotal)
+        {
+            // A range check rather than Enum.IsDefined, which boxes: readiness is read every frame and must not allocate.
+            if (state < InternalContentState.Pending || state > InternalContentState.Unreadable) throw new ArgumentOutOfRangeException(nameof(state));
+            if (packagesTotal < 0 || packagesDone < 0 || packagesDone > packagesTotal) throw new ArgumentOutOfRangeException(nameof(packagesDone));
+            if (bytesTotal < 0 || bytesDone < 0) throw new ArgumentOutOfRangeException(nameof(bytesDone));
+            State = state;
+            PackagesDone = packagesDone;
+            PackagesTotal = packagesTotal;
+            BytesDone = bytesDone > bytesTotal ? bytesTotal : bytesDone;
+            BytesTotal = bytesTotal;
+        }
+
+        /// <summary>Gets readiness with nothing left to identify.</summary>
+        internal static InternalContentReadiness Ready => new InternalContentReadiness(InternalContentState.Ready, 0, 0, 0, 0);
+
+        internal InternalContentState State { get; }
+
+        /// <summary>Gets how many packages this identification has finished, read from a receipt or hashed.</summary>
+        internal int PackagesDone { get; }
+
+        /// <summary>Gets how many packages this identification covers.</summary>
+        internal int PackagesTotal { get; }
+
+        /// <summary>Gets how many bytes of files this identification has hashed.</summary>
+        internal long BytesDone { get; }
+
+        /// <summary>Gets how many bytes of files it hashes in all, once it has listed them; zero before that.</summary>
+        internal long BytesTotal { get; }
+    }
+
+    /// <summary>
+    /// Thrown by <see cref="IInternalMultiplayerRuntimeHost.LocalContent"/> while the runtime is still identifying this game's
+    /// packages off the main thread. Nothing failed: wait for <see cref="IInternalMultiplayerRuntimeHost.ContentReadiness"/>.
+    /// </summary>
+    internal sealed class InternalContentNotReadyException : InvalidOperationException
+    {
+        internal const string Text = "This game is still identifying its mods for multiplayer.";
+
+        internal InternalContentNotReadyException()
+            : base(Text)
+        {
+        }
     }
 
     /// <summary>How a package takes part in sessions, from its manifest's <c>multiplayer</c> block.</summary>
