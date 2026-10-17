@@ -119,7 +119,7 @@ namespace TopiaForge.ModManager.Tests
                 "the boxes the host moved while hosting are mirrored, and wait for their scene");
 
             yard(player.Scene);
-            player.World.SceneLoaded(player.Scene.Scenes[0].Handle);
+            player.LoadScenes();
             var mine = player.Scene.Scenes[0].Roots;
             That(Enumerable.Range(0, 3).All(index => mine[index].Mark == 0 && Near(mine[index].Position, new NetVector3(index, 4, 4))),
                 "once it loads, the boxes moved before the game opened stand where the host's do");
@@ -130,10 +130,9 @@ namespace TopiaForge.ModManager.Tests
             That(mine.All(box => box.Kinematic), "and the scene's bodies are the host's to move");
 
             // A scene unloaded and loaded again starts from the scene: its removed box is hidden again.
-            player.World.SceneUnloaded(player.Scene.Scenes[0].Handle);
-            player.Scene.UnloadScene(player.Scene.Scenes[0]);
+            player.UnloadScene(player.Scene.Scenes[0]);
             yard(player.Scene);
-            player.World.SceneLoaded(player.Scene.Scenes[0].Handle);
+            player.LoadScenes();
             rig.Frames(5);
             That(!player.Scene.Scenes[0].Roots[11].Active, "a scene loaded again hides what the host removed from it");
         }

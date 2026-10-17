@@ -106,6 +106,9 @@ namespace TopiaForge.ModManager
 
         internal long EntriesTooLarge { get; set; }
 
+        /// <summary>Gets the scenes indexed with keys taken after their load, because their load could not be keyed.</summary>
+        internal long ScenesKeyedLate { get; set; }
+
         // A joined player.
         internal long Joins { get; set; }
 

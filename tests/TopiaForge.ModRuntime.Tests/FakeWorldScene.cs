@@ -54,7 +54,35 @@ namespace TopiaForge.ModManager.TestDoubles
             return created;
         }
 
+        /// <summary>Gets how many times a census keyed scene objects, so tests can see when keys are taken.</summary>
+        internal int Censuses { get; private set; }
+
+        /// <summary>Gets or sets a failure the scene census throws, as a broken engine side might.</summary>
+        internal Exception? FailSceneCensus { get; set; }
+
         public void CollectSceneObjects(int? sceneHandle, List<NetworkSceneObject> into)
+        {
+            if (FailSceneCensus != null) throw FailSceneCensus;
+            Censuses++;
+            var found = new List<(NetworkSceneObject Object, SceneObjectDescriptor Descriptor)>();
+            Collect(sceneHandle, found);
+            foreach (var item in found) into.Add(item.Object);
+        }
+
+        /// <summary>Appends what the census would key, with each object's descriptor, so tests can key it the model's way.</summary>
+        internal void CollectDescriptors(int? sceneHandle, List<SceneObjectDescriptor> into)
+        {
+            var found = new List<(NetworkSceneObject Object, SceneObjectDescriptor Descriptor)>();
+            Collect(sceneHandle, found);
+            foreach (var item in found) into.Add(item.Descriptor);
+        }
+
+        public void CollectLoadedScenes(List<int> into)
+        {
+            foreach (var scene in scenes) into.Add(scene.Handle);
+        }
+
+        private void Collect(int? sceneHandle, List<(NetworkSceneObject Object, SceneObjectDescriptor Descriptor)> into)
         {
             foreach (var scene in scenes)
             {
@@ -115,7 +143,8 @@ namespace TopiaForge.ModManager.TestDoubles
         private static FakeWorldObject? ObjectOf(IEntity entity) =>
             entity is FakeWorldEntity fake ? fake.Object : entity is FakeSpawnedEntity spawned ? spawned.Object : null;
 
-        private void Walk(FakeSceneData scene, FakeWorldObject current, int siblingIndex, List<SceneObjectPathSegment> path, List<NetworkSceneObject> into)
+        private void Walk(FakeSceneData scene, FakeWorldObject current, int siblingIndex, List<SceneObjectPathSegment> path,
+            List<(NetworkSceneObject Object, SceneObjectDescriptor Descriptor)> into)
         {
             if (!current.IsAlive) return;
             path.Add(new SceneObjectPathSegment(current.Name, siblingIndex));
@@ -125,7 +154,8 @@ namespace TopiaForge.ModManager.TestDoubles
                 if (current.Mark != 0) return;
                 if (current.HasRigidbody)
                 {
-                    into.Add(new NetworkSceneObject(scene.Handle, new SceneObjectDescriptor(scene.Name, path.ToArray(), "UnityEngine.Rigidbody"), current));
+                    var descriptor = new SceneObjectDescriptor(scene.Name, path.ToArray(), "UnityEngine.Rigidbody");
+                    into.Add((new NetworkSceneObject(scene.Handle, descriptor, current), descriptor));
                     return;
                 }
 
@@ -194,9 +224,9 @@ namespace TopiaForge.ModManager.TestDoubles
 
         internal FakeSceneData Scene { get; }
 
-        internal string Name { get; }
+        internal string Name { get; private set; }
 
-        internal FakeWorldObject? Parent { get; }
+        internal FakeWorldObject? Parent { get; private set; }
 
         internal List<FakeWorldObject> Children { get; } = new List<FakeWorldObject>();
 
@@ -228,6 +258,8 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public bool IsAlive => !Destroyed;
 
+        public bool IsNetworkRoot => Mark != 0;
+
         public IEntity Entity { get; }
 
         /// <summary>Adds a native system to the object, enabled unless told otherwise.</summary>
@@ -256,6 +288,28 @@ namespace TopiaForge.ModManager.TestDoubles
         }
 
         internal void Destroy() => Visit(each => each.Destroyed = true);
+
+        /// <summary>
+        /// Destroys the object and takes it out of the hierarchy, as the engine does by the end of the frame: every later
+        /// sibling's index moves down by one.
+        /// </summary>
+        internal void Remove()
+        {
+            Destroy();
+            Siblings().Remove(this);
+        }
+
+        /// <summary>Moves the object to the end of another parent's children, or of the scene's roots, as the engine's SetParent does.</summary>
+        internal void Reparent(FakeWorldObject? parent)
+        {
+            Siblings().Remove(this);
+            Parent = parent;
+            Siblings().Add(this);
+        }
+
+        internal void Rename(string name) => Name = name ?? throw new ArgumentNullException(nameof(name));
+
+        private List<FakeWorldObject> Siblings() => Parent?.Children ?? Scene.Roots;
 
         public bool TryReadPose(out NetPose pose)
         {

@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Tests
         internal static void Run()
         {
             SceneObjectIndexTests.Run();
+            SceneKeyCaptureTests.Run();
             NativeAuthoritySuppressorTests.Run();
             NetworkWorldWireTests.Run();
             NetworkWorldCensusTests.Run();
@@ -74,6 +75,9 @@ namespace TopiaForge.ModManager.Tests
 
         internal RecordingFactory Factories { get; }
 
+        /// <summary>Gets the scenes this peer's world was told had loaded.</summary>
+        internal HashSet<int> LoadedScenes { get; } = new HashSet<int>();
+
         internal SessionPhase Phase { get; set; } = SessionPhase.Running;
 
         /// <summary>Gets or sets whether this peer's runtime runs frames; a stalled game runs none.</summary>
@@ -84,6 +88,26 @@ namespace TopiaForge.ModManager.Tests
         internal NetworkWorldHost Host => World.Host;
 
         internal const string ModId = "io.example.world";
+
+        /// <summary>
+        /// Tells this peer's world of every scene its engine holds that it has not heard of yet, as the runtime's scene hook
+        /// does inside each load: the world keys the scene's objects now, as they loaded.
+        /// </summary>
+        internal void LoadScenes()
+        {
+            foreach (var scene in Scene.Scenes)
+            {
+                if (LoadedScenes.Add(scene.Handle)) World.SceneLoaded(scene.Handle);
+            }
+        }
+
+        /// <summary>Unloads a scene, telling the world first as the runtime's scene hook does.</summary>
+        internal void UnloadScene(FakeSceneData scene)
+        {
+            World.SceneUnloaded(scene.Handle);
+            Scene.UnloadScene(scene);
+            LoadedScenes.Remove(scene.Handle);
+        }
 
         internal IAssetService? FindAssets(string modId) => string.Equals(modId, ModId, StringComparison.Ordinal) ? Assets : null;
 
@@ -131,17 +155,19 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Gives the host and every later player the same scene: what each loads from the same scene asset.</summary>
         internal Action<FakeWorldScene>? BuildScene { get; set; }
 
-        /// <summary>Builds <paramref name=build/>'s scene for the host now, and for every player added later.</summary>
+        /// <summary>Loads <paramref name="build"/>'s scene for the host now, and for every player added later.</summary>
         internal void UseScene(Action<FakeWorldScene> build)
         {
             BuildScene = build ?? throw new ArgumentNullException(nameof(build));
             build(Host.Scene);
+            Host.LoadScenes();
         }
 
         internal WorldPeer AddPlayer(string id)
         {
             var player = new WorldPeer(Network.AddPlayer(id), Clock, id) { Phase = SessionPhase.Idle };
             BuildScene?.Invoke(player.Scene);
+            player.LoadScenes();
             player.Runtime.Connect();
             Players.Add(player);
             return player;

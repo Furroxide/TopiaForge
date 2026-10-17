@@ -186,6 +186,9 @@ internal static class NetworkWorldEngineTests
             Assets = new FakeWorldAssets(Scene, Lifetime);
             Factory = new Replicas(Scene);
             World = NetworkWorld.Install(peer.Composition, Replication, Scene, () => network.Now, _ => null);
+
+            // The yard loads as the game starts, and the runtime's scene hook keys it then.
+            World.SceneLoaded(Yard.Handle);
             Seam = Replication.Bind(ModId, new ModNetProfile(ModNetworkClass.Shared, ModExecutionContext.Process), Lifetime);
             That(Seam.RegisterReplicaFactory(RobotKind, Factory).Succeeded, "the robot provider registers its replicas");
         }

@@ -86,7 +86,9 @@ namespace TopiaForge.ModManager.Tests
                 }
 
                 var census = Census(world);
-                var model = SceneObjectKeyCensus.Build(census.Select(item => item.Descriptor).ToList());
+                var descriptors = new List<SceneObjectDescriptor>();
+                world.CollectDescriptors(null, descriptors);
+                var model = SceneObjectKeyCensus.Build(descriptors);
                 var index = new SceneObjectIndex();
                 index.Add(census);
                 That(index.UniqueCount == model.UniqueCount && index.ExcludedCount == model.DuplicateKeys.Count,

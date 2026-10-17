@@ -67,10 +67,14 @@ namespace TopiaForge.ModManager
             return null;
         }
 
-        /// <summary>Tells the network world a scene loaded; offline this is one field read.</summary>
+        /// <summary>
+        /// Tells the network world a scene loaded, inside the load's own event: in every realm the world keys the scene's
+        /// objects as they loaded, which a promotion later uses, and online it indexes them too. The cost is the load's;
+        /// frames pay nothing.
+        /// </summary>
         private void NetworkSceneLoaded(int sceneHandle)
         {
-            if (sceneHandle == 0 || !networkWorld.IsOnline) return;
+            if (sceneHandle == 0) return;
             try
             {
                 networkWorld.SceneLoaded(sceneHandle);
@@ -81,10 +85,10 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>Tells the network world a scene unloaded; offline this is one field read.</summary>
+        /// <summary>Tells the network world a scene unloaded, so it forgets the scene's keys and, online, its objects.</summary>
         private void NetworkSceneUnloaded(int sceneHandle)
         {
-            if (sceneHandle == 0 || !networkWorld.IsOnline) return;
+            if (sceneHandle == 0) return;
             try
             {
                 networkWorld.SceneUnloaded(sceneHandle);

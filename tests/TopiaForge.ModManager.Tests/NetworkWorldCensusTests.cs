@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager.Tests
             var yard = host.Scene.AddScene("Yard");
             var prop = host.Scene.Add(yard, "Prop", null, rigidbody: true);
             host.Scene.Player = host.Scene.Add(yard, "Player", null, rigidbody: true);
+            host.LoadScenes();
 
             // What the solo session spawned before anyone thought of hosting.
             var first = host.SpawnCrate(1);
@@ -52,10 +53,10 @@ namespace TopiaForge.ModManager.Tests
             That(world.IsActive && world.EntityCount == 3, "the census registers every live record, and only those (" + world.EntityCount + ")");
             var objects = new[] { ((FakeSpawnedEntity)first).Object, ((FakeSpawnedEntity)third).Object, platform };
             That(objects.Select(item => item.Mark).SequenceEqual(new uint[] { 1, 2, 3 }), "in the order they were recorded, each marked with its id");
-            // The client-local hat is a runtime object the census cannot tell from a scene's: it is keyed too, though no peer
-            // can ever bind it, since nobody else has it.
-            That(world.Index.UniqueCount == 2 && world.Index.TryGetBindable(SceneObjectIndexTests.KeyOf("Yard", ("Prop", 0)), out var slot) && ReferenceEquals(slot.Object, prop),
-                "the scene census keys the prop, and leaves out the marked spawns and the player (" + world.Index.UniqueCount + " keys)");
+            // The yard is keyed as it loaded: the prop, not the player. Everything spawned since, the client-local hat
+            // included, is no scene object.
+            That(world.Index.UniqueCount == 1 && world.Index.TryGetBindable(SceneObjectIndexTests.KeyOf("Yard", ("Prop", 0)), out var slot) && ReferenceEquals(slot.Object, prop),
+                "the scene census keys the prop as the yard loaded, and leaves out the spawns and the player (" + world.Index.UniqueCount + " keys)");
             That(host.Runtime.Spawns.Observer == world, "and from now on the host hears about later spawns");
             That(world.TryGetEntity(new NetworkEntityId(3), out var entity) && ReferenceEquals(entity, platform.Entity), "the host names its entities by id");
         }
@@ -147,6 +148,7 @@ namespace TopiaForge.ModManager.Tests
             var rig = new WorldRig();
             var host = rig.Host;
             var hall = host.Scene.AddScene("Hall");
+            host.LoadScenes();
             var platform = host.Scene.Add(hall, "Arena", null, rigidbody: true, position: new NetVector3(0, -1, 0));
             host.Seam(ModExecutionContext.WorldOwner).RegisterCanonical(platform.Entity,
                 new InternalSpawnDescriptor("worlds.arena", TransformState.Identity, null, InternalSpawnSource.WorldContent, "arena/floor"));
@@ -157,6 +159,7 @@ namespace TopiaForge.ModManager.Tests
 
             // The player's own world provider builds the same content, and registers it: it binds by key, recorded nowhere.
             var hallCopy = player.Scene.AddScene("Hall");
+            player.LoadScenes();
             var ownPlatform = player.Scene.Add(hallCopy, "Arena", null, rigidbody: true);
             var registered = player.Seam(ModExecutionContext.WorldOwner).RegisterCanonical(ownPlatform.Entity,
                 new InternalSpawnDescriptor("worlds.arena", TransformState.Identity, null, InternalSpawnSource.WorldContent, "arena/floor"));
@@ -174,6 +177,7 @@ namespace TopiaForge.ModManager.Tests
             var host = rig.Host;
             var yard = host.Scene.AddScene("Yard");
             var prop = host.Scene.Add(yard, "Prop", null, rigidbody: true);
+            host.LoadScenes();
             var crate = (FakeSpawnedEntity)host.SpawnCrate(1);
             rig.OpenToMultiplayer();
             var player = rig.AddPlayer("p1");

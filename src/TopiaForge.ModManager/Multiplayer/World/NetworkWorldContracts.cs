@@ -43,6 +43,12 @@ namespace TopiaForge.ModManager
         /// <summary>Gets whether the object still exists.</summary>
         bool IsAlive { get; }
 
+        /// <summary>
+        /// Gets whether the object is marked as a network root now: a spawn or world content the host registered, or a
+        /// replica. Such an object is an entity of its own, never a scene object to bind.
+        /// </summary>
+        bool IsNetworkRoot { get; }
+
         /// <summary>Gets the entity mods see for this object, as the runtime's entity registry names it.</summary>
         IEntity Entity { get; }
 
@@ -59,20 +65,30 @@ namespace TopiaForge.ModManager
         void SetNetworkIdentity(NetworkEntityId id);
     }
 
-    /// <summary>One network root candidate a scene census found: the scene it belongs to, what keys it, and the object.</summary>
+    /// <summary>
+    /// One network root candidate a scene census found: the scene it belongs to, its key as the census computed it from
+    /// the object's path, and the object.
+    /// </summary>
     internal readonly struct NetworkSceneObject
     {
-        internal NetworkSceneObject(int sceneHandle, SceneObjectDescriptor descriptor, INetworkWorldObject sceneObject)
+        internal NetworkSceneObject(int sceneHandle, SceneObjectKey key, INetworkWorldObject sceneObject)
         {
             SceneHandle = sceneHandle;
-            Descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));
+            Key = key;
             Object = sceneObject ?? throw new ArgumentNullException(nameof(sceneObject));
+        }
+
+        /// <summary>Keys an object by the replication model's rule over its descriptor.</summary>
+        internal NetworkSceneObject(int sceneHandle, SceneObjectDescriptor descriptor, INetworkWorldObject sceneObject)
+            : this(sceneHandle, SceneObjectKey.Compute(descriptor ?? throw new ArgumentNullException(nameof(descriptor))), sceneObject)
+        {
         }
 
         /// <summary>Gets the engine's handle of the loaded scene the object belongs to.</summary>
         internal int SceneHandle { get; }
 
-        internal SceneObjectDescriptor Descriptor { get; }
+        /// <summary>Gets the object's key: its scene, its path from the root as the census saw it, and its rigidbody.</summary>
+        internal SceneObjectKey Key { get; }
 
         internal INetworkWorldObject Object { get; }
     }
@@ -141,10 +157,14 @@ namespace TopiaForge.ModManager
     {
         /// <summary>
         /// Appends the network root candidates of every loaded scene, or of the scene <paramref name="sceneHandle"/> names:
-        /// each topmost object that carries a rigidbody, keyed by its scene, its path and its rigidbody. Objects already
-        /// marked as network roots, and the local player, are left out.
+        /// each topmost object that carries a rigidbody, keyed by its scene, its path as the hierarchy is now and its
+        /// rigidbody. Objects already marked as network roots, and the local player, are left out. The network world asks
+        /// as each scene loads, so the keys are the scene's as it loaded.
         /// </summary>
         void CollectSceneObjects(int? sceneHandle, List<NetworkSceneObject> into);
+
+        /// <summary>Appends the handle of every scene loaded now.</summary>
+        void CollectLoadedScenes(List<int> into);
 
         /// <summary>
         /// Appends the native systems a joined player turns off in every loaded scene, or in one: every scene rigidbody,
@@ -181,6 +201,10 @@ namespace TopiaForge.ModManager
         internal static readonly DetachedNetworkWorldBackend Instance = new DetachedNetworkWorldBackend();
 
         public void CollectSceneObjects(int? sceneHandle, List<NetworkSceneObject> into)
+        {
+        }
+
+        public void CollectLoadedScenes(List<int> into)
         {
         }
 

@@ -9,46 +9,24 @@ using UnityEngine.SceneManagement;
 namespace TopiaForge.ModManager
 {
     /// <summary>
-    /// The network world's engine side over Unity: the scene census walks the loaded scenes for the topmost objects that
-    /// carry a rigidbody, the native census finds what a joined player turns off, and network roots are the root game
-    /// objects the runtime's entity registry resolves. The local player's hierarchy is never touched. Main thread only.
+    /// The network world's engine side over Unity: the scene census keys the loaded scenes' topmost objects that carry a
+    /// rigidbody (the other part of this class), the native census finds what a joined player turns off, and network
+    /// roots are the root game objects the runtime's entity registry resolves. The local player's hierarchy is never
+    /// touched. Main thread only.
     /// </summary>
-    internal sealed class UnityNetworkWorldBackend : INetworkWorldBackend
+    internal sealed partial class UnityNetworkWorldBackend : INetworkWorldBackend
     {
         /// <summary>The primary component every rigidbody root is keyed by.</summary>
         internal const string RigidbodyComponent = "UnityEngine.Rigidbody";
 
         private readonly UnityEntityRegistry entities;
         private readonly List<GameObject> roots = new List<GameObject>();
-        private readonly List<SceneObjectPathSegment> path = new List<SceneObjectPathSegment>();
         private readonly List<Rigidbody> bodies = new List<Rigidbody>();
         private readonly List<Behaviour> behaviours = new List<Behaviour>();
 
         internal UnityNetworkWorldBackend(UnityEntityRegistry entities)
         {
             this.entities = entities ?? throw new ArgumentNullException(nameof(entities));
-        }
-
-        public void CollectSceneObjects(int? sceneHandle, List<NetworkSceneObject> into)
-        {
-            if (into == null) throw new ArgumentNullException(nameof(into));
-            UnityMainThreadGuard.AssertCurrent();
-            var player = UnityNativeAuthority.PlayerTransform();
-            for (var index = 0; index < SceneManager.sceneCount; index++)
-            {
-                var scene = SceneManager.GetSceneAt(index);
-                if (!scene.isLoaded || (sceneHandle.HasValue && scene.handle != sceneHandle.Value)) continue;
-                roots.Clear();
-                scene.GetRootGameObjects(roots);
-                foreach (var root in roots)
-                {
-                    path.Clear();
-                    Walk(scene, root.transform, player, into);
-                }
-            }
-
-            roots.Clear();
-            path.Clear();
         }
 
         public void CollectNativeAuthority(int? sceneHandle, List<NativeAuthorityTarget> into)
@@ -109,36 +87,6 @@ namespace TopiaForge.ModManager
 
         public INativeAuthoritySwitch? PresenceSwitch(INetworkWorldObject sceneObject) =>
             sceneObject is UnityNetworkWorldObject native && native.IsAlive ? new UnityNativeAuthority.PresenceSwitch(native.GameObject) : null;
-
-        /// <summary>
-        /// Walks one hierarchy: the first object on each branch that carries a rigidbody is a candidate, and what lies
-        /// under it belongs to it. Marked network roots and the local player are passed over with everything under them.
-        /// </summary>
-        private void Walk(Scene scene, Transform current, Transform? player, List<NetworkSceneObject> into)
-        {
-            var segmentName = current.name ?? string.Empty;
-            path.Add(new SceneObjectPathSegment(segmentName, current.GetSiblingIndex()));
-            try
-            {
-                if (UnityNativeAuthority.IsPlayer(current, player)) return;
-                var mark = current.GetComponent<TopiaForgeNetworkIdentity>();
-                if (mark != null && mark.NetworkId != 0) return;
-                if (current.GetComponent<Rigidbody>() != null)
-                {
-                    // Under a rigidbody root nothing else is a candidate, but the root itself may hold the player.
-                    if (player != null && player.IsChildOf(current)) return;
-                    into.Add(new NetworkSceneObject(scene.handle, new SceneObjectDescriptor(scene.name, path.ToArray(), RigidbodyComponent),
-                        new UnityNetworkWorldObject(current.gameObject, entities)));
-                    return;
-                }
-
-                for (var child = 0; child < current.childCount; child++) Walk(scene, current.GetChild(child), player, into);
-            }
-            finally
-            {
-                path.RemoveAt(path.Count - 1);
-            }
-        }
     }
 
     /// <summary>A network root over a Unity game object: its pose, its entity and its mark.</summary>
@@ -148,16 +96,26 @@ namespace TopiaForge.ModManager
         private readonly Rigidbody? body;
         private IEntity? entity;
 
-        internal UnityNetworkWorldObject(GameObject gameObject, UnityEntityRegistry entities)
+        internal UnityNetworkWorldObject(GameObject gameObject, UnityEntityRegistry entities, Rigidbody? body = null)
         {
             GameObject = gameObject;
             this.entities = entities;
-            body = gameObject.GetComponent<Rigidbody>();
+            this.body = body != null ? body : gameObject.GetComponent<Rigidbody>();
         }
 
         internal GameObject GameObject { get; }
 
         public bool IsAlive => GameObject != null;
+
+        public bool IsNetworkRoot
+        {
+            get
+            {
+                if (GameObject == null) return false;
+                var mark = GameObject.GetComponent<TopiaForgeNetworkIdentity>();
+                return mark != null && mark.NetworkId != 0;
+            }
+        }
 
         public IEntity Entity => entity != null && entity.IsAlive ? entity : entity = entities.GetOrCreate(GameObject);
 
@@ -238,10 +196,6 @@ namespace TopiaForge.ModManager
                 return null;
             }
         }
-
-        /// <summary>Whether <paramref name="candidate"/> is the local player or lies inside it.</summary>
-        internal static bool IsPlayer(Transform candidate, Transform? player) =>
-            player != null && (candidate == player || candidate.IsChildOf(player));
 
         /// <summary>Appends every native switch under <paramref name="root"/>, leaving the local player's hierarchy alone.</summary>
         internal static void Collect(GameObject root, Transform? player, List<Rigidbody> bodies, List<Behaviour> behaviours, List<NativeAuthorityTarget> into)

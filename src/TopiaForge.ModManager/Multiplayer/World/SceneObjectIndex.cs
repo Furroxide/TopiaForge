@@ -78,11 +78,11 @@ namespace TopiaForge.ModManager
 
     /// <summary>
     /// The scene objects every peer loads from the same scenes, keyed by the replication model's
-    /// <see cref="SceneObjectKey"/>, so the host and its players name an object without a spawn message. A key that more
-    /// than one object produces is excluded, every copy of it, rather than guessing which is which; a key a scene loaded
-    /// later collides with keeps its existing binding and binds nothing new. The host binds a key to a network entity
-    /// lazily, when the object first moves away from its census pose; a joined player binds the keys the host announces.
-    /// Main thread only.
+    /// <see cref="SceneObjectKey"/>, so the host and its players name an object without a spawn message. The keys are the
+    /// ones each scene's objects took as the scene loaded (<see cref="SceneKeyRegistry"/>). A key that more than one object
+    /// produces is excluded, every copy of it, rather than guessing which is which; a key a scene loaded later collides
+    /// with keeps its existing binding and binds nothing new. The host binds a key to a network entity lazily, when the
+    /// object first moves away from its census pose; a joined player binds the keys the host announces. Main thread only.
     /// </summary>
     internal sealed class SceneObjectIndex
     {
@@ -100,28 +100,29 @@ namespace TopiaForge.ModManager
         internal int ExcludedCount => excluded.Count;
 
         /// <summary>
-        /// Adds the objects one census found. Their keys are computed now, and each object's pose is read for first motion.
-        /// A key produced twice, within the census or with one already known, is excluded. <paramref name="originKnown"/>
-        /// says whether the census came as the scenes loaded, so the poses it read are the scenes' own. A scene already keyed
-        /// is passed over: a census of every loaded scene may meet one whose own load is reported after it.
+        /// Adds the objects one census found, each with the key the census gave it, and reads each live object's pose for
+        /// first motion. A key produced twice, within the census or with one already known, is excluded. An object that is
+        /// gone already is kept as removed, so a baseline names it: its scene had it as it loaded, and a joining player that
+        /// loads the scene has it too. An object marked as a network root since its scene loaded is an entity of its own,
+        /// and is kept from binding. <paramref name="originKnown"/> says whether the poses read now are the scenes' own, as
+        /// they are when a scene is indexed as it loads. A scene already indexed is passed over.
         /// </summary>
         internal void Add(IReadOnlyList<NetworkSceneObject> objects, bool originKnown = true)
         {
             if (objects == null) throw new ArgumentNullException(nameof(objects));
             batch.Clear();
-            var keys = new SceneObjectKey[objects.Count];
             for (var index = 0; index < objects.Count; index++)
             {
                 if (indexedScenes.Contains(objects[index].SceneHandle)) continue;
-                keys[index] = SceneObjectKey.Compute(objects[index].Descriptor);
-                batch.TryGetValue(keys[index], out var seen);
-                batch[keys[index]] = seen + 1;
+                var counted = objects[index].Key;
+                batch.TryGetValue(counted, out var seen);
+                batch[counted] = seen + 1;
             }
 
             for (var index = 0; index < objects.Count; index++)
             {
-                var key = keys[index];
                 var sceneObject = objects[index];
+                var key = sceneObject.Key;
                 if (indexedScenes.Contains(sceneObject.SceneHandle))
                 {
                     AlreadyIndexed++;
@@ -147,8 +148,22 @@ namespace TopiaForge.ModManager
                 }
 
                 var slot = new SceneObjectSlot(key, sceneObject.SceneHandle, sceneObject.Object, originKnown);
-                if (sceneObject.Object.TryReadPose(out var pose)) slot.RecordCensusPose(pose);
                 slots.Add(key, slot);
+                if (!sceneObject.Object.IsAlive)
+                {
+                    slot.MarkRemoved();
+                    GoneWhenIndexed++;
+                    continue;
+                }
+
+                if (sceneObject.Object.IsNetworkRoot)
+                {
+                    slot.MarkAmbiguous();
+                    RootsWhenIndexed++;
+                    continue;
+                }
+
+                if (sceneObject.Object.TryReadPose(out var pose)) slot.RecordCensusPose(pose);
                 scan.Add(slot);
             }
 
@@ -158,6 +173,12 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets how many objects a census offered again, from a scene already keyed, and the index passed over.</summary>
         internal int AlreadyIndexed { get; private set; }
+
+        /// <summary>Gets how many objects their scene had as it loaded and that were gone when the index took them.</summary>
+        internal int GoneWhenIndexed { get; private set; }
+
+        /// <summary>Gets how many objects were network roots of their own when the index took them, and bind nothing.</summary>
+        internal int RootsWhenIndexed { get; private set; }
 
         /// <summary>
         /// Forgets the objects of an unloaded scene. Slots that were bound are appended to <paramref name="unbound"/>, so the

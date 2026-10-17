@@ -89,19 +89,19 @@ namespace TopiaForge.ModManager.Tests
 
         private static void LookupsGoThroughTheRegistry()
         {
-            var rig = Yard(0);
-            var host = rig.Host;
-            var yard = host.Scene.Scenes[0];
-            var cart = host.Scene.Add(yard, "Cart", null, rigidbody: true);
-            var wheel = host.Scene.Add(yard, "Wheel", cart);
-            var crate = host.SpawnCrate(3);
-            rig.OpenToMultiplayer();
-            rig.BuildScene = scene =>
+            var rig = new WorldRig();
+            rig.UseScene(scene =>
             {
                 var copy = scene.AddScene("Yard");
                 var theirCart = scene.Add(copy, "Cart", null, rigidbody: true);
                 scene.Add(copy, "Wheel", theirCart);
-            };
+            });
+            var host = rig.Host;
+            var yard = host.Scene.Scenes[0];
+            var cart = yard.Roots[0];
+            var wheel = cart.Children[0];
+            var crate = host.SpawnCrate(3);
+            rig.OpenToMultiplayer();
             var player = AddPlayer(rig, "p1");
             cart.Position = new NetVector3(1, 0, 0);
             rig.JoinAndSynchronize(player);
@@ -231,6 +231,8 @@ namespace TopiaForge.ModManager.Tests
 
             public void CollectSceneObjects(int? sceneHandle, List<NetworkSceneObject> into) =>
                 throw new InvalidOperationException("the census of 203.0.113.9:27250 failed");
+
+            public void CollectLoadedScenes(List<int> into) => inner.CollectLoadedScenes(into);
 
             public void CollectNativeAuthority(int? sceneHandle, List<NativeAuthorityTarget> into) => inner.CollectNativeAuthority(sceneHandle, into);
 

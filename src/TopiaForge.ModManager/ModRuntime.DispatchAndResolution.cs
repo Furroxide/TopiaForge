@@ -54,6 +54,7 @@ namespace TopiaForge.ModManager
 
         private void DispatchInitialBackgroundSceneCore(SceneLifecycleEvent scene)
         {
+            NetworkSceneLoaded(scene.SceneInstanceId);
             DispatchSceneLifecycleCore(scene, "InitialSceneLoaded");
         }
 

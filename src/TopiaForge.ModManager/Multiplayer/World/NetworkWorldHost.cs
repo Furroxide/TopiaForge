@@ -72,6 +72,7 @@ namespace TopiaForge.ModManager
 
         private readonly NetworkWorldChannel channel;
         private readonly INetworkWorldBackend backend;
+        private readonly SceneKeyRegistry sceneKeys;
         private readonly Func<long> clock;
         private readonly NetworkWorldCounters counters;
         private readonly NetworkEntityTable table = new NetworkEntityTable();
@@ -97,10 +98,11 @@ namespace TopiaForge.ModManager
         private MultiplayerSpawnLedger? ledger;
         private long nextTickMicros;
 
-        internal NetworkWorldHost(NetworkWorldChannel channel, INetworkWorldBackend backend, Func<long> clock, NetworkWorldCounters counters)
+        internal NetworkWorldHost(NetworkWorldChannel channel, INetworkWorldBackend backend, SceneKeyRegistry sceneKeys, Func<long> clock, NetworkWorldCounters counters)
         {
             this.channel = channel ?? throw new ArgumentNullException(nameof(channel));
             this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
+            this.sceneKeys = sceneKeys ?? throw new ArgumentNullException(nameof(sceneKeys));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.counters = counters ?? throw new ArgumentNullException(nameof(counters));
             channel.Register(WorldMessages.BaselineRequest, this);
@@ -116,8 +118,9 @@ namespace TopiaForge.ModManager
         internal SceneObjectIndex Index => index;
 
         /// <summary>
-        /// Starts hosting the world: registers the live spawns the promotion carries, in the order they were recorded, keys
-        /// the loaded scenes, and from then hears about later spawns. A second promotion starts again from nothing.
+        /// Starts hosting the world: registers the live spawns the promotion carries, in the order they were recorded, indexes
+        /// the loaded scenes' objects by the keys they took as each scene loaded, and from then hears about later spawns. A
+        /// second promotion starts again from nothing.
         /// </summary>
         internal void Activate(MultiplayerPromotion promotion, MultiplayerSpawnLedger spawnLedger)
         {
@@ -135,12 +138,14 @@ namespace TopiaForge.ModManager
             counters.Promotions++;
 
             // The scene census comes last: one that fails leaves a host that replicates its spawns, and the failure goes on
-            // to the composition root, which reports it once. It comes after the scenes loaded, and the solo session may
-            // have moved anything, so its poses are not the scenes' own: baselines carry them for the objects still unbound.
+            // to the composition root, which reports it once. Each object keeps the key it took as its scene loaded, so an
+            // object destroyed or moved to another parent since shifts no other object's key, and one destroyed since is
+            // indexed as removed, which every baseline names. The solo session may have moved anything, so the poses read
+            // now are not the scenes' own: baselines carry them for the objects still unbound.
             census.Clear();
             try
             {
-                backend.CollectSceneObjects(null, census);
+                counters.ScenesKeyedLate += sceneKeys.CollectLoaded(census);
             }
             finally
             {
@@ -181,14 +186,14 @@ namespace TopiaForge.ModManager
             ResetPeers();
         }
 
-        /// <summary>Keys a scene that loaded while hosting.</summary>
+        /// <summary>Indexes a scene that loaded while hosting, by the keys it took as it loaded.</summary>
         internal void SceneLoaded(int sceneHandle)
         {
             if (!IsActive) return;
             census.Clear();
             try
             {
-                backend.CollectSceneObjects(sceneHandle, census);
+                if (!sceneKeys.CollectScene(sceneHandle, census)) counters.ScenesKeyedLate++;
             }
             finally
             {
@@ -411,6 +416,13 @@ namespace TopiaForge.ModManager
 
         private void Bind(SceneObjectSlot slot)
         {
+            // A scene object registered as a spawn or world content since its scene loaded is that entity already.
+            if (slot.Object.IsNetworkRoot)
+            {
+                slot.MarkAmbiguous();
+                return;
+            }
+
             var id = table.Allocate(MultiplayerSpawnKinds.SceneObject, NetOwner.Server);
             var hosted = new HostWorldEntity(id, WorldEntrySource.SceneObject, MultiplayerSpawnKinds.SceneObject) { Slot = slot, Object = slot.Object };
             slot.Bind(id);

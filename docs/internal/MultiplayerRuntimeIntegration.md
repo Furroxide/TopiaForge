@@ -711,10 +711,12 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
 | Part | What it does |
 | --- | --- |
 | `NetworkWorld` | Wires the rest to the composition root: the three frame stages, the census seam, the realm's observers, the session's identity source, and the replication seam's references and world content. It owns the `WorldReplication` channel while a provider is attached |
-| `NetworkWorldHost` | The listen host: registering recorded spawns, keying scenes, binding on first motion, announcements, despawns and snapshots |
+| `NetworkWorldHost` | The listen host: registering recorded spawns, indexing scenes, binding on first motion, announcements, despawns and snapshots |
 | `NetworkWorldHost.Baselines` | The host's players and their chunked baselines |
 | `NetworkWorldClient`, `.Replicas`, `.Assets` | A joined player: its readiness hold, census and suppression, applying what the host sends, and building and releasing replicas |
-| `SceneObjectIndex` | Scene object keys, the replication model's `SceneObjectKey`, with duplicates excluded and binding on first motion |
+| `SceneKeyRegistry` | Every loaded scene's object keys, taken inside the scene's load event in every realm and kept until it unloads |
+| `SceneKeyHasher` | The replication model's `SceneObjectKey`, hashed a path segment at a time, so the objects under one parent share its part |
+| `SceneObjectIndex` | A session's keyed scene objects, with duplicates excluded, objects gone since their load removed, and binding on first motion |
 | `NativeAuthoritySuppressor` | What a joined player turns off, and the exact restore |
 | `ReplicaTransformDriver` | Host samples into the replication model's `SnapshotInterpolationBuffer`, and replicas moved to them |
 | `NetworkWorldChannel`, `NetworkWorldWire`, `NetworkWorldEntries` | The channel's end, its wire format and its entries |
@@ -733,23 +735,35 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
   mark off; leaving `Client` ends the joined player's side (below); entering `Client` starts it.
 - **The census** (`PromotionCensus`): becoming a host starts the host's side with the promotion's records.
 - **Detaching** ends both sides, closes the channel and removes the identity source.
-- **Scenes.** ModRuntime tells the world of every scene load, before the mods hear of it, and of every unload. Offline
-  that is one field read.
+- **Scenes.** ModRuntime tells the world of every scene load, inside the load's own event and before the mods hear of
+  it, and of every unload, in every realm. The world keys the scene's objects as it loads (below) and forgets them as it
+  unloads. Frames pay nothing for either.
 
 ### The host
 
 - **Promotion.** The promotion's live records are registered in the order they were made, each a network entity with
-  its origin, `{owning mod, record sequence}`, and marked through `Adopt`. Then the loaded scenes are keyed, and the
-  world becomes the spawn ledger's observer, so every later record and description is announced.
-- **Scene objects.** The census walks the loaded scenes for the topmost objects that carry a rigidbody, keyed by their
-  path and `UnityEngine.Rigidbody`, never the local player or a marked root. Keys that repeat are excluded, every copy.
-  A scene is keyed once per load: a census of every scene may meet one whose own load is reported after it.
+  its origin, `{owning mod, record sequence}`, and marked through `Adopt`. Then the loaded scenes' objects are indexed
+  by the keys each took as its scene loaded, and the world becomes the spawn ledger's observer, so every later record
+  and description is announced.
+- **Scene keys.** As each scene loads, in single player as much as online, its candidates are keyed: the topmost
+  objects that carry a rigidbody, never the local player or a marked root, each by its scene, its path from the root as
+  the scene loaded and `UnityEngine.Rigidbody`. The keys stay with the scene until it unloads. A key carries sibling
+  indices, so a key taken later would shift with every sibling destroyed or reparented before it; taken at the load, an
+  object keeps its key whatever the hierarchy goes through since. One moved to another parent, or renamed, is still
+  named by its path as the scene loaded, and one destroyed moves no other object's key. A joining player, which loads
+  the scene fresh and keys it at its own load, names every object alike.
+- **Scene objects.** At the promotion, and for a scene that loads while hosting, the index takes each scene's keyed
+  objects. One its scene had at the load and that is gone since is indexed as removed, so every baseline names it and a
+  joining player hides its copy. One registered as a spawn or world content since is that entity already, and binds
+  nothing. An object made after its scene loaded has no key, and is no scene object. Keys that repeat are excluded,
+  every copy. A scene is indexed once per load. A load that could not be keyed is keyed when a session first needs the
+  scene, from the hierarchy as it is then, and counted (`ScenesKeyedLate`).
 - **First motion.** Each downstream tick checks up to 512 unbound objects in turn against the pose the census read, on
   the quantization grid. One that moved becomes an entity of kind `asset.scene`, is marked and announced; one that is
   gone is removed, and every player hears its key. Every object is checked before a baseline begins.
-- **Poses before the promotion.** A census at the promotion reads poses the solo session may have moved, so they are
-  not the scene's own. A baseline carries the pose of every object censused then and still unbound, and a joining
-  player places its copy there. A scene loaded while hosting is keyed at its load pose and needs no such entry.
+- **Poses before the promotion.** The poses the index reads at the promotion are ones the solo session may have moved,
+  so they are not the scene's own. A baseline carries the pose of every object indexed then and still unbound, and a
+  joining player places its copy there. A scene loaded while hosting is indexed at its load pose and needs no such entry.
 - **Downstream.** Every frame, the host broadcasts what ended (despawns and removed keys) and what appeared or changed
   (announcements). Every 100 ms it broadcasts a snapshot of the poses the replication scheduler picks under its
   800-byte budget, resting entities after their three confirmations dropping out. Every broadcast goes through `Send`,
@@ -770,8 +784,9 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
 
 ### A joined player
 
-- **Joining.** The world holds readiness ("Loading the host's world"), keys the loaded scenes, turns native authority
-  off, and asks for a baseline, every 250 ms until the channel takes the request, as it will once the stream starts.
+- **Joining.** The world holds readiness ("Loading the host's world"), indexes the loaded scenes by the keys they took
+  as they loaded, turns native authority off, and asks for a baseline, every 250 ms until the channel takes the
+  request, as it will once the stream starts.
 - **Native authority.** Scene rigidbodies become kinematic. Robot brains (`LLMAgent.llmDisabled`, and Behavior
   Designer's `BehaviorTree`), locomotion (`LocomotionController`), path followers (`NavMeshAgent`) and spawners
   (`PooledSpawner`) are turned off. The local player's hierarchy is never touched. The suppressor reads each setting,
@@ -847,8 +862,35 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
 - **Privacy.** Players are named by participant id inside the process and never logged. The world logs fixed texts and
   counts only, and its counters hold counts. Nothing it sends, keeps or answers holds an address, and the architecture
   test of section 9 covers its types with the runtime's.
-- **Offline**, every frame hook is one field read, and a scene load or unload one check more; the offline frame still
-  allocates zero bytes over 10,000 frames, through the composition root and the real `ModRuntime`.
+- **Offline**, every frame hook is one field read; the offline frame still allocates zero bytes over 10,000 frames,
+  through the composition root and the real `ModRuntime`, with a keyed scene loaded. A scene load keys that scene inside
+  its event, and an unload forgets its keys.
+- **The census at a load.** The engine lists the loaded rigidbodies and marks (`FindObjectsByType`, inactive ones
+  included) and looks above each rigidbody for another (`GetComponentsInParent`), so nothing here walks a hierarchy but
+  a candidate's own path, from the object up to the nearest ancestor already hashed. Each object on such a path is named
+  and hashed once, and a wide parent searched often has every child's index read in one pass. The working sets go with
+  the census; what stays is the scene's array of keyed objects, a 24-byte slot and a 48-byte wrapper each, 72 bytes a
+  key by their layout (the game's heap grew 58 bytes a key over 100,000 of them). The keys also keep the engine's own
+  managed objects of each keyed object and its rigidbody alive, where nothing else does. The runtime has the census's
+  steps compiled as it starts; the first scene load still compiles the rest, which is most of the menu's first capture.
+- **Scene keys in the game**, measured in Robotopia 2545 on a Windows 11 x64 machine: the capture inside each load's
+  event, the first time each scene loads and after a full collection, and what the keys keep while the scene stays
+  loaded. Each scene gave exactly
+  the keys the descriptor walk the census replaced gives, through the replication model's own rule. That walk named
+  every object of a scene, and cost City Streets 16.6 ms and IntroSewer 10.1 ms at their loads.
+
+  | Scene | In normal play | Transforms | Rigidbodies | Keyed | Capture | Kept |
+  | --- | --- | ---: | ---: | ---: | ---: | ---: |
+  | `TestCityStartMenu` | The main menu | 520 | 0 | 0 | 3.2 ms first, 0.1 ms after | under 100 bytes |
+  | `UgcPlay` | An arena's host scene, before its arena is built | 113 | 1 | 0 | 0.5 ms | under 100 bytes |
+  | `IntroSewer` | A free-play world | 10,152 | 320 | 69 | 1.5 ms | 4.9 KiB |
+  | `Collector Prototype` | A free-play world | 14,058 | 413 | 250 | 1.6 ms | 17.6 KiB |
+  | `AcidChamber` | A free-play world | 5,211 | 112 | 69 | 0.6 ms | 4.9 KiB |
+  | `City Streets` | A free-play world | 19,570 | 1,500 | 1,031 | 4.7 ms | 72.5 KiB |
+  | `Robotopia Entrance` | A free-play world | 10,517 | 157 | 82 | 0.8 ms | 5.8 KiB |
+
+  City Streets is the largest. A second census of it, right after the first, costs 1.7 ms; the rest of the first one's
+  4.7 ms is the engine's first touch of each object the census visits.
 - **Online**, measured over 600 frames: a host and two players with a world at rest allocate nothing per frame; with
   one body moving, 14 bytes a frame over the loopback channel. Over the real provider the world's stages allocate
   nothing at rest and 21 bytes a frame with one body moving, its snapshots' share of the channel, beside the provider's
@@ -858,6 +900,11 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
 
 - **ModManager harness** (`--network-world`): `SceneObjectIndexTests` (the model's keys, duplicates against the model's
   census over 200 seeded hierarchies, first-motion binding, later scenes, keying a scene twice, unloads);
+  `SceneKeyCaptureTests` (the hasher against the model's rule over 3,000 seeded paths with every escaped and surrogate
+  character; a sibling destroyed before the game opened, which the joining player hides while the boxes after it keep
+  their bindings; an object reparented and one renamed, which keep their keys; duplicates; additive scenes loaded
+  before and while hosting; objects made after the load; one capture per load, forgotten on unload, and a failed one
+  keyed late; and an offline frame with 500 keyed objects, which allocates nothing);
   `NativeAuthoritySuppressorTests` (exact restore, changes the game made meanwhile, partial and failing suppression,
   switches that lie); `NetworkWorldWireTests` (round trips, and hostile and truncated bytes); `NetworkWorldCensusTests`
   (the census over ledger records, later records, ended scopes); `WorldBaselineSyncTests` (a late joiner gets the whole
@@ -872,7 +919,8 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
   the same mod. The host's scene objects and its mod's spawns, made before and after it opened, appear on a joined
   player, which builds the crates through its own copy of the mod; a box moves there under interpolation, smoothly and
   a little behind; a late joiner gets everything in its baseline before it has loaded the scene; and after leaving, and
-  after shutting down while joined, every native setting is back.
+  after shutting down while joined, every native setting is back. `TestSceneKeysCostOnlyTheLoad`: the real runtime
+  keys a scene as it loads, offline, and its frames allocate nothing over 10,000 with no provider and with a solo one.
 - **Multiplayer harness** (`NetworkWorldEngineTests`): real providers on the virtual network. The baseline crosses the
   real channel while the player's hold keeps it short of Ready, motion reaches the player, a link that drops and comes
   back within the grace starts again from a new baseline that rebuilds nothing the player has, and the world's share of
@@ -881,7 +929,9 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
   the game changed meanwhile, when it writes back the suppressed value instead of the original, and when a change is
   recorded only once its write returned. The baseline suites fail when a refused chunk is not rewound, when the host
   goes on with a restarted player's old baseline, when a joined player does not ask again after its stream restarts,
-  and when the reader keeps a field an earlier entry read.
+  and when the reader keeps a field an earlier entry read. With the host's keys taken at the promotion again, from the
+  hierarchy as it is then, the destroyed sibling's test fails: the joining player keeps its copy of the box the host
+  destroyed, and past that check, the pushed box binds to the box before it.
 
 ### Where WS3.7 and WS3.8 attach
 
@@ -907,8 +957,9 @@ Authority routing (WS3.7):
 Session follow (WS3.8):
 
 - **Its own channel.** `SceneFollow`, re-baselined on its generation changes, as world replication is.
-- **Scenes.** The network world already hears every scene load and unload from ModRuntime's dispatch, online only. A
-  follower loads the host's world after joining, and what the world's baseline names waits for those scenes.
+- **Scenes.** The network world already hears every scene load and unload from ModRuntime's dispatch, in every realm,
+  and keys each scene as it loads. A follower loads the host's world after joining, so it keys those scenes as the host
+  did, and what the world's baseline names waits for them.
 - **Readiness.** The network world's hold covers its baseline and replicas only; follow holds readiness around
   LoadingWorld with its own hold and `ReportProgress`, and the player is Ready once both are released.
 - **Progress.** `NetworkWorld.Progress` (`NetworkWorldProgress`: phase, entries received and expected, replicas loading,
@@ -920,10 +971,15 @@ Session follow (WS3.8):
 
 - **Native spawns** are not replicated: only SDK spawns, world content and scene objects. A joined player's spawners
   are off, so it makes none of its own.
-- **Before a promotion.** An object the solo session destroyed is unknown to the host, so a joining player keeps its
-  copy. A key carries sibling indices, so a sibling destroyed or reparented before the promotion moves the keys after
-  it: those objects bind to nothing, or, among siblings that share a name, to another copy, which the baseline's poses
-  then place where the host has them.
+- **Keys are the load's.** A scene is keyed as its load event sees it, after the scene's own `Awake` and `OnEnable`. A
+  scene whose start-up makes, destroys or orders objects differently on two machines keys those objects differently,
+  so they match nothing on the other side and stay where each player's scene put them.
+- **A load that could not be keyed** is keyed when a session first needs the scene, from the hierarchy as it is then,
+  so for that scene a sibling destroyed or reparented before then moves the keys after it. `ScenesKeyedLate` counts it.
+- **Objects made after their scene loaded** are no scene objects: an SDK spawn or world content is replicated as such,
+  and anything else is a native spawn (above). A generated arena, which Worlds builds after `UgcPlay` loads, is
+  therefore not keyed; the arena is to be registered as world content by its key (WS4).
+- **Keys stay while their scene does**: 72 bytes an object, 72.5 KiB for City Streets, offline as much as online.
 - **Objects that never move** are never entities. A joined player keeps them where its scene put them, or where the
   baseline placed them.
 - **A scene a joined player reloads on its own**, which follow's authority policy prevents, keeps its unbound objects at
@@ -939,5 +995,10 @@ Session follow (WS3.8):
 - **Joined players record nothing** rather than clearing the ledger on joining and leaving: clearing would drop what
   this process made before it joined, which a later promotion should baseline.
 - **Restores yield to the game.** A setting the game changed while the player was joined is left as the game set it.
-- **Poses, not entities, for what moved before a promotion.** Binding every object censused at the promotion would
+- **Poses, not entities, for what moved before a promotion.** Binding every object indexed at the promotion would
   make each an entity in every snapshot; a pose in the baseline costs 27 bytes once.
+- **Keys at the load, not at the promotion.** Keys taken at the promotion name objects by the hierarchy the solo session
+  left, so a sibling destroyed or reparented before it rebinds every object after it to the wrong copy on each joining
+  player, and a destroyed object is unknown to the host. Taken at the load, the keys cost the load, at most 4.7 ms
+  (City Streets), and 72 bytes an object while the scene stays loaded, and frames nothing; the promotion indexes them
+  and reads poses.

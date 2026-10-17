@@ -105,6 +105,7 @@ namespace TopiaForge.ModManager
 
         private readonly NetworkWorldChannel channel;
         private readonly INetworkWorldBackend backend;
+        private readonly SceneKeyRegistry sceneKeys;
         private readonly Func<long> clock;
         private readonly NetworkWorldCounters counters;
         private readonly NetworkEntityTable table = new NetworkEntityTable();
@@ -134,6 +135,7 @@ namespace TopiaForge.ModManager
         internal NetworkWorldClient(
             NetworkWorldChannel channel,
             INetworkWorldBackend backend,
+            SceneKeyRegistry sceneKeys,
             Func<long> clock,
             NetworkWorldCounters counters,
             Func<string, IInternalReplicaFactory?> factories,
@@ -141,6 +143,7 @@ namespace TopiaForge.ModManager
         {
             this.channel = channel ?? throw new ArgumentNullException(nameof(channel));
             this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
+            this.sceneKeys = sceneKeys ?? throw new ArgumentNullException(nameof(sceneKeys));
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.counters = counters ?? throw new ArgumentNullException(nameof(counters));
             this.factories = factories ?? throw new ArgumentNullException(nameof(factories));
@@ -330,15 +333,17 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
-        /// Keys the scene objects and turns native authority off, in every loaded scene or in one. Either census may fail
-        /// part way; whatever it found by then is still keyed or turned off, and the failure is counted.
+        /// Indexes the scene objects, by the keys each scene took as it loaded, and turns native authority off, in every
+        /// loaded scene or in one. Either may fail part way; whatever was found by then is still indexed or turned off, and
+        /// the failure is counted.
         /// </summary>
         private void Census(int? sceneHandle)
         {
             census.Clear();
             try
             {
-                backend.CollectSceneObjects(sceneHandle, census);
+                if (!sceneHandle.HasValue) counters.ScenesKeyedLate += sceneKeys.CollectLoaded(census);
+                else if (!sceneKeys.CollectScene(sceneHandle.Value, census)) counters.ScenesKeyedLate++;
             }
             catch (Exception)
             {

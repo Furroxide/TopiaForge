@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
@@ -117,6 +118,57 @@ namespace TopiaForge.ModRuntime.Tests
             {
                 foreach (var game in games) game.Runtime.UnloadAll();
             }
+        }
+
+        /// <summary>
+        /// The real runtime keys each scene inside its load, offline as much as online, and its frames pay nothing for the
+        /// keys: zero bytes over 10,000 frames with a keyed scene, with no provider and with a solo one.
+        /// </summary>
+        private static void TestSceneKeysCostOnlyTheLoad(string root)
+        {
+            var network = new LoopbackNetPair();
+            var game = new WorldGame(NewFixture(Path.Combine(root, "world-offline"), "network-world", WorldModEntry), network.Host, new WorldTestClock());
+            try
+            {
+                game.Runtime.Load(new[] { game.Fixture.Package });
+                var yard = game.LoadScene("Yard", true);
+                Assert(game.World.SceneKeys.TryGet(yard.Handle, out var keys) && keys.Count == 9 && game.World.SceneKeys.Captures == 1 && !game.World.IsOnline,
+                    "the yard is keyed as it loads, offline, without a provider (" + keys.Count + " objects)");
+                var offline = MeasureWorldFrames(game);
+                Assert(offline == 0, "an offline frame with a keyed scene allocates nothing (" + offline + " bytes over 10,000 frames)");
+                Assert(game.Runtime.Multiplayer.Attach(network.Host), "a solo provider attaches");
+                var solo = MeasureWorldFrames(game);
+                Assert(solo == 0, "and so does a solo frame (" + solo + " bytes over 10,000 frames)");
+                Assert(game.Runtime.DispatchSceneUnloaded(yard.Handle, "Yard", true, SceneLoadMode.Additive) && !game.World.SceneKeys.TryGet(yard.Handle, out _),
+                    "unloading the yard forgets its keys");
+            }
+            finally
+            {
+                game.Runtime.UnloadAll();
+            }
+        }
+
+        /// <summary>Counts what 10,000 frames allocate, the fewest bytes of up to three passes after one to warm, as the other runtime checks do.</summary>
+        private static long MeasureWorldFrames(WorldGame game)
+        {
+            WorldFramePass(game, 10_000);
+            var allocated = long.MaxValue;
+            for (var pass = 0; pass < 3 && allocated != 0; pass++) allocated = Math.Min(allocated, WorldFramePass(game, 10_000));
+            return allocated;
+        }
+
+        /// <summary>Runs frames with a zero frame time, which keeps the runtime's once-a-second capability refresh out.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static long WorldFramePass(WorldGame game, int count)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < count; index++)
+            {
+                game.Runtime.DispatchUpdate(0f);
+                game.Game.RaiseLateUpdate();
+            }
+
+            return GC.GetAllocatedBytesForCurrentThread() - before;
         }
 
         private static List<NativeSwitchState> NativeSwitches(FakeWorldScene scene, Action build)

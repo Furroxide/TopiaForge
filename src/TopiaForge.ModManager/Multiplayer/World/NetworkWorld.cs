@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.ExceptionServices;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -41,8 +42,9 @@ namespace TopiaForge.ModManager
             if (clock == null) throw new ArgumentNullException(nameof(clock));
             if (findAssets == null) throw new ArgumentNullException(nameof(findAssets));
             Counters = new NetworkWorldCounters();
-            Host = new NetworkWorldHost(channel, backend, clock, Counters);
-            Client = new NetworkWorldClient(channel, backend, clock, Counters, kind => replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets);
+            SceneKeys = new SceneKeyRegistry(backend);
+            Host = new NetworkWorldHost(channel, backend, SceneKeys, clock, Counters);
+            Client = new NetworkWorldClient(channel, backend, SceneKeys, clock, Counters, kind => replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets);
             Backend = backend;
             WorldEvents = new Stage(this, StageKind.WorldEvents);
             HostSnapshots = new Stage(this, StageKind.HostSnapshots);
@@ -54,6 +56,9 @@ namespace TopiaForge.ModManager
         internal NetworkWorldClient Client { get; }
 
         internal NetworkWorldCounters Counters { get; }
+
+        /// <summary>Gets the keys every loaded scene's objects took as the scene loaded, offline as much as online.</summary>
+        internal SceneKeyRegistry SceneKeys { get; }
 
         internal INetworkWorldBackend Backend { get; }
 
@@ -164,21 +169,43 @@ namespace TopiaForge.ModManager
             control = null;
         }
 
-        /// <summary>A scene loaded: online, its objects are keyed, and on a joined player its native authority goes off.</summary>
+        /// <summary>
+        /// A scene loaded: its objects are keyed now, as it loaded, in every realm; online, the host or the joined player
+        /// indexes them, and a joined player turns the scene's native authority off. A capture that fails is reported to
+        /// the caller once the online side has had the scene, which it then keys itself.
+        /// </summary>
         internal void SceneLoaded(int sceneHandle)
         {
+            Exception? failure = null;
+            try
+            {
+                SceneKeys.Capture(sceneHandle);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+
             if (Host.IsActive) Host.SceneLoaded(sceneHandle);
             if (Client.IsActive) Client.SceneLoaded(sceneHandle);
+            if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
         }
 
-        /// <summary>A scene unloaded: online, its objects are forgotten.</summary>
+        /// <summary>A scene unloaded: online, its objects are forgotten, and in every realm its keys.</summary>
         internal void SceneUnloaded(int sceneHandle)
         {
-            if (Host.IsActive) Host.SceneUnloaded(sceneHandle);
-            if (Client.IsActive) Client.SceneUnloaded(sceneHandle);
+            try
+            {
+                if (Host.IsActive) Host.SceneUnloaded(sceneHandle);
+                if (Client.IsActive) Client.SceneUnloaded(sceneHandle);
+            }
+            finally
+            {
+                SceneKeys.Forget(sceneHandle);
+            }
         }
 
-        /// <summary>Gets whether the network world is doing anything, so offline scene loads skip it in one read.</summary>
+        /// <summary>Gets whether this process hosts the world or mirrors a host's.</summary>
         internal bool IsOnline => Host.IsActive || Client.IsActive;
 
         public bool TryGetNetworkObjectId(IEntity entity, out NetworkObjectId id)
