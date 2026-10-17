@@ -63,7 +63,7 @@ from the thirteen-package release payload.
 
 ## Templates and authoring surfaces
 
-- Seven C# mod templates: minimal, gameplay, gamemode, service, UI, asset, and world.
+- Eight C# mod templates: minimal, gameplay, gamemode, service, UI, asset, world, and multiplayer.
 - Unity world project template with the world companion and embedded VPM resolver.
 - Standalone Unity package template.
 - TopiaForgeUi bundle source project under `tools/unity-ui-bundle`.

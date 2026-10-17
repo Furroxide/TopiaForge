@@ -28,13 +28,14 @@ void main() {
     }
   });
 
-  test('lists the seven built-in mod templates', () async {
+  test('lists the eight built-in mod templates', () async {
     final templates = await repository.listModTemplates();
     expect(templates.map((template) => template.id).toList(), [
       'asset',
       'gamemode',
       'gameplay',
       'minimal',
+      'multiplayer',
       'service',
       'ui',
       'world',
