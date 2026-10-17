@@ -339,4 +339,40 @@ internal static class NatSessionTests
         That(scenario.Network.RunUntil(() => attempt.State == ConnectAttemptState.Failed, 30_000_000), "the join fails as " + expected + " (" + joiner.Agent.Status + ")");
         That(joiner.Agent.Status.Failure == expected && joiner.Agent.Status.Stage == NatJoinStage.Failed, "naming the reason " + expected + " (" + joiner.Agent.Status + ")");
     }
+
+    // A connected joiner that still needs signaling — here because its relay is changing — may have its reopenings
+    // refused by a full room again and again. Those losses must not count against the six-in-ten-minutes window that
+    // bounds a host or a still-connecting joiner: a connected joiner depends on signaling for the host's next relay, so
+    // it must keep asking, not give up for good after six refusals.
+    internal static void AConnectedJoinersSignalingLossesNeverFillTheWindow()
+    {
+        var (scenario, host, joiner, joinerLink, hostLink) = NatMatrixTests.Session(807, NatBehaviour.FullCone, NatBehaviour.FullCone, false, false,
+            configure: setup => { setup.Renewable = true; setup.Turn.LifetimeSeconds = 60; }, ttlSeconds: 600);
+        That(scenario.Network.RunUntil(() => NatScenario.RouteOf(joiner) == NatRoute.Direct, 15_000_000), "the session goes direct");
+        That(scenario.Network.RunUntil(() => !joiner.Agent.SignalingOpen && scenario.Signaling.OpenPeerSockets == 0, 2_000_000), "and the joiner closed its socket once connected");
+
+        // Fill the room so every reopening the joiner asks for is refused.
+        scenario.Signaling.Places = 2;
+        scenario.Signaling.ConnectPeer("5e1f0c3a9b2d4e6f", false, "a");
+        scenario.Signaling.ConnectPeer("8c4b7a6d5e3f2a1b", false, "b");
+        scenario.Network.RunFor(200_000);
+
+        // Kill the relay. The connected joiner's relay is now changing, so it keeps asking the full room for a socket,
+        // while its direct connection — fed by the exchanges below — carries on, never idling out.
+        var refusals = scenario.Signaling.Refusals;
+        scenario.Turn.Silent = true;
+        var began = scenario.Network.Now;
+        while (scenario.Network.Now - began < 180_000_000)
+        {
+            scenario.Network.RunFor(2_000_000);
+            scenario.Exchange(joinerLink, hostLink, 1, 1_000_000);
+        }
+
+        That(scenario.Signaling.Refusals - refusals >= 6, "the full room refused the connected joiner many times (" + (scenario.Signaling.Refusals - refusals) + ")");
+        That(ReconnectsInWindow(joiner) == 0, "and not one of those refusals counted against the reconnection window (" + ReconnectsInWindow(joiner) + ")");
+        That(!joinerLink.IsClosed && !hostLink.IsClosed && scenario.Exchange(joinerLink, hostLink, 2), "while the direct connection carried on throughout");
+    }
+
+    private static int ReconnectsInWindow(NatPeerNode peer) =>
+        (int)typeof(NatAgent).GetField("reconnectsInWindow", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(peer.Agent)!;
 }

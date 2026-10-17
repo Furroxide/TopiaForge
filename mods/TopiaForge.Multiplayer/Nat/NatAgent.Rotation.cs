@@ -98,7 +98,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             relayTargets = targets;
             relayRefused = false;
             credentialExpiresAt = now + (set.TtlSeconds * 1_000_000L);
-            nextRenewalAt = credentialExpiresAt - options.RenewMarginMicros;
+            nextRenewalAt = RenewalAt(now);
             renewRetryDelay = RenewRetryMicros;
             if (RelayUp && relayBase != null)
             {
@@ -163,6 +163,13 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
             return null;
         }
+
+        /// <summary>
+        /// When to mint the next credential: a margin before the current one expires, but never in the past and never
+        /// sooner than one retry interval from now, so a service that hands out a credential whose lifetime is below the
+        /// margin cannot make the agent renew without end.
+        /// </summary>
+        private long RenewalAt(long now) => Math.Max(credentialExpiresAt - options.RenewMarginMicros, now + RenewRetryMicros);
 
         private void RememberFailedTarget(TransportPath target, long now)
         {

@@ -87,4 +87,27 @@ internal static class NatRelayTargetTests
         scenario.Turn.RefuseEveryCredential = false;
         That(scenario.Network.RunUntil(() => host.Agent.RelayUp, 330 * Second), "the relay comes back once credentials work again");
     }
+
+    internal static void AShortCredentialTtlDoesNotBusyLoop()
+    {
+        // A service that hands out a credential whose lifetime is shorter than the renew margin must not drive the agent
+        // into a busy loop of continuous minting: the next renewal is never scheduled in the past. Here the credential
+        // lasts sixty seconds, below the ninety-second margin, so without the clamp the renewal falls due at once, over
+        // and over. With it, the agent renews on a bounded schedule, inside the control plane's five-a-minute limit.
+        var scenario = new NatScenario(1430, ttlSeconds: 60) { Renewable = true };
+        scenario.Turn.LifetimeSeconds = 60;
+        var host = scenario.AddPeer("host", scenario.Behind("host router", NatBehaviour.FullCone, "198.51.100.10"), "192.168.1.10", 27250, true, 1);
+        scenario.StartHost(host);
+
+        // Ten seconds in — inside the renew interval — the credential has been used but not yet re-minted: scheduling the
+        // first renewal in the past would have minted again at once.
+        scenario.Network.RunFor(10 * Second);
+        That(scenario.Mints == 1 && host.Agent.RelayUp, "the first credential is not re-minted at once (" + scenario.Mints + " mints, relayUp " + host.Agent.RelayUp + ")");
+
+        var from = scenario.Network.Now;
+        scenario.Network.RunFor(600 * Second);
+        var mints = scenario.MintedAt.Where(at => at >= from).ToList();
+        var busiestMinute = mints.Count == 0 ? 0 : mints.Max(start => mints.Count(at => at >= start && at < start + (60 * Second)));
+        That(mints.Count <= 50 && busiestMinute <= 5, "the agent renews on a bounded schedule, not without end (" + mints.Count + " in ten minutes, " + busiestMinute + " in the busiest minute)");
+    }
 }

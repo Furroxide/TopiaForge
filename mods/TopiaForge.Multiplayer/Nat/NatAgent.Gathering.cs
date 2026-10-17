@@ -96,7 +96,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             gatheringOutcome = NatGathering.Gathering;
             gatherDeadline = now + options.GatheringTimeoutMicros;
             credentialExpiresAt = now + (servers.TtlSeconds * 1_000_000L);
-            if (sessionPlan.Renew != null) nextRenewalAt = credentialExpiresAt - options.RenewMarginMicros;
+            if (sessionPlan.Renew != null) nextRenewalAt = RenewalAt(now);
             if (!RelayOnly)
             {
                 socketBase = LocalBase.Socket(IceCandidate.ComputePriority(IceCandidateKind.Host, 65535));
