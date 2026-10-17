@@ -99,6 +99,25 @@ void main() {
     );
   });
 
+  test('refuses a number that fills a 4 MiB document', () {
+    // Profiles and manager state may hold 4 MiB. Finding where each number
+    // ends with a pattern pushed a backtracking entry per digit of its
+    // fraction or exponent, and a number that long overflowed the stack.
+    const length = 4 * 1024 * 1024 - 2;
+    for (final token in [
+      '1e-${'9' * (length - 3)}',
+      '0.${'1' * (length - 2)}',
+    ]) {
+      final watch = Stopwatch()..start();
+      expect(
+        () => decodeJsonPreservingValues('[$token]', label: 'Manifest'),
+        refusalAt(2),
+        reason: token.substring(0, 3),
+      );
+      expect(watch.elapsedMilliseconds, lessThan(1000));
+    }
+  });
+
   test('checks a 20,000-member document in linear time', () {
     final members = [
       for (var i = 0; i < 20000; i++)

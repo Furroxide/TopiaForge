@@ -55,8 +55,14 @@ Object? decodeJsonPreservingValues(String text, {required String label}) {
       continue;
     }
     if (code != 45 && (code < 48 || code > 57)) continue;
-    final match = _jsonNumber.matchAsPrefix(text, offset)!;
-    final token = match.group(0)!;
+    // The text decoded, so the number ends at the first code unit that no
+    // number holds. A pattern would push a backtracking entry for each digit
+    // of a fraction or exponent, and overflow the stack on a 4 MiB number.
+    var end = offset + 1;
+    while (end < text.length && _isNumberPart(text.codeUnitAt(end))) {
+      end++;
+    }
+    final token = text.substring(offset, end);
     final value = scanned() as num;
     if (!value.isFinite ||
         normalizedJsonNumber(token) !=
@@ -65,14 +71,20 @@ Object? decodeJsonPreservingValues(String text, {required String label}) {
         '$label contains a number at character ${offset + 1} that cannot be preserved without changing its value. No state was written. Repair or explicitly replace that value in the original file before retrying.',
       );
     }
-    offset = match.end - 1;
+    offset = end - 1;
   }
   return decoded;
 }
 
-final _jsonNumber = RegExp(
-  r'-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
-);
+/// Whether a JSON number can hold [code]: a digit, `.`, `e`, `E`, `+` or
+/// `-`. No other code unit can follow a number in a document that decoded.
+bool _isNumberPart(int code) =>
+    code >= 48 && code <= 57 ||
+    code == 46 ||
+    code == 101 ||
+    code == 69 ||
+    code == 43 ||
+    code == 45;
 
 /// A decoded array or object, with the index or name of the member the scan is
 /// in. Members are looked up by name rather than by position, so the walk does
