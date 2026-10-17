@@ -25,7 +25,8 @@ internal static class NetworkPrivacyTests
         var root = NetworkFixtures.RepositoryRoot();
         var offenders = new List<string>();
         var provider = Path.Combine(root, "mods", "TopiaForge.Multiplayer");
-        var allowed = new[] { "Network", "Transport", "Nat", "ThirdParty", "bin", "obj" };
+        // The network layer: the transport, the live flows, the NAT layer, and the TopiaForge service's client.
+        var allowed = new[] { "Network", "Transport", "Nat", "ControlPlane", "ThirdParty", "bin", "obj" };
         foreach (var file in Directory.EnumerateFiles(provider, "*.cs", SearchOption.AllDirectories))
         {
             if (!allowed.Contains(Path.GetRelativePath(provider, file).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0])) Scan(root, file, offenders);

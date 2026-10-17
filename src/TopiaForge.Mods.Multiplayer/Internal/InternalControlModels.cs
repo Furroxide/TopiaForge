@@ -51,6 +51,12 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         internal bool AllowDirect { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether a host that allows direct connections asks its router to forward the game port, through
+        /// NAT-PMP or UPnP, while it hosts through the TopiaForge service. Off by default, and ignored for a relay-only host.
+        /// </summary>
+        internal bool RouterForwarding { get; set; }
+
         /// <summary>Gets or sets whether the session offers voice chat.</summary>
         internal bool Voice { get; set; }
 
@@ -243,14 +249,65 @@ namespace TopiaForge.Mods.Internal
         IdentityUnavailable = 19,
         NetworkStopped = 20,
 
-        /// <summary>The target needs the TopiaForge service, which this build does not reach yet.</summary>
+        /// <summary>The TopiaForge service could not be reached, failed, or answered in a way this game cannot read; try again shortly.</summary>
         ServiceUnavailable = 21,
 
         /// <summary>
         /// This game's packages could not be read, as when another program holds a file of one open, so hosting or the join
         /// stopped before anything connected; trying again once the file is free can succeed.
         /// </summary>
-        ContentUnreadable = 22
+        ContentUnreadable = 22,
+
+        /// <summary>This game has no TopiaForge service configured, so only LAN and direct play exist; nothing was contacted.</summary>
+        ServiceNotConfigured = 23,
+
+        /// <summary>The service's operator turned hosting, invites or Internet joining off for now.</summary>
+        ServiceDisabled = 24,
+
+        /// <summary>The service is turning away requests from this network for a while; <see cref="InternalInternetStatus.RetryAfterSeconds"/> says how long.</summary>
+        ServiceRateLimited = 25,
+
+        /// <summary>The invite code does not work: mistyped, expired or withdrawn, or its session ended.</summary>
+        InviteNotFound = 26,
+
+        /// <summary>The server is not listed any more, or never was.</summary>
+        ServerNotListed = 27,
+
+        /// <summary>
+        /// The relay is unavailable, and the join or host keeps to it: relay-only is honoured whatever it costs, so nothing
+        /// fell back to a direct path. <see cref="InternalInternetStatus.HostAllowsDirect"/> says whether a direct connection could help.
+        /// </summary>
+        RelayUnavailable = 28,
+
+        /// <summary>This network blocks the UDP traffic Internet play needs.</summary>
+        UdpBlocked = 29,
+
+        /// <summary>The host is not connected to the service.</summary>
+        HostOffline = 30,
+
+        /// <summary>The host never answered this player's offer.</summary>
+        HostNotAnswering = 31,
+
+        /// <summary>No path to the host worked, through the relay or directly.</summary>
+        NoRoute = 32,
+
+        /// <summary>The connection to the service's signaling was lost before the host was reached.</summary>
+        SignalingFailed = 33,
+
+        /// <summary>The host withdrew the invite this player joined with, or the server stopped being public.</summary>
+        InviteWithdrawn = 34,
+
+        /// <summary>The service's operator holds this server back for now.</summary>
+        ServerBlocked = 35,
+
+        /// <summary>The service refused a request this game made; the game may need an update.</summary>
+        ServiceRefused = 36,
+
+        /// <summary>
+        /// The hosted session already holds as many live invites as the service allows, eight; withdrawing one, or waiting
+        /// for one to expire, makes room.
+        /// </summary>
+        InviteLimit = 37
     }
 
     /// <summary>The reason code of a host's admission report.</summary>
@@ -353,6 +410,9 @@ namespace TopiaForge.Mods.Internal
         internal int MaxPlayers { get; set; }
 
         internal bool IsReadinessHeld { get; set; }
+
+        /// <summary>Gets the session's standing with the TopiaForge service: its listing and invite as a host, its route as a joiner.</summary>
+        internal InternalInternetStatus Internet { get; set; } = new InternalInternetStatus();
     }
 
     /// <summary>A lookup of one server without joining it. Main thread; it completes at a later pump.</summary>

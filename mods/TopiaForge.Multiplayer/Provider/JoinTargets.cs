@@ -11,7 +11,7 @@ namespace TopiaForge.Multiplayer
     /// </summary>
     internal sealed class ProviderJoinTarget : IInternalJoinTarget
     {
-        private ProviderJoinTarget(InternalJoinTargetKind kind, JoinTarget? network, string description, string? serverId, string? inviteCode)
+        private ProviderJoinTarget(InternalJoinTargetKind kind, JoinTarget network, string description, string? serverId, string? inviteCode)
         {
             Kind = kind;
             NetworkTarget = network;
@@ -26,8 +26,8 @@ namespace TopiaForge.Multiplayer
 
         public string? ServerId { get; }
 
-        /// <summary>Gets the network layer's target, or null for a target only the TopiaForge service can resolve.</summary>
-        internal JoinTarget? NetworkTarget { get; }
+        /// <summary>Gets the network layer's target; an invite or a listed server is one only the TopiaForge service resolves.</summary>
+        internal JoinTarget NetworkTarget { get; }
 
         /// <summary>Gets the canonical invite code of an invite target.</summary>
         internal string? InviteCode { get; }
@@ -58,8 +58,11 @@ namespace TopiaForge.Multiplayer
             return true;
         }
 
-        /// <summary>Never shows the address.</summary>
-        public override string ToString() => Description;
+        /// <summary>
+        /// Never shows the address, nor an invite's code: anyone holding the code may join, so a logged target keeps it out.
+        /// The interface shows the player the code they typed through <see cref="Description"/>.
+        /// </summary>
+        public override string ToString() => Kind == InternalJoinTargetKind.Invite ? "invite" : Description;
 
         private static bool TryFromLink(string value, out ProviderJoinTarget? target)
         {
@@ -71,7 +74,7 @@ namespace TopiaForge.Multiplayer
                     target = ForInvite(link.InviteCode!);
                     return true;
                 case SessionLinkKind.Server:
-                    target = new ProviderJoinTarget(InternalJoinTargetKind.ListedServer, null, "listed server", link.ServerId, null);
+                    target = new ProviderJoinTarget(InternalJoinTargetKind.ListedServer, JoinTarget.Listed(link.ServerId!), "listed server", link.ServerId, null);
                     return true;
                 default:
                     target = new ProviderJoinTarget(InternalJoinTargetKind.Direct, JoinTarget.Direct(link.Host!, link.Port, link.ServerId), "direct session", link.ServerId, null);
@@ -80,7 +83,7 @@ namespace TopiaForge.Multiplayer
         }
 
         private static ProviderJoinTarget ForInvite(string code) =>
-            new ProviderJoinTarget(InternalJoinTargetKind.Invite, null, "invite " + Network.InviteCode.Display(code), null, code);
+            new ProviderJoinTarget(InternalJoinTargetKind.Invite, JoinTarget.Invite(code), "invite " + Network.InviteCode.Display(code), null, code);
 
         private static bool TrySplitHost(string value, out string host, out int port)
         {

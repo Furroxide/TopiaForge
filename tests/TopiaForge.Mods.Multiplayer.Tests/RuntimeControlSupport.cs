@@ -141,6 +141,8 @@ internal sealed class UncheckedRuntimeHost : IInternalMultiplayerRuntimeHost
     public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
 
     public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => inner.ReportDiagnostic(diagnostic);
+
+    public string? ServiceOrigin => inner.ServiceOrigin;
 }
 
 /// <summary>

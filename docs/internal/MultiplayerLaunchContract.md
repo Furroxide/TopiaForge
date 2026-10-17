@@ -208,7 +208,8 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   (`TopiaForge.Mods.Internal.LaunchSessionTickets`), unless the command was rejected or recovery runs. The provider's
   narrow entry point is `MultiplayerProvider.TakeLaunchSession`, which takes the ticket once, while mods load, and maps
   it onto live sessions (`LaunchSessionPlan`): host settings, or a join target pinned by the verified server and its
-  settings. Invites and Internet listings wait for the control plane. Once mods have loaded, the runtime withdraws a
+  settings. Invites and Internet listings go through the control plane (`MultiplayerInternetSessions.md`), and the
+request's `serviceOrigin` comes before the manager's own. Once mods have loaded, the runtime withdraws a
   ticket no one took, so a direct target's address does not stay in memory for the whole process. When the runtime's
   internal multiplayer control merges (#211), the ticket becomes a call on it.
 - The ticket is internal, and the manager's package validator keeps it so: a package may not bundle any assembly a

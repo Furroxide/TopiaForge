@@ -162,6 +162,10 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public InternalMultiplayerStatistics GetStatistics() => new InternalMultiplayerStatistics { Role = Role };
 
+        public OperationResult<bool> CreateInvite() => Unsupported<bool>();
+
+        public OperationResult<bool> RevokeInvite(string code) => Unsupported<bool>();
+
         private static OperationResult<T> Unsupported<T>() where T : notnull =>
             OperationResult<T>.Failure(ModErrorCode.Unavailable, "The fake control does not do this.");
     }

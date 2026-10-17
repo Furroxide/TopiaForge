@@ -3,59 +3,21 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Multiplayer.ControlPlane;
 using TopiaForge.Multiplayer.Engine;
+using TopiaForge.Multiplayer.NatTraversal;
 using TopiaForge.Multiplayer.Transport;
 
 namespace TopiaForge.Multiplayer.Network
 {
-    /// <summary>A join target resolved to a path and its host's verified descriptor, or the reason it could not be.</summary>
-    internal sealed class ResolvedTarget
-    {
-        private ResolvedTarget(LiveFailure failure, string detail, TransportPath? path, SignedServerDescriptor? descriptor, string? servedServerId)
-        {
-            Failure = failure;
-            Detail = detail;
-            Path = path;
-            Descriptor = descriptor;
-            ServedServerId = servedServerId;
-        }
-
-        internal LiveFailure Failure { get; }
-        internal string Detail { get; }
-        internal TransportPath? Path { get; }
-        internal SignedServerDescriptor? Descriptor { get; }
-
-        /// <summary>Gets, for a changed identity, the server the address serves now: the one the player may choose to trust.</summary>
-        internal string? ServedServerId { get; }
-
-        internal static ResolvedTarget Found(TransportPath path, SignedServerDescriptor descriptor) =>
-            new ResolvedTarget(LiveFailure.None, string.Empty, path ?? throw new ArgumentNullException(nameof(path)), descriptor ?? throw new ArgumentNullException(nameof(descriptor)), null);
-
-        internal static ResolvedTarget Failed(LiveFailure failure, string detail) => new ResolvedTarget(failure, detail, null, null, null);
-
-        internal static ResolvedTarget IdentityChanged(string servedServerId) =>
-            new ResolvedTarget(LiveFailure.HostIdentityChanged, "This address served a different server last time.", null, null, servedServerId);
-    }
-
-    /// <summary>Finds where a target is and fetches what it says it is, off the main thread.</summary>
-    internal interface IJoinTargetResolver
-    {
-        /// <summary>
-        /// Resolves <paramref name="target"/>. Unless <paramref name="allowDirect"/>, nothing beyond the local network
-        /// is contacted, a name server included: such a host fails with <see cref="LiveFailure.DirectNotAllowed"/>
-        /// before anything is sent. A typed address that served another server before is trusted only when the server
-        /// it serves now is <paramref name="trustedServerId"/>.
-        /// </summary>
-        Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken);
-    }
-
     /// <summary>
     /// One join, from target to session, on the main thread. It resolves the target and verifies the host's descriptor,
     /// checks the game build, the protocol and the content, asks for the password when the session needs one and
     /// derives its proof off the main thread, then connects with the descriptor's transport key pinned. Only once the
     /// link is up does the engine leave solo play for the host's session, so any failure before that leaves the
     /// player's own session untouched. A lost link is retried for the engine's grace period with a fresh proof; after
-    /// that, or when the host ends the session, the engine returns to solo play.
+    /// that, or when the host ends the session, the engine returns to solo play. A host the TopiaForge service found is
+    /// reached through an <see cref="InternetJoinRoute"/>, whose NAT join fills in the attempt instead of a known path.
     /// </summary>
     internal sealed class LiveJoin : IDisposable
     {
@@ -73,6 +35,8 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<long> clock;
         private readonly Func<SoloSessionStart> soloStart;
         private readonly Func<TransportOptions> transportOptions;
+        private readonly InternetServices? services;
+        private readonly Func<NatAgentOptions> natOptions;
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
         private Task<ResolvedTarget>? resolving;
         private Task<byte[]>? deriving;
@@ -80,6 +44,7 @@ namespace TopiaForge.Multiplayer.Network
         private string? password;
         private byte[]? passwordKey;
         private INetworkControl? network;
+        private InternetJoinRoute? internet;
         private ConnectAttempt? attempt;
         private NetworkLink? link;
         private long reconnectDeadline;
@@ -98,7 +63,9 @@ namespace TopiaForge.Multiplayer.Network
             INetworkFactory factory,
             Func<long> clock,
             Func<SoloSessionStart> soloStart,
-            Func<TransportOptions>? transportOptions = null)
+            Func<TransportOptions>? transportOptions = null,
+            InternetServices? services = null,
+            Func<NatAgentOptions>? natOptions = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -110,6 +77,8 @@ namespace TopiaForge.Multiplayer.Network
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.soloStart = soloStart ?? throw new ArgumentNullException(nameof(soloStart));
             this.transportOptions = transportOptions ?? (() => new TransportOptions());
+            this.services = services;
+            this.natOptions = natOptions ?? (() => new NatAgentOptions());
             password = settings.Password;
             resolving = resolver.ResolveAsync(target, settings.AllowDirect, settings.TrustedServerId, cancellation.Token);
         }
@@ -120,6 +89,9 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets what went wrong, for the player, in this game's own words. It never names an address.</summary>
         internal string Detail { get; private set; } = string.Empty;
+
+        /// <summary>Gets the delay the TopiaForge service named when it refused this join, in seconds, or zero.</summary>
+        internal int RetryAfterSeconds { get; private set; }
 
         /// <summary>
         /// Gets what the host said when it ended, refused or removed this player, such as a kick message. Host-authored:
@@ -143,6 +115,12 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets the host's verified descriptor once resolved, for the interface to show.</summary>
         internal ServerDescriptor? Descriptor => resolved?.Descriptor?.Descriptor;
+
+        /// <summary>Gets how the TopiaForge service found the host, when it did; such a join runs through <see cref="Internet"/>.</summary>
+        internal ServiceRoute? Route => resolved?.Route;
+
+        /// <summary>Gets the route through the TopiaForge service once connecting began, for its status: enums and counts only.</summary>
+        internal InternetJoinRoute? Internet => internet;
 
         /// <summary>
         /// Gets, when a typed address now serves a different server, that server's id. A new join that sets it as
@@ -170,6 +148,7 @@ namespace TopiaForge.Multiplayer.Network
         {
             if (resolving != null && !resolving.IsCompleted) work.Add(resolving);
             if (deriving != null && !deriving.IsCompleted) work.Add(deriving);
+            internet?.AddPendingBackgroundWork(work);
         }
 
         /// <summary>Gives the password the session asked for, when the join is waiting for it.</summary>
@@ -325,6 +304,18 @@ namespace TopiaForge.Multiplayer.Network
         private void StartConnecting()
         {
             Phase = JoinPhase.Connecting;
+            if (resolved!.Route != null)
+            {
+                if (services == null)
+                {
+                    End(LiveFailure.ServiceNotConfigured, InternetFailures.Detail(LiveFailure.ServiceNotConfigured));
+                    return;
+                }
+
+                internet = new InternetJoinRoute(services, resolved.Route, resolved.Descriptor!.Descriptor.TransportKey, settings.AllowDirect, StartTraversal, clock);
+                internet.Begin();
+                return;
+            }
 
             // A joining player connects out and accepts nobody, so no one else can reach it or learn its key.
             var options = transportOptions();
@@ -346,13 +337,64 @@ namespace TopiaForge.Multiplayer.Network
             attempt = network.Connect(resolved!.Path!, resolved.Descriptor!.Descriptor.TransportKey);
         }
 
+        /// <summary>
+        /// Starts the network a join through the service runs on: its transport and its NAT agent are relay-only unless
+        /// the player allowed direct play for this session, and it accepts nobody. Null when no socket could open.
+        /// </summary>
+        private TraversalNetwork? StartTraversal(bool allowDirect)
+        {
+            var options = transportOptions();
+            options.RelayOnly = !allowDirect;
+            options.AcceptsInbound = false;
+            var stack = new NetworkStack(new TransportEndpoint(identity.CopyTransportPrivateKey(), options, clock()));
+            var nat = natOptions();
+            nat.RelayOnly = !allowDirect;
+            try
+            {
+                return factory.StartTraversal(0, stack, nat);
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                stack.Dispose();
+                return null;
+            }
+        }
+
         private void Connecting()
         {
             var now = clock();
+            if (internet != null)
+            {
+                internet.Pump();
+                if (internet.Failure != LiveFailure.None)
+                {
+                    End(internet.Failure, internet.Detail);
+                    return;
+                }
+
+                attempt ??= internet.TakeAttempt();
+            }
+
             if (attempt == null)
             {
-                if (Phase == JoinPhase.Reconnecting && now >= nextAttemptAt) attempt = network!.Connect(resolved!.Path!, resolved.Descriptor!.Descriptor.TransportKey);
-                else if (Phase == JoinPhase.Reconnecting && now >= reconnectDeadline) End(LiveFailure.ConnectionLost, "The connection to the host was lost.");
+                if (Phase == JoinPhase.Reconnecting && now >= nextAttemptAt)
+                {
+                    if (internet == null)
+                    {
+                        attempt = network!.Connect(resolved!.Path!, resolved.Descriptor!.Descriptor.TransportKey);
+                    }
+                    else
+                    {
+                        // A fresh NAT join on the same network; its attempt arrives at a later pump.
+                        internet.Reconnect();
+                        nextAttemptAt = now + ReconnectIntervalMicros;
+                    }
+                }
+                else if (Phase == JoinPhase.Reconnecting && now >= reconnectDeadline)
+                {
+                    End(LiveFailure.ConnectionLost, "The connection to the host was lost.");
+                }
+
                 return;
             }
 
@@ -360,11 +402,21 @@ namespace TopiaForge.Multiplayer.Network
             if (attempt.State == ConnectAttemptState.Failed)
             {
                 var failure = attempt.Failure;
+                var explained = LiveFailure.None;
+                if (internet != null && !internet.TryExplain(attempt, out explained)) return;
                 attempt = null;
                 if (Phase == JoinPhase.Reconnecting)
                 {
                     nextAttemptAt = now + ReconnectIntervalMicros;
                     if (now >= reconnectDeadline) End(LiveFailure.ConnectionLost, "The connection to the host was lost.");
+                    return;
+                }
+
+                if (internet != null)
+                {
+                    End(explained, explained == LiveFailure.HandshakeFailed
+                        ? "The host did not prove the identity it announced."
+                        : InternetFailures.Detail(explained, internet.HostAllowsDirect));
                     return;
                 }
 
@@ -518,6 +570,7 @@ namespace TopiaForge.Multiplayer.Network
             cancellation.Cancel();
             Failure = failure;
             Detail = detail;
+            RetryAfterSeconds = internet?.RetryAfterSeconds ?? resolved?.RetryAfterSeconds ?? 0;
             Phase = JoinPhase.Ended;
             if (engineJoined && engine.Role == EngineRole.Client)
             {
@@ -535,6 +588,9 @@ namespace TopiaForge.Multiplayer.Network
             var current = network;
             network = null;
             current?.Stop(StopGraceMicros);
+            var route = internet;
+            internet = null;
+            route?.Dispose();
         }
     }
 }

@@ -56,16 +56,17 @@ Both steps have landed. Section 8 says what each later WS3 slice plugs in where.
 | Session | `ReplaceSession`, `OpenSystemChannel`, `HoldReadiness`, `IsReadinessHeld`, `IsParticipantReady` | Sections 5 and 6. |
 | Sources | `SetEntityIdentitySource`, `SetAvatarSource` | Shape only for now; section 8. |
 | Voice and counters | `Voice`, `GetStatistics`, `GetStatus` | `Voice` is null until the voice service implements the SPI. |
+| Internet | `CreateInvite`, `RevokeInvite` | Host only, once the session is registered with the TopiaForge service: `MultiplayerInternetSessions.md`. |
 
 - **Results.** Commands answer with `OperationResult<bool>`: `NotAuthoritative` for a host-only action on a joined
   player, `InvalidState` when the current role or phase forbids it, `Unavailable` while live sessions are switched off,
-  without an attached runtime, or for a target only the TopiaForge service can resolve, `InvalidArgument` for bad
-  input, and `NotFound` for an unknown player or ban.
+  without an attached runtime, or, with no TopiaForge service configured, for Public or Invite hosting and for a
+  target only the service can resolve, `InvalidArgument` for bad input, and `NotFound` for an unknown player or ban.
 - **Status.** `GetStatus` returns one snapshot: the role, the host's phase and failure, the join's phase, failure and
   detail, the host's message, the host's admission code, the content problems and whether the host wrote them, a
-  changed server identity, the joined host's verified description, browsing, connected players and readiness. It
-  allocates, so the interface reads it on change. `JoinDetail` is always this game's own words; what the host wrote is
-  kept apart, as the next section sets out.
+  changed server identity, the joined host's verified description, browsing, connected players, readiness, and the
+  session's standing with the TopiaForge service (`Internet`). It allocates, so the interface reads it on change.
+  `JoinDetail` is always this game's own words; what the host wrote is kept apart, as the next section sets out.
 - **Bans.** A ban is listed by an opaque 32-character id, the first 128 bits of a labelled SHA-256 of the banned key,
   so the interface can lift a ban without ever holding the key.
 - **Server mute.** A mute follows the player's identity until hosting stops. The host drops a muted player's chat at
@@ -124,7 +125,8 @@ id the host chose for it.
   address is never mistaken for a code.
 - The handle keeps the text inside the provider. It shows only its kind, a description (`direct session`,
   `LAN session`, `listed server` or `invite ABCDE-12345`) and the server id a link named. `ToString` returns the
-  description, so logging a target cannot leak it.
+  description, except that an invite prints as `invite` without its code, so logging a target leaks neither an address
+  nor a code.
 - `Query` resolves a target and checks it as a join would, without connecting: the build, the protocol, the privacy
   choice and the content. It honours relay-only exactly as a join does.
 

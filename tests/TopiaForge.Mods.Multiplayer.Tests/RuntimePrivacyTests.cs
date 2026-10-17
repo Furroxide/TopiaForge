@@ -67,8 +67,9 @@ internal static class RuntimePrivacyTests
         foreach (var (text, kind, description, expectedServer) in cases)
         {
             That(peer.Control.TryCreateJoinTarget(text, out var target), "'" + text + "' makes a target");
-            That(target!.Kind == kind && target.Description == description && target.ServerId == expectedServer && target.ToString() == description,
-                "'" + text + "' is a " + kind + " shown as '" + description + "'");
+            var printed = kind == InternalJoinTargetKind.Invite ? "invite" : description;
+            That(target!.Kind == kind && target.Description == description && target.ServerId == expectedServer && target.ToString() == printed,
+                "'" + text + "' is a " + kind + " shown as '" + description + "' and printed as '" + printed + "', which never holds an invite's code");
             foreach (var secret in new[] { "203.0.113.5", "192.168.1.20", "2001:db8", "play.example.org", "198.51.100.9", "2726" })
             {
                 That(!Strings(target).Any(value => value.Contains(secret, StringComparison.OrdinalIgnoreCase)), "'" + text + "' shows no address in its handle");
@@ -423,6 +424,8 @@ internal static class RuntimePrivacyTests
         public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
 
         public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => throw new InvalidOperationException("the log at 203.0.113.9 is closed");
+
+        public string? ServiceOrigin => inner.ServiceOrigin;
     }
 
     /// <summary>A mod log that fails at every line.</summary>

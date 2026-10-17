@@ -82,6 +82,19 @@ namespace TopiaForge.ModManager
 
         public string DisplayName => displayName;
 
+        /// <summary>
+        /// Gets or sets the TopiaForge service's origin: the session launch's own when it names one, otherwise the
+        /// manager's configuration, the launcher's multiplayer preferences. Null when neither names one; the provider then
+        /// contacts no service.
+        /// </summary>
+        public string? ServiceOrigin { get; internal set; }
+
+        /// <summary>
+        /// Sets <see cref="ServiceOrigin"/> at startup from the session launch's origin (launch request V5) and the
+        /// manager's configured one: the launch's comes first. The launch ticket itself stays the provider's to take.
+        /// </summary>
+        internal void ConfigureServiceOrigin(string? launch, string? configured) => ServiceOrigin = launch ?? configured;
+
         /// <summary>Gets or sets the name this player hosts and joins as; the in-game settings set it.</summary>
         internal string PreferredDisplayName
         {

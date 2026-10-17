@@ -43,6 +43,12 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         internal bool AllowDirect { get; set; }
 
+        /// <summary>
+        /// Gets or sets whether a host that allows direct connections asks its router to forward the game port while it
+        /// hosts through the TopiaForge service. Off by default; a relay-only host never maps anything.
+        /// </summary>
+        internal bool MapPorts { get; set; }
+
         internal bool Voice { get; set; }
         internal string? Gamemode { get; set; }
         internal string? World { get; set; }
@@ -66,18 +72,25 @@ namespace TopiaForge.Multiplayer.Network
         Direct = 0,
 
         /// <summary>A session heard on the local network, named by its server id.</summary>
-        Lan = 1
+        Lan = 1,
+
+        /// <summary>An invite code, which the TopiaForge service resolves.</summary>
+        Invite = 2,
+
+        /// <summary>A server the TopiaForge service lists, named by its server id.</summary>
+        Listed = 3
     }
 
     /// <summary>Where a join goes. A direct target's address stays in the network layer; nothing above sees it.</summary>
     internal sealed class JoinTarget
     {
-        private JoinTarget(JoinTargetKind kind, string? host, int port, string? serverId)
+        private JoinTarget(JoinTargetKind kind, string? host, int port, string? serverId, string? inviteCode = null)
         {
             Kind = kind;
             Host = host;
             Port = port;
             ServerId = serverId;
+            InviteCode = inviteCode;
         }
 
         internal JoinTargetKind Kind { get; }
@@ -86,6 +99,12 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets the server the target must be, when a link, listing or beacon named it.</summary>
         internal string? ServerId { get; }
+
+        /// <summary>Gets an invite target's canonical code.</summary>
+        internal string? InviteCode { get; }
+
+        /// <summary>Gets whether only the TopiaForge service can find the target: an invite or a listed server.</summary>
+        internal bool NeedsService => Kind == JoinTargetKind.Invite || Kind == JoinTargetKind.Listed;
 
         internal static JoinTarget Direct(string host, int port, string? serverId = null)
         {
@@ -101,8 +120,26 @@ namespace TopiaForge.Multiplayer.Network
             return new JoinTarget(JoinTargetKind.Lan, null, 0, serverId);
         }
 
-        /// <summary>Never shows the address.</summary>
-        public override string ToString() => Kind == JoinTargetKind.Lan ? "LAN session" : "direct session";
+        /// <summary>
+        /// An invite. <paramref name="serverId"/> pins the server it must lead to, as a session launch that verified it does;
+        /// the code itself is never printed.
+        /// </summary>
+        internal static JoinTarget Invite(string code, string? serverId = null)
+        {
+            if (!Network.InviteCode.IsCanonical(code)) throw new ArgumentException("An invite code is ten canonical Crockford base32 characters.", nameof(code));
+            if (serverId != null && !WireText.IsHex(serverId, 32)) throw new ArgumentException("A server id is 64 lowercase hexadecimal characters.", nameof(serverId));
+            return new JoinTarget(JoinTargetKind.Invite, null, 0, serverId, code);
+        }
+
+        internal static JoinTarget Listed(string serverId)
+        {
+            if (!WireText.IsHex(serverId, 32)) throw new ArgumentException("A server id is 64 lowercase hexadecimal characters.", nameof(serverId));
+            return new JoinTarget(JoinTargetKind.Listed, null, 0, serverId);
+        }
+
+        /// <summary>Never shows the address, or an invite's code.</summary>
+        public override string ToString() =>
+            Kind == JoinTargetKind.Lan ? "LAN session" : Kind == JoinTargetKind.Invite ? "invite" : Kind == JoinTargetKind.Listed ? "listed server" : "direct session";
     }
 
     /// <summary>How a player joins.</summary>
@@ -193,11 +230,51 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>The host's network stopped after too many failures in a row, ending every player's session.</summary>
         NetworkStopped = 20,
 
+        /// <summary>The TopiaForge service could not be reached, failed, or answered in a way this game cannot read.</summary>
+        ServiceUnavailable = 21,
+
         /// <summary>
         /// This game's packages could not be read, as when another program holds a file of one open, so hosting or the join
-        /// stopped before anything connected. It has the internal control's number, whose 21 is a failure of its own.
+        /// stopped before anything connected. Every failure has the internal control's number for it.
         /// </summary>
-        ContentUnreadable = 22
+        ContentUnreadable = 22,
+
+        /// <summary>No TopiaForge service is configured; nothing was contacted.</summary>
+        ServiceNotConfigured = 23,
+
+        /// <summary>The service's operator turned hosting, invites or Internet joining off.</summary>
+        ServiceDisabled = 24,
+
+        /// <summary>The service turned this network's requests away for a while.</summary>
+        ServiceRateLimited = 25,
+
+        InviteNotFound = 26,
+
+        ServerNotListed = 27,
+
+        /// <summary>The relay is unavailable and the session keeps to it; nothing falls back to a direct path.</summary>
+        RelayUnavailable = 28,
+
+        UdpBlocked = 29,
+
+        HostOffline = 30,
+
+        HostNotAnswering = 31,
+
+        NoRoute = 32,
+
+        SignalingFailed = 33,
+
+        /// <summary>The service stopped honouring the join ticket: its invite was withdrawn or expired, or the server stopped being public.</summary>
+        InviteWithdrawn = 34,
+
+        ServerBlocked = 35,
+
+        /// <summary>The service refused a request this game made.</summary>
+        ServiceRefused = 36,
+
+        /// <summary>The hosted session holds as many live invites as the service allows.</summary>
+        InviteLimit = 37
     }
 
     /// <summary>What a content check found missing or different before a join, for the player to see.</summary>

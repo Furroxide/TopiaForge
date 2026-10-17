@@ -48,6 +48,13 @@ namespace TopiaForge.Mods.Internal
         /// diagnostics bundle or a crash report, so this is safe for any text the provider holds.
         /// </summary>
         void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic);
+
+        /// <summary>
+        /// Gets the TopiaForge service's origin: a session launch's own (launch request V5) when it names one, otherwise the
+        /// manager's configuration (the launcher's multiplayer preferences); null when neither does. Without one, the
+        /// provider contacts no service and offers only LAN and direct play.
+        /// </summary>
+        string? ServiceOrigin { get; }
     }
 
     /// <summary>How a package takes part in sessions, from its manifest's <c>multiplayer</c> block.</summary>

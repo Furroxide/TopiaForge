@@ -2,6 +2,7 @@ extern alias provider;
 
 using System.Diagnostics;
 using TopiaForge.Mods;
+using provider::TopiaForge.Multiplayer.NatTraversal;
 using provider::TopiaForge.Multiplayer.Network;
 using provider::TopiaForge.Multiplayer.Transport;
 using Provider = provider::TopiaForge.Multiplayer.MultiplayerProvider;
@@ -117,6 +118,10 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
         Networks.Add(started);
         return started;
     }
+
+    /// <summary>These networks have no NAT layer; the Internet tests build theirs with <see cref="TraversalNetworkFactory"/>.</summary>
+    public TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options) =>
+        throw new NotSupportedException("The stepped networks carry no NAT layer; Internet sessions run on the traversal factory.");
 
     public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => null;
 

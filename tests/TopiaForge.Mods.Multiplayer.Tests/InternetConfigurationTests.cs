@@ -1,0 +1,127 @@
+extern alias provider;
+
+using System.Net;
+using System.Net.Sockets;
+using TopiaForge.Mods.Internal;
+using provider::TopiaForge.Multiplayer.NatTraversal.Signaling;
+using provider::TopiaForge.Multiplayer.Network;
+using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
+
+namespace TopiaForge.Mods.Multiplayer.Tests;
+
+/// <summary>
+/// Where the TopiaForge service comes from and when it is reached: a LAN host never contacts it, a session launch's own
+/// origin comes before the manager's, a launch to an invite or an Internet listing is planned through it, and the
+/// signaling socket, like the HTTPS client, never goes through a proxy the system names.
+/// </summary>
+internal static class InternetConfigurationTests
+{
+    private const string ServerId = "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3";
+    private const string DescriptorSha256 = "0d4c3b2a1908f7e6d5c4b3a2918f7e6d5c4b3a2918f7e6d5c4b3a2918f7e6d5c";
+    private const string PackageDigest = "9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9";
+
+    internal static void ALanHostNeverContactsTheService()
+    {
+        using var rig = new InternetRig(7_601);
+        var host = rig.AddPeer("host", NatBehaviour.FullCone, "198.51.100.250", "192.168.1.250");
+        That(host.Internet.ServiceConfigured, "the service is configured");
+        That(host.Control.StartHosting(new InternalHostSettings("Sam's Sandbox", 4, InternalSessionVisibility.Lan)).Succeeded, "LAN hosting starts");
+        That(rig.Run(() => host.Status.HostPhase == InternalHostPhase.Hosting, 5_000_000), "and serves");
+        rig.Run(() => false, 60_000_000);
+        That(rig.Service.Requests.Count == 0 && host.Factory.Networks.Count == 0 && host.Factory.Plain.Count == 1,
+            "a LAN host binds its plain socket and asks the service nothing, ever");
+        That(host.Internet.ListingPhase == InternalListingPhase.Off && host.Internet.Invite == null, "and has no listing or invite to show");
+    }
+
+    /// <summary>
+    /// The runtime host names the service the provider reaches: a session launch's origin before the manager's. The
+    /// launch ticket stays untaken, so the runtime still withdraws it once mods load and a direct target's address goes.
+    /// </summary>
+    internal static void ASessionLaunchsOriginComesFirst()
+    {
+        var content = new provider::TopiaForge.Multiplayer.RuntimeContent("2545", "0.2.0");
+        var diagnostics = new provider::TopiaForge.Multiplayer.RoutedDiagnostics(null);
+        var network = new VirtualDatagramNetwork(7_602);
+        var cases = new (string? Launch, string? Configured, string? Reached)[]
+        {
+            ("https://launch.example.org", "https://manager.example.org", "https://launch.example.org"),
+            (null, "https://manager.example.org", "https://manager.example.org"),
+            ("https://launch.example.org", null, "https://launch.example.org"),
+            (null, null, null)
+        };
+        foreach (var (launch, configured, reached) in cases)
+        {
+            var ticket = new LaunchSessionTicket("join", "intent-7", "Sam", false, 0, false, true, launch,
+                new LaunchSessionTicketTarget("invite", ServerId, DescriptorSha256, PackageDigest, "ABCDE12345", null, null, 0), null);
+            LaunchSessionTickets.Offer(ticket);
+            try
+            {
+                using var provider = new provider::TopiaForge.Multiplayer.MultiplayerProvider(LiveRig.ProviderId, diagnostics, () => network.Now,
+                    new LiveSessionsSetup(new MemoryDataFiles(), content) { Factory = new SteppedNetworkFactory(network, "launch") });
+                using var control = new provider::TopiaForge.Multiplayer.InternalControl(provider, content, diagnostics);
+                var runtime = new TopiaForge.ModManager.MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog());
+                runtime.ConfigureServiceOrigin(launch, configured);
+                That(control.AttachRuntime(runtime), "the runtime attaches");
+                That(provider.Live!.Services?.Origin?.Text == reached, "a launch naming " + (launch ?? "no service") + " and a configuration naming " +
+                                                                        (configured ?? "none") + " reach " + (reached ?? "nothing"));
+                That(LaunchSessionTickets.Withdraw(ticket), "and the launch's ticket is still there for the runtime to withdraw");
+            }
+            finally
+            {
+                LaunchSessionTickets.Withdraw(ticket);
+            }
+        }
+    }
+
+    internal static void ALaunchToAnInviteOrAListingGoesThroughTheService()
+    {
+        LaunchSessionTicket Join(string kind, string? origin, string? invite = null, string? source = null) =>
+            new("join", "intent-8", "Sam", false, 0, false, true, origin, new LaunchSessionTicketTarget(kind, ServerId, DescriptorSha256, PackageDigest, invite, source, null, 0), null);
+
+        var invite = LaunchSessionPlan.FromTicket(Join("invite", "https://mp.example.org", invite: "ABCDE12345"), out var unsupported);
+        That(unsupported == LaunchSessionUnsupported.None && invite!.Target!.Kind == JoinTargetKind.Invite && invite.Target.InviteCode == "ABCDE12345" &&
+             invite.Target.ServerId == ServerId && invite.ServiceOrigin == "https://mp.example.org" && invite.Target.ToString() == "invite",
+            "an invite is planned through the service, pinned to the server the launcher verified, and never printed");
+        var listing = LaunchSessionPlan.FromTicket(Join("listing", "https://mp.example.org", source: "internet"), out unsupported);
+        That(unsupported == LaunchSessionUnsupported.None && listing!.Target!.Kind == JoinTargetKind.Listed && listing.Target.ServerId == ServerId,
+            "an Internet listing is found again by its server id");
+        That(LaunchSessionPlan.FromTicket(Join("invite", null, invite: "ABCDE12345"), out unsupported) == null && unsupported == LaunchSessionUnsupported.NeedsService,
+            "without a service origin an invite still cannot be planned");
+    }
+
+    /// <summary>A proxy that would take every request: the signaling socket must reach the room directly all the same.</summary>
+    internal static void SignalingNeverAsksAProxy()
+    {
+        using var proxy = LoopbackHttpServer.Answering(LoopbackHttpServer.Answer(502, null));
+        using var room = new LoopbackWebSocketServer();
+        var saved = System.Net.Http.HttpClient.DefaultProxy;
+        try
+        {
+            System.Net.Http.HttpClient.DefaultProxy = new GreedyProxy(new Uri("http://127.0.0.1:" + proxy.Port));
+            using var client = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + room.Port + "/"), ServerId, "tfj1_ticket");
+            var opened = SpinWait.SpinUntil(() => client.State != SignalingState.Connecting, TimeSpan.FromSeconds(10));
+            That(opened && client.State == SignalingState.Open && room.Upgraded, "the room is reached directly (" + client.State + ", " + client.CloseReason + ")");
+            That(proxy.Connections == 0, "and the proxy the system names is never asked");
+        }
+        finally
+        {
+            System.Net.Http.HttpClient.DefaultProxy = saved;
+        }
+    }
+
+    private sealed class GreedyProxy : IWebProxy
+    {
+        private readonly Uri address;
+
+        internal GreedyProxy(Uri address)
+        {
+            this.address = address;
+        }
+
+        public ICredentials? Credentials { get; set; }
+
+        public Uri GetProxy(Uri destination) => address;
+
+        public bool IsBypassed(Uri host) => false;
+    }
+}

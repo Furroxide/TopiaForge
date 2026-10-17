@@ -183,7 +183,7 @@ internal static class InternalControlTests
         guest.Control.Leave();
         That(guest.Control.Join(invite, new InternalJoinSettings()).ErrorCode == ModErrorCode.Unavailable, "an invite needs the TopiaForge service");
         using var query = guest.Control.Query(invite, false);
-        That(query.IsCompleted && query.Failure == InternalLiveFailure.ServiceUnavailable, "and so does looking it up");
+        That(query.IsCompleted && query.Failure == InternalLiveFailure.ServiceNotConfigured, "and so does looking it up, which says no service is configured");
 
         var standalone = rig.AddPeer("standalone", Sandbox, PackageSpec.Standalone("io.example.solo", "1.0.0", 'c'));
         var hosting = standalone.Control.StartHosting(new InternalHostSettings("Never", 4));

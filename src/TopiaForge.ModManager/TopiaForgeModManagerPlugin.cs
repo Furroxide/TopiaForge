@@ -140,6 +140,8 @@ namespace TopiaForge.ModManager
                     managerLogger,
                     validationContext,
                     startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
+                // The TopiaForge service a session launch names comes first, then the manager's multiplayer configuration.
+                runtime.Multiplayer.Host.ConfigureServiceOrigin(launchSession?.Session.ServiceOrigin, launchStaging.ReadPreferences()?.ServiceOrigin);
                 var selection = RuntimeSessionSelection.Create(launchProfile?.ProfileId ?? "direct-game", launchProfile?.ProfileRevision ?? 0,
                     packages, loadOrder, validationContext);
                 runtime.ActivateSessionRuntime(selection.Profile, rejectedSelections: selection.RejectedSelections);

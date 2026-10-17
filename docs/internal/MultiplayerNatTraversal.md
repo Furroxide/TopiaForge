@@ -11,8 +11,8 @@ The code lives in `mods/TopiaForge.Multiplayer/Nat/`, inside the provider only, 
 namespace is `TopiaForge.Multiplayer.NatTraversal`: a `TopiaForge.Multiplayer.Nat` namespace would hide the vendored
 BouncyCastle subset's own `Nat` class from the code that uses it.
 
-Nothing calls this layer yet. The host and join flows will, through the interface in section 11. Until then no
-player-facing behaviour changes, and an agent that is never started contacts nothing.
+The Internet host and join flows call this layer through the interface in section 11; `MultiplayerInternetSessions.md`
+records them. An agent that is never started contacts nothing.
 
 ## 1. Shape
 
@@ -396,9 +396,10 @@ peer id comes from the ticket.
   limited (4408), replaced (4409), session ended (4410) and expired (4411); a refused upgrade, whatever its status, is
   refused.
 
-The game's Mono runs `ClientWebSocket` over TLS 1.2 (`MultiplayerMonoSpike.md`, section 2), but that was measured
-against two public echo servers, not yet against the control plane's Worker. Everything outside this one class
-depends only on `ISignalingClient`, and the tests run the real client against a loopback server.
+The game's Mono runs `ClientWebSocket` over TLS 1.2 (`MultiplayerMonoSpike.md`, section 2). It was measured against
+two public echo servers first, and then inside the game against the staging control plane's Worker
+(`MultiplayerInternetSessions.md`, section 11). Everything outside this one class depends only on `ISignalingClient`,
+and the tests run the real client against a loopback server.
 
 ## 9. Privacy
 

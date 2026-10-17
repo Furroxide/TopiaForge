@@ -2,16 +2,39 @@ using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using TopiaForge.Mods;
+using TopiaForge.Multiplayer.ControlPlane;
 using TopiaForge.Multiplayer.Engine;
+using TopiaForge.Multiplayer.NatTraversal;
 using TopiaForge.Multiplayer.Transport;
 
 namespace TopiaForge.Multiplayer.Network
 {
+    /// <summary>A network whose game socket the NAT layer shares: the network the flows command, and the agent on its socket.</summary>
+    internal sealed class TraversalNetwork
+    {
+        internal TraversalNetwork(INetworkControl network, NatAgent agent)
+        {
+            Network = network ?? throw new ArgumentNullException(nameof(network));
+            Agent = agent ?? throw new ArgumentNullException(nameof(agent));
+        }
+
+        internal INetworkControl Network { get; }
+
+        internal NatAgent Agent { get; }
+    }
+
     /// <summary>Creates the networks live sessions run on: real sockets and threads in the game, a virtual network in tests.</summary>
     internal interface INetworkFactory
     {
         /// <summary>Starts a network that owns <paramref name="stack"/>, on <paramref name="port"/> or any free port when zero.</summary>
         INetworkControl Start(int port, NetworkStack stack);
+
+        /// <summary>
+        /// Starts a network as <see cref="Start"/> does, with the NAT layer on its game socket, for a session found through
+        /// the TopiaForge service. The agent contacts nothing until a session starts on it with a plan made from the
+        /// service's answers.
+        /// </summary>
+        TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options);
 
         /// <summary>Creates the host's descriptor endpoint on <paramref name="port"/>, or null where the network serves none.</summary>
         DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly);
@@ -49,6 +72,15 @@ namespace TopiaForge.Multiplayer.Network
             return thread;
         }
 
+        public TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options)
+        {
+            var nat = NatPlumbing.Wrap(new UdpSocketDriver(port), options, clock);
+            var thread = new NetworkThread("TopiaForge multiplayer network", nat.Socket, stack, clock);
+            thread.Attach(nat.Service);
+            thread.Start();
+            return new TraversalNetwork(thread, nat.Agent);
+        }
+
         public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => new DescriptorEndpoint(port, relayOnly: relayOnly);
 
         public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => new LanAnnouncer(beacon);
@@ -64,7 +96,10 @@ namespace TopiaForge.Multiplayer.Network
     /// A listen host: this process's session, open to other players. Starting binds the game port, the descriptor
     /// endpoint on the same port number and, for LAN or public visibility, the LAN announcer; it signs and serves the
     /// descriptor, answers info queries, and admits players through <see cref="HostPolicy"/>. The engine keeps running
-    /// the same session throughout: hosting adds links to it, and stopping closes them while the host plays on.
+    /// the same session throughout: hosting adds links to it, and stopping closes them while the host plays on. A public
+    /// or invite-only host with the TopiaForge service configured shares its game socket with the NAT layer and keeps an
+    /// <see cref="InternetHost"/>: registered, listed, holding an invite, and answering joiners through signaling. A LAN
+    /// host never contacts the service.
     /// </summary>
     internal sealed class LiveHost : IDisposable
     {
@@ -81,7 +116,11 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<long> clock;
         private readonly Func<long> unixSeconds;
         private readonly Func<TransportOptions> transportOptions;
+        private readonly InternetServices? services;
+        private readonly Func<NatAgentOptions> natOptions;
         private INetworkControl? network;
+        private TraversalNetwork? traversal;
+        private IReadOnlyList<DescriptorPackage>? packages;
         private DescriptorEndpoint? descriptorEndpoint;
         private int lastPlayers = -1;
         private bool stopped;
@@ -95,7 +134,9 @@ namespace TopiaForge.Multiplayer.Network
             Func<long> clock,
             Func<long> unixSeconds,
             byte[]? passwordKey,
-            Func<TransportOptions>? transportOptions = null)
+            Func<TransportOptions>? transportOptions = null,
+            InternetServices? services = null,
+            Func<NatAgentOptions>? natOptions = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.identity = identity ?? throw new ArgumentNullException(nameof(identity));
@@ -104,6 +145,8 @@ namespace TopiaForge.Multiplayer.Network
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.transportOptions = transportOptions ?? (() => new TransportOptions());
+            this.services = settings.Visibility == ServerVisibility.Lan ? null : services;
+            this.natOptions = natOptions ?? (() => new NatAgentOptions());
             Bans = bans ?? throw new ArgumentNullException(nameof(bans));
             Policy = new HostPolicy(bans, passwordKey, content, clock);
         }
@@ -123,6 +166,9 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Gets why the host stopped on its own, when its network failed; otherwise none.</summary>
         internal LiveFailure Failure { get; private set; }
 
+        /// <summary>Gets the session's life with the TopiaForge service, for a public or invite-only host that has one.</summary>
+        internal InternetHost? Internet { get; private set; }
+
         /// <summary>
         /// Binds the network and starts serving. Returns <see cref="LiveFailure.ContentUnreadable"/> when this game's
         /// packages cannot be read, before anything binds, and <see cref="LiveFailure.PortInUse"/> when no port could be
@@ -132,7 +178,7 @@ namespace TopiaForge.Multiplayer.Network
         {
             if (factory == null) throw new ArgumentNullException(nameof(factory));
             if (network != null) throw new InvalidOperationException("The host has already started.");
-            var packages = content.HostPackages();
+            packages = content.HostPackages();
             if (packages == null) return LiveFailure.ContentUnreadable;
             var port = settings.Port;
             for (var attempt = 0; attempt < PortAttempts && network == null; attempt++)
@@ -154,7 +200,23 @@ namespace TopiaForge.Multiplayer.Network
             engine.Options.MaximumParticipants = settings.MaxPlayers;
             engine.Options.JoinPolicy = Policy;
             RefreshInfo(force: true);
+            if (traversal != null) Internet = new InternetHost(services!, identity, traversal, Descriptor, settings, ConnectedPlayers, clock);
             return LiveFailure.None;
+        }
+
+        /// <summary>
+        /// Changes the gamemode and world the session announces, as a new world does: the descriptor is signed again and
+        /// served, the session info follows, and the TopiaForge service gets the newer descriptor.
+        /// </summary>
+        internal void UpdateWorld(string? gamemode, string? world)
+        {
+            if (network == null || stopped || packages == null) throw new InvalidOperationException("The host is not running.");
+            settings.Gamemode = gamemode;
+            settings.World = world;
+            Descriptor = Sign(packages);
+            descriptorEndpoint?.SetDescriptor(Descriptor);
+            RefreshInfo(force: true);
+            Internet?.Republish(Descriptor);
         }
 
         /// <summary>Main thread, every frame: admits new links to the engine and keeps the session info current.</summary>
@@ -177,6 +239,7 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             RefreshInfo(force: false);
+            Internet?.Pump();
         }
 
         /// <summary>Ends one player's connection with a message.</summary>
@@ -201,6 +264,10 @@ namespace TopiaForge.Multiplayer.Network
             if (engine.Role == EngineRole.Host && !engine.IsEnded) engine.CloseConnections(MultiplayerSessionEndReason.HostEnded, "The host stopped hosting.");
             if (ReferenceEquals(engine.Options.JoinPolicy, Policy)) engine.Options.JoinPolicy = null;
             Policy.Wipe();
+
+            // The listing is deleted. The NAT layer is left to the network, which closes the links first, so the message
+            // ending each player's session still leaves through the relay, and then says goodbye and releases the relay.
+            Internet?.Stop();
             network?.Stop(StopGraceMicros);
         }
 
@@ -214,9 +281,21 @@ namespace TopiaForge.Multiplayer.Network
             var endpoint = new TransportEndpoint(identity.CopyTransportPrivateKey(), options, clock());
             var stack = new NetworkStack(endpoint, key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)), MaximumLinksPerSource, factory.SourceOf, factory.NetworkOf);
             INetworkControl started;
+            TraversalNetwork? shared = null;
             try
             {
-                started = factory.Start(port, stack);
+                if (services != null)
+                {
+                    // Reached through the service: the NAT layer shares the game socket, relay-only unless the player allowed direct play.
+                    var nat = natOptions();
+                    nat.RelayOnly = !settings.AllowDirect;
+                    shared = factory.StartTraversal(port, stack, nat);
+                    started = shared.Network;
+                }
+                else
+                {
+                    started = factory.Start(port, stack);
+                }
             }
             catch (SocketException)
             {
@@ -238,6 +317,7 @@ namespace TopiaForge.Multiplayer.Network
 
             if (tcp != null) started.Attach(tcp);
             network = started;
+            traversal = shared;
             descriptorEndpoint = tcp;
             Port = started.LocalPort;
             return true;
@@ -272,7 +352,8 @@ namespace TopiaForge.Multiplayer.Network
             }
         }
 
-        private void RefreshInfo(bool force)
+        /// <summary>Counts the players connected now, this host's own included.</summary>
+        private int ConnectedPlayers()
         {
             var players = 0;
             foreach (var participant in engine.Snapshot.Participants)
@@ -280,6 +361,12 @@ namespace TopiaForge.Multiplayer.Network
                 if (participant.IsConnected) players++;
             }
 
+            return players;
+        }
+
+        private void RefreshInfo(bool force)
+        {
+            var players = ConnectedPlayers();
             if (!force && players == lastPlayers) return;
             lastPlayers = players;
             var info = new SessionInfo(

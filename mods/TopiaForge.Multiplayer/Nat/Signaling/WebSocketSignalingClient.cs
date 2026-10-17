@@ -52,6 +52,8 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
             var endpoint = Endpoint(origin, serverId);
             if (!IsCredential(credential)) throw new ArgumentException("A signaling credential is a token or ticket of printable ASCII.", nameof(credential));
             var client = new WebSocketSignalingClient();
+            // The room is the control plane's own origin, reached directly: never through a proxy the system names.
+            client.socket.Options.Proxy = null;
             client.socket.Options.SetRequestHeader("Authorization", "Bearer " + credential);
             client.socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
             var timeout = connectTimeout ?? ConnectTimeout;

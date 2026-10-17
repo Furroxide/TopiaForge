@@ -4,7 +4,9 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Multiplayer.ControlPlane;
 using TopiaForge.Multiplayer.Engine;
+using TopiaForge.Multiplayer.NatTraversal;
 using TopiaForge.Multiplayer.Transport.Crypto;
 
 namespace TopiaForge.Multiplayer.Network
@@ -35,8 +37,8 @@ namespace TopiaForge.Multiplayer.Network
         private readonly string providerModId;
         private readonly Func<Transport.TransportOptions> transportOptions;
 
-        /// <summary>How long closing waits for the last saves to land.</summary>
-        private const int SaveFlushMilliseconds = 1_000;
+        /// <summary>How long closing waits for the last saves, and the listing's deletion, to land.</summary>
+        private const int SaveFlushMilliseconds = 2_000;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly Func<ClientSessionEnd, SoloSessionStart?> endHook;
         private Task<(LocalIdentity Identity, BanList Bans)>? loading;
@@ -50,6 +52,8 @@ namespace TopiaForge.Multiplayer.Network
         private int knownHostsDirty;
         private Task bansWrite = Task.CompletedTask;
         private Task knownHostsWrite = Task.CompletedTask;
+        private readonly List<Task> endings = new List<Task>();
+        private readonly Func<NatAgentOptions> natOptions;
         private bool disposed;
 
         internal LiveSessions(
@@ -61,7 +65,8 @@ namespace TopiaForge.Multiplayer.Network
             Func<long> unixSeconds,
             string providerModId,
             IJoinTargetResolver? resolver = null,
-            Func<Transport.TransportOptions>? transportOptions = null)
+            Func<Transport.TransportOptions>? transportOptions = null,
+            Func<NatAgentOptions>? natOptions = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.files = files ?? throw new ArgumentNullException(nameof(files));
@@ -71,8 +76,11 @@ namespace TopiaForge.Multiplayer.Network
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
             this.transportOptions = transportOptions ?? (() => new Transport.TransportOptions());
+            this.natOptions = natOptions ?? (() => new NatAgentOptions());
             KnownHosts = new KnownHosts();
-            this.resolver = resolver ?? new NetworkTargetResolver(() => browser, KnownHosts, MarkKnownHostsChanged, unixSeconds);
+
+            // Invites and listed servers go to the TopiaForge service, while one is configured; every other target to the network.
+            this.resolver = new ServiceAwareResolver(resolver ?? new NetworkTargetResolver(() => browser, KnownHosts, MarkKnownHostsChanged, unixSeconds), () => Services);
             endHook = OnClientSessionEnded;
             engine.Options.AfterClientSessionEnds = endHook;
         }
@@ -87,6 +95,13 @@ namespace TopiaForge.Multiplayer.Network
         internal LiveJoin? Join { get; private set; }
 
         internal KnownHosts KnownHosts { get; }
+
+        /// <summary>
+        /// Gets or sets how this provider reaches the TopiaForge service, or null while no service origin is configured:
+        /// then nothing is contacted, invites and listed servers fail as not configured, and hosting is LAN or direct only.
+        /// Set it before hosting or joining; a session already running keeps what it started with.
+        /// </summary>
+        internal InternetServices? Services { get; set; }
 
         /// <summary>Marks the known-hosts record for saving; the resolver calls it from its own thread after a change.</summary>
         internal void MarkKnownHostsChanged() => Interlocked.Exchange(ref knownHostsDirty, 1);
@@ -114,9 +129,18 @@ namespace TopiaForge.Multiplayer.Network
         {
             pendingHost = null;
             hostKey = null;
+            var internet = Host?.Internet;
             Host?.Stop();
             Host = null;
             HostPhase = HostPhase.Idle;
+
+            // The listing's deletion runs on; closing waits for it as it waits for the last saves.
+            var ending = internet?.Ending;
+            if (ending != null)
+            {
+                endings.RemoveAll(task => task.IsCompleted);
+                endings.Add(ending);
+            }
         }
 
         /// <summary>Starts joining <paramref name="target"/>. The solo session stays until the link to the host is up.</summary>
@@ -127,7 +151,7 @@ namespace TopiaForge.Multiplayer.Network
             if (Join != null && Join.Phase != JoinPhase.Ended) throw new InvalidOperationException("A join is already in progress.");
             if (identity == null) throw new InvalidOperationException("The identity is not ready yet; call PrepareAsync first.");
             Join?.Dispose();
-            Join = new LiveJoin(engine, identity, target, settings, resolver, content, factory, clock, NextSolo, transportOptions);
+            Join = new LiveJoin(engine, identity, target, settings, resolver, content, factory, clock, NextSolo, transportOptions, Services, natOptions);
             Join.Timings = JoinTimings;
             return Join;
         }
@@ -181,7 +205,13 @@ namespace TopiaForge.Multiplayer.Network
             var work = new List<Task>();
             if (identity == null && loading != null && !loading.IsCompleted) work.Add(loading);
             if (hostKey != null && !hostKey.IsCompleted) work.Add(hostKey);
+            Host?.Internet?.AddPendingBackgroundWork(work);
             Join?.AddPendingBackgroundWork(work);
+            foreach (var ending in endings)
+            {
+                if (!ending.IsCompleted) work.Add(ending);
+            }
+
             if (saves && !bansWrite.IsCompleted) work.Add(bansWrite);
             if (saves && !knownHostsWrite.IsCompleted) work.Add(knownHostsWrite);
             return work;
@@ -265,11 +295,13 @@ namespace TopiaForge.Multiplayer.Network
             StopBrowsing();
             if (ReferenceEquals(engine.Options.AfterClientSessionEnds, endHook)) engine.Options.AfterClientSessionEnds = null;
 
-            // Whatever changed is saved before the game closes, and the saves get a moment to land.
+            // Whatever changed is saved before the game closes, and the saves, and the listing's deletion, get a moment to land.
             Persist();
             try
             {
-                Task.WaitAll(new[] { bansWrite, knownHostsWrite }, SaveFlushMilliseconds);
+                var waits = new List<Task> { bansWrite, knownHostsWrite };
+                waits.AddRange(endings);
+                Task.WaitAll(waits.ToArray(), SaveFlushMilliseconds);
             }
             catch (AggregateException)
             {
@@ -370,7 +402,7 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
-            var host = new LiveHost(engine, identity!, bans!, settings, content, clock, unixSeconds, keyTask.Result, transportOptions);
+            var host = new LiveHost(engine, identity!, bans!, settings, content, clock, unixSeconds, keyTask.Result, transportOptions, Services, natOptions);
 
             // The host's policy keeps its own copy of the key, so the derived one is wiped at once.
             if (keyTask.Result != null) Array.Clear(keyTask.Result, 0, keyTask.Result.Length);

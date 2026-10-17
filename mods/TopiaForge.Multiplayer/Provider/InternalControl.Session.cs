@@ -75,6 +75,7 @@ namespace TopiaForge.Multiplayer
                 if (join.Descriptor != null) status.Server = ToServerInfo(join.Descriptor);
             }
 
+            status.Internet = InternetStatus();
             return status;
         }
 
@@ -84,7 +85,11 @@ namespace TopiaForge.Multiplayer
             engine.RequireOwnerThread();
             if (live == null) return ProviderServerQuery.Failed(engine, InternalLiveFailure.NotFound, LiveOff);
             if (!(target is ProviderJoinTarget providerTarget)) return ProviderServerQuery.Failed(engine, InternalLiveFailure.NotFound, "The join target was not made by this provider.");
-            if (providerTarget.NetworkTarget == null) return ProviderServerQuery.Failed(engine, InternalLiveFailure.ServiceUnavailable, ServiceTargets);
+            if (providerTarget.NetworkTarget.NeedsService && live.Services == null)
+            {
+                return ProviderServerQuery.Failed(engine, InternalLiveFailure.ServiceNotConfigured, NoService);
+            }
+
             return new ProviderServerQuery(engine, live.StartQuery(providerTarget.NetworkTarget, allowDirect));
         }
 
