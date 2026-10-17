@@ -298,10 +298,11 @@
             "port": 0,
             "voice": true
           },
+          "journalEpoch": "5f0c2a9e8d7b6a5f4e3d2c1b0a998877",
           "serviceOrigin": "https://mp.topiaforge.dev"
         },
-        "bytes": "{\"displayName\":\"Zoë 東京\",\"hosting\":{\"maxPlayers\":16,\"name\":\"Zoë's \\\"quiet\\\" server\",\"port\":0,\"visibility\":\"public\",\"voice\":true},\"journalApplied\":3,\"network\":{\"lan\":false,\"upnp\":true},\"privacy\":{\"disclosure\":1,\"mode\":\"relay-only\"},\"revision\":7,\"schemaVersion\":1,\"serviceOrigin\":\"https://mp.topiaforge.dev\",\"voice\":{\"consent\":1,\"enabled\":true}}",
-        "reordered": "{\n  \"voice\": {\n    \"enabled\": true,\n    \"consent\": 1\n  },\n  \"serviceOrigin\": \"https://mp.topiaforge.dev\",\n  \"schemaVersion\": 1,\n  \"revision\": 7,\n  \"privacy\": {\n    \"mode\": \"relay-only\",\n    \"disclosure\": 1\n  },\n  \"network\": {\n    \"upnp\": true,\n    \"lan\": false\n  },\n  \"journalApplied\": 3,\n  \"hosting\": {\n    \"voice\": true,\n    \"visibility\": \"public\",\n    \"port\": 0,\n    \"name\": \"Zoë's \\\"quiet\\\" server\",\n    \"maxPlayers\": 16\n  },\n  \"displayName\": \"Zoë 東京\"\n}"
+        "bytes": "{\"displayName\":\"Zoë 東京\",\"hosting\":{\"maxPlayers\":16,\"name\":\"Zoë's \\\"quiet\\\" server\",\"port\":0,\"visibility\":\"public\",\"voice\":true},\"journalApplied\":3,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":false,\"upnp\":true},\"privacy\":{\"disclosure\":1,\"mode\":\"relay-only\"},\"revision\":7,\"schemaVersion\":1,\"serviceOrigin\":\"https://mp.topiaforge.dev\",\"voice\":{\"consent\":1,\"enabled\":true}}",
+        "reordered": "{\n  \"voice\": {\n    \"enabled\": true,\n    \"consent\": 1\n  },\n  \"serviceOrigin\": \"https://mp.topiaforge.dev\",\n  \"schemaVersion\": 1,\n  \"revision\": 7,\n  \"privacy\": {\n    \"mode\": \"relay-only\",\n    \"disclosure\": 1\n  },\n  \"network\": {\n    \"upnp\": true,\n    \"lan\": false\n  },\n  \"journalEpoch\": \"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\n  \"journalApplied\": 3,\n  \"hosting\": {\n    \"voice\": true,\n    \"visibility\": \"public\",\n    \"port\": 0,\n    \"name\": \"Zoë's \\\"quiet\\\" server\",\n    \"maxPlayers\": 16\n  },\n  \"displayName\": \"Zoë 東京\"\n}"
       }
     ],
     "invalid": [
@@ -359,6 +360,26 @@
         "id": "version-2",
         "about": "Version 1 only.",
         "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":2,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "applied-without-epoch",
+        "about": "A journal position names the journal it counts.",
+        "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":3,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "epoch-uppercase",
+        "about": "An epoch is 32 lowercase hexadecimal digits.",
+        "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":3,\"journalEpoch\":\"5F0C2A9E8D7B6A5F4E3D2C1B0A998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "epoch-short",
+        "about": "An epoch is 32 lowercase hexadecimal digits.",
+        "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":3,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a99887\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      },
+      {
+        "id": "epoch-null",
+        "about": "Optional members are omitted, never null.",
+        "text": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"journalEpoch\":null,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
       }
     ]
   },
@@ -369,16 +390,18 @@
         "about": "Nothing changed in game.",
         "document": {
           "schemaVersion": 1,
+          "epoch": "5f0c2a9e8d7b6a5f4e3d2c1b0a998877",
           "changes": []
         },
-        "bytes": "{\"changes\":[],\"schemaVersion\":1}",
-        "reordered": "{\n  \"schemaVersion\": 1,\n  \"changes\": []\n}"
+        "bytes": "{\"changes\":[],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+        "reordered": "{\n  \"schemaVersion\": 1,\n  \"epoch\": \"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\n  \"changes\": []\n}"
       },
       {
         "id": "every-change",
         "about": "One change of each kind, in sequence order.",
         "document": {
           "schemaVersion": 1,
+          "epoch": "5f0c2a9e8d7b6a5f4e3d2c1b0a998877",
           "changes": [
             {
               "sequence": 4,
@@ -414,79 +437,123 @@
             }
           ]
         },
-        "bytes": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"schemaVersion\":1}",
-        "reordered": "{\n  \"schemaVersion\": 1,\n  \"changes\": [\n    {\n      \"sequence\": 4,\n      \"displayName\": \"Sam\"\n    },\n    {\n      \"sequence\": 5,\n      \"disclosure\": 1\n    },\n    {\n      \"voice\": {\n        \"enabled\": true,\n        \"consent\": 1\n      },\n      \"sequence\": 6\n    },\n    {\n      \"sequence\": 8,\n      \"network\": {\n        \"upnp\": true,\n        \"lan\": true\n      }\n    },\n    {\n      \"sequence\": 9,\n      \"hosting\": {\n        \"voice\": true,\n        \"visibility\": \"lan\",\n        \"port\": 27260,\n        \"name\": \"Sam's Sandbox\",\n        \"maxPlayers\": 4\n      }\n    }\n  ]\n}"
+        "bytes": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+        "reordered": "{\n  \"schemaVersion\": 1,\n  \"epoch\": \"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\n  \"changes\": [\n    {\n      \"sequence\": 4,\n      \"displayName\": \"Sam\"\n    },\n    {\n      \"sequence\": 5,\n      \"disclosure\": 1\n    },\n    {\n      \"voice\": {\n        \"enabled\": true,\n        \"consent\": 1\n      },\n      \"sequence\": 6\n    },\n    {\n      \"sequence\": 8,\n      \"network\": {\n        \"upnp\": true,\n        \"lan\": true\n      }\n    },\n    {\n      \"sequence\": 9,\n      \"hosting\": {\n        \"voice\": true,\n        \"visibility\": \"lan\",\n        \"port\": 27260,\n        \"name\": \"Sam's Sandbox\",\n        \"maxPlayers\": 4\n      }\n    }\n  ]\n}"
       }
     ],
     "invalid": [
       {
         "id": "sequence-repeated",
         "about": "Sequences increase strictly.",
-        "text": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":2},{\"disclosure\":1,\"sequence\":2}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":2},{\"disclosure\":1,\"sequence\":2}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "sequence-zero",
         "about": "Sequences start at 1.",
-        "text": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":0}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":0}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "two-preferences",
         "about": "A change sets one preference.",
-        "text": "{\"changes\":[{\"disclosure\":1,\"displayName\":\"Sam\",\"sequence\":1}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"disclosure\":1,\"displayName\":\"Sam\",\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "no-preference",
         "about": "A change sets one preference.",
-        "text": "{\"changes\":[{\"sequence\":1}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "privacy-change",
         "about": "Direct play is never stored, so privacy is not a change.",
-        "text": "{\"changes\":[{\"privacy\":\"direct\",\"sequence\":1}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"privacy\":\"direct\",\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "disclosure-zero",
         "about": "An acknowledgement names version 1 or later.",
-        "text": "{\"changes\":[{\"disclosure\":0,\"sequence\":1}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"disclosure\":0,\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "voice-without-consent",
         "about": "Voice stays off until the player consents.",
-        "text": "{\"changes\":[{\"sequence\":1,\"voice\":{\"consent\":0,\"enabled\":true}}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"sequence\":1,\"voice\":{\"consent\":0,\"enabled\":true}}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "display-name-noncharacter",
         "about": "Display text never holds U+FFFF.",
-        "text": "{\"changes\":[{\"displayName\":\"Sam￿\",\"sequence\":1}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"displayName\":\"Sam￿\",\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
       },
       {
         "id": "too-many",
         "about": "The journal holds at most 64 changes.",
-        "text": "{\"changes\":[{\"disclosure\":1,\"sequence\":1},{\"disclosure\":1,\"sequence\":2},{\"disclosure\":1,\"sequence\":3},{\"disclosure\":1,\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"disclosure\":1,\"sequence\":6},{\"disclosure\":1,\"sequence\":7},{\"disclosure\":1,\"sequence\":8},{\"disclosure\":1,\"sequence\":9},{\"disclosure\":1,\"sequence\":10},{\"disclosure\":1,\"sequence\":11},{\"disclosure\":1,\"sequence\":12},{\"disclosure\":1,\"sequence\":13},{\"disclosure\":1,\"sequence\":14},{\"disclosure\":1,\"sequence\":15},{\"disclosure\":1,\"sequence\":16},{\"disclosure\":1,\"sequence\":17},{\"disclosure\":1,\"sequence\":18},{\"disclosure\":1,\"sequence\":19},{\"disclosure\":1,\"sequence\":20},{\"disclosure\":1,\"sequence\":21},{\"disclosure\":1,\"sequence\":22},{\"disclosure\":1,\"sequence\":23},{\"disclosure\":1,\"sequence\":24},{\"disclosure\":1,\"sequence\":25},{\"disclosure\":1,\"sequence\":26},{\"disclosure\":1,\"sequence\":27},{\"disclosure\":1,\"sequence\":28},{\"disclosure\":1,\"sequence\":29},{\"disclosure\":1,\"sequence\":30},{\"disclosure\":1,\"sequence\":31},{\"disclosure\":1,\"sequence\":32},{\"disclosure\":1,\"sequence\":33},{\"disclosure\":1,\"sequence\":34},{\"disclosure\":1,\"sequence\":35},{\"disclosure\":1,\"sequence\":36},{\"disclosure\":1,\"sequence\":37},{\"disclosure\":1,\"sequence\":38},{\"disclosure\":1,\"sequence\":39},{\"disclosure\":1,\"sequence\":40},{\"disclosure\":1,\"sequence\":41},{\"disclosure\":1,\"sequence\":42},{\"disclosure\":1,\"sequence\":43},{\"disclosure\":1,\"sequence\":44},{\"disclosure\":1,\"sequence\":45},{\"disclosure\":1,\"sequence\":46},{\"disclosure\":1,\"sequence\":47},{\"disclosure\":1,\"sequence\":48},{\"disclosure\":1,\"sequence\":49},{\"disclosure\":1,\"sequence\":50},{\"disclosure\":1,\"sequence\":51},{\"disclosure\":1,\"sequence\":52},{\"disclosure\":1,\"sequence\":53},{\"disclosure\":1,\"sequence\":54},{\"disclosure\":1,\"sequence\":55},{\"disclosure\":1,\"sequence\":56},{\"disclosure\":1,\"sequence\":57},{\"disclosure\":1,\"sequence\":58},{\"disclosure\":1,\"sequence\":59},{\"disclosure\":1,\"sequence\":60},{\"disclosure\":1,\"sequence\":61},{\"disclosure\":1,\"sequence\":62},{\"disclosure\":1,\"sequence\":63},{\"disclosure\":1,\"sequence\":64},{\"disclosure\":1,\"sequence\":65}],\"schemaVersion\":1}"
+        "text": "{\"changes\":[{\"disclosure\":1,\"sequence\":1},{\"disclosure\":1,\"sequence\":2},{\"disclosure\":1,\"sequence\":3},{\"disclosure\":1,\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"disclosure\":1,\"sequence\":6},{\"disclosure\":1,\"sequence\":7},{\"disclosure\":1,\"sequence\":8},{\"disclosure\":1,\"sequence\":9},{\"disclosure\":1,\"sequence\":10},{\"disclosure\":1,\"sequence\":11},{\"disclosure\":1,\"sequence\":12},{\"disclosure\":1,\"sequence\":13},{\"disclosure\":1,\"sequence\":14},{\"disclosure\":1,\"sequence\":15},{\"disclosure\":1,\"sequence\":16},{\"disclosure\":1,\"sequence\":17},{\"disclosure\":1,\"sequence\":18},{\"disclosure\":1,\"sequence\":19},{\"disclosure\":1,\"sequence\":20},{\"disclosure\":1,\"sequence\":21},{\"disclosure\":1,\"sequence\":22},{\"disclosure\":1,\"sequence\":23},{\"disclosure\":1,\"sequence\":24},{\"disclosure\":1,\"sequence\":25},{\"disclosure\":1,\"sequence\":26},{\"disclosure\":1,\"sequence\":27},{\"disclosure\":1,\"sequence\":28},{\"disclosure\":1,\"sequence\":29},{\"disclosure\":1,\"sequence\":30},{\"disclosure\":1,\"sequence\":31},{\"disclosure\":1,\"sequence\":32},{\"disclosure\":1,\"sequence\":33},{\"disclosure\":1,\"sequence\":34},{\"disclosure\":1,\"sequence\":35},{\"disclosure\":1,\"sequence\":36},{\"disclosure\":1,\"sequence\":37},{\"disclosure\":1,\"sequence\":38},{\"disclosure\":1,\"sequence\":39},{\"disclosure\":1,\"sequence\":40},{\"disclosure\":1,\"sequence\":41},{\"disclosure\":1,\"sequence\":42},{\"disclosure\":1,\"sequence\":43},{\"disclosure\":1,\"sequence\":44},{\"disclosure\":1,\"sequence\":45},{\"disclosure\":1,\"sequence\":46},{\"disclosure\":1,\"sequence\":47},{\"disclosure\":1,\"sequence\":48},{\"disclosure\":1,\"sequence\":49},{\"disclosure\":1,\"sequence\":50},{\"disclosure\":1,\"sequence\":51},{\"disclosure\":1,\"sequence\":52},{\"disclosure\":1,\"sequence\":53},{\"disclosure\":1,\"sequence\":54},{\"disclosure\":1,\"sequence\":55},{\"disclosure\":1,\"sequence\":56},{\"disclosure\":1,\"sequence\":57},{\"disclosure\":1,\"sequence\":58},{\"disclosure\":1,\"sequence\":59},{\"disclosure\":1,\"sequence\":60},{\"disclosure\":1,\"sequence\":61},{\"disclosure\":1,\"sequence\":62},{\"disclosure\":1,\"sequence\":63},{\"disclosure\":1,\"sequence\":64},{\"disclosure\":1,\"sequence\":65}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}"
+      },
+      {
+        "id": "epoch-missing",
+        "about": "A journal names its epoch.",
+        "text": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"schemaVersion\":1}"
+      },
+      {
+        "id": "epoch-uppercase",
+        "about": "An epoch is 32 lowercase hexadecimal digits.",
+        "text": "{\"changes\":[],\"epoch\":\"5F0C2A9E8D7B6A5F4E3D2C1B0A998877\",\"schemaVersion\":1}"
+      },
+      {
+        "id": "epoch-long",
+        "about": "An epoch is 32 lowercase hexadecimal digits.",
+        "text": "{\"changes\":[],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a9988770\",\"schemaVersion\":1}"
+      },
+      {
+        "id": "epoch-not-hex",
+        "about": "An epoch is 32 lowercase hexadecimal digits.",
+        "text": "{\"changes\":[],\"epoch\":\"gggggggggggggggggggggggggggggggg\",\"schemaVersion\":1}"
+      },
+      {
+        "id": "epoch-number",
+        "about": "An epoch is a string.",
+        "text": "{\"changes\":[],\"epoch\":7,\"schemaVersion\":1}"
+      },
+      {
+        "id": "epoch-null",
+        "about": "A journal names its epoch, never null.",
+        "text": "{\"changes\":[],\"epoch\":null,\"schemaVersion\":1}"
       }
     ]
   },
   "journalApply": [
     {
       "id": "all-from-defaults",
-      "about": "Every change applies, as one new revision.",
+      "about": "Every change applies, as one new revision that counts the journal.",
       "projection": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":0,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":0,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
-      "journal": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"schemaVersion\":1}",
-      "result": "{\"displayName\":\"Sam\",\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"journalApplied\":9,\"network\":{\"lan\":true,\"upnp\":true},\"privacy\":{\"disclosure\":1,\"mode\":\"relay-only\"},\"revision\":1,\"schemaVersion\":1,\"voice\":{\"consent\":1,\"enabled\":true}}"
+      "journal": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+      "result": "{\"displayName\":\"Sam\",\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"journalApplied\":9,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":true},\"privacy\":{\"disclosure\":1,\"mode\":\"relay-only\"},\"revision\":1,\"schemaVersion\":1,\"voice\":{\"consent\":1,\"enabled\":true}}"
     },
     {
       "id": "only-after-applied",
-      "about": "Changes the projection already covers are skipped, and an acknowledgement never lowers the disclosure.",
-      "projection": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":4,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":2,\"mode\":\"relay-only\"},\"revision\":4,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
-      "journal": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"schemaVersion\":1}",
-      "result": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"journalApplied\":9,\"network\":{\"lan\":true,\"upnp\":true},\"privacy\":{\"disclosure\":2,\"mode\":\"relay-only\"},\"revision\":5,\"schemaVersion\":1,\"voice\":{\"consent\":1,\"enabled\":true}}"
+      "about": "Changes the projection already counts are skipped, and an acknowledgement never lowers the disclosure.",
+      "projection": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":4,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":2,\"mode\":\"relay-only\"},\"revision\":4,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
+      "journal": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+      "result": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"journalApplied\":9,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":true},\"privacy\":{\"disclosure\":2,\"mode\":\"relay-only\"},\"revision\":5,\"schemaVersion\":1,\"voice\":{\"consent\":1,\"enabled\":true}}"
     },
     {
       "id": "nothing-new",
-      "about": "With nothing new, the projection stays as it is.",
-      "projection": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":9,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":2,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
-      "journal": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"schemaVersion\":1}",
-      "result": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":9,\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":2,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+      "about": "With nothing new in the journal the projection counts, the projection stays as it is.",
+      "projection": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":9,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":2,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
+      "journal": "{\"changes\":[{\"displayName\":\"Sam\",\"sequence\":4},{\"disclosure\":1,\"sequence\":5},{\"sequence\":6,\"voice\":{\"consent\":1,\"enabled\":true}},{\"network\":{\"lan\":true,\"upnp\":true},\"sequence\":8},{\"hosting\":{\"maxPlayers\":4,\"name\":\"Sam's Sandbox\",\"port\":27260,\"visibility\":\"lan\",\"voice\":true},\"sequence\":9}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+      "result": "{\"displayName\":\"Player\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":9,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":2,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+    },
+    {
+      "id": "started-over",
+      "about": "A journal under another epoch started over, so it applies from its first change, whatever position the projection counted in the journal before it.",
+      "projection": "{\"displayName\":\"Launcher\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":6,\"journalEpoch\":\"0d1c2b3a49586776a5b4c3d2e1f00f1e\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":6,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
+      "journal": "{\"changes\":[{\"displayName\":\"InGame\",\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+      "result": "{\"displayName\":\"InGame\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":1,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":7,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
+    },
+    {
+      "id": "counted-journal-again",
+      "about": "The journal the projection counts, read again after its change applied, applies nothing twice.",
+      "projection": "{\"displayName\":\"Launcher\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":1,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":7,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}",
+      "journal": "{\"changes\":[{\"displayName\":\"InGame\",\"sequence\":1}],\"epoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"schemaVersion\":1}",
+      "result": "{\"displayName\":\"Launcher\",\"hosting\":{\"maxPlayers\":8,\"name\":\"Player's server\",\"port\":27250,\"visibility\":\"lan\",\"voice\":false},\"journalApplied\":1,\"journalEpoch\":\"5f0c2a9e8d7b6a5f4e3d2c1b0a998877\",\"network\":{\"lan\":true,\"upnp\":false},\"privacy\":{\"disclosure\":0,\"mode\":\"relay-only\"},\"revision\":7,\"schemaVersion\":1,\"voice\":{\"consent\":0,\"enabled\":false}}"
     }
   ]
 }

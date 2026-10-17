@@ -18,7 +18,12 @@ abstract interface class MultiplayerPreferencesSource {
   /// The projection revision the store last saved, or null before the first.
   int? get revision;
 
-  /// The last journal sequence the store has taken in.
+  /// The epoch of the journal the store last took changes in from, or null
+  /// before the first. [journalApplied] counts in that journal only.
+  String? get journalEpoch;
+
+  /// The last sequence the store has taken in from the journal
+  /// [journalEpoch].
   int get journalApplied;
 }
 
@@ -30,6 +35,7 @@ final class MultiplayerPreferencesValues
     this.hostingDefaults,
     this.serviceOrigin,
     this.revision,
+    this.journalEpoch,
     this.journalApplied = 0,
   });
 
@@ -42,17 +48,20 @@ final class MultiplayerPreferencesValues
   @override
   final int? revision;
   @override
+  final String? journalEpoch;
+  @override
   final int journalApplied;
 }
 
 /// One round of keeping the game's projection and the launcher's
 /// preferences in step.
 ///
-/// The launcher's store is the record: it keeps the projection's [revision]
-/// and [journalApplied] with the player's settings, and a round that writes
-/// saves the store before the projection. A projection that is missing or
-/// damaged is then rewritten from the store, a journal change is never
-/// applied twice, and the revision never goes down.
+/// The launcher's store is the record: it keeps the projection's [revision],
+/// [journalEpoch] and [journalApplied] with the player's settings, and a
+/// round that writes saves the store before the projection. A projection
+/// that is missing or damaged is then rewritten from the store, a journal
+/// change is never applied twice, a journal that started over is applied
+/// from its first change, and the revision never goes down.
 final class MultiplayerPreferencesSync {
   const MultiplayerPreferencesSync._({
     required this.projection,
@@ -65,9 +74,11 @@ final class MultiplayerPreferencesSync {
   /// The round after [previous], the projection last written if it reads,
   /// given the game's [journal] and the launcher's current [source]:
   ///
-  /// - the game's changes after the later of `source.journalApplied` and
-  ///   `previous.journalApplied` apply on top of the launcher's current
-  ///   values, since they are the player's latest choices, made in game;
+  /// - the game's changes the launcher has not taken in apply on top of the
+  ///   launcher's current values, since they are the player's latest choices,
+  ///   made in game. From a journal the store or the projection counts, those
+  ///   are the changes after the later of their positions in it; from any
+  ///   other journal, which the game started over, every change;
   /// - every write takes the next revision after the later of
   ///   `source.revision` and `previous.revision`, starting from 0, and a
   ///   round that changes nothing writes nothing.
@@ -79,7 +90,19 @@ final class MultiplayerPreferencesSync {
     int? later(int? left, int? right) =>
         left == null || (right != null && right > left) ? right : left;
     final known = later(source.revision, previous?.revision);
-    final applied = later(source.journalApplied, previous?.journalApplied)!;
+    // How far the store and the projection say the launcher has taken in the
+    // journal [epoch]; null when neither counts it.
+    int? appliedIn(String? epoch) => epoch == null
+        ? null
+        : later(
+            source.journalEpoch == epoch ? source.journalApplied : null,
+            previous?.journalEpoch == epoch ? previous!.journalApplied : null,
+          );
+    // The journal the launcher counts: the game's, when either record counts
+    // it; otherwise the store's, then the projection's.
+    final counted = journal != null && appliedIn(journal.epoch) != null
+        ? journal.epoch
+        : source.journalEpoch ?? previous?.journalEpoch;
     final current = MultiplayerPreferencesProjection.fromSettings(
       source.settings,
       hosting:
@@ -87,7 +110,8 @@ final class MultiplayerPreferencesSync {
           previous?.hosting ??
           MultiplayerHostingDefaults.forPlayer(source.settings.displayName),
       revision: known ?? 0,
-      journalApplied: applied,
+      journalApplied: appliedIn(counted) ?? 0,
+      journalEpoch: counted,
       serviceOrigin: source.serviceOrigin,
     );
     final merged = journal?.applyTo(current) ?? current;
@@ -116,8 +140,8 @@ final class MultiplayerPreferencesSync {
   final MultiplayerPreferencesProjection projection;
 
   /// Whether [projection] differs from the one last written. The caller then
-  /// saves its store first ([settings], [hostingDefaults], [revision] and
-  /// [journalApplied]) and writes [projection] after.
+  /// saves its store first ([settings], [hostingDefaults], [revision],
+  /// [journalEpoch] and [journalApplied]) and writes [projection] after.
   final bool needsWrite;
 
   /// Whether the game's journal changed a preference.
@@ -130,7 +154,12 @@ final class MultiplayerPreferencesSync {
   /// The revision the store keeps with the settings.
   int get revision => projection.revision;
 
-  /// The journal position the store keeps with the settings.
+  /// The epoch of the journal the store keeps its position in, with the
+  /// settings; null before the launcher took in any journal.
+  String? get journalEpoch => projection.journalEpoch;
+
+  /// The journal position the store keeps with the settings, in the journal
+  /// [journalEpoch].
   int get journalApplied => projection.journalApplied;
 
   static bool _sameValues(

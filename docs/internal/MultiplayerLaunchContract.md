@@ -145,46 +145,60 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
 - **A live join never carries an address.** Its target is an invite or a listing; a direct target needs a launch
   request. The game refuses a join whose package-set digest is not its own, and reports it under `joinId` as it would
   a launch request. A newer join replaces one the game has not taken.
-- **A take claims before it reads.** The taker renames the file to a private `.taking-<nonce>` name, then reads,
-  checks and removes that, so a newer file the other side writes meanwhile lands at the channel's name again and is
-  never removed unread. A malformed or foreign file is removed without being acted on. `withdrawSessionJoin` says
-  whether it withdrew the join, since the game may have taken it.
+- **A take claims before it reads.** The taker renames the file to a private `.taking-<milliseconds>-<nonce>` name,
+  the claim time in Unix milliseconds and 32 random hexadecimal digits, then reads, checks and removes that, so a newer
+  file the other side writes meanwhile lands at the channel's name again and is never removed unread. A malformed or
+  foreign file is removed without being acted on. `withdrawSessionJoin` says whether it withdrew the join, since the
+  game may have taken it.
+- **Stale claims are swept.** A take that crashes leaves its claim behind, so each side sweeps its own: the launcher its
+  handoff claims whenever it takes a handoff (`sweepStaleClaims`), the game its join claims at startup and whenever it
+  takes a join (`SweepStaleClaims`). A sweep removes only its own side's claim pattern, and only a claim whose recorded
+  claim time is more than an hour past. The time comes from the name, because a rename keeps a file's own timestamps. A
+  live take holds its claim for milliseconds. Neither sweep removes a claim another process holds open: the game opens a
+  claim sharing nothing but deletion before it deletes it, and Windows refuses the launcher's deletion while another
+  handle holds the file. On other systems the age alone protects a claim. Claims hold no address.
 - **Writes retry briefly.** Windows refuses to rename over a file while another process reads it, however that reader
   shares it, so both sides retry a refused replace a few times, waiting up to about 310 ms in all. The game's readers
-  share deletion, so the launcher can still claim or remove a file the game is reading.
+  share deletion, so the launcher can still claim or remove a file the game is reading. A retry sleeps the thread that
+  writes, so the game writes channels off its main thread.
 
 ## 7. Preferences and their change journal
 
 `multiplayer-preferences-v1.json` projects the launcher's preferences for the game: `displayName`, `privacy` (`mode`
 always `relay-only`, and the acknowledged `disclosure`), `voice` (`consent`, `enabled`), `network` (`lan`, `upnp`),
-`hosting` defaults (`name`, `maxPlayers`, `visibility`, `port`, `voice`), the optional `serviceOrigin`, its `revision`
-and `journalApplied`. Favorites and history are never projected.
+`hosting` defaults (`name`, `maxPlayers`, `visibility`, `port`, `voice`), the optional `serviceOrigin`, its `revision`,
+and the launcher's position in the journal: `journalEpoch`, present once the launcher has taken in a journal, and
+`journalApplied`, which counts in that journal only and is 0 without one. Favorites and history are never projected.
 
 - **The game never edits the projection.** It records what the player changed in game in
-  `multiplayer-preferences-journal-v1.json`: at most 64 changes in strictly increasing `sequence` order, each setting
-  exactly one of `displayName`, `disclosure`, `voice`, `network` or `hosting`. Privacy is not a change, since direct
-  play is never stored.
+  `multiplayer-preferences-journal-v1.json`: an `epoch` and at most 64 changes in strictly increasing `sequence` order,
+  each setting exactly one of `displayName`, `disclosure`, `voice`, `network` or `hosting`. Privacy is not a change,
+  since direct play is never stored.
+- **Each journal has an epoch.** It is 32 lowercase hexadecimal digits, a random id the game picks when it starts a
+  journal: when there is no journal file, as in a fresh or lost staging, or the one there is not a journal the launcher
+  could apply (`LaunchStagingStore.RecordPreferenceChange`). A journal keeps its epoch as it grows. A journal file the
+  game cannot open is retried briefly and then refused, never replaced, so its changes are not lost to a new journal.
+  Both readers refuse a journal without a valid epoch, and a projection whose `journalApplied` names no epoch.
 - **A long session never fills the journal.** The launcher takes the journal in only before a session launch and after
   the game exits, so every edit of a session lands in it. Each change sets its whole preference, so when the game
   appends one (`MultiplayerPreferencesJournal.Append`) it drops every earlier change of the same preference; an earlier
   disclosure goes only when the new one acknowledges at least as much. The launcher's result is the same either way.
-- **The launcher's store is the record.** It keeps the projection's `revision` and `journalApplied` with the player's
-  settings, and gives them to the round through `MultiplayerPreferencesSource`.
+- **The launcher's store is the record.** It keeps the projection's `revision` and its journal position, the pair
+  `journalEpoch` and `journalApplied`, with the player's settings, and gives them to the round through
+  `MultiplayerPreferencesSource`. That is one value more than a store that keeps only `journalApplied`.
 - **One round** (`MultiplayerPreferencesSync`, and `syncPreferences` in staging): the launcher builds the projection
-  from its store and service configuration, applies the journal's changes after the later of the store's and the
-  projection's `journalApplied` on top, and gives every write the next revision after the later of theirs. When the
-  projection must change, the store is saved first and the projection written after. A projection that is missing or
-  damaged is therefore rewritten from the store: no journal change applies twice, and the revision never goes down. An
-  acknowledgement never lowers the disclosure version. The game then drops the changes the projection's
-  `journalApplied` covers.
+  from its store and service configuration and applies the journal's new changes on top. When the store or the
+  projection counts the journal's epoch, the new changes are those after the later of their positions in it; a journal
+  under any other epoch started over, and applies from its first change. Every write takes the next revision after the
+  later of theirs, and records the journal's epoch and last applied sequence. When the projection must change, the
+  store is saved first and the projection written after. A projection that is missing or damaged is therefore
+  rewritten from the store: no journal change applies twice, a journal started over after staging was lost is never
+  skipped, and the revision never goes down. An acknowledgement never lowers the disclosure version. The game then
+  drops the changes a projection counting its journal covers.
+- **One journal at a time.** The launcher remembers the latest journal only, so a journal restored from before the
+  latest one, say from a backup of staging, counts as started over and applies again.
 - **Hosting defaults.** Until the launcher's store holds hosting defaults, the source gives none, and the projection
   keeps its own, a change made in game included. The first projection starts from `MultiplayerHostingDefaults.forPlayer`.
-- **Known limit: a journal started over.** If staging loses both the projection and the journal (a runtime reinstall,
-  say) while the launcher's store keeps its position, a game started without the launcher numbers its next changes
-  from 1 again, and the launcher skips them until their sequence passes the store's. The launcher cannot tell that
-  journal from one it has already applied, which it must never apply twice. A journal epoch, a token the game picks
-  when it starts a journal and the store keeps with `journalApplied`, would tell them apart; it waits for the slice
-  that first writes journals, since nothing writes one yet.
 
 ## 8. The game side today
 
@@ -206,9 +220,11 @@ and `journalApplied`. Favorites and history are never projected.
   for the provider to report. A rejected V5 request is correlated by its intent and reported the same way.
 - In crash recovery, the session is not offered, and its launch fails at once (`unavailable`, with the reason), so the
   launcher never waits on a session nothing will report.
+- At startup the manager sweeps the join claims an earlier, crashed process left behind (section 6).
 
 What later slices wire: starting the session from the plan when live sessions are on, the provider's progress and
-outcomes V2 from its live flows, writing handoffs, polling for live joins, and reading the projection in game.
+outcomes V2 from its live flows, writing handoffs, polling for live joins, reading the projection in game, and recording
+in-game changes with `RecordPreferenceChange`, off the main thread.
 
 ## 9. Exact-version resolution
 

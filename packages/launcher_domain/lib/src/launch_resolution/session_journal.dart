@@ -148,12 +148,20 @@ final class HostingChange extends MultiplayerPreferenceChange {
 
 /// Preferences the player changed in game
 /// (`multiplayer-preferences-journal-v1.json` in manager staging, game to
-/// launcher): at most 64 changes in strictly increasing [sequence] order.
-/// The game appends and rewrites the whole file atomically, and drops the
-/// changes a projection's `journalApplied` covers.
+/// launcher): an [epoch] and at most 64 changes in strictly increasing
+/// [MultiplayerPreferenceChange.sequence] order.
+///
+/// The game gives each journal it starts a new random [epoch], so the
+/// launcher can tell a journal that started over, after staging was lost,
+/// from one whose changes it has already applied. The game appends and
+/// rewrites the whole file atomically, and drops the changes a projection
+/// counting this journal has applied.
 final class MultiplayerPreferencesJournal {
-  MultiplayerPreferencesJournal(Iterable<MultiplayerPreferenceChange> changes)
-    : changes = List.unmodifiable(changes.take(maximumChanges + 1)) {
+  MultiplayerPreferencesJournal(
+    String epoch,
+    Iterable<MultiplayerPreferenceChange> changes,
+  ) : epoch = _journalEpoch(epoch),
+      changes = List.unmodifiable(changes.take(maximumChanges + 1)) {
     if (this.changes.length > maximumChanges) {
       throw const FormatException('The journal holds at most 64 changes.');
     }
@@ -168,15 +176,13 @@ final class MultiplayerPreferencesJournal {
   static const maximumChanges = 64;
 
   factory MultiplayerPreferencesJournal.fromJson(Object? value) {
-    final json = _object(
-      value,
-      {'changes', 'schemaVersion'},
-      {'changes', 'schemaVersion'},
-    );
+    const members = {'changes', 'epoch', 'schemaVersion'};
+    final json = _object(value, members, members);
     if (_integer(json['schemaVersion']) != schemaVersion) {
       throw const FormatException('Unsupported preferences journal.');
     }
     return MultiplayerPreferencesJournal(
+      _journalEpoch(json['epoch']),
       _list(
         json['changes'],
         MultiplayerPreferenceChange.fromJson,
@@ -185,16 +191,23 @@ final class MultiplayerPreferencesJournal {
     );
   }
 
+  /// The random id the game gave this journal when it started it: 32
+  /// lowercase hexadecimal digits.
+  final String epoch;
   final List<MultiplayerPreferenceChange> changes;
 
-  /// [projection] with every change after its `journalApplied` applied in
-  /// order, as the next revision; [projection] itself when nothing is new.
+  /// [projection] with this journal's new changes applied in order, as the
+  /// next revision that counts this journal; [projection] itself when nothing
+  /// is new. When [projection] counts this journal, the changes after its
+  /// `journalApplied` are new; when it counts another, or none, every change
+  /// is.
   MultiplayerPreferencesProjection applyTo(
     MultiplayerPreferencesProjection projection,
   ) {
-    final fresh = changes
-        .where((change) => change.sequence > projection.journalApplied)
-        .toList();
+    final applied = projection.journalEpoch == epoch
+        ? projection.journalApplied
+        : 0;
+    final fresh = changes.where((change) => change.sequence > applied).toList();
     if (fresh.isEmpty) return projection;
     var next = projection;
     for (final change in fresh) {
@@ -203,11 +216,13 @@ final class MultiplayerPreferencesJournal {
         DisplayNameChange(:final displayName) => next._with(
           revision: revision,
           journalApplied: change.sequence,
+          journalEpoch: epoch,
           displayName: displayName,
         ),
         DisclosureChange(:final disclosure) => next._with(
           revision: revision,
           journalApplied: change.sequence,
+          journalEpoch: epoch,
           disclosure: disclosure > next.disclosure
               ? disclosure
               : next.disclosure,
@@ -215,18 +230,21 @@ final class MultiplayerPreferencesJournal {
         VoiceChange(:final consent, :final enabled) => next._with(
           revision: revision,
           journalApplied: change.sequence,
+          journalEpoch: epoch,
           voiceConsent: consent,
           voiceEnabled: enabled,
         ),
         NetworkChange(:final lanDiscovery, :final upnp) => next._with(
           revision: revision,
           journalApplied: change.sequence,
+          journalEpoch: epoch,
           lanDiscovery: lanDiscovery,
           upnp: upnp,
         ),
         HostingChange(:final hosting) => next._with(
           revision: revision,
           journalApplied: change.sequence,
+          journalEpoch: epoch,
           hosting: hosting,
         ),
       };
@@ -237,6 +255,7 @@ final class MultiplayerPreferencesJournal {
   Map<String, Object?> toJson() =>
       _sorted({
             'changes': [for (final change in changes) change.toJson()],
+            'epoch': epoch,
             'schemaVersion': schemaVersion,
           })!
           as Map<String, Object?>;

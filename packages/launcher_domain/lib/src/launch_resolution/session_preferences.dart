@@ -65,8 +65,9 @@ final class MultiplayerHostingDefaults {
 /// they change. The game never edits it: it records changes made in game in
 /// a [MultiplayerPreferencesJournal], which the launcher applies
 /// ([MultiplayerPreferencesJournal.applyTo]) before writing the next
-/// [revision]. [journalApplied] is the last journal sequence applied, so the
-/// game can drop what the launcher has taken in.
+/// [revision]. [journalApplied] is the last sequence applied from the journal
+/// named by [journalEpoch], and counts for that journal only, so the game can
+/// drop what the launcher has taken in.
 ///
 /// Privacy is always relay-only here: allowing direct play is a choice for
 /// one session, never a stored default. The projection holds no address.
@@ -74,6 +75,7 @@ final class MultiplayerPreferencesProjection {
   MultiplayerPreferencesProjection({
     required int revision,
     int journalApplied = 0,
+    String? journalEpoch,
     required String displayName,
     required int disclosure,
     required int voiceConsent,
@@ -84,6 +86,7 @@ final class MultiplayerPreferencesProjection {
     String? serviceOrigin,
   }) : revision = _integer(revision),
        journalApplied = _integer(journalApplied),
+       journalEpoch = journalEpoch == null ? null : _journalEpoch(journalEpoch),
        displayName = _displayText(
          displayName,
          MultiplayerSettings.maximumDisplayNameLength,
@@ -97,6 +100,11 @@ final class MultiplayerPreferencesProjection {
     if (voiceEnabled && this.voiceConsent < 1) {
       throw const FormatException('Voice stays off until the player consents.');
     }
+    if (this.journalEpoch == null && this.journalApplied != 0) {
+      throw const FormatException(
+        'A journal position names the journal it counts.',
+      );
+    }
   }
 
   static const schemaVersion = 1;
@@ -108,10 +116,12 @@ final class MultiplayerPreferencesProjection {
     required MultiplayerHostingDefaults hosting,
     required int revision,
     int journalApplied = 0,
+    String? journalEpoch,
     String? serviceOrigin,
   }) => MultiplayerPreferencesProjection(
     revision: revision,
     journalApplied: journalApplied,
+    journalEpoch: journalEpoch,
     displayName: settings.displayName,
     disclosure: settings.acknowledgedPrivacyDisclosure,
     voiceConsent: settings.voiceConsent,
@@ -133,7 +143,11 @@ final class MultiplayerPreferencesProjection {
       'schemaVersion',
       'voice',
     };
-    final json = _object(value, {...required, 'serviceOrigin'}, required);
+    final json = _object(value, {
+      ...required,
+      'journalEpoch',
+      'serviceOrigin',
+    }, required);
     if (_integer(json['schemaVersion']) != schemaVersion) {
       throw const FormatException('Unsupported multiplayer preferences.');
     }
@@ -155,6 +169,9 @@ final class MultiplayerPreferencesProjection {
     return MultiplayerPreferencesProjection(
       revision: _integer(json['revision']),
       journalApplied: _integer(json['journalApplied']),
+      journalEpoch: json.containsKey('journalEpoch')
+          ? _journalEpoch(json['journalEpoch'])
+          : null,
       displayName: _text(json['displayName'], max: 64),
       disclosure: _integer(privacy['disclosure']),
       voiceConsent: _integer(voice['consent']),
@@ -170,6 +187,10 @@ final class MultiplayerPreferencesProjection {
 
   final int revision;
   final int journalApplied;
+
+  /// The epoch of the journal [journalApplied] counts; null before the
+  /// launcher applied one.
+  final String? journalEpoch;
   final String displayName;
 
   /// The address disclosure version the player acknowledged; 0 when never.
@@ -201,9 +222,13 @@ final class MultiplayerPreferencesProjection {
         history: settings.history,
       );
 
+  /// This projection at [revision], counting [journalApplied] in the journal
+  /// [journalEpoch] (this projection's own when omitted), with the given
+  /// preferences replaced.
   MultiplayerPreferencesProjection _with({
     required int revision,
     required int journalApplied,
+    String? journalEpoch,
     String? displayName,
     int? disclosure,
     int? voiceConsent,
@@ -214,6 +239,7 @@ final class MultiplayerPreferencesProjection {
   }) => MultiplayerPreferencesProjection(
     revision: revision,
     journalApplied: journalApplied,
+    journalEpoch: journalEpoch ?? this.journalEpoch,
     displayName: displayName ?? this.displayName,
     disclosure: disclosure ?? this.disclosure,
     voiceConsent: voiceConsent ?? this.voiceConsent,
@@ -229,6 +255,7 @@ final class MultiplayerPreferencesProjection {
             'displayName': displayName,
             'hosting': hosting.toJson(),
             'journalApplied': journalApplied,
+            if (journalEpoch != null) 'journalEpoch': journalEpoch,
             'network': {'lan': lanDiscovery, 'upnp': upnp},
             'privacy': {
               'disclosure': disclosure,

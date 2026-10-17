@@ -1,10 +1,18 @@
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
+/// The game's journal of in-game changes.
+const _epoch = '5f0c2a9e8d7b6a5f4e3d2c1b0a998877';
+
+/// A journal the launcher took in before staging was lost.
+const _before = '0d1c2b3a49586776a5b4c3d2e1f00f1e';
+
 /// The projection follows the launcher's multiplayer store, and changes the
 /// player made in game flow back through the journal. The store keeps the
-/// projection's revision and journal position with the settings, so a lost
-/// projection never re-applies an old change or lowers the revision.
+/// projection's revision and its position in the journal, by epoch, with the
+/// settings, so a lost projection never re-applies an old change or lowers
+/// the revision, and a journal that started over is applied from its first
+/// change.
 void main() {
   final settings = MultiplayerSettings(displayName: 'Sam');
   final hosting = MultiplayerHostingDefaults.forPlayer('Sam');
@@ -25,13 +33,14 @@ void main() {
     expect(sync.projection.revision, 0);
     expect(sync.projection.displayName, 'Sam');
     expect(sync.projection.hosting.name, "Sam's server");
+    expect(sync.journalEpoch, isNull);
   });
 
   test('nothing changed writes nothing', () {
     final first = MultiplayerPreferencesSync.of(source: source()).projection;
     final again = MultiplayerPreferencesSync.of(
       previous: first,
-      journal: MultiplayerPreferencesJournal(const []),
+      journal: MultiplayerPreferencesJournal(_epoch, const []),
       source: source(),
     );
     expect(again.needsWrite, isFalse);
@@ -56,7 +65,7 @@ void main() {
 
   test('changes made in game flow back to the launcher once', () {
     final first = MultiplayerPreferencesSync.of(source: source()).projection;
-    final journal = MultiplayerPreferencesJournal([
+    final journal = MultiplayerPreferencesJournal(_epoch, [
       DisplayNameChange(sequence: 1, displayName: 'Zoë'),
       DisclosureChange(sequence: 2, disclosure: 1),
       VoiceChange(sequence: 3, consent: 1, enabled: true),
@@ -73,7 +82,7 @@ void main() {
     expect(round.changedInGame, isTrue);
     expect(round.needsWrite, isTrue);
     expect(round.revision, 1);
-    expect(round.journalApplied, 4);
+    expect((round.journalEpoch, round.journalApplied), (_epoch, 4));
     expect(round.settings.displayName, 'Zoë');
     expect(round.settings.needsPrivacyDisclosure, isFalse);
     expect(round.settings.voiceActive, isTrue);
@@ -97,7 +106,7 @@ void main() {
     final store = _Store(settings);
     var projection = store.round(null, null);
     expect(projection.revision, 0);
-    final journal = MultiplayerPreferencesJournal([
+    final journal = MultiplayerPreferencesJournal(_epoch, [
       DisplayNameChange(sequence: 1, displayName: 'InGame'),
     ]);
     projection = store.round(projection, journal);
@@ -113,7 +122,97 @@ void main() {
     expect(store.settings.displayName, 'Launcher');
     expect(projection.displayName, 'Launcher');
     expect(projection.revision, 3);
-    expect(projection.journalApplied, 1);
+    expect((projection.journalEpoch, projection.journalApplied), (_epoch, 1));
+  });
+
+  test('a journal started over after staging was lost is applied', () {
+    // The store took in journal _before up to change 6. Staging then lost the
+    // projection and the journal, and a game started without the launcher
+    // journaled the player's rename as change 1 of a new journal.
+    final store = _Store(settings.withDisplayName('Launcher'))
+      ..revision = 4
+      ..journalEpoch = _before
+      ..journalApplied = 6;
+    final projection = store.round(
+      null,
+      MultiplayerPreferencesJournal(_epoch, [
+        DisplayNameChange(sequence: 1, displayName: 'InGame'),
+      ]),
+    );
+    expect(store.settings.displayName, 'InGame');
+    expect(projection.displayName, 'InGame');
+    expect(projection.revision, 5);
+    expect((store.journalEpoch, store.journalApplied), (_epoch, 1));
+    expect((projection.journalEpoch, projection.journalApplied), (_epoch, 1));
+  });
+
+  test('a journal taken in already applies nothing twice', () {
+    final journal = MultiplayerPreferencesJournal(_epoch, [
+      DisplayNameChange(sequence: 1, displayName: 'InGame'),
+      VoiceChange(sequence: 2, consent: 1, enabled: true),
+    ]);
+    final store = _Store(settings);
+    var projection = store.round(null, journal);
+    expect(store.settings.displayName, 'InGame');
+    expect(store.settings.voiceActive, isTrue);
+    store.settings = store.settings
+        .withDisplayName('Launcher')
+        .withVoice(false);
+    projection = store.round(projection, journal);
+    expect(projection.displayName, 'Launcher');
+
+    // The projection is lost: the store's record counts the journal.
+    expect(store.round(null, journal).displayName, 'Launcher');
+    expect(store.settings.voiceActive, isFalse);
+    // The store lost its record: the projection's counts the journal.
+    final forgetful = _Store(store.settings);
+    final again = forgetful.round(projection, journal);
+    expect(again.displayName, 'Launcher');
+    expect(forgetful.settings.voiceActive, isFalse);
+  });
+
+  test('journals and journal positions name their epoch exactly', () {
+    for (final epoch in [
+      _epoch.toUpperCase(),
+      _epoch.substring(1),
+      '${_epoch}0',
+      'g' * 32,
+      '',
+    ]) {
+      expect(
+        () => MultiplayerPreferencesJournal(epoch, const []),
+        throwsFormatException,
+        reason: epoch,
+      );
+      expect(
+        () => MultiplayerPreferencesProjection.fromSettings(
+          settings,
+          hosting: hosting,
+          revision: 0,
+          journalApplied: 1,
+          journalEpoch: epoch,
+        ),
+        throwsFormatException,
+        reason: epoch,
+      );
+    }
+    expect(
+      () => MultiplayerPreferencesProjection.fromSettings(
+        settings,
+        hosting: hosting,
+        revision: 0,
+        journalApplied: 1,
+      ),
+      throwsFormatException,
+      reason: 'A position names the journal it counts.',
+    );
+    expect(
+      () => LaunchTransport.readPreferencesJournal(
+        '{"changes":[],"schemaVersion":1}',
+      ),
+      throwsFormatException,
+      reason: 'A journal names its epoch.',
+    );
   });
 
   test('the revision never goes down', () {
@@ -148,7 +247,7 @@ void main() {
 
   test('without a hosting store, an in-game hosting change is kept', () {
     final store = _Store(settings);
-    final journal = MultiplayerPreferencesJournal([
+    final journal = MultiplayerPreferencesJournal(_epoch, [
       HostingChange(
         sequence: 1,
         hosting: MultiplayerHostingDefaults(name: 'Late night', maxPlayers: 3),
@@ -215,13 +314,14 @@ void main() {
         hosting: hosting,
         revision: 3,
         journalApplied: applied,
+        journalEpoch: _epoch,
       );
       expect(
         LaunchTransport.writePreferences(
-          MultiplayerPreferencesJournal(kept).applyTo(projection),
+          MultiplayerPreferencesJournal(_epoch, kept).applyTo(projection),
         ),
         LaunchTransport.writePreferences(
-          MultiplayerPreferencesJournal(changes).applyTo(projection),
+          MultiplayerPreferencesJournal(_epoch, changes).applyTo(projection),
         ),
         reason: 'with changes through $applied applied',
       );
@@ -230,11 +330,13 @@ void main() {
 }
 
 /// A launcher store with no hosting defaults yet, as the multiplayer store is
-/// today: it keeps the settings, the revision and the journal position.
+/// today: it keeps the settings, the revision and the journal position, by
+/// epoch.
 final class _Store {
   _Store(this.settings);
   MultiplayerSettings settings;
   int? revision;
+  String? journalEpoch;
   int journalApplied = 0;
 
   /// One round against the projection last read, saving before it returns
@@ -249,12 +351,14 @@ final class _Store {
       source: MultiplayerPreferencesValues(
         settings: settings,
         revision: revision,
+        journalEpoch: journalEpoch,
         journalApplied: journalApplied,
       ),
     );
     if (sync.needsWrite) {
       settings = sync.settings;
       revision = sync.revision;
+      journalEpoch = sync.journalEpoch;
       journalApplied = sync.journalApplied;
     }
     return sync.projection;

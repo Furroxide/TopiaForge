@@ -50,16 +50,24 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>A server id, descriptor hash or package digest: 64 lowercase hexadecimal digits.</summary>
-        internal static string Sha256(string? value, string name)
+        internal static string Sha256(string? value, string name) =>
+            IsLowercaseHex(value, 64) ? value! : throw new ArgumentException("Invalid session hash.", name);
+
+        /// <summary>
+        /// A preferences journal's epoch: 32 lowercase hexadecimal digits, the random id the game gives a journal it starts.
+        /// </summary>
+        internal static string JournalEpoch(string? value, string name) =>
+            IsLowercaseHex(value, 32) ? value! : throw new ArgumentException("Invalid journal epoch.", name);
+
+        private static bool IsLowercaseHex(string? value, int length)
         {
-            if (value == null || value.Length != 64) throw new ArgumentException("Invalid session hash.", name);
+            if (value == null || value.Length != length) return false;
             foreach (var character in value)
             {
-                if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')))
-                    throw new ArgumentException("Invalid session hash.", name);
+                if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))) return false;
             }
 
-            return value;
+            return true;
         }
 
         /// <summary>A canonical invite code: 10 upper-case Crockford base32 characters.</summary>

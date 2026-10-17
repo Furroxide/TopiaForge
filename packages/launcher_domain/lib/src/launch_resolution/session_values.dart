@@ -49,6 +49,15 @@ String _sha256Hex(Object? value) {
   return value;
 }
 
+/// A preferences journal's epoch: 32 lowercase hexadecimal digits, the
+/// random id the game gives a journal it starts.
+String _journalEpoch(Object? value) {
+  if (value is! String || !WireText.isHex(value, 16)) {
+    throw const FormatException('Invalid journal epoch.');
+  }
+  return value;
+}
+
 /// An integer from [minimum] to [maximum].
 int _ranged(Object? value, int minimum, int maximum) {
   final number = _integer(value);

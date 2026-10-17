@@ -599,6 +599,12 @@ join_invalid = [
 ]
 
 
+# Journal epochs: the random id the game gives each journal it starts. EPOCH_BEFORE is a journal the launcher took in
+# before staging was lost; EPOCH is the journal the game started over with.
+EPOCH = "5f0c2a9e8d7b6a5f4e3d2c1b0a998877"
+EPOCH_BEFORE = "0d1c2b3a49586776a5b4c3d2e1f00f1e"
+
+
 def preferences(**overrides):
     value = {"schemaVersion": 1, "revision": 0, "journalApplied": 0, "displayName": "Player",
              "privacy": {"mode": "relay-only", "disclosure": 0}, "voice": {"consent": 0, "enabled": False},
@@ -610,7 +616,7 @@ def preferences(**overrides):
 
 
 PREFERENCES_DEFAULT = preferences()
-PREFERENCES_SET = preferences(revision=7, journalApplied=3, displayName="Zoë 東京", serviceOrigin=ORIGIN,
+PREFERENCES_SET = preferences(revision=7, journalApplied=3, journalEpoch=EPOCH, displayName="Zoë 東京", serviceOrigin=ORIGIN,
                               privacy={"mode": "relay-only", "disclosure": 1}, voice={"consent": 1, "enabled": True},
                               network={"lan": False, "upnp": True},
                               hosting={"name": "Zoë's \"quiet\" server", "maxPlayers": 16, "visibility": "public",
@@ -637,11 +643,17 @@ preferences_invalid = [
     invalid("hosting-port", "Ports run to 65535.",
             mutated(PREFERENCES_DEFAULT, put(65536, "hosting", "port"))),
     invalid("version-2", "Version 1 only.", preferences(schemaVersion=2)),
+    invalid("applied-without-epoch", "A journal position names the journal it counts.", preferences(journalApplied=3)),
+    invalid("epoch-uppercase", "An epoch is 32 lowercase hexadecimal digits.",
+            preferences(journalApplied=3, journalEpoch=EPOCH.upper())),
+    invalid("epoch-short", "An epoch is 32 lowercase hexadecimal digits.",
+            preferences(journalApplied=3, journalEpoch=EPOCH[:-1])),
+    invalid("epoch-null", "Optional members are omitted, never null.", preferences(journalEpoch=None)),
 ]
 
 
-def journal(*changes):
-    return {"schemaVersion": 1, "changes": list(changes)}
+def journal(*changes, epoch=EPOCH):
+    return {"schemaVersion": 1, "epoch": epoch, "changes": list(changes)}
 
 
 JOURNAL_EMPTY = journal()
@@ -674,16 +686,26 @@ journal_invalid = [
             journal({"sequence": 1, "displayName": "Sam\uffff"})),
     invalid("too-many", "The journal holds at most 64 changes.",
             journal(*({"sequence": index + 1, "disclosure": 1} for index in range(65)))),
+    invalid("epoch-missing", "A journal names its epoch.", mutated(JOURNAL_ALL, drop("epoch"))),
+    invalid("epoch-uppercase", "An epoch is 32 lowercase hexadecimal digits.", journal(epoch=EPOCH.upper())),
+    invalid("epoch-long", "An epoch is 32 lowercase hexadecimal digits.", journal(epoch=EPOCH + "0")),
+    invalid("epoch-not-hex", "An epoch is 32 lowercase hexadecimal digits.", journal(epoch="g" * 32)),
+    invalid("epoch-number", "An epoch is a string.", journal(epoch=7)),
+    invalid("epoch-null", "A journal names its epoch, never null.", journal(epoch=None)),
 ]
 
 
-def apply_journal(projection, changes):
-    """The launcher's rule: every change after journalApplied, in order, as one new revision."""
-    fresh = [change for change in changes if change["sequence"] > projection["journalApplied"]]
+def apply_journal(projection, document):
+    """The launcher's rule. A journal the projection counts (journalEpoch) applies its changes after journalApplied; any
+    other journal started over, and applies from its first change. The changes apply in order, as one new revision that
+    then counts this journal."""
+    applied = projection["journalApplied"] if projection.get("journalEpoch") == document["epoch"] else 0
+    fresh = [change for change in document["changes"] if change["sequence"] > applied]
     if not fresh:
         return projection
     result = copy.deepcopy(projection)
     result["revision"] = projection["revision"] + 1
+    result["journalEpoch"] = document["epoch"]
     for change in fresh:
         result["journalApplied"] = change["sequence"]
         if "displayName" in change:
@@ -699,17 +721,26 @@ def apply_journal(projection, changes):
     return result
 
 
-ACKNOWLEDGED = preferences(revision=4, journalApplied=4, privacy={"mode": "relay-only", "disclosure": 2})
+ACKNOWLEDGED = preferences(revision=4, journalApplied=4, journalEpoch=EPOCH,
+                           privacy={"mode": "relay-only", "disclosure": 2})
+BEFORE_LOSS = preferences(revision=6, journalApplied=6, journalEpoch=EPOCH_BEFORE, displayName="Launcher")
+STARTED_OVER = journal({"sequence": 1, "displayName": "InGame"})
 apply_cases = []
-for case_id, about, base, changes in (
-    ("all-from-defaults", "Every change applies, as one new revision.", PREFERENCES_DEFAULT, JOURNAL_ALL["changes"]),
-    ("only-after-applied", "Changes the projection already covers are skipped, and an acknowledgement never lowers "
-     "the disclosure.", ACKNOWLEDGED, JOURNAL_ALL["changes"]),
-    ("nothing-new", "With nothing new, the projection stays as it is.",
-     preferences(revision=2, journalApplied=9), JOURNAL_ALL["changes"]),
+for case_id, about, base, document in (
+    ("all-from-defaults", "Every change applies, as one new revision that counts the journal.", PREFERENCES_DEFAULT,
+     JOURNAL_ALL),
+    ("only-after-applied", "Changes the projection already counts are skipped, and an acknowledgement never lowers "
+     "the disclosure.", ACKNOWLEDGED, JOURNAL_ALL),
+    ("nothing-new", "With nothing new in the journal the projection counts, the projection stays as it is.",
+     preferences(revision=2, journalApplied=9, journalEpoch=EPOCH), JOURNAL_ALL),
+    ("started-over", "A journal under another epoch started over, so it applies from its first change, whatever "
+     "position the projection counted in the journal before it.", BEFORE_LOSS, STARTED_OVER),
+    ("counted-journal-again", "The journal the projection counts, read again after its change applied, applies "
+     "nothing twice.", preferences(revision=7, journalApplied=1, journalEpoch=EPOCH, displayName="Launcher"),
+     STARTED_OVER),
 ):
     apply_cases.append({"id": case_id, "about": about, "projection": sorted_json(base),
-                        "journal": sorted_json(journal(*changes)), "result": sorted_json(apply_journal(base, changes))})
+                        "journal": sorted_json(document), "result": sorted_json(apply_journal(base, document))})
 
 write("channels/cases.json", {
     "schema": 1,

@@ -20,6 +20,8 @@ namespace TopiaForge.ModManager
         private void AdmitStartup()
         {
             launchStaging = new LaunchStagingStore(paths);
+            // A join claim a crashed process left behind holds no address; the sweep never throws.
+            launchStaging.SweepStaleClaims();
             var acceptanceRequest = Environment.GetEnvironmentVariable(AcceptanceIsolationGate.EnvironmentVariable);
             if (acceptanceRequest == null) return;
             launchProfile = launchStaging.AdmitAcceptance(acceptanceRequest,

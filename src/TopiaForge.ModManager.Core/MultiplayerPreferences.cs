@@ -29,18 +29,23 @@ namespace TopiaForge.ModManager.Core
     /// The launcher's multiplayer preferences as the game reads them (<c>multiplayer-preferences-v1.json</c> in manager
     /// staging, launcher to game). The game never edits it: it records changes made in game in a
     /// <see cref="MultiplayerPreferencesJournal"/>, which the launcher applies before writing the next revision.
-    /// <see cref="JournalApplied"/> is the last journal sequence applied. Privacy is always relay-only here: direct play is
-    /// a choice for one session, never a stored default. The projection holds no address.
+    /// <see cref="JournalApplied"/> is the last sequence the launcher applied from the journal named by
+    /// <see cref="JournalEpoch"/>; it counts for that journal only. Privacy is always relay-only here: direct play is a
+    /// choice for one session, never a stored default. The projection holds no address.
     /// </summary>
     public sealed class MultiplayerPreferencesProjection
     {
         public const int SchemaVersion = 1;
 
         public MultiplayerPreferencesProjection(int revision, int journalApplied, string displayName, int disclosure, int voiceConsent,
-            bool voiceEnabled, bool lanDiscovery, bool upnp, MultiplayerHostingDefaults hosting, string? serviceOrigin = null)
+            bool voiceEnabled, bool lanDiscovery, bool upnp, MultiplayerHostingDefaults hosting, string? serviceOrigin = null,
+            string? journalEpoch = null)
         {
             Revision = LaunchContractValues.Revision(revision, nameof(revision));
             JournalApplied = LaunchContractValues.Revision(journalApplied, nameof(journalApplied));
+            JournalEpoch = journalEpoch == null ? null : LaunchSessionValues.JournalEpoch(journalEpoch, nameof(journalEpoch));
+            if (JournalEpoch == null && JournalApplied != 0)
+                throw new ArgumentException("A journal position names the journal it counts.", nameof(journalApplied));
             DisplayName = LaunchSessionValues.DisplayText(displayName, nameof(displayName), LaunchSessionValues.MinimumDisplayName,
                 LaunchSessionValues.MaximumDisplayName);
             Disclosure = LaunchContractValues.Revision(disclosure, nameof(disclosure));
@@ -55,6 +60,9 @@ namespace TopiaForge.ModManager.Core
 
         public int Revision { get; }
         public int JournalApplied { get; }
+
+        /// <summary>Gets the epoch of the journal <see cref="JournalApplied"/> counts; null before the launcher applied one.</summary>
+        public string? JournalEpoch { get; }
         public string DisplayName { get; }
 
         /// <summary>Gets the address disclosure version the player acknowledged; 0 when never.</summary>
@@ -116,17 +124,20 @@ namespace TopiaForge.ModManager.Core
 
     /// <summary>
     /// Preferences the player changed in game (<c>multiplayer-preferences-journal-v1.json</c> in manager staging, game to
-    /// launcher): at most 64 changes in strictly increasing sequence order. The game appends and rewrites the whole file
-    /// atomically, and drops what a projection's <see cref="MultiplayerPreferencesProjection.JournalApplied"/> covers and
-    /// every change a later one supersedes, so a long session never fills the journal.
+    /// launcher): an <see cref="Epoch"/> and at most 64 changes in strictly increasing sequence order. The game gives each
+    /// journal it starts a new random epoch (<see cref="Start"/>), so the launcher can tell a journal that started over,
+    /// after staging was lost, from one whose changes it has already applied. The game appends and rewrites the whole file
+    /// atomically, and drops what a projection counting this journal (<see cref="MultiplayerPreferencesProjection.JournalEpoch"/>)
+    /// has applied, and every change a later one supersedes, so a long session never fills the journal.
     /// </summary>
     public sealed class MultiplayerPreferencesJournal
     {
         public const int SchemaVersion = 1;
         public const int MaximumChanges = 64;
 
-        public MultiplayerPreferencesJournal(IEnumerable<MultiplayerPreferenceChange> changes)
+        public MultiplayerPreferencesJournal(string epoch, IEnumerable<MultiplayerPreferenceChange> changes)
         {
+            Epoch = LaunchSessionValues.JournalEpoch(epoch, nameof(epoch));
             var copy = (changes ?? throw new ArgumentNullException(nameof(changes))).Take(MaximumChanges + 1).ToArray();
             if (copy.Length > MaximumChanges) throw new ArgumentException("The journal holds at most 64 changes.", nameof(changes));
             for (var index = 1; index < copy.Length; index++)
@@ -138,25 +149,36 @@ namespace TopiaForge.ModManager.Core
             Changes = Array.AsReadOnly(copy);
         }
 
+        /// <summary>A new, empty journal under a fresh random epoch, for a game that finds no journal to continue.</summary>
+        public static MultiplayerPreferencesJournal Start() =>
+            new MultiplayerPreferencesJournal(Guid.NewGuid().ToString("N"), Array.Empty<MultiplayerPreferenceChange>());
+
+        /// <summary>Gets the random id of this journal: 32 lowercase hexadecimal digits, kept for as long as the journal lives.</summary>
+        public string Epoch { get; }
         public IReadOnlyList<MultiplayerPreferenceChange> Changes { get; }
 
         /// <summary>The next sequence a change takes.</summary>
         public int NextSequence(MultiplayerPreferencesProjection? projection) =>
-            Math.Max(Changes.Count == 0 ? 0 : Changes[Changes.Count - 1].Sequence, projection?.JournalApplied ?? 0) + 1;
+            Math.Max(Changes.Count == 0 ? 0 : Changes[Changes.Count - 1].Sequence, AppliedBy(projection)) + 1;
 
         /// <summary>
-        /// This journal without what <paramref name="projection"/> applied and without the changes <paramref name="change"/>
-        /// supersedes, with <paramref name="change"/> appended. The launcher applies changes in order and each sets its whole
-        /// preference, so an earlier change of the same preference can never alter the result. A disclosure is the exception:
-        /// an acknowledgement never lowers the version, so only one that acknowledges no more than <paramref name="change"/>
-        /// is superseded.
+        /// This journal without what <paramref name="projection"/> applied from it and without the changes
+        /// <paramref name="change"/> supersedes, with <paramref name="change"/> appended. A projection counting another
+        /// journal drops nothing. The launcher applies changes in order and each sets its whole preference, so an earlier
+        /// change of the same preference can never alter the result. A disclosure is the exception: an acknowledgement never
+        /// lowers the version, so only one that acknowledges no more than <paramref name="change"/> is superseded.
         /// </summary>
         public MultiplayerPreferencesJournal Append(MultiplayerPreferenceChange change, MultiplayerPreferencesProjection? projection)
         {
             if (change == null) throw new ArgumentNullException(nameof(change));
-            var applied = projection?.JournalApplied ?? 0;
-            return new MultiplayerPreferencesJournal(Changes.Where(item => item.Sequence > applied && !Supersedes(change, item)).Append(change));
+            var applied = AppliedBy(projection);
+            return new MultiplayerPreferencesJournal(Epoch,
+                Changes.Where(item => item.Sequence > applied && !Supersedes(change, item)).Append(change));
         }
+
+        /// <summary>How far <paramref name="projection"/> says the launcher applied this journal: zero when it counts another.</summary>
+        private int AppliedBy(MultiplayerPreferencesProjection? projection) =>
+            projection != null && string.Equals(projection.JournalEpoch, Epoch, StringComparison.Ordinal) ? projection.JournalApplied : 0;
 
         private static bool Supersedes(MultiplayerPreferenceChange later, MultiplayerPreferenceChange earlier) =>
             later.Kind == earlier.Kind && (later.Kind != "disclosure" || later.NewDisclosure >= earlier.NewDisclosure);

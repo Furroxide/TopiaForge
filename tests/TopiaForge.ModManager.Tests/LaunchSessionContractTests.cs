@@ -18,6 +18,10 @@ namespace TopiaForge.ModManager.Tests
         private const int PublicPort = 47819;
         private const string ServerId = "c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3";
 
+        // The game's journal, and one the launcher took in before it.
+        private const string Epoch = "5f0c2a9e8d7b6a5f4e3d2c1b0a998877";
+        private const string OtherEpoch = "0d1c2b3a49586776a5b4c3d2e1f00f1e";
+
         // V4 exactly as the launcher writes it, from the Dart golden test.
         private const string V4Menu = "{\"schemaVersion\":4,\"profileId\":\"default\",\"profileRevision\":7,"
             + "\"requestId\":\"fedcba9876543210fedcba9876543210\",\"command\":\"main-menu\",\"safeMode\":false,"
@@ -233,10 +237,11 @@ namespace TopiaForge.ModManager.Tests
                 File.WriteAllText(store.PreferencesPath, "{\"schemaVersion\":1}");
                 Assert(store.ReadPreferences() == null, "Damaged preferences read as none.");
                 var projection = new MultiplayerPreferencesProjection(3, 1, "Sam", 1, 1, true, true, false,
-                    new MultiplayerHostingDefaults("Sam's server", 8, "lan", 27250, false), "https://mp.topiaforge.dev");
+                    new MultiplayerHostingDefaults("Sam's server", 8, "lan", 27250, false), "https://mp.topiaforge.dev", Epoch);
                 File.WriteAllText(store.PreferencesPath, LaunchTransportJson.WritePreferences(projection));
                 var read = store.ReadPreferences()!;
-                Assert(read.Revision == 3 && read.DisplayName == "Sam" && read.ServiceOrigin == "https://mp.topiaforge.dev", "Preferences read back.");
+                Assert(read.Revision == 3 && read.DisplayName == "Sam" && read.ServiceOrigin == "https://mp.topiaforge.dev"
+                    && read.JournalEpoch == Epoch && read.JournalApplied == 1, "Preferences read back.");
             }
             finally { owned.Delete(true); }
         }
@@ -249,24 +254,40 @@ namespace TopiaForge.ModManager.Tests
                 var paths = new ManagerPaths(owned.CreateSubdirectory("game").CreateSubdirectory("BepInEx").FullName);
                 paths.EnsureCreated();
                 var store = new LaunchStagingStore(paths);
-                var journal = new MultiplayerPreferencesJournal(new[]
+                var journal = new MultiplayerPreferencesJournal(Epoch, new[]
                 {
                     MultiplayerPreferenceChange.DisplayName(1, "Sam"), MultiplayerPreferenceChange.Disclosure(2, 1)
                 });
-                var projection = new MultiplayerPreferencesProjection(4, 1, "Sam", 0, 0, false, true, false,
-                    new MultiplayerHostingDefaults("Sam's server", 8, "lan", 27250, false));
+                var projection = Counting(1, Epoch);
                 var next = journal.Append(MultiplayerPreferenceChange.Voice(journal.NextSequence(projection), 1, true), projection);
-                Assert(next.Changes.Select(change => change.Sequence).SequenceEqual(new[] { 2, 3 }), "Appending drops what the launcher applied.");
+                Assert(next.Epoch == Epoch && next.Changes.Select(change => change.Sequence).SequenceEqual(new[] { 2, 3 }),
+                    "Appending keeps the epoch and drops what the launcher applied from this journal.");
+                var other = Counting(9, OtherEpoch);
+                Assert(journal.NextSequence(other) == 3 && journal.NextSequence(Counting(0, null)) == 3
+                    && journal.Append(MultiplayerPreferenceChange.Voice(3, 1, true), other).Changes.Count == 3,
+                    "A position in another journal, or none, neither numbers nor trims this one.");
                 store.WritePreferencesJournal(next);
                 var read = store.ReadPreferencesJournal()!;
-                Assert(read.Changes.Count == 2 && read.Changes[1].Kind == "voice" && read.Changes[1].NewVoiceEnabled, "The journal reads back.");
+                Assert(read.Epoch == Epoch && read.Changes.Count == 2 && read.Changes[1].Kind == "voice" && read.Changes[1].NewVoiceEnabled,
+                    "The journal reads back with its epoch.");
                 Rejects(() => MultiplayerPreferenceChange.Voice(4, 0, true), "Voice stays off until the player consents.");
-                Rejects(() => new MultiplayerPreferencesJournal(new[] { MultiplayerPreferenceChange.Disclosure(2, 1), MultiplayerPreferenceChange.Disclosure(2, 1) }),
+                Rejects(() => new MultiplayerPreferencesJournal(Epoch, new[] { MultiplayerPreferenceChange.Disclosure(2, 1), MultiplayerPreferenceChange.Disclosure(2, 1) }),
                     "Sequences increase strictly.");
+                foreach (var epoch in new[] { Epoch.ToUpperInvariant(), Epoch.Substring(1), Epoch + "0", new string('g', 32), string.Empty })
+                {
+                    Rejects(() => new MultiplayerPreferencesJournal(epoch, Array.Empty<MultiplayerPreferenceChange>()), "An epoch is 32 lowercase hexadecimal digits.");
+                    Rejects(() => Counting(1, epoch), "A position names its journal by a valid epoch.");
+                }
+
+                Rejects(() => Counting(1, null), "A position names the journal it counts.");
+                var started = MultiplayerPreferencesJournal.Start();
+                Assert(started.Changes.Count == 0 && started.Epoch.Length == 32 && started.Epoch.All(Uri.IsHexDigit)
+                    && started.Epoch == started.Epoch.ToLowerInvariant() && started.Epoch != MultiplayerPreferencesJournal.Start().Epoch,
+                    "A new journal starts empty, under a fresh random epoch.");
 
                 // The launcher takes the journal in only before a session launch and after the game exits, so one session's
                 // edits all land in it. Only the newest change of each preference matters, so the journal never fills.
-                var session = new MultiplayerPreferencesJournal(Array.Empty<MultiplayerPreferenceChange>());
+                var session = new MultiplayerPreferencesJournal(Epoch, Array.Empty<MultiplayerPreferenceChange>());
                 for (var edit = 0; edit < 200; edit++)
                 {
                     var sequence = session.NextSequence(projection);
@@ -283,7 +304,7 @@ namespace TopiaForge.ModManager.Tests
                     "Two hundred edits keep only the newest change of each preference.");
                 Assert(session.Changes[0].NewDisplayName == "Sam 7" && session.Changes[1].NewVoiceEnabled && !session.Changes[2].NewLanDiscovery,
                     "The kept changes hold the newest values.");
-                var acknowledged = new MultiplayerPreferencesJournal(Array.Empty<MultiplayerPreferenceChange>())
+                var acknowledged = new MultiplayerPreferencesJournal(Epoch, Array.Empty<MultiplayerPreferenceChange>())
                     .Append(MultiplayerPreferenceChange.Disclosure(2, 2), null).Append(MultiplayerPreferenceChange.Disclosure(3, 1), null);
                 Assert(acknowledged.Changes.Select(change => change.NewDisclosure).SequenceEqual(new[] { 2, 1 }),
                     "An acknowledgement of less never supersedes one of more, since the launcher never lowers the version.");
@@ -292,6 +313,10 @@ namespace TopiaForge.ModManager.Tests
             }
             finally { owned.Delete(true); }
         }
+
+        /// <summary>A projection at revision 4 that counts <paramref name="applied"/> in the journal <paramref name="epoch"/>.</summary>
+        private static MultiplayerPreferencesProjection Counting(int applied, string? epoch) => new MultiplayerPreferencesProjection(4, applied,
+            "Sam", 0, 0, false, true, false, new MultiplayerHostingDefaults("Sam's server", 8, "lan", 27250, false), null, epoch);
 
         private static void Privacy()
         {

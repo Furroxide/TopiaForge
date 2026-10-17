@@ -179,6 +179,47 @@ void main() {
       expect(leftovers(), isEmpty);
     });
 
+    test('a take sweeps only its own claims, once they are stale', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final hour = const Duration(hours: 1).inMilliseconds;
+      File claim(String prefix, String id, int claimedAt) =>
+          File('${channel(prefix, id).path}.taking-$claimedAt-${'c' * 32}')
+            ..writeAsStringSync('{}');
+      final stale = claim('session-handoff', 'crashed', now - 2 * hour);
+      final live = claim('session-handoff', 'running', now - 1000);
+      final gameClaim = claim('session-join', 'crashed', now - 2 * hour);
+      final undated = File(
+        '${channel('session-handoff', 'other').path}.taking-${'c' * 32}',
+      )..writeAsStringSync('{}');
+      final held = claim('session-handoff', 'held', now - 2 * hour);
+      final reader = await held.open();
+      try {
+        channel('session-handoff', 'process-1').writeAsStringSync(
+          LaunchTransport.writeSessionHandoff(handoff('process-1')),
+        );
+        expect(await store.takeSessionHandoff('process-1'), isNotNull);
+        expect(stale.existsSync(), isFalse);
+        expect(
+          live.existsSync(),
+          isTrue,
+          reason: 'A live take keeps its claim.',
+        );
+        expect(
+          gameClaim.existsSync(),
+          isTrue,
+          reason: "The game's claims are the game's to sweep.",
+        );
+        expect(undated.existsSync(), isTrue, reason: 'Only dated claims go.');
+        if (Platform.isWindows) {
+          expect(held.existsSync(), isTrue, reason: 'Another handle holds it.');
+        }
+      } finally {
+        await reader.close();
+      }
+      expect(store.sweepStaleClaims(), Platform.isWindows ? 1 : 0);
+      expect(held.existsSync(), isFalse);
+    });
+
     test('a linked handoff is refused', () async {
       final outside = File(p.join(root.path, 'outside.json'))
         ..writeAsStringSync(
@@ -285,154 +326,4 @@ void main() {
           : 'Only Windows refuses a rename over a file another handle reads.',
     );
   });
-
-  group('multiplayer preferences', () {
-    test('the projection is rewritten in place', () async {
-      final projection = MultiplayerPreferencesProjection.fromSettings(
-        settings,
-        hosting: MultiplayerHostingDefaults.forPlayer('Sam'),
-        revision: 1,
-      );
-      final file = await store.writePreferences(projection);
-      expect(p.basename(file.path), 'multiplayer-preferences-v1.json');
-      expect(
-        file.readAsStringSync(),
-        LaunchTransport.writePreferences(projection),
-      );
-      final next = MultiplayerPreferencesJournal([
-        DisplayNameChange(sequence: 1, displayName: 'Charlie'),
-      ]).applyTo(projection);
-      await store.writePreferences(next);
-      expect(
-        LaunchTransport.readPreferences(file.readAsStringSync()).displayName,
-        'Charlie',
-      );
-    });
-
-    File projection() =>
-        File(p.join(staging.path, 'multiplayer-preferences-v1.json'));
-    void journal(List<MultiplayerPreferenceChange> changes) =>
-        File(
-          p.join(staging.path, 'multiplayer-preferences-journal-v1.json'),
-        ).writeAsStringSync(
-          LaunchTransport.writePreferencesJournal(
-            MultiplayerPreferencesJournal(changes),
-          ),
-        );
-
-    test('a sync writes from the store and takes in the journal', () async {
-      final kept = _PreferencesStore(settings);
-      final first = await store.syncPreferences(kept.source, save: kept.save);
-      expect(first.needsWrite, isTrue);
-      expect((await store.readPreferences())!.revision, 0);
-      expect(
-        (await store.syncPreferences(kept.source, save: kept.save)).needsWrite,
-        isFalse,
-      );
-      expect(kept.saves, 1);
-
-      journal([DisplayNameChange(sequence: 1, displayName: 'Charlie')]);
-      final round = await store.syncPreferences(kept.source, save: kept.save);
-      expect(round.changedInGame, isTrue);
-      expect(kept.settings.displayName, 'Charlie');
-      final written = (await store.readPreferences())!;
-      expect(written.revision, 1);
-      expect(written.journalApplied, 1);
-
-      projection().writeAsStringSync('{"schemaVersion":1}');
-      expect(await store.readPreferences(), isNull);
-    });
-
-    test('the store is saved before the projection is written', () async {
-      final kept = _PreferencesStore(settings);
-      await store.syncPreferences(kept.source, save: kept.save);
-      journal([DisplayNameChange(sequence: 1, displayName: 'Charlie')]);
-      String? seen;
-      await store.syncPreferences(
-        kept.source,
-        save: (sync) async {
-          seen = projection().readAsStringSync();
-          await kept.save(sync);
-        },
-      );
-      expect(LaunchTransport.readPreferences(seen!).revision, 0);
-      expect((await store.readPreferences())!.revision, 1);
-
-      kept.settings = kept.settings.withDisplayName('Launcher');
-      await expectLater(
-        store.syncPreferences(
-          kept.source,
-          save: (sync) async => throw const FileSystemException('full disk'),
-        ),
-        throwsA(isA<FileSystemException>()),
-      );
-      expect((await store.readPreferences())!.displayName, 'Charlie');
-    });
-
-    test('a lost projection is rewritten from the store', () async {
-      final kept = _PreferencesStore(settings);
-      await store.syncPreferences(kept.source, save: kept.save);
-      journal([DisplayNameChange(sequence: 1, displayName: 'InGame')]);
-      await store.syncPreferences(kept.source, save: kept.save);
-      kept.settings = kept.settings.withDisplayName('Launcher');
-      await store.syncPreferences(kept.source, save: kept.save);
-      expect((await store.readPreferences())!.revision, 2);
-
-      projection().deleteSync();
-      await store.syncPreferences(kept.source, save: kept.save);
-      expect(kept.settings.displayName, 'Launcher');
-      final rewritten = (await store.readPreferences())!;
-      expect(rewritten.displayName, 'Launcher');
-      expect(rewritten.revision, 3);
-
-      projection().writeAsStringSync('{"schemaVersion":1}');
-      await store.syncPreferences(kept.source, save: kept.save);
-      expect(kept.settings.displayName, 'Launcher');
-      expect((await store.readPreferences())!.revision, 4);
-    });
-
-    test('the journal is read, and a damaged one is never applied', () async {
-      expect(await store.readPreferencesJournal(), isNull);
-      final file = File(
-        p.join(staging.path, 'multiplayer-preferences-journal-v1.json'),
-      );
-      final journal = MultiplayerPreferencesJournal([
-        DisclosureChange(sequence: 3, disclosure: 1),
-      ]);
-      file.writeAsStringSync(LaunchTransport.writePreferencesJournal(journal));
-      expect(
-        (await store.readPreferencesJournal())!.changes.single.sequence,
-        3,
-      );
-      file.writeAsStringSync(
-        '{"changes":[{"sequence":1,"privacy":"direct"}],"schemaVersion":1}',
-      );
-      expect(await store.readPreferencesJournal(), isNull);
-      file.writeAsStringSync('{"changes":[],"changes":[],"schemaVersion":1}');
-      expect(await store.readPreferencesJournal(), isNull);
-    });
-  });
-}
-
-/// The launcher's multiplayer store as a preferences source: it keeps the
-/// settings with the projection's revision and journal position.
-final class _PreferencesStore {
-  _PreferencesStore(this.settings);
-  MultiplayerSettings settings;
-  int? revision;
-  int journalApplied = 0;
-  int saves = 0;
-
-  MultiplayerPreferencesSource get source => MultiplayerPreferencesValues(
-    settings: settings,
-    revision: revision,
-    journalApplied: journalApplied,
-  );
-
-  Future<void> save(MultiplayerPreferencesSync sync) async {
-    saves++;
-    settings = sync.settings;
-    revision = sync.revision;
-    journalApplied = sync.journalApplied;
-  }
 }

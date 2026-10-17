@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -10,8 +11,9 @@ namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
     /// Session launch staging under concurrency and against V4: a take claims its file before it reads, a reader shares
-    /// deletion, a channel write waits briefly for the launcher's reader, an untaken ticket is withdrawn, and every V4
-    /// wire-profile fixture reads through the request readers V5 added exactly as the V4 readers read it.
+    /// deletion, a channel write waits briefly for the launcher's reader, the game records preference changes under its
+    /// journal's epoch, stale claims are swept and live ones kept, an untaken ticket is withdrawn, and every V4 wire-profile
+    /// fixture reads through the request readers V5 added exactly as the V4 readers read it.
     /// </summary>
     internal static class LaunchSessionStagingTests
     {
@@ -23,6 +25,7 @@ namespace TopiaForge.ModManager.Tests
             foreach (var test in new (string Name, Action<ManagerPaths> Run)[]
             {
                 ("take-claims", TakeClaims), ("read-shares-deletion", ReadSharesDeletion), ("channel-write-retry", ChannelWriteRetry),
+                ("journal-record", JournalRecord), ("claims-swept", ClaimsSwept),
                 ("ticket-withdrawn", _ => TicketWithdrawn()), ("v4-fixtures", paths => V4Fixtures(repositoryRoot, paths))
             })
             {
@@ -91,8 +94,9 @@ namespace TopiaForge.ModManager.Tests
         private static void ChannelWriteRetry(ManagerPaths paths)
         {
             var plain = new LaunchStagingStore(paths);
-            var first = new MultiplayerPreferencesJournal(new[] { MultiplayerPreferenceChange.DisplayName(1, "Sam") });
-            var second = new MultiplayerPreferencesJournal(new[] { MultiplayerPreferenceChange.DisplayName(2, "Charlie") });
+            var epoch = MultiplayerPreferencesJournal.Start().Epoch;
+            var first = new MultiplayerPreferencesJournal(epoch, new[] { MultiplayerPreferenceChange.DisplayName(1, "Sam") });
+            var second = new MultiplayerPreferencesJournal(epoch, new[] { MultiplayerPreferenceChange.DisplayName(2, "Charlie") });
             plain.WritePreferencesJournal(first);
             // The launcher reads without sharing deletion, as Dart's reader does.
             FileStream? held = new FileStream(plain.PreferencesJournalPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -126,6 +130,96 @@ namespace TopiaForge.ModManager.Tests
             Assert(!Directory.EnumerateFiles(paths.Staging).Any(file => Path.GetFileName(file).Contains(".tmp-", StringComparison.Ordinal)),
                 "No temporary file is left behind.");
         }
+
+        private static void JournalRecord(ManagerPaths paths)
+        {
+            var store = new LaunchStagingStore(paths);
+            var first = store.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.DisplayName(sequence, "Sam"));
+            Assert(first.Changes.Single().Sequence == 1 && first.Epoch.Length == 32, "With no journal file, the game starts one under a fresh epoch.");
+            var second = store.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.Network(sequence, false, true));
+            Assert(second.Epoch == first.Epoch && second.Changes.Select(change => change.Sequence).SequenceEqual(new[] { 1, 2 })
+                && store.ReadPreferencesJournal()!.Epoch == first.Epoch, "A journal keeps its epoch as it grows.");
+
+            // The launcher took both changes in, then a projection counting another journal arrives.
+            File.WriteAllText(store.PreferencesPath, LaunchTransportJson.WritePreferences(Projection(2, first.Epoch)));
+            var third = store.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.Voice(sequence, 1, true));
+            Assert(third.Changes.Select(change => change.Sequence).SequenceEqual(new[] { 3 }), "What the launcher applied from this journal is dropped.");
+            File.WriteAllText(store.PreferencesPath, LaunchTransportJson.WritePreferences(Projection(9, new string('e', 32))));
+            var fourth = store.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.DisplayName(sequence, "Robin"));
+            Assert(fourth.Epoch == first.Epoch && fourth.Changes.Select(change => change.Sequence).SequenceEqual(new[] { 3, 4 }),
+                "A position in another journal neither numbers nor trims this one.");
+
+            // A journal the launcher could never apply, such as one without its epoch, is replaced by a new one.
+            File.WriteAllText(store.PreferencesJournalPath, "{\"changes\":[],\"schemaVersion\":1}");
+            var restarted = store.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.DisplayName(sequence, "Sam"));
+            Assert(restarted.Epoch != first.Epoch && restarted.Changes.Single().Sequence == 1,
+                "A damaged journal is replaced by a new one under a fresh epoch.");
+            if (!OperatingSystem.IsWindows()) return;
+
+            // A journal another process holds without sharing is waited for, then refused; never replaced by a new journal.
+            FileStream? locker = new FileStream(store.PreferencesJournalPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            var patient = new LaunchStagingStore(paths, null, null, null, attempt => { locker?.Dispose(); locker = null; });
+            try
+            {
+                var kept = patient.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.DisplayName(sequence, "Alex"));
+                Assert(kept.Epoch == restarted.Epoch && kept.Changes.Select(change => change.Sequence).SequenceEqual(new[] { 2 }),
+                    "A briefly locked journal keeps its epoch and gains the change.");
+            }
+            finally { locker?.Dispose(); }
+
+            var written = File.ReadAllText(store.PreferencesJournalPath);
+            var retries = 0;
+            var refused = new LaunchStagingStore(paths, null, null, null, attempt => retries++);
+            using (new FileStream(store.PreferencesJournalPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                try
+                {
+                    refused.RecordPreferenceChange(sequence => MultiplayerPreferenceChange.DisplayName(sequence, "Lost"));
+                    throw new InvalidOperationException("A journal that stays locked must refuse the change.");
+                }
+                catch (IOException) { }
+            }
+
+            Assert(retries == LaunchStagingStore.ChannelWriteRetries && File.ReadAllText(store.PreferencesJournalPath) == written,
+                "The locked journal keeps its epoch and its changes.");
+        }
+
+        private static void ClaimsSwept(ManagerPaths paths)
+        {
+            var store = new LaunchStagingStore(paths);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var hour = (long)TimeSpan.FromHours(1).TotalMilliseconds;
+            string Claim(string channel, long claimedAt)
+            {
+                var path = channel + ".taking-" + claimedAt.ToString(CultureInfo.InvariantCulture) + "-" + new string('c', 32);
+                File.WriteAllText(path, "{}");
+                return path;
+            }
+
+            var stale = Claim(store.SessionJoinPath("crashed"), now - (2 * hour));
+            var live = Claim(store.SessionJoinPath("running"), now - 1000);
+            var launcher = Claim(store.SessionHandoffPath("crashed"), now - (2 * hour));
+            var undated = store.SessionJoinPath("other") + ".taking-" + new string('c', 32);
+            File.WriteAllText(undated, "{}");
+            var held = Claim(store.SessionJoinPath("held"), now - (2 * hour));
+            using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                // The launcher stages a join; taking it sweeps first.
+                File.WriteAllText(store.SessionJoinPath("process-1"), LaunchTransportJson.WriteSessionJoin(Join("join-1")));
+                Assert(store.TakeSessionJoin("process-1")!.JoinId == "join-1", "The join is taken.");
+                Assert(!File.Exists(stale), "A stale claim of this game's is swept.");
+                Assert(File.Exists(live), "A live take keeps its claim.");
+                Assert(File.Exists(launcher), "The launcher's claims are the launcher's to sweep.");
+                Assert(File.Exists(undated), "Only dated claims go.");
+                if (OperatingSystem.IsWindows()) Assert(File.Exists(held), "A claim another handle holds, even sharing deletion, is left.");
+            }
+
+            var swept = store.SweepStaleClaims();
+            Assert(!File.Exists(held) && (!OperatingSystem.IsWindows() || swept == 1), "Once released, the held claim goes too.");
+        }
+
+        private static MultiplayerPreferencesProjection Projection(int applied, string epoch) => new MultiplayerPreferencesProjection(3, applied,
+            "Sam", 1, 0, false, true, false, new MultiplayerHostingDefaults("Sam's server", 8, "lan", 27250, false), null, epoch);
 
         private static void TicketWithdrawn()
         {

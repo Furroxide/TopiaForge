@@ -14,14 +14,20 @@ part of 'launch_staging_store.dart';
 ///
 /// A taker claims a channel file by renaming it to a private name before it
 /// reads it, so a newer file the other side writes meanwhile lands at the
-/// channel's name again and is never removed unread.
+/// channel's name again and is never removed unread. The claim's name holds
+/// its claim time, so a claim a crashed take left behind can be swept.
 extension LaunchStagingSessions on LaunchStagingStore {
   static const preferencesFile = 'multiplayer-preferences-v1.json';
   static const journalFile = 'multiplayer-preferences-journal-v1.json';
 
+  /// How old a claim must be before a sweep removes it. A live take holds
+  /// its claim for milliseconds.
+  static const staleClaimAge = Duration(hours: 1);
+
   /// Takes the handoff the game staged for the process launched as
   /// [requestId]: returns it and removes it, once. A malformed or foreign
-  /// handoff is removed without being acted on.
+  /// handoff is removed without being acted on. Claims a crashed take left
+  /// behind are swept first ([sweepStaleClaims]).
   Future<SessionHandoff?> takeSessionHandoff(String requestId) async {
     final file = _channel('session-handoff', requestId);
     final File claimed;
@@ -32,7 +38,11 @@ extension LaunchStagingSessions on LaunchStagingStore {
         return null;
       }
       _ordinaryFile(file);
-      claimed = File('${file.path}.taking-${_nonce()}');
+      final now = DateTime.now();
+      sweepStaleClaims(now: now);
+      claimed = File(
+        '${file.path}.taking-${now.millisecondsSinceEpoch}-${_nonce()}',
+      );
       file.renameSync(claimed.path);
     } on Object {
       return null;
@@ -196,6 +206,41 @@ extension LaunchStagingSessions on LaunchStagingStore {
     }
   }
 
+  /// Removes the launcher's handoff claims that a crashed take left behind,
+  /// and returns how many. Only its own claim pattern
+  /// (`session-handoff-<key>.json.taking-<milliseconds>-<nonce>`) is
+  /// touched. A rename keeps a file's timestamps, so a claim is dated by the
+  /// claim time in its name, and only one more than [staleClaimAge] old is
+  /// stale. A claim another process holds open is left, since Windows refuses
+  /// to delete it; elsewhere only its age protects it. It never throws.
+  int sweepStaleClaims({DateTime? now}) {
+    final cutoff =
+        (now ?? DateTime.now()).millisecondsSinceEpoch -
+        staleClaimAge.inMilliseconds;
+    final List<FileSystemEntity> entries;
+    try {
+      if (!_directories()) return 0;
+      entries = Directory(_staging).listSync(followLinks: false);
+    } on Object {
+      return 0;
+    }
+    var removed = 0;
+    for (final entry in entries) {
+      final match = _handoffClaim.firstMatch(p.basename(entry.path));
+      if (match == null || int.parse(match[1]!) >= cutoff) continue;
+      try {
+        final claim = File(entry.path);
+        _directories();
+        _ordinaryFile(claim);
+        claim.deleteSync();
+        removed++;
+      } on Object {
+        /* In use, linked or already gone: a later sweep looks again. */
+      }
+    }
+    return removed;
+  }
+
   static Future<void> _pause(int attempt) =>
       Future<void>.delayed(Duration(milliseconds: 10 << attempt));
 
@@ -207,3 +252,9 @@ extension LaunchStagingSessions on LaunchStagingStore {
     ).join();
   }
 }
+
+/// The launcher's own claims: a handoff claimed under its claim time (Unix
+/// milliseconds) and a random nonce.
+final _handoffClaim = RegExp(
+  r'^session-handoff-[0-9a-f]{64}\.json\.taking-([0-9]{13})-[0-9a-f]{32}$',
+);

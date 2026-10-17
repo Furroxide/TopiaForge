@@ -97,7 +97,7 @@ void main() {
         ),
       ),
       'journal': LaunchTransport.writePreferencesJournal(
-        MultiplayerPreferencesJournal([
+        MultiplayerPreferencesJournal('5f0c2a9e8d7b6a5f4e3d2c1b0a998877', [
           DisplayNameChange(sequence: 1, displayName: 'Sam'),
         ]),
       ),

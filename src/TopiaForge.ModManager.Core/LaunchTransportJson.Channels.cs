@@ -46,6 +46,7 @@ namespace TopiaForge.ModManager.Core
         public static string WritePreferences(MultiplayerPreferencesProjection projection) => Bounded(Sorted(
             ("displayName", Text(projection.DisplayName)), ("hosting", HostingJson(projection.Hosting)),
             ("journalApplied", Number(projection.JournalApplied)),
+            ("journalEpoch", projection.JournalEpoch == null ? null : Text(projection.JournalEpoch)),
             ("network", Sorted(("lan", Boolean(projection.LanDiscovery)), ("upnp", Boolean(projection.Upnp)))),
             ("privacy", Sorted(("disclosure", Number(projection.Disclosure)), ("mode", Text("relay-only")))),
             ("revision", Number(projection.Revision)), ("schemaVersion", Number(MultiplayerPreferencesProjection.SchemaVersion)),
@@ -54,8 +55,8 @@ namespace TopiaForge.ModManager.Core
 
         public static MultiplayerPreferencesProjection ReadPreferences(string json) => Read(json, MaxChannelBytes, text =>
         {
-            var value = new Fields(text, "displayName", "hosting", "journalApplied", "network", "privacy", "revision", "schemaVersion",
-                "serviceOrigin", "voice");
+            var value = new Fields(text, "displayName", "hosting", "journalApplied", "journalEpoch", "network", "privacy", "revision",
+                "schemaVersion", "serviceOrigin", "voice");
             value.Version(MultiplayerPreferencesProjection.SchemaVersion);
             var privacy = new Fields(value.Required("privacy"), "disclosure", "mode");
             if (privacy.String("mode") != "relay-only") throw Invalid("Direct play is never a stored default.");
@@ -63,20 +64,20 @@ namespace TopiaForge.ModManager.Core
             var network = new Fields(value.Required("network"), "lan", "upnp");
             return new MultiplayerPreferencesProjection(value.Integer("revision"), value.Integer("journalApplied"), value.String("displayName"),
                 privacy.Integer("disclosure"), voice.Integer("consent"), voice.Bool("enabled"), network.Bool("lan"), network.Bool("upnp"),
-                ParseHosting(value.Required("hosting")), value.OptionalString("serviceOrigin"));
+                ParseHosting(value.Required("hosting")), value.OptionalString("serviceOrigin"), value.OptionalString("journalEpoch"));
         });
 
         public static string WritePreferencesJournal(MultiplayerPreferencesJournal journal) => Bounded(Sorted(
-            ("changes", ArrayOf(journal.Changes.Select(ChangeJson))),
+            ("changes", ArrayOf(journal.Changes.Select(ChangeJson))), ("epoch", Text(journal.Epoch)),
             ("schemaVersion", Number(MultiplayerPreferencesJournal.SchemaVersion))), MaxChannelBytes);
 
         public static MultiplayerPreferencesJournal ReadPreferencesJournal(string json) => Read(json, MaxChannelBytes, text =>
         {
-            var value = new Fields(text, "changes", "schemaVersion");
+            var value = new Fields(text, "changes", "epoch", "schemaVersion");
             value.Version(MultiplayerPreferencesJournal.SchemaVersion);
             var changes = Values(value.Required("changes"));
             if (changes.Count > MultiplayerPreferencesJournal.MaximumChanges) throw Invalid("The journal holds at most 64 changes.");
-            return new MultiplayerPreferencesJournal(changes.Select(ParseChange).ToArray());
+            return new MultiplayerPreferencesJournal(value.String("epoch"), changes.Select(ParseChange).ToArray());
         });
 
         private static string HandoffTargetJson(LaunchHandoffTarget target) => Sorted(
