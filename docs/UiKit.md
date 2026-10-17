@@ -119,5 +119,9 @@ QA catalog. Provider work follows the repository's dirty-setter, pooling, virtua
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
 
+Every kit label comes from one TextMesh Pro factory, which turns on extra padding. The body face's
+stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops
+whole letters: at UI scale 1.0 in a 1600x900 window, "default" rendered as "defau t".
+
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.
