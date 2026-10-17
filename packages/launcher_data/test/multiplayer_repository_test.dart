@@ -129,9 +129,12 @@ void main() {
         (snapshot) => snapshot.status == LanDiscoveryStatus.disabled,
       );
       final off = (await repo.loadSettings()).settings.withLanDiscovery(false);
-      await repo.saveSettings(off);
+      final saving = repo.saveSettings(off);
+      // Browsing stops before the save is even written.
       expect(lan.isListening, isFalse);
       expect(repo.lanSnapshot.status, LanDiscoveryStatus.disabled);
+      await saving;
+      expect(lan.isListening, isFalse);
       expect((await published).message, contains('LAN discovery is off'));
       expect(
         (await repo.startLanBrowsing()).status,

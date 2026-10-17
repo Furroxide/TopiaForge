@@ -6,8 +6,9 @@ part of 'multiplayer_store.dart';
 ///
 /// Leftovers are known by the names this store gives them,
 /// `<file>.<token>.bak` and `<file>.<token>.tmp` with a token of
-/// `<process id>-<microseconds>-<random>`; anything else in the folder is
-/// never put back, swept or dropped.
+/// `<process id>-<microseconds>-<random>`, and damaged copies by
+/// `<stem>.damaged-<UTC time>.json`; anything else in the folder is never
+/// put back, swept or dropped.
 final class _StoreFiles {
   _StoreFiles(this.directory, this._clock);
 
@@ -32,7 +33,7 @@ final class _StoreFiles {
       if (type == FileSystemEntityType.notFound) {
         switch (await _restoreBackup(file)) {
           case _Restore.held:
-            // What the backup holds is unread, not missing.
+            // What the backup or the file holds is unread, not missing.
             return const _Unreadable();
           case _Restore.restored:
             type = await FileSystemEntity.type(file.path, followLinks: false);
@@ -64,6 +65,12 @@ final class _StoreFiles {
   /// is [_Restore.held]: an older one never stands in for it, and nothing is
   /// dropped. A folder that is there but cannot be listed throws, since it
   /// may hold one.
+  ///
+  /// A folder that can be listed but not searched, as `chmod 444` leaves
+  /// one, lists every name in it while each file looks missing, and moving
+  /// one reads as missing too. So the file listed under its own name, or a
+  /// backup listed with nothing to look at, is [_Restore.held]: unread, not
+  /// gone.
   Future<_Restore> _restoreBackup(File file) async {
     final fileName = p.basename(file.path);
     final backups = <({File file, DateTime modified, int writtenAt})>[];
@@ -71,10 +78,17 @@ final class _StoreFiles {
       await for (final entity in Directory(
         directory,
       ).list(followLinks: false)) {
-        final writtenAt = _writtenAt(p.basename(entity.path), fileName, '.bak');
+        final name = p.basename(entity.path);
+        if (name == fileName) return _Restore.held;
+        final writtenAt = _writtenAt(name, fileName, '.bak');
         if (entity is File && writtenAt != null) {
-          final modified = (await entity.stat()).modified;
-          backups.add((file: entity, modified: modified, writtenAt: writtenAt));
+          final stat = await entity.stat();
+          if (stat.type == FileSystemEntityType.notFound) return _Restore.held;
+          backups.add((
+            file: entity,
+            modified: stat.modified,
+            writtenAt: writtenAt,
+          ));
         }
       }
     } on FileSystemException catch (error) {
@@ -165,15 +179,7 @@ final class _StoreFiles {
   /// Renames [file] to a damaged copy beside it and keeps the newest
   /// [MultiplayerStore.keptDamagedCopies]; false when it could not be moved.
   Future<bool> setAside(File file) async {
-    final stem = p.basenameWithoutExtension(file.path);
-    final stamp = _clock().toUtc().toIso8601String().replaceAll(
-      RegExp(r'[^0-9TZ]'),
-      '',
-    );
-    var target = File(p.join(directory, '$stem.damaged-$stamp.json'));
-    for (var attempt = 2; await _exists(target) && attempt < 100; attempt++) {
-      target = File(p.join(directory, '$stem.damaged-$stamp-$attempt.json'));
-    }
+    final target = await _damagedCopyOf(file);
     try {
       final type = await FileSystemEntity.type(file.path, followLinks: false);
       if (type == FileSystemEntityType.link) {
@@ -186,18 +192,63 @@ final class _StoreFiles {
     } on FileSystemException {
       return false;
     }
-    await _pruneDamaged(stem);
+    await _pruneDamaged(p.basenameWithoutExtension(file.path));
     return true;
   }
 
+  /// Writes [bytes], what was read from the damaged [file], to a damaged
+  /// copy beside it and keeps the newest [MultiplayerStore.keptDamagedCopies];
+  /// false when the copy could not be written. [file] stays where it is, so
+  /// until what replaces it is written, a write that fails or stops part way
+  /// leaves it there to be salvaged again.
+  Future<bool> keepCopy(File file, List<int> bytes) async {
+    final target = await _damagedCopyOf(file);
+    try {
+      await target.writeAsBytes(bytes, flush: true);
+    } on FileSystemException {
+      await _deleteEntity(target.path);
+      return false;
+    }
+    await _pruneDamaged(p.basenameWithoutExtension(file.path));
+    return true;
+  }
+
+  /// A free name for a damaged copy of [file]:
+  /// `<stem>.damaged-<UTC time>.json`, or `-<attempt>` after the time.
+  Future<File> _damagedCopyOf(File file) async {
+    final stem = p.basenameWithoutExtension(file.path);
+    final stamp = _clock().toUtc().toIso8601String().replaceAll(
+      RegExp(r'[^0-9TZ]'),
+      '',
+    );
+    var target = File(p.join(directory, '$stem.damaged-$stamp.json'));
+    for (var attempt = 2; await _exists(target) && attempt < 100; attempt++) {
+      target = File(p.join(directory, '$stem.damaged-$stamp-$attempt.json'));
+    }
+    return target;
+  }
+
+  /// The time, and any attempt, in the name of a damaged copy this store
+  /// made.
+  static final _damagedStamp = RegExp(r'^[0-9]+T[0-9]+Z(-[0-9]+)?$');
+
+  /// Drops all but the newest [MultiplayerStore.keptDamagedCopies] damaged
+  /// copies of `<stem>.json`. Only names this store gives them count, so a
+  /// copy the player keeps beside them under another name is never dropped.
   Future<void> _pruneDamaged(String stem) async {
+    final prefix = '$stem.damaged-';
     try {
       final copies = <String>[];
       await for (final entity in Directory(
         directory,
       ).list(followLinks: false)) {
         final name = p.basename(entity.path);
-        if (name.startsWith('$stem.damaged-') && name.endsWith('.json')) {
+        if (name.length > prefix.length + '.json'.length &&
+            name.startsWith(prefix) &&
+            name.endsWith('.json') &&
+            _damagedStamp.hasMatch(
+              name.substring(prefix.length, name.length - '.json'.length),
+            )) {
           copies.add(entity.path);
         }
       }
@@ -293,7 +344,8 @@ enum _Restore {
   /// The newest backup is back in the file's place.
   restored,
 
-  /// The newest backup could not be moved just now.
+  /// The newest backup could not be moved just now, or the file itself is
+  /// there although it could not be looked at.
   held,
 }
 

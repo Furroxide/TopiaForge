@@ -7,10 +7,13 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'multiplayer_network_support.dart';
+
 /// What interrupted writes leave beside the store's files: backups are put
 /// back only under the store's own names, the newest one even within a
-/// second, and never taken for missing while the folder cannot be searched;
-/// stale temporary files are swept without touching a write in progress.
+/// second, and never taken for missing while the folder cannot be listed or
+/// searched; stale temporary files are swept without touching a write in
+/// progress.
 void main() {
   final now = DateTime.utc(2026, 10, 15, 12);
   late Directory root;
@@ -53,6 +56,8 @@ void main() {
         'settings.json.4242-1.bak',
         'settings.json.a-1-1.bak',
         'settings.json.4242-1-1.bak.old',
+        // As Windows names a copy made beside one of the store's own.
+        'settings.json.4242-1-1 - Copy.bak',
       ];
       for (final name in foreign) {
         settingsAs(name, 'Mine', DateTime(2026, 10, 9));
@@ -118,6 +123,60 @@ void main() {
       expect(names(), [MultiplayerStore.settingsFileName]);
     });
 
+    test('is never taken for missing while the folder lists but cannot be '
+        'searched', () async {
+      // As `chmod 444` leaves a folder: its names list, but every file in it
+      // looks missing.
+      final chosen = MultiplayerSettings(
+        displayName: 'Sam',
+        lanDiscoveryEnabled: false,
+      );
+      final typed = JoinAddressTarget(host: '127.0.0.1', port: 27250);
+      await store().saveSettings(chosen);
+      await store().updateKnownHosts(
+        (hosts) => hosts.remember(typed, hostAServerId, now),
+      );
+      // First the file itself, then only the backup a write left of it.
+      for (final onlyBackup in [false, true]) {
+        if (onlyBackup) {
+          inFolder(
+            MultiplayerStore.settingsFileName,
+          ).renameSync(p.join(folder, 'settings.json.4242-1-1.bak'));
+        }
+        final release = await _denySearching(
+          folder,
+          inFolder(MultiplayerStore.knownHostsFileName),
+        );
+        if (release == null) return;
+        final shared = store();
+        final load = await shared.loadSettings();
+        expect(load.recovery, MultiplayerStoreRecovery.unreadable);
+        expect(
+          load.settings.toJson(),
+          MultiplayerStore.unreadableSettings.toJson(),
+        );
+        await expectLater(
+          shared.updateSettings((settings) => settings.withUpnp(true)),
+          unreadable(),
+        );
+        // No server at a remembered address passes as the first one seen.
+        await expectLater(shared.loadKnownHosts(), unreadable());
+        await release();
+
+        final again = await store().loadSettings();
+        expect(again.recovery, MultiplayerStoreRecovery.none);
+        expect(again.settings.toJson(), chosen.toJson());
+        expect(
+          (await store().loadKnownHosts()).check(typed, hostBServerId),
+          KnownHostCheck.mismatch,
+        );
+        expect(names(), [
+          MultiplayerStore.knownHostsFileName,
+          MultiplayerStore.settingsFileName,
+        ]);
+      }
+    });
+
     test('is not looked for where no folder can be', () async {
       final blocker = File(p.join(root.path, 'blocker'))..writeAsStringSync('');
       // A file in the folder's place, and a file in place of its parent.
@@ -159,6 +218,7 @@ void main() {
         temporary('settings.json.tmp', stale),
         temporary('settings.json.mine.tmp', stale),
         temporary('settings.json.4242-4.tmp', stale),
+        temporary('settings.json.4242-4-4 - Copy.tmp', stale),
         temporary('profiles.json.4242-5-5.tmp', stale),
         temporary('settings.json.4242-6-6.tmp.keep', stale),
       ].map((file) => p.basename(file.path));
@@ -211,6 +271,38 @@ void main() {
       expect(names(), [MultiplayerStore.settingsFileName]);
     });
   });
+}
+
+/// Lets [folder] be listed but not searched until the test ends, as
+/// `chmod 444` does, and returns the release; null, after marking the test
+/// skipped, where that cannot be done or does not hold: on Windows, and for
+/// an account that searches any folder, as root does. [inside] is a file in
+/// the folder, which must then look missing.
+Future<Future<void> Function()?> _denySearching(
+  String folder,
+  File inside,
+) async {
+  if (Platform.isWindows) {
+    markTestSkipped('Folder modes are POSIX.');
+    return null;
+  }
+  final mode = (Directory(folder).statSync().mode & 0x1FF).toRadixString(8);
+  Future<void> release() async {
+    await Process.run('chmod', [mode, folder]);
+  }
+
+  if ((await Process.run('chmod', ['444', folder])).exitCode != 0) {
+    markTestSkipped('The folder\'s mode could not be changed.');
+    return null;
+  }
+  addTearDown(release);
+  if (FileSystemEntity.typeSync(inside.path, followLinks: false) !=
+      FileSystemEntityType.notFound) {
+    await release();
+    markTestSkipped('This account can search any folder.');
+    return null;
+  }
+  return release;
 }
 
 /// The store's folder as one that cannot be listed just now, as when its

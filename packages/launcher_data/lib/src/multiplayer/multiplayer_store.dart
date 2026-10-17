@@ -18,12 +18,12 @@ enum MultiplayerStoreRecovery {
   /// It read cleanly, or did not exist yet.
   none,
 
-  /// Part of it was damaged: the original was set aside and what was valid
-  /// is kept.
+  /// Part of it was damaged: a copy of the original was kept aside and what
+  /// was valid is kept.
   salvaged,
 
-  /// Nothing in it could be used: the original was set aside and defaults
-  /// replace it.
+  /// Nothing in it could be used: the original, or a copy of it, was kept
+  /// aside and defaults replace it.
   reset,
 
   /// It could not be read just now, as when another program holds it. The
@@ -67,9 +67,11 @@ final class MultiplayerStoreException implements Exception {
 ///
 /// Every write replaces its file atomically, and the writes of one store
 /// run one after another, so a slow save never lands after a newer one. A
-/// damaged file is never fatal: it is set aside as
+/// damaged file is never fatal: a copy of it is kept as
 /// `<name>.damaged-<UTC time>.json`, the newest [keptDamagedCopies] kept, and
-/// what was valid in it, or the defaults, take its place.
+/// what was valid in it, or the defaults, then take its place. Until they
+/// are written the damaged file stays where it is, so a write that fails or
+/// stops part way never leaves the defaults in place of what was salvaged.
 ///
 /// A file that cannot be read just now, as when another program holds it,
 /// is never replaced. Saves and updates throw [MultiplayerStoreException]
@@ -81,16 +83,16 @@ final class MultiplayerStoreException implements Exception {
 /// aside as `<name>.<token>.bak` first. A write stopped between its two moves
 /// leaves that backup and no file, so reading restores the newest backup
 /// when the file is missing, as the launcher's own files do. While that
-/// backup cannot be moved, or the folder cannot be searched for one, the file
-/// counts as one that cannot be read.
+/// backup cannot be moved, or the folder cannot be listed or searched, the
+/// file counts as one that cannot be read.
 ///
 /// A write stopped part way can also leave its `<name>.<token>.tmp`. Each
 /// store sweeps those once, before its first read or write, but only once
 /// they are [staleTemporaryAge] old and never while a write in this isolate
 /// uses one, so a write still running elsewhere keeps its own. The token is
 /// `<process id>-<microseconds>-<random>`, and only names the store gives its
-/// own files are ever put back or swept: a copy the player keeps beside a
-/// file under another name is never touched.
+/// own files are ever put back, swept or dropped: a copy the player keeps
+/// beside a file or a damaged copy under another name is never touched.
 ///
 /// One launcher process uses the folder at a time, since the launcher runs as
 /// a single instance. Two processes sharing it could race while a backup is
@@ -213,10 +215,12 @@ final class MultiplayerStore {
         try {
           salvaged = salvageMultiplayerSettings(jsonDecode(utf8.decode(bytes)));
         } on FormatException {
-          return _replaceDamaged(file, null);
+          return _replaceDamaged(file, null, bytes);
         }
-        if (salvaged == null) return _replaceDamaged(file, null);
-        if (salvaged.damaged) return _replaceDamaged(file, salvaged.settings);
+        if (salvaged == null) return _replaceDamaged(file, null, bytes);
+        if (salvaged.damaged) {
+          return _replaceDamaged(file, salvaged.settings, bytes);
+        }
         return MultiplayerSettingsLoad(
           salvaged.settings,
           MultiplayerStoreRecovery.none,
@@ -224,21 +228,30 @@ final class MultiplayerStore {
     }
   }
 
-  /// Sets a damaged settings file aside and writes [kept], or the defaults,
-  /// in its place. Failing to do either still yields usable settings.
+  /// Keeps a damaged settings file aside and writes [kept], or the defaults,
+  /// in its place. What was [read] is copied aside, and the file stays in
+  /// place until what replaces it is written, so a write that fails or stops
+  /// part way leaves it to be salvaged again; a file that could not be read,
+  /// such as a link or a folder in its place, is moved aside. Failing to do
+  /// either still yields usable settings.
   Future<MultiplayerSettingsLoad> _replaceDamaged(
     File file,
-    MultiplayerSettings? kept,
-  ) async {
+    MultiplayerSettings? kept, [
+    List<int>? read,
+  ]) async {
     final settings = kept ?? MultiplayerSettings();
     final recovery = kept == null
         ? MultiplayerStoreRecovery.reset
         : MultiplayerStoreRecovery.salvaged;
-    if (await _files.setAside(file)) {
+    final keptAside = read == null
+        ? await _files.setAside(file)
+        : await _files.keepCopy(file, read);
+    if (keptAside) {
       try {
         await _writeSettings(settings);
       } on MultiplayerStoreException {
-        // The next save tries again; these settings are in use meanwhile.
+        // The next read salvages it again; these settings are in use
+        // meanwhile.
       }
     }
     return MultiplayerSettingsLoad(settings, recovery);
@@ -274,14 +287,16 @@ final class MultiplayerStore {
         return KnownHosts.empty();
       case _Read(:final bytes):
         // The domain keeps what is valid; anything it had to drop means the
-        // file was damaged, so the original is kept aside for inspection.
+        // file was damaged, so a copy of the original is kept aside for
+        // inspection, and the file stays in place until the record that
+        // replaces it is written.
         final hosts = KnownHosts.decode(bytes);
         final encoded = hosts.encode();
-        if (!_sameBytes(encoded, bytes) && await _files.setAside(file)) {
+        if (!_sameBytes(encoded, bytes) && await _files.keepCopy(file, bytes)) {
           try {
             await _files.write(file, encoded, 'known hosts');
           } on MultiplayerStoreException {
-            // The next change writes it again.
+            // The next read salvages it again.
           }
         }
         return hosts;
