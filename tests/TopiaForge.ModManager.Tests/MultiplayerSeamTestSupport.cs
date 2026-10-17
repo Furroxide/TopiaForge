@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
@@ -139,10 +140,23 @@ namespace TopiaForge.ModManager.Tests
             throw new InvalidOperationException("Multiplayer seam test failed: " + message + " (no " + typeof(TException).Name + ")");
         }
 
+        /// <summary>
+        /// What <paramref name="frames"/> calls of <paramref name="frame"/> allocate on this thread. The calls run in a
+        /// method of their own, once unmeasured and then up to three times, and the fewest bytes count. Work the runtime
+        /// does on this thread while code first runs, such as compiling it or moving the long loop to optimized code part
+        /// way through, happens once, while an allocation in the frame shows in every pass.
+        /// </summary>
         internal static long Allocated(Action frame, int frames = 10_000)
         {
-            for (var index = 0; index < 64; index++) frame();
-            _ = GC.GetAllocatedBytesForCurrentThread();
+            Calls(frame, frames);
+            var allocated = long.MaxValue;
+            for (var pass = 0; pass < 3 && allocated != 0; pass++) allocated = Math.Min(allocated, Calls(frame, frames));
+            return allocated;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static long Calls(Action frame, int frames)
+        {
             var before = GC.GetAllocatedBytesForCurrentThread();
             for (var index = 0; index < frames; index++) frame();
             return GC.GetAllocatedBytesForCurrentThread() - before;

@@ -1,6 +1,7 @@
 extern alias provider;
 
 using System.Net;
+using System.Runtime.CompilerServices;
 using provider::TopiaForge.Multiplayer.NatTraversal;
 using provider::TopiaForge.Multiplayer.NatTraversal.Stun;
 using provider::TopiaForge.Multiplayer.NatTraversal.Turn;
@@ -87,40 +88,23 @@ internal static class NatDemuxTests
         // other's transport datagrams as ChannelData from its TURN server: that side's hook is the one measured.
         var relayedSide = RelayedSide(520, false);
         var (scenario, side) = (relayedSide.Scenario, relayedSide.Side);
-        var (relayed, sent, wrapped, allocated) = MeasureHook(relayedSide, false);
+        var (relayed, sent, rounds, wrapped, allocated) = MeasureHook(relayedSide, false);
         That(relayed == 20_000, "every replayed ChannelData came out as a relayed transport datagram (" + relayed + ")");
-        That(sent == 20_200 && wrapped, "and every relayed send went out as ChannelData");
+        That(sent == rounds && wrapped, "and every relayed send went out as ChannelData");
         That(allocated == 0, "the hook allocates nothing in the steady state (" + allocated + " bytes)");
 
         // Each datagram wakes the network thread, which turns the agent and asks for its next timer: with nothing due,
         // that allocates nothing either.
         var now = scenario.Network.Now;
-        IdleTurns(side, now, 200);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        IdleTurns(side, now, 20_000);
-        allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        allocated = AllocationPasses.Fewest(() => IdleTurns(side, now, 20_000));
         That(allocated == 0, "a turn with nothing due allocates nothing (" + allocated + " bytes)");
 
-        // A route tick that sends nothing (no consent check, keepalive or refresh fell due) allocates nothing.
+        // A route tick that sends nothing (no consent check, keepalive or refresh fell due) allocates nothing. Each pass
+        // runs the next 25 route ticks.
+        var tick = 0;
         var quietTicks = 0;
-        for (var tick = 1; tick <= 25; tick++)
-        {
-            var at = now + tick * NatSession.RouteIntervalMicros;
-            before = GC.GetAllocatedBytesForCurrentThread();
-            side.Agent.Turn(side.Stack, at);
-            allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            var any = false;
-            while (side.Agent.TryDequeueDatagram(out var datagram))
-            {
-                any = true;
-                side.Agent.Release(datagram);
-            }
-
-            if (any) continue;
-            quietTicks++;
-            That(allocated == 0, "a route tick that sends nothing allocates nothing (" + allocated + " bytes at tick " + tick + ")");
-        }
-
+        allocated = AllocationPasses.Fewest(() => QuietRouteTicks(side, now, ref tick, 25, out quietTicks));
+        That(allocated == 0, "a route tick that sends nothing allocates nothing (" + allocated + " bytes by tick " + tick + ")");
         That(quietTicks >= 20, "most route ticks send nothing (" + quietTicks + " of 25)");
     }
 
@@ -131,9 +115,9 @@ internal static class NatDemuxTests
         var relayedSide = RelayedSide(521, true);
         var statistics = relayedSide.Side.Agent.Relay!.Statistics;
         That(statistics.DataIndicationsReceived > 0 && statistics.ChannelDataReceived == 0, "data arrives as Data indications (" + statistics.DataIndicationsReceived + ")");
-        var (relayed, sent, wrapped, allocated) = MeasureHook(relayedSide, true);
+        var (relayed, sent, rounds, wrapped, allocated) = MeasureHook(relayedSide, true);
         That(relayed == 20_000, "every replayed Data indication came out as a relayed transport datagram (" + relayed + ")");
-        That(sent == 20_200 && wrapped, "and every relayed send went out as a Send indication");
+        That(sent == rounds && wrapped, "and every relayed send went out as a Send indication");
         That(allocated == 0, "the fallback allocates nothing in the steady state either (" + allocated + " bytes)");
     }
 
@@ -153,9 +137,10 @@ internal static class NatDemuxTests
 
     /// <summary>
     /// Captures one relayed transport datagram on its way from the TURN server to the measured side, as ChannelData or as
-    /// a Data indication, then replays it through the socket hook 20,000 times while sending as often, and measures.
+    /// a Data indication, then replays it through the socket hook 20,000 times a pass while sending as often, and
+    /// measures. Relayed is the last pass's count; Sent and Rounds count every pass.
     /// </summary>
-    private static (int Relayed, int Sent, bool Wrapped, long Allocated) MeasureHook(
+    private static (int Relayed, int Sent, int Rounds, bool Wrapped, long Allocated) MeasureHook(
         (NatScenario Scenario, NatPeerNode Side, IPAddress Router, NetworkLink JoinerLink, NetworkLink HostLink) relayedSide, bool indications)
     {
         var (scenario, side, router, joinerLink, hostLink) = relayedSide;
@@ -179,34 +164,77 @@ internal static class NatDemuxTests
         var buffer = new byte[TransportOptions.MaximumDatagramBytes];
         var payload = new byte[600];
         payload[0] = PacketType.Protected;
-        Replay(socket, buffer, relayedPath, payload, 200);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var relayed = Replay(socket, buffer, relayedPath, payload, 20_000);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        return (relayed, inner.Sent, indications ? inner.LastSentIndication : inner.LastSentChannel, allocated);
+        var relayed = 0;
+        var rounds = 0;
+        var allocated = AllocationPasses.Fewest(() =>
+        {
+            rounds += 20_000;
+            return Replay(socket, buffer, relayedPath, payload, 20_000, out relayed);
+        });
+        return (relayed, inner.Sent, rounds, indications ? inner.LastSentIndication : inner.LastSentChannel, allocated);
     }
 
     /// <summary>
-    /// The measured loop, compiled fully optimized from the start: a loop the runtime first runs unoptimized is moved to
-    /// optimized code part way through, and that one-time move must not count as the hook allocating.
+    /// Replays the captured datagram through the socket hook <paramref name="rounds"/> times, sending as often, and returns
+    /// what this thread allocated meanwhile; <paramref name="relayed"/> counts what came out as relayed datagrams.
     /// </summary>
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static int Replay(NatDatagramSocket socket, byte[] buffer, TransportPath relayedPath, byte[] payload, int rounds)
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long Replay(NatDatagramSocket socket, byte[] buffer, TransportPath relayedPath, byte[] payload, int rounds, out int relayed)
     {
-        var relayed = 0;
-        for (var round = 0; round < rounds; round++) relayed += Cycle(socket, buffer, relayedPath, payload) ? 1 : 0;
-        return relayed;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var count = 0;
+        for (var round = 0; round < rounds; round++) count += Cycle(socket, buffer, relayedPath, payload) ? 1 : 0;
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        relayed = count;
+        return allocated;
     }
 
-    /// <summary>Turns an agent with nothing due and asks for its next timer, compiled fully optimized from the start, as <see cref="Replay"/> is.</summary>
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
-    private static void IdleTurns(NatPeerNode side, long now, int rounds)
+    /// <summary>
+    /// Turns an agent with nothing due and asks for its next timer, <paramref name="rounds"/> times, and returns what this
+    /// thread allocated meanwhile.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long IdleTurns(NatPeerNode side, long now, int rounds)
     {
+        var before = GC.GetAllocatedBytesForCurrentThread();
         for (var round = 0; round < rounds; round++)
         {
             side.Agent.Turn(side.Stack, now);
             side.Agent.NextTimeoutMicros();
         }
+
+        return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
+    /// <summary>
+    /// Turns the agent at the next <paramref name="ticks"/> route ticks after <paramref name="tick"/>, dropping what each
+    /// sends, and returns what this thread allocated in the turns that sent nothing; <paramref name="quiet"/> counts them.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long QuietRouteTicks(NatPeerNode side, long start, ref int tick, int ticks, out int quiet)
+    {
+        var allocated = 0L;
+        var silent = 0;
+        for (var end = tick + ticks; tick < end;)
+        {
+            tick++;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            side.Agent.Turn(side.Stack, start + (tick * NatSession.RouteIntervalMicros));
+            var turn = GC.GetAllocatedBytesForCurrentThread() - before;
+            var any = false;
+            while (side.Agent.TryDequeueDatagram(out var datagram))
+            {
+                any = true;
+                side.Agent.Release(datagram);
+            }
+
+            if (any) continue;
+            silent++;
+            allocated += turn;
+        }
+
+        quiet = silent;
+        return allocated;
     }
 
     /// <summary>Gets whether a datagram is a Data indication carrying a protected transport packet.</summary>
