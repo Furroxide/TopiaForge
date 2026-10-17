@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
@@ -55,12 +56,18 @@ namespace TopiaForge.ModManager
             }
         }
 
+        /// <param name="profile">
+        /// Where the context runs: its mod's network class and its execution context. The network decorators the context
+        /// wraps these services in route by it; the Unity-side services later slices build for a context (WS3.6, WS3.7) take
+        /// it from here.
+        /// </param>
         public GameplayContextServices Create(
             string ownerModId,
             string packagePath,
             string dataPath,
             IModLifetime lifetime,
             IModLogger logger,
+            ModNetProfile profile,
             NativeTransitionAccessSlot? transitionAccess = null)
         {
             UnityMainThreadGuard.AssertCurrent();

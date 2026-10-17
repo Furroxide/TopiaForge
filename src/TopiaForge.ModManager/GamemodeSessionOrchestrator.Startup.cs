@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -37,7 +38,8 @@ namespace TopiaForge.ModManager
                         record.Identity.SessionId, () => !record.StopRequested);
                     record.Slots.Add(package.Id, slot);
                     var scope = await record.Snapshot.Contexts[package.Id].CreateChildScopeAsync(record.Identity.SessionId,
-                        record.Cancellation.Token, () => RequestBoundStop(record.Identity.SessionId), slot, dispatcher);
+                        record.Cancellation.Token, () => RequestBoundStop(record.Identity.SessionId), slot, dispatcher,
+                        ScopeContextFor(package.Id, record.Mode.Package.Id));
                     record.Scopes.Add(package.Id, scope);
                 }
                 record.CallerCancellation = callerToken.Register(() => dispatcher.Post(() => RequestBoundStop(record.Identity.SessionId)));
@@ -102,6 +104,14 @@ namespace TopiaForge.ModManager
                 CompleteCommand(record.Start, record.Identity.RequestId, "launch-target", record.Identity.SessionId,
                     launchFailure ?? OperationResult<bool>.Failure(ModErrorCode.Cancelled, "Session startup was cancelled."));
         }
+
+        /// <summary>
+        /// Where a session scope's code runs. The gamemode's package runs the factory's server controller, on the host only,
+        /// even when it also provides the world. Every other package the session selects, the world's and a launch target's
+        /// owner, runs on every peer as a world owner. A joined player's follower (WS3.8) makes its own world-owner scopes.
+        /// </summary>
+        internal static ModExecutionContext ScopeContextFor(string packageId, string gamemodePackageId) =>
+            Same(packageId, gamemodePackageId) ? ModExecutionContext.GamemodeServer : ModExecutionContext.WorldOwner;
 
         private void ThrowIfStopping(SessionRecord record)
         {

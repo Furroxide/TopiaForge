@@ -181,6 +181,31 @@ namespace TopiaForge.ValidTestMod
         }
     }
 
+    /// <summary>
+    /// Spawns one prefab through its context's asset service as it loads, so a test can see the runtime record the spawn
+    /// for a later promotion, and keeps an Update subscription so the frame has a mod to run.
+    /// </summary>
+    public sealed class RuntimeSpawningMod : TopiaForgeMod
+    {
+        protected override void OnLoad()
+        {
+            var spawned = Context.Assets.Spawn(new AssetSpawnRequest(new FixturePrefab(), TransformState.Identity));
+            RuntimeTrace.Write(spawned.Succeeded ? "spawned" : "spawn-failed:" + spawned.ErrorCode);
+            Context.Events.SubscribeUpdate(_ => { });
+        }
+
+        private sealed class FixturePrefab : IPrefabAsset
+        {
+            public string Name => "fixture-prefab";
+
+            public bool IsAlive => true;
+
+            public void Dispose()
+            {
+            }
+        }
+    }
+
     internal static class RuntimeTrace
     {
         public static void Write(string value)

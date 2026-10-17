@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -63,11 +64,14 @@ namespace TopiaForge.ModManager.Tests
         }
 
         public GameplayContextServices Create(string ownerModId, string packagePath, string dataPath,
-            IModLifetime lifetime, IModLogger logger, NativeTransitionAccessSlot? transitionAccess = null)
+            IModLifetime lifetime, IModLogger logger, ModNetProfile profile, NativeTransitionAccessSlot? transitionAccess = null)
         {
-            if (transitionAccess != null) { ChildLifetime = lifetime; Slot = transitionAccess; ScopeFactory?.Invoke(lifetime); }
+            if (transitionAccess != null) { ChildLifetime = lifetime; Slot = transitionAccess; ScopeProfiles.Add(profile); ScopeFactory?.Invoke(lifetime); }
             return GameplayContextServices.Unavailable(lifetime);
         }
+
+        /// <summary>Gets the network profile each session scope's gameplay services were made for, in order.</summary>
+        internal List<ModNetProfile> ScopeProfiles { get; } = new List<ModNetProfile>();
         public RuntimeSessionSnapshot Capture()
         {
             var bindings = new RuntimeBindingSnapshot(Profile.ProfileId, Profile.Revision, Plan.Digest,

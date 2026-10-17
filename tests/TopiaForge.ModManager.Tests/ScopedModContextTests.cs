@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -215,7 +216,7 @@ namespace TopiaForge.ModManager.Tests
             internal readonly List<IModLifetime> Lifetimes = new List<IModLifetime>();
             internal int FailAt; internal int Disposed;
             public GameplayContextServices Create(string ownerModId, string packagePath, string dataPath,
-                IModLifetime lifetime, IModLogger logger, NativeTransitionAccessSlot? transitionAccess = null)
+                IModLifetime lifetime, IModLogger logger, ModNetProfile profile, NativeTransitionAccessSlot? transitionAccess = null)
             {
                 Lifetimes.Add(lifetime);
                 lifetime.Defer(() => Disposed++);

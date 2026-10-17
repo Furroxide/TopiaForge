@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.3 of the live-multiplayer plan) · Date: 2026-10-16 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.3 of the live-multiplayer plan) · Date: 2026-10-17 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -11,7 +11,9 @@ The slice lands in two steps:
 
 1. **The SPI, the provider's implementation and the composition root** (sections 1 to 9).
 2. **The realm and the factory seam** (sections 10 and 11), which use the replication model's `NetRealm` and
-   `ModNetProfile`. Those sections record the design they follow until that step lands.
+   `ModNetProfile`.
+
+Both steps have landed. Section 8 says what each later WS3 slice plugs in where.
 
 ## 1. Shape
 
@@ -21,9 +23,13 @@ The slice lands in two steps:
 | The provider's control, content and join targets | `mods/TopiaForge.Multiplayer/Provider/` |
 | The engine's system channels, readiness holds and world sources | `src/TopiaForge.Multiplayer.Engine/Core/SessionEngine.System.cs`, `SessionEngine.Runtime.cs`, `System/` |
 | The composition root and the runtime host | `src/TopiaForge.ModManager/Multiplayer/` |
+| The replication SPI (section 11) | `src/TopiaForge.Mods.Abstractions/Internal/`, namespace `TopiaForge.Mods.Internal` |
+| The realm, the spawn ledger, the replication seam and the network decorators | `src/TopiaForge.ModManager/Multiplayer/` |
 
-- **Visibility.** Every SPI type is internal. The SDK assembly grants its internals to the provider, ModManager, the
-  test rig and the three test harnesses that use them. Nothing public changes, so the SDK API baselines do not either.
+- **Visibility.** Every SPI type is internal. The multiplayer SDK assembly grants its internals to the provider,
+  ModManager, the test rig and the three test harnesses that use them. The replication SPI lives in the core SDK
+  assembly, which already grants its internals to ModManager and the first-party providers that use it. Nothing public
+  changes, so the SDK API baselines do not either.
 - **Ownership.** The registry reserves the multiplayer SDK assembly's contracts for the multiplayer provider, so only it
   can publish `IInternalMultiplayerControl`. ModManager is the control's only caller; the in-game interface (WS5)
   reaches it through the runtime.
@@ -397,16 +403,34 @@ The frame:
 
 ## 8. What later slices plug in where
 
+The realm (section 10) and the factory seam (section 11) have landed. The rest of WS3, and the slices that build on it,
+plug in here:
+
 | Slice | Plugs in |
 | --- | --- |
-| WS3.1 realm (step 2) | `MultiplayerRuntime` holds the `NetRealm` and checks the realm rules before the control's hosting and joining (section 10) |
-| WS3.3 factory seam (step 2) | `ModNetProfile` through `CoreGameplayServices.Create`, the `Net*Service` decorators and `IRuntimeReplication` (section 11) |
-| WS3.6 network world | `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`; the `WorldReplication` channel, paced by `CanSend` and re-baselined when `GetGeneration` changes; `SetEntityIdentitySource` |
-| WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world |
+| WS3.4 intent tracking | `IntentScope`, fed after the input sample, from UI renderer callbacks, from `OwnerCommandService` and from interaction handlers. `IRuntimeReplication.Route` takes the intent from its caller today; the intent scope makes the current one available to the network decorators and the SPI |
+| WS3.5 core replication model | Landed in Core (`MultiplayerReplicationModel.md`); the slices below drive it |
+| WS3.6 network world | `PromotionCensus`: the scene census (`SceneObjectKeyCensus`) and baselines of the recorded `Spawns` at each promotion. `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`; replicas built through `MultiplayerReplication.TryGetReplicaFactory`; entity references through `MultiplayerReplication.References`; announcing what `RegisterCanonical` records; the `WorldReplication` channel, re-baselined when `GetGeneration` changes; `SetEntityIdentitySource` |
+| WS3.7 authority routing | The `Net*Service` decorators and the SPI's spawn and command stubs, each call routed by `ExecutionRouting.Route(realm, profile, intent)`: spawn adoption, and shadows bound by `NetSpawnOrigin`; `NetEntityMotion` behind `AcquireMotion`; `HeldItemOwnershipTracker` behind `NetItemService`; forwarded commands naming their sender in `InternalCommand.Sender` |
+| WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu |
+| WS3.9 participant realm | Participant scopes through `CreateChildScopeAsync(..., ModExecutionContext.Participant)` |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
-| WS5 interface | `GetStatus`, hosting, joining, targets, `Query`, LAN listings, moderation, and `PreferredDisplayName`, with the host-authored text rules of section 2 |
+| WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references |
+| WS3.12 presentation routing | `NetUiService`, routing each call by `PresentationRoutingPolicy.Route(realm, profile, kind)` |
+| WS3.13 pause and time | `TimeAuthority` and `NativePauseFreezesWorld`; the bridge that publishes the host's time scale and applies it on joined players adds to the SPI |
+| WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority |
+| WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, and `PreferredDisplayName`, with the host-authored text rules of section 2 |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
-| WS5 voice | `IInternalVoiceService` from the provider's voice service, `SubmitCapture` from `PresenceSend`'s capture, and each speaker's `IVoicePlaybackStream` in an audio callback |
+| WS5 voice | `IInternalVoiceService` from the provider's voice service, `SubmitCapture` from `PresenceSend`'s capture, and each speaker's `IVoicePlaybackStream` in an audio callback; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted |
+
+Two rules hold for everything that plugs in:
+
+- **Broadcasts.** A message to everyone goes out through `IInternalSystemChannel.Send`, whose `skipped` list names the
+  players whose window was full; their owner sends each of them a new baseline once `CanSend` to that player says there
+  is room. A broadcast is never gated on `CanSend` for everyone: that is false while any one player's window is full,
+  and waiting on it starves every other player (section 5).
+- **Generations.** A change of a stream's generation, from a rejoin or a replacement, means "start again from a
+  baseline", whatever the owner was in the middle of.
 
 The entity identity and avatar sources are shape only: the session's `TryGetNetworkObjectId`, `TryGetEntity`,
 `TryGetAvatar` and `TryGetPose` ask them once set, on the main thread, and answer no until then. A source that throws
@@ -452,24 +476,170 @@ answers no and is reported.
   type; typed hosts stay inside the handle; what the runtime logs and keeps is redacted, every address form above
   included, and the provider's own log gets the same redacted lines with no runtime attached and behind one that throws;
   and the host's words reach neither a log, through the developer switch or the runtime, nor a mod.
+- **The realm at the runtime** (`MultiplayerRealmRuntimeTests`, and `RuntimeRealmTests` over real providers): the realm
+  follows the provider's role at each pump; opening to multiplayer while a world runs promotes the solo session in
+  place, keeping its session id, and the census baselines the live spawns recorded offline, in order, once per
+  promotion; from the menu the game starts as a host. Every realm, phase and standalone combination for hosting and
+  joining is refused with its verdict and text before the provider hears of it, or reaches the provider; leaving is
+  never refused, from any realm or phase, stops hosting on its way and keeps an earlier hosting failure on record; a
+  missing provider or live sessions switched off is said first; a phase that cannot be read counts as busy; and the
+  census, leaving and phase failures are logged once, redacted. Over a real orchestrator (`MultiplayerRealmPhaseTests`,
+  and the ModRuntime harness), an idle session that is still changing is busy: while the main menu loads after the
+  player left the game, a join and hosting wait, as a launch does, and go through once it has loaded; so do a native
+  scene change, the orchestrator's own operation alone, and shutdown.
+- **The spawn ledger** (`MultiplayerSpawnLedgerTests`): order, liveness, what a host would baseline, describing an entity
+  again in place, descriptions that are refused, the sweep's bound under churn, and offline frames with a thousand
+  records, a solo frame, and a client-local spawn, each allocating nothing.
+- **The decorators** (`NetGameplayServicesTests`): every member of the four passes exactly its arguments to the host's
+  service and returns exactly its result, its exceptions included by reference; parent scopes pass through the
+  decorator; a spawn is recorded only when it succeeds, and a failure to record never reaches the mod.
+- **The profile** (`ModContextNetProfileTests`, the ModRuntime harness): every class of manifest reaches the package
+  context, its gameplay host and its replication seam; scopes take their execution context, and content and discovery
+  scopes inherit theirs; a real launch's scopes are its gamemode server and world owner; a real mod's spawn at load is
+  recorded; and a join is refused while a real session runs, and goes through once it stops.
+- **The replication SPI** (`RuntimeReplicationTests`, `RuntimeReplicationServiceTests`): its enums mirror the runtime's;
+  routes and time authority match the tables in every realm; factories, canonical registration, spawn requests,
+  commands, references and the microphone, with their bounds, refusals and lifetimes.
+- **Its privacy** (`ReplicationSpiPrivacyTests`): no member, parameter or type of the replication SPI (its interfaces, its
+  limits and every internal type they name, transitively), or of the runtime types behind it, is shaped like an address
+  or names a network type, and nothing the realm and the seam log or answer holds one, however many addresses the
+  failures they report carry. Other internal contracts in the namespace, such as the launch contract's session ticket,
+  are held to their own rules.
 
-## 10. The realm (step 2)
+## 10. The realm
 
-The runtime will hold the process's `NetRealm` (`Offline`, `ListenHost` or `Client`) and ask
-`NetRealms.EvaluateTransition` before acting:
+`MultiplayerRuntime` holds the process's `NetRealm` (`Offline`, `ListenHost` or `Client`) and applies the replication
+model's realm rules, `NetRealms.EvaluateTransition`, to every request to go online or to leave
+(`MultiplayerRuntime.Realm.cs`).
 
-- opening to multiplayer mid-session promotes the running solo session in place (`Offline` to `ListenHost`);
-- joining needs an idle local session (`Offline` to `Client` from Idle); a running one first asks "Leave current
-  game?";
-- leaving is never refused.
+- **The realm follows the provider.** `Realm` maps the role the last pump read: a solo session is `Offline`. It changes
+  only at a pump, or when the runtime detaches, and each change is logged once, by name. A request never sets it:
+  hosting and a join start at later pumps, and a join that fails before its link is up never leaves `Offline`.
+- **Requests.** The interface (WS5) asks the runtime, never the control's own hosting and joining:
 
-## 11. The factory seam (step 2)
+  | Request | Realm rule | Then, when the rule allows it |
+  | --- | --- | --- |
+  | `OpenToMultiplayer(settings)` | to `ListenHost` | The control's `StartHosting` |
+  | `Join(target, settings)` | to `Client` | The control's `Join` |
+  | `Leave()` | to `Offline`, never refused | `StopHosting` while hosting, or while hosting starts, then `Leave`, which also stops a join on its way |
 
-`ModNetProfile` will be threaded through `CoreGameplayServices.Create`, `ModContext` and its scopes, with pass-through
-`NetEntityService`, `NetAssetService` (keeping `IParentAssetScope`), `NetItemService` and `NetUiService` decorators that
-change no behaviour yet, and the internal `IInternalReplicationContext` and `IRuntimeReplication` with stubs for the
-later slices' replica factories, canonical registration and spawn requests, command routing, reference resolution, time
-authority and the microphone arbiter.
+  Each answers a `MultiplayerRealmChange`: the rule's verdict and effect, and the control's own result, or the refusal.
+  `EvaluateRealmChange(target)` asks the rule alone, so the interface can ask "Leave current game?" before it acts.
+- **What the rule reads.** The realm, the local session's phase, and whether a standalone mod is loaded. ModRuntime
+  points `SessionPhaseSource` at its gamemode session orchestrator's `RealmPhase`; until the session runtime starts,
+  the session is idle. A phase that cannot be read counts as busy, so nothing goes online on a guess, and its failure is
+  logged once.
+- **Idle means settled.** `RealmPhase` counts an idle session that is still changing as stopping, so the rule says
+  `Busy`: a return to the main menu that has ended the session but still loads the menu, any other operation or native
+  scene change that holds it, and shutdown. The orchestrator refuses to start a session then, and a join replaces the
+  local session, so it waits too. After "Leave current game?", the interface asks again once the menu has loaded.
+- **Refusals**, in this order: a missing provider, or live sessions switched off, first, since no leaving would change
+  them; then the rule's verdict:
+
+  | Refusal | Code | Text |
+  | --- | --- | --- |
+  | No provider, or live sessions switched off, whatever the verdict | `Unavailable` | "Multiplayer is unavailable: the multiplayer provider is not loaded." or "Live multiplayer is switched off in this build." |
+  | `RequiresLeave`, joining while a game runs | `InvalidState` | "Leave the current game before joining another session." |
+  | `RequiresLeave`, between online realms | `InvalidState` | "Stop hosting before joining another session." or "Leave the joined session before hosting." |
+  | `Busy` | `Conflict` | "A game is starting or stopping; try again once it has settled." |
+  | `StandaloneRefused` | `InvalidState` | "Solo refuses multiplayer; disable it to host." (or "to join"), naming three mods at most |
+  | `Unchanged` | `InvalidState` | "This game is already open to other players." or "This game is already in a joined session; leave it before joining another." |
+
+  The provider never hears of a refusal. A refusal of the provider's own, such as a join already in progress, comes back
+  as it is, under the rule's `Allowed`.
+- **Joining needs Idle.** Joining replaces the local session, so while a game runs the runtime refuses with
+  `RequiresLeave`. The interface asks "Leave current game?", stops the local session, and asks again from the menu.
+- **Leaving is never refused**, whatever the realm, the phase or the loaded mods. A host stops hosting and plays on alone
+  in the same session. Stopping hosting only when it runs or starts keeps an earlier hosting failure on record for the
+  interface. A provider that throws while leaving is reported once, redacted, as a failure of its own, never as a
+  refusal, and every step is still tried.
+- **Promotion in place.** Opening to multiplayer while a world session runs promotes it: the provider turns the running
+  solo session into a listen host, keeping its session id, its objects and the mods' state (live sessions, section 18).
+  From the menu the game starts as a host instead.
+- **The census seam.** `PromotionCensus` (`IMultiplayerPromotionCensus`) is the network world's (WS3.6). It is taken
+  once each time this process moves from `Offline` to `ListenHost`, after the pump that shows it hosting and before that
+  frame's world events, with a `MultiplayerPromotion`: `PromoteInPlace` when a world session runs at that moment and
+  `StartAsHost` otherwise, the phase, and the live spawn records in the order they happened. Until a slice fills it, a
+  promotion takes no census and the records stay. A census that throws is logged once until it recovers, and the host's
+  frame goes on.
+- **Spawn-time recording.** `Spawns` (`MultiplayerSpawnLedger`) records SDK spawns and world content when they happen, in
+  every realm and above all offline:
+
+  | Recorded from | Kind | Description |
+  | --- | --- | --- |
+  | `Assets.Spawn` that succeeds, through `NetAssetService` | `asset.prefab` | The spawn request |
+  | `RegisterCanonical` and `RequestSpawn`, from first-party providers | The provider's own | Its `InternalSpawnDescriptor`, world content with its content key |
+
+  Each record keeps a sequence that is never reused, the owning mod, the network profile of the context that made it,
+  what it is, its transform when it was made, its description, and the entity. Only what a listen host would baseline
+  is recorded: a client-local mod's spawns, which are never networked, and a standalone mod's, which never go online,
+  are not, and cost nothing. Registering a recorded entity again describes it in place, keeping its place in the order.
+  A record ends when its entity does: dead records are swept as recording goes on, whenever the ledger reaches twice
+  what was alive at the last sweep, or 64, so it never holds more than that. Recording happens only when something
+  spawns, so an offline frame costs nothing: 10,000 frames with a thousand records allocate zero bytes, through the
+  composition root with and without a solo provider, and through `ModRuntime` with a loaded mod's recorded spawn.
+- **Network classes.** Each loaded package's `ModNetworkClass` comes from its effective manifest
+  (`ModNetworkClasses.Classify`): no multiplayer block and `session` are `Shared`, `client-local` is `ClientLocal`,
+  `server-only` is `ServerOnly`, and `standalone`, a mode that cannot be read and an unsupported schema are
+  `Standalone`. The runtime gives it to each package context's profile (`NetworkClassOf`), answers it for a loaded mod
+  (`TryGetNetworkClass`), and names the loaded standalone mods (`StandaloneMods`) for the rule.
+- **The developer switch** still drives the provider directly (section 2), so its hosting and joining skip the realm
+  rules. It is off by default, and goes when the interface does.
+
+## 11. The factory seam
+
+- **Profiles.** Every mod context carries a `ModNetProfile`: its mod's network class and its execution context.
+
+  | Context | Execution context |
+  | --- | --- |
+  | A package context, made by `ModRuntime.Load` | `Process` |
+  | A session's scope for its gamemode's package, also when that package provides the world | `GamemodeServer` |
+  | A session's scope for any other package it selects: the world's, and a launch target's owner | `WorldOwner` |
+  | A content or discovery scope | Its caller's |
+  | A participant scope (WS3.9) | `Participant` |
+
+  A scope keeps its mod's network class. `CreateChildScopeAsync` takes the execution context, refuses an undefined one,
+  and without one inherits its parent's.
+- **The factory.** `IGameplayContextFactory.Create` receives the profile, so every service a gameplay host makes can
+  know where its context runs; the Unity-side parts later slices make for a context (WS3.6, WS3.7) take it from there.
+  `ModContext` then wraps the host's entity, asset, item and UI services in the network decorators, bound to the
+  context's replication seam, so every gameplay host gets the same seam. The entity service stays inside the lifetime
+  guard, so a stopping context is refused before anything routes.
+- **The decorators.** `NetEntityService`, `NetAssetService`, `NetItemService` and `NetUiService` change no behaviour
+  yet: each member passes exactly its arguments to the host's service and returns exactly its result, its exceptions
+  included. `NetAssetService` keeps `IParentAssetScope`: a scope's decorator hands its host service the parent's own host
+  service, not the parent's decorator, so the host's check of the relationship sees what it saw before, and a host
+  service without parent scopes is left as it was. It also records each spawn that succeeds (section 10). A failure to
+  record is reported once and never reaches the mod, whose spawn succeeded.
+- **The replication SPI.** `IInternalReplicationContext`, which every `ModContext` implements, gives trusted first-party
+  providers their context's `IRuntimeReplication`. A context that does not implement it, such as a test double, is
+  single player. Every member runs on the main thread; a stopping context is refused with `Cancelled`, and a profile
+  that does not run in the current realm, such as a gamemode server on a joined player, with `NotAuthoritative`.
+
+  | Members | Now | From |
+  | --- | --- | --- |
+  | `Realm`, `NetworkClass`, `ExecutionContext` | The runtime's realm and the context's profile | — |
+  | `Route(intent)` | `ExecutionRouting.Route` for the realm, the profile and the given intent | WS3.4 supplies the current intent |
+  | `RegisterReplicaFactory` | Kept, one per kind in the process, never called (stub) | WS3.6 builds replicas through it |
+  | `RegisterCanonical` | Records at once, in every realm | WS3.6 announces on the host; WS3.7 binds shadows on joined players |
+  | `RequestSpawn` | Runs the spawn here and records it, in every realm (stub) | WS3.7 forwards from a joined player, predicts, then adopts or rolls back |
+  | `RegisterCommand`, `SubmitCommand` | Runs the mod's own handler here at once, in every realm (stub) | WS3.7 forwards from a joined player; the host checks the sender |
+  | `TryCreateRef`, `TryResolveRef` | False until a reference source is set (stub) | WS3.6 names entities, WS3.11 players |
+  | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | WS3.13 publishes and applies the host's scale |
+  | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | WS5 feeds the game's recording and holds voice chat's leases |
+
+- **Bounds.** Replica and command kinds are lowercase tokens of at most 64 characters, the same rule as the entity
+  table's, and kinds that start with `asset.` are the runtime's own. Descriptions and command payloads are at most
+  16 KiB and copied in. A world content key is 1 to 256 printable characters, a reference's id 1 to 128, and a
+  microphone reason 1 to 128. A mod's command kinds are its own: two mods may each have a `spawn`, and neither runs
+  the other's. Registrations and microphone leases end with the context's lifetime, or when their lease is disposed.
+- **Microphone.** The game's own recording comes first and is observed, never taken; robot dialogue comes next, and voice
+  chat last. A use is refused with `Conflict` while one that comes before it holds the microphone, naming the holder,
+  and a lease is preempted, and must not capture, while one that comes before it takes the microphone later. Leases of
+  one use coexist.
+- **Privacy.** No member of the replication SPI carries an address: entities and players are named by runtime ids, and
+  every text the realm and the seam write or answer is this game's own, with failures redacted. The architecture test of
+  section 9 holds the SPI and the runtime types behind it to that.
 
 ## 12. Choices the plan leaves open
 
@@ -498,3 +668,21 @@ authority and the microphone arbiter.
   is done.
 - **Bans are listed by id, not by key**, so the interface never holds a player's key.
 - **Voice is null** until the voice lane adapts the provider's voice service to `IInternalVoiceService`.
+- **The realm follows the provider's role** rather than the requests: a request only asks, and the realm moves when the
+  pump shows the provider hosting or joined. A join that fails early therefore never leaves `Offline`, and nothing that
+  reads the realm sees a session that did not happen.
+- **One census seam for both ways of hosting.** The census runs whenever this process becomes a host, with the effect
+  read at that moment rather than at the request: a world may start or stop between the request and the pump that
+  hosts, and the census should describe the session that is actually opened.
+- **Records follow their entities.** The ledger holds a live entity and forgets it once it ends, rather than taking a
+  lease the provider must dispose: spawns end with their mods' lifetimes already, and a lease per spawn would grow the
+  lifetime's list for as long as the mod runs.
+- **The decorators wrap in `ModContext`**, not inside `CoreGameplayServices.Create`, so the Unity host and every test
+  host get the same seam, and the harnesses run it. `Create` still receives the profile.
+- **The microphone arbiter is real**, not a stub: the plan fixes its priority, and an arbiter that always granted would
+  have to be unlearned by the providers that use it.
+- **Kinds that start with `asset.` are the runtime's own**, so no provider can describe what the asset service spawns in
+  a format the runtime's own replicas would not read.
+- **The core SDK assembly's internals were already granted** to ModManager and the first-party providers, so the
+  replication SPI adds no visibility to it. The Core assembly grants its internals to the ModRuntime and multiplayer
+  harnesses, which compile and implement the seam's realm and profile types.

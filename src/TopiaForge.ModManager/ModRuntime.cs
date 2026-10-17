@@ -121,7 +121,10 @@ namespace TopiaForge.ModManager
                     TopiaForgeVersions.LoaderVersion,
                     multiplayerLog,
                     this.coreGameplayServices as IMultiplayerPlatform),
-                multiplayerLog);
+                multiplayerLog)
+            {
+                SessionPhaseSource = CurrentSessionPhase
+            };
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;

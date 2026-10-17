@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager.Tests
@@ -32,8 +33,9 @@ namespace TopiaForge.ModManager.Tests
                 new NativeTransitionAccessSlot("assets-session:assets.mod", "assets-session", () => true), dispatcher);
             HostDispatcherTests.Pump(dispatcher, creation);
             var scope = creation.Result;
-            var parentAssets = (Assets)parent.Assets;
-            var childAssets = (Assets)scope.Context.Assets;
+            // Each context's asset service is the network seam's pass-through decorator around the host's own.
+            var parentAssets = (Assets)((NetAssetService)parent.Assets).Inner;
+            var childAssets = (Assets)((NetAssetService)scope.Context.Assets).Inner;
             var prefab = parentAssets.MakePrefab();
             var result = scope.Context.Assets.Spawn(new AssetSpawnRequest(prefab, TransformState.Identity));
             Assert(result.Succeeded && prefab.IsAlive && parentAssets.Spawned == 0 && childAssets.Spawned == 1,
@@ -52,7 +54,7 @@ namespace TopiaForge.ModManager.Tests
         private sealed class Factory : IGameplayContextFactory
         {
             public GameplayContextServices Create(string owner, string package, string data, IModLifetime lifetime,
-                IModLogger logger, NativeTransitionAccessSlot? slot = null)
+                IModLogger logger, ModNetProfile profile, NativeTransitionAccessSlot? slot = null)
             {
                 var other = GameplayContextServices.Unavailable(lifetime);
                 return new GameplayContextServices(other.Input, other.LocalPlayer, other.Entities, other.Physics,

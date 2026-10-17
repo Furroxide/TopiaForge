@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -25,12 +26,14 @@ namespace TopiaForge.ModRuntime.Tests
             internal bool Disposed;
             internal WorldSpawnPolicy? LastSpawnPolicy;
             internal TaskCompletionSource<OperationResult<WorldReadiness>>? PendingReadiness;
+            internal readonly List<(string Owner, ModNetProfile Profile)> ScopeProfiles = new List<(string, ModNetProfile)>();
             private readonly WorldSceneIdentity scene = new WorldSceneIdentity(451, "GeneratedScene");
             internal void CompleteReadiness() => PendingReadiness!.SetResult(OperationResult<WorldReadiness>.Success(
                 new WorldReadiness(scene, new TransformState(new Vec3(2, 3, 4), Quat.Identity, new Vec3(1, 1, 1)))));
             public GameplayContextServices Create(string ownerModId, string packagePath, string dataPath,
-                IModLifetime lifetime, IModLogger logger, NativeTransitionAccessSlot? transitionAccess = null)
+                IModLifetime lifetime, IModLogger logger, ModNetProfile profile, NativeTransitionAccessSlot? transitionAccess = null)
             {
+                if (transitionAccess != null) ScopeProfiles.Add((ownerModId, profile));
                 var unavailable = GameplayContextServices.Unavailable(lifetime);
                 return new GameplayContextServices(unavailable.Input, unavailable.LocalPlayer, unavailable.Entities,
                     unavailable.Physics, unavailable.Time, unavailable.Scheduler, unavailable.Scenes, unavailable.Interactions,

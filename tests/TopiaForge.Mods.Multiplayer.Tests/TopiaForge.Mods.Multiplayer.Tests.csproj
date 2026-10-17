@@ -25,6 +25,9 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntime.cs" Link="Runtime\MultiplayerRuntime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntime.Realm.cs" Link="Runtime\MultiplayerRuntime.Realm.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRealm.cs" Link="Runtime\MultiplayerRealm.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerSpawnLedger.cs" Link="Runtime\MultiplayerSpawnLedger.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerRuntimeHost.cs" Link="Runtime\MultiplayerRuntimeHost.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentInventory.cs" Link="Runtime\MultiplayerContentInventory.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentAdmission.cs" Link="Runtime\MultiplayerContentAdmission.cs" />

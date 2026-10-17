@@ -4,6 +4,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
@@ -222,7 +223,7 @@ namespace TopiaForge.ModManager
             return builder.ToString();
         }
 
-        /// <summary>One loaded package: its manifest and the hash multiplayer compares it by.</summary>
+        /// <summary>One loaded package: its manifest, its network class and the hash multiplayer compares it by.</summary>
         internal sealed class LoadedPackage
         {
             private string? sha256;
@@ -231,11 +232,21 @@ namespace TopiaForge.ModManager
             {
                 Manifest = manifest;
                 PackagePath = packagePath;
+                NetworkClass = ModNetworkClasses.Classify(manifest);
             }
 
             internal ModManifest Manifest { get; }
 
             internal string PackagePath { get; }
+
+            /// <summary>
+            /// Gets how the package takes part in sessions, from its effective manifest: no multiplayer block is shared
+            /// implicitly, and a mode that cannot be read is standalone, so such a mod never goes online.
+            /// </summary>
+            internal ModNetworkClass NetworkClass { get; }
+
+            /// <summary>Gets the name players see for the package: its manifest's name, or its id without one.</summary>
+            internal string DisplayName => string.IsNullOrWhiteSpace(Manifest.Name) ? Manifest.Id : Manifest.Name.Trim();
 
             /// <summary>
             /// Gets the package hash, read when first needed. Files that cannot be read, as when another program holds one open,
@@ -253,8 +264,7 @@ namespace TopiaForge.ModManager
                     }
                     catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
                     {
-                        var name = string.IsNullOrWhiteSpace(Manifest.Name) ? Manifest.Id : Manifest.Name.Trim();
-                        throw new IOException(name + " " + Manifest.Version + " could not be read to identify it for multiplayer (" + exception.GetType().Name + ").", exception);
+                        throw new IOException(DisplayName + " " + Manifest.Version + " could not be read to identify it for multiplayer (" + exception.GetType().Name + ").", exception);
                     }
 
                     return sha256;

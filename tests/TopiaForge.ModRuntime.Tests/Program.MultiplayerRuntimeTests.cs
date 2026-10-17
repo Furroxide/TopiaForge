@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -21,6 +22,8 @@ namespace TopiaForge.ModRuntime.Tests
             TestMultiplayerFrameOrder(root);
             TestMultiplayerOfflineFrameAllocatesNothing(root);
             TestMultiplayerFollowsTheRuntimeLifecycle(root);
+            TestMultiplayerRealmAndFactorySeam(root);
+            TestTheRealmWaitsForTheMainMenu(root);
             Console.WriteLine("ModRuntime multiplayer composition tests passed.");
         }
 
@@ -142,7 +145,10 @@ namespace TopiaForge.ModRuntime.Tests
             return GC.GetAllocatedBytesForCurrentThread() - before;
         }
 
-        /// <summary>A gameplay host that raises LateUpdate on demand and keeps a background setting, as the Unity one does.</summary>
+        /// <summary>
+        /// A gameplay host that raises LateUpdate on demand and keeps a background setting, as the Unity one does. It records
+        /// the network profile each context is made with, and its asset service spawns whatever a mod asks for.
+        /// </summary>
         private sealed class MultiplayerFrameHost : IRuntimeGameplayHost, IMultiplayerPlatform
         {
             public event Action<GameTimeSample>? FixedUpdate { add { } remove { } }
@@ -151,14 +157,23 @@ namespace TopiaForge.ModRuntime.Tests
 
             public bool RunInBackground { get; set; } = true;
 
+            internal System.Collections.Generic.List<(string Owner, ModNetProfile Profile, bool Scoped)> Made { get; } =
+                new System.Collections.Generic.List<(string, ModNetProfile, bool)>();
+
             public GameplayContextServices Create(
                 string ownerModId,
                 string packagePath,
                 string dataPath,
                 IModLifetime lifetime,
                 IModLogger logger,
-                NativeTransitionAccessSlot? transitionAccess = null) =>
-                GameplayContextServices.Unavailable(lifetime);
+                ModNetProfile profile,
+                NativeTransitionAccessSlot? transitionAccess = null)
+            {
+                Made.Add((ownerModId, profile, transitionAccess != null));
+                var other = GameplayContextServices.Unavailable(lifetime);
+                return new GameplayContextServices(other.Input, other.LocalPlayer, other.Entities, other.Physics, other.Time, other.Scheduler,
+                    other.Scenes, other.Interactions, other.Items, new SpawningAssets(lifetime), other.Audio, other.Ui, other.UnityInterop, other.SceneTransitions);
+            }
 
             public GameTimeSample BeginFrame(float deltaTime) => new GameTimeSample(GameLoopPhase.Frame, deltaTime, deltaTime, 0d, 0);
 
