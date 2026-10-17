@@ -18,7 +18,6 @@ namespace TopiaForge.Multiplayer
     {
         private const string LiveOff = "Live multiplayer is switched off in this build.";
         private const string NoRuntime = "The TopiaForge runtime has not attached to multiplayer yet.";
-        private const string ServiceTargets = "Invites and listed servers need the TopiaForge service, which this build does not reach yet.";
 
         private readonly MultiplayerProvider provider;
         private readonly SessionEngine engine;
@@ -75,6 +74,7 @@ namespace TopiaForge.Multiplayer
             content.Runtime = runtime;
             content.Report = diagnostics.Report;
             diagnostics.Runtime = runtime;
+            ConfigureService(runtime);
 
             // The identity loads off the main thread, so a join the player starts later can begin at once.
             live?.PrepareAsync();
@@ -138,6 +138,8 @@ namespace TopiaForge.Multiplayer
                 }
             }
 
+            // Public and invite-only sessions are found through the TopiaForge service; without one, only the LAN can find them.
+            if (LacksService(settings.Visibility)) return Fail(ModErrorCode.Unavailable, NoService);
             HostSettings host;
             try
             {
@@ -145,6 +147,7 @@ namespace TopiaForge.Multiplayer
                 {
                     Password = settings.Password,
                     AllowDirect = settings.AllowDirect,
+                    MapPorts = settings.RouterForwarding,
                     Voice = settings.Voice,
                     Gamemode = settings.Gamemode,
                     World = settings.World
@@ -192,7 +195,7 @@ namespace TopiaForge.Multiplayer
             if (live!.Host != null || live.HostPhase == HostPhase.Preparing) return Fail(ModErrorCode.InvalidState, "Stop hosting before joining another session.");
             if (pendingJoin != null || (live.Join != null && live.Join.Phase != JoinPhase.Ended)) return Fail(ModErrorCode.InvalidState, "A join is already in progress.");
             if (!(target is ProviderJoinTarget providerTarget)) return Fail(ModErrorCode.InvalidArgument, "The join target was not made by this provider.");
-            if (providerTarget.NetworkTarget == null) return Fail(ModErrorCode.Unavailable, ServiceTargets);
+            if (providerTarget.NetworkTarget.NeedsService && live.Services == null) return Fail(ModErrorCode.Unavailable, NoService);
             var name = settings.DisplayName ?? runtime!.DisplayName;
             if (!WireText.IsDisplayText(name, InternalJoinSettings.MaximumDisplayNameLength))
             {

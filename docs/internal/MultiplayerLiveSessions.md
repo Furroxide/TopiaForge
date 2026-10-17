@@ -571,3 +571,5 @@ These choices differ from the plan:
   records it.
 - **Driving it.** The developer switch stands in for the interface until WS5, which drives live sessions through the
   internal control instead.
+- **Internet sessions.** Public and invite-only hosting, invites and listed servers go through the TopiaForge service,
+  with NAT traversal and the relay: `MultiplayerInternetSessions.md`.

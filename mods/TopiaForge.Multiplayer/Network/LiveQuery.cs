@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using TopiaForge.Multiplayer.ControlPlane;
 using TopiaForge.Multiplayer.Engine;
 using TopiaForge.Multiplayer.Transport;
 
@@ -8,7 +9,10 @@ namespace TopiaForge.Multiplayer.Network
 {
     /// <summary>
     /// The checks a resolved target must pass before anything connects to it, in order: the game build, the protocol's
-    /// major version, the path against the player's privacy choice, and the content. A join and a query share them.
+    /// major version, the path against the player's privacy choice, and the content. A join and a query share them. A
+    /// target the TopiaForge service found has no path; its privacy check is the relay's: a relay-only player, or a host
+    /// that hides its address, needs the relay, and while the service says it is unavailable the join stops here rather
+    /// than ever trying a direct path.
     /// </summary>
     internal static class JoinChecks
     {
@@ -35,7 +39,14 @@ namespace TopiaForge.Multiplayer.Network
                 return LiveFailure.ProtocolMismatch;
             }
 
-            if (resolved.Path!.Kind == TransportPathKind.Direct && !allowDirect)
+            var route = resolved.Route;
+            if (route != null && !route.RelayAvailable && (!allowDirect || route.HostRelayOnly))
+            {
+                detail = InternetFailures.Detail(LiveFailure.RelayUnavailable, !route.HostRelayOnly);
+                return LiveFailure.RelayUnavailable;
+            }
+
+            if (route == null && resolved.Path!.Kind == TransportPathKind.Direct && !allowDirect)
             {
                 detail = DirectNotAllowedDetail;
                 return LiveFailure.DirectNotAllowed;

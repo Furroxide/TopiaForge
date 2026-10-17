@@ -280,6 +280,8 @@ internal static class RuntimeAdmissionTests
         public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
 
         public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => inner.ReportDiagnostic(diagnostic);
+
+        public string? ServiceOrigin => inner.ServiceOrigin;
     }
 
     /// <summary>A runtime whose admission check fails, as a bug in it would.</summary>
@@ -307,5 +309,7 @@ internal static class RuntimeAdmissionTests
         public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
 
         public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => inner.ReportDiagnostic(diagnostic);
+
+        public string? ServiceOrigin => inner.ServiceOrigin;
     }
 }

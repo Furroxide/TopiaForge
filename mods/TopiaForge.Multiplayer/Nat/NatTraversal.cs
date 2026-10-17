@@ -31,12 +31,18 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <param name="expectedHostKey">The host's transport key from its verified descriptor; the handshake refuses any other.</param>
         internal static NatJoin Start(INetworkControl network, NatPlumbing nat, NatSessionPlan plan, byte[]? expectedHostKey)
         {
-            if (network == null) throw new ArgumentNullException(nameof(network));
             if (nat == null) throw new ArgumentNullException(nameof(nat));
+            return Start(network, nat.Agent, plan, expectedHostKey);
+        }
+
+        /// <summary>Starts a join on the agent of a network the NAT layer already shares, as the live flows build it.</summary>
+        internal static NatJoin Start(INetworkControl network, NatAgent agent, NatSessionPlan plan, byte[]? expectedHostKey)
+        {
+            if (network == null) throw new ArgumentNullException(nameof(network));
+            if (agent == null) throw new ArgumentNullException(nameof(agent));
             if (plan == null) throw new ArgumentNullException(nameof(plan));
             var attempt = new ConnectAttempt();
             var key = expectedHostKey == null ? null : (byte[])expectedHostKey.Clone();
-            var agent = nat.Agent;
             agent.Adopt(attempt);
             network.Post((stack, now) =>
             {
@@ -89,10 +95,16 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// <param name="mapper">The port mapper to use; null builds the production one.</param>
         internal static NatHost Start(INetworkControl network, NatPlumbing nat, NatSessionPlan plan, bool mapPorts, PortMapper? mapper = null)
         {
-            if (network == null) throw new ArgumentNullException(nameof(network));
             if (nat == null) throw new ArgumentNullException(nameof(nat));
+            return Start(network, nat.Agent, plan, mapPorts, mapper);
+        }
+
+        /// <summary>Starts hosting on the agent of a network the NAT layer already shares, as the live flows build it.</summary>
+        internal static NatHost Start(INetworkControl network, NatAgent agent, NatSessionPlan plan, bool mapPorts, PortMapper? mapper = null)
+        {
+            if (network == null) throw new ArgumentNullException(nameof(network));
+            if (agent == null) throw new ArgumentNullException(nameof(agent));
             if (plan == null) throw new ArgumentNullException(nameof(plan));
-            var agent = nat.Agent;
             var candidate = mapPorts && !agent.Options.RelayOnly && plan.LocalPort > 0 ? mapper ?? PortMapper.CreateDefault() : null;
             network.Post((stack, now) =>
             {

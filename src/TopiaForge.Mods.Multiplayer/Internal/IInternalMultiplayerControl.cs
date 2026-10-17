@@ -85,7 +85,8 @@ namespace TopiaForge.Mods.Internal
 
         /// <summary>
         /// Looks a server up without joining it: its verified description and whether this game's content fits. Unless
-        /// <paramref name="allowDirect"/>, nothing beyond the local network is contacted.
+        /// <paramref name="allowDirect"/>, no host beyond the local network is contacted. An invite or a listed server is
+        /// looked up through the TopiaForge service alone, which never connects to the host.
         /// </summary>
         IInternalServerQuery Query(IInternalJoinTarget target, bool allowDirect);
 
@@ -154,6 +155,19 @@ namespace TopiaForge.Mods.Internal
 
         /// <summary>Gets the provider's counters, for diagnostics. They name participants and channels, never addresses.</summary>
         InternalMultiplayerStatistics GetStatistics();
+
+        /// <summary>
+        /// Creates another invite for the session this player hosts through the TopiaForge service, and makes it the one
+        /// <see cref="InternalLiveStatus.Internet"/> shows once the service answers. Earlier invites keep working until they
+        /// expire or are withdrawn. Host only; refused while the session is not registered with the service.
+        /// </summary>
+        OperationResult<bool> CreateInvite();
+
+        /// <summary>
+        /// Withdraws the invite <paramref name="code"/> names. Nobody can join with it again, and players who joined with it
+        /// lose their relay when its credential next renews, within ten minutes, as the service ends their tickets. Host only.
+        /// </summary>
+        OperationResult<bool> RevokeInvite(string code);
     }
 
     /// <summary>One readiness hold. Disposing it releases the hold; disposing it again does nothing.</summary>

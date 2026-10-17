@@ -44,8 +44,9 @@ namespace TopiaForge.Multiplayer
             if (live != null)
             {
                 Live = new LiveSessions(engine, live.Files, live.Content, live.Factory ?? new SocketNetworkFactory(this.clockMicros), this.clockMicros,
-                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver, live.TransportOptions);
+                    () => DateTimeOffset.UtcNow.ToUnixTimeSeconds(), providerModId, live.Resolver, live.TransportOptions, live.NatOptions);
                 if (live.JoinTimings != null) Live.JoinTimings = live.JoinTimings;
+                Live.Services = live.Services;
             }
         }
 
@@ -253,5 +254,17 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets or sets how long joins wait for their hosts; null uses the production waits.</summary>
         internal LiveJoinTimings? JoinTimings { get; set; }
+
+        /// <summary>
+        /// Gets or sets how the TopiaForge service is reached, for tests that put a fake one behind it. Null leaves it to the
+        /// configured origin, from the session launch or the manager's configuration, once the runtime attaches.
+        /// </summary>
+        internal ControlPlane.InternetServices? Services { get; set; }
+
+        /// <summary>
+        /// Gets or sets what every NAT agent the live flows build starts from; each flow sets only its own privacy on it.
+        /// Null uses the production defaults.
+        /// </summary>
+        internal System.Func<NatTraversal.NatAgentOptions>? NatOptions { get; set; }
     }
 }

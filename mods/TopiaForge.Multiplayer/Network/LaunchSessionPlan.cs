@@ -8,7 +8,7 @@ namespace TopiaForge.Multiplayer.Network
     {
         None = 0,
 
-        /// <summary>Invites and Internet listings are found through the control plane, which this provider cannot reach yet.</summary>
+        /// <summary>Invites and Internet listings are found through the control plane, and the ticket named no service origin for it.</summary>
         NeedsService = 1,
 
         /// <summary>The ticket does not describe a host or a join this provider knows.</summary>
@@ -24,6 +24,8 @@ namespace TopiaForge.Multiplayer.Network
     /// and never falls back to trust on first use. The join must also refuse a descriptor whose SHA-256 is not
     /// <see cref="ExpectedDescriptorSha256"/>, as admission changed.</item>
     /// <item>Passwords are typed in game: a host with <see cref="PasswordRequired"/> asks for one before it opens.</item>
+    /// <item>An invite or an Internet listing is found through the TopiaForge service at <see cref="ServiceOrigin"/>, which the
+    /// launcher names in the request; an invite stays pinned to the server the launcher verified.</item>
     /// <item>The plan names the target's address only inside the network layer; <see cref="ToString"/> never shows it.</item>
     /// </list>
     /// </summary>
@@ -44,6 +46,7 @@ namespace TopiaForge.Multiplayer.Network
             ExpectedDescriptorSha256 = ticket.Target?.DescriptorSha256;
             ExpectedPackageDigest = ticket.Target?.PackageDigest;
             DevInstanceIndex = ticket.DevInstanceIndex;
+            ServiceOrigin = ticket.ServiceOrigin;
         }
 
         internal string IntentId { get; }
@@ -60,6 +63,9 @@ namespace TopiaForge.Multiplayer.Network
         internal string? ExpectedDescriptorSha256 { get; }
         internal string? ExpectedPackageDigest { get; }
         internal int DevInstanceIndex { get; }
+
+        /// <summary>Gets the TopiaForge service's origin the launcher named for this session, or null when it named none.</summary>
+        internal string? ServiceOrigin { get; }
 
         /// <summary>Maps <paramref name="ticket"/>; null with the reason when it cannot be planned yet.</summary>
         internal static LaunchSessionPlan? FromTicket(LaunchSessionTicket? ticket, out LaunchSessionUnsupported unsupported)
@@ -84,6 +90,12 @@ namespace TopiaForge.Multiplayer.Network
                         break;
                     case "listing" when target.Source == "lan":
                         joinTarget = JoinTarget.Lan(target.ServerId);
+                        break;
+                    case "invite" when ticket.ServiceOrigin != null:
+                        joinTarget = JoinTarget.Invite(target.InviteCode!, target.ServerId);
+                        break;
+                    case "listing" when ticket.ServiceOrigin != null:
+                        joinTarget = JoinTarget.Listed(target.ServerId);
                         break;
                     case "invite":
                     case "listing":

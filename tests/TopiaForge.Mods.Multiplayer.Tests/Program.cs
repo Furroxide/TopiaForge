@@ -7,6 +7,12 @@ internal static class Program
         try
         {
             HarnessOptions.Parse(args);
+            if (HarnessOptions.Staging)
+            {
+                StagingSpike.Run();
+                return 0;
+            }
+
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
             SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
             SdkContractCompletionTests.PresentationTargetsSelectExactRecipients();
@@ -436,6 +442,17 @@ internal static class Program
             NatHostilePeerTests.WarmSessionsNeverKeepAJoinerOut();
             NatHostilePeerTests.ASessionStillCheckingNeverMakesWay();
             NatHostilePeerTests.AnAllocationBeingReplacedGivesUpAnEndedSessionsClaims();
+            ControlPlaneClientTests.RequestsAndAnswersMatchTheRecordedExchanges();
+            ControlPlaneClientTests.TheWireCarriesTheRecordedRequests();
+            ControlPlaneClientTests.ErrorsReadByTheirCodeAndStatusOnly();
+            ControlPlaneClientTests.SuccessfulAnswersAreReadStrictly();
+            ControlPlaneHttpTests.OversizedAnswersStopAtTheirBound();
+            ControlPlaneHttpTests.MalformedAnswersAreRefused();
+            ControlPlaneHttpTests.RedirectsAreNeverFollowed();
+            ControlPlaneHttpTests.SlowAndSilentServicesMeetTheDeadline();
+            ControlPlaneHttpTests.TlsVerifiesTheOriginsName();
+            ControlPlaneHttpTests.NoProxyIsEverAsked();
+            ControlPlaneHttpTests.HostileAnswersNeverThrow();
             FuzzLedger.Print();
             SystemChannelTests.SystemMessagesTravelBothWaysInOrder();
             SystemChannelTests.MessagesFromAnEarlierSessionAreDropped();
@@ -546,6 +563,27 @@ internal static class Program
             VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
             ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
             ParticipantListFuzzTests.EverySnapshotShowsTheListOfTheHostThatSentIt();
+            ControlPlaneFakeTests.TheFakeServiceAnswersAsTheRecordingsDo();
+            InternetConfigurationTests.ALanHostNeverContactsTheService();
+            InternetConfigurationTests.ASessionLaunchsOriginComesFirst();
+            InternetConfigurationTests.ALaunchToAnInviteOrAListingGoesThroughTheService();
+            InternetConfigurationTests.SignalingNeverAsksAProxy();
+            InternetHostingTests.HeartbeatsKeepTheListingAndALapseRegistersAgain();
+            InternetHostingTests.RateLimitsAndRefusalsBackOffAndNameTheirCause();
+            InternetHostingTests.HostileAnswersNeverBreakTheHost();
+            InternetHostingTests.InvitesAreMadeAndWithdrawnThroughTheSpi();
+            InternetHostingTests.TheDescriptorFollowsTheSessionsWorld();
+            InternetSessionTests.AnInvitedJoinerReachesTheHostRelayOnlyThroughSymmetricNats();
+            InternetSessionTests.ADirectUpgradeHappensOnlyWhenTheJoinerChoseIt();
+            InternetSessionTests.AHostThatQuitsTakesItsListingWithIt();
+            InternetSessionTests.StoppingHostingDeletesTheListingAndPlaysOn();
+            InternetSessionTests.ALostLinkReconnectsThroughTheServiceWithinTheGrace();
+            InternetFailureTests.RelayOnlyIsHonouredWhenTheRelayIsUnavailable();
+            InternetFailureTests.JoinFailuresNameTheirCause();
+            InternetFailureTests.WithoutAServiceNothingIsContacted();
+            InternetFailureTests.ServiceOutcomesMapToTheirOwnCodes();
+            InternetPrivacyTests.NothingTheInternetFlowsReportNamesAnAddress();
+            InternetPrivacyTests.TheClientsTypesPrintOnlyTheirKind();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
