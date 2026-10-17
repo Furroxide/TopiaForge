@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods;
@@ -215,22 +216,18 @@ namespace TopiaForge.ModRuntime.Tests
                 var fixedSample = new GameTimeSample(GameLoopPhase.Fixed, 0.02f, 0.02f, 1d, 1);
                 var lateSample = new GameTimeSample(GameLoopPhase.Late, 0.016f, 0.016f, 1d, 1);
 
-                for (var index = 0; index < 32; index++)
+                // The dispatch loop runs in a method of its own, once unmeasured and then up to three times, and the
+                // fewest bytes count. Work the runtime does on this thread while code first runs, such as compiling it or
+                // moving the long loop to optimized code part way through, happens once, while an allocation in dispatch
+                // shows in every pass.
+                RaiseFrames(context, fixedSample, lateSample, 10_000);
+                var frames = 10_000;
+                var allocated = long.MaxValue;
+                for (var pass = 0; pass < 3 && allocated != 0; pass++)
                 {
-                    context.RaiseUpdate(0.016f);
-                    context.RaiseFixedUpdate(fixedSample);
-                    context.RaiseLateUpdate(lateSample);
+                    allocated = Math.Min(allocated, RaiseFrames(context, fixedSample, lateSample, 10_000));
+                    frames += 10_000;
                 }
-
-                _ = GC.GetAllocatedBytesForCurrentThread();
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                for (var index = 0; index < 10_000; index++)
-                {
-                    context.RaiseUpdate(0.016f);
-                    context.RaiseFixedUpdate(fixedSample);
-                    context.RaiseLateUpdate(lateSample);
-                }
-                var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
                 if (allocated != 0)
                 {
@@ -238,15 +235,30 @@ namespace TopiaForge.ModRuntime.Tests
                         "ModRuntime integration test failed: hot-loop event dispatch allocated " + allocated + " bytes");
                 }
 
-                Assert(probe.UpdateCalls == 10_032
-                    && probe.FixedCalls == 10_032
-                    && probe.LateCalls == 10_032,
+                Assert(probe.UpdateCalls == frames
+                    && probe.FixedCalls == frames
+                    && probe.LateCalls == frames,
                     "allocation measurement should still invoke every healthy hot-loop subscriber");
             }
             finally
             {
                 context.DisposeLifetime();
             }
+        }
+
+        /// <summary>Raises <paramref name="count"/> update, fixed-update and late-update frames and returns what this thread allocated meanwhile.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static long RaiseFrames(ModContext context, GameTimeSample fixedSample, GameTimeSample lateSample, int count)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < count; index++)
+            {
+                context.RaiseUpdate(0.016f);
+                context.RaiseFixedUpdate(fixedSample);
+                context.RaiseLateUpdate(lateSample);
+            }
+
+            return GC.GetAllocatedBytesForCurrentThread() - before;
         }
 
         private static ModContext CreateEventTestContext(string root, string name, IModLogger logger)

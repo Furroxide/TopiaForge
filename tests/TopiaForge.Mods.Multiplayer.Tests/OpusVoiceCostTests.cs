@@ -1,6 +1,7 @@
 extern alias provider;
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using ConcentusApplication = provider::TopiaForge.Multiplayer.ThirdParty.Concentus.Enums.OpusApplication;
 using ConcentusBandwidth = provider::TopiaForge.Multiplayer.ThirdParty.Concentus.Enums.OpusBandwidth;
 using ConcentusDecoder = provider::TopiaForge.Multiplayer.ThirdParty.Concentus.Structs.OpusDecoder;
@@ -8,6 +9,8 @@ using ConcentusEncoder = provider::TopiaForge.Multiplayer.ThirdParty.Concentus.S
 using ConcentusSignal = provider::TopiaForge.Multiplayer.ThirdParty.Concentus.Enums.OpusSignal;
 using OpusToc = provider::TopiaForge.Multiplayer.Voice.OpusToc;
 using OpusVoiceCodec = provider::TopiaForge.Multiplayer.Voice.OpusVoiceCodec;
+using OpusVoiceDecoder = provider::TopiaForge.Multiplayer.Voice.OpusVoiceDecoder;
+using OpusVoiceEncoder = provider::TopiaForge.Multiplayer.Voice.OpusVoiceEncoder;
 using SpeexResampler = provider::TopiaForge.Multiplayer.ThirdParty.Concentus.Common.SpeexResampler;
 using static TopiaForge.Mods.Multiplayer.Tests.OpusVoiceCodecTests;
 
@@ -45,41 +48,16 @@ internal static class OpusVoiceCostTests
     {
         // The vendored codec allocates scratch arrays for every frame, as upstream does. The wrapper must add nothing:
         // the same frames through the bare Concentus objects, configured as documented, allocate exactly as much and
-        // produce exactly the same bytes.
-        var speech = VoiceTestSignal.Voiced(Frame * 80);
-        var codec = new OpusVoiceCodec();
-        var wrapped = codec.CreateEncoder();
-        var bare = BareEncoder();
-        var wrappedDecoder = codec.CreateDecoder();
-        var bareDecoder = BareDecoder();
-        var wrappedPacket = new byte[OpusVoiceCodec.MaximumPacketLength];
-        var barePacket = new byte[OpusVoiceCodec.MaximumPacketLength];
-        var wrappedFrame = new short[Frame];
-        var bareFrame = new short[Frame];
-        long wrappedBytes = 0;
-        long bareBytes = 0;
-        for (var index = 0; index < 80; index++)
+        // produce exactly the same bytes. A pass codes 60 frames both ways and counts how far the two ways differ.
+        var speech = VoiceTestSignal.Voiced(Frame * 60);
+        var sideBySide = new SideBySide(new OpusVoiceCodec());
+        var (wrappedBytes, bareBytes) = (0L, 0L);
+        var difference = AllocationPasses.Fewest(() =>
         {
-            var input = speech.AsSpan(index * Frame, Frame);
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            var wrappedLength = wrapped.Encode(input, wrappedPacket);
-            var middle = GC.GetAllocatedBytesForCurrentThread();
-            var bareLength = bare.Encode(input, Frame, barePacket, OpusVoiceCodec.MaximumPacketLength);
-            var after = GC.GetAllocatedBytesForCurrentThread();
-            Assert(wrappedPacket.AsSpan(0, wrappedLength).SequenceEqual(barePacket.AsSpan(0, bareLength)),
-                "the wrapper applies exactly the documented encoder settings");
-            var decodeStart = GC.GetAllocatedBytesForCurrentThread();
-            Assert(wrappedDecoder.Decode(wrappedPacket.AsSpan(0, wrappedLength), wrappedFrame), "the wrapped decoder decodes");
-            var decodeMiddle = GC.GetAllocatedBytesForCurrentThread();
-            bareDecoder.Decode(barePacket.AsSpan(0, bareLength), bareFrame, Frame, false);
-            var decodeEnd = GC.GetAllocatedBytesForCurrentThread();
-            Assert(wrappedFrame.AsSpan().SequenceEqual(bareFrame), "the wrapped decoder matches the bare one");
-            if (index < 20) continue;
-            wrappedBytes += (middle - before) + (decodeMiddle - decodeStart);
-            bareBytes += (after - middle) + (decodeEnd - decodeMiddle);
-        }
-
-        Assert(wrappedBytes == bareBytes,
+            (wrappedBytes, bareBytes) = sideBySide.Code(speech);
+            return Math.Abs(wrappedBytes - bareBytes);
+        });
+        Assert(difference == 0,
             "the wrapper allocates nothing beyond the vendored codec (wrapper " + wrappedBytes + " B, bare " + bareBytes + " B over 60 frames)");
     }
 
@@ -258,5 +236,56 @@ internal static class OpusVoiceCostTests
         state ^= state >> 17;
         state ^= state << 5;
         return state;
+    }
+
+    /// <summary>The wrapper's encoder and decoder beside bare Concentus ones configured as documented, coding the same frames.</summary>
+    private sealed class SideBySide
+    {
+        private readonly OpusVoiceEncoder wrapped;
+        private readonly ConcentusEncoder bare = BareEncoder();
+        private readonly OpusVoiceDecoder wrappedDecoder;
+        private readonly ConcentusDecoder bareDecoder = BareDecoder();
+        private readonly byte[] wrappedPacket = new byte[OpusVoiceCodec.MaximumPacketLength];
+        private readonly byte[] barePacket = new byte[OpusVoiceCodec.MaximumPacketLength];
+        private readonly short[] wrappedFrame = new short[Frame];
+        private readonly short[] bareFrame = new short[Frame];
+
+        internal SideBySide(OpusVoiceCodec codec)
+        {
+            wrapped = codec.CreateEncoder();
+            wrappedDecoder = codec.CreateDecoder();
+        }
+
+        /// <summary>
+        /// Codes every frame of <paramref name="speech"/> both ways, checking that the two agree byte for byte, and returns
+        /// what each way allocated on this thread.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal (long Wrapped, long Bare) Code(short[] speech)
+        {
+            long wrappedBytes = 0;
+            long bareBytes = 0;
+            for (var offset = 0; offset < speech.Length; offset += Frame)
+            {
+                var input = speech.AsSpan(offset, Frame);
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                var wrappedLength = wrapped.Encode(input, wrappedPacket);
+                var middle = GC.GetAllocatedBytesForCurrentThread();
+                var bareLength = bare.Encode(input, Frame, barePacket, OpusVoiceCodec.MaximumPacketLength);
+                var after = GC.GetAllocatedBytesForCurrentThread();
+                Assert(wrappedPacket.AsSpan(0, wrappedLength).SequenceEqual(barePacket.AsSpan(0, bareLength)),
+                    "the wrapper applies exactly the documented encoder settings");
+                var decodeStart = GC.GetAllocatedBytesForCurrentThread();
+                Assert(wrappedDecoder.Decode(wrappedPacket.AsSpan(0, wrappedLength), wrappedFrame), "the wrapped decoder decodes");
+                var decodeMiddle = GC.GetAllocatedBytesForCurrentThread();
+                bareDecoder.Decode(barePacket.AsSpan(0, bareLength), bareFrame, Frame, false);
+                var decodeEnd = GC.GetAllocatedBytesForCurrentThread();
+                Assert(wrappedFrame.AsSpan().SequenceEqual(bareFrame), "the wrapped decoder matches the bare one");
+                wrappedBytes += (middle - before) + (decodeMiddle - decodeStart);
+                bareBytes += (after - middle) + (decodeEnd - decodeMiddle);
+            }
+
+            return (wrappedBytes, bareBytes);
+        }
     }
 }

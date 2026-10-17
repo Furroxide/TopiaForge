@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager;
 using TopiaForge.Mods.Internal;
 using provider::TopiaForge.Multiplayer.Network;
@@ -95,21 +96,7 @@ internal static class RuntimeCompositionTests
             }
 
             That(peer.Provider.Live.IsReady, "the identity loads off the main thread");
-            for (var index = 0; index < 64; index++)
-            {
-                network.RunFor(FrameMicros);
-                peer.Frame();
-            }
-
-            var idle = 0L;
-            for (var index = 0; index < 10_000; index++)
-            {
-                network.RunFor(FrameMicros);
-                var before = GC.GetAllocatedBytesForCurrentThread();
-                peer.Frame();
-                idle += GC.GetAllocatedBytesForCurrentThread() - before;
-            }
-
+            var idle = AllocationPasses.Fewest(() => IdleFrames(network, peer, 10_000));
             That(idle == 0, "an idle live provider's frame allocates nothing (" + idle + " bytes)");
         }
         finally
@@ -128,12 +115,33 @@ internal static class RuntimeCompositionTests
         runtime.BeforeModsLateUpdate(new GameTimeSample(GameLoopPhase.Late, 0.016f, 0.016f, 0d, 0));
     }
 
-    private static long Measure(Action frame)
+    private static long Measure(Action frame) => AllocationPasses.Fewest(() => Frames(frame, 10_000));
+
+    /// <summary>Runs <paramref name="count"/> frames and returns what this thread allocated meanwhile.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long Frames(Action frame, int count)
     {
-        for (var index = 0; index < 64; index++) frame();
-        _ = GC.GetAllocatedBytesForCurrentThread();
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var index = 0; index < 10_000; index++) frame();
+        for (var index = 0; index < count; index++) frame();
         return GC.GetAllocatedBytesForCurrentThread() - before;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="count"/> frames of an idle live provider, with the virtual network's bookkeeping between them,
+    /// and returns what this thread allocated in the frames alone.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long IdleFrames(VirtualDatagramNetwork network, ControlPeer peer, int count)
+    {
+        var allocated = 0L;
+        for (var index = 0; index < count; index++)
+        {
+            network.RunFor(FrameMicros);
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            peer.Frame();
+            allocated += GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        return allocated;
     }
 }

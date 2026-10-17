@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using TopiaForge.Multiplayer.Engine;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
@@ -221,7 +222,11 @@ internal static class VoiceJitterBufferTests
     {
         var codec = new FakeVoiceCodec();
         var buffer = new VoiceJitterBuffer(codec);
-        var packets = Enumerable.Range(0, 400).Select(ts => codec.Packet((short)(ts + 1), (short)ts)).ToArray();
+
+        // Two hundred whole frames prime the buffer. After them every seventh frame is lost, and each pass, the warming one
+        // too, plays the next 200 frames.
+        var frames = 200 * (2 + AllocationPasses.MeasuredPasses);
+        var packets = Enumerable.Range(0, frames).Select(ts => codec.Packet((short)(ts + 1), (short)ts)).ToArray();
         var output = new short[960];
         for (var ts = 0; ts < 200; ts++)
         {
@@ -229,15 +234,32 @@ internal static class VoiceJitterBufferTests
             buffer.Pull(output);
         }
 
+        var next = 200;
+        var allocated = AllocationPasses.Fewest(() =>
+        {
+            var bytes = PushAndPull(buffer, packets, output, next, 200);
+            next += 200;
+            return bytes;
+        });
+        Assert(allocated == 0, "pushing, pulling, recovering and concealing allocate nothing (" + allocated + " bytes)");
+        Assert(buffer.Statistics.Recovered > 0, "and the passes recovered the frames they lost (" + buffer.Statistics.Recovered + ")");
+    }
+
+    /// <summary>
+    /// Plays <paramref name="count"/> frames from frame <paramref name="first"/> on, losing every seventh, with a pull
+    /// every 20 ms, and returns what this thread allocated meanwhile.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long PushAndPull(VoiceJitterBuffer buffer, byte[][] packets, short[] output, int first, int count)
+    {
         var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var ts = 200; ts < 400; ts++)
+        for (var ts = first; ts < first + count; ts++)
         {
             if (ts % 7 != 0) buffer.Push(1, (ulong)ts + 1, (ulong)ts, VoiceFrameFlags.None, packets[ts], ts * Frame);
             buffer.Pull(output);
         }
 
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert(allocated == 0, "pushing, pulling, recovering and concealing allocate nothing (" + allocated + " bytes)");
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     internal static uint Next(ref uint state)

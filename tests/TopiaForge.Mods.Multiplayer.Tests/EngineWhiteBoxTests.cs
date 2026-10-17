@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using TopiaForge.Mods;
 using TopiaForge.Multiplayer.Engine;
 
@@ -196,12 +197,9 @@ internal static class EngineWhiteBoxTests
         using var tick = session.SubscribeTick(_ => steps++);
         var clock = new FixedStepClock(20);
         var now = 0UL;
-        for (; now < 100; now++) engine.Pump(clock.StepStartMicros(now));
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (; now < 1100; now++) engine.Pump(clock.StepStartMicros(now));
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var allocated = AllocationPasses.Fewest(() => PumpSteps(engine, clock, ref now, 1_000));
         Assert(allocated == 0, "a solo pump allocates nothing once warm (allocated " + allocated + " bytes)");
-        Assert(steps == 1099 && engine.Snapshot.Tick.Value == 1099, "every step ran exactly once");
+        Assert(steps == (int)now - 1 && engine.Snapshot.Tick.Value == now - 1, "every step ran exactly once");
     }
 
     internal static void CatchUpStepsAreBounded()
@@ -422,6 +420,18 @@ internal static class EngineWhiteBoxTests
                client.Snapshot.EndReason == MultiplayerSessionEndReason.ProtocolMismatch &&
                diagnostics.Count(EngineDiagnosticKind.CodecFailed) == 1,
             "a despawn whose final state does not decode ends the session like any other bad canonical payload");
+    }
+
+    /// <summary>
+    /// Pumps the engine at the start of <paramref name="count"/> fixed steps from <paramref name="now"/> on, and returns
+    /// what this thread allocated meanwhile.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long PumpSteps(SessionEngine engine, FixedStepClock clock, ref ulong now, int count)
+    {
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var end = now + (ulong)count; now < end; now++) engine.Pump(clock.StepStartMicros(now));
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private static MultiplayerContractDescriptor Descriptor(string digest) =>

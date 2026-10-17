@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Runtime.CompilerServices;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using Provider = provider::TopiaForge.Multiplayer.MultiplayerProvider;
@@ -439,22 +440,26 @@ internal static class SoloProviderTests
         RegisterState(solo, "idle", 0);
         var steps = 0;
         using var tick = solo.SubscribeTick(_ => steps++);
-        for (var frame = 0; frame < 200; frame++)
-        {
-            now += 16_667;
-            solo.Pump();
-        }
-
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var frame = 0; frame < 2_000; frame++)
-        {
-            now += 16_667;
-            solo.Pump();
-        }
-
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var allocated = AllocationPasses.Fewest(() => PumpFrames(solo, ref now, 2_000));
         Assert(allocated == 0, "a warm solo pump allocates nothing (allocated " + allocated + " bytes)");
         Assert(steps > 0 && solo.Snapshot.Tick.Value == (ulong)steps, "fixed steps ran at 20 Hz while the game pumped per frame");
+    }
+
+    /// <summary>
+    /// Pumps <paramref name="frames"/> game frames of 16.667 ms, moving <paramref name="now"/> on, and returns what this
+    /// thread allocated meanwhile.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long PumpFrames(Provider solo, ref long now, int frames)
+    {
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var frame = 0; frame < frames; frame++)
+        {
+            now += 16_667;
+            solo.Pump();
+        }
+
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private static void RegisterMutatingCommand(

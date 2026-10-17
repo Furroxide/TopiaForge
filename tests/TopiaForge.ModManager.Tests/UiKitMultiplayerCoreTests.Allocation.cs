@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using TopiaForge.Mods.UnityUi;
 
 namespace TopiaForge.ModManager.Tests
@@ -100,18 +101,28 @@ namespace TopiaForge.ModManager.Tests
                 sink += sorter.SourceIndexAt(tick % keys.Length) + sorter.ViewIndexOf(3);
             }
 
-            for (var warm = 0; warm < 32; warm++)
+            // The frames run in a method of their own, once unmeasured and then up to three times, and the fewest bytes
+            // count. Work the runtime does on this thread while code first runs, such as compiling it or moving a long loop
+            // to optimized code part way through, happens once, while an allocation on a per-frame path shows in every pass.
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            long Frames(int count)
             {
-                Frame(warm);
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var tick = 0; tick < count; tick++)
+                {
+                    Frame(tick);
+                }
+
+                return GC.GetAllocatedBytesForCurrentThread() - before;
             }
 
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var tick = 0; tick < 2000; tick++)
+            Frames(2000);
+            var allocated = long.MaxValue;
+            for (var pass = 0; pass < 3 && allocated != 0; pass++)
             {
-                Frame(tick);
+                allocated = Math.Min(allocated, Frames(2000));
             }
 
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             AssertEqual(allocated, 0L, "per-frame Core paths allocate nothing (sink " + sink + ")");
         }
     }

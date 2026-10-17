@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
@@ -127,16 +128,24 @@ namespace TopiaForge.ModRuntime.Tests
 
         private static long MeasureFrames(RuntimeUnderTest runtime, MultiplayerFrameHost host)
         {
-            // A zero frame time keeps the runtime's once-a-second capability refresh out of the measurement.
-            for (var index = 0; index < 64; index++)
-            {
-                runtime.DispatchUpdate(0f);
-                host.RaiseLateUpdate();
-            }
+            // The frames run in a method of their own, once unmeasured and then up to three times, and the fewest bytes
+            // count. Work the runtime does on this thread while code first runs, such as compiling it or moving the long
+            // loop to optimized code part way through, happens once, while an allocation in the frame shows in every pass.
+            DispatchFrames(runtime, host, 10_000);
+            var allocated = long.MaxValue;
+            for (var pass = 0; pass < 3 && allocated != 0; pass++) allocated = Math.Min(allocated, DispatchFrames(runtime, host, 10_000));
+            return allocated;
+        }
 
-            _ = GC.GetAllocatedBytesForCurrentThread();
+        /// <summary>
+        /// Dispatches <paramref name="count"/> frames and returns what this thread allocated meanwhile. A zero frame time
+        /// keeps the runtime's once-a-second capability refresh out of the measurement.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static long DispatchFrames(RuntimeUnderTest runtime, MultiplayerFrameHost host, int count)
+        {
             var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var index = 0; index < 10_000; index++)
+            for (var index = 0; index < count; index++)
             {
                 runtime.DispatchUpdate(0f);
                 host.RaiseLateUpdate();
