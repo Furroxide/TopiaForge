@@ -1,6 +1,7 @@
 extern alias provider;
 
 using provider::TopiaForge.Multiplayer.Engine;
+using provider::TopiaForge.Multiplayer.Voice;
 using TopiaForge.Mods;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 
@@ -123,6 +124,61 @@ internal static class ParticipantListProviderTests
         That(!stream.IsEnded && ReferenceEquals(voice.GetPlaybackStream(a.Id), stream) && VoiceAudio.LevelDecibels(again, again.Length / 2, again.Length / 2) > -35,
             "and b hears a again on the same stream");
         That(seen.Count > 0 && seen.All(snapshot => snapshot.Participants.Count == 3), "no snapshot through the outage and the rejoin lists fewer than three players");
+    }
+
+    internal static void AJoinWhoseWholeAnswerArrivesAtOnceEndsThePreviousHostsStreams()
+    {
+        // Both hosts number their players, so x, the first host's p1, and y, the second's, share an id. Over a fast link
+        // the second host's whole answer, its list included, arrives in one step, and b's session goes from the first
+        // host's list to the second's without ever listing nobody. The engine let go of the first host's list at the join
+        // all the same, so b's stream for x ends there: b hears y on a stream of its own, never on the one it played x from.
+        // A mod that asks for y's stream as soon as the session lists y, from its session callback and so ahead of the
+        // voice service's own pump, gets that new stream too, never x's. One it asks for there for the first host's own
+        // player, whom the second host does not list, is nobody's, and ends once the grace for unlisted speakers is over.
+        using var rig = new VoiceServiceRig(new VirtualLinkConditions { LatencyTicks = 1, TicksPerSecond = 100 });
+        rig.Options.ParticipantIdForIdentity = null;
+        rig.AddHost();
+        var x = rig.AddClient("x");
+        var b = rig.AddClient("b");
+        var second = rig.AddHost("host-2", session: SecondSession.Value);
+        var y = rig.AddClient("y", host: second);
+        That(ParticipantListTests.Rows(b.Engine.Snapshot) == "host=Host^,p1=x,p2=b*" && ParticipantListTests.Rows(y.Engine.Snapshot) == "host-2=Host^,p1=y*",
+            "x is p1 with the first host and y is p1 with the second (" + ParticipantListTests.Rows(b.Engine.Snapshot) + ")");
+        var stream = b.Listen("p1");
+        x.Source = VoiceSource.Speech(1, seed: 65);
+        rig.StepFor(800_000);
+        var near = b.Heard("p1").ToArray();
+        That(VoiceAudio.LevelDecibels(near, near.Length / 2, near.Length / 2) > -35, "b hears x as p1");
+
+        var p1 = new ParticipantId("p1");
+        var seen = new List<MultiplayerSessionSnapshot>();
+        VoicePlaybackStream? fromCallback = null;
+        VoicePlaybackStream? firstHostFromCallback = null;
+        using var watch = b.Engine.CreateFacade("observer").SubscribeChanged(snapshot =>
+        {
+            seen.Add(snapshot);
+            if (!snapshot.Id.Equals(SecondSession) || !snapshot.TryGetParticipant(p1, out _)) return;
+            fromCallback ??= b.Voice!.GetPlaybackStream(p1);
+            firstHostFromCallback ??= b.Voice!.GetPlaybackStream(new ParticipantId("host"));
+        });
+        rig.Connect(b, second);
+        StepUntilReady(rig, b);
+        That(ParticipantListTests.Rows(b.Engine.Snapshot) == "host-2=Host^,p1=y,p2=b*", "b lists the second host's players (" + ParticipantListTests.Rows(b.Engine.Snapshot) + ")");
+        That(seen.Count > 0 && seen.All(snapshot => snapshot.Participants.Count > 0), "the whole answer came at once: no snapshot listed nobody");
+        That(stream.IsEnded, "b's stream for the first host's p1 ended at the join");
+        var silence = new float[VoiceServiceRig.ReadSamples];
+        stream.Read(silence, 0, silence.Length);
+        That(silence.All(sample => sample == 0), "and plays silence");
+
+        var farStream = b.Listen("p1");
+        That(fromCallback != null && ReferenceEquals(fromCallback, farStream), "the stream the session callback asked for is the one for y");
+        y.Source = VoiceSource.Speech(1.5, seed: 66);
+        rig.StepFor(1_500_000);
+        var far = b.Heard("p1").ToArray();
+        That(!farStream.IsEnded && !ReferenceEquals(farStream, stream) && VoiceAudio.LevelDecibels(far, far.Length / 2, far.Length / 2) > -35,
+            "b hears y, the second host's p1, on a stream of its own");
+        rig.StepFor(VoiceService.EarlyVoiceGraceMicros - 1_000_000);
+        That(firstHostFromCallback != null && firstHostFromCallback.IsEnded, "and the stream asked for the first host's own player, unlisted here, has ended");
     }
 
     private static void StepUntilReady(VoiceServiceRig rig, VoiceServiceRig.Member member)

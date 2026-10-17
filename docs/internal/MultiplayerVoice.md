@@ -654,9 +654,12 @@ it; otherwise every mute, stream and capture the session went on producing would
     streams from 1, so a buffer kept from another session could take a new stream for an old one; a host's own session
     never leaves Ready, so the new id alone decides.
   - A speaker who leaves gets an ended stream, which plays silence and counts nothing. A join that withholds the
-    participant list lists nobody until the new host's list arrives (`MultiplayerSessionEngine.md`, "Participants and
-    connections"), so every speaker of the session before leaves then, and the new host's players get streams of their
-    own. A lost link keeps the list, and with it every stream.
+    participant list (`MultiplayerSessionEngine.md`, "Participants and connections") ends every speaker's stream, since
+    an id names a player only on the host that gave it, and the new host's players get streams of their own. That holds
+    when the new host's whole answer arrives within one pump too, so the session never lists nobody: the engine's
+    `ParticipantListGeneration` moves whenever the client lets a list go, and the service ends every stream when it
+    does. An earlier version went only by the ids the session listed, so a stream whose id the new host gave someone
+    else carried on, and played that player. A join that keeps the list, a lost link and a stall keep every stream.
 
 ### 3.5 Mutes, limits and the loss hint
 
@@ -733,8 +736,9 @@ engine, deterministic except where noted:
   - the talking indicator and the statistics refused off the main thread.
 - `VoiceSessionChangeTests`:
   - a listener moving to a host whose streams carry the same generations, with its worker stalled across the move, so
-    the old session's last frames are still queued: none of them plays;
-  - a host's own buffers dropped when its session is replaced in place;
+    the old session's last frames are still queued: none of them plays, the stream they were for ends, and the new
+    host's player is heard on a stream of its own;
+  - a host's own buffers dropped when its session is replaced in place, and a client's too, its streams kept;
   - the worker applying a reset among queued frames in their order, checked sample for sample;
   - the wish to hear nobody carried to another host, alone, and made again during the join, so the new host never
     sends a datagram;

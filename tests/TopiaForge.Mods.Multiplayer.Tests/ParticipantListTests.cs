@@ -189,6 +189,52 @@ internal static class ParticipantListTests
             "until the new process lists its players (" + Rows(traveller.Snapshot) + ")");
     }
 
+    internal static void TheListGenerationMovesOnlyWhenTheListIsLetGo()
+    {
+        // Whatever a consumer keeps per participant id, such as a voice stream, goes when the engine lets a list go. Over a
+        // fast link host B's whole answer arrives in one frame, so the session never lists nobody on the way from A's list
+        // to B's, and the generation alone says the ids changed hands. It moves at that join and on going back to solo
+        // play, and never at a stall, a lost link or a rejoin that keeps the list.
+        using var rig = new VoiceSessionHarness();
+        var hostA = Host(rig, "session-a", "Host A");
+        var hostB = Host(rig, "session-b", "Host B");
+        Join(rig, hostA, "a", "host-a");
+        var (traveller, link) = Join(rig, hostA, "traveller", "host-a");
+        var generation = traveller.ParticipantListGeneration;
+        foreach (var end in new[] { link, link.Peer! })
+        {
+            end.State = EngineLinkState.Stalled;
+            end.Outbound!.Held = true;
+        }
+
+        rig.Advance(30);
+        That(traveller.Snapshot.State == MultiplayerSessionState.Reconnecting && traveller.ParticipantListGeneration == generation, "a stall keeps the list");
+        foreach (var end in new[] { link, link.Peer! })
+        {
+            end.State = EngineLinkState.Open;
+            end.Outbound!.Held = false;
+        }
+
+        rig.Flush();
+        rig.Network.Sever(link);
+        rig.Advance(10);
+        That(traveller.Snapshot.State == MultiplayerSessionState.Connecting && Rows(traveller.Snapshot) == "local=Host A^,p1=a,p2=traveller" &&
+             traveller.ParticipantListGeneration == generation, "so does a lost link");
+        rig.ConnectTo(hostA, traveller, "traveller", "host-a");
+        rig.Flush();
+        That(Rows(traveller.Snapshot) == "local=Host A^,p1=a,p2=traveller*" && traveller.ParticipantListGeneration == generation,
+            "and a rejoin to the host that kept the record");
+
+        var seen = new List<int>();
+        using var watch = traveller.CreateFacade("observer").SubscribeChanged(snapshot => seen.Add(snapshot.Participants.Count));
+        rig.ConnectTo(hostB, traveller, "traveller", "host-b");
+        rig.Flush();
+        That(Rows(traveller.Snapshot) == "local=Host B^,p1=traveller*" && seen.All(count => count > 0) && traveller.ParticipantListGeneration == generation + 1,
+            "a join to another host lets the list go, though the session never listed nobody (" + string.Join(",", seen) + ")");
+        traveller.SwitchToSolo(new SoloSessionStart(new MultiplayerSessionId("solo"), new SessionSeed(4), new ParticipantId("local"), "traveller"));
+        That(traveller.ParticipantListGeneration == generation + 2, "and so does going back to solo play");
+    }
+
     /// <summary>
     /// Describes a snapshot's list in order: each participant's id and name, then ^ for the host and * for this process's
     /// player. An empty list is an empty string.

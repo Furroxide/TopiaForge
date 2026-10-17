@@ -20,6 +20,14 @@ namespace TopiaForge.Multiplayer.Engine
         private ParticipantId? listedHostParticipant;
 
         /// <summary>
+        /// Gets how many times a client has let its list go: at a join that withheld it, and on going back to solo play. From
+        /// then on the ids the list held may name other people. That holds even when the next host's whole answer arrives in
+        /// one pump, so no snapshot ever lists nobody, and whatever a consumer keeps per participant id, such as a voice
+        /// playback stream, goes when this changes. A join that keeps the list, a lost link and a stall leave it as it is.
+        /// </summary>
+        internal ulong ParticipantListGeneration { get; private set; }
+
+        /// <summary>
         /// Shows the list <paramref name="current"/>'s host sent. Nothing else fills a client's list, and this notes the
         /// host as the one whose players the session lists, which the listener mutes and the next join go by.
         /// </summary>
@@ -54,12 +62,13 @@ namespace TopiaForge.Multiplayer.Engine
             ForgetParticipantList();
         }
 
-        /// <summary>Empties a client's list and the ids that labelled it.</summary>
+        /// <summary>Empties a client's list and the ids that labelled it, and moves <see cref="ParticipantListGeneration"/> on.</summary>
         private void ForgetParticipantList()
         {
             clientParticipants = new List<ParticipantEntry>();
             listedLocalParticipant = null;
             listedHostParticipant = null;
+            ParticipantListGeneration++;
         }
     }
 }

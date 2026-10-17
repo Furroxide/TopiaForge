@@ -206,9 +206,16 @@ put a second or more between `JoinAccepted` and the list. In that window:
 
 So the `IsLocal` and `IsHost` marks always come from the host that sent the list they label, and a client that reaches
 `Ready` shows that host's own list, which arrives before the `Commit` that ends the join's snapshot.
-`ParticipantListTests` and `ParticipantListProviderTests` check each case over a slow link, and
-`ParticipantListFuzzTests` checks every snapshot a client shows against scripted hosts, two processes under one
-identity among them.
+
+When the new host's whole answer fits in one frame, its list arrives in the same pump as `JoinAccepted`, so no snapshot
+lists nobody: a subscriber sees the list of before replaced by the new host's at once, and an id it held may now name
+someone else. Every list a client lets go, at a join that withholds it or on going back to solo play, therefore moves
+`ParticipantListGeneration` on. Whatever keeps something per participant id watches it, as the voice service does
+with its playback streams (`MultiplayerVoice.md`, section 3.4).
+
+`ParticipantListTests` and `ParticipantListProviderTests` check each case over a slow link, and the generation and the
+provider's voice streams over a fast one, where the whole answer arrives at once. `ParticipantListFuzzTests` checks
+every snapshot a client shows against scripted hosts, two processes under one identity among them.
 
 A link that stalls without closing moves the client to `Reconnecting`; canonical state is frozen until the link
 recovers or closes.

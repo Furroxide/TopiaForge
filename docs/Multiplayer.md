@@ -234,8 +234,10 @@ and the snapshot says which one is current, whether this process holds world aut
   seconds: meanwhile the snapshot reports `Connecting` and still lists the session's players, though none of them as
   this process's own, and submissions still waiting for the host complete as cancelled. The host keeps a player's
   place, participant id included, for 30 seconds after the connection drops, so a reconnect in that window resumes the
-  same session as the same player, with the host's current values, the participant list kept throughout, and the
-  session hooks do not run. A player who cannot get back in time returns to solo play.
+  same session as the same player, with the host's current values, and the session hooks do not run. The participant
+  list is kept throughout, unless an attempt was lost after it reached the host but before the host's answer came back:
+  the host may have restarted meanwhile, so the snapshot then lists nobody until the host's own list arrives, before
+  `Ready`. A player who cannot get back in time returns to solo play.
 
 What a mod sees at each step:
 

@@ -542,6 +542,9 @@ internal static class Program
             ParticipantListTests.AJoinWhoseAnswerWasLostListsNobodyUntilTheHostDoes();
             ParticipantListProviderTests.AJoinToAnotherHostListsNobodyUntilThatHostDoes();
             ParticipantListProviderTests.ALostLinkKeepsTheListAndTheVoiceStreams();
+            ParticipantListProviderTests.AJoinWhoseWholeAnswerArrivesAtOnceEndsThePreviousHostsStreams();
+            VoiceSessionChangeTests.AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams();
+            ParticipantListTests.TheListGenerationMovesOnlyWhenTheListIsLetGo();
             ParticipantListFuzzTests.EverySnapshotShowsTheListOfTheHostThatSentIt();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;

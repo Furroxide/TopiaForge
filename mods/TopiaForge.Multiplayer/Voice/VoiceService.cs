@@ -26,7 +26,8 @@ namespace TopiaForge.Multiplayer.Voice
     /// drops any that waited too long, and hands received frames to the worker with their arrival times and stream
     /// generations. A talker who rejoins or restarts arrives with a new generation, which starts their jitter buffer
     /// again. A session that changes, or this player being Ready again after a lost or stalled link, drops every
-    /// speaker's jitter buffer. Speakers are bounded: see <see cref="GetPlaybackStream"/>.
+    /// speaker's jitter buffer. A join that withholds the participant list ends every speaker's stream, since its ids may
+    /// name other people from then on. Speakers are bounded: see <see cref="GetPlaybackStream"/>.
     /// </para>
     /// <para>
     /// The engine owns the listener mutes and keeps or forgets them at every join (docs/internal/MultiplayerVoice.md,
