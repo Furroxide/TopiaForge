@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
@@ -12,7 +13,8 @@ namespace TopiaForge.ModManager
     /// Removes anything shaped like a network address from multiplayer text before it reaches a log, the diagnostics
     /// bundle or a crash report. The provider already keeps addresses inside its network layer; this is the runtime's
     /// second line, and it errs towards removing too much: a diagnostic that loses a file name or a mod id is better than
-    /// one that keeps a host name.
+    /// one that keeps a host name. The multiplayer provider compiles this file too, so what it logs on its own, before a
+    /// runtime attaches or when the runtime fails, is redacted by the same rules.
     /// </summary>
     /// <remarks>
     /// The text is split into tokens at white space, quotes, brackets of every kind, commas, semicolons and bars. A token
@@ -56,6 +58,26 @@ namespace TopiaForge.ModManager
             "site", "tech", "cloud", "host", "server", "games", "game", "live", "tv", "pro", "name", "mobi", "zone", "world", "club",
             "local", "lan", "home", "internal", "localdomain", "arpa", "onion", "test", "example", "invalid", "localhost"
         };
+
+        /// <summary>
+        /// Describes <paramref name="diagnostic"/> in one redacted line: its code, message and participant, and its failure's
+        /// type, message and, for an error, stack. Only the failure's own message is kept, never an inner one. The runtime
+        /// logs and keeps exactly this line, and the provider's own log takes the same, so every path redacts alike.
+        /// </summary>
+        /// <param name="diagnostic">The diagnostic, whatever text it holds.</param>
+        /// <param name="code">The redacted code, as the diagnostics bundle keeps it.</param>
+        internal static string Describe(InternalMultiplayerDiagnostic diagnostic, out string code)
+        {
+            if (diagnostic == null) throw new ArgumentNullException(nameof(diagnostic));
+            code = Redact(diagnostic.Code);
+            var text = "Multiplayer [" + code + "]: " + Redact(diagnostic.Message);
+            if (diagnostic.Participant.HasValue) text += " (participant " + Redact(diagnostic.Participant.Value.Value) + ")";
+            var failure = diagnostic.Exception;
+            if (failure == null) return text;
+            text += " " + failure.GetType().Name + ": " + Redact(failure.Message);
+            if (diagnostic.Severity == InternalDiagnosticSeverity.Error && failure.StackTrace != null) text += Environment.NewLine + Redact(failure.StackTrace);
+            return text;
+        }
 
         /// <summary>Returns <paramref name="text"/> with every address-shaped token replaced; a text that defeats the patterns is withheld.</summary>
         internal static string Redact(string? text)

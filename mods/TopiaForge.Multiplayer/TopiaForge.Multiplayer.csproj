@@ -21,5 +21,9 @@
   </ItemGroup>
   <!-- The provider runs the same session engine as the test rig, linked in as internal source. -->
   <Import Project="..\..\src\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.props" />
+  <!-- The runtime's redactor, linked in the same way: what the provider logs on its own is redacted by the same rules. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerDiagnosticRedactor.cs" Link="Provider\MultiplayerDiagnosticRedactor.cs" />
+  </ItemGroup>
   <Import Project="..\..\src\TopiaForge.Mods.Analyzers\buildTransitive\TopiaForge.Mods.Analyzers.targets" />
 </Project>

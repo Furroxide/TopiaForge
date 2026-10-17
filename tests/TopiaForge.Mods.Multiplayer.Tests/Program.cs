@@ -378,6 +378,8 @@ internal static class Program
             ReadinessBoundsTests.AReplacementBehindFullWindowsLeavesThePlayerItsAllowance();
             HostTextTests.DescriptorRefusalsAreThisGamesOwnWords();
             HostTextTests.HostsNotReadySaySoInACodeOfTheirOwn();
+            RuntimePrivacyTests.TheProvidersOwnLogRedactsWhatNoRuntimeTakes();
+            RuntimeAdmissionTests.PackagesThatCannotBeReadStopHostingAndJoining();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

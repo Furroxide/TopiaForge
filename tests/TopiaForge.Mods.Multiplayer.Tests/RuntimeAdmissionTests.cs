@@ -12,13 +12,84 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// Content through the runtime: the host's descriptor lists the runtime's shared packages, the host admits through the
 /// runtime's admission planner, and a joining player checks the host's packages before connecting. Refusals reach the
-/// player as display lines naming mods and versions.
+/// player as display lines naming mods and versions, and packages that cannot be read stop hosting and joining cleanly.
 /// </summary>
 internal static class RuntimeAdmissionTests
 {
     private static readonly PackageSpec Sandbox = PackageSpec.Implicit("io.example.sandbox", "0.2.0", 'a');
     private static readonly PackageSpec Lobby = PackageSpec.Session("io.example.lobby", "1.0.0", 'c');
     private static readonly PackageSpec Optional = PackageSpec.Session("io.example.extras", "1.0.0", 'd', "optional");
+    private static readonly PackageSpec Devtools = PackageSpec.Implicit("io.example.devtools", "0.1.0", 'e');
+
+    internal static void PackagesThatCannotBeReadStopHostingAndJoining()
+    {
+        // A build copied by hand has no install receipt, so the runtime hashes its files the first time multiplayer looks at
+        // them, on the main thread. Here another program holds its only file open.
+        using var rig = new ControlRig(154, Sandbox);
+        var hostCopy = Path.Combine(rig.PackageRoot, "host-copy");
+        var locked = LockedPackage(hostCopy);
+        try
+        {
+            rig.Host.Runtime.Inventory.Add(Devtools.ToManifest(), hostCopy);
+            var refused = rig.Host.Control.StartHosting(new InternalHostSettings("Locked", 4));
+            That(!refused.Succeeded && refused.ErrorCode == ModErrorCode.Io && refused.ErrorMessage == RuntimeContent.ContentUnreadable,
+                "hosting is refused as content that cannot be read (" + refused.ErrorCode + ": " + refused.ErrorMessage + ")");
+            var reported = rig.Host.Runtime.RecentDiagnostics[^1];
+            That(reported.Code == "content.read-failed" && reported.Text.Contains("Devtools 0.1.0 could not be read", StringComparison.Ordinal) &&
+                 !reported.Text.Contains(rig.PackageRoot, StringComparison.OrdinalIgnoreCase),
+                "the failure is reported, naming the package and never its folder (" + reported.Text + ")");
+
+            // The developer switch drives the live sessions directly: the host fails before anything binds.
+            var live = rig.Host.Provider.Live!;
+            live.StartHosting(new HostSettings("Locked too"));
+            That(rig.Run(() => live.HostPhase == HostPhase.Failed), "hosting the live sessions directly fails");
+            That(live.HostFailure == LiveFailure.ContentUnreadable && rig.Host.Control.GetStatus().HostFailure == InternalLiveFailure.ContentUnreadable &&
+                 rig.Host.Factory.Networks.Count == 0,
+                "as content that cannot be read, with no network opened (" + live.HostFailure + ", " + rig.Host.Factory.Networks.Count + " networks)");
+        }
+        finally
+        {
+            locked.Dispose();
+        }
+
+        // Once the file is free the next read hashes it, and the host opens.
+        rig.StartHosting(new InternalHostSettings("Free", 4));
+
+        // A joining player with such a package stops before anything connects, in this game's own words.
+        var guest = rig.AddPeer("guest", Sandbox);
+        var guestCopy = Path.Combine(rig.PackageRoot, "guest-copy");
+        locked = LockedPackage(guestCopy);
+        try
+        {
+            guest.Runtime.Inventory.Add(Devtools.ToManifest(), guestCopy);
+            That(guest.Control.Join(guest.Target(), new InternalJoinSettings()).Succeeded, "the guest tries to join");
+            That(rig.Run(() => guest.Control.GetStatus().JoinPhase == InternalJoinPhase.Ended), "and stops");
+            var status = guest.Control.GetStatus();
+            That(status.JoinFailure == InternalLiveFailure.ContentUnreadable && status.JoinDetail == "This game's mods could not be read." &&
+                 status.ContentProblems.SequenceEqual(new[] { RuntimeContent.ContentUnreadable }) && !status.ContentProblemsFromHost,
+                "as content that cannot be read (" + status.JoinFailure + ": " + status.JoinDetail + " | " + string.Join(" | ", status.ContentProblems) + ")");
+            That(guest.Factory.Networks.Count == 0 && guest.Control.Role == InternalSessionRole.Solo && rig.Host.Control.GetStatus().ConnectedPlayers == 1,
+                "nothing connected, and the guest plays on alone");
+        }
+        finally
+        {
+            locked.Dispose();
+        }
+
+        That(!rig.Host.Log.Lines.Concat(guest.Log.Lines).Any(line => line.Contains("pump failed", StringComparison.Ordinal) || line.Contains("flush failed", StringComparison.Ordinal)),
+            "and no frame ever failed");
+
+        // Every other content path refuses the same way: a running host that cannot read its own packages admits nobody,
+        // and nothing is listed or offered.
+        var reports = new List<InternalMultiplayerDiagnostic>();
+        var content = new RuntimeContent("2545", "0.2.0") { Runtime = new UnreadableContent(new MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog())), Report = reports.Add };
+        var offer = ContentOfferCodec.TryEncode(new InternalContentOffer("2545", "1.0.0", ">=1.0.0 <2.0.0", Array.Empty<InternalContentDescriptor>()))!;
+        var admission = content.Admit(offer);
+        That(!admission.IsAdmitted && admission.Code == AdmissionCode.NotReady && admission.Problems.SequenceEqual(new[] { RuntimeContent.HostContentUnreadable }),
+            "the host refuses the player as not ready, saying why");
+        That(content.HostPackages() == null && content.ClientContent().Length == 0, "no descriptor can be signed and no offer made");
+        That(reports.Count == 3 && reports.All(report => report.Code == "content.read-failed" && report.Exception is IOException), "and each failure is reported");
+    }
 
     internal static void TheHostAdmitsThroughTheRuntimesPlanner()
     {
@@ -129,7 +200,7 @@ internal static class RuntimeAdmissionTests
     internal static void TheContentSeamRefusesWithoutARuntime()
     {
         var content = new RuntimeContent("2545", "0.2.0");
-        That(content.HostPackages().Count == 0 && content.ClientContent().Length == 0, "without a runtime nothing is listed or presented");
+        That(content.HostPackages() is { Count: 0 } && content.ClientContent().Length == 0, "without a runtime nothing is listed or presented");
         var refusal = content.Admit(Array.Empty<byte>());
         That(!refusal.IsAdmitted && refusal.Code == AdmissionCode.NotReady && refusal.Problems.SequenceEqual(new[] { RuntimeContent.HostNotReady }),
             "and nobody is admitted, for a runtime not ready rather than for the player's packages");
@@ -174,6 +245,42 @@ internal static class RuntimeAdmissionTests
         offer.GameBuild + "|" + offer.ProtocolVersion + "|" + offer.PeerVersionRange + "|" + string.Join(";", offer.Mods.Select(mod =>
             mod.Id + "," + mod.Version + "," + mod.PackageSha256 + "," + mod.Mode + "," + mod.Presence + "," + mod.ProtocolVersion + "," +
             (mod.PeerVersionRange ?? "-") + "," + string.Join("+", mod.SynchronizedFiles.Select(file => file.Path + "=" + file.Sha256))));
+
+    /// <summary>Writes a package without an install receipt into <paramref name="folder"/>, its only file held open with no sharing.</summary>
+    private static FileStream LockedPackage(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, "Devtools.dll");
+        File.WriteAllBytes(file, new byte[4096]);
+        return new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    }
+
+    /// <summary>A runtime whose packages cannot be read, as the inventory reports a file another program holds open.</summary>
+    private sealed class UnreadableContent : IInternalMultiplayerRuntimeHost
+    {
+        private readonly MultiplayerRuntimeHost inner;
+
+        internal UnreadableContent(MultiplayerRuntimeHost inner)
+        {
+            this.inner = inner;
+        }
+
+        public string GameBuild => inner.GameBuild;
+
+        public string RuntimeVersion => inner.RuntimeVersion;
+
+        public string DisplayName => inner.DisplayName;
+
+        public IReadOnlyList<InternalContentDescriptor> LocalContent => throw new IOException("Devtools 0.1.0 could not be read to identify it for multiplayer (IOException).");
+
+        public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => inner.EvaluateAdmission(offer);
+
+        public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) => inner.CheckHostContent(hostPackages);
+
+        public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
+
+        public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => inner.ReportDiagnostic(diagnostic);
+    }
 
     /// <summary>A runtime whose admission check fails, as a bug in it would.</summary>
     internal sealed class ThrowingAdmission : IInternalMultiplayerRuntimeHost

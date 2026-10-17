@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager.Tests
         {
             DescriptorsFollowTheManifests();
             PackageHashesComeFromReceiptsOrTheFilesThemselves(Path.Combine(root, "multiplayer-hashes"));
+            UnreadablePackagesAreNamedAndReadAgain(Path.Combine(root, "multiplayer-locked"));
             AdmissionNamesEveryProblem();
             HostChecksAreExactAndListWhatToChange();
             TheBackgroundSettingIsRestored();
@@ -94,6 +95,40 @@ namespace TopiaForge.ModManager.Tests
             File.WriteAllText(Path.Combine(second, "assets", "world.bundle"), "bundle");
             File.Move(Path.Combine(second, "assets", "world.bundle"), Path.Combine(second, "assets", "other.bundle"));
             Assert(MultiplayerContentInventory.PackageSha256(second) != hash, "and so does a renamed one");
+        }
+
+        private static void UnreadablePackagesAreNamedAndReadAgain(string root)
+        {
+            // A package without a receipt whose file another program holds open while the runtime hashes it.
+            var folder = Directory.CreateDirectory(Path.Combine(root, "devtools")).FullName;
+            var file = Path.Combine(folder, "Devtools.dll");
+            File.WriteAllText(file, "code");
+            var inventory = new MultiplayerContentInventory();
+            inventory.Add(Manifest("io.example.devtools", "0.1.0"), folder);
+            using (new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                foreach (var read in new Action[] { () => _ = inventory.Descriptors, () => _ = inventory.AdmissionMods })
+                {
+                    IOException? failure = null;
+                    try
+                    {
+                        read();
+                    }
+                    catch (IOException exception)
+                    {
+                        failure = exception;
+                    }
+
+                    Assert(failure != null && failure.Message == "Devtools 0.1.0 could not be read to identify it for multiplayer (IOException)." &&
+                           failure.InnerException is IOException && !failure.Message.Contains(root, StringComparison.OrdinalIgnoreCase),
+                        "a package whose files cannot be read is named, and its folder is not (" + failure?.Message + ")");
+                }
+            }
+
+            // The failed read kept nothing, so the next one, with the file free, hashes it.
+            Assert(inventory.Descriptors.Single().PackageSha256 == MultiplayerContentInventory.PackageSha256(folder) &&
+                   inventory.AdmissionMods.Single().PackageSha256 == MultiplayerContentInventory.PackageSha256(folder),
+                "once the file is free the package is read again");
         }
 
         private static void AdmissionNamesEveryProblem()

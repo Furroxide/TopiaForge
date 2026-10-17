@@ -165,16 +165,24 @@ internal static class ReadinessBoundsTests
         var stalled = harness.AddRawPeer("stalled");
         stalled.Join("Stalled");
         var steady = harness.AddClient("steady");
+
+        // A player whose runtime never lets go reports each replacement as it arrives, as every player does, and never
+        // acknowledges: the report of a player that was not Ready moves nothing.
+        var held = harness.AddClient("held");
+        var forever = held.Engine.HoldReadiness();
         harness.Flush();
         var stalledId = new ParticipantId("stalled");
+        var heldId = new ParticipantId("held");
         var steadyId = new ParticipantId("steady");
-        That(harness.Host.IsConnectedParticipant(stalledId) && !harness.Host.IsParticipantReady(stalledId) && harness.Host.IsParticipantReady(steadyId),
-            "one player has joined without acknowledging its snapshot, and one is Ready");
+        That(harness.Host.IsConnectedParticipant(stalledId) && !harness.Host.IsParticipantReady(stalledId) &&
+             harness.Host.IsConnectedParticipant(heldId) && !harness.Host.IsParticipantReady(heldId) && harness.Host.IsParticipantReady(steadyId),
+            "two players have joined without acknowledging their snapshots, and one is Ready");
 
         // A player still joining keeps the wait it started at its acceptance, however often the session is replaced; a Ready
         // player starts a new wait with each replacement, and keeps its place by acknowledging each new snapshot.
         var startedAt = harness.NowMicros;
         long endedAt = -1;
+        long heldEndedAt = -1;
         var replacements = 0;
         for (var tick = 1; tick <= 4 * 60; tick++)
         {
@@ -186,11 +194,15 @@ internal static class ReadinessBoundsTests
             }
 
             if (endedAt < 0 && !harness.Host.IsConnectedParticipant(stalledId)) endedAt = harness.NowMicros;
+            if (heldEndedAt < 0 && !harness.Host.IsConnectedParticipant(heldId)) heldEndedAt = harness.NowMicros;
         }
 
         That(endedAt >= 0 && endedAt - startedAt <= 1_100_000,
             "the player that never acknowledged loses its slot at the bound from its acceptance, through " + replacements + " replacements (" +
             (endedAt < 0 ? "still connected" : (endedAt - startedAt) + " us") + ")");
+        That(heldEndedAt >= 0 && heldEndedAt - startedAt <= 1_100_000 && held.Engine.SessionReplacementsReceived >= 1,
+            "and so does the one that reported every replacement it received (" + (heldEndedAt < 0 ? "still connected" : (heldEndedAt - startedAt) + " us") + ")");
+        forever.Dispose();
         harness.Flush();
         That(harness.Host.IsParticipantReady(steadyId) && steady.Engine.Snapshot.State == MultiplayerSessionState.Ready,
             "while the player that acknowledged every new snapshot keeps its own");

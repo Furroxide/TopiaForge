@@ -6,13 +6,16 @@ using TopiaForge.Mods.Internal;
 using TopiaForge.Multiplayer.Engine;
 using provider::TopiaForge.Multiplayer.Network;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
+using ProviderDiagnostic = provider::TopiaForge.Multiplayer.Engine.EngineDiagnostic;
+using ProviderDiagnosticKind = provider::TopiaForge.Multiplayer.Engine.EngineDiagnosticKind;
+using RoutedDiagnostics = provider::TopiaForge.Multiplayer.RoutedDiagnostics;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// No address crosses the internal SPI. Its types have no address-shaped member or parameter and no network type; a
 /// typed host and port stays inside the provider's handle; and what the runtime logs and keeps for diagnostics is
-/// redacted, whatever text reaches it.
+/// redacted, whatever text reaches it, as is what the provider logs on its own.
 /// </summary>
 internal static class RuntimePrivacyTests
 {
@@ -204,6 +207,45 @@ internal static class RuntimePrivacyTests
             "the bundle keeps the newest 64");
     }
 
+    internal static void TheProvidersOwnLogRedactsWhatNoRuntimeTakes()
+    {
+        // Addresses in a diagnostic's message, its participant, its failure, the failure's inner failure and its stack, from
+        // the engine and from the provider itself.
+        var secrets = new[] { "203.0.113.9", "2001:db8", "play.example.org", "198.51.100.4", "fe80::7" };
+        var failure = Thrown();
+        var participant = new ParticipantId("203.0.113.9:27250");
+        void Feed(RoutedDiagnostics routed)
+        {
+            routed.Report(new ProviderDiagnostic(ProviderDiagnosticKind.ProtocolViolation, "peer [2001:db8::5]:27250 broke the protocol", participant, failure));
+            routed.Report(new InternalMultiplayerDiagnostic(InternalDiagnosticSeverity.Warning, "live.join-ended", "lost play.example.org:27250", participant));
+            routed.Report(new InternalMultiplayerDiagnostic(InternalDiagnosticSeverity.Error, "content.read-failed", "while 198.51.100.4 waited", null, failure));
+        }
+
+        // What the runtime writes for them, and keeps for the bundle.
+        var runtimeLog = new RecordingMultiplayerLog();
+        Feed(new RoutedDiagnostics(null) { Runtime = new MultiplayerRuntimeHost("2545", "0.2.0", runtimeLog) });
+        That(runtimeLog.Lines.Count == 3 && runtimeLog.Lines.All(line => line.Contains(MultiplayerDiagnosticRedactor.Replacement, StringComparison.Ordinal)),
+            "the runtime redacts all three");
+
+        // The provider's own log, before any runtime attaches and behind one that cannot take a diagnostic, gets the same lines.
+        foreach (var failing in new[] { false, true })
+        {
+            var logger = new RecordingModLogger();
+            var routed = new RoutedDiagnostics(logger);
+            if (failing) routed.Runtime = new RefusingRuntime(new MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog()));
+            Feed(routed);
+            var path = failing ? "behind a failing runtime" : "with no runtime";
+            That(logger.Lines.SequenceEqual(runtimeLog.Lines), path + ", the provider logs the runtime's own redacted lines (" + string.Join(" | ", logger.Lines) + ")");
+            foreach (var secret in secrets)
+            {
+                That(!logger.Lines.Any(line => line.Contains(secret, StringComparison.OrdinalIgnoreCase)), path + ", its log never holds " + secret);
+            }
+        }
+
+        // A log that throws loses the line, and the diagnostic never breaks the frame.
+        Feed(new RoutedDiagnostics(new ThrowingModLogger()));
+    }
+
     internal static void HostWordsStayOutOfLogsAndMods()
     {
         const string Words = "Bye, player at 10.20.30.40";
@@ -334,5 +376,66 @@ internal static class RuntimePrivacyTests
         yield return target.Description;
         yield return target.ToString() ?? string.Empty;
         if (target.ServerId != null) yield return target.ServerId;
+    }
+
+    /// <summary>A thrown failure with addresses in its message and in its inner failure's, and a stack.</summary>
+    private static Exception Thrown()
+    {
+        try
+        {
+            try
+            {
+                throw new IOException("relay fe80::7%3 dropped the link");
+            }
+            catch (IOException inner)
+            {
+                throw new InvalidOperationException("relay at 198.51.100.4:3478 refused play.example.org", inner);
+            }
+        }
+        catch (InvalidOperationException exception)
+        {
+            return exception;
+        }
+    }
+
+    /// <summary>A runtime whose diagnostics sink fails, with an address in its own failure.</summary>
+    private sealed class RefusingRuntime : IInternalMultiplayerRuntimeHost
+    {
+        private readonly MultiplayerRuntimeHost inner;
+
+        internal RefusingRuntime(MultiplayerRuntimeHost inner)
+        {
+            this.inner = inner;
+        }
+
+        public string GameBuild => inner.GameBuild;
+
+        public string RuntimeVersion => inner.RuntimeVersion;
+
+        public string DisplayName => inner.DisplayName;
+
+        public IReadOnlyList<InternalContentDescriptor> LocalContent => inner.LocalContent;
+
+        public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) => inner.EvaluateAdmission(offer);
+
+        public InternalContentVerdict CheckHostContent(IReadOnlyList<InternalHostPackage> hostPackages) => inner.CheckHostContent(hostPackages);
+
+        public void SetRunInBackground(bool enabled) => inner.SetRunInBackground(enabled);
+
+        public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic) => throw new InvalidOperationException("the log at 203.0.113.9 is closed");
+    }
+
+    /// <summary>A mod log that fails at every line.</summary>
+    private sealed class ThrowingModLogger : IModLogger
+    {
+        public void Debug(string message) => throw new InvalidOperationException("closed");
+
+        public void Info(string message) => throw new InvalidOperationException("closed");
+
+        public void Warn(string message) => throw new InvalidOperationException("closed");
+
+        public void Error(string message) => throw new InvalidOperationException("closed");
+
+        public void Error(Exception exception, string message) => throw new InvalidOperationException("closed");
     }
 }

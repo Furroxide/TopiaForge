@@ -42,6 +42,12 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             check = content.Check(descriptor);
+            if (check.IsUnreadable)
+            {
+                detail = "This game's mods could not be read.";
+                return LiveFailure.ContentUnreadable;
+            }
+
             if (!check.IsReady)
             {
                 detail = "This game's mods do not match the host's.";

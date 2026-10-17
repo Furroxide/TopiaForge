@@ -135,18 +135,7 @@ namespace TopiaForge.ModManager
         public void ReportDiagnostic(InternalMultiplayerDiagnostic diagnostic)
         {
             if (diagnostic == null) throw new ArgumentNullException(nameof(diagnostic));
-            var code = MultiplayerDiagnosticRedactor.Redact(diagnostic.Code);
-            var text = "Multiplayer [" + code + "]: " + MultiplayerDiagnosticRedactor.Redact(diagnostic.Message);
-            if (diagnostic.Participant.HasValue) text += " (participant " + MultiplayerDiagnosticRedactor.Redact(diagnostic.Participant.Value.Value) + ")";
-            if (diagnostic.Exception != null)
-            {
-                text += " " + diagnostic.Exception.GetType().Name + ": " + MultiplayerDiagnosticRedactor.Redact(diagnostic.Exception.Message);
-                if (diagnostic.Severity == InternalDiagnosticSeverity.Error && diagnostic.Exception.StackTrace != null)
-                {
-                    text += Environment.NewLine + MultiplayerDiagnosticRedactor.Redact(diagnostic.Exception.StackTrace);
-                }
-            }
-
+            var text = MultiplayerDiagnosticRedactor.Describe(diagnostic, out var code);
             recent.Enqueue(new MultiplayerDiagnosticRecord(diagnostic.Severity, code, text));
             while (recent.Count > RecentDiagnosticCapacity) recent.Dequeue();
             switch (diagnostic.Severity)

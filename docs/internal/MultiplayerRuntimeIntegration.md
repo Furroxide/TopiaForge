@@ -133,7 +133,7 @@ runtime nothing is announced and nobody is admitted.
 | `GameBuild` | The game version's patch number, such as `2545`; `unknown` when the version is not known |
 | `RuntimeVersion` | The loader's semantic version |
 | `DisplayName` | The player's name, 1 to 24 printable characters, `Player` until the settings set one |
-| `LocalContent` | One descriptor per loaded package, sorted by id |
+| `LocalContent` | One descriptor per loaded package, sorted by id; the first read can fail when a package cannot be read |
 | `EvaluateAdmission` | The host's decision on a player's offer |
 | `CheckHostContent` | A joining player's check of the host's packages |
 | `SetRunInBackground` | On while online; off restores the game's own setting |
@@ -150,6 +150,20 @@ Each loaded package is described from its manifest and the hash multiplayer comp
   hash of the installed files stands in: each file's portable path, a zero byte, its length and its SHA-256, in ordinal
   order, under a label. The receipt is left out and links are not followed. A hand-copied development build therefore
   matches only the identical files elsewhere.
+- **Packages that cannot be read.** Those files are hashed at the first read of `LocalContent`, on the main thread. A
+  file that cannot be read then, as when another program holds it open, fails the read with an `IOException` that names
+  the package, never its folder, and the next read tries again. The provider treats this game's content as unreadable,
+  reports `content.read-failed`, and nothing connects:
+  - hosting through the control returns `Io` with "This game's mods could not be read: a file of one of them is in use
+    or cannot be opened.";
+  - a live host started directly, as the developer switch does, fails as `ContentUnreadable` before anything binds;
+  - a joining player's check ends the join as `ContentUnreadable`, "This game's mods could not be read.", with that line
+    as its content problem;
+  - a running host refuses every player as `not-ready`, with "The host could not read its own mods.".
+- **The hash's cost.** On a Windows 11 x64 machine with the files cached, 512 MiB in 64 files hashed in 0.44 s on
+  .NET 10 and in 3.9 s on Mono 6.13, whose SHA-256 is managed code, and 20,000 files of 4 KiB in 1.2 s and 3.2 s. A
+  large hand-copied package can therefore hold the game's frame for seconds the first time multiplayer reads it. Installed
+  packages carry a receipt and cost one small read each. Hashing off the main thread is later work (section 12).
 - **The host's descriptor** lists implicit mods as `implicit` and session mods as `session-required` or
   `session-optional`. Client-local, server-only and standalone mods are never listed.
 
@@ -185,9 +199,9 @@ whose problems are display lines naming mods and versions:
 Lines come in the planner's order, each once, and each within the report's 256-character display bound. `RuntimeContent`
 returns them as the live sessions' `ContentAdmission`, and the host's policy builds the admission report from it, so the
 joining player sees them as `RejectionProblems` and the status's content problems. An offer that cannot be read is a
-`protocol` refusal. A runtime whose check throws, or no attached runtime at all, refuses the player with a report of its
-own code, `not-ready`, and the failure is reported. The player reads "The host is not ready for players yet; try again
-shortly.", never that its packages differ.
+`protocol` refusal. A runtime whose check throws, a host that cannot read its own packages, or no attached runtime at
+all, refuses the player with a report of its own code, `not-ready`, and the failure is reported. The player reads "The
+host is not ready for players yet; try again shortly.", with the host's line saying why, never that its packages differ.
 
 ### The joining player's check
 
@@ -236,8 +250,15 @@ It errs towards removing too much. A four-part version goes, and so do file name
 names: a stack frame keeps its method and loses its file. Times such as `12:30`, versions such as `1.0.0`, and code names
 whose last part mixes cases, such as `System.Net.Sockets.SocketException`, stay; so do diagnostic codes, which end in a
 hyphenated part (`content.admission-failed`). A failure's exception keeps its type; its message and, for errors, its
-stack trace are redacted too. The newest 64 redacted lines stay for the diagnostics bundle. A live join that ends is
-reported by its failure's name only, since a kick's message is the host's own text.
+stack trace are redacted too, and an inner failure is never written. The newest 64 redacted lines stay for the
+diagnostics bundle. A live join that ends is reported by its failure's name only, since a kick's message is the host's
+own text.
+
+The provider's own log takes a diagnostic when no runtime is attached, before ModRuntime attaches or after it detaches,
+and when the attached runtime throws instead of taking one. It gets the line the runtime would have written: the
+provider compiles the runtime's `MultiplayerDiagnosticRedactor` from its source, as the test harnesses do, and formats
+with it. The exception never reaches that log as an object, since a mod log writes an exception's whole chain as it is,
+and a log that throws loses the line rather than the frame.
 
 ## 5. System channels
 
@@ -331,7 +352,13 @@ host's world and applies its baseline (WS3.6, WS3.8).
     again. Replacements while the player is still joining start nothing over, on either side, so a host that replaces
     the session more often than its bound never lets a player that stalls keep its slot. That is the player's whole
     allowance and a minute; the player counts from link-up, which comes before the acceptance, or from the replacement's
-    arrival, which comes before its report, so an honest player always gives up first.
+    arrival, which comes before its report, so an honest player always gives up first;
+  - **reports that do not count.** A report from a player still joining, or naming an epoch the host has not reached
+    or one older than the replacement it waits for, moves nothing, so a player that never acknowledges loses its slot
+    at most twice the bound after a replacement. A report without its epoch is a protocol violation;
+  - **peers without the report.** A host older than the report skips it by its length, as it skips any ignorable
+    type, and counts from the replacement alone. A newer host does the same for a player that never reports, such as
+    one older than the report: that player keeps only the minute's margin for the replacement to reach it.
 
   A session the host replaces while the player is in it is synchronized again within the same bounds, although the join
   stays `InSession`.
@@ -394,8 +421,10 @@ answers no and is reported.
   with the real runtime host and composition root.
 - **Admission through the runtime host** (`RuntimeAdmissionTests`): the descriptor's packages by role, a stale player
   refused by the host's planner with its report reaching the player, the joining player's own check before connecting, a
-  required session mod at a compatible version joining, the offer's format and its refusals, and the content seam
-  without a runtime.
+  required session mod at a compatible version joining, the offer's format and its refusals, the content seam
+  without a runtime, and a package whose only file another handle holds open: hosting through the control and through
+  the live sessions refused before anything binds, a joining player stopped before anything connects, a running host
+  refusing every player, every failure reported naming the package and never its folder, and no frame failing.
 - **The engine** (`SystemChannelTests`): channels both ways and in order, stale epochs and generations, windows and
   ownership, hostile peers, readiness holds and their progress, the host's bound on players that never become Ready, the
   world sources and the end-of-frame flush.
@@ -412,7 +441,8 @@ answers no and is reported.
   timings and every window full when the host replaces the session, the replacement reaches the player more than two
   minutes late and the host still waits out the player's allowance from there; on the engine, a late replacement's
   report moves the start of the host's wait once and never again, and a host that replaces the session every half
-  second still ends a player that never acknowledges at the bound from its acceptance.
+  second still ends a player that never acknowledges at the bound from its acceptance, also one that reports every
+  replacement as it arrives.
 - **The host's text** (`HostTextTests`): a refused descriptor request is described in this game's words, whatever
   status the host sends, and a host whose runtime is not ready refuses with a code of its own.
 - **The composition root** (`RuntimeCompositionTests`, `MultiplayerRuntimeHostTests`, the ModRuntime harness): who
@@ -420,7 +450,8 @@ answers no and is reported.
   zero-allocation offline frame.
 - **Privacy** (`RuntimePrivacyTests`): no SPI member, parameter or type is shaped like an address or names a network
   type; typed hosts stay inside the handle; what the runtime logs and keeps is redacted, every address form above
-  included; and the host's words reach neither a log, through the developer switch or the runtime, nor a mod.
+  included, and the provider's own log gets the same redacted lines with no runtime attached and behind one that throws;
+  and the host's words reach neither a log, through the developer switch or the runtime, nor a mod.
 
 ## 10. The realm (step 2)
 
@@ -461,5 +492,9 @@ authority and the microphone arbiter.
 - **The joining check is exact for implicit mods only**, and checks presence for required session mods, leaving the
   rest to the host's planner, as section 4 explains.
 - **The offer is binary**, not canonical JSON: it never leaves C#, and 512 packages fit in the join request's field.
+- **Packages without a receipt are hashed at first use, on the main thread**, so a player who never plays online pays
+  nothing. Hand-copied builds are development work, and section 4 measures the cost; before the in-game interface offers
+  hosting and joining to players, that hashing moves off the main thread, with content reported as not ready until it
+  is done.
 - **Bans are listed by id, not by key**, so the interface never holds a player's key.
 - **Voice is null** until the voice lane adapts the provider's voice service to `IInternalVoiceService`.

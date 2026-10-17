@@ -299,7 +299,9 @@ TopiaForge's runtime drives the provider's engine through the internal SPI
   after the join's acceptance, or after the replacement that took a Ready player out of the session; a client reports
   each replacement's arrival in `ReplacementReceived`, and the first report since that replacement starts the host's wait
   again, once, since a replacement can wait behind a full link. Replacements while the player is still joining start
-  nothing over. The wait is longer than a joining player's whole allowance.
+  nothing over, and neither do that player's reports. The wait is longer than a joining player's whole allowance. A host
+  without the message skips it as an ignorable type and counts from the replacement alone, as every host does for a
+  client that never reports.
 - **The host's words.** A pending submission that a session end cancels fails with the engine's own text, never the
   host's message.
 - **World sources.** The facade's `TryGetNetworkObjectId`, `TryGetEntity`, `TryGetAvatar` and `TryGetPose` ask the

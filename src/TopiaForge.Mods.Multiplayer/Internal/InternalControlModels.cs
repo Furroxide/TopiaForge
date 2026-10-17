@@ -244,7 +244,13 @@ namespace TopiaForge.Mods.Internal
         NetworkStopped = 20,
 
         /// <summary>The target needs the TopiaForge service, which this build does not reach yet.</summary>
-        ServiceUnavailable = 21
+        ServiceUnavailable = 21,
+
+        /// <summary>
+        /// This game's packages could not be read, as when another program holds a file of one open, so hosting or the join
+        /// stopped before anything connected; trying again once the file is free can succeed.
+        /// </summary>
+        ContentUnreadable = 22
     }
 
     /// <summary>The reason code of a host's admission report.</summary>

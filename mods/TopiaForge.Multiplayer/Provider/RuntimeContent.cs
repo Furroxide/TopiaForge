@@ -11,13 +11,17 @@ namespace TopiaForge.Multiplayer
     /// Live sessions' content, from the runtime attached through the internal control: the packages a host announces, the
     /// offer a joining player presents, the host's admission through the runtime's planner, and the joining player's own
     /// check. With no runtime attached nothing is announced and nobody is admitted, so a host can never let anyone in
-    /// without the runtime's decision. Main thread only.
+    /// without the runtime's decision. The same holds while the runtime cannot read this game's packages, as when another
+    /// program holds a file of one without an install receipt while it is hashed: the failure is reported, hosting does not
+    /// start and a running host refuses every player, and a joining player stops before anything connects. Main thread only.
     /// </summary>
     internal sealed class RuntimeContent : ILiveSessionContent
     {
         internal const string HostNotReady = "The host is not ready to admit players yet.";
         internal const string ClientNotReady = "This game is not ready to join sessions yet.";
         internal const string OfferUnreadable = "The host could not read this game's list of mods.";
+        internal const string ContentUnreadable = "This game's mods could not be read: a file of one of them is in use or cannot be opened.";
+        internal const string HostContentUnreadable = "The host could not read its own mods.";
 
         private readonly string fallbackGameBuild;
         private readonly string fallbackRuntimeVersion;
@@ -66,13 +70,19 @@ namespace TopiaForge.Multiplayer
             }
         }
 
-        /// <summary>Gets the shared packages for the descriptor: implicit and session mods, never client-local or server-only ones.</summary>
-        public IReadOnlyList<DescriptorPackage> HostPackages()
+        /// <summary>
+        /// Gets the shared packages for the descriptor: implicit and session mods, never client-local or server-only ones.
+        /// Null when this game's packages cannot be read, so the host does not start: a descriptor listing none would tell
+        /// every joining player that the host runs none.
+        /// </summary>
+        public IReadOnlyList<DescriptorPackage>? HostPackages()
         {
             var current = runtime;
             if (current == null) return Array.Empty<DescriptorPackage>();
+            var local = ReadLocalContent(current);
+            if (local == null) return null;
             var packages = new List<DescriptorPackage>();
-            foreach (var descriptor in current.LocalContent)
+            foreach (var descriptor in local)
             {
                 DescriptorPackageRole role;
                 switch (descriptor.Mode)
@@ -104,7 +114,10 @@ namespace TopiaForge.Multiplayer
             return packages.GetRange(0, ServerDescriptor.MaximumPackages);
         }
 
-        /// <summary>Gets the encoded offer this player presents; empty before a runtime attaches or when it cannot fit.</summary>
+        /// <summary>
+        /// Gets the encoded offer this player presents; empty before a runtime attaches, while this game's packages cannot be
+        /// read, or when they cannot fit. A joining player's check has already stopped the join in each case.
+        /// </summary>
         public byte[] ClientContent() => EncodedOffer() ?? Array.Empty<byte>();
 
         /// <summary>
@@ -115,6 +128,9 @@ namespace TopiaForge.Multiplayer
         {
             var current = runtime;
             if (current == null) return ContentAdmission.Refused(new[] { HostNotReady }, AdmissionCode.NotReady);
+
+            // A host that cannot read its own packages cannot judge anyone else's.
+            if (ReadLocalContent(current) == null) return ContentAdmission.Refused(new[] { HostContentUnreadable }, AdmissionCode.NotReady);
             if (!ContentOfferCodec.TryDecode(clientContent, out var offer))
             {
                 return ContentAdmission.Refused(new[] { OfferUnreadable }, AdmissionCode.Protocol);
@@ -140,6 +156,11 @@ namespace TopiaForge.Multiplayer
             if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
             var current = runtime;
             if (current == null) return new ContentCheck(new[] { ClientNotReady });
+
+            // This game's own packages are read first, hashed where they have no receipt: one that cannot be read stops the
+            // join here, before anything connects.
+            var local = ReadLocalContent(current);
+            if (local == null) return new ContentCheck(new[] { ContentUnreadable }, unreadable: true);
             var packages = new InternalHostPackage[descriptor.Packages.Count];
             for (var index = 0; index < packages.Length; index++)
             {
@@ -159,20 +180,55 @@ namespace TopiaForge.Multiplayer
             }
 
             if (!verdict.IsAdmitted) return new ContentCheck(verdict.Problems);
-            return EncodedOffer() == null
+            return EncodedOffer(local) == null
                 ? new ContentCheck(new[] { "Too many mods are enabled to join a session; at most " + InternalContentLimits.MaximumPackages + " fit." })
                 : ContentCheck.Ready;
         }
 
         /// <summary>
-        /// Gets the offer for this player's content, null when it cannot be presented. It is encoded once for each content
-        /// list the runtime returns, and the runtime returns a new list whenever its packages change.
+        /// Reads the attached runtime's packages as every content path here does: null without a runtime, or when the
+        /// runtime cannot read them, which is reported.
         /// </summary>
+        internal IReadOnlyList<InternalContentDescriptor>? ReadLocalContent()
+        {
+            var current = runtime;
+            return current == null ? null : ReadLocalContent(current);
+        }
+
+        /// <summary>
+        /// Reads the runtime's packages, or returns null when it cannot, as when another program holds a file of a package
+        /// without an install receipt while the runtime hashes it. The failure is reported and the content treated as
+        /// unreadable: nothing is announced or offered and nobody is admitted, so the frame goes on, and the next read tries
+        /// again.
+        /// </summary>
+        private IReadOnlyList<InternalContentDescriptor>? ReadLocalContent(IInternalMultiplayerRuntimeHost current)
+        {
+            try
+            {
+                return current.LocalContent;
+            }
+            catch (Exception exception)
+            {
+                Report?.Invoke(new InternalMultiplayerDiagnostic(InternalDiagnosticSeverity.Error, "content.read-failed", "This game's mods could not be read.", null, exception));
+                return null;
+            }
+        }
+
+        /// <summary>Gets the offer for this player's content, null when it cannot be read or presented.</summary>
         private byte[]? EncodedOffer()
         {
             var current = runtime;
             if (current == null) return null;
-            var content = current.LocalContent;
+            var content = ReadLocalContent(current);
+            return content == null ? null : EncodedOffer(content);
+        }
+
+        /// <summary>
+        /// Gets the offer for <paramref name="content"/>, null when it cannot be presented. It is encoded once for each
+        /// content list the runtime returns, and the runtime returns a new list whenever its packages change.
+        /// </summary>
+        private byte[]? EncodedOffer(IReadOnlyList<InternalContentDescriptor> content)
+        {
             if (encodedOffer != null && ReferenceEquals(content, offeredContent)) return encodedOffer;
             offeredContent = content;
             encodedOffer = null;

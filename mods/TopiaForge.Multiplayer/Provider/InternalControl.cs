@@ -126,7 +126,11 @@ namespace TopiaForge.Multiplayer
                 return Fail(ModErrorCode.InvalidArgument, "A password is 1 to 64 characters with no control characters.");
             }
 
-            foreach (var descriptor in runtime!.LocalContent)
+            // This game's packages are read, and hashed where they have no receipt, before anything opens: packages that cannot
+            // be read stop hosting here, and the failure is reported.
+            var local = content.ReadLocalContent();
+            if (local == null) return Fail(ModErrorCode.Io, RuntimeContent.ContentUnreadable);
+            foreach (var descriptor in local)
             {
                 if (descriptor.Mode == InternalContentMode.Standalone)
                 {

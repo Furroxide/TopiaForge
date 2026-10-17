@@ -45,7 +45,11 @@ namespace TopiaForge.ModManager
             admissionMods = null;
         }
 
-        /// <summary>Gets one descriptor per loaded package, sorted by id; computed once and kept until the packages change.</summary>
+        /// <summary>
+        /// Gets one descriptor per loaded package, sorted by id; computed once and kept until the packages change. The first
+        /// read hashes the packages without a receipt; one whose files cannot be read throws an <see cref="IOException"/>, and
+        /// the next read tries again.
+        /// </summary>
         internal IReadOnlyList<InternalContentDescriptor> Descriptors
         {
             get
@@ -233,8 +237,29 @@ namespace TopiaForge.ModManager
 
             internal string PackagePath { get; }
 
-            /// <summary>Gets the package hash, read when first needed.</summary>
-            internal string Sha256 => sha256 ??= PackageSha256(PackagePath);
+            /// <summary>
+            /// Gets the package hash, read when first needed. Files that cannot be read, as when another program holds one open,
+            /// throw an <see cref="IOException"/> that names the package and not its folder, which names this player's own
+            /// folders; the next read tries again.
+            /// </summary>
+            internal string Sha256
+            {
+                get
+                {
+                    if (sha256 != null) return sha256;
+                    try
+                    {
+                        sha256 = PackageSha256(PackagePath);
+                    }
+                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                    {
+                        var name = string.IsNullOrWhiteSpace(Manifest.Name) ? Manifest.Id : Manifest.Name.Trim();
+                        throw new IOException(name + " " + Manifest.Version + " could not be read to identify it for multiplayer (" + exception.GetType().Name + ").", exception);
+                    }
+
+                    return sha256;
+                }
+            }
         }
     }
 }

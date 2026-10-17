@@ -17,8 +17,11 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Gets the TopiaForge runtime version.</summary>
         string RuntimeVersion { get; }
 
-        /// <summary>Gets the packages a host lists in its descriptor, sorted by id.</summary>
-        IReadOnlyList<DescriptorPackage> HostPackages();
+        /// <summary>
+        /// Gets the packages a host lists in its descriptor, sorted by id, or null when this game's packages cannot be read;
+        /// the host then does not start.
+        /// </summary>
+        IReadOnlyList<DescriptorPackage>? HostPackages();
 
         /// <summary>Gets what a joining player presents for admission, as opaque bytes the host's runtime reads.</summary>
         byte[] ClientContent();
@@ -29,7 +32,10 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         ContentAdmission Admit(byte[] clientContent);
 
-        /// <summary>Checks, on a joining player, whether the host's packages are installed exactly.</summary>
+        /// <summary>
+        /// Checks, on a joining player, whether the host's packages are installed exactly. A check that could not read this
+        /// game's own packages is <see cref="ContentCheck.IsUnreadable"/>.
+        /// </summary>
         ContentCheck Check(ServerDescriptor descriptor);
     }
 

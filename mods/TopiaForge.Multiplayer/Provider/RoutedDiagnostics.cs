@@ -1,4 +1,5 @@
 using System;
+using TopiaForge.ModManager;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Multiplayer.Engine;
@@ -7,7 +8,8 @@ namespace TopiaForge.Multiplayer
 {
     /// <summary>
     /// Where the provider's diagnostics go: to the attached runtime, which redacts them before its log and diagnostics
-    /// bundle, or to the provider's own log before one attaches. Diagnostics never carry network addresses either way.
+    /// bundle, or to the provider's own log when no runtime is attached or the runtime fails to take one. That log gets the
+    /// line the runtime would have written, from the runtime's own redactor, so no path logs an address.
     /// </summary>
     internal sealed class RoutedDiagnostics : IEngineDiagnostics
     {
@@ -34,6 +36,7 @@ namespace TopiaForge.Multiplayer
 
         internal void Report(InternalMultiplayerDiagnostic diagnostic)
         {
+            if (diagnostic == null) throw new ArgumentNullException(nameof(diagnostic));
             var runtime = Runtime;
             if (runtime != null)
             {
@@ -48,11 +51,37 @@ namespace TopiaForge.Multiplayer
                 }
             }
 
+            LogLocally(diagnostic);
+        }
+
+        /// <summary>
+        /// Writes what no runtime took to the provider's own log, redacted exactly as the runtime redacts. The failure goes in
+        /// as redacted text, never as the exception itself, whose message, inner failures and stack the log would print as
+        /// they are. A log that throws loses the line: diagnostics never break the frame.
+        /// </summary>
+        private void LogLocally(InternalMultiplayerDiagnostic diagnostic)
+        {
             if (logger == null) return;
-            var text = "Multiplayer: " + diagnostic.Message + (diagnostic.Participant.HasValue ? " (participant " + diagnostic.Participant.Value + ")" : string.Empty);
-            if (diagnostic.Exception != null) logger.Error(diagnostic.Exception, text);
-            else if (diagnostic.Severity == InternalDiagnosticSeverity.Info) logger.Info(text);
-            else logger.Warn(text);
+            var text = MultiplayerDiagnosticRedactor.Describe(diagnostic, out _);
+            try
+            {
+                switch (diagnostic.Severity)
+                {
+                    case InternalDiagnosticSeverity.Info:
+                        logger.Info(text);
+                        break;
+                    case InternalDiagnosticSeverity.Warning:
+                        logger.Warn(text);
+                        break;
+                    default:
+                        logger.Error(text);
+                        break;
+                }
+            }
+            catch (Exception)
+            {
+                // Best effort, as the runtime's own log is.
+            }
         }
 
         /// <summary>

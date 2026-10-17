@@ -22,6 +22,9 @@ namespace TopiaForge.Mods.Internal
         /// <summary>
         /// Gets the packages this process runs, as multiplayer admission sees them, sorted by id. The same list comes back
         /// until the packages change, so a caller may keep what it derives from the list for as long as it gets that list.
+        /// The first read hashes the files of packages without an install receipt, on the calling thread, and throws an
+        /// <see cref="System.IO.IOException"/> when one cannot be read; the provider then treats this player's content as
+        /// unreadable, so it neither hosts nor joins with it, and the next read tries again.
         /// </summary>
         IReadOnlyList<InternalContentDescriptor> LocalContent { get; }
 
