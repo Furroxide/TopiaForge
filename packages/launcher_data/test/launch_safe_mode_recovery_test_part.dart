@@ -303,5 +303,49 @@ void _registerLaunchSafeModeRecoveryTests({
       expect(starts, 0);
       expect(Directory(state.path).existsSync(), isTrue);
     });
+
+    test('a launcher backup of manager state that cannot be put back blocks '
+        'every launch, Safe Mode too', () async {
+      var starts = 0;
+      final (repo, install) = await _prepareProfileLaunchRepository(
+        dataRoot: dataRoot(),
+        repositoryRoot: repositoryRoot(),
+        gameRoot: gameRoot(),
+        starter: (_) async {
+          starts++;
+          return 588;
+        },
+      );
+      // What a launcher save stopped between its two moves leaves. The game
+      // cannot see that backup, so a Safe Mode start would save a fresh
+      // state over the player's.
+      final state = _profileManagerState(gameRoot())
+        ..writeAsStringSync('{"mods":[]}');
+      final backup = state.renameSync(
+        '${state.path}.4242-1760520615100000.bak',
+      );
+      const menu = LauncherProfile(id: 'menu', name: 'Menu');
+      final safe = menu.copyWith(
+        launchSettings: const LaunchSettings(safeMode: true),
+      );
+      final release = await holdInPlace(backup);
+      if (release == null) return;
+      for (final profile in [menu, safe]) {
+        final preview = await repo.previewLaunch(install, profile);
+        expect(preview.canLaunch, isFalse, reason: profile.id);
+        expect(
+          preview.issues.map((issue) => issue.message).join(' '),
+          contains('Manager state could not be read just now'),
+        );
+        expect((await repo.launch(install, profile)).processStarted, isFalse);
+      }
+      expect(starts, 0);
+      expect(state.existsSync(), isFalse);
+      await release();
+
+      expect((await repo.previewLaunch(install, menu)).canLaunch, isTrue);
+      expect(state.readAsStringSync(), '{"mods":[]}');
+      expect(backup.existsSync(), isFalse);
+    });
   });
 }

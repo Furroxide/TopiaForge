@@ -5,6 +5,7 @@ extension LauncherBlocActions on LauncherBloc {
     PackageSourceAdded event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, _sourcesNotSaved)) return;
     final id = 'source-${DateTime.now().millisecondsSinceEpoch}';
     final source = PackageSource(id: id, name: event.name, url: event.url);
     await _guard(emit, 'Added package source.', () async {
@@ -17,6 +18,7 @@ extension LauncherBlocActions on LauncherBloc {
     PackageSourceEnabledChanged event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, _sourcesNotSaved)) return;
     final sources = [
       for (final source in state.packageSources)
         if (source.id == event.sourceId)
@@ -34,6 +36,7 @@ extension LauncherBlocActions on LauncherBloc {
     PackageSourceRemoved event,
     Emitter<LauncherState> emit,
   ) async {
+    if (!_canSaveFromState(emit, _sourcesNotSaved)) return;
     final sources = state.packageSources
         .where((source) => source.id != event.sourceId || source.builtIn)
         .toList();
@@ -124,6 +127,8 @@ extension LauncherBlocActions on LauncherBloc {
     ].join(' ');
   }
 }
+
+const _sourcesNotSaved = 'Package sources could not be saved.';
 
 String _packageInboxMessage(PackageInboxInstallOutcome outcome) {
   final summary = switch (outcome.status) {

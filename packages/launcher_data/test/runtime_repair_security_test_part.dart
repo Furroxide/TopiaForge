@@ -159,4 +159,92 @@ void _registerRuntimeRepairSecurityTests({
       expect(transaction.existsSync(), isFalse);
     },
   );
+
+  test('runtime repair rolls back with the journal an interrupted save moved '
+      'aside', () async {
+    final (:target, :transaction, :journal) = _interruptedRuntimeCommit(
+      gameRoot(),
+    );
+    journal.renameSync('${journal.path}.4242-1760520615100000.bak');
+    Directory(
+      p.join(repositoryRoot().path, 'third_party', 'BepInEx'),
+    ).deleteSync(recursive: true);
+    final install = await repository().selectGameDirectory(gameRoot().path);
+
+    final report = await repository().installOrRepairRuntime(install);
+
+    expect(report.ok, isFalse);
+    expect(target.readAsStringSync(), 'original proxy');
+    expect(transaction.existsSync(), isFalse);
+  });
+
+  test(
+    'runtime repair keeps every backup while the journal an interrupted save '
+    'moved aside is held',
+    () async {
+      final (:target, :transaction, :journal) = _interruptedRuntimeCommit(
+        gameRoot(),
+      );
+      final moved = journal.renameSync(
+        '${journal.path}.4242-1760520615100000.bak',
+      );
+      Directory(
+        p.join(repositoryRoot().path, 'third_party', 'BepInEx'),
+      ).deleteSync(recursive: true);
+      final install = await repository().selectGameDirectory(gameRoot().path);
+      final release = await holdInPlace(moved);
+      if (release == null) return;
+
+      final report = await repository().installOrRepairRuntime(install);
+
+      expect(report.ok, isFalse);
+      expect(target.readAsStringSync(), 'partially installed proxy');
+      expect(
+        File(p.join(transaction.path, 'backups', '0.bak')).existsSync(),
+        isTrue,
+        reason: "The game's original file waits there.",
+      );
+      expect(
+        report.issues.map((issue) => issue.message).join(' '),
+        contains('Runtime repair journal could not be read just now'),
+      );
+      await release();
+
+      // Free again, the journal is put back and the original restored.
+      expect((await repository().installOrRepairRuntime(install)).ok, isFalse);
+      expect(target.readAsStringSync(), 'original proxy');
+      expect(transaction.existsSync(), isFalse);
+    },
+  );
+}
+
+/// A runtime repair stopped after installing `winhttp.dll` over the game's
+/// own, whose original waits in the transaction's backups.
+({File target, Directory transaction, File journal}) _interruptedRuntimeCommit(
+  Directory gameRoot,
+) {
+  final target = File(p.join(gameRoot.path, 'winhttp.dll'))
+    ..writeAsStringSync('original proxy');
+  final transaction = Directory(
+    p.join(gameRoot.path, '.topiaforge-runtime-transaction'),
+  );
+  final backup = File(p.join(transaction.path, 'backups', '0.bak'));
+  backup.parent.createSync(recursive: true);
+  target.renameSync(backup.path);
+  target.writeAsStringSync('partially installed proxy');
+  final journal = File(p.join(transaction.path, 'journal.json'))
+    ..writeAsStringSync(
+      jsonEncode({
+        'formatVersion': 2,
+        'status': 'committing',
+        'operations': [
+          {
+            'relativePath': 'winhttp.dll',
+            'phase': 'installed',
+            'hadOriginal': true,
+          },
+        ],
+      }),
+    );
+  return (target: target, transaction: transaction, journal: journal);
 }

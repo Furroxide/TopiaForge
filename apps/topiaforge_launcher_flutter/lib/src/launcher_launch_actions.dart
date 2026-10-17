@@ -7,6 +7,7 @@ extension LauncherLaunchActions on LauncherBloc {
     Emitter<LauncherState> emit,
     String message,
   ) async {
+    if (!_canSaveFromState(emit, 'Profile could not be saved.')) return false;
     List<LauncherProfile> saved;
     try {
       saved = await _repository.saveProfiles(profiles, selectedId);

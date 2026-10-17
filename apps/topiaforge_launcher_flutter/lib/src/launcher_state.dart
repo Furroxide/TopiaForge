@@ -45,6 +45,7 @@ class LauncherState {
     this.reachabilityProbe = const ReachabilityProbeSettings(),
     this.reachabilityResult,
     this.multiplayer = const MultiplayerViewState(),
+    this.snapshotLoaded = false,
   });
 
   factory LauncherState.initial() => LauncherState(
@@ -108,6 +109,10 @@ class LauncherState {
 
   /// Session links, link handling, and what the multiplayer section adds.
   final MultiplayerViewState multiplayer;
+
+  /// Whether a snapshot has loaded. Until one has, the profiles, package
+  /// sources and update settings here are stand-ins, never the player's.
+  final bool snapshotLoaded;
 
   /// Last developer-toolchain audit (.NET/Node/Unity/Git), shown in the Dev tab's Environment pane.
   final EnvironmentReport? developerEnvironment;
@@ -248,6 +253,7 @@ class LauncherState {
     ReachabilityProbeSettings? reachabilityProbe,
     NatClassification? reachabilityResult,
     MultiplayerViewState? multiplayer,
+    bool? snapshotLoaded,
   }) {
     return LauncherState(
       section: section ?? this.section,
@@ -303,6 +309,7 @@ class LauncherState {
       reachabilityProbe: reachabilityProbe ?? this.reachabilityProbe,
       reachabilityResult: reachabilityResult ?? this.reachabilityResult,
       multiplayer: multiplayer ?? this.multiplayer,
+      snapshotLoaded: snapshotLoaded ?? this.snapshotLoaded,
     );
   }
 

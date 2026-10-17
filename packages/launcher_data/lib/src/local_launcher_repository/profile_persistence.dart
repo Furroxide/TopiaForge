@@ -106,8 +106,13 @@ extension _ProfilePersistence on LocalLauncherRepository {
   }
 
   Future<(List<LauncherProfile>, bool)> _readProfileStore() async {
-    await _recoverAtomicBackupIfMissing(_profilesFile);
-    if (!_profilesFile.existsSync()) return (<LauncherProfile>[], true);
+    if (await _recoverAtomicBackupIfMissing(
+          _profilesFile,
+          label: 'Launcher profiles',
+        ) ==
+        _AtomicFileState.missing) {
+      return (<LauncherProfile>[], true);
+    }
     final decoded = await _readJsonFileBounded(
       _profilesFile,
       maxBytes: _maxProfilesBytes,

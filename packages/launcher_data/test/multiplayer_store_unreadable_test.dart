@@ -7,9 +7,9 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'held_file_support.dart';
 import 'multiplayer_lan_rig.dart';
 import 'multiplayer_network_support.dart';
-import 'multiplayer_unreadable_file.dart';
 
 /// A stored file that another program holds unreadable is never written
 /// over, and nothing takes it for empty or for the defaults. On Windows the

@@ -16,8 +16,11 @@ extension _StorageHelpers on LocalLauncherRepository {
   Future<List<LauncherProfile>> _loadProfiles() => _loadVersionedProfiles();
 
   Future<List<PackageSource>> _loadPackageSources() async {
-    await _recoverAtomicBackupIfMissing(_sourcesFile);
-    if (!_sourcesFile.existsSync()) {
+    if (await _recoverAtomicBackupIfMissing(
+          _sourcesFile,
+          label: 'Package sources',
+        ) ==
+        _AtomicFileState.missing) {
       return _defaultPackageSources();
     }
 
@@ -86,8 +89,11 @@ extension _StorageHelpers on LocalLauncherRepository {
   }
 
   Future<Map<String, Object?>> _loadSettings() async {
-    await _recoverAtomicBackupIfMissing(_settingsFile);
-    if (!_settingsFile.existsSync()) {
+    if (await _recoverAtomicBackupIfMissing(
+          _settingsFile,
+          label: 'Launcher settings',
+        ) ==
+        _AtomicFileState.missing) {
       return <String, Object?>{};
     }
 
@@ -181,40 +187,6 @@ extension _StorageHelpers on LocalLauncherRepository {
       );
     } finally {
       completion.complete();
-    }
-  }
-}
-
-Future<void> _recoverAtomicBackupIfMissing(File file) async {
-  if (await file.exists() || !await file.parent.exists()) {
-    return;
-  }
-  final prefix = '${p.basename(file.path)}.';
-  final candidates =
-      file.parent.listSync(followLinks: false).whereType<File>().where((
-        candidate,
-      ) {
-        final name = p.basename(candidate.path);
-        return name.startsWith(prefix) && name.endsWith('.bak');
-      }).toList()..sort(
-        (left, right) =>
-            right.statSync().modified.compareTo(left.statSync().modified),
-      );
-  for (final backup in candidates) {
-    if (FileSystemEntity.typeSync(backup.path, followLinks: false) !=
-        FileSystemEntityType.file) {
-      continue;
-    }
-    try {
-      await backup.rename(file.path);
-      for (final stale in candidates.where(
-        (candidate) => candidate != backup,
-      )) {
-        await _deleteFileBestEffort(stale);
-      }
-      return;
-    } on FileSystemException {
-      // Try the next intact backup if this one vanished or was locked.
     }
   }
 }
