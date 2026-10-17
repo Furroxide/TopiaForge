@@ -59,9 +59,10 @@ namespace TopiaForge.Multiplayer.Voice
             return refused;
         }
 
-        /// <summary>Gets whether <paramref name="speaker"/> was heard in the last 250 ms.</summary>
+        /// <summary>Gets whether <paramref name="speaker"/> was heard in the last 250 ms, on the main thread: it refuses any other.</summary>
         internal bool IsSpeaking(ParticipantId speaker)
         {
+            engine.RequireOwnerThread();
             if (!speaker.IsValid || !streams.TryGetValue(speaker.Value, out var stream)) return false;
             var heard = stream.LastVoiceMicros;
             return heard != long.MinValue && clock() - heard < SpeakingMicros;

@@ -17,9 +17,10 @@ namespace TopiaForge.Multiplayer.Voice
 
         /// <summary>
         /// Sets whom the local player does not want to hear; the host stops relaying them, and anything of theirs still
-        /// buffered here goes at once. The engine keeps the set for as long as the host keeps this player's record. Names
-        /// given while a join is under way, or while the link is down, belong to the host this player joined last, so the
-        /// join keeps them with that host and never gives them to another.
+        /// buffered here goes at once. The engine keeps the set for as long as the host keeps this player's record. It ties
+        /// names to the host whose players the session lists, so a join keeps them with that host and never gives them to
+        /// another. Names given after a join found another host, but before that host lists its players, are dropped: the
+        /// session still lists the players of before.
         /// </summary>
         /// <remarks>
         /// The wish to hear nobody, <paramref name="muteAll"/>, lasts until the player changes it: the service gives it back

@@ -398,6 +398,36 @@ internal static class VoiceSessionChangeTests
         }
     }
 
+    internal static void NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere()
+    {
+        // The second host's world is large, so over a 64 kB/s link its answer to b's join spans two frames, with its
+        // participant list in the second. In between, b's session names the second host's session but still lists the
+        // first host's players, and the player mutes the a it shows. That a is nobody with the second host: the name goes
+        // at once, b hears the second host's a, and that host never learns the name.
+        using var rig = new VoiceServiceRig(new VirtualLinkConditions { LatencyTicks = 1, TicksPerSecond = 100, BandwidthBytesPerSecond = 64_000 });
+        rig.AddHost();
+        rig.AddClient("a");
+        var b = rig.AddClient("b");
+        var second = rig.AddHost("host-2", session: SecondSession.Value);
+        VoiceMuteTests.FillWorld(second.Engine.CreateFacade("world"));
+        var farA = rig.AddClient("a", host: second, untilReady: false);
+        for (var step = 0; step < 400 && farA.Engine.Snapshot.State != MultiplayerSessionState.Ready; step++) rig.Step();
+        rig.Connect(b, second);
+        for (var step = 0; step < 400 && !b.Engine.Snapshot.Id.Equals(SecondSession); step++) rig.Step();
+        Assert(b.Engine.Snapshot.State == MultiplayerSessionState.Synchronizing && b.Engine.Snapshot.TryGetParticipant(new ParticipantId("host"), out _),
+            "b is joining the second host, and its session still lists the first host's players");
+        b.Voice!.SetListenerMutes(new[] { new ParticipantId("a") });
+        var mutes = new HashSet<ParticipantId>();
+        Assert(!b.Voice.GetListenerMutes(mutes) && mutes.Count == 0, "the name goes at once");
+        StepUntilReady(rig, b);
+        b.Listen("a");
+        farA.Source = VoiceSource.Speech(2, seed: 43);
+        rig.StepFor(1_500_000);
+        var heard = b.Heard("a").ToArray();
+        Assert(VoiceAudio.LevelDecibels(heard, heard.Length / 2, heard.Length / 2) > -35, "b hears the second host's a");
+        Assert(second.Engine.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 0, "which never learned the name");
+    }
+
     /// <summary>Stalls or restores a member's link both ways, holding what is sent meanwhile, as the rig's Interrupt does.</summary>
     private static void Stall(VoiceServiceRig.Member member, bool stalled)
     {

@@ -100,6 +100,8 @@ namespace TopiaForge.Multiplayer
                     return "engine.codec-failed";
                 case EngineDiagnosticKind.VoiceAbuse:
                     return "engine.voice-abuse";
+                case EngineDiagnosticKind.VoiceFailed:
+                    return "engine.voice-failed";
                 default:
                     return "engine.other-diagnostic";
             }

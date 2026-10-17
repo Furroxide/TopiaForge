@@ -9,6 +9,7 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// The provider's voice service through the rig with the real codec: speech reaches every listener with bounded delay,
 /// fits the transport's voice shares at the 20 kbit/s target, survives reconnects and restarts, and stops at once for mutes.
+/// A worker that gives up leaves nothing queued, and the readings belong to the main thread.
 /// </summary>
 internal static class VoiceServiceTests
 {
@@ -286,6 +287,127 @@ internal static class VoiceServiceTests
             "once a is Ready, the host codes again and a hears it");
     }
 
+    internal static void AWorkerThatGivesUpLeavesNothingQueued()
+    {
+        // The worker's steps fail, here because its clock does. Nine failures, a step that works and nine more: it carries
+        // on. A tenth in a row and it gives up, which voice reports once and its transmit state shows. The session goes on,
+        // and so do its events: mutes change, speakers come and go, the player holds the key and talks. Nothing takes what
+        // the main thread queues for the worker any more, so every pump drops it, and none of it piles up.
+        var codec = new OpusVoiceCodec();
+        var options = new EngineOptions
+        {
+            StepRateHz = 60,
+            DownstreamRateHz = 0,
+            ClockSyncIntervalMicros = 0,
+            ParticipantIdForIdentity = identity => new ParticipantId(identity),
+            Voice = new VoiceOptions(codec)
+        };
+        var network = new VirtualEngineTransport(new VirtualLinkConditions { LatencyTicks = 1 });
+        var now = 1_000_000L;
+        var failing = false;
+        var reports = new Reports();
+        var host = SessionEngine.CreateHost(options, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("failing"), new SessionSeed(1),
+            new ParticipantId("host"), "Host", now);
+        var client = SessionEngine.CreateClient(options, new MultiplayerSessionId("failing"), now);
+        var pair = network.Connect("a");
+        host.Accept(pair.HostEnd);
+        client.Connect(pair.ClientEnd, "a");
+        var voice = new VoiceService(client, codec, () => failing ? throw new InvalidOperationException("The voice clock failed.") : now, reports, startWorker: false)
+        {
+            Enabled = true
+        };
+        ulong tick = 0;
+        void Pump()
+        {
+            tick++;
+            now += 10_000;
+            network.Now = tick;
+            network.DeliverDue(tick);
+            host.Pump(now);
+            client.Pump(now);
+            voice.Pump(now);
+        }
+
+        bool Fail(int steps)
+        {
+            failing = true;
+            var running = true;
+            for (var step = 0; step < steps; step++) running = voice.Worker.TryStep();
+            failing = false;
+            return running;
+        }
+
+        try
+        {
+            for (var step = 0; step < 20 && client.Snapshot.State != MultiplayerSessionState.Ready; step++) Pump();
+            Assert(client.Snapshot.State == MultiplayerSessionState.Ready, "a joins");
+            Assert(Fail(VoiceWorker.FaultLimit - 1) && voice.Worker.TryStep() && Fail(VoiceWorker.FaultLimit - 1) && !voice.Worker.Failed,
+                "nine failed steps, one that works and nine more leave the worker running");
+            Assert(!Fail(1) && voice.Worker.Failed && voice.Worker.Faults == (2 * VoiceWorker.FaultLimit) - 1, "a tenth in a row and it gives up");
+            Pump();
+            Assert(voice.TransmitState == VoiceTransmitState.Failed && reports.Count(EngineDiagnosticKind.VoiceFailed) == 1, "voice says so, and reports it once");
+
+            var samples = new float[480];
+            var most = 0;
+            for (var frame = 0; frame < 500; frame++)
+            {
+                voice.SetListenerMutes(Array.Empty<ParticipantId>(), muteAll: frame % 2 == 0);
+                voice.GetPlaybackStream(new ParticipantId("s" + frame));
+                voice.SetTransmitting(frame % 10 != 0);
+                voice.SubmitCapture(samples, samples.Length, 48_000);
+                Pump();
+                lock (voice.Inbound.Gate)
+                {
+                    var batch = voice.Inbound.Writable;
+                    most = Math.Max(most, batch.Controls.Count + batch.CaptureCount + batch.FrameCount);
+                }
+            }
+
+            Assert(most == 0, "every pump drops what was queued for the worker that gave up (" + most + " entries waited at most)");
+            Assert(reports.Count(EngineDiagnosticKind.VoiceFailed) == 1, "and voice reported its failure once");
+        }
+        finally
+        {
+            voice.Dispose();
+            client.Shutdown(MultiplayerSessionEndReason.Left);
+            host.Shutdown(MultiplayerSessionEndReason.HostEnded);
+        }
+    }
+
+    internal static void TheIndicatorAndStatisticsBelongToTheMainThread()
+    {
+        // The talking indicator and the statistics read the speakers the main thread keeps, so from any other thread both
+        // are refused at once, as capture is.
+        using var rig = new VoiceServiceRig();
+        rig.AddHost();
+        var a = rig.AddClient("a");
+        var b = rig.AddClient("b");
+        b.Listen("a");
+        a.Source = VoiceSource.Speech(1, seed: 44);
+        rig.StepFor(500_000);
+        var voice = b.Voice!;
+        Assert(voice.IsSpeaking(a.Id) && voice.GetStatistics().Speakers.Count == 1, "on the main thread, b sees a speaking");
+        var refused = new List<string>();
+        var calls = new (string Name, Action Call)[] { ("IsSpeaking", () => voice.IsSpeaking(a.Id)), ("GetStatistics", () => voice.GetStatistics()) };
+        var thread = new Thread(() =>
+        {
+            foreach (var (name, call) in calls)
+            {
+                try
+                {
+                    call();
+                }
+                catch (InvalidOperationException)
+                {
+                    refused.Add(name);
+                }
+            }
+        });
+        thread.Start();
+        thread.Join();
+        Assert(refused.Count == calls.Length, "both are refused on another thread (refused: " + string.Join(", ", refused) + ")");
+    }
+
     internal static VoiceSpeakerStatistics Counters(VoiceServiceRig.Member listener, string speaker) =>
         listener.Voice!.GetStatistics().Speakers.Single(entry => entry.Speaker.Value == speaker);
 
@@ -298,5 +420,15 @@ internal static class VoiceServiceTests
     internal static void Assert(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("Assertion failed: " + message);
+    }
+
+    /// <summary>The diagnostics a voice service reports, by kind.</summary>
+    private sealed class Reports : IEngineDiagnostics
+    {
+        private readonly List<EngineDiagnostic> reports = new();
+
+        public void Report(EngineDiagnostic diagnostic) => reports.Add(diagnostic);
+
+        internal int Count(EngineDiagnosticKind kind) => reports.Count(report => report.Kind == kind);
     }
 }

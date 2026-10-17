@@ -13,8 +13,9 @@ namespace TopiaForge.Multiplayer.Voice
     /// playback streams.
     /// </summary>
     /// <remarks>
-    /// <see cref="Start"/> runs <see cref="Step"/> on a background thread, woken by the main thread or by the next slot.
-    /// Tests call <see cref="Step"/> themselves against a virtual clock instead, so every run is the same. A step that
+    /// <see cref="Start"/> runs <see cref="TryStep"/> on a background thread, woken by the main thread or by the next slot;
+    /// ten failed steps in a row and it gives up. Tests call <see cref="Step"/> themselves against a virtual clock instead,
+    /// so every run is the same, and <see cref="TryStep"/> to see a failure through. A step that
     /// comes up to <see cref="MaximumCatchUpSlots"/> slots late runs the slots it missed. One that comes later follows a
     /// stall: the missed slots are dropped rather than run in a burst, and every jitter buffer is trimmed to its target, as
     /// it is after any batch that leaves one deeper than it ever aims to be. Voice then plays at its usual delay at once.
@@ -152,6 +153,31 @@ namespace TopiaForge.Multiplayer.Voice
             RunSlots(nowMicros);
         }
 
+        /// <summary>
+        /// Runs <see cref="Step"/> on the voice clock and contains whatever it throws: a fault is counted, and after
+        /// <see cref="FaultLimit"/> in a row the worker gives up. Returns false once it has. The background thread runs
+        /// this; tests may run it themselves.
+        /// </summary>
+        internal bool TryStep()
+        {
+            if (failed) return false;
+            try
+            {
+                Step(clock());
+                consecutiveFaults = 0;
+                return true;
+            }
+            catch (Exception exception)
+            {
+                // Nothing may escape the thread: an unhandled exception would take the game down with it.
+                Faults++;
+                LastFault = exception;
+                if (++consecutiveFaults < FaultLimit) return true;
+                failed = true;
+                return false;
+            }
+        }
+
         /// <summary>Stops the background thread and waits up to a second for it.</summary>
         public void Dispose()
         {
@@ -242,25 +268,8 @@ namespace TopiaForge.Multiplayer.Voice
 
         private void Run()
         {
-            while (!stopping)
+            while (!stopping && TryStep())
             {
-                try
-                {
-                    Step(clock());
-                    consecutiveFaults = 0;
-                }
-                catch (Exception exception)
-                {
-                    // Nothing may escape the thread: an unhandled exception would take the game down with it.
-                    Faults++;
-                    LastFault = exception;
-                    if (++consecutiveFaults >= FaultLimit)
-                    {
-                        failed = true;
-                        return;
-                    }
-                }
-
                 if (stopping) return;
                 wake.WaitOne(WaitMilliseconds());
             }

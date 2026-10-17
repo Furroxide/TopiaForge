@@ -173,6 +173,7 @@ namespace TopiaForge.Multiplayer.Engine
                     break;
                 case MessageType.ParticipantsChanged:
                     clientParticipants = SessionMessages.ReadParticipants(body);
+                    NoteListedHost(current);
                     MarkSessionChanged(participantsChanged: true);
                     break;
                 case MessageType.StateDelta:

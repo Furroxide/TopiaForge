@@ -5,12 +5,14 @@ using provider::TopiaForge.Multiplayer.Engine;
 using provider::TopiaForge.Multiplayer.Voice;
 using TopiaForge.Mods;
 using Provider = provider::TopiaForge.Multiplayer.MultiplayerProvider;
+using Routed = provider::TopiaForge.Multiplayer.RoutedDiagnostics;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// The voice service in the provider: off unless live multiplayer is switched on, a worker that really runs on its own
-/// thread and stops, and an encoder loss hint that follows the transport's counters.
+/// thread and stops, an encoder loss hint that follows the transport's counters, and a code of its own for each engine
+/// diagnostic the provider hands on, the worker's failure included.
 /// </summary>
 internal static class VoiceProviderTests
 {
@@ -150,6 +152,17 @@ internal static class VoiceProviderTests
         rig.Step();
         Assert(a.Voice.ExpectedLossPercent == 20 && a.Voice.Worker.Transmitter.Encoder.ExpectedLossPercent == 20,
             "20% loss on the link sets the encoder's FEC hint to 20%");
+    }
+
+    internal static void EveryEngineDiagnosticHasACodeOfItsOwn()
+    {
+        // The provider hands engine diagnostics on under a code for each kind, the voice worker's failure included. Every
+        // code ends in a hyphenated part, which the runtime's redactor needs to tell it from a host name.
+        var codes = Enum.GetValues<EngineDiagnosticKind>().Select(Routed.Code).ToList();
+        Assert(codes.Distinct(StringComparer.Ordinal).Count() == codes.Count && !codes.Contains("engine.other-diagnostic"),
+            "each kind has a code of its own (" + string.Join(", ", codes) + ")");
+        Assert(codes.All(code => code.Substring(code.LastIndexOf('.') + 1).Contains('-')), "and every code ends in a hyphenated part");
+        Assert(Routed.Code(EngineDiagnosticKind.VoiceFailed) == "engine.voice-failed", "a worker that gave up is engine.voice-failed");
     }
 
     private static void Assert(bool condition, string message)

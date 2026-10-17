@@ -320,10 +320,14 @@ record, so the set lasts exactly as long as the host keeps the record of the pla
   also remembers the host it was made with, by the host's authenticated identity, so another host's kept record does
   not count: a traveller who returns within the grace to a host it visited, after muting players elsewhere, leaves
   those mutes behind.
-- **Made while joining.** A set made while no session is joined, or while a join is under way, can name only players
-  the player has seen: those of the host it joined last. Its names belong to that host, so the join keeps or forgets
-  them as above; names made before any join, or after a role change, belong to no host and every join forgets them. A
-  set that names nobody, such as muting everyone, applies to the session the join finds, whichever that is.
+- **Names belong to the host that listed them.** A player can name only the players the session lists, and a client's
+  list is the last one a host sent it. A join changes it only when the new host sends its own, after the snapshot, which
+  for a large world can come a second or more after `JoinAccepted`. So names given while no session is joined, or while
+  a join is under way, belong to the host that sent the list, and the join keeps or forgets them as above. Names given
+  after a join has found another host, or this one without the player's record, but before that host lists its
+  players, name nobody in the session and go at once. Names given before any list, or after a role change, belong to no
+  host, and every join forgets them. A set that names nobody, such as muting everyone, applies to the session the join
+  finds, whichever that is, whether it was made with no link or during the join.
 - **Role changes** forget the set.
 
 So muting `p2` on one host never silences a different `p2` on the next, and never tells the next host whom the player
@@ -334,7 +338,10 @@ connected kept them, and a set made between moving the link and the `JoinAccepte
 another session, though the same call after a role change was kept. A third applied every set made while a join was
 under way to the session the join found, names included, so a name given from the old host's list silenced whoever had
 that id on the new one, and a caller had to hold names back by session, which lost them across a reconnect into an
-in-place replacement.
+in-place replacement. A fourth tied names given while no session was joined, or while a join was under way, to the host
+joined last. A client goes on listing the previous host's players until the new host's list arrives, so a name given
+from that list after the new host's `JoinAccepted`, or while the link was down before its list came, still reached the
+new host.
 
 ### 2.6 The engine API
 
@@ -458,8 +465,11 @@ These run in the multiplayer test project, and every one is deterministic:
   and a restart noticed by host and client alike when the path loses its first datagram;
 - `VoiceMuteTests`, over the rig: `JoinAccepted`'s vector, which says whether the host kept the record; mutes that
   survive an in-place replacement however the client resynchronizes; mutes forgotten when the record expired, and when
-  a host other than the one they were made with kept it; and a set that names nobody, made while joining, applied to
-  the session the join finds, with or without a role change first;
+  a host other than the one they were made with kept it; a set that names nobody, made while joining or with no link,
+  applied to the session the join finds, with or without a role change first; and, for a host whose snapshot spans two
+  frames over a slow link, a name given from the old host's list after `JoinAccepted` dropped at once, one given while
+  the link was down before the new list came left with the old host, and one from a restarted host's old list, whose
+  number the new process has given to someone else, dropped too;
 - `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, link time kept in fractions
   of a tick, the link's datagram-first, bounded reads, and datagrams shed when their lane is more than three ticks
   behind, or past their share while the session lane is.
@@ -519,7 +529,7 @@ part 2.
 
 | Thread | Does | Never |
 | --- | --- | --- |
-| Main, the engine's owner | `SubmitCapture` and `SetTransmitting`, which refuse any other thread; `Pump`, which hands capture to the worker, gives the engine encoded frames, takes received frames from it and watches the session | Encodes, decodes or waits |
+| Main, the engine's owner | Every member of `VoiceService`; capture, transmission, `Enabled`, the mutes, `GetPlaybackStream`, `IsSpeaking` and `GetStatistics` refuse any other thread. `Pump` hands capture to the worker, gives the engine encoded frames, takes received frames from it and watches the session | Encodes, decodes or waits |
 | Voice worker | Resampling, framing, voice activation, encoding, the jitter buffers, decoding, filling the playback streams | Touches the engine |
 | Audio | `VoicePlaybackStream.Read` | Locks, waits or allocates |
 
@@ -532,7 +542,9 @@ fallen behind. The audio thread reads a single-producer, single-consumer ring.
 `Pump` runs once per game frame, after the engine's own pump. The worker runs on a background thread at above-normal
 priority. It wakes when the main thread queues work, or when its next 20 ms playout slot falls due, and sleeps when
 there is nothing to do. Tests run its step on a virtual clock instead. A step that throws is counted, and ten in a row
-stop the worker and voice with one `VoiceFailed` diagnostic. No exception leaves the thread.
+stop the worker and voice with one `VoiceFailed` diagnostic, which the provider passes on as `engine.voice-failed`. No
+exception leaves the thread. From then on nothing takes what the main thread queues for the worker, so each pump drops
+it; otherwise every mute, stream and capture the session went on producing would pile up for as long as it lasted.
 
 ### 3.2 Capture
 
@@ -637,10 +649,11 @@ stop the worker and voice with one `VoiceFailed` diagnostic. No exception leaves
 - `SetListenerMutes` passes the set to the engine, which owns it, and drops what newly muted speakers left buffered at
   once. The service keeps no copy: `GetListenerMutes` reads the engine's, as section 2.5 kept or forgot it at the last
   join, so whatever shows the player whom they muted never shows a mute that no longer applies.
-- **Names stay with their host.** Names reach the engine at once, whatever the session's state. Those given while the
-  link is down or a join is under way belong to the host this player joined last (section 2.5), so a reconnect to that
-  host keeps them, through an in-place replacement too, and a join that finds another host forgets them: a name meant
-  for one host's player never silences whoever has that id on the next. An earlier version of the service held names
+- **Names stay with their host.** Names reach the engine at once, whatever the session's state, and the engine ties them
+  to the host whose players the session lists (section 2.5). A reconnect to that host keeps them, through an in-place
+  replacement too, and a join that finds another host forgets them. A name given after a join has found another host,
+  but before that host's list arrives, goes at once: the session still lists the players of before. A name meant for one
+  host's player never silences whoever has that id on the next. An earlier version of the service held names
   back until this player was Ready in the session they were given in. It cleared the engine's set meanwhile and knew
   sessions only by id, so a change made while the link was down lost every mute when the host replaced its session
   before the player was back.
@@ -674,7 +687,7 @@ stop the worker and voice with one `VoiceFailed` diagnostic. No exception leaves
   extra and skipped pulls, cushions, frames trimmed from a stall's backlog, underruns, skips and the target delay.
 
 They name participants, never addresses. `IsSpeaking(participant)` is true for 250 ms after a speaker was heard, for
-talking indicators.
+talking indicators. Both read the speakers the main thread keeps, and refuse any other thread.
 
 ### 3.7 In the provider
 
@@ -700,7 +713,10 @@ engine, deterministic except where noted:
   - nothing captured, coded or sent until voice is turned on, and nothing more once it is turned off;
   - a reconnect and a restart, each started by its new generation;
   - listener and server mutes;
-  - a returning speaker heard from the first frame while the session stream that announces the return is held back.
+  - a returning speaker heard from the first frame while the session stream that announces the return is held back;
+  - a worker that gives up after ten failed steps in a row, a step that works ending a run of them: voice reports it
+    once, and every pump then drops what was queued for the worker;
+  - the talking indicator and the statistics refused off the main thread.
 - `VoiceSessionChangeTests`:
   - a listener moving to a host whose streams carry the same generations, with its worker stalled across the move, so
     the old session's last frames are still queued: none of them plays;
@@ -715,7 +731,9 @@ engine, deterministic except where noted:
     recovered link brings it, with the mute made before the outage kept too;
   - names given while a stalled link moves to another host left behind, and a wish to hear nobody made while the link
     is down holding from the next host's first message;
-  - names given with no host joined, at a first join or after a return to solo play, forgotten by the join.
+  - names given with no host joined, at a first join or after a return to solo play, forgotten by the join;
+  - a name given from the first host's list after the second host's `JoinAccepted`, while its large snapshot is still
+    on the way, dropped at once, so the second host's own player is heard.
 - `VoiceCaptureTests`:
   - voice activation and its hangover;
   - push-to-talk spurts, including a held key with no samples;
@@ -727,8 +745,9 @@ engine, deterministic except where noted:
   - capture at 44.1 and 16 kHz.
 - `VoicePlaybackTests`:
   - the ring's order, underruns, skips, flushes and overflow;
-  - reads that allocate nothing, measured over a warmed loop as the best of three passes, call nothing that can block
-    (checked in the IL), and finish while another thread holds the stream's monitor;
+  - reads that allocate nothing, nor the writes beside them, through underruns, skips and a full ring, measured over a
+    warmed loop as the best of three passes; reads that call nothing that can block (checked in the IL), and finish
+    while another thread holds the stream's monitor;
   - 800,000 reads, each reader on its own thread, beside a writer that flushes between them, on real threads;
   - a device clock 0.5% fast and slow.
 - `VoiceSpeakerBoundTests`:
@@ -740,7 +759,8 @@ engine, deterministic except where noted:
 - `VoiceProviderTests`:
   - the live switch, with voice off until it is turned on;
   - a real worker thread, the one test that waits on the wall clock, for at most five seconds;
-  - the loss hint.
+  - the loss hint;
+  - a code of its own for each engine diagnostic the provider passes on, the worker's failure included.
 
 | Measurement | Result |
 | --- | --- |

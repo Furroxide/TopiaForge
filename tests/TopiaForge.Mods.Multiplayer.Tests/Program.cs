@@ -523,6 +523,13 @@ internal static class Program
             VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownSurviveAnInPlaceReplacement();
             VoiceSessionChangeTests.MutesMadeWhileTheLinkIsDownNeverReachAnotherHost();
             VoiceSessionChangeTests.NamesGivenWithNoHostJoinedNameNobody();
+            VoiceMuteTests.AWishToHearNobodyMadeWithNoLinkHoldsWhereverTheJoinGoes();
+            VoiceMuteTests.NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere();
+            VoiceMuteTests.NamesFromARestartedHostsOldListNameNobody();
+            VoiceSessionChangeTests.NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere();
+            VoiceServiceTests.AWorkerThatGivesUpLeavesNothingQueued();
+            VoiceServiceTests.TheIndicatorAndStatisticsBelongToTheMainThread();
+            VoiceProviderTests.EveryEngineDiagnosticHasACodeOfItsOwn();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

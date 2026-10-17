@@ -7,8 +7,9 @@ namespace TopiaForge.Multiplayer.Voice
 {
     /// <summary>
     /// Voice chat for one provider: the local talker's capture in, each remote speaker's playback stream out, and the
-    /// session engine's voice path between them. Every member belongs to the main thread, the engine's owner, and the
-    /// capture calls check it, so a caller hands capture over on that thread. The one exception is
+    /// session engine's voice path between them. Every member belongs to the main thread, the engine's owner. Capture,
+    /// transmission, the switch, mutes, playback streams, the talking indicator and the statistics check it and refuse any
+    /// other thread, so a caller hands capture over on that thread. The one exception is
     /// <see cref="VoicePlaybackStream.Read"/>, which belongs to the audio thread. Coding happens on the
     /// <see cref="VoiceWorker"/>. Mutes, a full rate and a muted talker are expected states, counted rather than reported.
     /// </summary>
@@ -106,6 +107,9 @@ namespace TopiaForge.Multiplayer.Voice
         }
 
         internal VoiceWorker Worker => worker;
+
+        /// <summary>Gets what the main thread hands the worker, for tests that check what waits there.</summary>
+        internal VoiceExchange<VoiceInboundBatch> Inbound => inbound;
 
         internal OpusVoiceCodec Codec => codec;
 
@@ -220,11 +224,14 @@ namespace TopiaForge.Multiplayer.Voice
             SendEncoded(nowMicros);
             var queued = ReceiveFrames(nowMicros);
             UpdateTransmitter(nowMicros);
-            if (queued) worker.Signal();
+            if (worker.Failed) DropWorkForTheFailedWorker();
+            else if (queued) worker.Signal();
         }
 
+        /// <summary>Gets the statistics, on the main thread: it refuses any other.</summary>
         internal VoiceServiceStatistics GetStatistics()
         {
+            engine.RequireOwnerThread();
             var transmitter = worker.Transmitter;
             var speakers = new List<VoiceSpeakerStatistics>(streams.Count);
             foreach (var stream in streams.Values) speakers.Add(new VoiceSpeakerStatistics(stream, IsSpeaking(stream.Speaker)));
@@ -289,6 +296,15 @@ namespace TopiaForge.Multiplayer.Voice
             last = nowMicros;
             if (interval <= 0 || interval > MaximumFrameIntervalMicros) return;
             smoothed = smoothed == 0 ? interval : smoothed + ((interval - smoothed) / 4);
+        }
+
+        /// <summary>
+        /// Empties what the main thread queued for a worker that gave up. Nothing takes it any more, so a session's events
+        /// would pile up in it for as long as the session lasts, each stream it attached keeping its ring.
+        /// </summary>
+        private void DropWorkForTheFailedWorker()
+        {
+            lock (inbound.Gate) inbound.Writable.Clear();
         }
 
         /// <summary>Queues the end of a talk spurt after the capture queued so far, when one could be open.</summary>

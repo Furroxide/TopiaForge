@@ -5,8 +5,10 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// Listener mutes follow the people. A mute set lasts as long as the host keeps the player's participant record, however
-/// the client got back into the session, and is forgotten when the join finds a host that did not keep it. A set made
-/// while a join is under way applies to the session the join finds, with or without a role change first.
+/// the client got back into the session, and is forgotten when the join finds a host that did not keep it. Names name the
+/// players the session lists, so they belong to the host that listed them, even while a join is under way or after one,
+/// until the new host lists its own. A set that names nobody, made while a join is under way or with no link at all,
+/// applies to the session the join finds, with or without a role change first.
 /// </summary>
 internal static class VoiceMuteTests
 {
@@ -187,8 +189,175 @@ internal static class VoiceMuteTests
             "and both engines report mute-all");
     }
 
+    internal static void AWishToHearNobodyMadeWithNoLinkHoldsWhereverTheJoinGoes()
+    {
+        // The traveller's link to host A drops, and while it is down the player asks to hear nobody. That names nobody, so
+        // it holds in the session the next join finds: host B, another host, never relays the traveller a frame.
+        using var rig = new VoiceSessionHarness();
+        var other = rig.Track(SessionEngine.CreateHost(rig.Options, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("other"),
+            new SessionSeed(9), new ParticipantId("host-b"), "Host B", rig.NowMicros));
+        var otherA = rig.Track(SessionEngine.CreateClient(rig.Options, new MultiplayerSessionId("other"), rig.NowMicros));
+        rig.ConnectTo(other, otherA, "a", "host-b");
+        var (traveller, link) = rig.AddClient("traveller");
+        rig.Network.Sever(link);
+        rig.Advance(2);
+        Assert(traveller.Snapshot.State == MultiplayerSessionState.Connecting, "the traveller's link is down");
+        traveller.SetListenerMutes(Array.Empty<ParticipantId>(), muteAll: true);
+        rig.ConnectTo(other, traveller, "traveller", "host-b");
+        rig.Flush();
+        Assert(traveller.Snapshot.State == MultiplayerSessionState.Ready && traveller.Snapshot.Id.Equals(new MultiplayerSessionId("other")),
+            "the traveller joins host B");
+
+        var ears = rig.Listen(traveller);
+        rig.Talk(otherA, 5000, 10);
+        rig.Advance(30);
+        rig.Flush();
+        Assert(ears.From("a").Count == 0 && other.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 5,
+            "host B skips the traveller for each of a's 5 datagrams (" + ears.From("a").Count + " heard)");
+        var kept = new List<ParticipantId>();
+        Assert(traveller.GetListenerMutes(kept) && kept.Count == 0, "and the traveller's engine reports mute-all");
+    }
+
+    internal static void NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere()
+    {
+        // Host B's world is large, so over a 64 kB/s link its answer to a join spans two frames: JoinAccepted in the first,
+        // its participant list after the snapshot in the second. In between, a joining player's session names B's session
+        // but still lists host A's players. t1 mutes the a it sees there. That a is A's, nobody with B, so the name goes at
+        // once. t2's link drops in that window, and t2 mutes A's a while it is down: the name stays with A, and B, which
+        // kept t2's record, forgets it at the next join. Both hear all of B's own a, and B never learns the name.
+        using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 64_000 });
+        var aId = new ParticipantId("a");
+        rig.AddClient("a");
+        var (t1, _) = rig.AddClient("t1");
+        var (t2, _) = rig.AddClient("t2");
+        var other = rig.Track(SessionEngine.CreateHost(rig.Options, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("other"),
+            new SessionSeed(9), new ParticipantId("host-b"), "Host B", rig.NowMicros));
+        FillWorld(other.CreateFacade("world"));
+        var otherA = rig.Track(SessionEngine.CreateClient(rig.Options, new MultiplayerSessionId("other"), rig.NowMicros));
+        rig.ConnectTo(other, otherA, "a", "host-b");
+        rig.Flush();
+        rig.ConnectTo(other, t1, "t1", "host-b");
+        var t2Link = rig.ConnectTo(other, t2, "t2", "host-b");
+        var joined = new MultiplayerSessionId("other");
+        for (var tick = 0; tick < 600 && !(t1.Snapshot.Id.Equals(joined) && t2.Snapshot.Id.Equals(joined)); tick++) rig.Advance();
+        Assert(new[] { t1, t2 }.All(engine => engine.Snapshot.State == MultiplayerSessionState.Synchronizing && engine.Snapshot.TryGetParticipant(new ParticipantId("host"), out _)),
+            "t1 and t2 are joining host B, and their sessions still list host A's players");
+
+        t1.SetListenerMutes(new[] { aId });
+        rig.Network.Sever(t2Link);
+        rig.Advance();
+        Assert(t2.Snapshot.State == MultiplayerSessionState.Connecting && t2.Snapshot.TryGetParticipant(new ParticipantId("host"), out _),
+            "t2's link drops before B lists its players");
+        t2.SetListenerMutes(new[] { aId });
+        var kept = new List<ParticipantId>();
+        Assert(!t1.GetListenerMutes(kept) && kept.Count == 0, "t1's name goes at once: it names nobody with B");
+        Assert(!t2.GetListenerMutes(kept) && kept.SequenceEqual(new[] { aId }), "t2's, given with no link, waits with A, whose player it names");
+        rig.ConnectTo(other, t2, "t2", "host-b");
+        rig.Flush();
+        Assert(new[] { t1, t2 }.All(engine => engine.Snapshot.State == MultiplayerSessionState.Ready && engine.Snapshot.Id.Equals(joined)),
+            "both are in B's session");
+        Assert(!t2.GetListenerMutes(kept) && kept.Count == 0, "and B, another host, has forgotten t2's name");
+
+        var ears = new[] { t1, t2 }.Select(rig.Listen).ToList();
+        rig.Talk(otherA, 5000, 10);
+        rig.Advance(30);
+        rig.Flush();
+        Assert(ears.All(listener => listener.From("a").Count == 10),
+            "both hear all of B's a (t1 " + ears[0].From("a").Count + ", t2 " + ears[1].From("a").Count + ")");
+        Assert(other.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 0, "and B never learned the name");
+    }
+
+    internal static void NamesFromARestartedHostsOldListNameNobody()
+    {
+        // Host A numbers its players itself, as a live host does: x is p1, a is p2 and the traveller p3. A's process dies and
+        // starts again under the same identity, with a large world, so its answer to a join spans two frames. c and d join
+        // the new process first, as p1 and p2, and the traveller comes back as a new record. Until the new list arrives,
+        // the traveller's session still lists the old process's players, and the player mutes p2, meaning a. p2 is d now:
+        // the name goes at once, and the traveller hears all of d.
+        using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 64_000 });
+        var numbered = new EngineOptions
+        {
+            StepRateHz = 60,
+            DownstreamRateHz = 0,
+            ClockSyncIntervalMicros = 0,
+            ObjectIdPrefix = "voice-",
+            CallbackFailures = EngineCallbackFailureMode.Propagate,
+            Diagnostics = rig.Diagnostics,
+            Voice = rig.Voice
+        };
+        var p2 = new ParticipantId("p2");
+        var first = rig.Track(SessionEngine.CreateHost(numbered, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("first-run"),
+            new SessionSeed(3), new ParticipantId("host"), "Host", rig.NowMicros));
+        var links = new List<VirtualLinkEnd>();
+        SessionEngine Join(SessionEngine host, string identity)
+        {
+            var engine = rig.Track(SessionEngine.CreateClient(rig.Options, new MultiplayerSessionId("joining"), rig.NowMicros));
+            links.Add(rig.ConnectTo(host, engine, identity));
+            rig.Flush();
+            return engine;
+        }
+
+        Join(first, "x");
+        Join(first, "a");
+        var traveller = Join(first, "traveller");
+        Assert(traveller.Snapshot.TryGetParticipant(p2, out var before) && before!.DisplayName == "a", "with the first process, p2 is a");
+
+        // The first process dies without a word: its links go, and it never sends another frame.
+        foreach (var link in links) rig.Network.Sever(link);
+        first.Shutdown(MultiplayerSessionEndReason.HostEnded);
+        var second = rig.Track(SessionEngine.CreateHost(numbered, MultiplayerProcessKind.Interactive, new MultiplayerSessionId("second-run"),
+            new SessionSeed(4), new ParticipantId("host"), "Host", rig.NowMicros));
+        FillWorld(second.CreateFacade("world"));
+        Join(second, "c");
+        var d = Join(second, "d");
+        Assert(second.Snapshot.TryGetParticipant(p2, out var now) && now!.DisplayName == "d", "with the second process, p2 is d");
+        rig.ConnectTo(second, traveller, "traveller");
+        var joined = new MultiplayerSessionId("second-run");
+        for (var tick = 0; tick < 600 && !traveller.Snapshot.Id.Equals(joined); tick++) rig.Advance();
+        Assert(traveller.Snapshot.State == MultiplayerSessionState.Synchronizing && traveller.Snapshot.TryGetParticipant(p2, out var stale) &&
+            stale!.DisplayName == "a", "the traveller is joining the second process, and its session still lists the first one's players");
+
+        traveller.SetListenerMutes(new[] { p2 });
+        var kept = new List<ParticipantId>();
+        Assert(!traveller.GetListenerMutes(kept) && kept.Count == 0, "the name goes at once: the first process's p2 is nobody now");
+        rig.Flush();
+        Assert(traveller.Snapshot.State == MultiplayerSessionState.Ready && traveller.Snapshot.TryGetParticipant(p2, out var listed) &&
+            listed!.DisplayName == "d", "back in, the traveller's session lists p2 as d");
+        var ears = rig.Listen(traveller);
+        rig.Talk(d, 6000, 10);
+        rig.Advance(30);
+        rig.Flush();
+        Assert(ears.From("p2").Count == 10, "the traveller hears all of d (" + ears.From("p2").Count + ")");
+        Assert(second.GetVoiceStatistics().Dropped(VoiceDropReason.ListenerMuted) == 0, "and the host never took d for the muted a");
+    }
+
+    /// <summary>
+    /// Gives a host twenty replicated values of about 4 kB each, so its answer to a join spans two frames, the participant
+    /// list after the snapshot in the second. Over a slow link the second comes well after the first.
+    /// </summary>
+    internal static void FillWorld(IMultiplayerSession world)
+    {
+        var codec = new JsonTestCodec<WorldChunk>();
+        for (var index = 0; index < 20; index++)
+        {
+            var registered = world.RegisterState(new ReplicatedStateDefinition<WorldChunk>("chunk-" + index, new WorldChunk(new string('x', 4_000)), codec));
+            Assert(registered.Succeeded, "chunk " + index + " registers");
+        }
+    }
+
     private static void Assert(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("Assertion failed: " + message);
     }
+}
+
+/// <summary>One replicated piece of a large world, for joins whose snapshot spans more than one frame.</summary>
+internal sealed class WorldChunk
+{
+    public WorldChunk(string text)
+    {
+        Text = text;
+    }
+
+    public string Text { get; }
 }
