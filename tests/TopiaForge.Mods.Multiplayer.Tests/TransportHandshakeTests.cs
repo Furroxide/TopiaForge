@@ -108,7 +108,7 @@ internal static class TransportHandshakeTests
     internal static void AFullEndpointTurnsAwayALateCompletion()
     {
         var network = new VirtualDatagramNetwork(18);
-        var options = new TransportOptions { Random = new SeededTransportRandom(18), MaximumConnections = 1 };
+        var options = new TransportOptions { Random = new SeededTransportRandom(18), MaximumConnections = 1, RelayOnly = false };
         var endpoint = new TransportEndpoint(TransportPair.Key(18, 1), options, network.Now);
         var node = network.AddEndpoint("host", endpoint);
         var first = new RawTransportPeer(network, "first", 18);
@@ -130,7 +130,7 @@ internal static class TransportHandshakeTests
     internal static void AnInitiatorTakesOneRetryPerAttempt()
     {
         var network = new VirtualDatagramNetwork(6);
-        var endpoint = new TransportEndpoint(TransportPair.Key(6, 1), new TransportOptions { Random = new SeededTransportRandom(6) }, network.Now);
+        var endpoint = new TransportEndpoint(TransportPair.Key(6, 1), new TransportOptions { Random = new SeededTransportRandom(6), RelayOnly = false }, network.Now);
         var node = network.AddEndpoint("client", endpoint);
         var silent = network.AddRaw("silent");
         var connection = endpoint.Connect(VirtualDatagramNetwork.PathTo(silent), network.Now);
@@ -169,7 +169,7 @@ internal static class TransportHandshakeTests
         That(second.Inbox.Count == 0 && pair.Host.Statistics.InitiationsRefused == 2, "a full endpoint refuses new handshakes");
         Throws<InvalidOperationException>(() =>
         {
-            var full = new TransportEndpoint(TransportPair.Key(7, 3), new TransportOptions { MaximumConnections = 1 }, 0);
+            var full = new TransportEndpoint(TransportPair.Key(7, 3), new TransportOptions { MaximumConnections = 1, RelayOnly = false }, 0);
             full.Connect(new TransportPath(new byte[] { 1 }, TransportPathKind.Direct), 0);
             full.Connect(new TransportPath(new byte[] { 2 }, TransportPathKind.Direct), 0);
         }, "a full endpoint refuses to connect");
@@ -179,7 +179,7 @@ internal static class TransportHandshakeTests
     {
         var network = new VirtualDatagramNetwork(8);
         var diagnostics = new RecordingTransportDiagnostics();
-        var endpoint = new TransportEndpoint(TransportPair.Key(8, 1), new TransportOptions { Random = new SeededTransportRandom(8), Diagnostics = diagnostics }, network.Now);
+        var endpoint = new TransportEndpoint(TransportPair.Key(8, 1), new TransportOptions { Random = new SeededTransportRandom(8), Diagnostics = diagnostics, RelayOnly = false }, network.Now);
         network.AddEndpoint("client", endpoint);
         var silent = network.AddRaw("silent");
         var start = network.Now;
@@ -253,7 +253,7 @@ internal static class TransportHandshakeTests
     internal static void APeerWhoseWindowCannotHoldAFrameIsRefused()
     {
         var network = new VirtualDatagramNetwork(17);
-        var endpoint = new TransportEndpoint(TransportPair.Key(17, 1), new TransportOptions { Random = new SeededTransportRandom(17) }, network.Now);
+        var endpoint = new TransportEndpoint(TransportPair.Key(17, 1), new TransportOptions { Random = new SeededTransportRandom(17), RelayOnly = false }, network.Now);
         var node = network.AddEndpoint("host", endpoint);
         new RawTransportPeer(network, "raw", 17).Connect(node, window: 1_000);
         network.RunFor(100_000);

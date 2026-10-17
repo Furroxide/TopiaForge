@@ -55,11 +55,12 @@ namespace TopiaForge.Multiplayer.Transport
         internal bool AlwaysRequireCookie { get; set; }
 
         /// <summary>
-        /// Gets or sets the player's "hide my IP" choice. The endpoint then uses only relayed and LAN paths: it never
-        /// sends a transport datagram to a direct Internet path, and drops every one that arrives from such a path.
-        /// STUN and TURN traffic still reaches the NAT layer, which needs it to reach the relay.
+        /// Gets or sets the player's "hide my IP" choice, which is on unless the player allowed direct play: direct play
+        /// is never a silent default, so a caller sets this false only for a player who chose it. The endpoint then uses
+        /// only relayed and LAN paths: it never sends a transport datagram to a direct Internet path, and drops every one
+        /// that arrives from such a path. STUN and TURN traffic still reaches the NAT layer, which needs it to reach the relay.
         /// </summary>
-        internal bool RelayOnly { get; set; }
+        internal bool RelayOnly { get; set; } = true;
 
         /// <summary>
         /// Gets or sets whether peers may open connections to this endpoint. Only a host accepts them; a joining player

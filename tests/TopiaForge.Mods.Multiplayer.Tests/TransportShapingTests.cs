@@ -91,13 +91,13 @@ internal static class TransportShapingTests
     internal static void TheUplinkIsSharedFairlyAndShedsVoiceFirst()
     {
         var network = new VirtualDatagramNetwork(83);
-        var hostOptions = new TransportOptions { Random = new SeededTransportRandom(830), UplinkBytesPerSecond = 64 * 1024 };
+        var hostOptions = new TransportOptions { Random = new SeededTransportRandom(830), UplinkBytesPerSecond = 64 * 1024, RelayOnly = false };
         var host = new TransportEndpoint(TransportPair.Key(83, 1), hostOptions, network.Now);
         var hostNode = network.AddEndpoint("host", host);
         var ends = new List<(TransportConnection AtHost, TransportConnection AtClient)>();
         for (var index = 0; index < 3; index++)
         {
-            var endpoint = new TransportEndpoint(TransportPair.Key(83, 10 + index), new TransportOptions { Random = new SeededTransportRandom(831 + index) }, network.Now);
+            var endpoint = new TransportEndpoint(TransportPair.Key(83, 10 + index), new TransportOptions { Random = new SeededTransportRandom(831 + index), RelayOnly = false }, network.Now);
             network.AddEndpoint("client" + index, endpoint);
             var atClient = endpoint.Connect(VirtualDatagramNetwork.PathTo(hostNode), network.Now);
             TransportConnection? atHost = null;

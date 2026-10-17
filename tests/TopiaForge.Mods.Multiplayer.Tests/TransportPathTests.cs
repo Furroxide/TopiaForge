@@ -152,7 +152,7 @@ internal static class TransportPathTests
     internal static void OnlyTheEchoedChallengeValidatesAPath()
     {
         var network = new VirtualDatagramNetwork(76);
-        var endpoint = new TransportEndpoint(TransportPair.Key(76, 1), new TransportOptions { Random = new SeededTransportRandom(76) }, network.Now);
+        var endpoint = new TransportEndpoint(TransportPair.Key(76, 1), new TransportOptions { Random = new SeededTransportRandom(76), RelayOnly = false }, network.Now);
         var node = network.AddEndpoint("host", endpoint);
         var raw = new RawTransportPeer(network, "raw", 76);
         raw.Connect(node);
@@ -179,7 +179,7 @@ internal static class TransportPathTests
     internal static void ChallengesAreAnsweredOnTheirOwnPathAtTheirOwnSize()
     {
         var network = new VirtualDatagramNetwork(75);
-        var endpoint = new TransportEndpoint(TransportPair.Key(75, 1), new TransportOptions { Random = new SeededTransportRandom(75) }, network.Now);
+        var endpoint = new TransportEndpoint(TransportPair.Key(75, 1), new TransportOptions { Random = new SeededTransportRandom(75), RelayOnly = false }, network.Now);
         var node = network.AddEndpoint("host", endpoint);
         var raw = new RawTransportPeer(network, "raw", 75);
         raw.Connect(node);

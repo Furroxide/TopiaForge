@@ -123,7 +123,7 @@ internal static class TransportLifecycleTests
         {
             var network = new VirtualDatagramNetwork(seed);
             var diagnostics = new RecordingTransportDiagnostics();
-            var options = new TransportOptions { Random = new SeededTransportRandom(seed), Diagnostics = diagnostics };
+            var options = new TransportOptions { Random = new SeededTransportRandom(seed), Diagnostics = diagnostics, RelayOnly = false };
             var endpoint = new TransportEndpoint(TransportPair.Key(seed, 1), options, network.Now);
             var node = network.AddEndpoint("host", endpoint);
             var raw = new RawTransportPeer(network, "raw", seed++);
