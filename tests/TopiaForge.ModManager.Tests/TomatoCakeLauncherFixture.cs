@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace TopiaForge.ModManager.Tests
@@ -72,6 +73,25 @@ namespace TopiaForge.ModManager.Tests
         {
             return System.Text.Json.JsonSerializer.Serialize(value);
         }
+
+        /// <summary>
+        /// The 8.3 short spelling Windows reports for an existing path, or the path itself where the volume keeps no
+        /// 8.3 names and on other hosts.
+        /// </summary>
+        internal static string ShortPath(string path)
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return path;
+            }
+
+            var buffer = new StringBuilder(32768);
+            var length = GetShortPathNameW(path, buffer, (uint)buffer.Capacity);
+            return length == 0 || length >= buffer.Capacity ? path : buffer.ToString();
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        private static extern uint GetShortPathNameW(string path, StringBuilder result, uint capacity);
 
         /// <summary>Creates a directory link: a junction on Windows, which needs no privilege, else a symlink.</summary>
         internal static void LinkDirectory(string link, string target)

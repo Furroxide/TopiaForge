@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             AttributesTheStateMarkerOnlyToTheRelocatedGame(TomatoCakeLauncherFixture.Create(testRoot, "attribution"));
             ChecksGameDirectoryShapes();
             RuntimeReaderFollowsTheRelocation(testRoot);
+            StaleDefaultCopyDoesNotBorrowTheMovedMarker(testRoot);
             Console.WriteLine("TomatoCakeLauncherStateTests passed.");
         }
 
@@ -239,6 +240,55 @@ namespace TopiaForge.ModManager.Tests
             relocated.WriteConfig("{\"game_dir\":" + value + ",\"game_dir\":" + value + "}");
             Assert(ReadVersion(relocated.RelocatedGameRoot, relocated.State) == string.Empty,
                 "a malformed launcher-config.json should lend no marker");
+        }
+
+        private static void StaleDefaultCopyDoesNotBorrowTheMovedMarker(string testRoot)
+        {
+            var fixture = TomatoCakeLauncherFixture.Create(testRoot, "runtime-stale-default");
+            Directory.CreateDirectory(fixture.DefaultGameRoot);
+            Directory.CreateDirectory(fixture.RelocatedGameRoot);
+            fixture.WriteStateMarker(2545);
+            Assert(!TomatoCakeLauncherState.StateMarkerBelongsElsewhere(fixture.State, fixture.State),
+                "without launcher-config.json the state marker should stay with the default copy");
+
+            fixture.WriteGameDirectory(fixture.RelocatedParent);
+            Assert(TomatoCakeLauncherState.StateMarkerBelongsElsewhere(fixture.State, fixture.State),
+                "after a move the state marker should belong to the relocated game");
+            Assert(!TomatoCakeLauncherState.StateMarkerBelongsElsewhere(fixture.RelocatedParent, fixture.State),
+                "only the state directory itself should lose its marker");
+            Assert(ReadVersion(fixture.RelocatedGameRoot, fixture.State) == "0.0.2545",
+                "the relocated game should keep the launcher marker");
+            Assert(!InstalledGameVersionReader.TryRead(fixture.DefaultGameRoot, fixture.State, out _, out var error)
+                   && error.Contains("not found", StringComparison.Ordinal),
+                "a copy left at the old default location should not borrow the moved game's marker: " + error);
+
+            if (OperatingSystem.IsWindows())
+            {
+                // An 8.3 short name and a junction name the same directory. .NET's GetFullPath already expands
+                // short names, but Unity's Mono runtime does not, and no path text resolves a junction. Keep the
+                // Robotopia leaf so the parent rule still applies.
+                var shortState = TomatoCakeLauncherFixture.ShortPath(fixture.State);
+                var junction = Path.Combine(fixture.Root, "state-junction");
+                TomatoCakeLauncherFixture.LinkDirectory(junction, fixture.State);
+                foreach (var alias in new[] { shortState, junction })
+                {
+                    Assert(TomatoCakeLauncherState.StateMarkerBelongsElsewhere(alias, fixture.State),
+                        "another spelling of the state directory should still be the state directory: " + alias);
+                    Assert(ReadVersion(Path.Combine(alias, "Robotopia"), fixture.State) == string.Empty,
+                        "another spelling should not let the old default copy borrow the moved marker: " + alias);
+                }
+
+                Assert(ReadVersion(fixture.DefaultGameRoot, shortState) == string.Empty,
+                    "an 8.3 spelling of the state directory should not lend the moved marker either");
+            }
+
+            fixture.WriteGameDirectory(fixture.State);
+            Assert(ReadVersion(fixture.DefaultGameRoot, fixture.State) == "0.0.2545",
+                "a record naming the default parent should leave the marker with the default copy");
+
+            fixture.WriteConfig("{\"game_dir\":7}");
+            Assert(ReadVersion(fixture.DefaultGameRoot, fixture.State) == "0.0.2545",
+                "a malformed launcher-config.json should leave the default copy's marker alone");
         }
 
         private static string ReadVersion(string gameRoot, string? state)
