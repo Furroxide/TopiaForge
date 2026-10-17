@@ -422,8 +422,9 @@ internal sealed class FakeTurnServer
             return;
         }
 
-        var other = allocation.Channels.FirstOrDefault(entry => NatAddresses.SameEndPoint(entry.Value.Peer, peer) && entry.Key != number);
-        if ((allocation.Channels.TryGetValue(number, out var bound) && !NatAddresses.SameEndPoint(bound.Peer, peer)) || other.Key != 0)
+        // A number, or a peer, is taken only while its binding lasts (RFC 8656, section 12.2); one that lapsed binds afresh.
+        var other = allocation.Channels.FirstOrDefault(entry => NatAddresses.SameEndPoint(entry.Value.Peer, peer) && entry.Key != number && entry.Value.ExpiresAt > now);
+        if ((allocation.Channels.TryGetValue(number, out var bound) && bound.ExpiresAt > now && !NatAddresses.SameEndPoint(bound.Peer, peer)) || other.Key != 0)
         {
             Error(message, from, serverSide, 400, key, false);
             return;

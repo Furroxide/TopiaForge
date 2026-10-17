@@ -9,18 +9,16 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 {
     /// <summary>
     /// Peers. A permission lets one peer address send through the allocation (RFC 8656, section 9); the client installs
-    /// one for every address it is asked to, in batches of up to eight, and refreshes it while it is wanted. A channel
+    /// one for every address a scope claims, in batches of up to eight, and refreshes it while any scope does. A channel
     /// binds one peer address and port to a number from 0x4000 to 0x4FFF (section 12), so data then travels with a
-    /// four-byte header instead of a Send or Data indication. A channel is bound the first time a peer is sent to or
-    /// heard from, numbers are never reused within an allocation, and data waits for the binding's answer rather than
-    /// risk loss: until then it goes as Send indications. A refresh that goes unanswered is tried again with the same
-    /// number while the binding lasts, and ChannelData is accepted for as long as the server can hold the binding: ten
-    /// minutes after the last bind request for it, answered or not.
+    /// four-byte header instead of a Send or Data indication. A claimed peer-path is bound the first time it is sent to or
+    /// heard from, and data waits for the binding's answer rather than risk loss: until then it goes as Send indications.
+    /// A refresh that goes unanswered is tried again with the same number while the binding lasts, and ChannelData is
+    /// accepted for as long as the server can hold the binding: ten minutes after the last bind request for it, answered
+    /// or not. Who claims what, and how a number comes back, is in <c>TurnClient.Claims.cs</c>.
     /// </summary>
     internal sealed partial class TurnClient
     {
-        internal const int MaximumPeers = 256;
-        internal const int MaximumPermissions = 256;
         internal const int PermissionsPerRequest = 8;
         internal const long ChannelLifetimeMicros = 600_000_000;
 
@@ -41,20 +39,13 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         internal int ChannelCount { get; private set; }
 
         /// <summary>
-        /// Asks for a permission for <paramref name="address"/> and keeps it fresh until <see cref="Forget"/>.
-        /// <paramref name="scope"/> names the remote peer whose candidate asked for it, so no one peer fills the table.
+        /// Claims a permission for <paramref name="address"/> for <paramref name="scope"/>, the remote side that needs it,
+        /// and keeps it fresh until every scope that claims it lets go (<see cref="Release"/>).
         /// </summary>
-        internal void Permit(IPAddress address, string? scope, long now)
+        internal void Permit(IPAddress address, string scope, long now)
         {
             if (address == null) throw new ArgumentNullException(nameof(address));
-            var permission = PermissionFor(NatAddresses.Unmap(address), scope, true, now);
-            if (permission != null) permission.Wanted = true;
-        }
-
-        /// <summary>Stops refreshing <paramref name="address"/>'s permission; the server lets it lapse.</summary>
-        internal void Forget(IPAddress address)
-        {
-            if (address != null && permissions.TryGetValue(NatAddresses.Unmap(address), out var permission)) permission.Wanted = false;
+            ClaimPermission(NatAddresses.Unmap(address), scope, now);
         }
 
         /// <summary>Gets whether data from or to <paramref name="address"/> may pass the allocation now.</summary>
@@ -64,26 +55,35 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         /// <summary>Gets whether data to or from <paramref name="peer"/> travels as ChannelData now, for tests.</summary>
         internal bool UsesChannel(IPEndPoint peer, long now) => peersByPath.TryGetValue(TurnRelayPath.For(Allocation, peer), out var known) && known.HasChannel(now);
 
-        /// <summary>Gets the relayed path that reaches <paramref name="peer"/> through this allocation.</summary>
-        internal TransportPath PathTo(IPEndPoint peer)
+        /// <summary>
+        /// Gets the relayed path that reaches <paramref name="peer"/> through this allocation. With a
+        /// <paramref name="scope"/>, that scope claims the path and its address's permission, so both stay for as long as
+        /// it needs them.
+        /// </summary>
+        internal TransportPath PathTo(IPEndPoint peer, string? scope = null, long now = 0)
         {
             if (peer == null) throw new ArgumentNullException(nameof(peer));
-            var path = TurnRelayPath.For(Allocation, peer);
+            var endpoint = new IPEndPoint(NatAddresses.Unmap(peer.Address), peer.Port);
+            var path = TurnRelayPath.For(Allocation, endpoint);
+            if (scope != null && State == TurnAllocationState.Ready && endpoint.Port != 0)
+            {
+                var claimed = ClaimPath(endpoint, path, scope, now);
+                if (claimed != null) return claimed.Path;
+            }
+
             return peersByPath.TryGetValue(path, out var known) ? known.Path : path;
         }
 
         /// <summary>
         /// Wraps a datagram for a peer reached through this allocation into <paramref name="output"/>: ChannelData while
         /// the channel is bound, a Send indication otherwise. Returns its length, or 0 when it cannot go yet because the
-        /// allocation is not ready or the peer's permission is not installed. A known peer's datagram allocates nothing.
+        /// allocation is not ready or no installed permission covers the peer. A known peer's datagram allocates nothing.
         /// </summary>
         internal int Wrap(TransportPath path, byte[] data, int offset, int count, byte[] output, long now)
         {
-            Peer? peer = null;
-            if (State != TurnAllocationState.Ready || !TryGetPeer(path, true, true, now, out peer) || peer.Permission.State != PermissionState.Installed)
+            if (State != TurnAllocationState.Ready || !TryGetPeer(path, true, true, now, out var peer) || peer.Permission.State != PermissionState.Installed)
             {
-                // A peer without its permission yet asks for one; the datagram is lost, as on any network, and resent.
-                if (peer != null) peer.Permission.Wanted = true;
+                // The permission is on its way, or nothing claims one: the datagram is lost, as on any network, and resent.
                 Statistics.Held++;
                 return 0;
             }
@@ -96,7 +96,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
                 return ChannelData.Write(output, peer.Channel, data, offset, count);
             }
 
-            if (peer.ChannelState == ChannelState.None && now >= peer.ChannelRetryAt) Bind(peer, now);
+            if (peer.Claimed && peer.ChannelState == ChannelState.None && now >= peer.ChannelRetryAt) Bind(peer, now);
             dataWriter.Begin(output, StunMethod.Send, StunClass.Indication, stun.NewTransactionId());
             dataWriter.AddAddressBytes(StunAttribute.XorPeerAddress, peer.AddressBytes, peer.EndPoint.Port);
             dataWriter.AddBytes(StunAttribute.Data, data, offset, count);
@@ -125,7 +125,8 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         /// <summary>
         /// Reads a Data indication from the server where it lies: a peer's datagram that arrived without a channel. The
         /// peer must hold a permission. A peer heard before is found by its address bytes, so this allocates nothing; a
-        /// new one is bound now, so what follows arrives as ChannelData once the server agrees.
+        /// claimed one is bound now, so what follows arrives as ChannelData once the server agrees, and a port no scope
+        /// claims joins the pool.
         /// </summary>
         internal bool TryReadData(byte[] buffer, int offset, int count, long now, out TransportPath path, out int dataOffset, out int dataLength)
         {
@@ -150,39 +151,28 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 
             Statistics.DataIndicationsReceived++;
             peer.LastUsedAt = now;
-            if (peer.ChannelState == ChannelState.None && now >= peer.ChannelRetryAt) Bind(peer, now);
+            if (peer.Claimed && peer.ChannelState == ChannelState.None && now >= peer.ChannelRetryAt) Bind(peer, now);
             path = peer.Path;
             return true;
         }
 
-        private Permission? PermissionFor(IPAddress address, string? scope, bool create, long now)
-        {
-            if (permissions.TryGetValue(address, out var permission)) return permission;
-            if (!create || !MakePermissionRoom(scope, now)) return null;
-            permission = new Permission(address) { Scope = scope, Order = permissionOrder++ };
-            permissions.Add(address, permission);
-            return permission;
-        }
-
+        /// <summary>
+        /// Finds the peer-path for <paramref name="path"/>, or adds it to the pool when <paramref name="create"/> asks and a
+        /// permission covers its address. Nothing here creates or claims a permission: only a scope does.
+        /// </summary>
         private bool TryGetPeer(TransportPath path, bool create, bool solicited, long now, out Peer peer)
         {
             if (peersByPath.TryGetValue(path, out peer!))
             {
-                // A path this side now sends to is solicited for good, so inbound data on it no longer counts as a spray.
+                // A pooled path this side sends to outlasts, in the pool, one that was only ever heard from.
                 if (solicited) peer.Solicited = true;
                 return true;
             }
 
-            if (!create || !TurnRelayPath.TryParse(path, out var allocation, out var endpoint) || allocation != Allocation) return false;
-            if (endpoint.Port == 0 || !MakePeerRoom(endpoint, solicited, now)) return false;
-
-            // A peer-path's address was permitted before any datagram reached it, so this finds the existing permission;
-            // its scope lives on the permission, so the per-peer cap is enforced there, not again here.
-            var permission = PermissionFor(NatAddresses.Unmap(endpoint.Address), null, true, now);
-            if (permission == null) return false;
-            peer = new Peer(endpoint, path, permission) { LastUsedAt = now, Solicited = solicited };
-            peersByPath.Add(path, peer);
-            peersByKey[PeerKey.From(endpoint)] = peer;
+            if (!create || !TurnRelayPath.TryParse(path, out var allocation, out var endpoint) || allocation != Allocation || endpoint.Port == 0) return false;
+            var added = AddUnclaimed(endpoint, path, solicited, now);
+            if (added == null) return false;
+            peer = added;
             return true;
         }
 
@@ -190,7 +180,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
         {
             if (peer.Channel == 0)
             {
-                if (!TryAcquireChannel(now, out var number)) return;
+                if (!TryAcquireChannel(peer, now, out var number)) return;
                 peer.Channel = number;
                 peersByChannel[peer.Channel - ChannelData.FirstChannel] = peer;
                 ChannelCount++;
@@ -269,7 +259,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             {
                 // A permission whose refreshes kept failing lapses on the server too, so it stops counting here.
                 if (permission.State == PermissionState.Installed && now >= permission.ExpiresAt) permission.State = PermissionState.Wanted;
-                if (!permission.Wanted || permission.InFlight || permission.State == PermissionState.Refused) continue;
+                if (permission.InFlight || permission.State == PermissionState.Refused) continue;
                 if (now < (permission.State == PermissionState.Installed ? permission.RefreshAt : permission.RetryAt)) continue;
 
                 // A batch refused once is retried one address per request, so one forbidden peer cannot block the rest.
@@ -353,7 +343,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             var next = long.MaxValue;
             foreach (var permission in permissions.Values)
             {
-                if (!permission.Wanted || permission.InFlight || permission.State == PermissionState.Refused) continue;
+                if (permission.InFlight || permission.State == PermissionState.Refused) continue;
                 next = Math.Min(next, permission.State == PermissionState.Installed ? Math.Min(permission.RefreshAt, permission.ExpiresAt) : permission.RetryAt);
             }
 
@@ -370,11 +360,13 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             peersByPath.Clear();
             peersByKey.Clear();
             permissions.Clear();
+            scopes.Clear();
+            unclaimed.Clear();
             Array.Clear(peersByChannel, 0, peersByChannel.Length);
             Array.Clear(channelFreeAt, 0, channelFreeAt.Length);
+            channelKeys = null;
             nextChannel = ChannelData.FirstChannel;
             ChannelCount = 0;
-            permissionOrder = 0;
         }
 
         private enum PermissionState
@@ -392,7 +384,10 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
             Refused
         }
 
-        /// <summary>One permitted address. It stays usable while a refresh is in flight, until the server's five minutes run out.</summary>
+        /// <summary>
+        /// One permitted address, there while some scope claims it. It stays usable while a refresh is in flight, until the
+        /// server's five minutes run out.
+        /// </summary>
         private sealed class Permission
         {
             internal Permission(IPAddress address)
@@ -406,13 +401,11 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 
             internal byte[] AddressBytes { get; }
 
-            /// <summary>Gets or sets the remote peer whose candidate caused this permission; null for the local side.</summary>
-            internal string? Scope { get; set; }
+            /// <summary>Gets the scopes that claim this permission; it goes when the last lets go.</summary>
+            internal List<Scope> Claimants { get; } = new List<Scope>(1);
 
-            /// <summary>Gets or sets when this permission was installed, in this allocation's order, so the oldest can go first.</summary>
-            internal long Order { get; set; }
-
-            internal bool Wanted { get; set; }
+            /// <summary>Gets or sets how many pooled peer-paths, claimed by no scope, this address holds.</summary>
+            internal int Unclaimed { get; set; }
 
             /// <summary>Gets or sets whether a refused batch held this address, so it is next tried on its own.</summary>
             internal bool Solo { get; set; }
@@ -436,6 +429,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
                 Path = path;
                 Permission = permission;
                 AddressBytes = endpoint.Address.GetAddressBytes();
+                Key = PeerKey.From(AddressBytes, AddressBytes.Length, endpoint.Port);
             }
 
             internal IPEndPoint EndPoint { get; }
@@ -446,7 +440,15 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
 
             internal byte[] AddressBytes { get; }
 
-            /// <summary>Gets or sets whether this side ever sent a check or datagram to this port, so inbound data on it is not a spray.</summary>
+            /// <summary>Gets the peer's address and port as a Data indication names them.</summary>
+            internal PeerKey Key { get; }
+
+            /// <summary>Gets the scopes that claim this path; with none it is pooled, and never binds a channel.</summary>
+            internal List<Scope> Claimants { get; } = new List<Scope>(1);
+
+            internal bool Claimed => Claimants.Count > 0;
+
+            /// <summary>Gets or sets whether this side ever sent to this port, so a pooled path it sends to outlasts a spray.</summary>
             internal bool Solicited { get; set; }
 
             internal ushort Channel { get; set; }
@@ -505,12 +507,6 @@ namespace TopiaForge.Multiplayer.NatTraversal.Turn
                 }
 
                 return new PeerKey(high, low, port);
-            }
-
-            internal static PeerKey From(IPEndPoint endpoint)
-            {
-                var bytes = NatAddresses.Unmap(endpoint.Address).GetAddressBytes();
-                return From(bytes, bytes.Length, endpoint.Port);
             }
 
             public bool Equals(PeerKey other) => high == other.high && low == other.low && port == other.port;

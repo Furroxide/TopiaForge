@@ -73,7 +73,18 @@ namespace TopiaForge.Multiplayer.NatTraversal
     internal sealed partial class NatAgent : IDisposable
     {
         internal const int MaximumQueuedDatagrams = 512;
-        internal const int MaximumSessions = 32;
+
+        /// <summary>The most sessions that run at once: as many as an allocation keeps a whole share of its tables for.</summary>
+        internal const int MaximumSessions = TurnClient.MaximumScopes;
+
+        /// <summary>Every session's share of the STUN client at once: the checks and consent checks each may wait on.</summary>
+        internal const int CheckShares = MaximumSessions * (Ice.ConnectivityChecker.MaximumChecksInFlight + Ice.ConnectivityChecker.MaximumConsentInFlight);
+
+        /// <summary>
+        /// What the STUN client keeps beyond every session's share of checks, for the relay's requests, gathering and
+        /// releases. It doubles as a compile-time check: were the shares ever to outgrow the client, this would not compile.
+        /// </summary>
+        internal const uint StunReserve = StunClient.MaximumOutstanding - CheckShares;
 
         private readonly NatAgentOptions options;
         private readonly StunClient stun;
@@ -399,13 +410,13 @@ namespace TopiaForge.Multiplayer.NatTraversal
             mapper.Stop().ContinueWith(task => _ = task.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
 
+        /// <summary>Forgets sessions that ended a while ago; what they claimed on the relay went when they ended.</summary>
         private void ExpireSessions(long now)
         {
             for (var index = sessions.Count - 1; index >= 0; index--)
             {
                 var session = sessions[index];
                 if (!session.CanForget(now)) continue;
-                ForgetPermissions(session);
                 byUfrag.Remove(session.Checker.Local.Ufrag);
                 sessions.RemoveAt(index);
             }

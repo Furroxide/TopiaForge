@@ -24,7 +24,7 @@ internal static class NatTurnRecoveryTests
         harness.RunFor(1_000_000);
         harness.Client.Permit(Peer.Address, "peer", harness.Now);
         harness.RunFor(1_000_000);
-        var path = harness.Client.PathTo(Peer);
+        var path = harness.Client.PathTo(Peer, "peer", harness.Now);
         harness.SendData(path, new byte[] { 0xE8, 1 });
         harness.RunFor(1_000_000);
         That(harness.Client.UsesChannel(Peer, harness.Now), "the channel is bound");

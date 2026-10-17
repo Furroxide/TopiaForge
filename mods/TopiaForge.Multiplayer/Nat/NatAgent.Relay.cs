@@ -62,26 +62,37 @@ namespace TopiaForge.Multiplayer.NatTraversal
         /// </summary>
         internal bool RelayWanted => !disposed && Role != NatRole.None && servers != null && servers.HasRelay && !relayRefused && (Role == NatRole.Host || LiveJoin() != null);
 
-        /// <summary>Gives the path from a base to a remote address, or null when that base cannot reach it.</summary>
-        internal TransportPath? PathFor(LocalBase local, IPEndPoint remote)
+        /// <summary>
+        /// Gives the path from a base to a remote address, or null when that base cannot reach it. A path through an
+        /// allocation is claimed there for <paramref name="scope"/>, the session that pairs it, with its permission.
+        /// </summary>
+        internal TransportPath? PathFor(LocalBase local, IPEndPoint remote, string scope)
         {
             if (!local.IsRelay) return RelayOnly ? null : UdpPaths.For(remote);
             var client = RelayNumbered(local.Allocation);
             if (client == null || client.RelayedAddress == null || !RelayablePeer(remote.Address)) return null;
             if (NatAddresses.Unmap(remote.Address).AddressFamily != client.RelayedAddress.Address.AddressFamily) return null;
-            return client.PathTo(remote);
+            return client.PathTo(remote, scope, currentTime);
         }
 
         /// <summary>Gets whether a TURN relay may send to <paramref name="address"/>: a public address, or loopback in single-machine tests.</summary>
         internal bool RelayablePeer(IPAddress address) => NatAddresses.IsPublic(address) || (options.AcceptLoopback && IPAddress.IsLoopback(address));
 
         /// <summary>
-        /// Asks the current allocation to let <paramref name="candidate"/> reach this side. <paramref name="scope"/> is
-        /// the remote peer the candidate came from, so one peer's candidates cannot fill the allocation's table.
+        /// Asks the current allocation to let <paramref name="candidate"/> reach this side, claimed for
+        /// <paramref name="scope"/>, the session the candidate came from: each session holds only its own share of the
+        /// allocation's tables, and what one gives up never takes another's.
         /// </summary>
-        internal void PermitRemote(IceCandidate candidate, string? scope, long now)
+        internal void PermitRemote(IceCandidate candidate, string scope, long now)
         {
             if (relay != null && relay.State == TurnAllocationState.Ready && RelayablePeer(candidate.EndPoint.Address)) relay.Permit(candidate.EndPoint.Address, scope, now);
+        }
+
+        /// <summary>A session ended: every allocation gives up what it claimed there, and keeps what other sessions claim.</summary>
+        internal void ReleaseClaims(NatSession session)
+        {
+            relay?.Release(session.Scope, currentTime);
+            retiring?.Release(session.Scope, currentTime);
         }
 
         /// <summary>Puts the next allocation in place under <paramref name="set"/>'s credential; it starts at <paramref name="startAt"/>, once no release on its 5-tuple is settling.</summary>
@@ -109,7 +120,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
             Report(NatDiagnosticKind.RelayReady, "The relay is ready.");
             foreach (var session in sessions)
             {
-                foreach (var remote in session.Checker.RemoteCandidates) PermitRemote(remote, session.PeerId, now);
+                // A session that ended claims nothing more: it gave up its claims when it ended.
+                if (session.State == NatSessionState.Ended || session.State == NatSessionState.Failed) continue;
+                foreach (var remote in session.Checker.RemoteCandidates) PermitRemote(remote, session.Scope, now);
                 session.AddRelayBase(relayBase, relayCandidate, now);
             }
         }
@@ -360,26 +373,6 @@ namespace TopiaForge.Multiplayer.NatTraversal
             retiringBase = null;
             relayCandidate = null;
             retireBy = long.MaxValue;
-        }
-
-        private void ForgetPermissions(NatSession leaving)
-        {
-            foreach (var remote in leaving.Checker.RemoteCandidates)
-            {
-                var shared = false;
-                foreach (var session in sessions)
-                {
-                    if (ReferenceEquals(session, leaving)) continue;
-                    foreach (var other in session.Checker.RemoteCandidates)
-                    {
-                        if (NatAddresses.SameAddress(other.EndPoint.Address, remote.EndPoint.Address)) shared = true;
-                    }
-                }
-
-                if (shared) continue;
-                relay?.Forget(remote.EndPoint.Address);
-                retiring?.Forget(remote.EndPoint.Address);
-            }
         }
 
         private TurnClient? RelayAt(TransportPath from)

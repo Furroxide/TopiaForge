@@ -104,7 +104,10 @@ with an unknown comprehension-required attribute, as RFC 8489 discards such an i
 
 `StunClient` runs transactions sans-I/O. A response matches by transaction id and by the path the request went to,
 and only once its owner accepts it, typically after checking integrity. A response it refuses is dropped, and the
-request keeps retransmitting as though nothing came. At most 256 run at once.
+request keeps retransmitting as though nothing came. At most 640 run at once. Every session's share of checks (section
+6) is 320 of them, and the rest stays for the relay's own requests, gathering and releases, so no number of remotes that
+never answer can keep the relay from refreshing or a new joiner's checks from starting. `NatAgent.StunReserve` is that
+remainder, and it would not compile were the shares ever to outgrow the client.
 
 | Timing | Initial RTO | Transmissions | Final wait | Settled by |
 | --- | --- | --- | --- | --- |
@@ -136,15 +139,29 @@ request keeps retransmitting as though nothing came. At most 256 run at once.
 | Lifetime | Server keeps it | Client renews it |
 | --- | --- | --- |
 | Allocation | Its LIFETIME, 600 s by default, clamped to 30–3,600 s | A minute before it lapses |
-| Permission (one per peer address) | 300 s | Every 240 s while wanted, up to eight per request |
+| Permission (one per peer address) | 300 s | Every 240 s while a session claims it, up to eight per request |
 | Channel binding (one per peer address and port) | 600 s | Every 480 s; an unanswered refresh again five seconds later, with the same number |
 | The NAT mapping in front of the client | Varies | A Binding indication after 15 quiet seconds |
 
-- **Channels.** Numbers come from `0x4000`–`0x4FFF`, in order, and are never reused within an allocation. That range
-  is what RFC 8656 allows, and its first byte is RFC 7983's ChannelData band.
-- **Before a binding.** A peer is bound the first time it is sent to or heard from. Data waits for the binding's answer
-  and goes as Send indications meanwhile. Nothing goes to a peer without an installed permission. A permission stays
-  usable while its refresh is in flight. One that keeps failing lapses on both sides together.
+- **Tables, claimed per session.** Every permission and peer-path is claimed by the session that needs it, the one
+  whose candidate named the address or whose checks paired the path, and it stays exactly as long as some session
+  claims it. What a session claimed goes when it ends. A session claims at most 16 permissions and 24 peer-paths on
+  each allocation; past that it gives up its own oldest permission or least recently used path, never another
+  session's. An entry two sessions claim, such as a relay address several peers share, stays while either does. The
+  tables have room for every session's whole share at once, 32 sessions of 16 permissions and 24 paths, so however
+  much hostile peers claim, none can take what a session holds or keep the next one out.
+- **The pool.** A port no session claims, heard from or sent to before anything paired it, as from a spray over many
+  source ports, lands in a pool of 64, at most eight from one address, where the least recently used makes way, and
+  one this side never sent to goes first. A pooled path never binds a channel, so letting it go leaves nothing on the
+  server, and it becomes claimed once a session pairs it. Nothing but a session's claim creates a permission.
+- **Channels.** Numbers come from `0x4000`–`0x4FFF`, fresh ones first. A number a peer-path gives up comes back to
+  the same peer address and port while the server may still hold that binding, so the two sides never disagree on it,
+  and to any other only once the binding would have lapsed, ten minutes after its last bind request, plus the
+  five-minute guard (RFC 8656, section 12). That range is what RFC 8656 allows, and its first byte is RFC 7983's
+  ChannelData band.
+- **Before a binding.** A claimed peer-path is bound the first time it is sent to or heard from. Data waits for the
+  binding's answer and goes as Send indications meanwhile. Nothing goes to a peer without an installed permission. A
+  permission stays usable while its refresh is in flight. One that keeps failing lapses on both sides together.
 - **Lost answers.** A server refreshes a binding whether or not its answer arrives, so ChannelData on a peer's number
   is accepted for ten minutes after the last bind request for it, answered or not. Data keeps leaving as ChannelData
   until ten minutes after the last answered bind, while the refresh is tried again with the same number; a binding
@@ -253,7 +270,9 @@ transport's path validation.
 - **Pairs.** Every base pairs with every remote candidate: the socket, and each allocation. A relay base pairs only
   with public addresses of its own family.
 - **Order.** Triggered checks go first. Then come relayed pairs, so the session can start, then direct pairs by RFC
-  8445 pair priority. Ordinary checks go out one every 50 ms, and only after the punch.
+  8445 pair priority. Ordinary checks go out one every 50 ms, and only after the punch. A session waits on at most
+  eight ordinary and triggered checks at once; the next goes when one is answered or gives up, so a remote that never
+  answers, however many candidates it names or checks it triggers, holds only its own share of the STUN client.
 - **Triggered checks.** A verified check from the remote triggers one back on its pair at once, even before the punch.
   That is what opens both NATs when the two sides check together. An unknown source becomes a peer-reflexive
   candidate, paired only with the base it arrived on. When the remote later signals that address, the candidate takes
@@ -274,7 +293,8 @@ transport's path validation.
 | --- | --- |
 | Remote candidates per session | 24, of which peer-reflexive 8 |
 | Pairs per session | 64 |
-| Sessions per host | 32, as the signaling room allows |
+| Checks waiting for an answer, per session | 8, and 2 consent checks |
+| Sessions per host | 32. With every one taken, the oldest that has no connection and whose checks ran out makes way for a new peer, without a goodbye, so sessions kept warm with checks never keep a joiner out |
 
 ## 7. Routes
 
@@ -524,6 +544,8 @@ What the flows still own:
 | `NatRestartTests` | A host that stopped and hosts again on the same agent answering the next joiner, relay-only and direct, and a player joining again on the same agent |
 | `NatLongSessionTests` | On relays that give every allocation an address of its own: a joiner whose network drops for four seconds every 110 seconds for 35 minutes of rotations on one TURN port, and five joiners through half an hour of 150-second credentials, all staying connected |
 | `NatRelayTargetTests` | A relay leaving an address that went silent for the one that came back, an allocation a crashed run left on the 5-tuple sending the next to another port, and credentials refused right after a working allocation (minted again at once) or for an hour (within five a minute and twenty an hour) |
+| `NatTableQuotaTests` | One allocation's tables: a session's share of sixteen permissions and twenty-four paths, its own oldest or least recently used giving way; a claim two sessions share staying until both let go; thirty-two whole shares at once and no thirty-third; a pool of sixty-four unclaimed ports, eight per address, that never binds a channel; a channel number coming back to its own peer at once and to another only after the binding's lapse and the guard |
+| `NatHostilePeerTests` | Hostile identities against a relay-only host, each within its shares and on relay addresses of its own: a flood from one identity, a spray over 300 ports, thirty-one identities naming sixteen addresses or twenty-four ports each, forty-eight identities churning through one /24, a shared relay address a hostile peer named first, thirty-two sessions kept warm with checks, and checks re-triggered every second from 744 ports. Each time the next honest joiner gets in, and a connected player, rotating its relay under warm hostile sessions on production credentials, never misses an exchange |
 
 **The NAT simulator.** It runs over `VirtualDatagramNetwork`, which gained attachments, a router and a configurable
 datagram limit. Sites and NAT boxes model RFC 4787's mapping and filtering behaviours:

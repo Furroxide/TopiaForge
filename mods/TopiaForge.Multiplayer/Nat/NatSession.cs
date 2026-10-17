@@ -51,11 +51,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private long lastUsedAt;
         private long endedAt = long.MaxValue;
 
-        internal NatSession(NatAgent agent, string? peerId, ConnectivityChecker checker, long now)
+        internal NatSession(NatAgent agent, string? peerId, string scope, ConnectivityChecker checker, long now)
         {
             this.agent = agent;
             options = agent.Options;
             PeerId = peerId;
+            Scope = scope;
             Checker = checker;
             CreatedAt = now;
             lastUsedAt = now;
@@ -63,6 +64,12 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
         /// <summary>Gets the signaling peer id a host's session answers; a joiner's session has none.</summary>
         internal string? PeerId { get; }
+
+        /// <summary>
+        /// Gets the name this session's permissions and peer-paths are claimed under on every allocation: its own, so it
+        /// holds its share of the relay's tables until it ends, and nothing another session does takes them.
+        /// </summary>
+        internal string Scope { get; }
 
         internal ConnectivityChecker Checker { get; }
 
@@ -175,7 +182,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
         internal void AddRemote(SignalCandidate signaled, long now)
         {
             if (Checker.Remote == null || !agent.TryAccept(signaled, out var candidate)) return;
-            if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, PeerId, now);
+            if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, Scope, now);
         }
 
         /// <summary>A new allocation came up: it becomes a base here, and the relay candidate goes to the remote once described.</summary>
@@ -255,7 +262,10 @@ namespace TopiaForge.Multiplayer.NatTraversal
             return next;
         }
 
-        /// <summary>Ends the session; a goodbye goes to the remote when asked and signaling still runs.</summary>
+        /// <summary>
+        /// Ends the session; a goodbye goes to the remote when asked and signaling still runs. What it claimed on the relay
+        /// goes at once, so an ended session never holds a share another one needs.
+        /// </summary>
         internal void End(NatFailure failure, long now, bool sayGoodbye)
         {
             if (State == NatSessionState.Ended || State == NatSessionState.Failed) return;
@@ -264,11 +274,19 @@ namespace TopiaForge.Multiplayer.NatTraversal
             Failure = failure;
             endedAt = now;
             Checker.Stop();
+            agent.ReleaseClaims(this);
             if (attempt != null && connectPair == null && attempt.State == ConnectAttemptState.Pending) attempt.Fail(TransportCloseReason.Local);
             if (IsJoin) agent.RememberJoinOutcome(Stage, failure);
         }
 
         internal bool CanForget(long now) => (State == NatSessionState.Ended || State == NatSessionState.Failed) && now - endedAt >= ForgetMicros;
+
+        /// <summary>
+        /// Gets whether a host's session may end to make room for a new peer: it has no connection, and its checks had
+        /// their time and found none, so no player is on it or still on the way.
+        /// </summary>
+        internal bool CanMakeWay(long now) =>
+            !IsJoin && State != NatSessionState.Ended && State != NatSessionState.Failed && Current == null && now >= checksDeadline;
 
         private void Fail(NatFailure failure, long now)
         {
@@ -302,7 +320,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
             foreach (var signaled in candidates)
             {
                 if (!agent.TryAccept(signaled, out var candidate)) continue;
-                if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, PeerId, now);
+                if (Checker.AddRemote(candidate, now)) agent.PermitRemote(candidate, Scope, now);
             }
 
             if (State == NatSessionState.Describing) State = NatSessionState.Checking;

@@ -40,6 +40,9 @@ namespace TopiaForge.Multiplayer.NatTraversal
         private NatJoinStage lastJoinStage = NatJoinStage.Idle;
         private NatFailure lastJoinFailure = NatFailure.None;
 
+        /// <summary>How many sessions this agent started over its life, which names each one's claims on the relay apart.</summary>
+        private long sessionsStarted;
+
         private enum SignalingNeed
         {
             /// <summary>Nothing more will ever be said: the session ended.</summary>
@@ -167,13 +170,35 @@ namespace TopiaForge.Multiplayer.NatTraversal
 
             var tieBreakerBytes = new byte[8];
             options.Random.Fill(tieBreakerBytes);
-            var checker = new ConnectivityChecker(local, controlling, BitConverter.ToUInt64(tieBreakerBytes, 0), stun, options.Random, PathFor);
+
+            // What the session's checks pair through an allocation is claimed there in its own name, never another's.
+            var scope = "session " + (++sessionsStarted).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var checker = new ConnectivityChecker(local, controlling, BitConverter.ToUInt64(tieBreakerBytes, 0), stun, options.Random, (from, to) => PathFor(from, to, scope));
             if (socketBase != null) checker.AddBase(socketBase, now);
             if (relayBase != null) checker.AddBase(relayBase, now);
-            var session = new NatSession(this, peer, checker, now);
+            var session = new NatSession(this, peer, scope, checker, now);
             sessions.Add(session);
             byUfrag.Add(local.Ufrag, session);
             return session;
+        }
+
+        /// <summary>
+        /// Makes room for a new peer's session when the agent runs as many as it may: the oldest session that has no
+        /// connection and whose checks have run out ends without a goodbye, so a peer that only keeps a session warm can
+        /// never hold a place a joiner needs. False when every session is connected or still connecting.
+        /// </summary>
+        private bool MakeWay(long now)
+        {
+            NatSession? oldest = null;
+            foreach (var session in sessions)
+            {
+                if (!session.CanMakeWay(now)) continue;
+                if (oldest == null || session.CreatedAt < oldest.CreatedAt) oldest = session;
+            }
+
+            if (oldest == null) return false;
+            oldest.End(NatFailure.None, now, false);
+            return true;
         }
 
         private void OpenSignaling(long now)
@@ -367,7 +392,10 @@ namespace TopiaForge.Multiplayer.NatTraversal
             return null;
         }
 
-        /// <summary>A peer's offer replaces any earlier session for it, and is answered once gathering has settled.</summary>
+        /// <summary>
+        /// A peer's offer replaces any earlier session for it, and is answered once gathering has settled. With every
+        /// place taken, a session that has no connection and whose checks have run out makes way for it.
+        /// </summary>
         private void OnOffer(SignalMessage offer, long now)
         {
             if (offer.Peer == null || offer.Ice == null) return;
@@ -379,7 +407,7 @@ namespace TopiaForge.Multiplayer.NatTraversal
                 if (session.State != NatSessionState.Ended && session.State != NatSessionState.Failed) live++;
             }
 
-            if (live >= MaximumSessions) return;
+            if (live >= MaximumSessions && !MakeWay(now)) return;
             var created = CreateSession(offer.Peer, false, now);
             created.OnOffer(offer.Ice, offer.Candidates, relayOnlyPeers.TryGetValue(offer.Peer, out var relayOnly) && relayOnly, now);
         }

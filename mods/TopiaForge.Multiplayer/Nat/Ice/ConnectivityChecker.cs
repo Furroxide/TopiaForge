@@ -14,13 +14,22 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
     /// triggers one back on its pair at once, which is what opens both NATs when the two sides punch together. Nomination
     /// is left to the transport: the route keeper hands a succeeded pair to its path validation. Pairs the session uses
     /// keep consent fresh (RFC 7675): a check every 15 seconds, give or take a fifth, and consent lapses 30 seconds after
-    /// the last answer.
+    /// the last answer. At most <see cref="MaximumChecksInFlight"/> ordinary and triggered checks wait for answers at once,
+    /// and only two pairs keep consent, so a remote that never answers holds no more than its share of the shared STUN
+    /// client, however many candidates it names or checks it triggers.
     /// </summary>
     internal sealed class ConnectivityChecker : IStunTransactionOwner
     {
         internal const int MaximumPairs = 64;
         internal const int MaximumRemoteCandidates = 24;
         internal const int MaximumPeerReflexive = 8;
+
+        /// <summary>The most ordinary and triggered checks one session waits on at once; the next goes when one is answered or gives up.</summary>
+        internal const int MaximumChecksInFlight = 8;
+
+        /// <summary>The most consent checks one session waits on at once: the pair in use, and the relay standing by behind a direct one.</summary>
+        internal const int MaximumConsentInFlight = 2;
+
         internal const long PacingMicros = 50_000;
         internal const long ConsentIntervalMicros = 15_000_000;
         internal const long ConsentLifetimeMicros = 30_000_000;
@@ -263,7 +272,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
                 }
             }
 
-            if (Remote == null || now < nextCheckAt) return;
+            if (Remote == null || now < nextCheckAt || ChecksInFlight() >= MaximumChecksInFlight) return;
             var next = NextToCheck();
             if (next == null) return;
             next.Triggered = false;
@@ -275,8 +284,9 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
 
         internal long NextTimeoutMicros()
         {
+            // With every check slot taken, the next check waits for an answer or a give-up, which the STUN client times.
             var next = long.MaxValue;
-            if (Remote != null && NextToCheck() != null) next = nextCheckAt;
+            if (Remote != null && ChecksInFlight() < MaximumChecksInFlight && NextToCheck() != null) next = nextCheckAt;
             foreach (var pair in pairs)
             {
                 if (!pair.ConsentWanted) continue;
@@ -383,6 +393,18 @@ namespace TopiaForge.Multiplayer.NatTraversal.Ice
             }
 
             return best;
+        }
+
+        /// <summary>Gets how many ordinary and triggered checks are waiting for an answer.</summary>
+        private int ChecksInFlight()
+        {
+            var count = 0;
+            foreach (var pair in pairs)
+            {
+                if (pair.Check != null) count++;
+            }
+
+            return count;
         }
 
         /// <summary>Triggered checks first; then relayed pairs, so the session can start; then the rest by priority.</summary>

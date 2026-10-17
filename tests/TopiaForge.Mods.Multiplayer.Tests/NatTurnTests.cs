@@ -237,7 +237,7 @@ internal static class NatTurnTests
         harness.RunFor(1_000_000);
         harness.Client.Permit(Peer.Address, "peer", harness.Now);
         harness.RunFor(1_000_000);
-        var path = harness.Client.PathTo(Peer);
+        var path = harness.Client.PathTo(Peer, "peer", harness.Now);
         That(path.Kind == TransportPathKind.Relayed && TurnRelayPath.TryParse(path, out var allocation, out var named) && allocation == 1 && named.Equals(Peer),
             "a peer behind the relay is a relayed path naming the allocation and the peer");
         That(harness.SendData(path, new byte[] { 0xE8, 1 }) > 0 && harness.AtPeers.Count == 1, "the first datagram travels as a Send indication");
@@ -270,10 +270,14 @@ internal static class NatTurnTests
         var harness = new TurnHarness(10);
         harness.Start();
         harness.RunFor(1_000_000);
-        var path = harness.Client.PathTo(Peer);
-        That(harness.SendData(path, new byte[] { 1 }) == 0 && harness.Client.Statistics.Held == 1, "nothing goes to a peer without a permission");
+        var unclaimed = harness.Client.PathTo(Peer);
+        That(harness.SendData(unclaimed, new byte[] { 1 }) == 0 && harness.Client.Statistics.Held == 1, "nothing goes to a peer without a permission");
         harness.RunFor(1_000_000);
-        That(harness.Client.IsPermitted(Peer.Address), "trying asks for the permission");
+        That(!harness.Client.IsPermitted(Peer.Address) && harness.Server.PermissionRequests == 0, "and trying to send asks for none: only a scope's claim does");
+        var path = harness.Client.PathTo(Peer, "peer", harness.Now);
+        That(harness.SendData(path, new byte[] { 1 }) == 0 && harness.Client.Statistics.Held == 2, "a claimed path waits for its permission too");
+        harness.RunFor(1_000_000);
+        That(harness.Client.IsPermitted(Peer.Address), "which the claim asked for");
         var stranger = new IPEndPoint(IPAddress.Parse("198.51.100.200"), 5000);
         harness.PeerSends(stranger, new byte[] { 2 });
         That(harness.Delivered.Count == 0 && harness.Server.Unpermitted == 1, "a stranger without a permission never reaches the client");

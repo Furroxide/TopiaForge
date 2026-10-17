@@ -124,7 +124,11 @@ namespace TopiaForge.Multiplayer.NatTraversal.Stun
     /// </summary>
     internal sealed class StunClient
     {
-        internal const int MaximumOutstanding = 256;
+        /// <summary>
+        /// The most transactions at once: room for every session's share of checks, which the NAT agent holds to half of
+        /// this, and as much again for the relay's own requests, gathering and releases, so neither crowds out the other.
+        /// </summary>
+        internal const int MaximumOutstanding = 640;
 
         private readonly ITransportRandom random;
         private readonly Action<TransportPath, byte[], int> send;
