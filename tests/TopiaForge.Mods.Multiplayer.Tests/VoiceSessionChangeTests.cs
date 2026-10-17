@@ -22,7 +22,8 @@ internal static class VoiceSessionChangeTests
         // generation 2, and the second host's a has talked longer, so its numbers run on past the first one's. b hears the
         // first host's a, then moves to the second host, whose a is quiet for now, while b's voice worker is stalled: the
         // first session's last frames are still queued for the worker when b arrives. The jitter buffers go at the change,
-        // after those frames, so b plays none of the session it left, and hears the second host's a as usual.
+        // after those frames, and so does b's stream for the first host's a, since an id names a player only on the host
+        // that gave it. So b plays none of the session it left, and hears the second host's a as usual, on a new stream.
         using var rig = new VoiceServiceRig();
         rig.AddHost();
         var second = rig.AddHost("host-2", session: SecondSession.Value);
@@ -31,8 +32,7 @@ internal static class VoiceSessionChangeTests
         rig.StepFor(2_100_000);
         var nearA = rig.AddClient("a");
         var b = rig.AddClient("b");
-        var listenAt = rig.NowMicros;
-        b.Listen("a");
+        var nearStream = b.Listen("a");
         nearA.Source = VoiceSource.Speech(4, seed: 22);
         rig.StepFor(1_000_000);
         var before = VoiceServiceTests.Counters(b, "a");
@@ -50,10 +50,13 @@ internal static class VoiceSessionChangeTests
         b.WorkerStalled = false;
         rig.StepFor(500_000);
         var quiet = b.Heard("a").Skip(resumedAt).ToArray();
-        Assert(VoiceAudio.LevelDecibels(quiet, 0, quiet.Length) < -90, "b plays none of the session it left");
+        Assert(nearStream.IsEnded && VoiceAudio.LevelDecibels(quiet, 0, quiet.Length) < -90, "b plays none of the session it left");
 
         // The stalled worker caught up five slots at once when it resumed, which leaves up to 100 ms more in the stream
         // until drift control trims it, a frame a second; hence a looser bound on the delay here than elsewhere.
+        var listenAt = rig.NowMicros;
+        var farStream = b.Listen("a");
+        Assert(!ReferenceEquals(farStream, nearStream) && !farStream.IsEnded, "the second host's a is on a stream of its own");
         var talkAt = rig.NowMicros;
         farA.Source = VoiceSource.Speech(3, seed: 23);
         rig.StepFor(2_000_000);
@@ -62,7 +65,7 @@ internal static class VoiceSessionChangeTests
         Assert(correlation >= 0.9 && delay <= MaximumDelaySamples + 4_800,
             "b hears the second host's a (" + (delay / 48) + " ms, correlation " + correlation.ToString("F3") + ")");
         var after = VoiceServiceTests.Counters(b, "a");
-        Assert(after.TargetDelayMicros <= 80_000 && after.Late == before.Late,
+        Assert(after.TargetDelayMicros <= 80_000 && after.Late == 0 && before.Late == 0,
             "with a delay target of that stream's own (" + (after.TargetDelayMicros / 1_000) + " ms) and nothing late");
     }
 
@@ -80,6 +83,27 @@ internal static class VoiceSessionChangeTests
         rig.StepFor(1_000_000);
         var counters = VoiceServiceTests.Counters(host, "a");
         Assert(counters.Resets == 1 && counters.Decoded > 80, "the host dropped a's jitter buffer once, at the new session, and hears a on");
+    }
+
+    internal static void AClientWhoseSessionIsReplacedInPlaceDropsItsJitterBuffersButKeepsItsStreams()
+    {
+        // The host replaces its session in place and keeps every record, so its ids still name the same players: b keeps
+        // its stream for a, and only the jitter buffers go, at the new session.
+        using var rig = new VoiceServiceRig();
+        var host = rig.AddHost();
+        var a = rig.AddClient("a");
+        var b = rig.AddClient("b");
+        var stream = b.Listen("a");
+        a.Source = VoiceSource.Speech(3, seed: 26);
+        rig.StepFor(1_000_000);
+        Assert(VoiceServiceTests.Counters(b, "a").Resets == 0, "b hears a");
+        var replaced = new MultiplayerSessionId("voice-service-replaced");
+        host.Engine.ReplaceSession(replaced, new SessionSeed(13));
+        rig.StepFor(1_000_000);
+        Assert(b.Engine.Snapshot.Id.Equals(replaced) && b.Engine.Snapshot.State == MultiplayerSessionState.Ready, "b is Ready in the new session");
+        Assert(!stream.IsEnded && ReferenceEquals(b.Voice!.GetPlaybackStream(a.Id), stream), "b kept its stream for a");
+        var counters = VoiceServiceTests.Counters(b, "a");
+        Assert(counters.Resets >= 1 && counters.Decoded > 80, "b dropped a's jitter buffer at the new session (" + counters.Resets + " resets) and hears a on");
     }
 
     internal static void TheWorkerAppliesControlInTheOrderItWasQueued()
@@ -155,11 +179,14 @@ internal static class VoiceSessionChangeTests
         rig.StepFor(500_000);
         rig.Connect(b, second);
         rig.Connect(c, second);
+        for (var step = 0; step < 100 && !new[] { b, c }.All(member => member.Engine.Snapshot.State == MultiplayerSessionState.Ready); step++) rig.Step();
+        Assert(new[] { b, c }.All(member => member.Engine.Snapshot.State == MultiplayerSessionState.Ready && member.Engine.Snapshot.Id.Equals(SecondSession)),
+            "b and c moved to the second host");
+
+        // An id names a player only on the host that gave it, so each listens to the second host's a from here.
         b.Listen("a");
         c.Listen("a");
         rig.StepFor(1_500_000);
-        Assert(new[] { b, c }.All(member => member.Engine.Snapshot.State == MultiplayerSessionState.Ready && member.Engine.Snapshot.Id.Equals(SecondSession)),
-            "b and c moved to the second host");
 
         var mutes = new HashSet<ParticipantId>();
         Assert(b.Voice.GetListenerMutes(mutes) && mutes.Count == 0, "b's set holds the wish alone, naming nobody");
@@ -401,9 +428,9 @@ internal static class VoiceSessionChangeTests
     internal static void NamesGivenBeforeTheNewHostListsItsPlayersNameNobodyThere()
     {
         // The second host's world is large, so over a 64 kB/s link its answer to b's join spans two frames, with its
-        // participant list in the second. In between, b's session names the second host's session but still lists the
-        // first host's players, and the player mutes the a it shows. That a is nobody with the second host: the name goes
-        // at once, b hears the second host's a, and that host never learns the name.
+        // participant list in the second. In between, b's session names the second host's session and lists nobody, and
+        // the player mutes the a it saw with the first host. That a is nobody with the second host: the name goes at once,
+        // b hears the second host's a, and that host never learns the name.
         using var rig = new VoiceServiceRig(new VirtualLinkConditions { LatencyTicks = 1, TicksPerSecond = 100, BandwidthBytesPerSecond = 64_000 });
         rig.AddHost();
         rig.AddClient("a");
@@ -414,8 +441,8 @@ internal static class VoiceSessionChangeTests
         for (var step = 0; step < 400 && farA.Engine.Snapshot.State != MultiplayerSessionState.Ready; step++) rig.Step();
         rig.Connect(b, second);
         for (var step = 0; step < 400 && !b.Engine.Snapshot.Id.Equals(SecondSession); step++) rig.Step();
-        Assert(b.Engine.Snapshot.State == MultiplayerSessionState.Synchronizing && b.Engine.Snapshot.TryGetParticipant(new ParticipantId("host"), out _),
-            "b is joining the second host, and its session still lists the first host's players");
+        Assert(b.Engine.Snapshot.State == MultiplayerSessionState.Synchronizing && b.Engine.Snapshot.Participants.Count == 0,
+            "b is joining the second host, and its session lists nobody yet");
         b.Voice!.SetListenerMutes(new[] { new ParticipantId("a") });
         var mutes = new HashSet<ParticipantId>();
         Assert(!b.Voice.GetListenerMutes(mutes) && mutes.Count == 0, "the name goes at once");

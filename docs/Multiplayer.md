@@ -217,7 +217,8 @@ and the snapshot says which one is current, whether this process holds world aut
   connection to the host is up, so a join that fails leaves solo play as it was. Once the link is up the snapshot names
   a placeholder session and `HasWorldAuthority` is false; it takes the host's own session id when the host accepts the
   join. The state goes from `Connecting` through `Synchronizing` to `Ready`, which it reaches only once all the host's
-  values and objects have arrived.
+  values and objects have arrived. A participant id names a player only on the host that gave it, so the snapshot lists
+  nobody until the host's own list arrives, which it does before `Ready`.
 - **What replicates.** What a contract declares, and nothing else: `[ReplicatedState]` values, `[ReplicatedObject]`
   objects, commands with their confirmations, and presentation events, which reach players only once the host commits
   them. Unity objects, files, configuration and a mod's own fields stay in their process. Replicating the world itself,
@@ -230,10 +231,13 @@ and the snapshot says which one is current, whether this process holds world aut
   session.
 - **Reconnecting.** When the connection to the host goes quiet, the snapshot reports `Reconnecting` and canonical
   values hold still. A connection that recovers carries on. One that drops is tried again every two seconds for 30
-  seconds: meanwhile the snapshot reports `Connecting`, and submissions still waiting for the host complete as
-  cancelled. The host keeps a player's place, participant id included, for 30 seconds after the connection drops, so
-  a reconnect in that window resumes the same session as the same player, with the host's current values, and the
-  session hooks do not run. A player who cannot get back in time returns to solo play.
+  seconds: meanwhile the snapshot reports `Connecting` and still lists the session's players, though none of them as
+  this process's own, and submissions still waiting for the host complete as cancelled. The host keeps a player's
+  place, participant id included, for 30 seconds after the connection drops, so a reconnect in that window resumes the
+  same session as the same player, with the host's current values, and the session hooks do not run. The participant
+  list is kept throughout, unless an attempt was lost after it reached the host but before the host's answer came back:
+  the host may have restarted meanwhile, so the snapshot then lists nobody until the host's own list arrives, before
+  `Ready`. A player who cannot get back in time returns to solo play.
 
 What a mod sees at each step:
 

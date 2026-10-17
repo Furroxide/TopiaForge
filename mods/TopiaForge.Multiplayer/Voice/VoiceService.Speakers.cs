@@ -33,6 +33,7 @@ namespace TopiaForge.Multiplayer.Voice
         private IReadOnlyList<MultiplayerParticipant>? observedParticipants;
         private MultiplayerSessionId observedSession;
         private MultiplayerSessionState observedState;
+        private ulong observedListGeneration;
         private bool observedAny;
         private int connectedOthers;
         private long framesReceived;
@@ -73,17 +74,19 @@ namespace TopiaForge.Multiplayer.Voice
             var snapshot = engine.Snapshot;
             var participants = snapshot.Participants;
             if (observedAny && ReferenceEquals(participants, observedParticipants) && snapshot.Id.Equals(observedSession) &&
-                snapshot.State == observedState)
+                snapshot.State == observedState && engine.ParticipantListGeneration == observedListGeneration)
             {
                 return;
             }
 
+            CatchUpWithTheList();
             var sessionChanged = !observedAny || !snapshot.Id.Equals(observedSession);
             var rejoined = observedAny && observedState != MultiplayerSessionState.Ready && snapshot.State == MultiplayerSessionState.Ready;
             observedAny = true;
             observedParticipants = participants;
             observedSession = snapshot.Id;
             observedState = snapshot.State;
+            observedListGeneration = engine.ParticipantListGeneration;
             ready = snapshot.State == MultiplayerSessionState.Ready;
             lock (inbound.Gate)
             {
@@ -177,6 +180,7 @@ namespace TopiaForge.Multiplayer.Voice
         /// <summary>Gets or creates <paramref name="speaker"/>'s stream, or returns null when the bound leaves no room.</summary>
         private VoicePlaybackStream? EnsureStream(ParticipantId speaker, long nowMicros)
         {
+            CatchUpWithTheList();
             var id = speaker.Value;
             if (streams.TryGetValue(id, out var stream)) return stream;
             var listed = present.Contains(id);
@@ -208,6 +212,28 @@ namespace TopiaForge.Multiplayer.Voice
             lock (inbound.Gate) EndStream(oldest);
             unlistedStreamsEnded++;
             return true;
+        }
+
+        /// <summary>
+        /// Ends every speaker's stream, listed or not, once the engine has let go of the list they were named from: at a join
+        /// that withheld it or a role change, after which their ids may name other people. That holds even when the next
+        /// host's list arrived in the same pump, so the session never listed nobody. The pump does this as it looks at the
+        /// session, and so does a stream asked for sooner, as from a session callback during a join, so no caller is ever
+        /// handed a stream named from the list of before.
+        /// </summary>
+        private void CatchUpWithTheList()
+        {
+            var listGeneration = engine.ParticipantListGeneration;
+            if (!observedAny || listGeneration == observedListGeneration) return;
+            observedListGeneration = listGeneration;
+            lock (inbound.Gate)
+            {
+                present.Clear();
+                ending.Clear();
+                foreach (var id in streams.Keys) ending.Add(id);
+                foreach (var id in ending) EndStream(id);
+                known.Clear();
+            }
         }
 
         /// <summary>Ends a speaker's stream and stops playing them. The caller holds the inbound gate.</summary>

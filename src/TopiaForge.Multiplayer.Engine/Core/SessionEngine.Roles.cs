@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using TopiaForge.Mods;
 
 namespace TopiaForge.Multiplayer.Engine
@@ -140,7 +139,7 @@ namespace TopiaForge.Multiplayer.Engine
         private void BecomeSolo(SoloSessionStart start)
         {
             RetireLocalSession(start.SessionId, start.Seed, 0, "The joined session ended.");
-            clientParticipants = new List<ParticipantEntry>();
+            ForgetParticipantList();
             Role = EngineRole.Host;
             ended = false;
             endReason = MultiplayerSessionEndReason.None;

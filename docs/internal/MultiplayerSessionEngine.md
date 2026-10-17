@@ -175,7 +175,8 @@ disconnected at once, and objects it owned return to server ownership. Its recor
 so a returning identity keeps its participant id and submission sequence. `JoinAccepted` tells the client the next
 sequence the host will accept, so a restarted client cannot collide with one the host has already processed. It also
 says whether the host kept the player's record, within the grace or across an in-place replacement, rather than
-creating one; only then does the client keep its listener mutes (`MultiplayerVoice.md`, section 2.5).
+creating one; only then does the client keep its participant list (below) and its listener mutes (`MultiplayerVoice.md`,
+section 2.5).
 
 The host keeps at most twice `MaximumParticipants` records, connected or within their grace period, and never more
 than the 256 a snapshot and a peer accept. A new identity that would exceed the limit takes the place of the
@@ -186,6 +187,35 @@ on commands and objects with it, so they never outnumber the participants the ho
 Each joined connection receives the participant list at most once per flush, however many joins, departures or quality
 changes happened since the last one. A round-trip sample comes only from the echo of the latest clock probe, so a client
 can neither steer its reported ping nor make the host resend the list at will.
+
+**A client's list.** Every host numbers its players itself, so a participant id names a player only on the host that
+gave it. A client therefore shows the list a host sent only beside the ids that host gave it, its own player's and this
+player's, which mark the rows `IsHost` and `IsLocal`. A host sends its list after the snapshot, and a large world can
+put a second or more between `JoinAccepted` and the list. In that window:
+
+- **A join that finds the host that sent the list, with this player's record kept,** keeps the list, since that host
+  gives the same ids and they still name the same people. A reconnect within the grace does, into an in-place
+  replacement too.
+- **Any other join withholds it.** The snapshot lists nobody, and names no local or host participant, until the host the
+  join found sends its own list: a join to another host, to this host after it restarted or let the record expire, or
+  after a join to it went unanswered, which counts as a lost record (`MultiplayerVoice.md`, section 2.5). So does a join
+  to another process under the same identity, such as a second copy of the game sharing one data folder, that gives
+  this player another id.
+- **A lost link never withholds or clears it.** While the link is down the list stays as the host last sent it, and no
+  row is this player's until a host accepts it again. Clearing it would end every speaker's voice stream at each outage.
+
+So the `IsLocal` and `IsHost` marks always come from the host that sent the list they label, and a client that reaches
+`Ready` shows that host's own list, which arrives before the `Commit` that ends the join's snapshot.
+
+When the new host's whole answer fits in one frame, its list arrives in the same pump as `JoinAccepted`, so no snapshot
+lists nobody: a subscriber sees the list of before replaced by the new host's at once, and an id it held may now name
+someone else. Every list a client lets go, at a join that withholds it or on going back to solo play, therefore moves
+`ParticipantListGeneration` on. Whatever keeps something per participant id watches it, as the voice service does
+with its playback streams (`MultiplayerVoice.md`, section 3.4).
+
+`ParticipantListTests` and `ParticipantListProviderTests` check each case over a slow link, and the generation and the
+provider's voice streams over a fast one, where the whole answer arrives at once. `ParticipantListFuzzTests` checks
+every snapshot a client shows against scripted hosts, two processes under one identity among them.
 
 A link that stalls without closing moves the client to `Reconnecting`; canonical state is frozen until the link
 recovers or closes.

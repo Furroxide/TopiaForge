@@ -26,23 +26,23 @@ namespace TopiaForge.Multiplayer.Engine
         private string? listenerMutesHost;
 
         /// <summary>
-        /// The authenticated identity of the host whose players a client's session lists, the only players its player can
-        /// name: the host that sent the last participant list. It is null before any list and after a role change, which
-        /// list nobody, and <see cref="NoMutesHost"/> once a join finds that host without this player's record, or a join
-        /// to it goes unanswered: its ids then name nobody.
+        /// The authenticated identity of the host that sent a client its last participant list, whose players are the only
+        /// ones its player can name. It is null before any list and after a role change, which list nobody, and
+        /// <see cref="NoMutesHost"/> once a join finds that host without this player's record, or a join to it goes
+        /// unanswered: its ids then name nobody. A join that withholds the list leaves it as it was, so names given while
+        /// no session is joined are still that host's.
         /// </summary>
         private string? listedHost;
 
         /// <summary>
         /// Sets whom the local player does not want to hear. A client also sends the set to its host, reliably, so muted
         /// speakers are never relayed to it; <paramref name="muteAll"/> stops all relayed voice. A client's names name the
-        /// players its session lists, and those are the players of the host that sent the last list: a join changes them
-        /// only when the new host sends its own, after its snapshot. A set made while no session is joined, or while a join
-        /// is under way, therefore belongs to that host, and the join keeps or forgets it as it would any set made there.
-        /// Names given once a join has found another host, or this one without the player's record, but before that host
-        /// lists its players, name nobody in the session and are dropped. A join that went unanswered counts as one that
-        /// found the record lost. A name never silences whoever has that id with the next host. A set that names nobody,
-        /// such as muting everyone, applies to whichever session the join finds.
+        /// players of the host that sent the last list. A set made while no session is joined, or while a join is under
+        /// way, therefore belongs to that host, and the join keeps or forgets it as it would any set made there. A join
+        /// that finds another host, or this one without the player's record, withholds that list until the host it found
+        /// sends its own, after its snapshot: names given in between name nobody in the session and are dropped. A join
+        /// that went unanswered counts as one that found the record lost. A name never silences whoever has that id with
+        /// the next host. A set that names nobody, such as muting everyone, applies to whichever session the join finds.
         /// </summary>
         internal void SetListenerMutes(IReadOnlyCollection<ParticipantId> muted, bool muteAll = false)
         {
@@ -78,8 +78,8 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>
         /// Ties a client's new set to the host whose players it names. While no session is joined, or a join is under way,
-        /// that is the host whose players the session lists. Once joined, it is the joined host, unless the session still
-        /// lists the players of before: then the names name nobody here, and go.
+        /// that is the host that sent the last list. Once joined, it is the joined host, unless that host has not listed
+        /// its players since the join withheld the list of before: then the names name nobody here, and go.
         /// </summary>
         private void TieListenerMutesToTheirHost()
         {
@@ -100,8 +100,8 @@ namespace TopiaForge.Multiplayer.Engine
         /// forgotten, mute-all included, so it neither silences strangers who got the same ids nor tells this host whom the
         /// player muted. Names given while the join was under way belong to the host whose players the session listed, and
         /// fare the same. A set that names nobody, made while the join was under way, stays, for the session the join found.
-        /// Until this host lists its players the session lists the players of before; when they were this host's and it lost
-        /// the record, their ids name nobody now.
+        /// When the last list was this host's and it lost the record, that list's ids name nobody now; the join withholds
+        /// the list itself (<see cref="AdoptParticipantList"/>).
         /// </summary>
         private void AdoptListenerMutes(string host, bool recordKept)
         {
