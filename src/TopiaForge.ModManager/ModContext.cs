@@ -7,13 +7,15 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.ModManager
 {
-    internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext, IInternalWorldRuntimeContext
+    internal sealed partial class ModContext : IModContext, IUnityInteropContext, IInternalSceneTransitionContext, IInternalWorldRuntimeContext,
+        IInternalReplicationContext
     {
         private readonly OwnerModLifetime ownerLifetime;
         private readonly ModEvents modEvents;
@@ -24,6 +26,8 @@ namespace TopiaForge.ModManager
         private readonly ModServiceRegistry serviceRegistry;
         private readonly string[] visibleDependencies;
         private readonly bool allowUnityInterop;
+        private readonly MultiplayerReplication replicationServices;
+        private readonly RuntimeReplication replication;
 
         public ModContext(
             ModManifest manifest,
@@ -36,6 +40,10 @@ namespace TopiaForge.ModManager
         {
         }
 
+        /// <param name="replicationServices">
+        /// The process's replication services; ModRuntime passes its own, and a context made without them is single player.
+        /// The context's network profile comes from them: the runtime's network class for the manifest, process-wide.
+        /// </param>
         internal ModContext(
             ModManifest manifest,
             ManagerPaths managerPaths,
@@ -44,7 +52,8 @@ namespace TopiaForge.ModManager
             ModServiceRegistry serviceRegistry,
             IRuntimeInfo? runtimeInfo,
             IGameplayContextFactory? gameplayFactory,
-            IEnumerable<ModManifest>? availableManifests = null)
+            IEnumerable<ModManifest>? availableManifests = null,
+            MultiplayerReplication? replicationServices = null)
         {
             if (manifest == null) throw new ArgumentNullException(nameof(manifest));
             if (managerPaths == null) throw new ArgumentNullException(nameof(managerPaths));
@@ -54,14 +63,17 @@ namespace TopiaForge.ModManager
             this.packagePath = packagePath;
             this.gameplayFactory = gameplayFactory;
             this.serviceRegistry = serviceRegistry;
+            this.replicationServices = replicationServices ?? MultiplayerReplication.Offline();
             visibleDependencies = VisibleDependencyIds(manifest, availableManifests).ToArray();
             allowUnityInterop = manifest.Capabilities.Any(capability => string.Equals(
                 capability, "unsafe-native", StringComparison.OrdinalIgnoreCase));
             Identity = new ModIdentity(manifest.Id, manifest.Name, SemanticVersion.Parse(manifest.Version));
+            NetProfile = this.replicationServices.ProfileFor(manifest);
             Runtime = runtimeInfo ?? new RuntimeInfo();
             Logger = logger;
             ownerLifetime = new OwnerModLifetime();
             Lifetime = ownerLifetime;
+            replication = this.replicationServices.Bind(Identity.Id, NetProfile, Lifetime);
             try
             {
                 modEvents = new ModEvents(ownerLifetime, logger);
@@ -79,20 +91,21 @@ namespace TopiaForge.ModManager
                         packagePath,
                         dataPath,
                         Lifetime,
-                        Logger)
+                        Logger,
+                        NetProfile)
                     ?? GameplayContextServices.Unavailable(Lifetime);
                 Input = gameplay.Input;
                 Time = gameplay.Time;
                 Scheduler = gameplay.Scheduler;
                 LocalPlayer = new LifetimePlayerService(gameplay.LocalPlayer, Lifetime);
                 Scenes = gameplay.Scenes;
-                Entities = new LifetimeEntityService(gameplay.Entities, Lifetime);
+                Entities = new LifetimeEntityService(new NetEntityService(gameplay.Entities, replication), Lifetime);
                 Physics = gameplay.Physics;
                 Interactions = gameplay.Interactions;
-                Items = gameplay.Items;
-                Assets = gameplay.Assets;
+                Items = new NetItemService(gameplay.Items, replication);
+                Assets = new NetAssetService(gameplay.Assets, replication);
                 Audio = gameplay.Audio;
-                Ui = gameplay.Ui;
+                Ui = new NetUiService(gameplay.Ui, replication);
                 SceneTransitions = gameplay.SceneTransitions;
                 WorldRuntime = gameplay.WorldRuntime;
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
@@ -159,6 +172,14 @@ namespace TopiaForge.ModManager
         public IExtensionService Extensions { get; }
         public IInternalSceneTransitionService SceneTransitions { get; }
         public IInternalWorldRuntimeService WorldRuntime { get; }
+
+        /// <summary>Gets where this context runs: its mod's network class and its execution context.</summary>
+        internal ModNetProfile NetProfile { get; }
+
+        /// <summary>Gets this context's replication seam, which its network decorators record through.</summary>
+        internal RuntimeReplication NetReplication => replication;
+
+        IRuntimeReplication IInternalReplicationContext.Replication => replication;
 
         IUnityInteropService IUnityInteropContext.UnityInterop => unityInterop
             ?? throw new InvalidOperationException(

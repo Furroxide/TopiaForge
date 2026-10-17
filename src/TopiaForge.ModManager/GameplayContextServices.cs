@@ -1,12 +1,18 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Interop.Unity;
 
 namespace TopiaForge.ModManager
 {
+    /// <summary>
+    /// The factory seam: the gameplay host makes each mod context's gameplay services. The context passes its network
+    /// profile in, so every service the host makes can know where its context runs, and wraps the entity, asset, item and
+    /// UI services it returns in the network decorators.
+    /// </summary>
     internal interface IGameplayContextFactory
     {
         GameplayContextServices Create(
@@ -15,6 +21,7 @@ namespace TopiaForge.ModManager
             string dataPath,
             IModLifetime lifetime,
             IModLogger logger,
+            ModNetProfile profile,
             NativeTransitionAccessSlot? transitionAccess = null);
     }
 

@@ -69,7 +69,9 @@ a standalone mod is reported before a busy phase: the player hears the reason th
 | `Offline` | `Client` | Running | `RequiresLeave` | — ("Leave current game?", then ask again from Idle) |
 
 `PromoteInPlace` is where `NetworkWorld` takes its scene census and baselines earlier spawns from the descriptors it
-recorded at spawn time. A client that wants another server leaves (`Client` to `Offline`) and then joins from Idle.
+recorded at spawn time. A client that wants another server leaves (`Client` to `Offline`) and then joins from Idle. The
+runtime applies these rules to every request to go online or to leave, as
+[MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md#10-the-realm) records.
 
 ## Execution model (WS3.1 and WS3.4)
 

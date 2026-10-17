@@ -326,9 +326,18 @@
   </ItemGroup>
 
   <!-- The multiplayer composition root and runtime host are Unity-free; compiling them here unit-tests them and keeps
-       them that way. The fake control is shared with the ModRuntime harness. -->
+       them that way. So are the realm, the spawn ledger, the replication seam and the network decorators every mod
+       context's services pass through. The fake control is shared with the ModRuntime harness. -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntime.cs" Link="Runtime/Multiplayer/MultiplayerRuntime.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntime.Realm.cs" Link="Runtime/Multiplayer/MultiplayerRuntime.Realm.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRealm.cs" Link="Runtime/Multiplayer/MultiplayerRealm.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerSpawnLedger.cs" Link="Runtime/Multiplayer/MultiplayerSpawnLedger.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerReplication.cs" Link="Runtime/Multiplayer/MultiplayerReplication.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerMicrophoneArbiter.cs" Link="Runtime/Multiplayer/MultiplayerMicrophoneArbiter.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.cs" Link="Runtime/Multiplayer/RuntimeReplication.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetAssetService.cs" Link="Runtime/Multiplayer/NetAssetService.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetGameplayServices.cs" Link="Runtime/Multiplayer/NetGameplayServices.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntimeHost.cs" Link="Runtime/Multiplayer/MultiplayerRuntimeHost.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentInventory.cs" Link="Runtime/Multiplayer/MultiplayerContentInventory.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerContentAdmission.cs" Link="Runtime/Multiplayer/MultiplayerContentAdmission.cs" />

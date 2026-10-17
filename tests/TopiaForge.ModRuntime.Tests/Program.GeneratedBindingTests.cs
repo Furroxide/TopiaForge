@@ -9,7 +9,10 @@ using System.Text.Json;
 using System.Threading;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
+using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModRuntime.Tests
 {
@@ -124,6 +127,7 @@ namespace TopiaForge.ModRuntime.Tests
                 var target = manifest.Contributions!.LaunchTargets.Single();
                 var resolution = runtime.ResolveLaunch(new LaunchRequest(target.Id));
                 Assert(resolution.Resolved, "loaded-manifest resolution accepts the generated target");
+                var scopesBefore = host.ScopeProfiles.Count;
                 var launch = runtime.LaunchTargetAsync(new LaunchRequest(target.Id), "generated-" + name);
                 var deadline = DateTime.UtcNow.AddSeconds(15);
                 while (host.PendingReadiness == null && !launch.IsCompleted && DateTime.UtcNow < deadline)
@@ -135,6 +139,7 @@ namespace TopiaForge.ModRuntime.Tests
                 PumpBinding(runtime.NativeDispatcher, launch);
                 Assert(launch.Result.Succeeded && orchestrator.Current.Phase == SessionPhase.Running,
                     "production-generated launch reaches Running: " + launch.Result.ErrorMessage);
+                AssertSessionScopesAndRealm(runtime, host, packages, resolution.Plan!, scopesBefore);
                 Assert(host.LastSpawnPolicy?.Kind == (name == "world" ? WorldSpawnKind.AuthoredMarker : WorldSpawnKind.ProviderDefault),
                     "generated spawn policy reaches native preparation");
                 if (name == "world")
@@ -147,12 +152,47 @@ namespace TopiaForge.ModRuntime.Tests
                     && host.ActiveResources == 0 && owners.All(owner => !owner.Lifetime.IsStopping && owner.ActiveChildScopeCount == 0)
                     && runtime.LoadedModIds.Count == 2,
                     "session-bound stop releases generated resources while both package parents remain alive");
+                var joined = runtime.Multiplayer.Join(new FakeJoinTarget(), new InternalJoinSettings());
+                Assert(joined.Succeeded && joined.Effect == NetRealmTransitionEffect.ReplaceLocalSession &&
+                       ((FakeMultiplayerControl)runtime.Multiplayer.Control!).RealmCalls.SequenceEqual(new[] { "join" }),
+                    "once the game is left, the same join goes through: " + joined);
                 PumpBinding(runtime.NativeDispatcher, runtime.UnloadAllAsync());
                 Assert(host.ActiveResources == 0 && host.Disposed && owners.All(owner => owner.ActiveChildScopeCount == 0),
                     "runtime unload closes every generated child and native/asset resource");
                 Assert(logger.Errors.Count == 0, "generated runtime has no hidden cleanup errors: " + string.Join("; ", logger.Errors));
             }
             finally { PumpBinding(runtime.NativeDispatcher, runtime.UnloadAllAsync()); }
+        }
+
+        /// <summary>
+        /// While the generated session runs: its scopes run where the session says, the gamemode's package as its server and
+        /// every other package as a world owner, each with its mod's network class; and the realm rules read the real
+        /// orchestrator's phase, so a join is refused until the player leaves the game, while hosting would promote it in place.
+        /// </summary>
+        private static void AssertSessionScopesAndRealm(TopiaForge.ModManager.ModRuntime runtime, GeneratedGameplayHost host,
+            IEnumerable<ModPackage> packages, LaunchPlan plan, int scopesBefore)
+        {
+            var modeOwner = plan.Packages.OrderByDescending(package => package.Id.Length)
+                .First(package => plan.GamemodeId.StartsWith(package.Id + ".", StringComparison.OrdinalIgnoreCase));
+            var session = host.ScopeProfiles.Skip(scopesBefore).ToArray();
+            Assert(session.Length > 0 && session.Count(scope => scope.Profile.Context == ModExecutionContext.GamemodeServer) == 1,
+                "the session makes one gamemode server scope (" + string.Join(", ", session.Select(scope => scope.Owner + "=" + scope.Profile)) + ")");
+            foreach (var (owner, profile) in session)
+            {
+                var expected = string.Equals(owner, modeOwner.Id, StringComparison.OrdinalIgnoreCase)
+                    ? ModExecutionContext.GamemodeServer : ModExecutionContext.WorldOwner;
+                var manifest = packages.Single(package => string.Equals(package.Manifest!.Id, owner, StringComparison.OrdinalIgnoreCase)).Manifest!;
+                Assert(profile.Equals(new ModNetProfile(MultiplayerRuntime.NetworkClassOf(manifest), expected)),
+                    owner + "'s session scope runs as " + expected + " (" + profile + ")");
+            }
+
+            var control = new FakeMultiplayerControl();
+            Assert(runtime.Multiplayer.Attach(control), "a provider attaches");
+            var refused = runtime.Multiplayer.Join(new FakeJoinTarget(), new InternalJoinSettings());
+            Assert(refused.Verdict == NetRealmTransitionVerdict.RequiresLeave && !refused.Succeeded && control.RealmCalls.Count == 0,
+                "while the game runs, a join is refused until the player leaves it: " + refused);
+            Assert(runtime.Multiplayer.EvaluateRealmChange(NetRealm.ListenHost).Effect == NetRealmTransitionEffect.PromoteInPlace,
+                "while it runs, hosting would promote it in place");
         }
 
         private static ModManifest GeneratedWorldsManifest() => new ModManifest

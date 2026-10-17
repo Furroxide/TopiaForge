@@ -32,7 +32,22 @@ namespace TopiaForge.ModManager.TestDoubles
 
         internal Exception? FlushFailure { get; set; }
 
-        public bool IsLiveAvailable => true;
+        /// <summary>Gets each realm request the provider received, in order: <c>host</c>, <c>join</c>, <c>leave</c> and <c>stop-hosting</c>.</summary>
+        internal List<string> RealmCalls { get; } = new List<string>();
+
+        /// <summary>Gets or sets what hosting answers; it succeeds by default.</summary>
+        internal OperationResult<bool> HostingResult { get; set; } = OperationResult<bool>.Success(true);
+
+        /// <summary>Gets or sets what a join answers; it succeeds by default.</summary>
+        internal OperationResult<bool> JoinResult { get; set; } = OperationResult<bool>.Success(true);
+
+        /// <summary>Gets or sets the host phase the status reports; by default Hosting for a listen host and Idle otherwise.</summary>
+        internal InternalHostPhase? HostPhase { get; set; }
+
+        /// <summary>Gets or sets a failure leaving throws, as a broken provider would.</summary>
+        internal Exception? LeaveFailure { get; set; }
+
+        public bool IsLiveAvailable { get; set; } = true;
 
         public InternalSessionRole Role { get; set; }
 
@@ -72,12 +87,23 @@ namespace TopiaForge.ModManager.TestDoubles
             if (FlushFailure != null) throw FlushFailure;
         }
 
-        public InternalLiveStatus GetStatus() => new InternalLiveStatus { Role = Role, IsLiveAvailable = true };
+        public InternalLiveStatus GetStatus() => new InternalLiveStatus
+        {
+            Role = Role,
+            IsLiveAvailable = IsLiveAvailable,
+            HostPhase = HostPhase ?? (Role == InternalSessionRole.ListenHost ? InternalHostPhase.Hosting : InternalHostPhase.Idle)
+        };
 
-        public OperationResult<bool> StartHosting(InternalHostSettings settings) => Unsupported<bool>();
+        public OperationResult<bool> StartHosting(InternalHostSettings settings)
+        {
+            RealmCalls.Add("host");
+            return HostingResult;
+        }
 
         public void StopHosting()
         {
+            RealmCalls.Add("stop-hosting");
+            if (LeaveFailure != null) throw LeaveFailure;
         }
 
         public bool TryCreateJoinTarget(string text, out IInternalJoinTarget? target)
@@ -86,12 +112,18 @@ namespace TopiaForge.ModManager.TestDoubles
             return false;
         }
 
-        public OperationResult<bool> Join(IInternalJoinTarget target, InternalJoinSettings settings) => Unsupported<bool>();
+        public OperationResult<bool> Join(IInternalJoinTarget target, InternalJoinSettings settings)
+        {
+            RealmCalls.Add("join");
+            return JoinResult;
+        }
 
         public OperationResult<bool> SupplyPassword(string password) => Unsupported<bool>();
 
         public void Leave()
         {
+            RealmCalls.Add("leave");
+            if (LeaveFailure != null) throw LeaveFailure;
         }
 
         public IInternalServerQuery Query(IInternalJoinTarget target, bool allowDirect) => throw new NotSupportedException();
@@ -132,6 +164,18 @@ namespace TopiaForge.ModManager.TestDoubles
 
         private static OperationResult<T> Unsupported<T>() where T : notnull =>
             OperationResult<T>.Failure(ModErrorCode.Unavailable, "The fake control does not do this.");
+    }
+
+    /// <summary>A join target as a provider would make one: an opaque handle that shows only what it is.</summary>
+    internal sealed class FakeJoinTarget : IInternalJoinTarget
+    {
+        public InternalJoinTargetKind Kind => InternalJoinTargetKind.Lan;
+
+        public string Description => "LAN session";
+
+        public string? ServerId => null;
+
+        public override string ToString() => Description;
     }
 
     /// <summary>A frame stage that records when it runs.</summary>

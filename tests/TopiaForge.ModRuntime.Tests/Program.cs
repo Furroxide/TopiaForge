@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using RuntimeUnderTest = TopiaForge.ModManager.ModRuntime;
 
@@ -317,6 +318,7 @@ namespace TopiaForge.ModRuntime.Tests
                 string dataPath,
                 IModLifetime lifetime,
                 IModLogger logger,
+                ModNetProfile profile,
                 NativeTransitionAccessSlot? transitionAccess = null)
             {
                 if (transitionAccess != null) ScopeCreated?.Invoke(lifetime);

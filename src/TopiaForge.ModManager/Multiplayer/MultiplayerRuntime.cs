@@ -21,9 +21,10 @@ namespace TopiaForge.ModManager
     /// <item><see cref="BeforeModsLateUpdate"/>: replica interpolation, before the mods' LateUpdate.</item>
     /// </list>
     /// The stages are named seams that later slices fill; an empty one costs a field read. With no provider attached,
-    /// each hook costs one field read and allocates nothing. See docs/internal/MultiplayerRuntimeIntegration.md.
+    /// each hook costs one field read and allocates nothing. The realm and its rules live in the other part of this class.
+    /// See docs/internal/MultiplayerRuntimeIntegration.md.
     /// </summary>
-    internal sealed class MultiplayerRuntime
+    internal sealed partial class MultiplayerRuntime
     {
         private readonly Func<IInternalMultiplayerControl?> findControl;
         private readonly IMultiplayerLog log;
@@ -49,6 +50,9 @@ namespace TopiaForge.ModManager
         }
 
         internal MultiplayerRuntimeHost Host { get; }
+
+        /// <summary>Gets where the runtime reports what fails, redacted; the replication seam reports there too.</summary>
+        internal IMultiplayerLog Log => log;
 
         /// <summary>Gets the attached control, or null in a process without the multiplayer provider.</summary>
         internal IInternalMultiplayerControl? Control => control;
@@ -123,6 +127,7 @@ namespace TopiaForge.ModManager
             if (current == null) return;
             control = null;
             role = InternalSessionRole.Solo;
+            FollowRealm();
             try
             {
                 current.DetachRuntime(Host);
@@ -153,6 +158,7 @@ namespace TopiaForge.ModManager
                 return;
             }
 
+            FollowRealm();
             if (role == InternalSessionRole.Solo) return;
             Run(WorldEvents, ref worldFailureLogged, deltaTime);
         }

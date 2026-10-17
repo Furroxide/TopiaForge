@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -21,13 +22,21 @@ namespace TopiaForge.ModManager
         private readonly List<ModContextScope> childScopes = new List<ModContextScope>();
         internal int ActiveChildScopeCount { get { lock (scopeSync) return childScopes.Count; } }
 
+        /// <param name="executionContext">
+        /// Where the scope's code runs: a session gives its gamemode's package <see cref="ModExecutionContext.GamemodeServer"/>
+        /// and its other packages <see cref="ModExecutionContext.WorldOwner"/>. Without one, the scope runs where this context
+        /// does, as a content or discovery scope works for its caller. The scope keeps its mod's network class.
+        /// </param>
         internal async Task<ModContextScope> CreateChildScopeAsync(string sessionId, CancellationToken sessionStoppingToken,
-            Action requestSessionStop, NativeTransitionAccessSlot transitionAccess, IHostDispatcher dispatcher)
+            Action requestSessionStop, NativeTransitionAccessSlot transitionAccess, IHostDispatcher dispatcher,
+            ModExecutionContext? executionContext = null)
         {
             if (string.IsNullOrWhiteSpace(sessionId)) throw new ArgumentException("A session identity is required.", nameof(sessionId));
             if (requestSessionStop == null) throw new ArgumentNullException(nameof(requestSessionStop));
             if (transitionAccess == null) throw new ArgumentNullException(nameof(transitionAccess));
             if (dispatcher == null) throw new ArgumentNullException(nameof(dispatcher));
+            var scopeContext = executionContext ?? NetProfile.Context;
+            if (!ModExecutionContexts.IsDefined(scopeContext)) throw new ArgumentOutOfRangeException(nameof(executionContext));
             if (!dispatcher.IsCurrent) throw new InvalidOperationException("Scopes must be created on the host thread.");
             ModContextScope scope;
             lock (scopeSync)
@@ -41,7 +50,7 @@ namespace TopiaForge.ModManager
             }
             try
             {
-                scope.Initialize(new ModContext(this, scope, transitionAccess));
+                scope.Initialize(new ModContext(this, scope, transitionAccess, new ModNetProfile(NetProfile.NetworkClass, scopeContext)));
                 return scope;
             }
             catch (Exception constructionFailure)
@@ -53,41 +62,44 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private ModContext(ModContext parent, ModContextScope scope, NativeTransitionAccessSlot transitionAccess)
+        private ModContext(ModContext parent, ModContextScope scope, NativeTransitionAccessSlot transitionAccess, ModNetProfile profile)
         {
             scopeParent = parent;
             packagePath = parent.packagePath;
             dataPath = parent.dataPath;
             gameplayFactory = parent.gameplayFactory;
             serviceRegistry = parent.serviceRegistry;
+            replicationServices = parent.replicationServices;
             visibleDependencies = parent.visibleDependencies;
             allowUnityInterop = parent.allowUnityInterop;
             Identity = parent.Identity;
+            NetProfile = profile;
             Runtime = parent.Runtime;
             Logger = parent.Logger;
             ownerLifetime = scope.OwnerLifetime;
             Lifetime = scope.Lifetime;
+            replication = replicationServices.Bind(Identity.Id, NetProfile, Lifetime);
             if (parent.sessionOwner != null) ConfigureSessions(parent.sessionOwner);
             modEvents = new ModEvents(parent.modEvents, Lifetime);
             Events = modEvents;
             Files = new ModFiles(packagePath, dataPath, Lifetime);
             Config = new ScopedConfigService(parent.Config, Lifetime);
             LocalStorage = new ScopedStorageService(parent.LocalStorage, Lifetime);
-            var gameplay = gameplayFactory?.Create(Identity.Id, packagePath, dataPath, Lifetime, Logger, transitionAccess)
+            var gameplay = gameplayFactory?.Create(Identity.Id, packagePath, dataPath, Lifetime, Logger, NetProfile, transitionAccess)
                 ?? GameplayContextServices.Unavailable(Lifetime);
             Input = gameplay.Input;
             Time = gameplay.Time;
             Scheduler = gameplay.Scheduler;
             LocalPlayer = new LifetimePlayerService(gameplay.LocalPlayer, Lifetime);
             Scenes = gameplay.Scenes;
-            Entities = new LifetimeEntityService(gameplay.Entities, Lifetime);
+            Entities = new LifetimeEntityService(new NetEntityService(gameplay.Entities, replication), Lifetime);
             Physics = gameplay.Physics;
             Interactions = gameplay.Interactions;
-            Items = gameplay.Items;
-            Assets = gameplay.Assets;
+            Items = new NetItemService(gameplay.Items, replication);
+            Assets = new NetAssetService(gameplay.Assets, replication);
             if (Assets is IParentAssetScope assetScope) assetScope.AttachParent(parent.Assets);
             Audio = gameplay.Audio;
-            Ui = gameplay.Ui;
+            Ui = new NetUiService(gameplay.Ui, replication);
             Ui.ApplyAccessibility(parent.Ui.Accessibility);
             SceneTransitions = gameplay.SceneTransitions;
             WorldRuntime = gameplay.WorldRuntime;

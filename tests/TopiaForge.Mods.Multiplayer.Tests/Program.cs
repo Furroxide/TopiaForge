@@ -465,6 +465,8 @@ internal static class Program
             RuntimeAdmissionTests.TheOfferFollowsTheLoadedPackages();
             RuntimeCompositionTests.TheCompositionRootDrivesTheProvider();
             RuntimeCompositionTests.TheOfflineFrameAllocatesNothing();
+            RuntimeRealmTests.OpeningToMultiplayerPromotesTheRunningSessionInPlace();
+            RuntimeRealmTests.JoiningNeedsAnIdleSessionAndLeavingIsNeverRefused();
             RuntimePrivacyTests.TheSpiCarriesNoAddress();
             RuntimePrivacyTests.TypedHostsStayInsideTheProvider();
             RuntimePrivacyTests.TheRuntimeRedactsWhatItLogs();
