@@ -14,7 +14,6 @@ namespace TopiaForge.Multiplayer.Engine
         private readonly TombstoneSet tombstones = new TombstoneSet();
         private readonly ProtocolWriter clientFrame = new ProtocolWriter(1024);
         private readonly ProtocolWriter clientBody = new ProtocolWriter(256);
-        private List<ParticipantEntry> clientParticipants = new List<ParticipantEntry>();
         private ClientChannel? channel;
         private FixedStepClock? hostClock;
         private ulong nextSequence;
@@ -172,9 +171,7 @@ namespace TopiaForge.Multiplayer.Engine
                     current.SnapshotCompleted = true;
                     break;
                 case MessageType.ParticipantsChanged:
-                    clientParticipants = SessionMessages.ReadParticipants(body);
-                    NoteListedHost(current);
-                    MarkSessionChanged(participantsChanged: true);
+                    ListParticipants(current, SessionMessages.ReadParticipants(body));
                     break;
                 case MessageType.StateDelta:
                     ReplicationMessages.ReadStateDelta(body, current.InIntern, out var owner, out var stateId, out var version, out var bytes);
@@ -232,7 +229,9 @@ namespace TopiaForge.Multiplayer.Engine
                 ResetLocalSession(newSession, new SessionSeed(message.Seed), message.Epoch, "The multiplayer session was replaced.");
             }
 
-            // Listener mutes follow the people, not the session id: see AdoptListenerMutes.
+            // A list shows only beside the ids of the host that sent it, and listener mutes follow the people, not the
+            // session id: see AdoptParticipantList and AdoptListenerMutes.
+            AdoptParticipantList(current.Link.PeerIdentity, message);
             AdoptListenerMutes(current.Link.PeerIdentity, message.RecordKept);
 
             // A rejoin keeps the session and its epoch but restarts every system stream: what the old link carried is gone,

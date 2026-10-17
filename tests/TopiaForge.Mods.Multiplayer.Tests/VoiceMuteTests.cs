@@ -223,8 +223,8 @@ internal static class VoiceMuteTests
     {
         // Host B's world is large, so over a 64 kB/s link its answer to a join spans two frames: JoinAccepted in the first,
         // its participant list after the snapshot in the second. In between, a joining player's session names B's session
-        // but still lists host A's players. t1 mutes the a it sees there. That a is A's, nobody with B, so the name goes at
-        // once. t2's link drops in that window, and t2 mutes A's a while it is down: the name stays with A, and B, which
+        // and lists nobody. t1 mutes the a it saw with host A all the same. That a is A's, nobody with B, so the name goes
+        // at once. t2's link drops in that window, and t2 mutes A's a while it is down: the name stays with A, and B, which
         // kept t2's record, forgets it at the next join. Both hear all of B's own a, and B never learns the name.
         using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 64_000 });
         var aId = new ParticipantId("a");
@@ -241,13 +241,13 @@ internal static class VoiceMuteTests
         var t2Link = rig.ConnectTo(other, t2, "t2", "host-b");
         var joined = new MultiplayerSessionId("other");
         for (var tick = 0; tick < 600 && !(t1.Snapshot.Id.Equals(joined) && t2.Snapshot.Id.Equals(joined)); tick++) rig.Advance();
-        Assert(new[] { t1, t2 }.All(engine => engine.Snapshot.State == MultiplayerSessionState.Synchronizing && engine.Snapshot.TryGetParticipant(new ParticipantId("host"), out _)),
-            "t1 and t2 are joining host B, and their sessions still list host A's players");
+        Assert(new[] { t1, t2 }.All(engine => engine.Snapshot.State == MultiplayerSessionState.Synchronizing && engine.Snapshot.Participants.Count == 0),
+            "t1 and t2 are joining host B, and their sessions list nobody yet");
 
         t1.SetListenerMutes(new[] { aId });
         rig.Network.Sever(t2Link);
         rig.Advance();
-        Assert(t2.Snapshot.State == MultiplayerSessionState.Connecting && t2.Snapshot.TryGetParticipant(new ParticipantId("host"), out _),
+        Assert(t2.Snapshot.State == MultiplayerSessionState.Connecting && t2.Snapshot.Participants.Count == 0,
             "t2's link drops before B lists its players");
         t2.SetListenerMutes(new[] { aId });
         var kept = new List<ParticipantId>();
@@ -273,8 +273,8 @@ internal static class VoiceMuteTests
         // Host A numbers its players itself, as a live host does: x is p1, a is p2 and the traveller p3. A's process dies and
         // starts again under the same identity, with a large world, so its answer to a join spans two frames. c and d join
         // the new process first, as p1 and p2, and the traveller comes back as a new record. Until the new list arrives,
-        // the traveller's session still lists the old process's players, and the player mutes p2, meaning a. p2 is d now:
-        // the name goes at once, and the traveller hears all of d.
+        // the traveller's session lists nobody, and the player mutes p2 from the old process's list, meaning a. p2 is d
+        // now: the name goes at once, and the traveller hears all of d.
         using var rig = new VoiceSessionHarness(new VirtualLinkConditions { LatencyTicks = 1, BandwidthBytesPerSecond = 64_000 });
         var numbered = Numbered(rig);
         var p2 = new ParticipantId("p2");
@@ -306,8 +306,8 @@ internal static class VoiceMuteTests
         rig.ConnectTo(second, traveller, "traveller");
         var joined = new MultiplayerSessionId("second-run");
         for (var tick = 0; tick < 600 && !traveller.Snapshot.Id.Equals(joined); tick++) rig.Advance();
-        Assert(traveller.Snapshot.State == MultiplayerSessionState.Synchronizing && traveller.Snapshot.TryGetParticipant(p2, out var stale) &&
-            stale!.DisplayName == "a", "the traveller is joining the second process, and its session still lists the first one's players");
+        Assert(traveller.Snapshot.State == MultiplayerSessionState.Synchronizing && traveller.Snapshot.Participants.Count == 0,
+            "the traveller is joining the second process, and its session lists nobody until the new list comes");
 
         traveller.SetListenerMutes(new[] { p2 });
         var kept = new List<ParticipantId>();
@@ -439,7 +439,7 @@ internal static class VoiceMuteTests
     }
 
     /// <summary>Engine options for a host that numbers its players itself, p1, p2 and on, as a live host does.</summary>
-    private static EngineOptions Numbered(VoiceSessionHarness rig) => new()
+    internal static EngineOptions Numbered(VoiceSessionHarness rig) => new()
     {
         StepRateHz = 60,
         DownstreamRateHz = 0,

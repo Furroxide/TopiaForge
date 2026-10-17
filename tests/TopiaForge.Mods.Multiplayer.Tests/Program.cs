@@ -535,6 +535,14 @@ internal static class Program
             VoiceMuteTests.MutesFromBeforeARestartStayBehindWhenItsFirstAnswerIsLost();
             VoiceMuteTests.AJoinReplacedBeforeItsRequestLeftKeepsTheMutes();
             VoiceMuteTests.NamesGivenBeforeTheSameHostListsAgainStay();
+            ParticipantListTests.AJoinToAnotherHostListsNobodyUntilThatHostDoes();
+            ParticipantListTests.ARejoinToAHostThatKeptTheRecordKeepsTheList();
+            ParticipantListTests.ARejoinThatFindsTheRecordGoneListsNobodyUntilTheHostDoes();
+            ParticipantListTests.TwoProcessesUnderOneIdentityNeverShareAList();
+            ParticipantListTests.AJoinWhoseAnswerWasLostListsNobodyUntilTheHostDoes();
+            ParticipantListProviderTests.AJoinToAnotherHostListsNobodyUntilThatHostDoes();
+            ParticipantListProviderTests.ALostLinkKeepsTheListAndTheVoiceStreams();
+            ParticipantListFuzzTests.EverySnapshotShowsTheListOfTheHostThatSentIt();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
