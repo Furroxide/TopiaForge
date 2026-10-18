@@ -1241,6 +1241,10 @@ continuations, timers and callbacks see.
     it. Nothing private in corlib is touched.
   - **Elsewhere** it sets an `AsyncLocal` and restores it, which copies the runtime's map of async-locals on each
     change. That is the fallback when neither way above exists, and the probe falls back to it on any failure.
+
+  The manager log names the way once, when the runtime first attaches to the provider, as information, and as a
+  warning when it is the fallback, so a corlib that stops offering the logical call context shows there rather than
+  only as allocations in a profiler.
 - **Online only.** Offline every route is canonical whatever the intent, so no scope opens, and each entry point costs
   one field read. The realm reports each change to the tracking at the pump that shows it (`FollowRealm`), and each
   change starts a new epoch.
@@ -1309,6 +1313,11 @@ world events, and every other runtime callback.
   the record, also when the awaited work completes on a worker or while another scope is open; a capture is a snapshot;
   `Task.Run`'s thread observes none while its context carries the record for what it hands back; nested scopes and
   failures restore; a scope opened inside an async method or a continuation ends there; other threads open nothing.
+  A second run on the same runtime added that reads inside a scope allocate nothing, a thread left after running a
+  captured context carries none, an await resumed at once inside another scope keeps its own record and the other
+  returns after it, and 2,000 frames of awaits leave nothing flowing between frames while every continuation keeps its
+  own record. It also showed that the startup probe, run while execution-context flow is suppressed, refuses the
+  logical call context, which is why the way records run is logged.
 - **An await inside a scope** copies the record's slot along with the context: on the game's Mono a capture there costs
   384 bytes rather than 72. Every await already allocates its state machine and continuation, and at rest a capture
   copies nothing of the scope.
@@ -1351,7 +1360,8 @@ world events, and every other runtime callback.
 
 Records name players by participant id alone; nothing in the tracking is shaped like an address or names a network
 type, and an architecture test scans every type it adds. A record's text names its source and whether the local player
-or a participant acts, never the participant's id. The tracking logs nothing.
+or a participant acts, never the participant's id. The tracking logs one line, the way it runs records, and names no
+player in it.
 
 ### What an author needs to know
 
@@ -1380,24 +1390,30 @@ active, scripted work in them included, so scripted spawning belongs in a timer 
   awaits keep the intent after the scope ended and after an await completed from scripted code, Task.Run's thread and
   the work an await hands it observe none while the context carries the record for what it hands back, nested scopes
   replace and restore, failures restore, other threads open nothing, the logical call context is left empty at rest,
-  the probe trusts only a logical call context whose captures keep their values, the store binds `CallContext`'s three
-  public members by name, checked against a stand-in with the same names and shapes, and never members that are not
-  public, the mode follows the runtime, and the reusing and logical ways allocate nothing. The game's Mono is outside
-  the harnesses; the costs above record the same rules checked on it.
+  the probe trusts only a logical call context whose captures keep their values, and refuses one whose captures share
+  its slots, one that empties a slot in place under the captures taken before, one that empties it only at the next
+  change of context, one where a value set in a captured run escapes, and one that refuses access, the store binds
+  `CallContext`'s three public members by name, checked against a stand-in with the same names and shapes, and never
+  members that are not public, the mode follows the runtime, and the reusing and logical ways allocate nothing. The
+  game's Mono is outside the harnesses; the costs above record the same rules checked on it.
 - **The runtime** (`MultiplayerIntentRuntimeTests`, `MultiplayerIntentServicesTests`): the epoch follows the realm and
-  ends an intent mid-scope; the kit's hook opens, nests and carries deferred completions, and survives a sink that
-  throws; commands act for the player who ran them, as their own mod, a participant's included, and scripted runs clear
-  what else flows; the seam answers and routes by the current intent in every realm; the motion lease and forwarded
-  seams; what an input frame starts stays coarse while a click, the player's command, an interaction, a lease and a
-  forwarded click are direct (`MultiplayerIntentCoarsenessTests`); the privacy scan. Over real contexts: input edges
+  ends an intent mid-scope; attaching names the way records run once, the fallback as a warning; the kit's hook opens,
+  nests and carries deferred completions, and survives a sink that throws; commands act for the player who ran them, as
+  their own mod, a participant's included, and scripted runs clear what else flows; the seam answers and routes by the
+  current intent in every realm; the motion lease and forwarded seams; what an input frame starts stays coarse while a
+  click, the player's command, an interaction, a lease and a forwarded click are direct
+  (`MultiplayerIntentCoarsenessTests`); the privacy scan. Over real contexts: input edges
   and held input make a mod's Update and LateUpdate input-active while FixedUpdate, quiet frames and another mod's
-  Update never are; a session scope's action counts for its mod; the input decorator passes everything through and
-  ends actions with their lifetime; scheduled callbacks, `Every`, a coroutine and a worker's hand-back capture where
+  Update never are; a session scope's action counts for its mod; the input decorator passes everything through, ends
+  actions with their lifetime, and changes nothing when the game's action refuses a dispose off the main thread, so the
+  retry its error asks for works; scheduled callbacks, `Every`, a coroutine and a worker's hand-back capture where
   they were scheduled, another mod's and scripted ones none, and a realm change ends them; interactions; and frames
   that allocate nothing offline, at rest and with input held.
 - **The analyzer** (the analyzer harness): TF1009 reports an edge read in a FixedUpdate lambda, method in another file,
-  or local function, and not one in Update or LateUpdate, held or analog input in FixedUpdate, or a mod's own member
-  named like an edge.
+  local function, handler kept in a local, or lambda the handler runs at once, naming a conditional read with its
+  receiver; and not one in Update or LateUpdate, in what a FixedUpdate handler subscribes or schedules for later, held
+  or analog input in FixedUpdate, a mod's own member named like an edge, or a mod's own edge being set. TF1008 offers
+  awaiting before polling.
 - **The kit** (`UiKitIntentConventionTests`): every callback a player's input raises opens the owner's action, every
   one raised inside an action or by what only happens to a control opens nothing of its own, tweens carry what they
   captured, every listener is accounted for, and the runtime connects and disconnects the kit.

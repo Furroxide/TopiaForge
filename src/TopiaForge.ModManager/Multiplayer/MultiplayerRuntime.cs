@@ -130,6 +130,7 @@ namespace TopiaForge.ModManager
 
             control = candidate;
             role = candidate.Role;
+            ReportIntentMode();
             for (var index = 0; index < observers.Count; index++) Tell(observers[index], ObserverEvent.Attached, candidate, default, default);
             return true;
         }

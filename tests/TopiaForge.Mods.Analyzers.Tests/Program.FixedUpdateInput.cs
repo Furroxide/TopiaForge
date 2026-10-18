@@ -16,6 +16,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
             + "System.IDisposable SubscribeUpdate(System.Action<float> handler); "
             + "System.IDisposable SubscribeFixedUpdate(System.Action<GameTimeSample> handler); "
             + "System.IDisposable SubscribeLateUpdate(System.Action<GameTimeSample> handler); } "
+            + "public interface IModScheduler { System.IDisposable NextFrame(System.Action action); } "
             + "public interface IInputAction : System.IDisposable { "
             + "bool WasPressed { get; } bool WasReleased { get; } bool IsHeld { get; } float Value { get; } } }";
 
@@ -26,6 +27,70 @@ namespace TopiaForge.Mods.Analyzers.Tests
             ReportsAnEdgeReadInAFixedUpdateLocalFunction();
             AllowsEdgesInUpdateAndHeldInputInFixedUpdate();
             IgnoresAnotherTypesMemberNamedLikeAnEdge();
+            AllowsWhatAFixedUpdateHandlerHandsTheSdkForLater();
+            ReportsALambdaTheHandlerRunsAtOnce();
+            ReportsAHandlerKeptInALocal();
+            NamesAConditionalReadWithItsReceiverAndNeverASetter();
+        }
+
+        // What a FixedUpdate handler subscribes or schedules runs on the frame's own clock, so an edge read there is right
+        // where the rule sends it, and must not be reported.
+        private static void AllowsWhatAFixedUpdateHandlerHandsTheSdkForLater()
+        {
+            var diagnostics = AnalyzeSources(
+                "using TopiaForge.Mods; public sealed class Mod { IInputAction jump = null!; IModScheduler scheduler = null!; IModEvents events = null!; "
+                + "public void Load() { "
+                + "events.SubscribeFixedUpdate(_ => { scheduler.NextFrame(() => { if (jump.WasPressed) { } }); }); "
+                + "events.SubscribeFixedUpdate(_ => { events.SubscribeUpdate(__ => { if (jump.WasReleased) { } }); }); "
+                + "events.SubscribeFixedUpdate(OnFixedUpdate); } "
+                + "void OnFixedUpdate(GameTimeSample time) { scheduler.NextFrame(() => { if (jump.WasPressed) { } }); } }");
+            var found = diagnostics.Where(item => item.Id == "TF1009").ToArray();
+            Assert(found.Length == 0, "an edge read in what a FixedUpdate handler schedules or subscribes for later must not report TF1009 ("
+                + string.Join("; ", found.Select(item => item.GetMessage())) + ")");
+        }
+
+        // A lambda the handler runs at once, such as a test over its actions, reads in FixedUpdate all the same.
+        private static void ReportsALambdaTheHandlerRunsAtOnce()
+        {
+            var diagnostics = AnalyzeSources(
+                "using TopiaForge.Mods; public static class Actions { public static bool Any(this IInputAction[] actions, System.Func<IInputAction, bool> test) "
+                + "{ foreach (var action in actions) if (test(action)) return true; return false; } } "
+                + "public sealed class Mod { public void Load(IModEvents events, IInputAction[] actions) { "
+                + "events.SubscribeFixedUpdate(_ => { if (actions.Any(action => action.WasPressed)) { } }); } }");
+            Assert(diagnostics.Count(item => item.Id == "TF1009") == 1, "an edge read in a lambda the FixedUpdate handler runs at once should report TF1009");
+        }
+
+        private static void ReportsAHandlerKeptInALocal()
+        {
+            var diagnostics = AnalyzeSources(
+                "using TopiaForge.Mods; public sealed class Mod { IInputAction jump = null!; "
+                + "public void Load(IModEvents events) { "
+                + "System.Action<GameTimeSample> step = _ => { if (jump.WasPressed) { } }; "
+                + "events.SubscribeFixedUpdate(step); "
+                + "System.Action<GameTimeSample> named = OnFixedUpdate; "
+                + "events.SubscribeFixedUpdate(named); } "
+                + "void OnFixedUpdate(GameTimeSample time) { if (jump.WasReleased) { } } }");
+            Assert(diagnostics.Count(item => item.Id == "TF1009") == 2,
+                "a FixedUpdate handler kept in a local before it is subscribed, lambda or method, should report TF1009 ("
+                + diagnostics.Count(item => item.Id == "TF1009") + ")");
+        }
+
+        private static void NamesAConditionalReadWithItsReceiverAndNeverASetter()
+        {
+            var conditional = AnalyzeSources(
+                "using TopiaForge.Mods; public sealed class Mod { public void Load(IModEvents events, IInputAction? jump) { "
+                + "events.SubscribeFixedUpdate(_ => { if (jump?.WasPressed == true) { } }); } }").Single(item => item.Id == "TF1009");
+            Assert(conditional.GetMessage().StartsWith("'jump?.WasPressed' reads"), "TF1009 names a conditional read with its receiver: " + conditional.GetMessage());
+
+            // A mod's own action that keeps a press for FixedUpdate: setting it is no read, though reading it still counts.
+            const string LatchedSource =
+                "using TopiaForge.Mods; public sealed class Latched : IInputAction { public bool WasPressed { get; set; } public bool WasReleased => false; "
+                + "public bool IsHeld => false; public float Value => 0f; public void Dispose() { } } "
+                + "public sealed class Mod { public void Load(IModEvents events, Latched jump) { "
+                + "events.SubscribeFixedUpdate(_ => { if (jump.WasPressed) jump.WasPressed = false; }); } }";
+            var latched = AnalyzeSources(LatchedSource).Where(item => item.Id == "TF1009").ToArray();
+            Assert(latched.Length == 1 && latched[0].Location.SourceSpan.Start == LatchedSource.IndexOf("if (jump.WasPressed)") + "if (".Length,
+                "setting an action's WasPressed is not reported as reading it, only the read is (" + latched.Length + ")");
         }
 
         // TF1009. FixedUpdate runs zero or more times a frame, before the input sample, so an edge read there is missed or

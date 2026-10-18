@@ -145,16 +145,14 @@ namespace TopiaForge.ModManager
 
         public void Dispose()
         {
+            if (Volatile.Read(ref disposed) != 0) return;
+
+            // The host's action ends first. It refuses a call off the main thread, and nothing here changes until it has
+            // agreed, so the activity list stays the main thread's and disposing again there, as its error says to, works.
+            inner.Dispose();
             if (Interlocked.Exchange(ref disposed, 1) != 0) return;
             activity.Remove(this);
-            try
-            {
-                inner.Dispose();
-            }
-            finally
-            {
-                Interlocked.Exchange(ref lease, null)?.Dispose();
-            }
+            Interlocked.Exchange(ref lease, null)?.Dispose();
         }
     }
 }

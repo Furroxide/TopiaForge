@@ -29,6 +29,7 @@ namespace TopiaForge.ModManager.Tests
             InputActiveFramesCarryTheModsOwnIntent(Path.Combine(root, "frames"));
             SessionScopesInputCountsForTheirMod(Path.Combine(root, "scopes"));
             InputActionsPassThroughAndEndWithTheirLifetime(Path.Combine(root, "input"));
+            ADisposeTheHostRefusesChangesNothing();
             ScheduledCallbacksCaptureWhereTheyWereScheduled(Path.Combine(root, "scheduler"));
             InteractionsRunWithTheInteractionIntent(Path.Combine(root, "interactions"));
             InputActiveFramesAllocateNothing(Path.Combine(root, "allocation"));
@@ -135,6 +136,35 @@ namespace TopiaForge.ModManager.Tests
             world.Release(builder);
             True(world.Host.Action(Builder, "jump").Disposed && !builder.HasActiveInput, "the end of the lifetime ends every action and its count");
             GC.KeepAlive(second);
+        }
+
+        /// <summary>
+        /// The game's own action refuses a dispose off the main thread and says to dispose it there instead. The decorator
+        /// leaves everything as it was until the host's action agrees, so its activity list is only ever the main thread's,
+        /// and the retry the error asks for ends the action.
+        /// </summary>
+        private static void ADisposeTheHostRefusesChangesNothing()
+        {
+            var activity = new ModInputActivity();
+            var host = new MainThreadAction();
+            var action = new NetInputAction(host, activity);
+            activity.Add(action);
+            var refused = Task.Run(() =>
+            {
+                try
+                {
+                    action.Dispose();
+                    return null;
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return exception;
+                }
+            }).GetAwaiter().GetResult();
+            True(refused != null && !host.Disposed, "the game's action refuses a dispose off the main thread");
+            True(activity.Count == 1, "and the refused dispose leaves the action counted, without touching the activity list off the main thread");
+            action.Dispose();
+            True(host.Disposed && activity.Count == 0, "so disposing it again on the main thread, as the error says to, ends it and stops counting it");
         }
 
         private static void ScheduledCallbacksCaptureWhereTheyWereScheduled(string root)
@@ -290,6 +320,40 @@ namespace TopiaForge.ModManager.Tests
         {
             var intent = ((IInternalReplicationContext)context).Replication.CurrentIntent;
             return !intent.IsPlayerIntent ? "none" : intent.Source + (intent.IsLocalPlayer ? "/local" : "/" + intent.ParticipantId);
+        }
+
+        /// <summary>An action that, as the game's does, may be disposed only on the thread that made it.</summary>
+        private sealed class MainThreadAction : IInputAction
+        {
+            private readonly int owner = Environment.CurrentManagedThreadId;
+
+            internal bool Disposed { get; private set; }
+
+            public string Name => "fire";
+
+            public IReadOnlyList<InputBinding> Bindings => Array.Empty<InputBinding>();
+
+            public float Value => 0f;
+
+            public bool IsHeld => false;
+
+            public bool WasPressed => false;
+
+            public bool WasReleased => false;
+
+            public OperationResult<bool> Rebind(IEnumerable<InputBinding> bindings) => OperationResult<bool>.Success(true);
+
+            public OperationResult<bool> ResetBindings() => OperationResult<bool>.Success(true);
+
+            public void Dispose()
+            {
+                if (Environment.CurrentManagedThreadId != owner)
+                {
+                    throw new InvalidOperationException("Dispose must be called on the game thread. Use Context.Scheduler.NextFrame from a background task.");
+                }
+
+                Disposed = true;
+            }
         }
     }
 }

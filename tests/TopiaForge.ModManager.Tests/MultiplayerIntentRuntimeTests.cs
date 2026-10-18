@@ -84,10 +84,14 @@ namespace TopiaForge.ModManager.Tests
 
         private static void IntentFollowsTheRealm()
         {
-            var (runtime, control, _) = Seam.Runtime(() => SessionPhase.Idle);
+            var (runtime, control, log) = Seam.Runtime(() => SessionPhase.Idle);
             var intents = runtime.Intents;
             True(!intents.IsRecording && intents.Epoch == 0 && intents.Realm == NetRealm.Offline, "a runtime starts offline, recording nothing");
+            True(!log.Lines.Any(line => line.Contains("intent tracking", StringComparison.Ordinal)), "and says nothing of intent tracking before a provider attaches");
             runtime.Connect();
+            True(log.Lines.Where(line => line.Contains("intent tracking", StringComparison.Ordinal))
+                    .SequenceEqual(new[] { "info: " + MultiplayerIntents.DescribeMode(IntentScopeMode.ReusedContext) }),
+                "attaching says once how intent tracking runs its records here, .NET's reused contexts (" + string.Join(" | ", log.Lines) + ")");
             control.Role = InternalSessionRole.ListenHost;
             True(!intents.IsRecording, "the realm moves only at a pump");
             Seam.Frame(runtime);
@@ -113,6 +117,19 @@ namespace TopiaForge.ModManager.Tests
             runtime.Disconnect();
             True(!intents.IsRecording && intents.Epoch == 5 && intents.Realm == NetRealm.Offline, "detaching goes offline in an epoch of its own");
             True(intents.EnterUiActivation(Builder).Restore == null && intents.Scope.Flowing == null, "offline no entry point opens anything");
+            True(runtime.Connect() && log.Lines.Count(line => line.Contains("intent tracking", StringComparison.Ordinal)) == 1, "attaching again says nothing more");
+
+            // The game's Mono runs records on its logical call context; a runtime with neither way warns that it allocates.
+            var mono = new RecordingRuntimeLog();
+            MultiplayerRuntime.ReportIntentMode(mono, IntentScopeMode.LogicalCallContext);
+            var fallback = new RecordingRuntimeLog();
+            MultiplayerRuntime.ReportIntentMode(fallback, IntentScopeMode.AsyncLocal);
+            True(mono.Lines.Single() == "info: " + MultiplayerIntents.DescribeMode(IntentScopeMode.LogicalCallContext) &&
+                 mono.Lines.Single().Contains("logical call context", StringComparison.Ordinal),
+                "the game's Mono way is named as information (" + mono.Lines.Single() + ")");
+            True(fallback.Lines.Single().StartsWith("warn: ", StringComparison.Ordinal) &&
+                 fallback.Lines.Single().Contains("fallback", StringComparison.Ordinal) && fallback.Lines.Single().Contains("allocates", StringComparison.Ordinal),
+                "and the fallback is a warning that says it allocates (" + fallback.Lines.Single() + ")");
         }
 
         private static IntentRecord? slot;

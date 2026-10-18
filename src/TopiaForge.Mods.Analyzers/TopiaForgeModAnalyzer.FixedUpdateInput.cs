@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -11,7 +13,7 @@ namespace TopiaForge.Mods.Analyzers
         private static readonly DiagnosticDescriptor InputEdgeInFixedUpdate = new DiagnosticDescriptor(
             "TF1009",
             "Input edge read in FixedUpdate",
-            "'{0}' reads an input edge in a FixedUpdate handler. FixedUpdate runs zero or more times a frame, before the frame's input is sampled, so it misses or repeats presses, and in multiplayer it never counts as the player's own action; read the edge in an Update or LateUpdate handler and keep what it means for FixedUpdate.",
+            "'{0}' reads an input edge in a FixedUpdate handler. FixedUpdate runs zero or more times a frame, before the frame's input is sampled, so it misses or repeats presses, and in multiplayer it never counts as the player's own action; read the edge in an Update or LateUpdate handler and set a field there that FixedUpdate reads.",
             Category,
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
@@ -21,8 +23,10 @@ namespace TopiaForge.Mods.Analyzers
 
         /// <summary>
         /// Registers TF1009 for one compilation that references the SDK's input and event contracts: every
-        /// <c>WasPressed</c> or <c>WasReleased</c> read in a handler passed to <c>SubscribeFixedUpdate</c>, whether a lambda
-        /// or a method of this compilation, wherever that method is declared.
+        /// <c>WasPressed</c> or <c>WasReleased</c> read in a handler passed to <c>SubscribeFixedUpdate</c>, whether a lambda,
+        /// a method of this compilation wherever it is declared, or either kept in a local first. Code the handler hands to
+        /// the SDK to run later, an Update subscription or a scheduled callback, runs on the frame's own clock and is not
+        /// the handler's.
         /// </summary>
         private static void RegisterFixedUpdateInput(CompilationStartAnalysisContext context)
         {
@@ -33,7 +37,8 @@ namespace TopiaForge.Mods.Analyzers
                 return;
             }
 
-            var scan = new FixedUpdateInputScan(events, input);
+            var scheduler = context.Compilation.GetTypeByMetadataName("TopiaForge.Mods.IModScheduler");
+            var scan = new FixedUpdateInputScan(events, input, scheduler);
             context.RegisterOperationAction(scan.AnalyzeSubscription, OperationKind.Invocation);
             context.RegisterOperationAction(scan.AnalyzeEdgeRead, OperationKind.PropertyReference);
             context.RegisterCompilationEndAction(scan.Report);
@@ -44,14 +49,16 @@ namespace TopiaForge.Mods.Analyzers
         {
             private readonly INamedTypeSymbol events;
             private readonly INamedTypeSymbol input;
+            private readonly INamedTypeSymbol? scheduler;
             private readonly ConcurrentDictionary<ISymbol, bool> handlers = new ConcurrentDictionary<ISymbol, bool>(SymbolEqualityComparer.Default);
             private readonly ConcurrentBag<(ISymbol Method, Location Location, string Text)> methodReads = new ConcurrentBag<(ISymbol, Location, string)>();
             private readonly ConcurrentDictionary<Location, string> lambdaReads = new ConcurrentDictionary<Location, string>();
 
-            internal FixedUpdateInputScan(INamedTypeSymbol events, INamedTypeSymbol input)
+            internal FixedUpdateInputScan(INamedTypeSymbol events, INamedTypeSymbol input, INamedTypeSymbol? scheduler)
             {
                 this.events = events;
                 this.input = input;
+                this.scheduler = scheduler;
             }
 
             internal void AnalyzeSubscription(OperationAnalysisContext context)
@@ -64,25 +71,14 @@ namespace TopiaForge.Mods.Analyzers
 
                 foreach (var argument in invocation.Arguments)
                 {
-                    var value = argument.Value;
-                    while (value is IConversionOperation conversion)
-                    {
-                        value = conversion.Operand;
-                    }
-
-                    if (!(value is IDelegateCreationOperation creation))
-                    {
-                        continue;
-                    }
-
-                    switch (creation.Target)
+                    switch (HandlerOf(argument.Value)?.Target)
                     {
                         case IAnonymousFunctionOperation handler:
                             foreach (var read in handler.Body.Descendants().OfType<IPropertyReferenceOperation>())
                             {
-                                if (IsEdge(read.Property))
+                                if (IsEdgeRead(read) && !RunsLater(read, handler))
                                 {
-                                    lambdaReads.TryAdd(read.Syntax.GetLocation(), read.Syntax.ToString());
+                                    lambdaReads.TryAdd(read.Syntax.GetLocation(), Text(read));
                                 }
                             }
 
@@ -97,7 +93,7 @@ namespace TopiaForge.Mods.Analyzers
             internal void AnalyzeEdgeRead(OperationAnalysisContext context)
             {
                 var read = (IPropertyReferenceOperation)context.Operation;
-                if (!IsEdge(read.Property))
+                if (!IsEdgeRead(read) || RunsLater(read, null))
                 {
                     return;
                 }
@@ -113,7 +109,7 @@ namespace TopiaForge.Mods.Analyzers
                     }
                 }
 
-                methodReads.Add((method.OriginalDefinition, read.Syntax.GetLocation(), read.Syntax.ToString()));
+                methodReads.Add((method.OriginalDefinition, read.Syntax.GetLocation(), Text(read)));
             }
 
             internal void Report(CompilationAnalysisContext context)
@@ -136,28 +132,129 @@ namespace TopiaForge.Mods.Analyzers
                 }
             }
 
-            private bool IsFixedUpdateSubscription(IMethodSymbol method)
+            /// <summary>
+            /// The delegate an argument hands over: made right there, through any conversion, or kept in a local that the
+            /// same body declares with one.
+            /// </summary>
+            private static IDelegateCreationOperation? HandlerOf(IOperation value)
             {
-                if (method.Name != "SubscribeFixedUpdate")
+                value = Unwrap(value);
+                if (value is ILocalReferenceOperation local)
+                {
+                    var root = value;
+                    while (root.Parent != null)
+                    {
+                        root = root.Parent;
+                    }
+
+                    var declarator = root.Descendants()
+                        .OfType<IVariableDeclaratorOperation>()
+                        .FirstOrDefault(item => SymbolEqualityComparer.Default.Equals(item.Symbol, local.Local));
+                    var initial = declarator?.GetVariableInitializer()?.Value;
+                    if (initial != null)
+                    {
+                        value = Unwrap(initial);
+                    }
+                }
+
+                return value as IDelegateCreationOperation;
+            }
+
+            private static IOperation Unwrap(IOperation value)
+            {
+                while (value is IConversionOperation conversion)
+                {
+                    value = conversion.Operand;
+                }
+
+                return value;
+            }
+
+            /// <summary>
+            /// Whether <paramref name="read"/> sits in a lambda that the handler hands to the SDK to run later: an event
+            /// subscription of its own, or a scheduled callback. Its reads are not the handler's: an Update subscription or a
+            /// scheduled callback runs on the frame's own clock, and a FixedUpdate subscription is a handler that its own
+            /// subscription reports. The walk stops at <paramref name="handler"/> and at a local function, whose reads count
+            /// where it is a handler itself.
+            /// </summary>
+            private bool RunsLater(IOperation read, IOperation? handler)
+            {
+                for (var node = read.Parent; node != null && !ReferenceEquals(node, handler); node = node.Parent)
+                {
+                    if (node is ILocalFunctionOperation)
+                    {
+                        return false;
+                    }
+
+                    if (node is IAnonymousFunctionOperation && HandedToTheSdkForLater(node))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            private bool HandedToTheSdkForLater(IOperation function)
+            {
+                var value = function.Parent;
+                if (!(value is IDelegateCreationOperation))
                 {
                     return false;
                 }
 
-                var type = method.ContainingType;
-                return SymbolEqualityComparer.Default.Equals(type, events)
-                    || type.AllInterfaces.Any(item => SymbolEqualityComparer.Default.Equals(item, events));
+                while (value.Parent is IConversionOperation)
+                {
+                    value = value.Parent;
+                }
+
+                if (!(value.Parent is IArgumentOperation argument) || !(argument.Parent is IInvocationOperation call))
+                {
+                    return false;
+                }
+
+                var owner = call.TargetMethod.ContainingType;
+                return Is(owner, events) || (scheduler != null && Is(owner, scheduler));
             }
 
-            private bool IsEdge(IPropertySymbol property)
+            private bool IsFixedUpdateSubscription(IMethodSymbol method) =>
+                method.Name == "SubscribeFixedUpdate" && Is(method.ContainingType, events);
+
+            /// <summary>Whether <paramref name="read"/> reads an SDK input edge; setting a mod's own property is no read.</summary>
+            private bool IsEdgeRead(IPropertyReferenceOperation read)
             {
+                var property = read.Property;
                 if (property.Name != "WasPressed" && property.Name != "WasReleased")
                 {
                     return false;
                 }
 
-                var type = property.ContainingType;
-                return SymbolEqualityComparer.Default.Equals(type, input)
-                    || type.AllInterfaces.Any(item => SymbolEqualityComparer.Default.Equals(item, input));
+                if (read.Parent is ISimpleAssignmentOperation assignment && ReferenceEquals(assignment.Target, read))
+                {
+                    return false;
+                }
+
+                return Is(property.ContainingType, input);
+            }
+
+            private static bool Is(INamedTypeSymbol? type, INamedTypeSymbol contract) =>
+                type != null && (SymbolEqualityComparer.Default.Equals(type, contract)
+                    || type.AllInterfaces.Any(item => SymbolEqualityComparer.Default.Equals(item, contract)));
+
+            /// <summary>The read as the author wrote it: inside a conditional access, with its receiver.</summary>
+            private static string Text(IOperation read)
+            {
+                var text = read.Syntax.ToString();
+                if (text.StartsWith(".", StringComparison.Ordinal))
+                {
+                    var access = read.Syntax.FirstAncestorOrSelf<ConditionalAccessExpressionSyntax>();
+                    if (access != null)
+                    {
+                        text = access.ToString();
+                    }
+                }
+
+                return text;
             }
         }
     }

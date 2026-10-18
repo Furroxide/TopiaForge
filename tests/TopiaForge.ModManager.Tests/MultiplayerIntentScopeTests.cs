@@ -252,9 +252,23 @@ namespace TopiaForge.ModManager.Tests
             var stuck = new EmulatedLogicalCallContext(ignoreFree: true);
             True(!IntentLogicalStore.KeepsCapturedValues(stuck.Store), "nor is one that cannot empty a slot in place");
             True(!IntentLogicalStore.KeepsCapturedValues(new IntentLogicalStore(_ => null, (_, _) => { }, _ => { })), "nor one that loses what is set");
+            True(!TrustedApart(new EmptiedInPlace().Store),
+                "nor one that empties a slot in place under the captures taken before, where an await would lose the record as its scope ends");
+            True(!TrustedApart(new EscapingWrites().Store),
+                "nor one where a value set while a captured context runs escapes into the code that ran it");
+            True(!TrustedApart(new EmptiedLater().Store),
+                "nor one that empties a slot only when the thread next changes context, where an await right after a scope ends would carry its record on");
             True(!IntentLogicalStore.KeepsCapturedValues(new IntentLogicalStore(_ => throw new NotSupportedException("refused"), (_, _) => { }, _ => { })),
                 "nor one that refuses access, and the check never throws");
             Throws<ArgumentNullException>(() => IntentLogicalStore.KeepsCapturedValues(null!), "the check needs a store");
+        }
+
+        /// <summary>Checks a store in a context of its own, so whatever a broken store leaves set never reaches the harness's thread.</summary>
+        private static bool TrustedApart(IntentLogicalStore store)
+        {
+            var trusted = false;
+            ExecutionContext.Run(ExecutionContext.Capture()!, _ => trusted = IntentLogicalStore.KeepsCapturedValues(store), null);
+            return trusted;
         }
 
         /// <summary>
@@ -366,6 +380,103 @@ namespace TopiaForge.ModManager.Tests
             internal static void LogicalSetData(string name, object data) => Context.Store.Set(name, data);
 
             internal static void FreeNamedDataSlot(string name) => Context.Store.Free(name);
+        }
+
+        /// <summary>
+        /// Copies its slots when one is set but empties one in place, so a context captured before the slot was emptied
+        /// loses its value, as a runtime whose captures share the slots they were taken with would.
+        /// </summary>
+        private sealed class EmptiedInPlace
+        {
+            private readonly AsyncLocal<Dictionary<string, object>?> slots = new AsyncLocal<Dictionary<string, object>?>();
+
+            internal EmptiedInPlace()
+            {
+                Store = new IntentLogicalStore(
+                    slot => slots.Value != null && slots.Value.TryGetValue(slot, out var value) ? value : null,
+                    (slot, value) => slots.Value = new Dictionary<string, object>(slots.Value ?? new Dictionary<string, object>()) { [slot] = value },
+                    slot => slots.Value?.Remove(slot));
+            }
+
+            internal IntentLogicalStore Store { get; }
+        }
+
+        /// <summary>
+        /// Keeps captured values as the logical call context does, but also holds what is set on the thread itself, so a
+        /// value set while a captured context runs escapes into the code that ran it.
+        /// </summary>
+        private sealed class EscapingWrites
+        {
+            [ThreadStatic]
+            private static Dictionary<string, object>? onThread;
+
+            private readonly EmulatedLogicalCallContext flowing = new EmulatedLogicalCallContext();
+
+            internal EscapingWrites()
+            {
+                Store = new IntentLogicalStore(Get, Set, Free);
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            private static Dictionary<string, object> ThreadSlots => onThread ??= new Dictionary<string, object>();
+
+            private object? Get(string slot) => ThreadSlots.TryGetValue(slot, out var value) ? value : flowing.Store.Get(slot);
+
+            private void Set(string slot, object value)
+            {
+                flowing.Store.Set(slot, value);
+                ThreadSlots[slot] = value;
+            }
+
+            private void Free(string slot)
+            {
+                flowing.Store.Free(slot);
+                ThreadSlots.Remove(slot);
+            }
+        }
+
+        /// <summary>
+        /// Empties a slot only once the thread next changes context, so right after a scope ends the slot still holds its
+        /// value, and a capture taken then would carry it into a later frame.
+        /// </summary>
+        private sealed class EmptiedLater
+        {
+            private readonly AsyncLocal<Dictionary<string, object>?> slots = new AsyncLocal<Dictionary<string, object>?>();
+            private readonly AsyncLocal<object?> generation;
+            private readonly HashSet<string> pending = new HashSet<string>();
+            private bool switched;
+
+            internal EmptiedLater()
+            {
+                generation = new AsyncLocal<object?>(change => switched |= change.ThreadContextChanged);
+                Store = new IntentLogicalStore(Get, Set, slot => pending.Add(slot));
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            private object? Get(string slot)
+            {
+                Settle();
+                return slots.Value != null && slots.Value.TryGetValue(slot, out var value) ? value : null;
+            }
+
+            private void Set(string slot, object value)
+            {
+                Settle();
+                slots.Value = new Dictionary<string, object>(slots.Value ?? new Dictionary<string, object>()) { [slot] = value };
+                generation.Value = new object();
+            }
+
+            private void Settle()
+            {
+                if (!switched || pending.Count == 0) return;
+                switched = false;
+                var next = new Dictionary<string, object>(slots.Value ?? new Dictionary<string, object>());
+                foreach (var slot in pending) next.Remove(slot);
+                pending.Clear();
+                slots.Value = next.Count == 0 ? null : next;
+            }
         }
 
         /// <summary>Slots every context shares, changed in place: captures see later changes, as no logical call context may.</summary>

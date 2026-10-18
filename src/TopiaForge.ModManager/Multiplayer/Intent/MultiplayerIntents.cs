@@ -47,6 +47,21 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the realm as the runtime last reported it.</summary>
         internal NetRealm Realm => realm;
 
+        /// <summary>The manager log's line for how intent tracking runs its records on this runtime (<see cref="IntentScopeMode"/>).</summary>
+        internal static string DescribeMode(IntentScopeMode mode)
+        {
+            switch (mode)
+            {
+                case IntentScopeMode.ReusedContext:
+                    return "Multiplayer: intent tracking runs on reused execution contexts; an input-active frame allocates nothing.";
+                case IntentScopeMode.LogicalCallContext:
+                    return "Multiplayer: intent tracking runs on the logical call context; an input-active frame allocates nothing.";
+                default:
+                    return "Multiplayer: intent tracking runs on its async-local fallback, since this runtime passed neither " +
+                           "allocation-free way at startup; each input-active frame allocates while online.";
+            }
+        }
+
         /// <summary>
         /// Follows the realm the composition root moved to. Each change starts a new epoch, so the continuations of an intent
         /// from before hosting, joining or leaving observe none, and online realms record.
