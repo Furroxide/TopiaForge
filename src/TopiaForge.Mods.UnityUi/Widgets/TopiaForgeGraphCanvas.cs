@@ -60,6 +60,12 @@ namespace TopiaForge.Mods.UnityUi
             emptyGo.transform.SetParent(Go.transform, false);
             emptyLabel = TopiaForgeTmp.Create(emptyGo);
             emptyLabel.fontSize = TopiaForgeTokens.BodySize;
+            var emptyFont = TopiaForgeFonts.For(TopiaForgeTextStyle.Body);
+            if (emptyFont != null)
+            {
+                emptyLabel.font = emptyFont;
+            }
+
             emptyLabel.alignment = TextAlignmentOptions.Center;
             emptyLabel.text = "NO GRAPH NODES";
             emptyLabel.raycastTarget = false;

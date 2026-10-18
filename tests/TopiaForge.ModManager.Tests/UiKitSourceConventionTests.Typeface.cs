@@ -111,7 +111,8 @@ namespace TopiaForge.ModManager.Tests
 
         // Small text never reaches the Light face: only the font resolver names it, a literal style handed to
         // TopiaForgeFonts.For is never a Light style unless the label takes that style's size too, and a
-        // variable style always brings its own size.
+        // variable style always brings its own size. Nor does it go without a face: every label the kit's
+        // factory makes is given one, or it draws in the game's own TextMesh Pro default font.
         private static void NothingSelectsTheLightFaceForSmallText()
         {
             var root = Program.FindRepoRoot();
@@ -144,6 +145,14 @@ namespace TopiaForge.ModManager.Tests
                     {
                         throw new InvalidOperationException(
                             "Only the font resolver may select the Light face, but " + file + " reaches it directly. Take a style's face from TopiaForgeFonts.For.");
+                    }
+
+                    var created = Regex.Matches(source, @"TopiaForgeTmp\.Create\(").Count;
+                    var given = Regex.Matches(source, @"\.font = ").Count;
+                    if (created > 0 && (given < created || !source.Contains("TopiaForgeFonts.For(", StringComparison.Ordinal)))
+                    {
+                        throw new InvalidOperationException(
+                            file + " leaves a TextMesh Pro label without a face (" + given + " fonts for " + created + " labels), so it draws in the game's default font. Give each label its style's font from TopiaForgeFonts.For.");
                     }
 
                     foreach (Match match in literal.Matches(source))

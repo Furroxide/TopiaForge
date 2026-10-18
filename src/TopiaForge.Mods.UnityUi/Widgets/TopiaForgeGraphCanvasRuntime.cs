@@ -200,6 +200,8 @@ namespace TopiaForge.Mods.UnityUi
             labelGo.transform.SetParent(go.transform, false);
             label = TopiaForgeTmp.Create(labelGo);
             label.fontSize = TopiaForgeTokens.CaptionSize;
+            var font = TopiaForgeFonts.For(TopiaForgeTextStyle.Caption);
+            if (font != null) label.font = font;
             label.textWrappingMode = TextWrappingModes.NoWrap;
             label.raycastTarget = false;
         }
