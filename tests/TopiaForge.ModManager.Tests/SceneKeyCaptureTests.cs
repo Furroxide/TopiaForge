@@ -27,6 +27,7 @@ namespace TopiaForge.ModManager.Tests
             ObjectsMadeAfterTheLoadAreNoSceneObjects();
             KeysAreTakenOncePerLoadAndForgottenWithTheScene();
             KeysCostTheLoadAlone();
+            MarksAreCountedSoALoadSkipsTheirSearch();
         }
 
         private static void TheHasherKeysExactlyAsTheModel()
@@ -244,6 +245,28 @@ namespace TopiaForge.ModManager.Tests
             That(host.World.SceneKeys.LastObjects == 500 && host.Runtime.Realm == NetRealm.Offline, "the yard's 500 boxes were keyed as it loaded, offline");
             var frames = Allocated(() => host.Frame(), 2_000);
             That(frames == 0, "an offline frame with a keyed scene allocates nothing (" + frames + " bytes)");
+        }
+
+        /// <summary>
+        /// The engine's census looks for network marks only while one may carry an id, which offline none does: each mark
+        /// counts itself in when it is given an id and out when the id goes, once whatever its id becomes, and never below
+        /// none.
+        /// </summary>
+        private static void MarksAreCountedSoALoadSkipsTheirSearch()
+        {
+            var start = NetworkMarks.Live;
+            That(start == 0 && !NetworkMarks.AnyLive, "no test engine marks anything, so the count starts empty");
+            NetworkMarks.Changed(0, 0);
+            That(NetworkMarks.Live == 0, "a mark without an id counts nothing");
+            NetworkMarks.Changed(0, 5);
+            NetworkMarks.Changed(5, 9);
+            NetworkMarks.Changed(0, 3);
+            That(NetworkMarks.Live == 2 && NetworkMarks.AnyLive, "a mark given an id counts once, however its id changes after");
+            NetworkMarks.Changed(9, 0);
+            NetworkMarks.Changed(3, 0);
+            That(NetworkMarks.Live == 0 && !NetworkMarks.AnyLive, "and counts out when its id goes, so a load skips the search again");
+            NetworkMarks.Changed(4, 0);
+            That(NetworkMarks.Live == 0, "and the count never goes below none");
         }
 
         /// <summary>Adds a scene of <paramref name="count"/> boxes in a row at depth <paramref name="z"/>, and returns them.</summary>

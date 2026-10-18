@@ -30,9 +30,14 @@ namespace TopiaForge.ModManager
             var player = UnityNativeAuthority.PlayerTransform();
             var census = new Census();
             var everyBody = UnityEngine.Object.FindObjectsByType<Rigidbody>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (var mark in UnityEngine.Object.FindObjectsByType<TopiaForgeNetworkIdentity>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+
+            // Offline no mark carries an id, so a load skips the engine's search through every behaviour for one.
+            if (NetworkMarks.AnyLive)
             {
-                if (mark != null && mark.NetworkId != 0) census.Marked.Add(mark.transform.GetInstanceID());
+                foreach (var mark in UnityEngine.Object.FindObjectsByType<TopiaForgeNetworkIdentity>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (mark != null && mark.NetworkId != 0) census.Marked.Add(mark.transform.GetInstanceID());
+                }
             }
 
             for (var index = 0; index < SceneManager.sceneCount; index++)

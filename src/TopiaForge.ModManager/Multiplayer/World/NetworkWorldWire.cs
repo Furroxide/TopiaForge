@@ -14,7 +14,10 @@ namespace TopiaForge.ModManager
     {
         internal const byte Version = 1;
 
-        /// <summary>Host: a baseline starts. <c>[baseline varuint][expected entries varuint][host time varuint]</c>.</summary>
+        /// <summary>
+        /// Host: a baseline starts. <c>[baseline varuint][expected entries varuint][host time varuint][world instance u64]</c>;
+        /// the world instance is never zero, and a new one means another world, as after the host's process restarted.
+        /// </summary>
         internal const byte BaselineBegin = 1;
 
         /// <summary>Host: part of a baseline. <c>[baseline varuint][count varuint][entries]</c>.</summary>
@@ -37,6 +40,12 @@ namespace TopiaForge.ModManager
 
         /// <summary>Player: asks for a baseline. <c>[reason byte]</c>: 0 when a stream starts, 1 to resynchronize.</summary>
         internal const byte BaselineRequest = 32;
+
+        /// <summary>
+        /// Player: how much of a baseline has arrived. <c>[baseline varuint][chunks read varuint]</c>, sent at most once a frame
+        /// while chunks arrive, so the host keeps only a few chunks in flight.
+        /// </summary>
+        internal const byte BaselineProgress = 33;
 
         /// <summary>The first type authority routing (WS3.7) may claim.</summary>
         internal const byte FirstRoutingType = 64;

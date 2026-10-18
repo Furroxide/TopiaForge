@@ -23,6 +23,9 @@ namespace TopiaForge.ModManager.Tests
         {
             LeavingReleasesEverything();
             DetachingWhileJoinedRestoresEverything();
+            LeavingMidBaselineRestoresExactly();
+            LoadsLandingAfterLeavingAreLetGoOfOnTheGameThread();
+            AChannelThatWillNotOpenSaysWhatToDo();
             LookupsGoThroughTheRegistry();
             TheSteadyStateAllocatesNothingOfItsOwn();
             FailuresStayWhereTheyHappen();
@@ -85,6 +88,141 @@ namespace TopiaForge.ModManager.Tests
             That(bodies.All(body => !body.Kinematic) && player.Control.Holds == 0 && player.Control.IdentitySource == null && player.Control.Channel(InternalSystemChannelKind.WorldReplication) == null,
                 "detaching restores every body, lets readiness go, removes the lookups and closes the channel");
             That(player.Runtime.Control == null && !player.World.IsOnline, "and the world is offline");
+        }
+
+        /// <summary>
+        /// A player leaves part way through its baseline, with asset replicas still loading, after a scene loaded while it
+        /// was joined and after the game turned one of the suppressed settings back itself: every setting comes back as it
+        /// was, the game's own change is left as the game made it, and nothing the baseline started is left behind.
+        /// </summary>
+        private static void LeavingMidBaselineRestoresExactly()
+        {
+            var rig = Yard(6);
+            var host = rig.Host;
+            NativeAuthoritySuppressorTests.Robots(host.Scene, 2);
+            for (var index = 0; index < 4; index++) host.SpawnCrate(index);
+            for (var index = 0; index < 120; index++) SpawnRobot(host, index, 8 * 1024);
+            rig.OpenToMultiplayer();
+            rig.BuildScene = scene =>
+            {
+                var yard = scene.AddScene("Yard");
+                for (var index = 0; index < 6; index++) scene.Add(yard, "Box", null, rigidbody: true, position: new NetVector3(index * 2, 0, 0));
+                NativeAuthoritySuppressorTests.Robots(scene, 2);
+            };
+            var player = AddPlayer(rig, "p1");
+            player.Assets.HoldLoads = true;
+            var switches = NativeAuthoritySuppressorTests.AllSwitches(player.Scene);
+            var before = switches.Select(item => item.Value).ToArray();
+            rig.Join(player);
+            That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.ReceivingBaseline && player.World.Progress.EntriesReceived > 10, 120),
+                "the baseline is part way (" + player.World.Progress + ")");
+
+            // A scene loads while the player is joined, and its settings are turned off too.
+            var annex = player.Scene.AddScene("Annex");
+            for (var index = 0; index < 2; index++)
+            {
+                var robot = player.Scene.Add(annex, "Robot", null, rigidbody: true, kinematic: false);
+                robot.AddNative(NativeAuthorityKind.RobotBrain);
+                robot.AddNative(NativeAuthorityKind.Locomotion);
+            }
+
+            var annexSwitches = annex.Roots.SelectMany(robot => robot.Natives.Prepend(robot.KinematicSwitch)).ToList();
+            player.LoadScenes();
+            That(annexSwitches.All(item => item.Value == item.SuppressedValue), "the annex's settings go off as it loads");
+
+            // The game turns one brain back on behind the suppressor's back.
+            var turnedOn = switches.First(item => item.Kind == NativeAuthorityKind.RobotBrain && item.Value == item.SuppressedValue && !item.SuppressedValue);
+            turnedOn.SetNatively(true);
+            var writes = turnedOn.WriteCount;
+            var suppressed = player.Counters().SuppressedSwitches;
+            var restoredBefore = player.Counters().RestoredSwitches;
+            That(player.Client.PendingBuilds > 0 && player.World.Progress.Phase == NetworkWorldPhase.ReceivingBaseline, "asset replicas still load, and the baseline is under way");
+            player.Control.Leave();
+            rig.Frames(2);
+            That(switches.Select(item => item.Value).SequenceEqual(before) && annexSwitches.All(item => item.Value != item.SuppressedValue),
+                "every setting, the annex's too, is back as it was");
+            That(player.Counters().RestoredSwitches - restoredBefore == suppressed - 1 && turnedOn.WriteCount == writes,
+                "every change was undone but the one the game made itself, which was left alone (" + (player.Counters().RestoredSwitches - restoredBefore) + " of " + suppressed + ")");
+            var spawned = player.Assets.Spawned.Count;
+            player.Assets.CompleteLoads();
+            rig.Frames(2);
+            player.Assets.CompleteLoads();
+            rig.Frames(2);
+            That(player.Assets.Spawned.Count == spawned && player.Assets.Spawned.All(replica => !replica.IsAlive) &&
+                 player.Factories.Released.Count == player.Factories.Built.Count && player.Client.PendingBuilds == 0,
+                "loads that land after the player left build nothing, and every replica built is released");
+            That(player.Control.Holds == 0 && player.Client.EntityCount == 0 && player.Client.Suppressor.SuppressedCount == 0, "and nothing is held or mirrored");
+        }
+
+        /// <summary>
+        /// A player leaves while its asset replicas still load through the engine's loader, which finishes a load on the game
+        /// thread and runs what waits for it later, elsewhere, where no handle may be let go of. What lands after the player
+        /// left is let go of on the game thread all the same: its bundle is unloaded and its prefab released, so the player
+        /// loads both again when it rejoins, and the engine, which refuses a bundle file that is still loaded, loads them.
+        /// </summary>
+        private static void LoadsLandingAfterLeavingAreLetGoOfOnTheGameThread()
+        {
+            var rig = new WorldRig();
+            rig.UseScene(scene => scene.AddScene("Yard"));
+            rig.OpenToMultiplayer();
+            var crates = Enumerable.Range(0, 2).Select(index => rig.Host.SpawnCrate(index)).ToList();
+            var player = rig.AddPlayer("p1");
+            var assets = new NativeWorldAssets(player.Scene, player.Lifetime);
+            player.ModAssets = assets;
+
+            // The player leaves while the crates' bundle loads.
+            rig.Join(player);
+            That(rig.Run(() => player.Client.PendingBuilds == 2 && assets.BundleLoads == 1, 120), "the player loads the crates' bundle (" + player.World.Progress + ")");
+            player.Control.Leave();
+            rig.Frames(2);
+            assets.CompleteLoads();
+            That(assets.LoadedBundles == 0 && assets.Spawned.Count == 0,
+                "the bundle that landed after the player left is unloaded at once, and builds nothing (" + assets.LoadedBundles + " loaded)");
+
+            // It joins again, and leaves while the crates' prefab loads.
+            rig.Join(player);
+            That(rig.Run(() => assets.BundleLoads == 2, 120) && assets.CompleteLoads() == 1, "joining again, the player loads the bundle again");
+            That(rig.Run(() => assets.PrefabLoads == 1, 30) && assets.RefusedLoads == 0 && assets.LoadedBundles == 1 && player.Client.PendingBuilds == 2,
+                "the engine loads it, and the prefab loads after it (" + assets.RefusedLoads + " refused)");
+            player.Control.Leave();
+            rig.Frames(2);
+            assets.CompleteLoads();
+            That(assets.LivePrefabs == 0 && assets.LoadedBundles == 0 && assets.Spawned.Count == 0,
+                "the prefab that landed after the player left is let go of, and its bundle unloaded (" + assets.LivePrefabs + " prefabs, " + assets.LoadedBundles + " bundles)");
+
+            // A third join builds both crates, and no handle was ever let go of off the game thread.
+            rig.Join(player);
+            That(rig.Run(() =>
+            {
+                assets.CompleteLoads();
+                return assets.Spawned.Count(replica => replica.IsAlive) == 2;
+            }, 120), "a third join builds both crates (" + player.World.Progress + ")");
+            That(assets.RefusedLoads == 0 && assets.OffThreadReleases == 0, "no load was refused, and nothing was let go of off the game thread (" + assets.OffThreadReleases + ")");
+            GC.KeepAlive(crates);
+        }
+
+        /// <summary>
+        /// A provider that will not open the world's channel, because something else holds it: the one warning stands for
+        /// the ones hosting or joining without the channel would give, so it says what that costs and what to do.
+        /// </summary>
+        private static void AChannelThatWillNotOpenSaysWhatToDo()
+        {
+            var rig = Yard(2);
+            rig.OpenToMultiplayer();
+            var control = rig.Network.AddPlayer("p1");
+            var held = control.OpenSystemChannel(InternalSystemChannelKind.WorldReplication);
+            var player = new WorldPeer(control, rig.Clock, "p1") { Phase = SessionPhase.Idle };
+            rig.BuildScene!(player.Scene);
+            player.LoadScenes();
+            player.Runtime.Connect();
+            rig.Players.Add(player);
+            rig.Join(player);
+            rig.Frames(10);
+            var warnings = player.Log.Lines.Where(line => line.Contains("world replication channel", StringComparison.Ordinal)).ToList();
+            That(held.Succeeded && warnings.Count == 1 && warnings[0].Contains("show the host's world", StringComparison.Ordinal) &&
+                 warnings[0].Contains("restart the game", StringComparison.Ordinal),
+                "one warning says the host's world will not show here, and what to do (" + string.Join(" | ", warnings) + ")");
+            That(!player.World.IsOnline && player.Control.Holds == 0, "and the world stays offline, holding nothing");
         }
 
         private static void LookupsGoThroughTheRegistry()

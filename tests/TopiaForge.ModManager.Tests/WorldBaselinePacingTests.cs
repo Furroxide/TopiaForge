@@ -24,6 +24,8 @@ namespace TopiaForge.ModManager.Tests
             RequestsWithinAStreamAreBounded();
             PlayersNeverHoldEachOtherBack();
             LeavingPlayersAreForgotten();
+            ABaselineLeavesTheWindowToTheBroadcastsBehindIt();
+            ProgressReportsMoveOnlyTheirOwnBaseline();
         }
 
         private static void ChunksStayWithinTheChannelsBounds()
@@ -57,7 +59,8 @@ namespace TopiaForge.ModManager.Tests
             var rig = Yard(20);
             var host = rig.Host;
             for (var index = 0; index < 200; index++) SpawnRobot(host, index, 4096);
-            rig.Network.HostWindowBytes = 96 * 1024;
+            // Small enough that the window, not the chunks in flight, stops the baseline: a chunk is refused and rewound.
+            rig.Network.HostWindowBytes = 48 * 1024;
             rig.OpenToMultiplayer();
             var player = AddPlayer(rig, "p1");
             rig.Join(player);
@@ -166,6 +169,91 @@ namespace TopiaForge.ModManager.Tests
             rig.Network.Leave(stranger.Control);
             rig.Frames(4);
             That(rig.Host.Host.PeerCount == 0 && rig.Host.Counters().RequestsRefused >= refused, "a request whose stream is gone keeps nothing");
+        }
+
+        /// <summary>
+        /// A world larger than the player's window, over a link that falls behind: the baseline keeps only a few chunks in
+        /// flight, so an announcement as large as a whole chunk still reaches the player, and nothing starts again. Paced by
+        /// the window alone, the baseline would fill it to its last 12 KiB and the announcement would skip the player.
+        /// </summary>
+        private static void ABaselineLeavesTheWindowToTheBroadcastsBehindIt()
+        {
+            var rig = Yard(4);
+            var host = rig.Host;
+            for (var index = 0; index < 150; index++) SpawnRobot(host, index, 9_500);
+            rig.OpenToMultiplayer();
+            var player = AddPlayer(rig, "p1");
+            rig.Join(player);
+            That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.ReceivingBaseline, 60), "a baseline of about 1.4 MiB starts");
+
+            // The player's link falls behind: what the host sends waits in its window, unread.
+            player.Paused = true;
+            rig.Frames(40);
+            var channel = host.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            var inFlight = channel.Outstanding(player.Control.Id).Bytes;
+            var bound = NetworkWorldHost.MaximumChunksInFlight * (NetworkWorldHost.BaselineChunkBytes + 16) + 64;
+            That(inFlight <= bound, "the baseline keeps at most " + NetworkWorldHost.MaximumChunksInFlight + " chunks in flight (" + inFlight + " bytes)");
+
+            // A mod spawns three robots at once, described in 7 KB each: one announcement of about 21 KB.
+            var spawned = Enumerable.Range(0, 3).Select(index => SpawnRobot(host, 500 + index, 7_000)).ToList();
+            rig.Frame();
+            That(host.Counters().Rebaselines == 0 && channel.Outstanding(player.Control.Id).Bytes > inFlight + 20_000,
+                "the announcement went to the player behind its baseline, and nothing starts again");
+            player.Paused = false;
+            That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.Synchronized, 2_000), "the baseline completes (" + player.World.Progress + ")");
+            rig.Frames(10);
+            That(SameWorld(host, player) && host.Counters().BaselinesStarted == 1 && player.Factories.Built.Count == 153,
+                "in one baseline, with every robot once (" + host.Counters().BaselinesStarted + " started, " + player.Factories.Built.Count + " built)");
+            GC.KeepAlive(spawned);
+        }
+
+        private static void ProgressReportsMoveOnlyTheirOwnBaseline()
+        {
+            var rig = Yard(4);
+            var host = rig.Host;
+            for (var index = 0; index < 100; index++) SpawnRobot(host, index, 9_500);
+            rig.OpenToMultiplayer();
+            var player = AddPlayer(rig, "p1");
+            rig.Join(player);
+            That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.ReceivingBaseline, 60), "the baseline starts");
+            player.Paused = true;
+            rig.Frames(10);
+            var channel = host.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            var inFlight = channel.Outstanding(player.Control.Id).Bytes;
+            var ignored = host.Counters().ProgressIgnored;
+            var discarded = host.World.Channel.Discarded;
+
+            // Reports for another baseline move nothing; malformed ones are discarded.
+            channel.Inject(player.Control.Id, Progress(9_999, 50));
+            foreach (var malformed in new[] { new byte[] { WorldMessages.Version, WorldMessages.BaselineProgress, 1 },
+                         new byte[] { WorldMessages.Version, WorldMessages.BaselineProgress, 1, 1, 0 }, new byte[] { WorldMessages.Version, WorldMessages.BaselineProgress, 1, 0x80, 0 } })
+            {
+                channel.Inject(player.Control.Id, malformed);
+            }
+
+            host.Frame();
+            host.Frame();
+            That(host.Counters().ProgressIgnored == ignored + 1 && host.World.Channel.Discarded == discarded + 3 && channel.Outstanding(player.Control.Id).Bytes == inFlight,
+                "a report for another baseline is ignored, malformed ones are discarded, and no chunk went");
+
+            // A report past what was sent counts only what was sent: the host sends the next few chunks and stops again.
+            channel.Inject(player.Control.Id, Progress(1, 1_000_000));
+            host.Frame();
+            host.Frame();
+            var after = channel.Outstanding(player.Control.Id).Bytes;
+            That(after > inFlight && after <= inFlight + NetworkWorldHost.MaximumChunksInFlight * (NetworkWorldHost.BaselineChunkBytes + 16) + 64,
+                "a report past what was sent lets only the next few chunks go (" + inFlight + " -> " + after + " bytes)");
+            player.Paused = false;
+            That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.Synchronized, 2_000) && SameWorld(host, player), "and the baseline still completes");
+        }
+
+        private static byte[] Progress(int baseline, int chunks)
+        {
+            var writer = new WorldWireWriter(16);
+            writer.Begin(WorldMessages.BaselineProgress);
+            writer.WriteVarUInt((ulong)baseline);
+            writer.WriteVarUInt((ulong)chunks);
+            return writer.Segment.ToArray();
         }
 
         private static byte Type(byte[] payload) => payload.Length >= 2 ? payload[1] : (byte)0;

@@ -96,6 +96,9 @@ namespace TopiaForge.ModManager
 
         internal long RequestsRefused { get; set; }
 
+        /// <summary>Gets the progress reports that named no baseline under way for their sender, which move nothing.</summary>
+        internal long ProgressIgnored { get; set; }
+
         internal long StreamRestarts { get; set; }
 
         internal long Rebaselines { get; set; }
@@ -118,6 +121,9 @@ namespace TopiaForge.ModManager
 
         internal long BaselinesApplied { get; set; }
 
+        /// <summary>Gets how many times a baseline named another world of the host, so this player started again from nothing.</summary>
+        internal long WorldsReplaced { get; set; }
+
         internal long EntriesApplied { get; set; }
 
         internal long EntitiesRefused { get; set; }
@@ -138,6 +144,9 @@ namespace TopiaForge.ModManager
         internal long ReplicasBuilt { get; set; }
 
         internal long ReplicasUnbuildable { get; set; }
+
+        /// <summary>Gets the bundle and prefab loads refused past <see cref="NetworkWorldClient.MaximumBundleLoads"/> and <see cref="NetworkWorldClient.MaximumPrefabLoads"/>.</summary>
+        internal long AssetLoadsRefused { get; set; }
 
         internal long ReplicasReleased { get; set; }
 

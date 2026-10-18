@@ -60,7 +60,7 @@ namespace TopiaForge.ModManager
     /// the loaded scenes; it registers later spawns as the spawn ledger reports them, binds a scene object the first time
     /// it moves, and announces every new, changed or ended entity to every player at once. At 10 Hz it sends the poses
     /// the replication scheduler picks under its byte budget, and it sends each player that asks a chunked baseline paced
-    /// by that player's window (the other part of this class). Main thread only.
+    /// by what that player reports it has read and by its window (the other part of this class). Main thread only.
     /// </summary>
     internal sealed partial class NetworkWorldHost : IMultiplayerSpawnObserver, IWorldMessageHandler
     {
@@ -97,6 +97,7 @@ namespace TopiaForge.ModManager
         private readonly List<ParticipantId> skipped = new List<ParticipantId>();
         private MultiplayerSpawnLedger? ledger;
         private long nextTickMicros;
+        private ulong worldInstance;
 
         internal NetworkWorldHost(NetworkWorldChannel channel, INetworkWorldBackend backend, SceneKeyRegistry sceneKeys, Func<long> clock, NetworkWorldCounters counters)
         {
@@ -106,6 +107,7 @@ namespace TopiaForge.ModManager
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.counters = counters ?? throw new ArgumentNullException(nameof(counters));
             channel.Register(WorldMessages.BaselineRequest, this);
+            channel.Register(WorldMessages.BaselineProgress, this);
         }
 
         /// <summary>Gets whether this process hosts world replication now.</summary>
@@ -116,6 +118,13 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets the scene index, so tests and diagnostics can see what the census keyed.</summary>
         internal SceneObjectIndex Index => index;
+
+        /// <summary>
+        /// Gets the world this host serves, a random value drawn at each promotion and named in every baseline. A player
+        /// whose host's process restarted under the same identity rejoins within the grace into a different world, with its
+        /// own entity ids; the new value tells it to start that world from nothing.
+        /// </summary>
+        internal ulong WorldInstance => worldInstance;
 
         /// <summary>
         /// Starts hosting the world: registers the live spawns the promotion carries, in the order they were recorded, indexes
@@ -130,6 +139,7 @@ namespace TopiaForge.ModManager
             IsActive = true;
             ledger = spawnLedger;
             nextTickMicros = clock();
+            worldInstance = NewWorldInstance();
             ResetPeers();
 
             // Spawns are marked first, so the scene census that follows leaves them out.
@@ -294,14 +304,6 @@ namespace TopiaForge.ModManager
             SendAnnouncements();
             if (tick) SendSnapshot(now);
             PumpBaselines(now);
-        }
-
-        bool IWorldMessageHandler.Handle(byte type, ParticipantId sender, WorldWireReader reader)
-        {
-            if (!IsActive || type != WorldMessages.BaselineRequest) return false;
-            if (!reader.TryReadByte(out var reason) || reason > 1 || !reader.AtEnd) return false;
-            Request(sender);
-            return true;
         }
 
         private HostWorldEntity? Register(MultiplayerSpawnRecord record)

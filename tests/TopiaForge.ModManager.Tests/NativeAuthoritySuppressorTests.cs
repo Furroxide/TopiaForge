@@ -25,6 +25,8 @@ namespace TopiaForge.ModManager.Tests
             ASeededSweepNeverLeavesASuppressedValueBehind();
             AJoinedPlayerTurnsNativeAuthorityOffAndBackOn();
             APartialOrFailedJoinIsUndone();
+            AnUnloadedScenesSettingsAreLetGo();
+            OneKindIsRestoredAlone();
         }
 
         private static void RestoreIsExact()
@@ -240,6 +242,84 @@ namespace TopiaForge.ModManager.Tests
             That(switches.Select(item => item.Value).SequenceEqual(before) && player.Control.Holds == 0 && !player.World.IsOnline,
                 "a join that fails before the world arrives restores everything and lets readiness go");
             rig.Host.Paused = false;
+        }
+
+        /// <summary>
+        /// A scene a joined player unloads takes its objects with it, so their settings are forgotten at once rather than
+        /// held until the player leaves, and nothing keeps the scene reachable. The engine reports an unload once the
+        /// scene's objects are gone; reported before, the next scene to load forgets them.
+        /// </summary>
+        private static void AnUnloadedScenesSettingsAreLetGo()
+        {
+            var rig = new WorldRig();
+            rig.UseScene(scene => Robots(scene, 2));
+            rig.OpenToMultiplayer();
+            var player = rig.AddPlayer("p1");
+            var switches = AllSwitches(player.Scene);
+            var before = switches.Select(item => item.Value).ToArray();
+            rig.JoinAndSynchronize(player);
+            var suppressor = player.Client.Suppressor;
+            var suppressed = suppressor.SuppressedCount;
+            var seen = suppressor.SeenCount;
+            var probe = LoadAndUnloadAnnex(player, engineOrder: true, out var whileLoaded);
+            That(whileLoaded > suppressed, "the annex's settings were turned off as it loaded (" + whileLoaded + ")");
+            That(suppressor.SuppressedCount == suppressed && suppressor.SeenCount == seen && suppressor.ForgottenGone == 40,
+                "and forgotten as it unloaded, its kinematic bodies with them (" + suppressor.SuppressedCount + ", " + suppressor.SeenCount + " seen)");
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            That(!probe.IsAlive, "so nothing keeps the annex's objects reachable");
+
+            LoadAndUnloadAnnex(player, engineOrder: false, out _);
+            That(suppressor.SuppressedCount > suppressed, "an unload reported before its objects go forgets nothing yet");
+            player.Scene.AddScene("Hall");
+            player.LoadScenes();
+            That(suppressor.SuppressedCount == suppressed && suppressor.SeenCount == seen, "the next scene to load forgets them (" + suppressor.SuppressedCount + ")");
+            player.Control.Leave();
+            rig.Frames(2);
+            That(switches.Select(item => item.Value).SequenceEqual(before) && suppressor.SuppressedCount == 0 && player.Counters().RestoreFailures == 0,
+                "leaving restores the yard's settings exactly, and nothing fails");
+        }
+
+        /// <summary>Loads an annex of 20 robots on <paramref name="player"/>, unloads it, and returns a weak reference to one of its robots.</summary>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static WeakReference LoadAndUnloadAnnex(WorldPeer player, bool engineOrder, out int whileLoaded)
+        {
+            var annex = player.Scene.AddScene("Annex");
+            for (var index = 0; index < 20; index++)
+            {
+                var robot = player.Scene.Add(annex, "Robot", null, rigidbody: true, kinematic: false);
+                robot.AddNative(NativeAuthorityKind.Locomotion);
+            }
+
+            var probe = new WeakReference(annex.Roots[0]);
+            player.LoadScenes();
+            whileLoaded = player.Client.Suppressor.SuppressedCount;
+            if (engineOrder) player.Scene.UnloadScene(annex);
+            player.World.SceneUnloaded(annex.Handle);
+            if (!engineOrder) player.Scene.UnloadScene(annex);
+            player.LoadedScenes.Remove(annex.Handle);
+            return probe;
+        }
+
+        private static void OneKindIsRestoredAlone()
+        {
+            var (world, switches) = Robots(3);
+            var before = switches.Select(item => item.Value).ToArray();
+            var scene = world.Scenes[0];
+            var hidden = world.Add(scene, "Crate", null, rigidbody: true, kinematic: true);
+            var suppressor = new NativeAuthoritySuppressor();
+            suppressor.Suppress(Targets(world));
+            That(suppressor.Suppress(new NativeAuthorityTarget(hidden.PresenceSwitch, false)) && !hidden.Active, "a removed object is hidden");
+            var others = switches.Select(item => item.Value).ToArray();
+            var shown = suppressor.RestoreKind(NativeAuthorityKind.SceneObjectPresence);
+            That(shown.Restored == 1 && hidden.Active && switches.Select(item => item.Value).SequenceEqual(others),
+                "restoring one kind shows the hidden object and leaves every other setting as it is (" + shown + ")");
+            That(suppressor.CountSuppressed(NativeAuthorityKind.SceneObjectPresence) == 0 && suppressor.Suppress(new NativeAuthorityTarget(hidden.PresenceSwitch, false)) && !hidden.Active,
+                "and forgets it, so it can be hidden again");
+            var restore = suppressor.Restore();
+            That(hidden.Active && switches.Select(item => item.Value).SequenceEqual(before) && restore.Failed == 0,
+                "a full restore afterwards still gives back everything exactly (" + restore + ")");
         }
 
         /// <summary>A scene of robots: each a rigidbody root with a brain, a language model, and locomotion; the first also a spawner and a path follower.</summary>

@@ -46,14 +46,21 @@ namespace TopiaForge.ModManager
     internal sealed class NativeAuthoritySuppressor
     {
         private readonly List<Change> changes = new List<Change>();
-        private readonly HashSet<SwitchKey> seen = new HashSet<SwitchKey>();
+        private readonly Dictionary<SwitchKey, INativeAuthoritySwitch> seen = new Dictionary<SwitchKey, INativeAuthoritySwitch>();
+        private readonly List<SwitchKey> dropping = new List<SwitchKey>();
         private int failures;
 
         /// <summary>Gets how many switches are suppressed now.</summary>
         internal int SuppressedCount => changes.Count;
 
+        /// <summary>Gets how many native settings the suppressor knows of, suppressed or found already at their suppressed value.</summary>
+        internal int SeenCount => seen.Count;
+
         /// <summary>Gets how many reads and writes threw during suppression since the last restore.</summary>
         internal int SuppressionFailures => failures;
+
+        /// <summary>Gets how many switches were forgotten because their native object had gone, as an unloaded scene's do.</summary>
+        internal long ForgottenGone { get; private set; }
 
         /// <summary>Counts the suppressed switches of one kind.</summary>
         internal int CountSuppressed(NativeAuthorityKind kind)
@@ -91,7 +98,9 @@ namespace TopiaForge.ModManager
             try
             {
                 if (!nativeSwitch.IsAlive) return false;
-                if (!seen.Add(new SwitchKey(nativeSwitch))) return false;
+                var key = new SwitchKey(nativeSwitch);
+                if (seen.ContainsKey(key)) return false;
+                seen.Add(key, nativeSwitch);
                 original = nativeSwitch.Read();
             }
             catch (Exception)
@@ -131,15 +140,65 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
+        /// Forgets every switch whose native object no longer exists, as the objects of a scene that unloaded do: nothing
+        /// is left to restore, and holding them would keep each unloaded scene's objects reachable until the player
+        /// leaves. A switch that cannot say is kept. The rest keep their order, so a restore still runs newest first.
+        /// Returns how many it forgot.
+        /// </summary>
+        internal int ForgetGone()
+        {
+            var kept = 0;
+            for (var index = 0; index < changes.Count; index++)
+            {
+                var change = changes[index];
+                if (!IsGone(change.Switch)) changes[kept++] = change;
+            }
+
+            changes.RemoveRange(kept, changes.Count - kept);
+            dropping.Clear();
+            foreach (var pair in seen)
+            {
+                if (IsGone(pair.Value)) dropping.Add(pair.Key);
+            }
+
+            foreach (var key in dropping) seen.Remove(key);
+            var forgotten = dropping.Count;
+            dropping.Clear();
+            ForgottenGone += forgotten;
+            return forgotten;
+        }
+
+        private static bool IsGone(INativeAuthoritySwitch nativeSwitch)
+        {
+            try
+            {
+                return !nativeSwitch.IsAlive;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Undoes every change, newest first, and forgets what it suppressed. A switch still at the suppressed value gets its
         /// original back, even one whose suppression write threw after all.
         /// </summary>
-        internal NativeAuthorityRestore Restore()
+        internal NativeAuthorityRestore Restore() => Restore(null);
+
+        /// <summary>
+        /// Undoes the changes of one kind only, newest first and by the same rules, and forgets them; every other switch
+        /// stays as it is. A joined player whose host's world is replaced by another shows again what the old world hid.
+        /// </summary>
+        internal NativeAuthorityRestore RestoreKind(NativeAuthorityKind kind) => Restore(kind);
+
+        private NativeAuthorityRestore Restore(NativeAuthorityKind? only)
         {
             int restored = 0, leftChanged = 0, gone = 0, failed = 0, unwritten = 0;
             for (var index = changes.Count - 1; index >= 0; index--)
             {
                 var change = changes[index];
+                if (only.HasValue && change.Kind != only.Value) continue;
                 try
                 {
                     if (!change.Switch.IsAlive)
@@ -164,9 +223,25 @@ namespace TopiaForge.ModManager
                 }
             }
 
-            changes.Clear();
-            seen.Clear();
-            failures = 0;
+            if (only.HasValue)
+            {
+                changes.RemoveAll(change => change.Kind == only.Value);
+                dropping.Clear();
+                foreach (var key in seen.Keys)
+                {
+                    if (key.Kind == only.Value) dropping.Add(key);
+                }
+
+                foreach (var key in dropping) seen.Remove(key);
+                dropping.Clear();
+            }
+            else
+            {
+                changes.Clear();
+                seen.Clear();
+                failures = 0;
+            }
+
             return new NativeAuthorityRestore(restored, leftChanged, gone, failed, unwritten);
         }
 
@@ -175,12 +250,16 @@ namespace TopiaForge.ModManager
             internal Change(INativeAuthoritySwitch nativeSwitch, bool original, bool suppressed, bool written)
             {
                 Switch = nativeSwitch;
+                Kind = nativeSwitch.Kind;
                 Original = original;
                 Suppressed = suppressed;
                 IsWritten = written;
             }
 
             internal INativeAuthoritySwitch Switch { get; }
+
+            /// <summary>Gets what the switch controls, read once as it was recorded.</summary>
+            internal NativeAuthorityKind Kind { get; }
 
             internal bool Original { get; }
 
@@ -203,6 +282,8 @@ namespace TopiaForge.ModManager
                 target = nativeSwitch.Target ?? throw new InvalidOperationException("A native switch names its target.");
                 kind = nativeSwitch.Kind;
             }
+
+            internal NativeAuthorityKind Kind => kind;
 
             public bool Equals(SwitchKey other) => kind == other.kind && Equals(target, other.target);
 

@@ -24,6 +24,10 @@ namespace TopiaForge.ModManager.Tests
             EntriesRefuseWhatTheRuntimeWouldNot();
             AssetDescriptionsRoundTripAndRefuseGarbage();
             HostileMessagesNeverGetPastTheReader();
+            AHostNamingAssetsWithoutEndLoadsABoundedFew();
+            AHostNamingPrefabsWithoutEndLoadsABoundedFew();
+            KeysOfScenesNeverLoadedAreBounded();
+            ABaselineNamesItsWorld();
         }
 
         private static void VarintsAreMinimalAndBounded()
@@ -232,6 +236,170 @@ namespace TopiaForge.ModManager.Tests
             That(!player.World.IsOnline && player.Client.Suppressor.SuppressedCount == 0, "and leaving still restores everything");
         }
 
+        /// <summary>
+        /// A hostile host describes one asset spawn again and again, each time from a bundle and a prefab it makes up. Every
+        /// load asks the owning mod's package files and is kept for the session, so a joined player loads a bounded few and
+        /// refuses the rest; the host's own crates, from a bundle it loaded before, are still built.
+        /// </summary>
+        private static void AHostNamingAssetsWithoutEndLoadsABoundedFew()
+        {
+            var rig = new WorldRig();
+            rig.UseScene(scene => scene.AddScene("Yard"));
+            rig.OpenToMultiplayer();
+            var first = rig.Host.SpawnCrate(1);
+            var player = rig.AddPlayer("p1");
+            rig.JoinAndSynchronize(player);
+            That(player.Assets.Spawned.Count == 1, "the host's crate is built");
+            var channel = player.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            var writer = new WorldWireWriter();
+            var pose = new NetPose(new NetVector3(1, 2, 3), NetQuaternion.Identity);
+            for (var round = 0; round < 2_000; round++)
+            {
+                writer.Begin(WorldMessages.Spawn);
+                writer.WriteVarUInt(1);
+                WorldEntryCodec.WriteSpawn(writer, new NetworkEntityId(900_000), "asset.prefab", WorldPeer.ModId, 9_999, 0, new NetVector3(1, 1, 1), pose,
+                    WorldEntryCodec.EncodeAsset(MultiplayerAssetDescriptor.Create("made-up/" + round + ".bundle", "Thing " + round)));
+                channel.Inject(rig.Network.Host.Id, writer.Segment.ToArray());
+                if (round % 50 == 49) player.Client.Receive();
+            }
+
+            player.Client.Receive();
+            That(player.Assets.BundleLoads <= NetworkWorldClient.MaximumBundleLoads && player.Assets.PrefabLoads <= NetworkWorldClient.MaximumBundleLoads &&
+                 player.Counters().AssetLoadsRefused > 1_000,
+                "the player loaded a bounded few of the made-up assets and refused the rest (" + player.Assets.BundleLoads + " bundles, " + player.Assets.PrefabLoads +
+                " prefabs, " + player.Counters().AssetLoadsRefused + " refused; malformed " + player.Counters().MalformedMessages + ", refused entities " +
+                player.Counters().EntitiesRefused + ", unbuildable " + player.Counters().ReplicasUnbuildable + ", entities " + player.Client.EntityCount + ", discarded " +
+                player.World.Channel.Discarded + ")");
+            var second = rig.Host.SpawnCrate(2);
+            That(rig.Run(() => player.Assets.Spawned.Count(replica => replica.Object.IsAlive) == 2, 30), "and the host's next crate is still built, from what it loaded before");
+            GC.KeepAlive(first);
+            GC.KeepAlive(second);
+        }
+
+        /// <summary>
+        /// The same host names the one bundle the player does load, each time with a prefab name it makes up: the bundle is
+        /// loaded once, and the prefabs are bounded on their own, since a load of each is kept for the session as well.
+        /// </summary>
+        private static void AHostNamingPrefabsWithoutEndLoadsABoundedFew()
+        {
+            var rig = new WorldRig();
+            rig.UseScene(scene => scene.AddScene("Yard"));
+            rig.OpenToMultiplayer();
+            var crate = rig.Host.SpawnCrate(1);
+            var player = rig.AddPlayer("p1");
+            rig.JoinAndSynchronize(player);
+            var channel = player.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            var writer = new WorldWireWriter();
+            var pose = new NetPose(new NetVector3(1, 2, 3), NetQuaternion.Identity);
+            var refused = player.Counters().AssetLoadsRefused;
+            for (var round = 0; round < NetworkWorldClient.MaximumPrefabLoads + 500; round++)
+            {
+                writer.Begin(WorldMessages.Spawn);
+                writer.WriteVarUInt(1);
+                WorldEntryCodec.WriteSpawn(writer, new NetworkEntityId(900_000), "asset.prefab", WorldPeer.ModId, 9_999, 0, new NetVector3(1, 1, 1), pose,
+                    WorldEntryCodec.EncodeAsset(MultiplayerAssetDescriptor.Create("assets/world.bundle", "Thing " + round)));
+                channel.Inject(rig.Network.Host.Id, writer.Segment.ToArray());
+                if (round % 50 == 49) player.Client.Receive();
+            }
+
+            player.Client.Receive();
+            That(player.Assets.BundleLoads == 1 && player.Assets.PrefabLoads == NetworkWorldClient.MaximumPrefabLoads && player.Counters().AssetLoadsRefused - refused >= 500,
+                "the bundle loaded once, and a bounded few of the made-up prefabs (" + player.Assets.BundleLoads + " bundles, " + player.Assets.PrefabLoads + " prefabs, " +
+                (player.Counters().AssetLoadsRefused - refused) + " refused)");
+            GC.KeepAlive(crate);
+        }
+
+        /// <summary>
+        /// A hostile host names scene objects this player never loaded, without end: objects it says are gone, and poses for
+        /// objects it says are unbound. The player keeps both for scenes it may load later, but at most
+        /// <see cref="NetworkWorldClient.MaximumPendingKeys"/> of each, counts the rest, and goes on mirroring the world.
+        /// </summary>
+        private static void KeysOfScenesNeverLoadedAreBounded()
+        {
+            var rig = WorldBaselineSyncTests.Yard(3);
+            rig.OpenToMultiplayer();
+            var player = rig.AddPlayer("p1");
+            rig.JoinAndSynchronize(player);
+            var channel = player.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            var writer = new WorldWireWriter();
+            var random = new Random(4_242);
+            var bytes = new byte[8];
+            ulong NextKey()
+            {
+                random.NextBytes(bytes);
+                return BitConverter.ToUInt64(bytes, 0) | 1UL;
+            }
+
+            // Objects the host says are gone, about 3,000 keys a message, past the bound.
+            const int KeysPerMessage = 3_000;
+            var removedSent = 0;
+            while (removedSent < NetworkWorldClient.MaximumPendingKeys + 10_000)
+            {
+                writer.Begin(WorldMessages.SceneRemoved);
+                writer.WriteVarUInt(KeysPerMessage);
+                for (var index = 0; index < KeysPerMessage; index++) writer.WriteUInt64(NextKey());
+                channel.Inject(rig.Network.Host.Id, writer.Segment.ToArray());
+                player.Client.Receive();
+                removedSent += KeysPerMessage;
+            }
+
+            // Poses for objects the host says are unbound, about 1,000 entries a message, past the bound.
+            const int PosesPerMessage = 1_000;
+            var pose = new NetPose(new NetVector3(1, 2, 3), NetQuaternion.Identity);
+            var posesSent = 0;
+            while (posesSent < NetworkWorldClient.MaximumPendingKeys + 10_000)
+            {
+                writer.Begin(WorldMessages.Spawn);
+                writer.WriteVarUInt(PosesPerMessage);
+                for (var index = 0; index < PosesPerMessage; index++) WorldEntryCodec.WriteScenePose(writer, new SceneObjectKey(NextKey()), pose);
+                channel.Inject(rig.Network.Host.Id, writer.Segment.ToArray());
+                player.Client.Receive();
+                posesSent += PosesPerMessage;
+            }
+
+            var dropped = player.Counters().SceneKeysDropped;
+            That(player.Client.RemovedKeyCount == NetworkWorldClient.MaximumPendingKeys && player.Client.PendingPoseCount == NetworkWorldClient.MaximumPendingKeys &&
+                 dropped >= removedSent + posesSent - 2 * NetworkWorldClient.MaximumPendingKeys && player.Counters().MalformedMessages == 0,
+                "the player keeps at most " + NetworkWorldClient.MaximumPendingKeys + " of each and counts the rest (" + player.Client.RemovedKeyCount + " removed, " +
+                player.Client.PendingPoseCount + " poses, " + dropped + " dropped of " + (removedSent + posesSent) + ")");
+
+            // The world it mirrors goes on: a box the host moves binds and follows.
+            var box = rig.Host.Scene.Scenes[0].Roots[1];
+            box.Position = new NetVector3(9, 1, 1);
+            var mine = player.Scene.Scenes[0].Roots[1];
+            That(rig.Run(() => mine.Mark != 0 && Math.Abs(mine.Position.X - 9) < 0.05f, 120), "and a box the host moves still binds and follows (" + mine.Position.X + ")");
+        }
+
+        /// <summary>Every baseline names the host's world, drawn afresh at each promotion; one that names none is malformed.</summary>
+        private static void ABaselineNamesItsWorld()
+        {
+            var rig = WorldBaselineSyncTests.Yard(2);
+            rig.OpenToMultiplayer();
+            var first = rig.Host.Host.WorldInstance;
+            var player = rig.AddPlayer("p1");
+            rig.JoinAndSynchronize(player);
+            var channel = player.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
+            var malformed = player.Counters().MalformedMessages;
+            foreach (var instance in new ulong?[] { null, 0UL })
+            {
+                var writer = new WorldWireWriter(64);
+                writer.Begin(WorldMessages.BaselineBegin);
+                writer.WriteVarUInt(7);
+                writer.WriteVarUInt(0);
+                writer.WriteVarUInt(1);
+                if (instance.HasValue) writer.WriteUInt64(instance.Value);
+                channel.Inject(rig.Network.Host.Id, writer.Segment.ToArray());
+            }
+
+            player.Client.Receive();
+            That(first != 0 && player.Counters().MalformedMessages == malformed + 2 && player.Counters().WorldsReplaced == 0 && player.World.Progress.Phase == NetworkWorldPhase.Synchronized,
+                "a baseline that names no world is malformed and changes nothing");
+            rig.Network.StopHosting();
+            rig.Frames(2);
+            rig.OpenToMultiplayer();
+            That(rig.Host.Host.IsActive && rig.Host.Host.WorldInstance != 0 && rig.Host.Host.WorldInstance != first, "a second promotion serves another world");
+        }
+
         /// <summary>One valid message of every type a host sends.</summary>
         private static List<byte[]> ValidMessages()
         {
@@ -242,6 +410,7 @@ namespace TopiaForge.ModManager.Tests
             writer.WriteVarUInt(9);
             writer.WriteVarUInt(3);
             writer.WriteVarUInt(5_000_000);
+            writer.WriteUInt64(0x0123_4567_89AB_CDEFUL);
             messages.Add(writer.Segment.ToArray());
             writer.Begin(WorldMessages.BaselineEntries);
             writer.WriteVarUInt(9);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
 
@@ -41,6 +42,16 @@ namespace TopiaForge.ModManager
     {
         /// <summary>How long one replica may take to load before it counts as unbuildable.</summary>
         internal const long BuildTimeoutMicros = 30_000_000;
+
+        /// <summary>
+        /// The most bundles a joined player loads for replicas in one session. A host names each one by its path in the
+        /// owning mod's package, so only a host that makes paths up reaches this; whatever it names past the bound is not
+        /// loaded, and its replicas count as unbuildable.
+        /// </summary>
+        internal const int MaximumBundleLoads = 256;
+
+        /// <summary>The most prefabs a joined player loads for replicas in one session, under the same rule.</summary>
+        internal const int MaximumPrefabLoads = 4096;
 
         private readonly Func<string, IAssetService?> findAssets;
         private readonly Dictionary<string, AssetLoad<IAssetBundle>> bundles = new Dictionary<string, AssetLoad<IAssetBundle>>(StringComparer.Ordinal);
@@ -101,7 +112,16 @@ namespace TopiaForge.ModManager
 
             if (!bundles.TryGetValue(build.BundleKey, out var bundle))
             {
-                bundle = AssetLoad<IAssetBundle>.Start(() => build.Assets.LoadBundleAsync(build.BundlePath));
+                // Each load asks the package's files, and is kept for the session: a host that names paths without end
+                // gets no more of either.
+                if (bundles.Count >= MaximumBundleLoads)
+                {
+                    counters.AssetLoadsRefused++;
+                    FinishBuild(mirrored, false);
+                    return;
+                }
+
+                bundle = AssetLoad<IAssetBundle>.Start(token => build.Assets.LoadBundleAsync(build.BundlePath, token));
                 bundles.Add(build.BundleKey, bundle);
             }
 
@@ -114,8 +134,15 @@ namespace TopiaForge.ModManager
 
             if (!prefabs.TryGetValue(build.PrefabKey, out var prefab))
             {
+                if (prefabs.Count >= MaximumPrefabLoads)
+                {
+                    counters.AssetLoadsRefused++;
+                    FinishBuild(mirrored, false);
+                    return;
+                }
+
                 var loaded = bundle.Value!;
-                prefab = AssetLoad<IPrefabAsset>.Start(() => build.Assets.LoadPrefabAsync(loaded, build.AssetName));
+                prefab = AssetLoad<IPrefabAsset>.Start(token => build.Assets.LoadPrefabAsync(loaded, build.AssetName, token));
                 prefabs.Add(build.PrefabKey, prefab);
             }
 
@@ -159,7 +186,10 @@ namespace TopiaForge.ModManager
             if (!built) Unbuildable(mirrored);
         }
 
-        /// <summary>Lets go of every bundle and prefab loaded for replicas; a load still running lets go of its result when it lands.</summary>
+        /// <summary>
+        /// Lets go of every bundle and prefab loaded for replicas. A load still running is cancelled, and the engine's loader
+        /// lets go of its result on the game thread as it lands, so the same bundle loads again for a later join.
+        /// </summary>
         private void ReleaseAssetLoads()
         {
             foreach (var mirrored in building) mirrored.Build = null;
@@ -174,6 +204,7 @@ namespace TopiaForge.ModManager
         /// <summary>One shared load of a bundle or a prefab, polled each frame. Releasing it disposes what it loaded, now or when it lands.</summary>
         private sealed class AssetLoad<T> where T : class, IDisposable
         {
+            private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
             private Task<OperationResult<T>>? task;
             private bool released;
 
@@ -191,12 +222,12 @@ namespace TopiaForge.ModManager
                 }
             }
 
-            internal static AssetLoad<T> Start(Func<Task<OperationResult<T>>> start)
+            internal static AssetLoad<T> Start(Func<CancellationToken, Task<OperationResult<T>>> start)
             {
                 var load = new AssetLoad<T>();
                 try
                 {
-                    load.task = start();
+                    load.task = start(load.cancellation.Token);
                 }
                 catch (Exception)
                 {
@@ -206,21 +237,32 @@ namespace TopiaForge.ModManager
                 return load;
             }
 
+            /// <summary>
+            /// Lets go of what the load holds. One still running is cancelled first: the engine's loader then lets go of whatever
+            /// it loads as it lands, on the game thread. A continuation here could not promise that thread, since the loader runs
+            /// what waits for a load elsewhere, and a handle let go of there stays loaded, so a later load of its bundle fails.
+            /// </summary>
             internal void Release()
             {
                 if (released) return;
+                released = true;
                 var current = task;
-                if (current != null && !current.IsCompleted)
+                if (current == null) return;
+                if (!current.IsCompleted)
                 {
-                    // Whatever lands after the player left is let go of as it lands, on the thread that completes it.
-                    current.ContinueWith(landed => DisposeResult(landed), TaskContinuationOptions.ExecuteSynchronously);
-                }
-                else if (current != null)
-                {
-                    DisposeResult(current);
+                    try
+                    {
+                        cancellation.Cancel();
+                    }
+                    catch (Exception)
+                    {
+                        // A loader whose cancellation throws is let go of below, like one that takes no notice of it.
+                    }
                 }
 
-                released = true;
+                // A loader that takes no notice of cancellation hands back what it loaded anyway, and that goes as it lands.
+                if (current.IsCompleted) DisposeResult(current);
+                else current.ContinueWith(landed => DisposeResult(landed), TaskContinuationOptions.ExecuteSynchronously);
             }
 
             private static void DisposeResult(Task<OperationResult<T>> landed)

@@ -75,6 +75,12 @@ namespace TopiaForge.ModManager
 
         internal int EntriesSent { get; set; }
 
+        /// <summary>Gets the chunks of this baseline sent so far.</summary>
+        internal int ChunksSent { get; set; }
+
+        /// <summary>Gets the chunks the player said it has read, never more than were sent.</summary>
+        internal int ChunksAcknowledged { get; set; }
+
         internal bool IsFullySent => Cursor >= Ids.Count && RemovedCursor >= Removed.Count && PoseCursor >= Poses.Count;
     }
 
@@ -82,9 +88,9 @@ namespace TopiaForge.ModManager
     {
         /// <summary>
         /// What a baseline message asks of a player's window before it goes: room for a whole system message, 32 KiB, though
-        /// a baseline message carries at most <see cref="BaselineChunkBytes"/>. So a baseline always leaves the broadcasts
-        /// behind it at least the difference, and pacing a baseline never makes a broadcast skip the player it is for. The
-        /// channel answers <c>CanSend</c> for one message at most, so this is the most headroom the probe can ask for.
+        /// a baseline message carries at most <see cref="BaselineChunkBytes"/>. The channel answers <c>CanSend</c> for one
+        /// message at most, so this is the most headroom the probe can ask for; the window is a megabyte, so what keeps a
+        /// large baseline from filling it is <see cref="MaximumChunksInFlight"/>.
         /// </summary>
         internal const int BaselineProbeBytes = InternalSystemLimits.MaximumPayloadBytes;
 
@@ -93,6 +99,13 @@ namespace TopiaForge.ModManager
 
         /// <summary>The most baseline messages one player gets in one frame, so a large world spreads its cost.</summary>
         internal const int BaselineMessagesPerFrame = 8;
+
+        /// <summary>
+        /// The most chunks of a baseline in flight to one player: sent, and not yet reported read. At most 80 KiB, which
+        /// keeps a 256 kbit/s link busy across seconds of round trip, while the broadcasts behind the baseline keep the rest
+        /// of the player's 1 MiB window however large the world is, as much as a player without a baseline has but 80 KiB.
+        /// </summary>
+        internal const int MaximumChunksInFlight = 4;
 
         /// <summary>The most players the host keeps baseline state for; the engine bounds its streams far below this.</summary>
         internal const int MaximumPeers = 256;
@@ -123,6 +136,41 @@ namespace TopiaForge.ModManager
             sent = 0;
             expected = 0;
             return false;
+        }
+
+        bool IWorldMessageHandler.Handle(byte type, ParticipantId sender, WorldWireReader reader)
+        {
+            if (!IsActive) return false;
+            switch (type)
+            {
+                case WorldMessages.BaselineRequest:
+                    if (!reader.TryReadByte(out var reason) || reason > 1 || !reader.AtEnd) return false;
+                    Request(sender);
+                    return true;
+                case WorldMessages.BaselineProgress:
+                    if (!reader.TryReadInt32(int.MaxValue, out var number) || !reader.TryReadInt32(int.MaxValue, out var chunks) || !reader.AtEnd) return false;
+                    Progress(sender, number, chunks);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>A random world instance, never zero, which a player reads as no world yet.</summary>
+        private static ulong NewWorldInstance()
+        {
+            var bytes = new byte[8];
+            using (var random = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                ulong value;
+                do
+                {
+                    random.GetBytes(bytes);
+                    value = BitConverter.ToUInt64(bytes, 0);
+                }
+                while (value == 0);
+                return value;
+            }
         }
 
         private void ResetPeers()
@@ -205,6 +253,22 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
+        /// A player read <paramref name="chunks"/> chunks of its baseline <paramref name="number"/>: that many are no longer in
+        /// flight. A report for another baseline, or past what was sent, moves nothing further.
+        /// </summary>
+        private void Progress(ParticipantId sender, int number, int chunks)
+        {
+            if (!peers.TryGetValue(sender, out var peer) || peer.Active == null || peer.Active.Number != number || peer.Stream != channel.GetGeneration(sender))
+            {
+                counters.ProgressIgnored++;
+                return;
+            }
+
+            var baseline = peer.Active;
+            baseline.ChunksAcknowledged = Math.Max(baseline.ChunksAcknowledged, Math.Min(chunks, baseline.ChunksSent));
+        }
+
+        /// <summary>
         /// A broadcast skipped these players because their window was full: each missed a message, so each gets a new
         /// baseline once its window has room, which supersedes any baseline under way.
         /// </summary>
@@ -257,6 +321,7 @@ namespace TopiaForge.ModManager
             message.WriteVarUInt((ulong)baseline.Number);
             message.WriteVarUInt((ulong)baseline.Expected);
             message.WriteVarUInt((ulong)Math.Min(now, WorldMessages.MaximumTimeMicros));
+            message.WriteUInt64(worldInstance);
             if (!channel.TrySendTo(peer.Id, message, BaselineProbeBytes)) return false;
             peer.Number = baseline.Number;
             peer.Active = baseline;
@@ -277,6 +342,10 @@ namespace TopiaForge.ModManager
             while (!baseline.IsFullySent)
             {
                 if (messages >= BaselineMessagesPerFrame) return;
+
+                // Paced by what the player has read, not only by its window: the window is a megabyte, and a baseline that
+                // filled it would leave the broadcasts behind it too little room, so they would skip the player.
+                if (baseline.ChunksSent - baseline.ChunksAcknowledged >= MaximumChunksInFlight) return;
                 var cursor = baseline.Cursor;
                 var removedCursor = baseline.RemovedCursor;
                 var poseCursor = baseline.PoseCursor;
@@ -301,6 +370,7 @@ namespace TopiaForge.ModManager
                 }
 
                 baseline.EntriesSent += count;
+                baseline.ChunksSent++;
                 messages++;
             }
 

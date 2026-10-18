@@ -73,6 +73,9 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Gets the asset service of the test mod, which a joined player builds asset replicas through.</summary>
         internal FakeWorldAssets Assets { get; }
 
+        /// <summary>Gets or sets an asset service the test mod's replicas load through instead of <see cref="Assets"/>.</summary>
+        internal IAssetService? ModAssets { get; set; }
+
         internal RecordingFactory Factories { get; }
 
         /// <summary>Gets the scenes this peer's world was told had loaded.</summary>
@@ -109,7 +112,7 @@ namespace TopiaForge.ModManager.Tests
             LoadedScenes.Remove(scene.Handle);
         }
 
-        internal IAssetService? FindAssets(string modId) => string.Equals(modId, ModId, StringComparison.Ordinal) ? Assets : null;
+        internal IAssetService? FindAssets(string modId) => string.Equals(modId, ModId, StringComparison.Ordinal) ? ModAssets ?? Assets : null;
 
         /// <summary>Binds a replication seam for the test mod, with <paramref name="context"/>.</summary>
         internal RuntimeReplication Seam(ModExecutionContext context = ModExecutionContext.Process, IModLifetime? lifetime = null) =>

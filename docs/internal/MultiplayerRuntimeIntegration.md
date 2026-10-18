@@ -777,10 +777,19 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
 - **Baselines.** A baseline's list is fixed when it begins, not when it is asked for, so a player whose window stays
   full costs nothing but a check: the live entities in order, the removed scene keys, and the poses above. It goes as
   `BaselineBegin`, chunks of at most 20 KiB, and `BaselineEnd`, at most eight messages per player per frame, and each
-  only while that player's window would also take a whole 32 KiB message. A baseline therefore leaves at least 12 KiB
-  of the window to the broadcasts behind it, and never makes one skip its player. A chunk the window refuses is written
-  again next frame from where it stopped; an entity that ended before its entry was written is left out, since the
-  player hears of its end. A new baseline for the same player supersedes the one under way.
+  only while that player's window would also take a whole 32 KiB message. The player reports each chunk it reads
+  (`BaselineProgress`, at most once a frame), and the host keeps at most four chunks, 80 KiB, in flight beyond the
+  last one reported. The link, not the window, sets the pace: 80 KiB keeps a 256 kbit/s link busy across seconds of
+  round trip, and the broadcasts behind a baseline keep all but 80 KiB of the player's 1 MiB window, however large the
+  world. Paced by the window alone, a baseline larger than the window filled it to its last 12 KiB, so an announcement
+  of a few robots, up to 24 KiB, skipped the player and started its baseline again: over the real provider, seven
+  players joining a 1.2 MB world while the host spawned three robots every three seconds never became Ready in seven
+  minutes, 231 baselines begun and none completed; paced by what they read, each was Ready after 49.5 s, in one
+  baseline. A report for another baseline, or past what was sent, moves nothing further. A chunk the window refuses is
+  written again next frame from where it stopped; an entity that ended before its entry was written is left out,
+  since the player hears of its end. A new baseline for the same player supersedes the one under way.
+- **Its world.** Each promotion draws a random, non-zero world instance, and every `BaselineBegin` names it, so a
+  player can tell a rejoin to the same world from one to another world of the same host (below).
 
 ### A joined player
 
@@ -793,7 +802,9 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
   records it, then writes the suppressed value, and keeps each setting once. On leaving it restores the newest first,
   and only where the value is still the one it wrote, so a change the game made meanwhile stands. It counts what it
   restored, what had changed, what is gone, what failed and what was never written, so a join that fails part way is
-  restored exactly as far as it went. A scene object the host removed is hidden through the same suppressor.
+  restored exactly as far as it went. A scene object the host removed is hidden through the same suppressor. When a
+  scene unloads, or the next one loads, whichever the engine reports first, the settings of objects gone with it are
+  forgotten, so an unloaded scene stays reachable through nothing until the player leaves.
 - **Applying.** `BaselineBegin` marks every mirrored entity stale, entries and announcements make them current, and
   `BaselineEnd` removes whatever is still stale. A known entity whose description is unchanged keeps its replica, and
   a changed one is built again. A baseline's entry is newer than any sample the player buffered before it, so the
@@ -801,7 +812,9 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
 - **Building.** A scene object binds by its key. World content binds by its content key to the entity this player's
   own world provider registered (`RegisterCanonical` on a joined player). An asset spawn is built through the owning
   mod's package asset service from its bundle path and asset name: each bundle and prefab is loaded once and shared,
-  polled each frame and never awaited, and a load that takes 30 seconds counts as unbuildable. A provider's spawn is
+  polled each frame and never awaited, and a load that takes 30 seconds counts as unbuildable. A session loads at most
+  256 bundles and 4,096 prefabs for replicas, so a host that makes paths up gets no more file lookups or kept loads
+  than that; past the bound a replica counts as unbuildable and the refusal is counted. A provider's spawn is
   built by its kind's replica factory. Replicas are made kinematic, marked and placed. What cannot be built stays
   mirrored, is counted, and is tried again only when its description changes; nothing throws. A player mirrors at most
   16,384 entities.
@@ -809,14 +822,25 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
   removed and the poses it placed wait for their scene too, up to 65,536 keys. The baseline may therefore arrive before
   session follow (WS3.8) has loaded the world.
 - **Readiness.** The hold is released once a baseline is applied and no replica is still loading; each finished replica
-  reports progress. A stream that restarts takes the hold again, until its new baseline is in place.
+  reports progress. A stream that restarts takes the hold again, until its new baseline is in place. The engine counts
+  every message of the host's world as progress while the player is held, so a baseline that keeps arriving never
+  meets the hold's 60-second idle limit; holds last 300 seconds in all, about 9 MiB of baseline at 32 KiB/s.
+- **Another world.** A host's process can restart under the same identity, and a player whose link was down finds it
+  again within the grace, as the engine allows: the new process serves another world, numbered from one again and
+  with whatever the old one destroyed. Its first baseline names another world instance, and the player starts that
+  world from nothing: every replica is released and every scene object unbound, the entity table forgotten, the
+  objects the old world hid shown again (only those: native authority stays off), and the loaded scenes indexed
+  afresh by the keys they took as they loaded. A rejoin to the same process names the same instance and rebuilds
+  nothing.
 - **Snapshots.** Each sample goes into its entity's interpolation buffer at the host's time and this player's arrival
   time. In LateUpdate, before the mods, the driver writes every replica the buffer's pose for now. A replica still
   being built keeps its samples and moves once it exists.
 - **Leaving.** Every replica is released: asset replicas are disposed, and factory replicas go back through
-  `ReleaseReplica`. Scene objects are unmarked, native settings restored, bundle and prefab handles let go of (a load
-  still running lets go of its result as it lands), and the hold released. Each step runs whatever the one before it
-  did, and a restore that failed is logged once, with its counts.
+  `ReleaseReplica`. Scene objects are unmarked, native settings restored, bundle and prefab handles let go of, and the
+  hold released. A load still running is cancelled, and the engine's loader lets go of its result on the game thread as
+  it lands: the loader runs what waits for a load on another thread, where no handle may be let go of, and a bundle
+  left loaded would make the engine refuse it to the next join. Each step runs whatever the one before it did, and a
+  restore that failed is logged once, with its counts.
 
 ### Lookups, references and the ledger
 
@@ -835,12 +859,12 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
 
 ### The wire
 
-Every message starts `[version 1][type]`, varints are minimal LEB128, and a malformed message is discarded whole and
-counted.
+Every message starts `[version 1][type]`, and varints are minimal LEB128. A malformed message is counted, and reading
+stops at its first bad field: items before it in a list still apply, as the host could have sent them alone.
 
 | Type | From | Body |
 | --- | --- | --- |
-| 1 `BaselineBegin` | Host | baseline number, expected entries, host time |
+| 1 `BaselineBegin` | Host | baseline number, expected entries, host time, world instance (8 bytes, never zero) |
 | 2 `BaselineEntries` | Host | baseline number, count, entries |
 | 3 `BaselineEnd` | Host | baseline number |
 | 4 `Spawn` | Host | count, entries: new entities, and new descriptions |
@@ -848,6 +872,7 @@ counted.
 | 6 `Snapshot` | Host | host time, count, then id and transform record each |
 | 7 `SceneRemoved` | Host | count, scene keys |
 | 32 `BaselineRequest` | Player | reason: 0 when a stream starts, 1 to resynchronize |
+| 33 `BaselineProgress` | Player | baseline number, chunks read |
 | 64 to 127 | Either | Authority routing's (WS3.7) |
 
 An entry starts with its source: a scene object (id, key, pose), an SDK spawn (id, kind, owning mod, origin sequence,
@@ -865,9 +890,11 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
 - **Offline**, every frame hook is one field read; the offline frame still allocates zero bytes over 10,000 frames,
   through the composition root and the real `ModRuntime`, with a keyed scene loaded. A scene load keys that scene inside
   its event, and an unload forgets its keys.
-- **The census at a load.** The engine lists the loaded rigidbodies and marks (`FindObjectsByType`, inactive ones
-  included) and looks above each rigidbody for another (`GetComponentsInParent`), so nothing here walks a hierarchy but
-  a candidate's own path, from the object up to the nearest ancestor already hashed. Each object on such a path is named
+- **The census at a load.** The engine lists the loaded rigidbodies (`FindObjectsByType`, inactive ones included),
+  and the marks too, but only while some mark carries an id: each mark counts itself in `NetworkMarks` while it does,
+  and offline none does, so a load in single player skips the engine's search through every behaviour. It looks above
+  each rigidbody for another (`GetComponentsInParent`), so nothing here walks a hierarchy but a candidate's own path,
+  from the object up to the nearest ancestor already hashed. Each object on such a path is named
   and hashed once, and a wide parent searched often has every child's index read in one pass. The working sets go with
   the census; what stays is the scene's array of keyed objects, a 24-byte slot and a 48-byte wrapper each, 72 bytes a
   key by their layout (the game's heap grew 58 bytes a key over 100,000 of them). The keys also keep the engine's own
@@ -890,11 +917,19 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
   | `Robotopia Entrance` | A free-play world | 10,517 | 157 | 82 | 0.8 ms | 5.8 KiB |
 
   City Streets is the largest. A second census of it, right after the first, costs 1.7 ms; the rest of the first one's
-  4.7 ms is the engine's first touch of each object the census visits.
+  4.7 ms is the engine's first touch of each object the census visits. The table was measured with the search for
+  marks at every load. Without it, as every offline load now runs, ten loads of City Streets over two runs, alternating,
+  took 2.2 to 3.5 ms (2.8 ms on average; the first load of each run, which pays the engine's first touch, 3.1 and
+  2.9 ms), and with it 3.9 to 4.4 ms (4.1 ms); the search alone, measured warm just after, cost 0.9 to 1.8 ms. Every
+  one of the ten gave the descriptor walk's 1,031 keys, none of them the local player's, whom the census found at each
+  load.
 - **Online**, measured over 600 frames: a host and two players with a world at rest allocate nothing per frame; with
   one body moving, 14 bytes a frame over the loopback channel. Over the real provider the world's stages allocate
   nothing at rest and 21 bytes a frame with one body moving, its snapshots' share of the channel, beside the provider's
-  own 393 bytes a frame for the two peers.
+  own 393 bytes a frame for the two peers. In the game, promoted in place in City Streets with a loopback player, the
+  host's stages driven 2,000 ticks at rest allocated nothing and sent nothing; over 600 frames the receive stage
+  allocated nothing, and the send stage one 4 KiB heap block while bodies the run had pushed still settled and 60
+  snapshots went out, each of which the loopback test channel copies.
 
 ### Tests
 
@@ -904,17 +939,25 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
   character; a sibling destroyed before the game opened, which the joining player hides while the boxes after it keep
   their bindings; an object reparented and one renamed, which keep their keys; duplicates; additive scenes loaded
   before and while hosting; objects made after the load; one capture per load, forgotten on unload, and a failed one
-  keyed late; and an offline frame with 500 keyed objects, which allocates nothing);
-  `NativeAuthoritySuppressorTests` (exact restore, changes the game made meanwhile, partial and failing suppression,
-  switches that lie); `NetworkWorldWireTests` (round trips, and hostile and truncated bytes); `NetworkWorldCensusTests`
-  (the census over ledger records, later records, ended scopes); `WorldBaselineSyncTests` (a late joiner gets the whole
+  keyed late; an offline frame with 500 keyed objects, which allocates nothing; and the marks' count, which lets a
+  load skip their search); `NativeAuthoritySuppressorTests` (exact restore, changes the game made meanwhile, partial and
+  failing suppression, switches that lie, an unloaded scene's settings forgotten in either order of the engine's
+  reports and its objects unreachable, one kind restored alone); `NetworkWorldWireTests` (round trips, hostile and
+  truncated bytes, a host that names made-up assets without end, and made-up prefabs of a bundle the player has, keys
+  of scenes the player never loaded past their bound, a baseline that names no world); `NetworkWorldCensusTests` (the
+  census over ledger records, later records, ended scopes); `WorldBaselineSyncTests` (a late joiner gets the whole
   world, the world before its scene, what happens during a baseline, a generation change mid-baseline and in sync, a
-  replacement, a restart that rebuilds nothing, progress into the hold and the overlay, a player a broadcast skipped);
-  `WorldBaselinePacingTests` (chunk bounds, a stalled window resumed from where it stopped without a skipped broadcast,
-  bounded requests, players that never hold each other back, leaving players forgotten); `ReplicaTransformDriverTests`
-  (interpolation timing); `NetworkWorldLifecycleTests` (leaving and detaching restore everything, lookups through the
-  registry, allocation, failures that stay where they happen); `NetworkWorldPrivacyTests` (what a host writes, and
-  players whose ids look like addresses, reach no log or report, and the counters are counts).
+  replacement, a restart that rebuilds nothing, progress into the hold and the overlay, a load that never lands giving
+  up, a player a broadcast skipped, a host whose process restarted serving another world);
+  `WorldBaselinePacingTests` (chunk bounds, a stalled window resumed from where it stopped without a skipped
+  broadcast, bounded requests, players that never hold each other back, leaving players forgotten, a world larger than
+  the window with a large announcement behind its baseline, progress reports that move only their own baseline);
+  `ReplicaTransformDriverTests`
+  (interpolation timing); `NetworkWorldLifecycleTests` (leaving and detaching restore everything, leaving part way
+  through a baseline, loads that land after the player left let go of on the game thread through the runtime's own
+  native asset operation, so the next join loads them again, a channel that will not open saying what to do, lookups
+  through the registry, allocation, failures that stay where they happen); `NetworkWorldPrivacyTests` (what a host
+  writes, and players whose ids look like addresses, reach no log or report, and the counters are counts).
 - **ModRuntime harness** (`TestNetworkWorldAcrossRuntimes`): three real runtimes over the loopback network, each loading
   the same mod. The host's scene objects and its mod's spawns, made before and after it opened, appear on a joined
   player, which builds the crates through its own copy of the mod; a box moves there under interpolation, smoothly and
@@ -931,7 +974,16 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
   goes on with a restarted player's old baseline, when a joined player does not ask again after its stream restarts,
   and when the reader keeps a field an earlier entry read. With the host's keys taken at the promotion again, from the
   hierarchy as it is then, the destroyed sibling's test fails: the joining player keeps its copy of the box the host
-  destroyed, and past that check, the pushed box binds to the box before it.
+  destroyed, and past that check, the pushed box binds to the box before it. The bounds fail as plainly: without the
+  cap on loads a hostile host has 2,000 bundles looked up; paced by the window alone the large world's announcement
+  skips the player; with progress past what was sent taken whole, or for any baseline, the reports' test fails;
+  without the new world's reset, or with the old world's hidden objects kept, the restarted host's box stays hidden;
+  and without forgetting at the unload, or at the next load, the unloaded scene's settings stay held. Without the
+  prefab cap, a host that makes prefab names up has 4,597 loaded from one bundle; a player that stops sending its
+  progress, or counting the chunks it read, never completes a large baseline; without cancelling a load still running
+  when the player leaves, or without passing the load its token, the late bundle or prefab stays loaded; without the
+  bounds on keys of scenes not loaded, a hostile host has 78,000 removed keys or 76,000 poses kept; and without the
+  timeout, a load that never lands keeps the player loading.
 
 ### Where WS3.7 and WS3.8 attach
 
@@ -984,14 +1036,21 @@ Session follow (WS3.8):
   baseline placed them.
 - **A scene a joined player reloads on its own**, which follow's authority policy prevents, keeps its unbound objects at
   the scene's poses.
+- **One snapshot schedule for every player.** Relevancy (`RelevancySet`) needs each player's position, which arrives
+  with presence (WS3.10), so every player gets the same snapshots, 800 bytes a tick at most. Measured over the real
+  provider with eight players in a City Streets of 1,031 keyed objects: up to about 50 bodies moving at once, each
+  reaches every player at the full 10 Hz; 100 at 5.3 Hz each; 300 at 1.7 Hz each, below what interpolation hides. No
+  player ever missed a broadcast, and snapshots cost each link about 8 KB a second. Per-player budgets and relevancy
+  come with presence; bodies a player holds will stream at 30 Hz of their own (WS3.7).
 
 ### Choices
 
 - **Baselines are pulled.** A player asks on each stream start, so the host acts on requests and generations, never on
   the participant list, which may be unreliable during joins.
 - **Lists are fixed when a baseline begins**, so a stalled player costs nothing per skipped broadcast.
-- **Pacing by probe.** The channel answers `CanSend` for one message, at most 32 KiB, so a baseline probes for a whole
-  message and sends at most 20 KiB; no reserve larger than a message could be asked for.
+- **Pacing by what the player read.** The channel answers `CanSend` for one message, at most 32 KiB, so no reserve
+  larger than a message can be probed for, and the window is a megabyte. A baseline therefore probes for a whole message
+  and sends at most 20 KiB, and keeps no more than four chunks in flight beyond what the player reported reading.
 - **Joined players record nothing** rather than clearing the ledger on joining and leaving: clearing would drop what
   this process made before it joined, which a later promotion should baseline.
 - **Restores yield to the game.** A setting the game changed while the player was joined is left as the game set it.
@@ -999,6 +1058,8 @@ Session follow (WS3.8):
   make each an entity in every snapshot; a pose in the baseline costs 27 bytes once.
 - **Keys at the load, not at the promotion.** Keys taken at the promotion name objects by the hierarchy the solo session
   left, so a sibling destroyed or reparented before it rebinds every object after it to the wrong copy on each joining
-  player, and a destroyed object is unknown to the host. Taken at the load, the keys cost the load, at most 4.7 ms
-  (City Streets), and 72 bytes an object while the scene stays loaded, and frames nothing; the promotion indexes them
-  and reads poses.
+  player, and a destroyed object is unknown to the host. Taken at the load, the keys cost the load, about 3 ms for City
+  Streets in single player, and 72 bytes an object while the scene stays loaded, and frames nothing; the promotion
+  indexes them and reads poses.
+- **A world instance in every baseline**, rather than a signal from the engine, so a player tells another world of the
+  same host by what world replication itself sends.

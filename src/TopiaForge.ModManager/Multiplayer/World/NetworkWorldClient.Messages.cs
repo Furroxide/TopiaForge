@@ -53,6 +53,8 @@ namespace TopiaForge.ModManager
             synchronized = false;
             requestPending = true;
             nextRequestMicros = 0;
+            chunksRead = 0;
+            progressPending = false;
 
             // A rejoin or a replacement takes the player out of Ready until the new snapshot; the hold applies from there.
             TakeHold();
@@ -72,18 +74,33 @@ namespace TopiaForge.ModManager
             nextRequestMicros = now + RequestRetryMicros;
         }
 
+        /// <summary>Tells the host how many chunks of its baseline arrived, so it sends the next few; tried again next frame when refused.</summary>
+        private void SendProgress()
+        {
+            progress.Begin(WorldMessages.BaselineProgress);
+            progress.WriteVarUInt((ulong)receiving);
+            progress.WriteVarUInt((ulong)chunksRead);
+            if (channel.TrySendToHost(progress)) progressPending = false;
+        }
+
         private bool ReadBegin(WorldWireReader reader)
         {
             if (!reader.TryReadInt32(int.MaxValue, out var number) || !reader.TryReadInt32(WorldMessages.MaximumBaselineEntries, out var announced) ||
-                !reader.TryReadVarUInt((ulong)WorldMessages.MaximumTimeMicros, out _) || !reader.AtEnd)
+                !reader.TryReadVarUInt((ulong)WorldMessages.MaximumTimeMicros, out _) || !reader.TryReadUInt64(out var instance) || instance == 0 || !reader.AtEnd)
             {
                 return false;
             }
 
+            // Another world: the host's process restarted under the same identity and this player rejoined it within the
+            // grace. Nothing it mirrors belongs to that world, whose entities are numbered afresh, so it starts from nothing.
+            if (worldInstance != 0 && instance != worldInstance) ReplaceWorld();
+            worldInstance = instance;
             receiving = number;
             expected = announced;
             received = 0;
             synchronized = false;
+            chunksRead = 0;
+            progressPending = false;
 
             // The new baseline lists the poses of every object still unbound on the host, so older ones are superseded.
             pendingPoses.Clear();
@@ -125,6 +142,10 @@ namespace TopiaForge.ModManager
                     counters.StaleMessages++;
                     return true;
                 }
+
+                // Read or not, the chunk is out of flight: the host may send the next.
+                chunksRead++;
+                progressPending = true;
             }
 
             if (!reader.TryReadInt32(WorldMessages.MaximumItems, out var count)) return false;

@@ -81,7 +81,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception exception)
             {
-                multiplayer.Log.Error("Multiplayer: a loaded scene could not be keyed: " + exception.GetType().Name + ".");
+                multiplayer.Log.Error("Multiplayer: a loaded scene could not be keyed as it loaded (" + exception.GetType().Name + "); a session keys it from its objects as they are when it first needs them.");
             }
         }
 
@@ -95,7 +95,8 @@ namespace TopiaForge.ModManager
             }
             catch (Exception exception)
             {
-                multiplayer.Log.Error("Multiplayer: an unloaded scene could not be forgotten: " + exception.GetType().Name + ".");
+                // Its keys are forgotten whatever happens; what failed is letting go of its objects online.
+                multiplayer.Log.Error("Multiplayer: an unloaded scene's objects could not be let go of (" + exception.GetType().Name + "); they go when this game stops hosting or leaves.");
             }
         }
     }

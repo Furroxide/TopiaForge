@@ -121,6 +121,7 @@ namespace TopiaForge.ModManager
         private readonly List<NativeAuthorityTarget> natives = new List<NativeAuthorityTarget>();
         private readonly List<SceneObjectSlot> unloaded = new List<SceneObjectSlot>();
         private readonly WorldWireWriter request = new WorldWireWriter(16);
+        private readonly WorldWireWriter progress = new WorldWireWriter(16);
         private readonly WorldEntry entry = new WorldEntry();
         private IInternalMultiplayerControl? control;
         private IInternalReadinessHold? hold;
@@ -131,6 +132,9 @@ namespace TopiaForge.ModManager
         private int expected;
         private int received;
         private bool synchronized;
+        private ulong worldInstance;
+        private int chunksRead;
+        private bool progressPending;
 
         internal NetworkWorldClient(
             NetworkWorldChannel channel,
@@ -163,6 +167,12 @@ namespace TopiaForge.ModManager
         internal ReplicaTransformDriver Driver => driver;
 
         internal SceneObjectIndex Index => index;
+
+        /// <summary>Gets how many keys of objects the host says are gone this player keeps, so tests and diagnostics can see the bound.</summary>
+        internal int RemovedKeyCount => removedKeys.Count;
+
+        /// <summary>Gets how many poses of objects the host says are unbound wait for their scene, so tests and diagnostics can see the bound.</summary>
+        internal int PendingPoseCount => pendingPoses.Count;
 
         /// <summary>Gets whether a readiness hold keeps this player short of Ready.</summary>
         internal bool HoldsReadiness => hold != null;
@@ -239,7 +249,34 @@ namespace TopiaForge.ModManager
             received = 0;
             synchronized = false;
             requestPending = false;
+            worldInstance = 0;
+            chunksRead = 0;
+            progressPending = false;
             return restore;
+        }
+
+        /// <summary>
+        /// Starts a different world of the same host from nothing: every replica is released and every scene object
+        /// unbound, the objects the old world hid are shown again, and the loaded scenes are indexed afresh by the keys they
+        /// took as they loaded. Native authority stays off, and the readiness hold stays until the new baseline is in place.
+        /// </summary>
+        private void ReplaceWorld()
+        {
+            scratch.Clear();
+            scratch.AddRange(entities.Values);
+            foreach (var mirrored in scratch) Release(mirrored);
+            scratch.Clear();
+            entities.Clear();
+            driver.Clear();
+            table.Clear();
+            index.Clear();
+            removedKeys.Clear();
+            pendingPoses.Clear();
+            ReleaseAssetLoads();
+            var shown = suppressor.RestoreKind(NativeAuthorityKind.SceneObjectPresence);
+            counters.RestoreFailures += shown.Failed;
+            counters.WorldsReplaced++;
+            Census(null);
         }
 
         /// <summary>Keys a scene that loaded while joined, turns its native authority off, and binds what waited for it.</summary>
@@ -261,7 +298,10 @@ namespace TopiaForge.ModManager
             scratch.Clear();
         }
 
-        /// <summary>Forgets a scene that unloaded; entities bound to its objects lose their objects.</summary>
+        /// <summary>
+        /// Forgets a scene that unloaded: entities bound to its objects lose their objects, and the native settings of its
+        /// objects, which went with it, are forgotten rather than held until the player leaves.
+        /// </summary>
         internal void SceneUnloaded(int sceneHandle)
         {
             if (!IsActive) return;
@@ -275,6 +315,7 @@ namespace TopiaForge.ModManager
             }
 
             unloaded.Clear();
+            suppressor.ForgetGone();
         }
 
         /// <summary>Gets the entity a network id names here, if it is present.</summary>
@@ -322,6 +363,7 @@ namespace TopiaForge.ModManager
             var now = clock();
             AdvanceBuilds(now);
             if (requestPending && now >= nextRequestMicros) SendRequest(now);
+            if (progressPending && receiving >= 0) SendProgress();
             if (synchronized && pendingBuilds == 0) ReleaseHold();
         }
 
@@ -339,6 +381,9 @@ namespace TopiaForge.ModManager
         /// </summary>
         private void Census(int? sceneHandle)
         {
+            // The native settings of objects gone since, as a scene that unloaded for this one takes its own, are forgotten
+            // here as well as at the unload, whichever the engine reports first.
+            if (sceneHandle.HasValue) suppressor.ForgetGone();
             census.Clear();
             try
             {

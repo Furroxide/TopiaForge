@@ -116,7 +116,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception exception)
             {
-                if (!identityFailureLogged) runtime.Log.Warn("Multiplayer: the session's entity lookups are unavailable (" + exception.GetType().Name + ").");
+                if (!identityFailureLogged) runtime.Log.Warn("Multiplayer: the session's entity lookups are unavailable (" + exception.GetType().Name + "); mods' network references will not resolve until the game restarts.");
                 identityFailureLogged = true;
             }
         }
@@ -129,7 +129,7 @@ namespace TopiaForge.ModManager
             var joined = control;
             if (joined == null || !channel.IsOpen)
             {
-                if (!channelFailureLogged) runtime.Log.Warn("Multiplayer: joined without the world replication channel; the host's world will not appear.");
+                if (!channelFailureLogged) runtime.Log.Warn("Multiplayer: joined without the world replication channel, so the host's world will not appear; leave, restart the game and join again.");
                 channelFailureLogged = true;
                 return;
             }
@@ -142,7 +142,7 @@ namespace TopiaForge.ModManager
             if (promotion == null) throw new ArgumentNullException(nameof(promotion));
             if (!channel.IsOpen)
             {
-                if (!channelFailureLogged) runtime.Log.Warn("Multiplayer: hosting without the world replication channel; players will not see this world.");
+                if (!channelFailureLogged) runtime.Log.Warn("Multiplayer: hosting without the world replication channel, so players will not see this world; stop hosting, restart the game and open it again.");
                 channelFailureLogged = true;
                 return;
             }
@@ -291,7 +291,13 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            if (!channelFailureLogged) runtime.Log.Warn("Multiplayer: the world replication channel could not be opened (" + opened.ErrorCode + ").");
+            // This warning stands for the ones hosting or joining without the channel would give, so it says what they would.
+            if (!channelFailureLogged)
+            {
+                runtime.Log.Warn("Multiplayer: the world replication channel could not be opened (" + opened.ErrorCode +
+                                 "), so this game cannot share its world when it hosts or show the host's world when it joins; restart the game before hosting or joining.");
+            }
+
             channelFailureLogged = true;
         }
 
@@ -305,7 +311,7 @@ namespace TopiaForge.ModManager
 
             if (!restoreFailureLogged)
             {
-                runtime.Log.Error("Multiplayer: " + restore.Failed + " native setting(s) could not be restored after leaving; " + restore.Restored + " were.");
+                runtime.Log.Error("Multiplayer: " + restore.Failed + " native setting(s) could not be restored after leaving; " + restore.Restored + " were. Load the world again to put the rest back.");
             }
 
             restoreFailureLogged = true;

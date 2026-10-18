@@ -27,7 +27,9 @@ namespace TopiaForge.ModManager.Tests
             ANewBaselineRebuildsNothingThePlayerHas();
             AReplacementStartsEveryPlayerAgain();
             ProgressFeedsTheHoldAndTheOverlay();
+            ALoadThatNeverLandsGivesUp();
             APlayerABroadcastSkippedGetsANewBaseline();
+            AHostWhoseProcessRestartedServesAnotherWorld();
         }
 
         private static void ALateJoinerGetsTheWholeWorld()
@@ -174,6 +176,9 @@ namespace TopiaForge.ModManager.Tests
 
             // The player's link drops and it rejoins within its grace: the session goes on, its stream restarts.
             rig.Network.Rejoin(player.Control);
+            host.Frame();
+            That(!host.Host.TryGetBaselineProgress(player.Control.Id, out _, out _),
+                "the host abandons the baseline under way as soon as the stream restarts, before the player asks again");
             robots[5].Dispose();
             var during = SpawnRobot(host, 2000, 32);
             That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.Synchronized && !player.World.IsHoldingReadiness, 600),
@@ -284,6 +289,30 @@ namespace TopiaForge.ModManager.Tests
                 "each finished replica reports progress, and readiness goes once they are all built (" + player.Control.ProgressReports + " reports)");
         }
 
+        /// <summary>
+        /// An asset replica whose load never lands gives up after <see cref="NetworkWorldClient.BuildTimeoutMicros"/>: it
+        /// counts as unbuildable and the player's readiness goes, rather than holding the player until the hold's own limit
+        /// ends its join.
+        /// </summary>
+        private static void ALoadThatNeverLandsGivesUp()
+        {
+            var rig = Yard(0);
+            for (var index = 0; index < 2; index++) rig.Host.SpawnCrate(index);
+            rig.OpenToMultiplayer();
+            var player = AddPlayer(rig, "p1");
+            player.Assets.HoldLoads = true;
+            rig.Join(player);
+            That(rig.Run(() => player.World.Progress.Phase == NetworkWorldPhase.BuildingReplicas, 300) && player.World.IsHoldingReadiness,
+                "the player waits for the crates' loads (" + player.World.Progress + ")");
+            rig.Clock.Advance(NetworkWorldClient.BuildTimeoutMicros / 2);
+            rig.Frames(2);
+            That(player.World.IsHoldingReadiness && player.Counters().ReplicasUnbuildable == 0, "half the bound later it still waits");
+            rig.Clock.Advance(NetworkWorldClient.BuildTimeoutMicros / 2 + 1_000_000);
+            That(rig.Run(() => !player.World.IsHoldingReadiness, 30) && player.Counters().ReplicasUnbuildable == 2 &&
+                 player.World.Progress.Phase == NetworkWorldPhase.Synchronized,
+                "past it, both crates count as unbuildable and readiness goes (" + player.World.Progress + ", " + player.Counters().ReplicasUnbuildable + " unbuildable)");
+        }
+
         private static void APlayerABroadcastSkippedGetsANewBaseline()
         {
             var rig = Yard(12);
@@ -321,6 +350,60 @@ namespace TopiaForge.ModManager.Tests
             var apart = Enumerable.Range(0, 12).Where(index => !Near(boxes[index].Position, playerBoxes[index].Position, 0.05)).ToList();
             That(apart.Count == 0, "and every box stands where the host's does again (" + string.Join(", ", apart.Select(index =>
                 index + ": " + boxes[index].Position.X + " / " + playerBoxes[index].Position.X)) + ")");
+        }
+
+        /// <summary>
+        /// The host's process restarts under the same identity, and the player's link finds it again within the grace, as
+        /// the engine allows: the new process serves another world, whose entities are numbered from one again and which
+        /// has what the first one destroyed. The player starts that world from nothing: what the first world hid shows
+        /// again, an id the first world ended is the new world's to use, and each scene object binds to the new world's
+        /// entity. A rejoin to the same process keeps everything, as above.
+        /// </summary>
+        private static void AHostWhoseProcessRestartedServesAnotherWorld()
+        {
+            var rig = Yard(6);
+            var host = rig.Host;
+            rig.OpenToMultiplayer();
+            var robot = SpawnRobot(host, 40, 32);
+            var player = AddPlayer(rig, "p1");
+            rig.JoinAndSynchronize(player);
+            var boxes = host.Scene.Scenes[0].Roots;
+            boxes[1].Position = new NetVector3(30, 1, 1);
+            boxes[2].Remove();
+            rig.Frames(10);
+            robot.Dispose();
+            rig.Frames(10);
+            var mine = player.Scene.Scenes[0].Roots;
+            That(!mine[2].Active && mine[1].Mark != 0 && player.Client.EntityCount == 1, "the player hid the box the first process destroyed, and bound the one it moved");
+
+            // The first process goes without a word, and a second one starts under the same identity, loads the yard and hosts.
+            host.Runtime.Disconnect();
+            var restarted = new WorldPeer(rig.Network.Host, rig.Clock, "host again");
+            rig.BuildScene!(restarted.Scene);
+            restarted.LoadScenes();
+            That(restarted.Runtime.Connect(), "the second process's runtime attaches");
+            restarted.Frame();
+            That(restarted.Host.IsActive, "and takes its census");
+            rig.Network.Rejoin(player.Control);
+            var theirs = restarted.Scene.Scenes[0].Roots;
+            theirs[1].Position = new NetVector3(8, 1, 1);
+            theirs[2].Position = new NetVector3(7, 1, 1);
+            var synchronized = false;
+            for (var frame = 0; frame < 600 && !synchronized; frame++)
+            {
+                restarted.Frame();
+                player.Frame();
+                rig.Clock.Advance(16_000);
+                synchronized = player.World.Progress.Phase == NetworkWorldPhase.Synchronized && !player.World.IsHoldingReadiness && theirs[2].Mark != 0 &&
+                               SameWorld(restarted, player) && mine[2].Mark == theirs[2].Mark;
+            }
+
+            That(synchronized && player.Counters().WorldsReplaced == 1, "the player mirrors the second process's world (" + player.World.Progress + ", " +
+                 player.Counters().WorldsReplaced + " replaced; " + string.Join(",", Ids(restarted)) + " / " + string.Join(",", Ids(player)) + ")");
+            That(mine[2].Active && Near(mine[2].Position, theirs[2].Position), "the box the first process destroyed is back, where the second has it");
+            That(mine[1].Mark == theirs[1].Mark && theirs[1].Mark != 0 && Near(mine[1].Position, theirs[1].Position),
+                "the box both moved follows the second process's entity, under the id the first gave the robot it ended");
+            That(new[] { 0, 3, 4, 5 }.All(index => mine[index].Mark == 0 && mine[index].Active), "and the rest stand as the yard loaded them");
         }
 
         /// <summary>A rig whose host and players load a yard of <paramref name="boxes"/> boxes in a row, and whose players build robots.</summary>
