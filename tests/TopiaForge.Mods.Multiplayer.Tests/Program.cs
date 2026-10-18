@@ -22,6 +22,10 @@ internal static class Program
             SdkContractCompletionTests.RigTicksRunOnlyWithWorldAuthority();
             SdkContractCompletionTests.InterimProvidersRegisterContractsAndExposePlayers();
             GeneratedLockStabilityTests.SampleLocksMatchGeneratedDescriptors();
+            TestingKitBindingTests.TheRunnerBindsAfterTheContextAndBeforeOnLoad();
+            TestingKitBindingTests.TheBindingEndsWithTheMod();
+            TestingKitBindingTests.AModWithoutASessionLoadsUnbound();
+            TestingKitBindingTests.AFailedBindingFailsTheLoadAndSaysWhy();
             SdkContractCompletionTests.SubmissionSequencesAreSenderScoped();
             MultiplayerRigTests.RolesExposeCorrectSides();
             MultiplayerRigTests.ServerAndTwoClientsConverge();

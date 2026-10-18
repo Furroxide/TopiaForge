@@ -16,6 +16,10 @@
     <ProjectReference Include="..\..\samples\multiplayer\TopiaForge.Multiplayer.DroneSample\TopiaForge.Multiplayer.DroneSample.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer\TopiaForge.Mods.Multiplayer.csproj" />
     <ProjectReference Include="..\..\src\TopiaForge.Mods.Testing\TopiaForge.Mods.Testing.csproj" />
+    <!-- The generator, so the testing kit's binding tests can declare a contract of their own. -->
+    <ProjectReference Include="..\..\src\TopiaForge.Mods.Multiplayer.Generators\TopiaForge.Mods.Multiplayer.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
     <!-- The compile-check engine assembly grants this harness its internals for the white-box tests. -->
     <ProjectReference Include="..\..\src\TopiaForge.Multiplayer.Engine\TopiaForge.Multiplayer.Engine.csproj" />
     <!-- ModManager's multiplayer composition root is Unity-free; compiling it here lets the real runtime host and
