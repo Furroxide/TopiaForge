@@ -7,10 +7,11 @@ namespace TopiaForge.ModManager
     /// and stops at the first one that refuses. The plugin subscribes while the game starts, ahead of the game's own
     /// handler, whose quit steps include the shutdown feedback page. Unloading mods at the first request would remove
     /// their patches before the game's own steps ran, and a mod such as NoFeedbackUrl patches exactly those steps. So
-    /// the first request is refused once: the handler moves behind every other handler and asks for the quit again on
-    /// the next frame. The other handlers then answer first, with every mod still loaded and every patch in place.
-    /// The teardown cannot be undone, so it starts only when every other handler has let the quit go ahead. The
-    /// coordinator then holds the quit until the teardown has finished, and no patch outlives its mod.
+    /// the first request is refused once: the handler moves behind every handler subscribed until then and asks for
+    /// the quit again on the next frame. Those handlers then answer first, with every mod still loaded and every patch
+    /// in place. The teardown cannot be undone, so it starts only when every handler ahead of this one has let the
+    /// quit go ahead; a handler subscribed after the first request sits behind it. The coordinator then holds the quit
+    /// until the teardown has finished, and no patch outlives its mod.
     /// </summary>
     internal sealed class PluginQuitHandler
     {
@@ -29,9 +30,9 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Answers Unity's wantsToQuit. The first request is refused once, after the handler has moved behind every
-        /// other handler; <see cref="ShouldRequestQuit"/> then asks for the quit again. Unity asks this handler again
-        /// only once every handler ahead of it has let the quit go ahead, and from then on the coordinator decides:
-        /// it starts the teardown and holds the quit until the teardown has finished.
+        /// handler subscribed until then; <see cref="ShouldRequestQuit"/> then asks for the quit again. Unity asks
+        /// this handler again only once every handler ahead of it has let the quit go ahead, and from then on the
+        /// coordinator decides: it starts the teardown and holds the quit until the teardown has finished.
         /// </summary>
         internal bool Answer()
         {

@@ -8,8 +8,8 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>
     /// The game runs its own quit steps, the shutdown feedback page among them, inside its own quit handler. Those
     /// steps must run while every mod, and every patch a mod placed on them, is still loaded. Mods unload only once
-    /// every other handler has let the quit go ahead, and the quit then waits for the teardown that records the clean
-    /// exit, so no patch outlives its mod.
+    /// every handler subscribed before the first quit request has let the quit go ahead, and the quit then waits for
+    /// the teardown that records the clean exit, so no patch outlives its mod.
     /// </summary>
     internal static class PluginQuitHandlerTests
     {
@@ -24,6 +24,7 @@ namespace TopiaForge.ModManager.Tests
                 (nameof(RequestThatReachesTheHandlerAgainIsNotRepeated), RequestThatReachesTheHandlerAgainIsNotRepeated),
                 (nameof(HandlerThatCannotMoveHoldsTheQuitAtOnce), HandlerThatCannotMoveHoldsTheQuitAtOnce),
                 (nameof(FailingReportStillHoldsTheQuit), FailingReportStillHoldsTheQuit),
+                (nameof(TeardownThatCannotStartLetsTheQuitGoAheadOnTheNextRequest), TeardownThatCannotStartLetsTheQuitGoAheadOnTheNextRequest),
                 (nameof(TeardownWithoutAQuitRequestNeverStartsAQuit), TeardownWithoutAQuitRequestNeverStartsAQuit),
                 (nameof(InvalidArgumentsAreRejected), InvalidArgumentsAreRejected),
                 ("QuitPressedWhileTopiaForgeIsAskedFirst", () => GameQuitStepsKeepEveryPatch(root, topiaForgeFirst: true, windowClosed: false)),
@@ -31,6 +32,7 @@ namespace TopiaForge.ModManager.Tests
                 ("QuitPressedWhileTheGameIsAskedFirst", () => GameQuitStepsKeepEveryPatch(root, topiaForgeFirst: false, windowClosed: false)),
                 (nameof(QuitWithNoOtherHandlerRecordsACleanExit), () => QuitWithNoOtherHandlerRecordsACleanExit(root)),
                 (nameof(QuitRefusedForGoodKeepsEveryModLoaded), () => QuitRefusedForGoodKeepsEveryModLoaded(root)),
+                (nameof(HandlerSubscribedAfterTheFirstRequestIsAskedOnceModsUnload), () => HandlerSubscribedAfterTheFirstRequestIsAskedOnceModsUnload(root)),
                 (nameof(StuckTeardownAfterTheGameStepsQuitsAtTheDeadline), () => StuckTeardownAfterTheGameStepsQuitsAtTheDeadline(root)),
             };
             foreach (var (name, test) in cases)
@@ -84,6 +86,18 @@ namespace TopiaForge.ModManager.Tests
         {
             var plugin = new Unit(moveFails: true, report: _ => throw new IOException("log closed"));
             Check(!plugin.Handler.Answer() && plugin.TeardownStarts == 1, "A closed log must not cost the clean exit.");
+        }
+
+        // #234: a teardown that cannot start never holds the quit. Behind the move it costs one request, no more.
+        private static void TeardownThatCannotStartLetsTheQuitGoAheadOnTheNextRequest()
+        {
+            var failures = new List<Exception>();
+            var plugin = new Unit(startFails: true, teardownReport: failures.Add);
+            Check(!plugin.Handler.Answer(), "The first request must be refused once while the handler moves.");
+            Check(plugin.Handler.ShouldRequestQuit(), "The refused request must be asked for again.");
+            Check(plugin.Handler.Answer(), "A teardown that cannot start must not hold the quit.");
+            Check(plugin.TeardownStarts == 1 && failures.Count == 1, "The teardown must be tried once and its failure reported once.");
+            Check(!plugin.Handler.ShouldRequestQuit(), "A quit that already went ahead must not be asked for again.");
         }
 
         private static void TeardownWithoutAQuitRequestNeverStartsAQuit()
@@ -140,6 +154,23 @@ namespace TopiaForge.ModManager.Tests
                 "Mods must stay loaded, with every patch, while another handler refuses the quit: the teardown cannot be undone.");
         }
 
+        // The handler moves once, on the first request, so a handler subscribed after that sits behind it and is asked
+        // only once mods have started to unload. UnityInterop.md says so, and tells authors to subscribe in OnLoad.
+        private static void HandlerSubscribedAfterTheFirstRequestIsAskedOnceModsUnload(string root)
+        {
+            var scenario = new QuitScenario(root, "late", topiaForgeFirst: true, GameHandler.HoldsForFrames(4));
+            var late = GameHandler.HoldsForFrames(2);
+            scenario.PressQuit();
+            scenario.RunFrames(1);
+            Check(scenario.Plugin.TeardownStarts == 0, "The first request must only move the handler.");
+            scenario.SubscribeLate(late);
+            scenario.RunUntilQuit(maxFrames: 60);
+            Check(scenario.Game.PatchInPlaceDuringSteps, "A handler subscribed before the first request must run its steps with every patch in place.");
+            Check(late.StepsRan && !late.PatchInPlaceDuringSteps,
+                "A handler subscribed after the first request is asked only once mods have unloaded, as the docs say.");
+            scenario.ExpectNextStart(safeMode: false, "The quit must still record the clean exit.");
+        }
+
         private static void StuckTeardownAfterTheGameStepsQuitsAtTheDeadline(string root)
         {
             var scenario = new QuitScenario(root, "stuck", topiaForgeFirst: true, GameHandler.HoldsForFrames(4), teardownFrames: null);
@@ -165,10 +196,15 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>The handler alone, with a coordinator whose teardown the test finishes by hand.</summary>
         private sealed class Unit
         {
-            internal Unit(bool moveFails = false, Action<Exception>? report = null)
+            internal Unit(bool moveFails = false, Action<Exception>? report = null, bool startFails = false,
+                Action<Exception>? teardownReport = null)
             {
-                var coordinator = new PluginQuitCoordinator(() => TeardownStarts++, () => Finished, () => TimeSpan.Zero, Limit,
-                    error => throw new InvalidOperationException("Unexpected teardown failure.", error));
+                var coordinator = new PluginQuitCoordinator(() =>
+                    {
+                        TeardownStarts++;
+                        if (startFails) throw new InvalidOperationException("cannot start");
+                    }, () => Finished, () => TimeSpan.Zero, Limit,
+                    teardownReport ?? (error => throw new InvalidOperationException("Unexpected teardown failure.", error)));
                 Handler = new PluginQuitHandler(coordinator, () =>
                 {
                     Moves++;
@@ -191,6 +227,7 @@ namespace TopiaForge.ModManager.Tests
         private sealed class QuitScenario
         {
             private readonly List<Func<bool>> handlers = new List<Func<bool>>();
+            private readonly List<GameHandler> lateHandlers = new List<GameHandler>();
             private readonly string journalPath;
             private bool quitRequested;
 
@@ -214,6 +251,14 @@ namespace TopiaForge.ModManager.Tests
             internal TimeSpan Now { get; private set; } = TimeSpan.FromMinutes(2);
 
             internal void Subscribe(Func<bool> handler) => handlers.Add(handler);
+
+            // A handler that subscribes while the quit is under way, after the plugin's handler has moved.
+            internal void SubscribeLate(GameHandler handler)
+            {
+                handler.Attach(this);
+                lateHandlers.Add(handler);
+                Subscribe(handler.Answer);
+            }
 
             internal void Unsubscribe(Func<bool> handler)
             {
@@ -250,6 +295,7 @@ namespace TopiaForge.ModManager.Tests
                 Now += TimeSpan.FromMilliseconds(16);
                 Plugin.Update();
                 Game.Update();
+                foreach (var handler in lateHandlers) handler.Update();
                 Plugin.DrainTeardown();
                 if (!quitRequested) return;
                 quitRequested = false;
