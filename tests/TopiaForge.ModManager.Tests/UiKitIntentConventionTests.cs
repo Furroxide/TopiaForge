@@ -24,9 +24,9 @@ namespace TopiaForge.ModManager.Tests
         // Raised inside an action opened where the input arrived, or by what only happens to a control: they open nothing.
         private static readonly string[] InheritingCallbacks =
         {
-            "Window Closed", "Fullscreen tool Closed", "Modal Closed", "Modal confirmation", "Tab selection", "List selection",
-            "Table selection", "Keybind change", "Shop Purchased", "Shop PurchaseFailed", "Card hover", "Theme Changed",
-            "Accessibility profile changed", "List row binding", "List row created"
+            "Window Closed", "Fullscreen tool Closed", "Modal Closed", "Modal confirmation", "Modal cancellation", "Tab selection",
+            "List selection", "Table selection", "Keybind change", "Shop Purchased", "Shop PurchaseFailed", "Card hover",
+            "Theme Changed", "Accessibility profile changed", "List row binding", "List row created"
         };
 
         // Listeners that run no mod code of their own, with why.
