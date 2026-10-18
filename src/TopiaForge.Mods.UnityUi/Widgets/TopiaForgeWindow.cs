@@ -22,6 +22,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly UImage titleBarFill;
         private readonly TextMeshProUGUI titleLabel;
         private readonly TopiaForgeCursorLease cursorLease = new TopiaForgeCursorLease();
+        private readonly TopiaForgeWindowDeferredClamp deferredClamp;
         private readonly string persistKey;
         private readonly bool autoHeight;
         private bool open;
@@ -101,6 +102,10 @@ namespace TopiaForge.Mods.UnityUi
             var focus = Go.AddComponent<TopiaForgeWindowFocus>();
             focus.Window = this;
 
+            deferredClamp = Go.AddComponent<TopiaForgeWindowDeferredClamp>();
+            deferredClamp.Window = this;
+            deferredClamp.enabled = false;
+
             RestoreRect();
             TopiaForgeWindowRegistry.Register(this);
             Go.SetActive(false);
@@ -143,7 +148,10 @@ namespace TopiaForge.Mods.UnityUi
             open = true;
             closing = false;
             Go.SetActive(true);
-            ClampToScreen();
+
+            // A canvas built this frame stays 0x0 until Unity first lays it out, so the clamp
+            // then waits for the first frame the canvas has a size.
+            deferredClamp.enabled = !TryClampToScreen();
             TopiaForgeMotion.WindowIn(this);
             cursorLease.Acquire();
             TopiaForgeDismissStack.Push(this);
@@ -260,12 +268,24 @@ namespace TopiaForge.Mods.UnityUi
             titleLabel.color = theme.Text;
         }
 
-        private void ClampToScreen()
+        /// <summary>Runs the clamp that Show deferred; true once no clamp is left to run.</summary>
+        internal bool FinishDeferredClamp()
+        {
+            return tornDown || !open || closing || TryClampToScreen();
+        }
+
+        private bool TryClampToScreen()
         {
             var (rect, canvasSize) = CanvasSpaceRect();
+            if (!TopiaForgeWindowMath.HasViewport(canvasSize.x, canvasSize.y))
+            {
+                return false;
+            }
+
             var (w, h) = TopiaForgeWindowMath.ClampSize(rect.Width, rect.Height, canvasSize.x, canvasSize.y, 240f, 120f);
             var clamped = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(rect.X, rect.Y, w, h), canvasSize.x, canvasSize.y);
             ApplyCanvasSpaceRect(clamped, canvasSize);
+            return true;
         }
 
         private (TopiaForgeRect Rect, Vector2 CanvasSize) CanvasSpaceRect()

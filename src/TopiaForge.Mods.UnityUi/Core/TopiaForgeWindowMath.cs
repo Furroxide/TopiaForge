@@ -33,7 +33,8 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>
     /// Window placement math: clamp fully on-screen, cap size to a viewport fraction,
     /// and snap to edges. Coordinates are canvas-space with origin at bottom-left
-    /// (Unity uGUI convention); pure and unit-tested.
+    /// (Unity uGUI convention); pure and unit-tested. A screen without a measured size
+    /// bounds nothing: no method then shrinks or moves the window.
     /// </summary>
     public static class TopiaForgeWindowMath
     {
@@ -42,7 +43,19 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>The max viewport fraction design-token value.</summary>
         public const float MaxViewportFraction = 0.9f;
 
-        /// <summary>Caps a window size to the viewport fraction and a sane minimum.</summary>
+        /// <summary>
+        /// Whether a screen size can bound a window: both sides positive and finite. A canvas
+        /// created this frame reads 0x0 until Unity first lays it out.
+        /// </summary>
+        public static bool HasViewport(float screenWidth, float screenHeight)
+        {
+            return IsMeasured(screenWidth) && IsMeasured(screenHeight);
+        }
+
+        /// <summary>
+        /// Caps a window size to the viewport fraction and a sane minimum. Without a viewport
+        /// only the minimum applies, so an unmeasured canvas never shrinks a window.
+        /// </summary>
         public static (float Width, float Height) ClampSize(
             float width,
             float height,
@@ -51,16 +64,24 @@ namespace TopiaForge.Mods.UnityUi
             float minWidth,
             float minHeight)
         {
-            var maxW = screenWidth * MaxViewportFraction;
-            var maxH = screenHeight * MaxViewportFraction;
-            var w = Math.Min(Math.Max(width, minWidth), maxW);
-            var h = Math.Min(Math.Max(height, minHeight), maxH);
-            return (w, h);
+            var w = Math.Max(width, minWidth);
+            var h = Math.Max(height, minHeight);
+            if (!HasViewport(screenWidth, screenHeight))
+            {
+                return (w, h);
+            }
+
+            return (Math.Min(w, screenWidth * MaxViewportFraction), Math.Min(h, screenHeight * MaxViewportFraction));
         }
 
         /// <summary>Clamps a window rect so it sits fully inside the screen.</summary>
         public static TopiaForgeRect ClampToScreen(TopiaForgeRect rect, float screenWidth, float screenHeight)
         {
+            if (!HasViewport(screenWidth, screenHeight))
+            {
+                return rect;
+            }
+
             var x = Clamp(rect.X, 0f, Math.Max(0f, screenWidth - rect.Width));
             var y = Clamp(rect.Y, 0f, Math.Max(0f, screenHeight - rect.Height));
             return new TopiaForgeRect(x, y, rect.Width, rect.Height);
@@ -69,6 +90,11 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Snaps a rect's edges to the screen edges when within the threshold.</summary>
         public static TopiaForgeRect SnapToEdges(TopiaForgeRect rect, float screenWidth, float screenHeight, float threshold = SnapThreshold)
         {
+            if (!HasViewport(screenWidth, screenHeight))
+            {
+                return rect;
+            }
+
             var x = rect.X;
             var y = rect.Y;
 
@@ -96,6 +122,12 @@ namespace TopiaForge.Mods.UnityUi
         private static float Clamp(float value, float min, float max)
         {
             return value < min ? min : value > max ? max : value;
+        }
+
+        private static bool IsMeasured(float extent)
+        {
+            // False for NaN too, since every comparison with NaN is false.
+            return extent > 0f && extent < float.PositiveInfinity;
         }
     }
 }

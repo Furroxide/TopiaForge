@@ -123,6 +123,11 @@ Every kit label comes from one TextMesh Pro factory, which turns on extra paddin
 stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops
 whole letters: at UI scale 1.0 in a 1600x900 window, "default" rendered as "defau t".
 
+A window shown in the frame its canvas is built can find that canvas still 0x0, because Unity
+measures a new canvas only when it first lays it out. The window then keeps its size and position
+and finishes its screen clamp on the first frame the canvas has a size; clamping against 0x0 once
+collapsed the UI Gallery to nothing at 1920x1080.
+
 ## Multiplayer kit widgets
 
 These renderer widgets are the building blocks for multiplayer screens such as the scoreboard, chat,
