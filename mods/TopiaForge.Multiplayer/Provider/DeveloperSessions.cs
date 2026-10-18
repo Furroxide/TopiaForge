@@ -22,12 +22,21 @@ namespace TopiaForge.Multiplayer
         private readonly JoinTarget? joinTarget;
         private readonly string displayName;
         private readonly int port;
+        private readonly Func<bool>? contentPending;
         private bool started;
         private HostPhase lastHostPhase;
         private JoinPhase? lastJoinPhase;
 
         /// <summary>Drives live sessions as the developer variables ask; <see cref="Create"/> reads them, and tests pass them.</summary>
-        internal DeveloperSessions(LiveSessions live, IModLogger logger, string? hostName, JoinTarget? joinTarget, string displayName, int port)
+        /// <param name="contentPending">Says while the runtime still identifies this game's packages; the switch waits for it.</param>
+        internal DeveloperSessions(
+            LiveSessions live,
+            IModLogger logger,
+            string? hostName,
+            JoinTarget? joinTarget,
+            string displayName,
+            int port,
+            Func<bool>? contentPending = null)
         {
             this.live = live;
             this.logger = logger;
@@ -35,12 +44,13 @@ namespace TopiaForge.Multiplayer
             this.joinTarget = joinTarget;
             this.displayName = displayName;
             this.port = port;
+            this.contentPending = contentPending;
         }
 
         internal static bool IsLiveEnabled() => Environment.GetEnvironmentVariable(LiveVariable) == "1";
 
         /// <summary>Reads the developer variables; returns null when they ask for nothing.</summary>
-        internal static DeveloperSessions? Create(LiveSessions live, IModLogger logger)
+        internal static DeveloperSessions? Create(LiveSessions live, IModLogger logger, Func<bool>? contentPending = null)
         {
             var host = Environment.GetEnvironmentVariable("TOPIAFORGE_MULTIPLAYER_HOST");
             var join = Environment.GetEnvironmentVariable("TOPIAFORGE_MULTIPLAYER_JOIN");
@@ -71,7 +81,7 @@ namespace TopiaForge.Multiplayer
             if (string.IsNullOrEmpty(host) && target == null) return null;
             var displayName = WireText.IsDisplayText(name, 24) ? name! : "Player";
             var hostName = WireText.IsDisplayText(host, ServerDescriptor.MaximumNameLength) ? host : null;
-            return new DeveloperSessions(live, logger, hostName, target, displayName, port);
+            return new DeveloperSessions(live, logger, hostName, target, displayName, port, contentPending);
         }
 
         /// <summary>Main thread, every frame, after the provider pumped.</summary>
@@ -85,6 +95,9 @@ namespace TopiaForge.Multiplayer
                     return;
                 }
 
+                // The runtime identifies this game's packages off the main thread; hosting or joining before it finishes
+                // would treat them as unreadable.
+                if (contentPending != null && contentPending()) return;
                 started = true;
                 if (hostName != null)
                 {

@@ -260,7 +260,7 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--multiplayer-runtime", StringComparison.Ordinal))
             {
                 var multiplayerRoot = Directory.CreateTempSubdirectory("TopiaForgeMultiplayerRuntime-");
-                try { MultiplayerRuntimeHostTests.Run(multiplayerRoot.FullName); MultiplayerSeamTests.Run(multiplayerRoot.FullName); NetworkWorldTests.Run(); return 0; }
+                try { MultiplayerRuntimeHostTests.Run(multiplayerRoot.FullName); MultiplayerSeamTests.Run(multiplayerRoot.FullName); NetworkWorldTests.Run(); RunMultiplayerSessions(multiplayerRoot.FullName); return 0; }
                 finally { multiplayerRoot.Delete(true); }
             }
 
@@ -383,6 +383,7 @@ namespace TopiaForge.ModManager.Tests
                 MultiplayerRuntimeHostTests.Run(root);
                 MultiplayerSeamTests.Run(root);
                 NetworkWorldTests.Run();
+                RunMultiplayerSessions(root);
                 ModuleContractSurfaceTests.Run();
                 V1LaunchCoverageTests.Run();
                 GameplayFacadeTests.Run();
@@ -493,5 +494,15 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
+        /// <summary>The in-game sessions interface: content identification, the approved wording, presenters and architecture.</summary>
+        private static void RunMultiplayerSessions(string root)
+        {
+            MultiplayerContentIdentificationTests.Run(root);
+            MultiplayerPrivacyTextTests.Run();
+            MultiplayerSessionsTests.Run(Path.Combine(root, "multiplayer-sessions"));
+            MultiplayerFrameGuardTests.Run();
+            ManagerTabLookupTests.Run();
+            MultiplayerUiArchitectureTests.Run();
+        }
     }
 }

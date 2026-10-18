@@ -9,6 +9,12 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public sealed class TopiaForgeResolvedTheme
     {
+        private readonly Color primaryText;
+        private readonly Color accentText;
+        private readonly Color successText;
+        private readonly Color warningText;
+        private readonly Color dangerText;
+
         /// <summary>Gets scheme.</summary>
         public TopiaForgeScheme Scheme { get; }
         /// <summary>Gets theme version.</summary>
@@ -103,6 +109,32 @@ namespace TopiaForge.Mods.UnityUi
             Shadow = ToColor(colors.Shadow);
             ShadowStrong = ToColor(colors.ShadowStrong);
             FocusRing = ToColor(colors.FocusRing);
+
+            // Status and brand colors are made for fills and rings. On Paper their text is darkened until it reads on every
+            // surface; the HUD's are bright on dark already.
+            var paper = scheme == TopiaForgeScheme.Paper;
+            primaryText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Primary, HighContrast)) : Primary;
+            accentText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Accent, HighContrast)) : Accent;
+            successText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Success, HighContrast)) : Success;
+            warningText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Warning, HighContrast)) : Warning;
+            dangerText = paper ? ToColor(TopiaForgeSchemes.PaperText(colors.Danger, HighContrast)) : Danger;
+        }
+
+        /// <summary>
+        /// Gets a tone's color for body text: as <see cref="ToneColor"/>, except that on Paper the status and brand tones
+        /// are darkened until they read at WCAG AA on every surface, or AAA in high contrast.
+        /// </summary>
+        internal Color TextToneColor(TopiaForgeTone tone)
+        {
+            return tone switch
+            {
+                TopiaForgeTone.Primary => primaryText,
+                TopiaForgeTone.Accent => accentText,
+                TopiaForgeTone.Success => successText,
+                TopiaForgeTone.Warning => warningText,
+                TopiaForgeTone.Danger => dangerText,
+                _ => ToneColor(tone),
+            };
         }
 
         /// <summary>Semantic tone lookup used by widgets with a Tone chainer.</summary>

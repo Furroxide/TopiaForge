@@ -57,7 +57,7 @@ namespace TopiaForge.ModManager
         internal const string DefaultDisplayName = "Player";
         internal const int RecentDiagnosticCapacity = 64;
 
-        private readonly MultiplayerContentInventory inventory = new MultiplayerContentInventory();
+        private readonly MultiplayerContentInventory inventory;
         private readonly Queue<MultiplayerDiagnosticRecord> recent = new Queue<MultiplayerDiagnosticRecord>();
         private readonly IMultiplayerLog log;
         private readonly IMultiplayerPlatform platform;
@@ -68,12 +68,19 @@ namespace TopiaForge.ModManager
         /// <param name="runtimeVersion">The TopiaForge runtime's semantic version.</param>
         /// <param name="log">Where diagnostics go once redacted.</param>
         /// <param name="platform">The game engine's process controls; null remembers the setting only.</param>
-        internal MultiplayerRuntimeHost(string gameBuild, string runtimeVersion, IMultiplayerLog log, IMultiplayerPlatform? platform = null)
+        /// <param name="contentScheduler">Where packages are identified; null uses a background thread, never the caller's.</param>
+        internal MultiplayerRuntimeHost(
+            string gameBuild,
+            string runtimeVersion,
+            IMultiplayerLog log,
+            IMultiplayerPlatform? platform = null,
+            IMultiplayerWorkScheduler? contentScheduler = null)
         {
             GameBuild = IsGameBuild(gameBuild) ? gameBuild : "unknown";
             RuntimeVersion = string.IsNullOrWhiteSpace(runtimeVersion) ? TopiaForgeVersions.LoaderVersion : runtimeVersion;
             this.log = log ?? throw new ArgumentNullException(nameof(log));
             this.platform = platform ?? new DetachedMultiplayerPlatform();
+            inventory = new MultiplayerContentInventory(contentScheduler ?? MultiplayerWorkSchedulers.Background);
         }
 
         public string GameBuild { get; }
@@ -120,6 +127,8 @@ namespace TopiaForge.ModManager
         internal bool HoldsRunInBackground => savedRunInBackground.HasValue;
 
         public IReadOnlyList<InternalContentDescriptor> LocalContent => inventory.Descriptors;
+
+        public InternalContentReadiness ContentReadiness => inventory.Readiness;
 
         public InternalContentVerdict EvaluateAdmission(InternalContentOffer offer) =>
             MultiplayerContentAdmission.Evaluate(GameBuild, inventory.AdmissionMods, offer);
