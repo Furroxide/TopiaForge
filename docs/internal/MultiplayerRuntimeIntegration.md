@@ -1206,7 +1206,8 @@ continuations, timers and callbacks see.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| `IntentRecord`, `IntentScope` | `Core/Multiplayer/IntentScope.cs` | The record, and the `AsyncLocal` scope that carries it |
+| `IntentRecord`, `IntentScope` | `Core/Multiplayer/IntentScope.cs` | The record, and the scope that carries it with the execution context |
+| `IntentLogicalStore` | `Core/Multiplayer/IntentLogicalStore.cs` | The logical call context, where a scope keeps its record on the game's Mono |
 | `IntentEntryRules`, `IntentFlowRules` | `Core/Multiplayer/IntentTables.cs` | The two rule tables, and the decisions that apply them |
 | `MultiplayerIntents` | `MM/Multiplayer/Intent/` | The runtime's tracking: the realm epoch, the entry points, the motion lease and forwarded-request seams |
 | `NetInputService`, `NetScheduler`, `NetInteractionService` | `MM/Multiplayer/Intent/` | The decorators that feed and carry it, beside section 11's |
@@ -1219,12 +1220,27 @@ continuations, timers and callbacks see.
 ### The record and the scope
 
 - **A record** names what caused the intent (`IntentSource`), the mod whose code acts on it, whose intent it is (null
-  for this process's own player, or the participant id the host gave a player), and the realm epoch it was recorded in.
-  It never holds an address. The runtime keeps one record per mod and source for an epoch, so the steady state makes
-  none.
-- **The scope** is an `AsyncLocal<IntentRecord>`. Opening one runs the mod code with the record flowing to it and to
-  every continuation that code starts, then restores what flowed before, on success and on failure alike. It is
-  observed only on the thread that made it, the game's main thread; every other thread reads none.
+  for this process's own player, or the participant id the host gave a player), the realm epoch it was recorded in,
+  and whether an input-active frame made it (`IsInputFrame`, below). It never holds an address. The runtime keeps one
+  record per mod and source for an epoch, so the steady state makes none.
+- **The scope** carries the record with the execution context, as an `AsyncLocal` would. Opening one runs the mod code
+  with the record flowing to it and to every continuation that code starts, then restores what flowed before, on
+  success and on failure alike. It is observed only on the thread that made it, the game's main thread; every other
+  thread reads none.
+- **How it carries the record** (`IntentScopeMode`) is the cheapest way the runtime has that keeps every rule, picked
+  once per process by a probe that checks the runtime's behaviour first:
+  - **.NET** runs a captured execution context more than once, so the scope keeps, on each record, the context that is
+    the caller's plus the record, and runs that again (`ExecutionContext.Run`).
+  - **The game's Mono**, like the .NET Framework, runs a captured context once only. There the scope keeps the record
+    in the logical call context (`IntentLogicalStore`): set in place on the main thread, copied only when something
+    captures the context, as an await, `Task.Run` or a timer does, and removed, never set to null, when the scope ends,
+    so a capture at rest copies nothing of it. It uses the public static members of corlib's
+    `System.Runtime.Remoting.Messaging.CallContext` (`LogicalGetData`, `LogicalSetData`, `FreeNamedDataSlot`), bound
+    by name because the netstandard2.1 surface does not name the type, and only after the probe has seen that a
+    capture keeps the value it held, a later capture does not, and a value set while a captured context runs stays in
+    it. Nothing private in corlib is touched.
+  - **Elsewhere** it sets an `AsyncLocal` and restores it, which copies the runtime's map of async-locals on each
+    change. That is the fallback when neither way above exists, and the probe falls back to it on any failure.
 - **Online only.** Offline every route is canonical whatever the intent, so no scope opens, and each entry point costs
   one field read. The realm reports each change to the tracking at the pump that shows it (`FollowRealm`), and each
   change starts a new epoch.
@@ -1244,6 +1260,12 @@ continuations, timers and callbacks see.
 | An interaction handler | `InteractionHandler` | `NetInteractionService`, around each call the game makes when the local player interacts | The local player |
 | Code driving a motion lease the player holds | `MotionLease` | `MultiplayerIntents.EnterMotionLease`, the seam WS3.7 calls; nothing calls it yet | The local player |
 | On a listen host, the code that carries out a participant's forwarded request | The request's own | `MultiplayerIntents.EnterForwarded`, the seam WS3.7 calls; a joined player never acts for another, so there it opens nothing | That participant, by id |
+
+**Input-active frames are the coarse source.** A mod's whole Update and LateUpdate carry the player's intent while its
+input is active, scripted work in them included, so a record says whether an input-active frame made it
+(`IsInputFrame`), and what such a frame starts stays coarse: a command it runs, and a control's event its code fires,
+whichever mod owns the control, since the player's own input never reaches a control from inside mod code. A click, a
+command the player runs, an interaction and a motion lease are direct actions.
 
 Everything else is scripted and carries none: a mod's Update and LateUpdate in a frame where none of its own input is
 active, FixedUpdate (it runs before the frame's input sample), a timer that scripted code scheduled, a command that
@@ -1268,56 +1290,62 @@ world events, and every other runtime callback.
 | Later frames | Never: a frame's scope ends with that mod's callback, and the next frame, its timers included, starts with none |
 | Another mod's code run from inside the scope: its callbacks, the services it published, and their continuations | None: only the mod the record names observes it. A first-party provider bound to the calling mod's context acts as that mod, so it does |
 | A change of realm: hosting, joining, leaving, stopping | Ends it: nothing recorded before is observed after, also mid-scope |
-| A command run from inside the scope | Re-attributed: the handler acts for the same player, as an owner command of the command's own mod. A command scripted code runs clears what else flows, so it never borrows another mod's intent through the mod that ran it |
+| A command run from inside the scope | Re-attributed: the handler acts for the same player, as an owner command of the command's own mod, and stays coarse when an input-active frame ran it. A command scripted code runs clears what else flows, so it never borrows another mod's intent through the mod that ran it |
+| A control's event that code fires while an input-active frame's intent flows | Coarse: the control's owner acts on the player's UI intent as that frame's (`IsInputFrame`), never as a click |
 | A scope opened inside another | The inner one flows for its duration, and the outer one again after it. The same record nested changes nothing |
 
 ### What it costs
 
 - **Offline and online at rest** a frame allocates nothing: measured over 10,000 frames through the real `ModRuntime`
   and through real contexts, the B3 tests included. Online at rest each mod's frame reads its tracked actions.
-- **An input-active frame** allocates nothing in the steady state on .NET, measured the same way: the scope keeps, on
-  each record, the execution context that is the caller's plus the record, and runs that again
-  (`ExecutionContext.Run`). One run set and restored instead costs 72 bytes there.
-- **On the game's Mono 6.13** a captured execution context runs only once, and every change of an async-local value
-  copies the context's small dictionary of them, as the .NET Framework's implementation does. There a scope sets the
-  record and restores it, which allocates in the steady state. Measured with the scope's own source compiled for the
-  Unity editor's Mono 6.13, whose execution-context code matches the game's corlib call for call: 288 to 448 bytes per
-  scope opened, growing with the number of async-locals the thread has ever set, and 0.3 microseconds with Mono's sgen
-  collector or 0.6 to 0.9 with the Boehm collector the game uses. The same run checked the rules there: awaits keep the
-  record, `Task.Run`'s thread observes none, and the scope ends with its callback. Nothing opens offline or at rest, and
-  an input-active frame opens one per mod whose own input is active. The probe that picks the way runs once.
-- **A zero-allocation way on Mono exists and is not taken.** Running a cached context again after setting corlib's
-  internal `ExecutionContext.isNewCapture` back measured 0 bytes and 33 nanoseconds a scope on the same Mono. It needs
-  private access to corlib, and a cheap check that the caller's context has not changed since the cached one was made,
-  which on Mono also needs private access. That is a decision for the owner, recorded under Choices.
-- **UI activations, commands and interactions** allocate a little each time one opens, at most a record, the delivery
-  of an interaction's arguments and the runtime's async-local map, and only a player's action opens one.
+- **An input-active frame** allocates nothing in the steady state on .NET, measured the same way, by reusing its
+  context. The async-local fallback costs 160 bytes a scope there.
+- **On the game's Mono** an input-active frame's scope allocates nothing in the steady state either. Measured with the
+  built Core assembly on the game's own 64-bit runtime (`mono-2.0-bdwgc.dll`, the Boehm collector) and its own corlib,
+  embedded the way the Unity player embeds Mono, with an allocation profiler counting what the main thread allocates:
+  0 bytes a scope over 1,000,000 scopes, with no collection, at about 0.10 microseconds a scope. The
+  async-local way, which this slice first shipped there, measured 456 bytes and 0.5 microseconds a scope on the same
+  runtime. The same runs checked every rule there, under the logical call context and the fallback alike: awaits keep
+  the record, also when the awaited work completes on a worker or while another scope is open; a capture is a snapshot;
+  `Task.Run`'s thread observes none while its context carries the record for what it hands back; nested scopes and
+  failures restore; a scope opened inside an async method or a continuation ends there; other threads open nothing.
+- **An await inside a scope** copies the record's slot along with the context: on the game's Mono a capture there costs
+  384 bytes rather than 72. Every await already allocates its state machine and continuation, and at rest a capture
+  copies nothing of the scope.
+- **UI activations, commands and interactions** allocate a little each time a player's action opens one: a command a
+  record, an interaction the delivery of its arguments. A control's activation reuses one record per owner, whether
+  the player's click opened it or an input frame's code fired it.
 - **Time.** The ModRuntime harness reports a whole frame's time in each case and never asserts it, since it depends on
-  the machine. On a Windows 11 x64 machine on 2026-10-18, the fewest of five 10,000-frame runs took 0.14 microseconds a
-  frame offline, 0.19 online at rest and 0.31 online with input held, for a mod with one input action.
+  the machine. On a Windows 11 x64 machine on 2026-10-18, the fewest of five 10,000-frame runs took 0.15 microseconds a
+  frame offline, 0.23 online at rest and 0.35 online with input held, for a mod with one input action.
 
 ### The SPI, and what WS3.7 can ask
 
 - **"Does this call carry intent, and whose?"** `IRuntimeReplication.CurrentIntent` answers for the context's own mod:
-  its source, `IsPlayerIntent`, `IsLocalPlayer`, and the participant id when a host acts for a participant. It
+  its source, `IsPlayerIntent`, `IsLocalPlayer`, the participant id when a host acts for a participant, and whether it
+  is one of the player's direct actions (`IsDirectAction`) or an input-active frame's coarse intent (`IsInputFrame`). It
   allocates nothing. `RouteCurrentIntent()` is `Route` for that source, so on a joined player a call on intent is
   `Forwarded` and a scripted one a `Shadow`; a gamemode server there is `NotRun`, and a client-local mod's `LocalOnly`.
   Inside the runtime the network decorators read the same through `RuntimeReplication.VisibleIntent`.
 - **Forwarded requests.** On the host, WS3.7 runs the code that carries out a participant's request inside
-  `EnterForwarded(mod, source, participantId)`, so a spawn made there knows whose it is, for its `ProxyParticipant`
-  scope, and a command it runs keeps that participant. An interaction forwarded that way runs the mod's own handler,
-  `InteractionIntent.Handler`, rather than the local player's relay.
+  `EnterForwarded(mod, source, participantId, fromInputFrame)`, so a spawn made there knows whose it is, for its
+  `ProxyParticipant` scope, and a command it runs keeps that participant. The request carries whether the participant's
+  process made it from an input-active frame, so the host weighs it as that process did. An interaction forwarded that
+  way runs the mod's own handler, `InteractionIntent.Handler`, rather than the local player's relay.
 - **Motion leases.** WS3.7 opens `EnterMotionLease(mod)` around the code that drives a lease the local player holds,
   such as GravityGun's FixedUpdate, which moves the body the player holds.
 - **Providers that act for another mod.** A provider's own seam answers for the provider's mod, so it sees none of a
-  consumer's intent. CreatorContent's and RobotKit's facades are bound by owner id alone (`IOwnerBoundExtensionFactory`).
-  To route a spawn they make for a consumer by that consumer's intent, WS3.7 binds them to the consumer's context
-  (`IOwnerContextBoundExtensionFactory`, as Worlds already is) and asks that context's seam
-  (`IInternalReplicationContext.Replication.CurrentIntent`).
+  consumer's intent. CreatorContent's and RobotKit's facades are bound by owner id alone (`IOwnerBoundExtensionFactory`),
+  and their spawns run in another mod's code: RobotKit's own for a robot, and the content source's factory for creator
+  content. Binding those facades to the consumer's context (`IOwnerContextBoundExtensionFactory`, as Worlds already
+  is) lets them ask the consumer's seam (`IInternalReplicationContext.Replication.CurrentIntent`), but that answer still
+  has to reach the seam that routes the spawn. WS3.7 decides how: re-attributing the consumer's current intent to the
+  mod whose code spawns, for the call's duration, as a command does, or handing the route down with the request.
 - **Input-active frames are coarse.** A mod's whole Update and LateUpdate carry `InputActiveFrame` while its own input
   is active, scripted work included. On a joined player, a scripted spawn made there reads as the player's, although the
-  host's own run of the same script makes it too. The record names its source, so WS3.7 can weigh `InputActiveFrame`
-  apart from a click, a command or an interaction when it decides between forwarding a spawn and shadowing it.
+  host's own run of the same script makes it too. `CurrentIntent.IsDirectAction` is false for it and for what it starts,
+  so WS3.7 can weigh it apart from a click, a command or an interaction when it decides between forwarding a spawn and
+  shadowing it.
 
 ### Privacy
 
@@ -1333,7 +1361,7 @@ on purpose, and the fix keeps it the player's:
 
 | Code | Why it is scripted | Fix |
 | --- | --- | --- |
-| Input read in FixedUpdate, or in a timer that load scheduled | Only a mod's Update and LateUpdate in an input-active frame carry the frame's input | Read input in Update or LateUpdate. A body the player drives with physics gets a motion lease (WS3.7) |
+| Input read in FixedUpdate, or in a timer that load scheduled | Only a mod's Update and LateUpdate in an input-active frame carry the frame's input | Read input in Update or LateUpdate; the analyzer warns about an edge read in FixedUpdate (TF1009). A body the player drives with physics gets a motion lease (WS3.7) |
 | A completion polled in a later Update, as `PendingOperation<T>` polls | The later frame is quiet | Await the call's task in the code that started it, rather than polling; its continuation keeps the intent |
 | Work another mod's published service does when this mod's code calls it | Intent stays with the mod whose code acted on it | Run that work as the other mod's command (`Context.Commands.TryExecute`), which acts for the same player |
 | An Update subscription made from a click, meant to act for the player each frame | Subscribers are frame callbacks | Schedule the work instead (`Every`, `NextFrame`), which keeps the click's intent |
@@ -1346,21 +1374,30 @@ active, scripted work in them included, so scripted spawning belongs in a timer 
 ### Tests
 
 - **Core** (`MultiplayerIntentRulesTests`, `MultiplayerIntentScopeTests`): both tables, every entry point and flow;
-  observation by mod, thread and epoch; captures and their resumption; commands; records' bounds and text; and the
-  scope with both of its ways to run a record: a scope ends with its callback, awaits keep the intent after the scope
-  ended and after an await completed from scripted code, Task.Run's thread and the work an await hands it observe none
-  while the continuation back on the main thread does, nested scopes replace and restore, failures restore, other
-  threads open nothing, and the reusable way allocates nothing.
+  observation by mod, thread and epoch; captures and their resumption; commands, which stay coarse when an input frame
+  ran them; a control's event fired inside any mod's input frame; records' bounds and text; and the scope with each of
+  its ways to run a record, the logical call context emulated since .NET has none: a scope ends with its callback,
+  awaits keep the intent after the scope ended and after an await completed from scripted code, Task.Run's thread and
+  the work an await hands it observe none while the context carries the record for what it hands back, nested scopes
+  replace and restore, failures restore, other threads open nothing, the logical call context is left empty at rest,
+  the probe trusts only a logical call context whose captures keep their values, the store binds `CallContext`'s three
+  public members by name, checked against a stand-in with the same names and shapes, and never members that are not
+  public, the mode follows the runtime, and the reusing and logical ways allocate nothing. The game's Mono is outside
+  the harnesses; the costs above record the same rules checked on it.
 - **The runtime** (`MultiplayerIntentRuntimeTests`, `MultiplayerIntentServicesTests`): the epoch follows the realm and
   ends an intent mid-scope; the kit's hook opens, nests and carries deferred completions, and survives a sink that
   throws; commands act for the player who ran them, as their own mod, a participant's included, and scripted runs clear
   what else flows; the seam answers and routes by the current intent in every realm; the motion lease and forwarded
-  seams; the privacy scan. Over real contexts: input edges and held input make a mod's Update and LateUpdate
-  input-active while FixedUpdate, quiet frames and another mod's Update never are; a session scope's action counts
-  for its mod; the input decorator passes everything through and ends actions with their lifetime; scheduled
-  callbacks, `Every`, a coroutine and a worker's hand-back capture where they were scheduled, another mod's and
-  scripted ones none, and a realm change ends them; interactions; and frames that allocate nothing offline, at rest
-  and with input held.
+  seams; what an input frame starts stays coarse while a click, the player's command, an interaction, a lease and a
+  forwarded click are direct (`MultiplayerIntentCoarsenessTests`); the privacy scan. Over real contexts: input edges
+  and held input make a mod's Update and LateUpdate input-active while FixedUpdate, quiet frames and another mod's
+  Update never are; a session scope's action counts for its mod; the input decorator passes everything through and
+  ends actions with their lifetime; scheduled callbacks, `Every`, a coroutine and a worker's hand-back capture where
+  they were scheduled, another mod's and scripted ones none, and a realm change ends them; interactions; and frames
+  that allocate nothing offline, at rest and with input held.
+- **The analyzer** (the analyzer harness): TF1009 reports an edge read in a FixedUpdate lambda, method in another file,
+  or local function, and not one in Update or LateUpdate, held or analog input in FixedUpdate, or a mod's own member
+  named like an edge.
 - **The kit** (`UiKitIntentConventionTests`): every callback a player's input raises opens the owner's action, every
   one raised inside an action or by what only happens to a control opens nothing of its own, tweens carry what they
   captured, every listener is accounted for, and the runtime connects and disconnects the kit.
@@ -1385,10 +1422,13 @@ active, scripted work in them included, so scripted spawning belongs in a timer 
 - **Decorators, not host changes.** Input activity, scheduler capture and interactions live in Unity-free decorators
   every gameplay host passes through, as section 11's do, so the harnesses run the same code the game does; the kit's
   half is the one Unity-side part, checked in its sources.
-- **Two ways to run a record**, picked by a probe: reusing a captured execution context where the runtime can, setting
-  and restoring it where it cannot, with the same rules either way.
-- **Mono's steady-state cost is accepted for now.** The plan asks that an input-active frame's scope allocate nothing
-  in the steady state. It does not on the game's Mono, where it costs 288 to 448 bytes a scope, online only and only
-  for a mod whose own input is active. Reaching zero there means re-arming a cached execution context through corlib's
-  internals, guarded by a startup self-test that falls back to setting and restoring; the slice leaves that, or a
-  Unity on CoreCLR, to a decision rather than shipping private corlib access unasked.
+- **Three ways to run a record**, picked by a probe: the cheapest the runtime has that keeps every rule, with the same
+  rules each way and the async-local as the fallback.
+- **The logical call context on Mono, not corlib's internals.** The plan asks that an input-active frame's scope
+  allocate nothing in the steady state. On the game's Mono an async-local cannot: each change copies its map. Re-arming
+  a cached execution context through corlib's internal `isNewCapture` reached zero too, but needs private corlib
+  access twice over. The logical call context reaches zero through public members of a public corlib type, which Mono
+  and the .NET Framework both document, and the startup probe falls back rather than trust one that behaves otherwise.
+  It is bound by name, so a corlib without it, as .NET is, simply never uses it.
+- **Coarse stays coarse.** An input-active frame cannot tell the player's input handling from scripted work in the same
+  Update, so what it starts never passes for a direct action: WS3.7 sees which is which instead of a guess.

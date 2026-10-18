@@ -285,7 +285,7 @@ Code that looks like the player's action but counts as a script, with its fix:
 
 | If your code | It counts as a script because | Do this instead |
 | --- | --- | --- |
-| Reads input in FixedUpdate, or in a timer scheduled at load | Only Update and LateUpdate carry the frame's input | Read input in Update or LateUpdate |
+| Reads input in FixedUpdate, or in a timer scheduled at load | Only Update and LateUpdate carry the frame's input | Read input in Update or LateUpdate; the build warns about a press read in FixedUpdate ([TF1009](Diagnostics.md#tf1009)) |
 | Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling |
 | Calls a service another mod published | The player's action belongs to your mod, so the other mod's code sees none | Run the other mod's command with `Context.Commands.TryExecute` |
 | Subscribes to Update from a click, to act for the player every frame | Frame subscribers are scripts | Schedule the work with `Context.Scheduler.Every` or `NextFrame` from the click |

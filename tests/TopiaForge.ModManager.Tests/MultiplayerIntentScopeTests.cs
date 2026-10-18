@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,29 +10,38 @@ using static TopiaForge.ModManager.Tests.MultiplayerModelAssert;
 namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
-    /// The intent scope's mechanics in Core (WS3.4), with both of its ways to run a record: reusing a cached execution
-    /// context, as .NET can, and setting and restoring the record, as the game's Mono must. A scope ends with its callback;
-    /// awaits carry it; worker threads never observe it while an await that returns to the main thread does; nested scopes
-    /// replace and restore; failures restore; and the steady state of the reusable way allocates nothing.
+    /// The intent scope's mechanics in Core (WS3.4), with each of its ways to run a record: reusing a cached execution
+    /// context, as .NET can; the logical call context, as the game's Mono runs it, emulated here since .NET has none; and
+    /// setting and restoring an async-local, the fallback. A scope ends with its callback; awaits carry it; worker threads
+    /// never observe it while an await that returns to the main thread does; nested scopes replace and restore; failures
+    /// restore; the probe that trusts a runtime's logical call context refuses one that does not keep captured values; and
+    /// the steady state allocates nothing in either way that should.
     /// </summary>
     internal static class MultiplayerIntentScopeTests
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+        private static readonly ContextCallback Noop = _ => { };
 
         internal static void Run()
         {
             True(IntentScope.RuntimeCanReuseContexts, ".NET runs one captured execution context more than once");
-            foreach (var reuse in new[] { true, false })
+            True(!IntentScope.RuntimeHasLogicalCallContext && IntentLogicalStore.TryBind() == null, ".NET has no logical call context");
+            Equal(IntentScopeMode.ReusedContext, IntentScope.RuntimeMode, ".NET scopes reuse contexts");
+            Equal(IntentScopeMode.ReusedContext, new IntentScope().Mode, "and a scope made without a mode does too");
+            TheModeFollowsTheRuntime();
+            foreach (var (name, make) in Ways())
             {
-                var name = reuse ? "reusing contexts" : "setting and restoring";
-                AScopeEndsWithItsCallback(reuse, name);
-                AwaitsKeepTheIntent(reuse, name);
-                WorkerThreadsNeverObserveIt(reuse, name);
-                NestedScopesReplaceAndRestore(reuse, name);
-                FailuresRestoreTheScope(reuse, name);
-                OtherThreadsOpenNothing(reuse, name);
+                AScopeEndsWithItsCallback(make, name);
+                AwaitsKeepTheIntent(make, name);
+                WorkerThreadsNeverObserveIt(make, name);
+                NestedScopesReplaceAndRestore(make, name);
+                FailuresRestoreTheScope(make, name);
+                OtherThreadsOpenNothing(make, name);
             }
 
+            TheLogicalCallContextIsLeftEmptyAtRest();
+            OnlyALogicalCallContextThatKeepsCapturesIsTrusted();
+            TheStoreBindsCorlibsPublicMembersByName();
             TheSteadyStateAllocatesNothing();
             Console.WriteLine("MultiplayerIntentScopeTests passed.");
         }
@@ -39,10 +49,28 @@ namespace TopiaForge.ModManager.Tests
         internal static IntentRecord Record(string modId, IntentSource source = IntentSource.UiCallback, long epoch = 1) =>
             new IntentRecord(source, modId, null, epoch);
 
-        private static void AScopeEndsWithItsCallback(bool reuse, string name)
+        private static IEnumerable<(string Name, Func<IntentScope> Make)> Ways()
         {
-            var scope = new IntentScope(reuse);
-            Equal(reuse, scope.ReusesContexts, name + ": the strategy is the one asked for");
+            yield return ("reusing contexts", () => new IntentScope(IntentScopeMode.ReusedContext));
+            yield return ("the logical call context", () => new IntentScope(IntentScopeMode.LogicalCallContext, new EmulatedLogicalCallContext().Store));
+            yield return ("setting and restoring", () => new IntentScope(IntentScopeMode.AsyncLocal));
+        }
+
+        private static void TheModeFollowsTheRuntime()
+        {
+            Equal(IntentScopeMode.ReusedContext, IntentScope.ModeFor(reusesContexts: true, hasLogicalCallContext: true), "a runtime that reuses contexts reuses them");
+            Equal(IntentScopeMode.LogicalCallContext, IntentScope.ModeFor(reusesContexts: false, hasLogicalCallContext: true),
+                "one that runs a captured context once, as the game's Mono does, keeps the record in its logical call context");
+            Equal(IntentScopeMode.AsyncLocal, IntentScope.ModeFor(reusesContexts: false, hasLogicalCallContext: false), "and one with neither sets and restores");
+            Throws<NotSupportedException>(() => new IntentScope(IntentScopeMode.LogicalCallContext), "a way the runtime lacks is refused, not faked");
+            Throws<ArgumentOutOfRangeException>(() => new IntentScope((IntentScopeMode)3), "an undefined way is refused");
+            var scope = new IntentScope(IntentScopeMode.LogicalCallContext, new EmulatedLogicalCallContext().Store);
+            Equal(IntentScopeMode.LogicalCallContext, scope.Mode, "a scope given a store keeps its record there");
+        }
+
+        private static void AScopeEndsWithItsCallback(Func<IntentScope> make, string name)
+        {
+            var scope = make();
             var record = Record("io.example.builder");
             True(scope.Flowing == null, name + ": nothing flows outside a scope");
             IntentRecord? seen = null;
@@ -64,9 +92,9 @@ namespace TopiaForge.ModManager.Tests
             True(scope.Flowing == null, name + ": restoring nothing changes nothing");
         }
 
-        private static void AwaitsKeepTheIntent(bool reuse, string name)
+        private static void AwaitsKeepTheIntent(Func<IntentScope> make, string name)
         {
-            var scope = new IntentScope(reuse);
+            var scope = make();
             var record = Record("io.example.builder");
             using var pump = new MainThreadPump();
             var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -96,23 +124,25 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        private static void WorkerThreadsNeverObserveIt(bool reuse, string name)
+        private static void WorkerThreadsNeverObserveIt(Func<IntentScope> make, string name)
         {
-            var scope = new IntentScope(reuse);
+            var scope = make();
             var record = Record("io.example.builder");
             using var pump = new MainThreadPump();
-            Task<IntentRecord?>? onWorker = null;
+            Task<(IntentRecord? Flowing, IntentRecord? Carried)>? onWorker = null;
             Task<(IntentRecord? Worker, IntentRecord? Back)>? roundTrip = null;
             scope.Run(record, _ =>
             {
-                onWorker = Task.Run(() => scope.Flowing);
+                onWorker = Task.Run(() => (scope.Flowing, scope.FlowingOnAnyThread));
                 roundTrip = AwaitWorker();
             }, null);
             pump.RunUntil(() => onWorker!.IsCompleted && roundTrip!.IsCompleted, Timeout);
-            True(onWorker!.Result == null, name + ": Task.Run's thread observes no intent (WorkerThread)");
+            True(onWorker!.Result.Flowing == null, name + ": Task.Run's thread observes no intent (WorkerThread)");
+            True(ReferenceEquals(onWorker.Result.Carried, record), name + ": though its context carries it, for what it hands back (WorkerHandBack)");
             var (worker, back) = roundTrip!.Result;
             True(worker == null, name + ": nor does the work an await hands it");
             True(ReferenceEquals(back, record), name + ": and the continuation back on the main thread acts on it again");
+            True(Task.Run(() => scope.FlowingOnAnyThread).GetAwaiter().GetResult() == null, name + ": a worker started at rest carries none");
 
             async Task<(IntentRecord?, IntentRecord?)> AwaitWorker()
             {
@@ -121,13 +151,13 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        private static void NestedScopesReplaceAndRestore(bool reuse, string name)
+        private static void NestedScopesReplaceAndRestore(Func<IntentScope> make, string name)
         {
-            var scope = new IntentScope(reuse);
+            var scope = make();
             var outer = Record("io.example.builder", IntentSource.InputActiveFrame);
             var inner = Record("io.example.builder", IntentSource.OwnerCommand);
             var other = Record("io.example.neighbour", IntentSource.UiCallback);
-            var trace = new System.Collections.Generic.List<string>();
+            var trace = new List<string>();
             scope.Run(outer, _ =>
             {
                 trace.Add(Describe(scope.Flowing));
@@ -154,9 +184,9 @@ namespace TopiaForge.ModManager.Tests
             static string Describe(IntentRecord? record) => record == null ? "none" : record.Source.ToString();
         }
 
-        private static void FailuresRestoreTheScope(bool reuse, string name)
+        private static void FailuresRestoreTheScope(Func<IntentScope> make, string name)
         {
-            var scope = new IntentScope(reuse);
+            var scope = make();
             var outer = Record("io.example.builder", IntentSource.InteractionHandler);
             var inner = Record("io.example.builder", IntentSource.UiCallback);
             using (scope.Enter(outer))
@@ -178,16 +208,16 @@ namespace TopiaForge.ModManager.Tests
             Throws<ArgumentNullException>(() => scope.Run(inner, null!, null), name + ": a scope runs a callback");
         }
 
-        private static void OtherThreadsOpenNothing(bool reuse, string name)
+        private static void OtherThreadsOpenNothing(Func<IntentScope> make, string name)
         {
-            var scope = new IntentScope(reuse);
+            var scope = make();
             var record = Record("io.example.builder");
             var outcome = Task.Run(() =>
             {
                 IntentRecord? seen = record;
                 scope.Run(record, _ => seen = scope.Flowing, null);
                 var token = scope.Enter(record);
-                var flowing = scope.Flowing;
+                var flowing = scope.FlowingOnAnyThread;
                 token.Dispose();
                 return (seen, token.Restore, flowing, scope.IsOwnerThread);
             }).GetAwaiter().GetResult();
@@ -196,16 +226,68 @@ namespace TopiaForge.ModManager.Tests
             True(scope.Flowing == null, name + ": and the main thread is unchanged");
         }
 
+        private static void TheLogicalCallContextIsLeftEmptyAtRest()
+        {
+            var context = new EmulatedLogicalCallContext();
+            var scope = new IntentScope(IntentScopeMode.LogicalCallContext, context.Store);
+            var outer = Record("io.example.builder", IntentSource.InputActiveFrame);
+            scope.Run(outer, _ =>
+            {
+                True(context.Slots == 1, "a scope keeps its record in one slot of the logical call context");
+                using (scope.Enter(Record("io.example.builder", IntentSource.OwnerCommand))) True(context.Slots == 1, "and a nested one reuses that slot");
+                scope.Run(null, __ => True(context.Slots == 0, "a scope that runs without intent empties the slot"), null);
+            }, null);
+            True(context.Slots == 0, "a scope that ends removes its slot rather than setting it to null, so a capture at rest copies nothing");
+            var token = scope.Enter(outer);
+            token.Dispose();
+            True(context.Slots == 0, "and so does a token disposed back to none");
+        }
+
+        private static void OnlyALogicalCallContextThatKeepsCapturesIsTrusted()
+        {
+            True(IntentLogicalStore.KeepsCapturedValues(new EmulatedLogicalCallContext().Store), "a context that copies what captures held is trusted");
+            var shared = new SharedSlots();
+            True(!IntentLogicalStore.KeepsCapturedValues(shared.Store), "one whose captures see later changes is not: an await would lose the record or see a later one");
+            True(shared.Count == 0, "and the check leaves the slot it used empty");
+            var stuck = new EmulatedLogicalCallContext(ignoreFree: true);
+            True(!IntentLogicalStore.KeepsCapturedValues(stuck.Store), "nor is one that cannot empty a slot in place");
+            True(!IntentLogicalStore.KeepsCapturedValues(new IntentLogicalStore(_ => null, (_, _) => { }, _ => { })), "nor one that loses what is set");
+            True(!IntentLogicalStore.KeepsCapturedValues(new IntentLogicalStore(_ => throw new NotSupportedException("refused"), (_, _) => { }, _ => { })),
+                "nor one that refuses access, and the check never throws");
+            Throws<ArgumentNullException>(() => IntentLogicalStore.KeepsCapturedValues(null!), "the check needs a store");
+        }
+
+        /// <summary>
+        /// The game's Mono offers its logical call context through three public static members of corlib's
+        /// <c>System.Runtime.Remoting.Messaging.CallContext</c>, which .NET lacks, so the binding is checked here against a
+        /// stand-in with the same names and shapes: a renamed or reshaped member would otherwise only show on Mono.
+        /// </summary>
+        private static void TheStoreBindsCorlibsPublicMembersByName()
+        {
+            var store = IntentLogicalStore.TryBind(typeof(StandInCallContext));
+            True(store != null, "a type with CallContext's public LogicalGetData, LogicalSetData and FreeNamedDataSlot binds, by name");
+            var scope = new IntentScope(IntentScopeMode.LogicalCallContext, store);
+            var record = Record("io.example.builder");
+            IntentRecord? seen = null;
+            scope.Run(record, _ => seen = scope.Flowing, null);
+            True(ReferenceEquals(seen, record) && scope.Flowing == null, "and a scope runs its record through what it bound");
+            True(IntentLogicalStore.TryBind(typeof(HiddenCallContext)) == null, "members that are not public are never bound");
+            True(IntentLogicalStore.TryBind(typeof(object)) == null && IntentLogicalStore.TryBind(null) == null, "a type without them binds nothing");
+        }
+
         private static void TheSteadyStateAllocatesNothing()
         {
-            var reusing = new IntentScope(reuseContexts: true);
             var record = Record("io.example.builder", IntentSource.InputActiveFrame);
-            var reused = Measure(reusing, record);
+            var reused = Measure(new IntentScope(IntentScopeMode.ReusedContext), record);
             True(reused == 0, "running one record again and again reuses its context and allocates nothing (" + reused + " bytes over 10,000 runs)");
-            var setting = new IntentScope(reuseContexts: false);
-            var set = Measure(setting, record);
-            True(set > 0, "setting and restoring the record, as Mono must, allocates the runtime's async-local map each time");
-            Console.WriteLine("Intent scope cost on .NET: 0 bytes per run reusing contexts; " + (set / 10_000.0) + " bytes per run setting and restoring.");
+            var inPlace = new InPlaceSlot();
+            var logical = Measure(new IntentScope(IntentScopeMode.LogicalCallContext, inPlace.Store), record);
+            True(logical == 0 && inPlace.Value == null,
+                "over a logical call context that changes in place, as Mono's does, the scope itself allocates nothing (" + logical + " bytes over 10,000 runs)");
+            var set = Measure(new IntentScope(IntentScopeMode.AsyncLocal), record);
+            True(set > 0, "setting and restoring an async-local, the fallback, allocates the runtime's map of them each time");
+            Console.WriteLine("Intent scope cost on .NET: 0 bytes per run reusing contexts; " + (logical / 10_000.0) +
+                              " over an in-place logical call context; " + (set / 10_000.0) + " setting and restoring an async-local.");
         }
 
         private static long Measure(IntentScope scope, IntentRecord record)
@@ -216,14 +298,102 @@ namespace TopiaForge.ModManager.Tests
             return fewest;
         }
 
-        private static readonly ContextCallback Noop = _ => { };
-
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static long Runs(IntentScope scope, IntentRecord record, int count)
         {
             var before = GC.GetAllocatedBytesForCurrentThread();
             for (var index = 0; index < count; index++) scope.Run(record, Noop, null);
             return GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        /// <summary>
+        /// The logical call context as Mono's corlib keeps it, emulated on .NET, which has none: each execution context holds
+        /// its own slots, a capture keeps what they held then, and no change reaches a context captured before it.
+        /// </summary>
+        internal sealed class EmulatedLogicalCallContext
+        {
+            private readonly AsyncLocal<Dictionary<string, object>?> slots = new AsyncLocal<Dictionary<string, object>?>();
+            private readonly bool ignoreFree;
+
+            internal EmulatedLogicalCallContext(bool ignoreFree = false)
+            {
+                this.ignoreFree = ignoreFree;
+                Store = new IntentLogicalStore(Get, Set, Free);
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            /// <summary>Gets how many slots the calling code's context holds.</summary>
+            internal int Slots => slots.Value?.Count ?? 0;
+
+            private object? Get(string slot) => slots.Value != null && slots.Value.TryGetValue(slot, out var value) ? value : null;
+
+            private void Set(string slot, object value)
+            {
+                var next = slots.Value == null ? new Dictionary<string, object>() : new Dictionary<string, object>(slots.Value);
+                next[slot] = value ?? throw new ArgumentNullException(nameof(value));
+                slots.Value = next;
+            }
+
+            private void Free(string slot)
+            {
+                if (ignoreFree || slots.Value == null || !slots.Value.ContainsKey(slot)) return;
+                var next = new Dictionary<string, object>(slots.Value);
+                next.Remove(slot);
+                slots.Value = next.Count == 0 ? null : next;
+            }
+        }
+
+        /// <summary>Corlib's <c>CallContext</c> members, by name and shape, over captured values as Mono keeps them.</summary>
+        private static class StandInCallContext
+        {
+            private static readonly EmulatedLogicalCallContext Context = new EmulatedLogicalCallContext();
+
+            public static object? LogicalGetData(string name) => Context.Store.Get(name);
+
+            public static void LogicalSetData(string name, object data) => Context.Store.Set(name, data);
+
+            public static void FreeNamedDataSlot(string name) => Context.Store.Free(name);
+        }
+
+        /// <summary>The same working members, kept internal: the store binds a runtime's public API only.</summary>
+        private static class HiddenCallContext
+        {
+            private static readonly EmulatedLogicalCallContext Context = new EmulatedLogicalCallContext();
+
+            internal static object? LogicalGetData(string name) => Context.Store.Get(name);
+
+            internal static void LogicalSetData(string name, object data) => Context.Store.Set(name, data);
+
+            internal static void FreeNamedDataSlot(string name) => Context.Store.Free(name);
+        }
+
+        /// <summary>Slots every context shares, changed in place: captures see later changes, as no logical call context may.</summary>
+        private sealed class SharedSlots
+        {
+            private readonly Dictionary<string, object> slots = new Dictionary<string, object>();
+
+            internal SharedSlots()
+            {
+                Store = new IntentLogicalStore(slot => slots.TryGetValue(slot, out var value) ? value : null, (slot, value) => slots[slot] = value, slot => slots.Remove(slot));
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            internal int Count => slots.Count;
+        }
+
+        /// <summary>One slot changed in place, allocating nothing: what Mono's logical call context costs the scope on the main thread.</summary>
+        private sealed class InPlaceSlot
+        {
+            internal InPlaceSlot()
+            {
+                Store = new IntentLogicalStore(_ => Value, (_, value) => Value = value, _ => Value = null);
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            internal object? Value { get; private set; }
         }
     }
 }

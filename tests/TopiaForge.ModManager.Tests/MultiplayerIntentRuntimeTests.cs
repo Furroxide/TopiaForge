@@ -47,7 +47,8 @@ namespace TopiaForge.ModManager.Tests
             var offenders = new List<string>();
             foreach (var type in new[]
                      {
-                         typeof(IntentRecord), typeof(IntentScope), typeof(IntentScope.Token), typeof(IntentEntryRules), typeof(IntentFlowRules),
+                         typeof(IntentRecord), typeof(IntentScope), typeof(IntentScope.Token), typeof(IntentScopeMode), typeof(IntentLogicalStore),
+                         typeof(IntentEntryRules), typeof(IntentFlowRules),
                          typeof(MultiplayerIntents), typeof(ModInputActivity), typeof(NetInputService), typeof(NetInputAction), typeof(NetScheduler),
                          typeof(NetInteractionService), typeof(InteractionIntent), typeof(MultiplayerIntentKitHook), typeof(InternalIntentRecord),
                          typeof(ITopiaForgeIntentSink), typeof(TopiaForgeIntent)

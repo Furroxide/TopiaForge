@@ -11,7 +11,7 @@ namespace TopiaForge.Mods.Analyzers
 {
     /// <summary>Enforces the safe V1 authoring boundary and keeps source dependencies aligned with the manifest.</summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
-    public sealed class TopiaForgeModAnalyzer : DiagnosticAnalyzer
+    public sealed partial class TopiaForgeModAnalyzer : DiagnosticAnalyzer
     {
         private const string Category = "TopiaForge";
         private const string DocsRoot = "https://docs.topiaforge.dev/diagnostics/";
@@ -122,7 +122,8 @@ namespace TopiaForge.Mods.Analyzers
                 ObsoletePreV1Api,
                 MissingRequiredCapability,
                 LoaderOwnedUiReference,
-                BlockingWaitOnSdkTask);
+                BlockingWaitOnSdkTask,
+                InputEdgeInFixedUpdate);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -149,6 +150,9 @@ namespace TopiaForge.Mods.Analyzers
             context.RegisterSyntaxNodeAction(
                 AnalyzeBlockingWait,
                 SyntaxKind.SimpleMemberAccessExpression);
+
+            // FixedUpdate's timing is the game loop's too, whichever profile the mod builds with.
+            RegisterFixedUpdateInput(context);
 
             if (HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,

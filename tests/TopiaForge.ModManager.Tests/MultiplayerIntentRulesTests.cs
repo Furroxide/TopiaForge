@@ -33,6 +33,7 @@ namespace TopiaForge.ModManager.Tests
             ReadersObserveOnlyTheirOwnIntentOnTheMainThreadInItsEpoch();
             CapturedCallbacksResumeWhileTheirEpochLasts();
             CommandsActForTheSamePlayerAsTheirOwnMod();
+            InputFramesStayCoarse();
             OnlineRealmsRecordAndOnlyHostsActForParticipants();
             RecordsCarryParticipantIdsOnly();
             Console.WriteLine("MultiplayerIntentRulesTests passed.");
@@ -134,6 +135,41 @@ namespace TopiaForge.ModManager.Tests
             True(IntentFlowRules.ForCommand(null, "io.example.builder", 7) == null, "a command scripted code runs carries none");
             True(IntentFlowRules.ForCommand(local, "io.example.builder", 8) == null, "nor does one run on an intent from before the realm changed");
             Throws<ArgumentNullException>(() => IntentFlowRules.ForCommand(local, null!, 7), "a command names its mod");
+
+            // A command a click ran is the player's direct action; one an input-active frame ran stays that frame's.
+            True(command != null && !command.IsInputFrame, "a command a click ran is a direct action");
+            var frame = new IntentRecord(IntentSource.InputActiveFrame, "io.example.console", null, 7);
+            var fromFrame = IntentFlowRules.ForCommand(frame, "io.example.builder", 7);
+            True(fromFrame != null && fromFrame.Source == IntentSource.OwnerCommand && fromFrame.IsInputFrame,
+                "a command an input-active frame ran stays coarse, so it never passes for the player's own command");
+            var again = IntentFlowRules.ForCommand(fromFrame, "io.example.console", 7);
+            True(again != null && again.IsInputFrame, "and so does a command that command runs");
+        }
+
+        /// <summary>
+        /// The input-active frame is the coarse source: WS3.7 weighs it apart from the player's direct actions, so what such a
+        /// frame starts stays coarse, and a control's event fired from inside any mod's input frame never passes for a click.
+        /// </summary>
+        private static void InputFramesStayCoarse()
+        {
+            var frame = new IntentRecord(IntentSource.InputActiveFrame, "io.example.builder", null, 5);
+            var click = new IntentRecord(IntentSource.UiCallback, "io.example.builder", null, 5);
+            var fired = new IntentRecord(IntentSource.UiCallback, "io.example.builder", null, 5, fromInputFrame: true);
+            True(frame.IsInputFrame && !click.IsInputFrame && fired.IsInputFrame, "an input frame is coarse, a click is not, and a record says which it came from");
+            foreach (var source in new[] { IntentSource.OwnerCommand, IntentSource.InteractionHandler, IntentSource.MotionLease })
+            {
+                True(!new IntentRecord(source, "io.example.builder", "participant-1", 5).IsInputFrame, source + " is a direct action unless an input frame made it");
+            }
+
+            True(fired.ToString() == "UiCallback from an input frame of the local player" && frame.ToString() == "InputActiveFrame of the local player",
+                "its text says so, still without a participant id (" + fired + ")");
+            True(IntentFlowRules.UiActivationIsInputFrame(frame, 5), "a control's event fired while an input frame's intent flows is that frame's");
+            True(IntentFlowRules.UiActivationIsInputFrame(new IntentRecord(IntentSource.InputActiveFrame, "io.example.neighbour", null, 5), 5),
+                "whichever mod's frame fired it, since a click never reaches a control from inside mod code");
+            True(IntentFlowRules.UiActivationIsInputFrame(fired, 5), "and so is one fired by code an input frame started");
+            True(!IntentFlowRules.UiActivationIsInputFrame(click, 5), "inside a click's callback it is the click's");
+            True(!IntentFlowRules.UiActivationIsInputFrame(null, 5), "with nothing flowing it is the player's own input");
+            True(!IntentFlowRules.UiActivationIsInputFrame(frame, 6), "and a frame from before the realm changed counts for nothing");
         }
 
         private static void OnlineRealmsRecordAndOnlyHostsActForParticipants()

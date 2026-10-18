@@ -10,7 +10,7 @@ namespace TopiaForge.ModManager
     /// entry points that open it. Online, a player's own action opens a scope around the mod code that runs for it: an
     /// input-active frame, a UI control's activation, a command the player runs and an interaction. Offline nothing opens,
     /// since every route is canonical whatever the intent. The rules it applies are Core's <see cref="IntentEntryRules"/>
-    /// and <see cref="IntentFlowRules"/>; docs/internal/MultiplayerRuntimeIntegration.md, section 13, states them. Main
+    /// and <see cref="IntentFlowRules"/>; docs/internal/MultiplayerRuntimeIntegration.md, section 14, states them. Main
     /// thread only: code on any other thread observes no intent.
     /// </summary>
     internal sealed class MultiplayerIntents
@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager
 
         private static readonly ContextCallback InvokeAction = state => ((Action)state!)();
         private readonly Dictionary<string, IntentRecord> controls = new Dictionary<string, IntentRecord>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, IntentRecord> inputFrameControls = new Dictionary<string, IntentRecord>(StringComparer.OrdinalIgnoreCase);
         private NetRealm realm;
         private bool recording;
         private long epoch;
@@ -58,6 +59,7 @@ namespace TopiaForge.ModManager
             Interlocked.Increment(ref epoch);
             Volatile.Write(ref recording, IntentFlowRules.Records(next));
             controls.Clear();
+            inputFrameControls.Clear();
         }
 
         /// <summary>What <paramref name="modId"/>'s code observes now: its own intent, on the main thread, from this epoch; else null.</summary>
@@ -98,16 +100,19 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Opens the local player's UI intent for a TopiaForgeUi control's activation, attributed to the control's owner: the
-        /// kit's hook calls it, and the SDK UI service's callbacks run inside it.
+        /// kit's hook calls it, and the SDK UI service's callbacks run inside it. An event an input-active frame's code fires
+        /// while that frame's intent flows stays coarse (<see cref="IntentRecord.IsInputFrame"/>), since the player's own
+        /// input never reaches a control from inside mod code.
         /// </summary>
         internal IntentScope.Token EnterUiActivation(string ownerId)
         {
             if (!recording || string.IsNullOrEmpty(ownerId)) return default;
-            var source = IntentEntryRules.SourceOf(IntentEntryPoint.UiActivation);
-            if (!controls.TryGetValue(ownerId, out var record))
+            var fromInputFrame = IntentFlowRules.UiActivationIsInputFrame(Scope.Flowing, epoch);
+            var cache = fromInputFrame ? inputFrameControls : controls;
+            if (!cache.TryGetValue(ownerId, out var record))
             {
-                record = new IntentRecord(source, ownerId, null, epoch);
-                if (controls.Count < MaximumCachedControlOwners) controls.Add(ownerId, record);
+                record = new IntentRecord(IntentEntryRules.SourceOf(IntentEntryPoint.UiActivation), ownerId, null, epoch, fromInputFrame);
+                if (cache.Count < MaximumCachedControlOwners) cache.Add(ownerId, record);
             }
 
             return Scope.Enter(record);
@@ -194,15 +199,16 @@ namespace TopiaForge.ModManager
         /// The forwarded-request seam (WS3.7): on a listen host, opens a participant's intent of <paramref name="source"/>
         /// for <paramref name="modId"/> around the code that carries out what that participant's process forwarded. It names
         /// the participant by the id the host gave it, never by an address. A joined player never acts for another
-        /// participant, so there it opens nothing.
+        /// participant, so there it opens nothing. <paramref name="fromInputFrame"/> says the participant's process made the
+        /// request from an input-active frame (<see cref="IntentRecord.IsInputFrame"/>), as a command such a frame ran.
         /// </summary>
-        internal IntentScope.Token EnterForwarded(string modId, IntentSource source, string participantId)
+        internal IntentScope.Token EnterForwarded(string modId, IntentSource source, string participantId, bool fromInputFrame = false)
         {
             if (modId == null) throw new ArgumentNullException(nameof(modId));
             if (!IntentRules.IsPlayerIntent(source)) throw new ArgumentOutOfRangeException(nameof(source), "A forwarded request carries player intent.");
             if (!IntentFlowRules.IsParticipantId(participantId)) throw new ArgumentException("A participant id is 1 to 128 printable characters.", nameof(participantId));
             if (!recording || !IntentFlowRules.ActsForParticipants(realm)) return default;
-            return Scope.Enter(new IntentRecord(source, modId, participantId, epoch));
+            return Scope.Enter(new IntentRecord(source, modId, participantId, epoch, fromInputFrame));
         }
     }
 }

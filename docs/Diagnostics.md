@@ -118,9 +118,53 @@ A hand-rolled `IsCompleted` poll is still accepted by this rule, but `PendingOpe
 supported shape: cancellation, timeout, late-result release, and restart-while-draining are all
 already handled and covered by tests.
 
+Awaiting the task never blocks, so `await` is fine too. In multiplayer it is the better choice for work
+that a player's own action starts, such as a click that loads a prefab and then spawns it: the code after
+the `await` keeps the player's action, while a result polled in a later Update counts as a script. See
+[The player's own actions](Multiplayer.md#the-players-own-actions).
+
 This rule applies to every mod project, including one that sets `TopiaForgeSafeProject` to `false`:
 opting into the unstable interop package does not move the code off the game loop. Test projects
 (`IsTestProject`) are exempt.
+
+### TF1009
+
+**Input edge read in FixedUpdate.**
+
+The code reads `WasPressed` or `WasReleased` in a handler passed to `SubscribeFixedUpdate`. The input
+service samples input once a frame, before Update, and an edge holds for that one frame. FixedUpdate
+runs zero or more times a frame on its own clock, so it misses presses when the game runs fast and
+repeats them when it runs slow. In multiplayer only a mod's Update and LateUpdate carry the player's
+input as the player's own action, so what the handler does counts as a script there.
+
+Act on the edge in Update or LateUpdate. When the response has to run in FixedUpdate, such as a force
+on the local player, note the press in Update and use it there:
+
+```csharp
+private IInputAction jump = null!;
+private bool jumpRequested;
+
+protected override void OnLoad()
+{
+    jump = Context.Input.RegisterAction(
+        new InputActionDefinition("jump", "Jump", new[] { InputBinding.Key("Space") })).Value!;
+    Context.Events.SubscribeUpdate(_ =>
+    {
+        if (jump.WasPressed) jumpRequested = true;
+    });
+    Context.Events.SubscribeFixedUpdate(_ =>
+    {
+        if (!jumpRequested) return;
+        jumpRequested = false;
+        ApplyJumpForce();
+    });
+}
+```
+
+Held input (`IsHeld`) and analog values (`Value`) hold for the whole frame, so reading them in
+FixedUpdate is fine and is not reported. A spawn, a transform change or a destroy that answers the press
+belongs in Update, where it counts as the player's own action. The rule is a warning, applies to every
+mod project like TF1008, and exempts test projects.
 
 ### TF1101
 

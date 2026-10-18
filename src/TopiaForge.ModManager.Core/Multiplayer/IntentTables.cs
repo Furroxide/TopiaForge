@@ -241,14 +241,25 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// The intent a command's handler acts on: the same player's, as an owner command of the command's own mod, when the
-        /// code that ran it observed player intent; none otherwise.
+        /// code that ran it observed player intent; none otherwise. A command an input-active frame runs stays an input
+        /// frame's (<see cref="IntentRecord.IsInputFrame"/>), so it never passes for the player's own command.
         /// </summary>
         public static IntentRecord? ForCommand(IntentRecord? runner, string commandModId, long epoch)
         {
             if (commandModId == null) throw new ArgumentNullException(nameof(commandModId));
             if (runner == null || runner.Epoch != epoch) return null;
-            return new IntentRecord(IntentSource.OwnerCommand, commandModId, runner.ParticipantId, epoch);
+            return new IntentRecord(IntentSource.OwnerCommand, commandModId, runner.ParticipantId, epoch, runner.IsInputFrame);
         }
+
+        /// <summary>
+        /// Whether a TopiaForgeUi control's event belongs to an input-active frame rather than to the player's click. The
+        /// player's own input reaches a control from the UI's event loop, outside every mod's code, so an event raised while
+        /// an input frame's intent flows, whichever mod's, was fired by that frame's code: it keeps the frame's coarse
+        /// intent (<see cref="IntentRecord.IsInputFrame"/>) and never passes for a click. An intent from before the realm
+        /// changed is not observed, so it changes nothing.
+        /// </summary>
+        public static bool UiActivationIsInputFrame(IntentRecord? flowing, long epoch) =>
+            flowing != null && flowing.Epoch == epoch && flowing.IsInputFrame;
 
         /// <summary>A participant id: 1 to 128 UTF-16 units, no surrounding white space, no control characters and no lone surrogates.</summary>
         public static bool IsParticipantId(string? value)

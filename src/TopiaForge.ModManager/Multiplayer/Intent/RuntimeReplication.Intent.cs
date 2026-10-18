@@ -16,7 +16,9 @@ namespace TopiaForge.ModManager
             get
             {
                 var record = VisibleIntent;
-                return record == null ? default : new InternalIntentRecord((InternalIntent)(int)record.Source, record.ParticipantId);
+                return record == null
+                    ? default
+                    : new InternalIntentRecord((InternalIntent)(int)record.Source, record.ParticipantId, record.IsInputFrame);
             }
         }
 

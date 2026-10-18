@@ -115,7 +115,9 @@ namespace TopiaForge.Mods.Internal
         /// whose it is, this process's own player or a participant a listen host acts for. Scripted code, another mod's code,
         /// code on another thread than the main one, an intent from before the realm last changed, and anything offline see
         /// none. Authority routing (WS3.7) asks it whether a spawn, a transform change or a destroy carries intent, and
-        /// whose. It allocates nothing.
+        /// whose, and whether that intent is one of the player's direct actions or only an input-active frame
+        /// (<see cref="InternalIntentRecord.IsDirectAction"/>, <see cref="InternalIntentRecord.IsInputFrame"/>). It allocates
+        /// nothing.
         /// </summary>
         InternalIntentRecord CurrentIntent { get; }
 

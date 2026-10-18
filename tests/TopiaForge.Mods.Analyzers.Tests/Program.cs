@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers.Tests
 {
-    internal static class Program
+    internal static partial class Program
     {
         private static readonly ModuleFixture[] SpecialistModules =
         {
@@ -70,6 +70,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 AllowsDrainSplitAcrossPartialFiles();
                 ReportsBlockingWaitInNonSafeProject();
                 AllowsAuthorsOwnMemberNamedLikeARetiredApi();
+                RunFixedUpdateInputTests();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }

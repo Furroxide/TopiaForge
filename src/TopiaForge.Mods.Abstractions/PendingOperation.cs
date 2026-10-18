@@ -45,6 +45,11 @@ namespace TopiaForge.Mods
     /// update and act on the state it returns. Nothing here ever waits.
     /// </para>
     /// <para>
+    /// In multiplayer, a result polled this way is acted on in a later frame, which counts as scripted code. For
+    /// work a player's own action starts, such as a click that loads a prefab and then spawns it, await the SDK
+    /// call in that action's code instead: the code after the await keeps the player's action.
+    /// </para>
+    /// <para>
     /// A cancelled or timed-out operation is not dropped. The SDK may still hand back a live result that owns
     /// game objects, and only the main thread may release those, so it keeps draining and is reported as
     /// <see cref="PendingOperationState.Abandoned"/>. That also frees the armed slot immediately, so restarting

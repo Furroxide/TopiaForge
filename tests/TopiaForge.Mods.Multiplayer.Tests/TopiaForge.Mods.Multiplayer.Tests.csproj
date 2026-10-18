@@ -45,9 +45,11 @@
     <Compile Include="..\TopiaForge.ModRuntime.Tests\FakeWorldScene.cs" Link="World\FakeWorldScene.cs" />
   </ItemGroup>
 
-  <!-- The composition root's intent tracking (WS3.4), which its realm reports each change to. -->
+  <!-- The composition root's intent tracking (WS3.4), which its realm reports each change to, and the replication seam's
+       half that answers it. -->
   <ItemGroup>
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerIntents.cs" Link="Runtime\MultiplayerIntents.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerRuntime.Intent.cs" Link="Runtime\MultiplayerRuntime.Intent.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\RuntimeReplication.Intent.cs" Link="Runtime\RuntimeReplication.Intent.cs" />
   </ItemGroup>
 </Project>

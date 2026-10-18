@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading;
 
 namespace TopiaForge.ModManager.Core.Multiplayer
@@ -18,7 +19,11 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// printable characters.
         /// </param>
         /// <param name="epoch">The realm epoch it belongs to; once the realm changes it is never observed again.</param>
-        internal IntentRecord(IntentSource source, string modId, string? participantId, long epoch)
+        /// <param name="fromInputFrame">
+        /// Whether the code that opened it acted on an input-active frame, such as a command an input frame ran. An
+        /// <see cref="IntentSource.InputActiveFrame"/> record always is.
+        /// </param>
+        internal IntentRecord(IntentSource source, string modId, string? participantId, long epoch, bool fromInputFrame = false)
         {
             if (!IntentRules.IsPlayerIntent(source)) throw new ArgumentOutOfRangeException(nameof(source), "A record is player intent; scripted code has none.");
             if (string.IsNullOrEmpty(modId)) throw new ArgumentException("A record names the mod whose code acts on it.", nameof(modId));
@@ -31,6 +36,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             ModId = modId;
             ParticipantId = participantId;
             Epoch = epoch;
+            IsInputFrame = fromInputFrame || source == IntentSource.InputActiveFrame;
         }
 
         /// <summary>Gets what caused the intent.</summary>
@@ -48,54 +54,120 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// <summary>Gets the realm epoch the record belongs to.</summary>
         internal long Epoch { get; }
 
-        // The scope's cache: the execution context that runs this record over an outer one (main thread only).
+        /// <summary>
+        /// Gets whether the intent is an input-active frame's, the coarse source: a mod's whole Update and LateUpdate carry
+        /// it while its input is active, scripted work in them included. What such a frame starts keeps it: a command it
+        /// runs, and a control's event its code fires. Clicks, the player's own commands, interactions and motion leases
+        /// are direct actions, and are not.
+        /// </summary>
+        internal bool IsInputFrame { get; }
+
+        // The scope's cache: the execution context that runs this record over an outer one (main thread only, .NET).
         internal ExecutionContext? CachedOuter { get; set; }
 
         internal ExecutionContext? CachedInner { get; set; }
 
         /// <summary>Names the source and whose intent it is, never a participant's id: logs must not carry one.</summary>
-        public override string ToString() => Source + (IsLocalPlayer ? " of the local player" : " of a participant");
+        public override string ToString() =>
+            Source + (IsInputFrame && Source != IntentSource.InputActiveFrame ? " from an input frame" : string.Empty) +
+            (IsLocalPlayer ? " of the local player" : " of a participant");
+    }
+
+    /// <summary>How an intent scope makes its record flow: the cheapest way the runtime has that keeps every rule.</summary>
+    internal enum IntentScopeMode
+    {
+        /// <summary>
+        /// .NET: runs a cached execution context that is the caller's plus the record. A captured context can run more than
+        /// once there, so the steady state allocates nothing.
+        /// </summary>
+        ReusedContext = 0,
+
+        /// <summary>
+        /// Mono, as the game runs it, and the .NET Framework: keeps the record in the logical call context
+        /// (<see cref="IntentLogicalStore"/>), set and emptied in place and copied only when something captures the
+        /// execution context, so the steady state allocates nothing.
+        /// </summary>
+        LogicalCallContext = 1,
+
+        /// <summary>
+        /// Anywhere: sets the async-local and restores it. Each change copies the runtime's map of async-locals, so it
+        /// allocates in the steady state; it is the fallback where neither way above exists.
+        /// </summary>
+        AsyncLocal = 2
     }
 
     /// <summary>
-    /// The intent scope (WS3.4): an <see cref="AsyncLocal{T}"/> record of the player intent the current code acts on. It
-    /// flows with the execution context into every continuation that code starts, and is observed only on the thread that
-    /// made the scope, the game's main thread: every other thread reads none. Opening a scope always restores what was
-    /// there before once its code returns, so a scope never outlives the callback it wraps. The rules for who observes what
-    /// are in <see cref="IntentFlowRules"/>.
+    /// The intent scope (WS3.4): the record of the player intent the current code acts on. It flows with the execution
+    /// context into every continuation that code starts, and is observed only on the thread that made the scope, the
+    /// game's main thread: every other thread reads none. Opening a scope always restores what was there before once its
+    /// code returns, so a scope never outlives the callback it wraps. The rules for who observes what are in
+    /// <see cref="IntentFlowRules"/>.
     /// </summary>
     /// <remarks>
-    /// Running a record allocates nothing in the steady state where the runtime can run one captured execution context more
-    /// than once (.NET): the scope keeps, on each record, the context that is the caller's plus the record, and runs that.
-    /// Where a captured context runs once only (the .NET Framework model, which the game's Mono follows), it sets the
-    /// record, runs, and restores, and each of those changes copies the runtime's small dictionary of async-local values.
+    /// A probe picks the way to run a record once per process (<see cref="IntentScopeMode"/>): a reused execution context
+    /// on .NET, the logical call context on the game's Mono, where a captured context runs only once, and setting and
+    /// restoring an async-local where neither exists. Each keeps the same rules.
     /// </remarks>
     internal sealed class IntentScope
     {
         private static readonly bool RuntimeReusesContexts = ProbeReusableContexts();
+        private static readonly IntentLogicalStore? RuntimeLogicalStore = RuntimeReusesContexts ? null : IntentLogicalStore.TryBind();
         private static readonly object RestoreNone = new object();
         private static readonly ContextCallback Build = BuildInner;
+        private static int scopes;
         private readonly AsyncLocal<IntentRecord?> current = new AsyncLocal<IntentRecord?>();
+        private readonly IntentLogicalStore? logical;
+        private readonly string slot;
         private readonly int ownerThread;
 
-        /// <summary>Creates a scope owned by the calling thread, using reusable contexts where the runtime has them.</summary>
+        /// <summary>Creates a scope owned by the calling thread, running records the way this runtime does best.</summary>
         internal IntentScope()
-            : this(reuseContexts: true)
+            : this(RuntimeMode)
         {
         }
 
-        /// <param name="reuseContexts">False runs every record by setting and restoring it, as the game's Mono must.</param>
-        internal IntentScope(bool reuseContexts)
+        /// <summary>Creates a scope owned by the calling thread that runs records in <paramref name="mode"/>, which this runtime must support.</summary>
+        internal IntentScope(IntentScopeMode mode)
+            : this(mode, mode == IntentScopeMode.LogicalCallContext ? RuntimeLogicalStore : null)
         {
-            ReusesContexts = reuseContexts && RuntimeReusesContexts;
+        }
+
+        /// <summary>
+        /// Creates a scope owned by the calling thread. <paramref name="store"/> is the logical call context
+        /// <see cref="IntentScopeMode.LogicalCallContext"/> uses; a test passes one of its own where the runtime has none.
+        /// </summary>
+        internal IntentScope(IntentScopeMode mode, IntentLogicalStore? store)
+        {
+            switch (mode)
+            {
+                case IntentScopeMode.ReusedContext:
+                    if (!RuntimeReusesContexts) throw new NotSupportedException("This runtime runs a captured execution context once only.");
+                    break;
+                case IntentScopeMode.LogicalCallContext:
+                    logical = store ?? throw new NotSupportedException("This runtime has no logical call context a scope can keep its record in.");
+                    break;
+                case IntentScopeMode.AsyncLocal:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+
+            Mode = mode;
+            slot = "TopiaForge.Intent." + Interlocked.Increment(ref scopes).ToString(CultureInfo.InvariantCulture);
             ownerThread = Environment.CurrentManagedThreadId;
         }
 
         /// <summary>Gets whether this runtime can run one captured execution context more than once.</summary>
         internal static bool RuntimeCanReuseContexts => RuntimeReusesContexts;
 
-        /// <summary>Gets whether running a record reuses a cached execution context rather than setting and restoring it.</summary>
-        internal bool ReusesContexts { get; }
+        /// <summary>Gets whether this runtime has a logical call context a scope can keep its record in.</summary>
+        internal static bool RuntimeHasLogicalCallContext => RuntimeLogicalStore != null;
+
+        /// <summary>Gets the way a scope runs records on this runtime unless told otherwise.</summary>
+        internal static IntentScopeMode RuntimeMode => ModeFor(RuntimeReusesContexts, RuntimeLogicalStore != null);
+
+        /// <summary>Gets how this scope runs records.</summary>
+        internal IntentScopeMode Mode { get; }
 
         /// <summary>Gets whether the calling thread is the one the scope belongs to.</summary>
         internal bool IsOwnerThread => Environment.CurrentManagedThreadId == ownerThread;
@@ -104,14 +176,23 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// Gets the record flowing to the calling code, or null outside every scope and on any other thread than the owner.
         /// It does not check the reader's mod or the epoch; <see cref="IntentFlowRules.Observe"/> does.
         /// </summary>
-        internal IntentRecord? Flowing => IsOwnerThread ? current.Value : null;
+        internal IntentRecord? Flowing => IsOwnerThread ? Read() : null;
 
         /// <summary>
         /// Gets the record the execution context carries to the calling code on whichever thread it runs, for work handed
         /// back to the main thread (<see cref="IntentFlow.WorkerHandBack"/>): a worker the intent's own code started never
         /// observes it, but what it schedules through the SDK scheduler captures it. Nothing else reads it.
         /// </summary>
-        internal IntentRecord? FlowingOnAnyThread => current.Value;
+        internal IntentRecord? FlowingOnAnyThread => Read();
+
+        /// <summary>
+        /// The way to run records on a runtime that can, or cannot, reuse captured execution contexts, and has, or has no,
+        /// logical call context: the first way of <see cref="IntentScopeMode"/> that allocates nothing, else the async-local.
+        /// </summary>
+        internal static IntentScopeMode ModeFor(bool reusesContexts, bool hasLogicalCallContext) =>
+            reusesContexts ? IntentScopeMode.ReusedContext
+            : hasLogicalCallContext ? IntentScopeMode.LogicalCallContext
+            : IntentScopeMode.AsyncLocal;
 
         /// <summary>
         /// Runs <paramref name="callback"/> with <paramref name="record"/> flowing to it and to every continuation it
@@ -126,14 +207,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 return;
             }
 
-            var flowing = current.Value;
+            var flowing = Read();
             if (ReferenceEquals(flowing, record))
             {
                 callback(state);
                 return;
             }
 
-            if (record != null && ReusesContexts)
+            if (record != null && Mode == IntentScopeMode.ReusedContext)
             {
                 var outer = ExecutionContext.Capture();
                 if (outer != null)
@@ -143,14 +224,14 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 }
             }
 
-            current.Value = record;
+            Write(record);
             try
             {
                 callback(state);
             }
             finally
             {
-                current.Value = flowing;
+                Write(flowing);
             }
         }
 
@@ -162,9 +243,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         internal Token Enter(IntentRecord? record)
         {
             if (!IsOwnerThread) return default;
-            var flowing = current.Value;
+            var flowing = Read();
             if (ReferenceEquals(flowing, record)) return default;
-            current.Value = record;
+            Write(record);
             return new Token(this, (object?)flowing ?? RestoreNone);
         }
 
@@ -175,7 +256,26 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         internal void Restore(object? restore)
         {
             if (restore == null || !IsOwnerThread) return;
-            current.Value = ReferenceEquals(restore, RestoreNone) ? null : (IntentRecord)restore;
+            Write(ReferenceEquals(restore, RestoreNone) ? null : (IntentRecord)restore);
+        }
+
+        private IntentRecord? Read() => logical != null ? logical.Get(slot) as IntentRecord : current.Value;
+
+        private void Write(IntentRecord? record)
+        {
+            if (logical == null)
+            {
+                current.Value = record;
+            }
+            else if (record == null)
+            {
+                // Removed, never set to null, so a capture at rest copies nothing.
+                logical.Free(slot);
+            }
+            else
+            {
+                logical.Set(slot, record);
+            }
         }
 
         private ExecutionContext InnerFor(IntentRecord record, ExecutionContext outer)
@@ -198,7 +298,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// Whether a captured execution context can run twice. .NET allows it; the .NET Framework model, which Mono follows,
-        /// refuses a context that has already run.
+        /// refuses a context that has already run. It never throws: the probe runs when the runtime starts, offline too, so a
+        /// runtime that refuses any of it in another way simply has no reusable contexts.
         /// </summary>
         private static bool ProbeReusableContexts()
         {
@@ -221,8 +322,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 ExecutionContext.Run(captured, count, null);
                 return seen == 2;
             }
-            catch (InvalidOperationException)
+            catch (Exception)
             {
+                // Mono refuses the second run with InvalidOperationException; any other refusal means the same.
                 return false;
             }
         }

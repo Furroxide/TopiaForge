@@ -22,6 +22,7 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerIntentRulesTests.Run();
             MultiplayerIntentScopeTests.Run();
             MultiplayerIntentRuntimeTests.Run();
+            MultiplayerIntentCoarsenessTests.Run();
             MultiplayerIntentServicesTests.Run(root);
             UiKitIntentConventionTests.Run();
             Console.WriteLine("Multiplayer intent tracking tests passed.");
