@@ -1,5 +1,10 @@
 part of '../local_developer_repository.dart';
 
+/// Finds [executable] on PATH, as `where` does on Windows and `which` does
+/// elsewhere: its first match, or '' when there is none. The developer tools'
+/// own lookup runs one of those, bounded to five seconds.
+typedef ExecutableLocator = Future<String> Function(String executable);
+
 extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
   Directory? _findProjectRoot(String startPath) {
     var current = FileSystemEntity.isDirectorySync(startPath)
@@ -317,6 +322,8 @@ ${references.join('\n')}
   }
 
   Future<String> _which(String executable) async {
+    final locator = _executableLocator;
+    if (locator != null) return locator(executable);
     final command = Platform.isWindows ? 'where' : 'which';
     final result = await runBoundedProcess(
       command,

@@ -53,6 +53,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     UnityEditorVersionProbe? unityEditorVersionProbe,
     UnityEditorLauncher? unityEditorLauncher,
     RepositoryDotnetSdkResolver? dotnetSdkResolver,
+    ExecutableLocator? executableLocator,
     Duration unityEditorProbeTimeout = const Duration(seconds: 5),
   }) : _repositoryRoot = Directory(
          repositoryRoot ?? _findDeveloperRepoRoot(workingDirectory),
@@ -62,6 +63,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
        _unityEditorVersionProbe = unityEditorVersionProbe,
        _unityEditorLauncher = unityEditorLauncher,
        _dotnetSdkResolver = dotnetSdkResolver ?? resolveRepositoryDotnetSdk,
+       _executableLocator = executableLocator,
        _unityEditorProbeTimeout = unityEditorProbeTimeout,
        super(Directory(dataRoot ?? resolveTopiaForgeDataRoot()));
 
@@ -71,6 +73,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
   final UnityEditorVersionProbe? _unityEditorVersionProbe;
   final UnityEditorLauncher? _unityEditorLauncher;
   final RepositoryDotnetSdkResolver _dotnetSdkResolver;
+  final ExecutableLocator? _executableLocator;
   final Duration _unityEditorProbeTimeout;
 
   @override
