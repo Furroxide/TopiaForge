@@ -39,14 +39,39 @@ The build script bakes the static SDF TMP font assets itself (idempotent — an 
 committed `Assets/FontAssets/*.asset` is reused after its derivative object/family
 names are normalized; delete it only to re-bake the atlas):
 
-- `TopiaForge Body SDF` — 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1
-  Supplement + Latin Extended-A + typographic punctuation.
-- `TopiaForge Display SDF` — 512×512, same settings (display headings).
-- Bold renders via TMP faux-bold (the variable TTF imports only its default instance),
-  which the kit selects automatically when no dedicated bold asset ships.
+- `TopiaForge Body Medium SDF` — Quicksand Medium (500), for body, label and caption
+  text. 1024×1024, SDFAA, padding 9, static; ASCII + Latin-1 Supplement + Latin
+  Extended-A + typographic punctuation.
+- `TopiaForge Body SDF` — Quicksand Light (300), the variable font's default instance,
+  for Quicksand text larger than body text: headings and numerals. Same settings.
+- `TopiaForge Display SDF` — Audiowide, 512×512, same settings (display headings).
+- Bold renders via TMP faux-bold over each style's face; no bold asset ships.
 
-Every font-asset material stays on the `TextMeshPro/Distance Field` shader — building
-the bundle pulls the shader in as a dependency, which is the in-game safety net.
+Unity imports only a variable font's default instance, so `TopiaForge Body Medium SDF`
+is baked from `Assets/Fonts/TopiaForgeBody-Medium.ttf`, a static Medium instance that
+`make_body_medium_font.py` writes with fontTools (`pip install fonttools==4.65.0`, then
+`python make_body_medium_font.py`). The script accepts only the upstream Quicksand
+release recorded in `THIRD_PARTY_NOTICES.md` and writes the same bytes on every run.
+Run it again only when that source font changes.
+
+A re-bake is reproducible byte for byte. Unity gives a new asset a random GUID, and its
+material and atlas pages random local ids, so the builder writes each freshly baked SDF
+again with the GUID pinned in `Assets/Editor/UiBundleReproducibleAssets.cs` and fixed
+sub-asset ids. To re-bake an SDF, delete its `.asset` and `.asset.meta` and build. A new
+SDF needs a pinned GUID there first.
+
+With an unchanged source font, a re-bake of `TopiaForge Body Medium SDF` matches the
+committed files. `TopiaForge Body SDF` and `TopiaForge Display SDF` were baked before
+the ids were pinned, and the Body SDF from an earlier copy of the Quicksand font, so the
+first re-bake of either changes its `.asset` and the bundle; later re-bakes match.
+
+Every font-asset material stays on TMP's `TextMeshPro/Mobile/Distance Field` shader
+(`Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader`) — building the bundle pulls the
+shader in as a dependency, which is the in-game safety net. That vendored shader omits
+the `#pragma enable_d3d11_debug_symbols` line TMP ships with: on Windows the directive
+compiles it unoptimized, with debug data that changes on every compile and records
+absolute editor paths, so the bundle stops being reproducible. Keep it out if the TMP
+essentials are ever re-imported.
 Commit the baked `.asset` files (+ `.meta`) together with the rebuilt bundle.
 
 ## Building the bundle

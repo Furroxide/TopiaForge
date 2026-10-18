@@ -6,23 +6,24 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// TMP font resolution with a tiered fallback chain, resolved lazily on first use:
-    ///   1. Brand bundle embedded in the DLL (Quicksand + Audiowide SDF assets).
+    ///   1. Brand bundle embedded in the DLL: Quicksand Medium, Quicksand Light and Audiowide SDF assets.
     ///   2. Dynamic TMP asset from an OS font (Segoe UI).
     ///   3. The game's own TMP default font asset.
     ///   4. Null — TopiaForgeSafeMode surfaces a diagnostic banner; labels render empty.
-    /// Each tier logs, and the resolved tier is part of the one-shot init report.
+    /// Each tier logs, and the resolved tier is part of the one-shot init report. A style's face comes
+    /// from <see cref="TopiaForgeTokens.FaceOf"/> alone, so small text gets the Medium face everywhere.
     /// </summary>
     public static class TopiaForgeFonts
     {
         private static bool resolved;
         private static TMP_FontAsset? body;
-        private static TMP_FontAsset? bold;
+        private static TMP_FontAsset? heading;
         private static TMP_FontAsset? display;
 
         /// <summary>Gets or sets resolved tier.</summary>
         public static string ResolvedTier { get; private set; } = "unresolved";
 
-        /// <summary>Gets body.</summary>
+        /// <summary>Gets the small-text face: body, label and caption text (Quicksand Medium in the brand tier).</summary>
         public static TMP_FontAsset? Body
         {
             get
@@ -32,13 +33,13 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        /// <summary>Gets bold.</summary>
-        public static TMP_FontAsset? Bold
+        /// <summary>Gets the face for Quicksand text larger than body text (Quicksand Light in the brand tier).</summary>
+        public static TMP_FontAsset? Heading
         {
             get
             {
                 EnsureResolved();
-                return bold;
+                return heading;
             }
         }
 
@@ -52,22 +53,28 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        /// <summary>True when a style must be synthesized with TMP faux-bold (no dedicated asset).</summary>
-        public static bool UseFauxBold => EnsureResolved() && ReferenceEquals(bold, body);
+        /// <summary>
+        /// True in every tier: no bold face ships, so bold styles are drawn with TMP faux bold over the face
+        /// their style resolves to.
+        /// </summary>
+        public static bool UseFauxBold => true;
 
-        /// <summary>True when display styles share the body asset (fallback tiers).</summary>
-        public static bool UseFauxDisplay => EnsureResolved() && ReferenceEquals(display, body);
+        /// <summary>True when display styles share a text face (fallback tiers).</summary>
+        public static bool UseFauxDisplay => EnsureResolved() && (ReferenceEquals(display, body) || ReferenceEquals(display, heading));
 
-        /// <summary>Gets a motion preset adjusted for the active accessibility settings.</summary>
+        /// <summary>Gets the font asset for a text style: the face <see cref="TopiaForgeTokens.FaceOf"/> gives it.</summary>
         public static TMP_FontAsset? For(TopiaForgeTextStyle style)
         {
             EnsureResolved();
-            if (TopiaForgeTokens.IsDisplay(style))
+            switch (TopiaForgeTokens.FaceOf(style))
             {
-                return display;
+                case TopiaForgeFace.Display:
+                    return display;
+                case TopiaForgeFace.Heading:
+                    return heading;
+                default:
+                    return body;
             }
-
-            return TopiaForgeTokens.IsBold(style) ? bold : body;
         }
 
         private static bool EnsureResolved()
@@ -79,14 +86,17 @@ namespace TopiaForge.Mods.UnityUi
 
             resolved = true;
 
-            // Tier 1: embedded brand bundle.
-            if (TopiaForgeBrandBundle.TryLoad() && TopiaForgeBrandBundle.BodyFont != null)
+            // Tier 1: embedded brand bundle. A bundle that lacks one Quicksand weight draws its styles with the other.
+            if (TopiaForgeBrandBundle.TryLoad() && (TopiaForgeBrandBundle.BodyFont != null || TopiaForgeBrandBundle.HeadingFont != null))
             {
-                body = TopiaForgeBrandBundle.BodyFont;
-                bold = TopiaForgeBrandBundle.BoldFont != null ? TopiaForgeBrandBundle.BoldFont : TopiaForgeBrandBundle.BodyFont;
-                display = TopiaForgeBrandBundle.DisplayFont != null ? TopiaForgeBrandBundle.DisplayFont : bold;
+                var bodyFont = TopiaForgeBrandBundle.BodyFont != null ? TopiaForgeBrandBundle.BodyFont : TopiaForgeBrandBundle.HeadingFont!;
+                var headingFont = TopiaForgeBrandBundle.HeadingFont != null ? TopiaForgeBrandBundle.HeadingFont : bodyFont;
+                var displayFont = TopiaForgeBrandBundle.DisplayFont != null ? TopiaForgeBrandBundle.DisplayFont : headingFont;
+                body = bodyFont;
+                heading = headingFont;
+                display = displayFont;
                 ResolvedTier = "brand-bundle";
-                TopiaForgeLog.Info("Fonts resolved from brand bundle (body: " + body.name + ", display: " + display.name + ").");
+                TopiaForgeLog.Info("Fonts resolved from brand bundle (body: " + bodyFont.name + ", heading: " + headingFont.name + ", display: " + displayFont.name + ").");
                 return true;
             }
 
@@ -100,7 +110,7 @@ namespace TopiaForge.Mods.UnityUi
                     if (asset != null)
                     {
                         body = asset;
-                        bold = asset;
+                        heading = asset;
                         display = asset;
                         ResolvedTier = "os-font";
                         TopiaForgeLog.Warn("Fonts resolved from OS font 'Segoe UI' (brand bundle unavailable). Brand typography is degraded.");
@@ -120,7 +130,7 @@ namespace TopiaForge.Mods.UnityUi
                 if (gameDefault != null)
                 {
                     body = gameDefault;
-                    bold = gameDefault;
+                    heading = gameDefault;
                     display = gameDefault;
                     ResolvedTier = "game-default";
                     TopiaForgeLog.Warn("Fonts resolved from the game's TMP default asset '" + gameDefault.name + "'.");
