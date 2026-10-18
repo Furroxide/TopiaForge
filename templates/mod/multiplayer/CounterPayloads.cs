@@ -1,3 +1,5 @@
+using TopiaForge.Mods;
+
 namespace {{ASSEMBLY_NAME}}
 {
     // Multiplayer payloads are plain, sealed classes with public auto-properties of deterministic types, which the

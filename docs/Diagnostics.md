@@ -269,7 +269,7 @@ Payloads are concrete classes with a compiler-generated parameterless constructo
 
 **Unbounded multiplayer payload.**
 
-Give every string and array member `[NetworkBound(maximum)]`, so the generated codec has a hard size limit.
+Give every string and array member `[NetworkBound(maximum)]`, so the generated codec has a hard size limit. A bound the compiler cannot resolve, usually for want of `using TopiaForge.Mods;`, is the compiler's error to report, so it raises CS0246 and no TFMP004.
 
 ### TFMP005
 
