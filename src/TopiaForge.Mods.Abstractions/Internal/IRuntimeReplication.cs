@@ -15,8 +15,9 @@ namespace TopiaForge.Mods.Internal
     /// </para>
     /// <para>
     /// Some members are stubs until the WS3 slice that owns their behaviour lands, and each says so. Until then a spawn
-    /// request and a command run here, as single player always has, and no reference resolves. The realm, the route, the
-    /// time authority and the microphone already answer by the execution model's rules. A context whose profile does not
+    /// request and a command run here, as single player always has, and no player reference resolves. The realm, the
+    /// route, the time authority and the microphone already answer by the execution model's rules, and the network world
+    /// (WS3.6) builds replicas, announces what is registered and names entities. A context whose profile does not
     /// run in the current realm, such as a gamemode server on a joined player, is refused with
     /// <see cref="ModErrorCode.NotAuthoritative"/>, and a stopping one with <see cref="ModErrorCode.Cancelled"/>.
     /// </para>
@@ -43,22 +44,28 @@ namespace TopiaForge.Mods.Internal
         /// Registers how this process builds its replica of an entity of <paramref name="kind"/> that the host announced. A
         /// kind has one factory in the process; disposing the lease removes it.
         /// </summary>
-        /// <remarks>Stub: the network world (WS3.6) builds replicas through these factories; until then they are kept and never called.</remarks>
+        /// <remarks>
+        /// A joined player's network world (WS3.6) builds the host's entities of this kind through the factory, and releases
+        /// them through it when they end, when a baseline no longer lists them, or when the player leaves.
+        /// </remarks>
         OperationResult<IDisposable> RegisterReplicaFactory(string kind, IInternalReplicaFactory factory);
 
         /// <summary>
         /// Registers an entity this context spawned, or built as world content, as a canonical network entity with the
-        /// description peers build it from. The runtime records it at once, in every realm, so that opening this session to
-        /// other players later can baseline it. Registering a recorded entity again replaces its description, and the
-        /// record ends when the entity does. A client-local mod's registration is kept local: nothing it does is networked.
+        /// description peers build it from. Offline and on a listen host the runtime records it at once, so that opening this
+        /// session to other players later can baseline it, and a listen host announces it to its players. Registering a
+        /// recorded entity again replaces its description, and the record ends when the entity does, or when this context
+        /// ends. A client-local mod's registration is kept local: nothing it does is networked. On a joined player nothing is
+        /// recorded: world content waits to bind, by its content key, to the host's entity of that key.
         /// </summary>
-        /// <remarks>Stub: from WS3.6 a host also announces the entity, and from WS3.7 a joined player binds it as a shadow of the host's.</remarks>
+        /// <remarks>Stub: from WS3.7 a joined player's other registrations bind as shadows of the host's.</remarks>
         OperationResult<bool> RegisterCanonical(IEntity entity, InternalSpawnDescriptor descriptor);
 
         /// <summary>Spawns through <paramref name="spawn"/> and registers what it returns as canonical; a failed spawn is returned as it is.</summary>
         /// <remarks>
-        /// Stub: until authority routing (WS3.7) the spawn runs here in every realm, as in single player. From then a joined
-        /// player forwards it to the host, predicts it locally and is told whether the host adopted it.
+        /// Stub: until authority routing (WS3.7) the spawn runs here in every realm, as in single player, and a joined
+        /// player's is recorded as nothing. From then a joined player forwards it to the host, predicts it locally and is
+        /// told whether the host adopted it.
         /// </remarks>
         OperationResult<IEntity> RequestSpawn(InternalSpawnDescriptor descriptor, Func<OperationResult<IEntity>> spawn);
 
@@ -76,11 +83,14 @@ namespace TopiaForge.Mods.Internal
         OperationResult<bool> SubmitCommand(string kind, byte[] payload);
 
         /// <summary>Makes a reference that names <paramref name="entity"/> on every peer.</summary>
-        /// <remarks>Stub: false until the network world (WS3.6) names entities and the players directory (WS3.11) names players.</remarks>
+        /// <remarks>
+        /// The network world (WS3.6) names the entities this session replicates, a part of one by its network root. Stub for
+        /// players: false until the players directory (WS3.11) names them.
+        /// </remarks>
         bool TryCreateRef(IEntity entity, out InternalNetRef reference);
 
         /// <summary>Finds the entity a reference names in this process.</summary>
-        /// <remarks>Stub: false until WS3.6 and WS3.11, as for <see cref="TryCreateRef"/>.</remarks>
+        /// <remarks>As for <see cref="TryCreateRef"/>: entities resolve while this session replicates them, and players from WS3.11.</remarks>
         bool TryResolveRef(InternalNetRef reference, out IEntity? entity);
 
         /// <summary>
@@ -101,11 +111,20 @@ namespace TopiaForge.Mods.Internal
         OperationResult<IInternalMicrophoneLease> AcquireMicrophone(InternalMicrophoneUse use, string reason);
     }
 
-    /// <summary>Builds this process's replica of an entity another peer announced. Main thread.</summary>
+    /// <summary>
+    /// Builds this process's replica of an entity another peer announced, and ends it again. The network world (WS3.6)
+    /// keeps the replica kinematic and moves it to the host's samples; the factory owns it otherwise. Main thread.
+    /// </summary>
     internal interface IInternalReplicaFactory
     {
         /// <summary>Builds the replica <paramref name="descriptor"/> describes, or says why it cannot.</summary>
         OperationResult<IEntity> CreateReplica(InternalSpawnDescriptor descriptor);
+
+        /// <summary>
+        /// Ends a replica this factory built, because the host despawned its entity, a baseline no longer lists it, or this
+        /// process left the session. It is called once per replica and must not throw.
+        /// </summary>
+        void ReleaseReplica(IEntity replica);
     }
 
     /// <summary>A hold on the microphone. Disposing it gives the microphone back; disposing it again does nothing.</summary>

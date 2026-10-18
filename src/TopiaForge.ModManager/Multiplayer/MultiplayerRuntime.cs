@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 
@@ -28,7 +29,9 @@ namespace TopiaForge.ModManager
     {
         private readonly Func<IInternalMultiplayerControl?> findControl;
         private readonly IMultiplayerLog log;
+        private readonly List<IMultiplayerRuntimeObserver> observers = new List<IMultiplayerRuntimeObserver>();
         private IInternalMultiplayerControl? control;
+        private bool observerFailureLogged;
         private InternalSessionRole role;
         private bool pumpFailureLogged;
         private bool flushFailureLogged;
@@ -71,6 +74,16 @@ namespace TopiaForge.ModManager
 
         /// <summary>LateUpdate, joined players only: interpolating replicas before mods see them (WS3.6 replica driver).</summary>
         internal IMultiplayerFrameStage? ReplicaInterpolation { get; set; }
+
+        /// <summary>
+        /// Adds a slice that hears when a control attaches and detaches and when the realm changes: the network world
+        /// (WS3.6), and session follow (WS3.8). Observers hear in the order they were added.
+        /// </summary>
+        internal void AddObserver(IMultiplayerRuntimeObserver observer)
+        {
+            if (observer == null) throw new ArgumentNullException(nameof(observer));
+            if (!observers.Contains(observer)) observers.Add(observer);
+        }
 
         /// <summary>
         /// Attaches to the control the registry holds now: ModRuntime calls it once packages have loaded. Attaching again
@@ -117,6 +130,7 @@ namespace TopiaForge.ModManager
 
             control = candidate;
             role = candidate.Role;
+            for (var index = 0; index < observers.Count; index++) Tell(observers[index], ObserverEvent.Attached, candidate, default, default);
             return true;
         }
 
@@ -128,6 +142,7 @@ namespace TopiaForge.ModManager
             control = null;
             role = InternalSessionRole.Solo;
             FollowRealm();
+            for (var index = 0; index < observers.Count; index++) Tell(observers[index], ObserverEvent.Detaching, current, default, default);
             try
             {
                 current.DetachRuntime(Host);
@@ -205,7 +220,41 @@ namespace TopiaForge.ModManager
             }
         }
 
+        /// <summary>Tells one observer what happened; one that throws is reported once until an observer succeeds, and the rest still hear.</summary>
+        private void Tell(IMultiplayerRuntimeObserver observer, ObserverEvent happened, IInternalMultiplayerControl? subject, Core.Multiplayer.NetRealm previous, Core.Multiplayer.NetRealm next)
+        {
+            try
+            {
+                switch (happened)
+                {
+                    case ObserverEvent.Attached:
+                        observer.Attached(subject!);
+                        break;
+                    case ObserverEvent.Detaching:
+                        observer.Detaching(subject!);
+                        break;
+                    default:
+                        observer.RealmChanged(previous, next);
+                        break;
+                }
+
+                observerFailureLogged = false;
+            }
+            catch (Exception exception)
+            {
+                if (!observerFailureLogged) log.Error("Multiplayer: a runtime observer failed: " + Describe(exception));
+                observerFailureLogged = true;
+            }
+        }
+
         private static string Describe(Exception exception) =>
             exception.GetType().Name + ": " + MultiplayerDiagnosticRedactor.Redact(exception.Message);
+
+        private enum ObserverEvent
+        {
+            Attached,
+            Detaching,
+            RealmChanged
+        }
     }
 }

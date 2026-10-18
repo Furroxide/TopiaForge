@@ -18,8 +18,11 @@ namespace TopiaForge.ModManager
     /// <summary>The replica kinds the runtime itself describes; first-party providers cannot claim them.</summary>
     internal static class MultiplayerSpawnKinds
     {
-        /// <summary>A prefab spawned through a mod context's asset service; the spawn request is its description.</summary>
+        /// <summary>A prefab spawned through a mod context's asset service; its bundle and asset name are its description.</summary>
         internal const string AssetPrefab = "asset.prefab";
+
+        /// <summary>A scene object every peer loads, bound by its scene object key.</summary>
+        internal const string SceneObject = "asset.scene";
 
         /// <summary>The prefix of every kind the runtime describes itself.</summary>
         internal const string RuntimePrefix = "asset.";
@@ -30,18 +33,22 @@ namespace TopiaForge.ModManager
 
     /// <summary>
     /// One spawn the runtime recorded when it happened: who made it, with which network profile, what it is, how peers
-    /// build it, and the live entity. A record ends when its entity does. Main thread only.
+    /// build it, and the live entity. A record ends when its entity does, when it is forgotten, or when the scope that
+    /// made it ends; an ended record lets go of its entity, so it keeps nothing of an ended scope reachable. Main thread
+    /// only.
     /// </summary>
     internal sealed class MultiplayerSpawnRecord
     {
+        private IEntity? entity;
         private bool removed;
 
-        internal MultiplayerSpawnRecord(long sequence, string entityKey, MultiplayerSpawnDescription description, IEntity entity)
+        internal MultiplayerSpawnRecord(long sequence, string entityKey, MultiplayerSpawnDescription description, IEntity entity, object? owner)
         {
             Sequence = sequence;
             EntityKey = entityKey;
             Description = description;
-            Entity = entity;
+            this.entity = entity;
+            Owner = owner;
         }
 
         /// <summary>Gets the order this process recorded the spawn in, from 1. A sequence is never reused.</summary>
@@ -50,23 +57,45 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the entity's process-local id when it was recorded.</summary>
         internal string EntityKey { get; }
 
-        /// <summary>Gets the live entity.</summary>
-        internal IEntity Entity { get; }
+        /// <summary>Gets the live entity, or <see cref="ReleasedEntity.Instance"/> once the record has ended.</summary>
+        internal IEntity Entity => entity ?? ReleasedEntity.Instance;
+
+        /// <summary>Gets the seam that recorded it, whose scope ending ends the record; null when nothing owns it.</summary>
+        internal object? Owner { get; }
 
         /// <summary>Gets who made it and how peers build it; registering the entity again replaces it.</summary>
         internal MultiplayerSpawnDescription Description { get; private set; }
 
         /// <summary>Gets whether the record still describes a live entity.</summary>
-        internal bool IsLive => !removed && Entity.IsAlive;
+        internal bool IsLive => !removed && entity != null && entity.IsAlive;
 
         internal void Redescribe(MultiplayerSpawnDescription description) => Description = description;
 
-        internal void MarkRemoved() => removed = true;
+        /// <summary>Ends the record and lets go of its entity.</summary>
+        internal void MarkRemoved()
+        {
+            removed = true;
+            entity = null;
+        }
 
         public override string ToString() => "#" + Sequence + " " + Description.Kind + " of " + Description.OwnerModId;
+
+        /// <summary>The entity an ended record reports: never alive, and holding nothing.</summary>
+        internal sealed class ReleasedEntity : IEntity
+        {
+            internal static readonly ReleasedEntity Instance = new ReleasedEntity();
+
+            public string Id => string.Empty;
+
+            public string Name => "Ended spawn";
+
+            public bool IsAlive => false;
+
+            public Vec3 Position => Vec3.Zero;
+        }
     }
 
-    /// <summary>Who made a recorded spawn and how peers build it. Immutable.</summary>
+    /// <summary>Who made a recorded spawn and how peers build it. Immutable, and it holds no handle of the scope that made it.</summary>
     internal sealed class MultiplayerSpawnDescription
     {
         /// <param name="ownerModId">The mod whose context made the spawn.</param>
@@ -75,7 +104,10 @@ namespace TopiaForge.ModManager
         /// <param name="kind">The replica kind, a lowercase token, such as <c>asset.prefab</c>.</param>
         /// <param name="contentKey">World content only: the key every peer computes alike for it.</param>
         /// <param name="transform">Where the entity was when it was made.</param>
-        /// <param name="descriptor">What it was made from: the spawn request, or the provider's own descriptor.</param>
+        /// <param name="descriptor">
+        /// What a joined player builds it from: a <see cref="MultiplayerAssetDescriptor"/> for an asset spawn, the
+        /// provider's own <c>InternalSpawnDescriptor</c> otherwise.
+        /// </param>
         internal MultiplayerSpawnDescription(
             string ownerModId,
             ModNetProfile profile,
@@ -119,11 +151,26 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>
+    /// Hears about spawns the ledger records while it is set: the network world (WS3.6) announces each one a listen host
+    /// makes after its census. It is called on the main thread, inside the spawn, and must not throw or spawn.
+    /// </summary>
+    internal interface IMultiplayerSpawnObserver
+    {
+        /// <summary>
+        /// A spawn was recorded, or, when <paramref name="redescribed"/>, an entity already recorded was described again in
+        /// place.
+        /// </summary>
+        void Recorded(MultiplayerSpawnRecord record, bool redescribed);
+    }
+
+    /// <summary>
     /// The spawns the runtime records at spawn time, even offline, so that opening the running session to other players
     /// later can baseline them: SDK spawns and world content, each with the network profile of the context that made it.
     /// Recording happens only when something spawns, so an offline frame costs nothing. A record ends with its entity:
-    /// dead records are swept as recording goes on, in amortized constant time, and whenever the live records are read.
-    /// Main thread only.
+    /// dead records are swept as recording goes on, in amortized constant time, and whenever the live records are read. A
+    /// record also ends when the scope whose seam recorded it ends, at once, so an ended session scope stays reachable
+    /// through no record. While an observer is set, each new record and each new description is reported to it. Main
+    /// thread only.
     /// </summary>
     internal sealed class MultiplayerSpawnLedger
     {
@@ -139,6 +186,15 @@ namespace TopiaForge.ModManager
         internal int Count => records.Count;
 
         /// <summary>
+        /// Gets or sets who hears about later records: the network world, while this process hosts. Null by default, so an
+        /// offline spawn reports to nobody.
+        /// </summary>
+        internal IMultiplayerSpawnObserver? Observer { get; set; }
+
+        /// <summary>Gets how many times the observer threw; the spawn that reported it succeeded regardless.</summary>
+        internal int ObserverFailures { get; private set; }
+
+        /// <summary>
         /// Whether spawns from a context with <paramref name="profile"/> are recorded: those a listen host would baseline.
         /// A client-local mod is never networked, and a standalone one never goes online.
         /// </summary>
@@ -148,10 +204,11 @@ namespace TopiaForge.ModManager
         /// <summary>
         /// Records a spawn, or returns null when its profile is never baselined. An entity the ledger already holds alive is
         /// described again in place, keeping its place in the order: a first-party provider that spawns through the asset
-        /// service and then registers the entity describes it best.
+        /// service and then registers the entity describes it best. <paramref name="owner"/> is the seam that recorded it;
+        /// <see cref="ReleaseOwner"/> ends its records when its scope ends.
         /// </summary>
         /// <exception cref="ArgumentException">The entity has no id.</exception>
-        internal MultiplayerSpawnRecord? Record(IEntity entity, MultiplayerSpawnDescription description)
+        internal MultiplayerSpawnRecord? Record(IEntity entity, MultiplayerSpawnDescription description, object? owner = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             if (description == null) throw new ArgumentNullException(nameof(description));
@@ -161,13 +218,15 @@ namespace TopiaForge.ModManager
             if (byEntity.TryGetValue(key, out var existing) && existing.IsLive)
             {
                 existing.Redescribe(description);
+                Notify(existing, true);
                 return existing;
             }
 
             if (records.Count >= sweepThreshold) Sweep();
-            var record = new MultiplayerSpawnRecord(nextSequence++, key, description, entity);
+            var record = new MultiplayerSpawnRecord(nextSequence++, key, description, entity, owner);
             records.Add(record);
             byEntity[key] = record;
+            Notify(record, false);
             return record;
         }
 
@@ -177,6 +236,29 @@ namespace TopiaForge.ModManager
             if (record == null) throw new ArgumentNullException(nameof(record));
             record.MarkRemoved();
             if (byEntity.TryGetValue(record.EntityKey, out var current) && ReferenceEquals(current, record)) byEntity.Remove(record.EntityKey);
+        }
+
+        /// <summary>Ends every record <paramref name="owner"/> made, at once: its scope has ended. Returns how many.</summary>
+        internal int ReleaseOwner(object owner)
+        {
+            if (owner == null) throw new ArgumentNullException(nameof(owner));
+            var kept = 0;
+            var released = 0;
+            for (var index = 0; index < records.Count; index++)
+            {
+                var record = records[index];
+                if (!ReferenceEquals(record.Owner, owner))
+                {
+                    records[kept++] = record;
+                    continue;
+                }
+
+                Forget(record);
+                released++;
+            }
+
+            records.RemoveRange(kept, records.Count - kept);
+            return released;
         }
 
         /// <summary>Gets the record of a live entity, or null.</summary>
@@ -194,6 +276,21 @@ namespace TopiaForge.ModManager
             return records.Count == 0 ? Array.Empty<MultiplayerSpawnRecord>() : records.ToArray();
         }
 
+        private void Notify(MultiplayerSpawnRecord record, bool redescribed)
+        {
+            var observer = Observer;
+            if (observer == null) return;
+            try
+            {
+                observer.Recorded(record, redescribed);
+            }
+            catch (Exception)
+            {
+                // The spawn already succeeded; its announcement is the observer's to retry.
+                ObserverFailures++;
+            }
+        }
+
         private void Sweep()
         {
             var kept = 0;
@@ -206,11 +303,17 @@ namespace TopiaForge.ModManager
                     continue;
                 }
 
-                if (byEntity.TryGetValue(record.EntityKey, out var current) && ReferenceEquals(current, record)) byEntity.Remove(record.EntityKey);
+                Forget(record);
             }
 
             records.RemoveRange(kept, records.Count - kept);
             sweepThreshold = Math.Max(MinimumSweepThreshold, records.Count * 2);
+        }
+
+        private void Forget(MultiplayerSpawnRecord record)
+        {
+            if (byEntity.TryGetValue(record.EntityKey, out var current) && ReferenceEquals(current, record)) byEntity.Remove(record.EntityKey);
+            record.MarkRemoved();
         }
     }
 }

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace TopiaForge.ModManager
 {
     /// <summary>Unity-backed manager-owned implementation of the safe V1 gameplay contracts.</summary>
-    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform
+    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource
     {
         private readonly UnityInputRegistry input = new UnityInputRegistry();
         private readonly UnityEntityRegistry entities = new UnityEntityRegistry();
@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager
         private readonly string runtimeOwnershipId;
         private readonly SceneCoordinator sceneCoordinator;
         private readonly UnityPhysicsBackend physics;
+        private readonly UnityNetworkWorldBackend networkWorldBackend;
         private readonly GameObject loopObject;
         private bool disposed;
 
@@ -32,14 +33,19 @@ namespace TopiaForge.ModManager
             this.runtimeOwnershipId = runtimeOwnershipId;
             UnityMainThreadGuard.CaptureCurrentThread();
             physics = new UnityPhysicsBackend(entities);
+            networkWorldBackend = new UnityNetworkWorldBackend(entities);
             loopObject = new GameObject("TopiaForge.CoreGameplayLoop");
             UnityEngine.Object.DontDestroyOnLoad(loopObject);
+            WarmUpNetworkWorld();
             var loop = loopObject.AddComponent<CoreGameplayLoop>();
             loop.Owner = this;
         }
 
         public event Action<GameTimeSample>? FixedUpdate;
         public event Action<GameTimeSample>? LateUpdate;
+
+        /// <summary>Gets the network world's engine side, over the loaded scenes and this host's entity registry.</summary>
+        public INetworkWorldBackend NetworkWorldBackend => networkWorldBackend;
 
         /// <summary>Gets or sets Unity's <c>Application.runInBackground</c>; multiplayer keeps it on while online.</summary>
         public bool RunInBackground
@@ -96,6 +102,22 @@ namespace TopiaForge.ModManager
                 new OwnerUnityInteropService(ownerModId, lifetime, entities),
                 sceneTransitions,
                 new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher));
+        }
+
+        /// <summary>
+        /// Has the network world's scene census compiled now, so the first scene load keys its objects without compiling
+        /// the census inside the load. A failure here only leaves that compile to the first load.
+        /// </summary>
+        private void WarmUpNetworkWorld()
+        {
+            try
+            {
+                networkWorldBackend.WarmUp(loopObject.transform);
+            }
+            catch (Exception)
+            {
+                // The census compiles with the first scene that needs it instead.
+            }
         }
 
         public GameTimeSample BeginFrame(float deltaTime)

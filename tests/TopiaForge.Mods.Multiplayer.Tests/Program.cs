@@ -585,6 +585,7 @@ internal static class Program
             InternetFailureTests.ServiceOutcomesMapToTheirOwnCodes();
             InternetPrivacyTests.NothingTheInternetFlowsReportNamesAnAddress();
             InternetPrivacyTests.TheClientsTypesPrintOnlyTheirKind();
+            NetworkWorldEngineTests.AJoiningPlayersWorldCrossesTheRealChannel();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

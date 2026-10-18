@@ -19,6 +19,19 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>
+    /// Takes the world content a joined player's own world provider builds, so the network world (WS3.6) binds it by its
+    /// content key to the host's, which names it. Main thread only.
+    /// </summary>
+    internal interface IMultiplayerLocalContent
+    {
+        /// <summary>Keeps <paramref name="entity"/> as this player's world content of <paramref name="contentKey"/>, made through <paramref name="owner"/>.</summary>
+        void RegisterLocalContent(object owner, string contentKey, IEntity entity);
+
+        /// <summary>Forgets the content <paramref name="owner"/> registered: its scope has ended.</summary>
+        void ReleaseOwner(object owner);
+    }
+
+    /// <summary>
     /// The process's replication services behind every mod context's <see cref="IRuntimeReplication"/>: the realm and the
     /// spawn ledger of the composition root, the replica factories and command handlers providers register, the reference
     /// seam and the microphone arbiter. Each mod context binds a <see cref="RuntimeReplication"/> to it with its own
@@ -49,6 +62,12 @@ namespace TopiaForge.ModManager
         /// set, no reference is made or resolved. A source that throws answers no and is reported.
         /// </summary>
         internal IMultiplayerReferenceSource? References { get; set; }
+
+        /// <summary>
+        /// Gets or sets where a joined player's world content waits to bind by key to the host's: the network world. Until
+        /// one is set, a joined player's world content binds to nothing.
+        /// </summary>
+        internal IMultiplayerLocalContent? LocalContent { get; set; }
 
         /// <summary>Creates the services of a process with no multiplayer provider: single player, as a mod context made outside ModRuntime has it.</summary>
         internal static MultiplayerReplication Offline()
@@ -104,12 +123,16 @@ namespace TopiaForge.ModManager
             return registration;
         }
 
-        /// <summary>Records a spawn without letting a failure reach the mod whose spawn already succeeded; a failure is reported once until a spawn records again.</summary>
-        internal void RecordQuietly(IEntity entity, MultiplayerSpawnDescription description)
+        /// <summary>
+        /// Records a spawn <paramref name="owner"/>'s context made, without letting a failure reach the mod whose spawn
+        /// already succeeded; a failure is reported once until a spawn records again. The record ends with the context.
+        /// </summary>
+        internal void RecordQuietly(IEntity entity, MultiplayerSpawnDescription description, RuntimeReplication owner)
         {
             try
             {
-                Runtime.Spawns.Record(entity, description);
+                if (!owner.TrackRelease()) return;
+                Runtime.Spawns.Record(entity, description, owner);
                 recordFailureLogged = false;
             }
             catch (Exception exception)

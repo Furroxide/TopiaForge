@@ -108,9 +108,23 @@ namespace TopiaForge.ModManager.Tests
             That(records.Count == 1, "a spawn that succeeds is recorded at spawn time (" + records.Count + " records)");
             var record = records[0];
             That(ReferenceEquals(record.Entity, inner.SpawnResult.Value) && record.Description.Kind == MultiplayerSpawnKinds.AssetPrefab &&
-                 ReferenceEquals(record.Description.Descriptor, request) && record.Description.Transform.Equals(request.Transform) &&
+                 ReferenceEquals(record.Description.Descriptor, MultiplayerAssetDescriptor.Unknown) && record.Description.Transform.Equals(request.Transform) &&
                  record.Description.OwnerModId == "io.example.seam" && record.Description.Profile.Equals(replication.Profile) &&
-                 record.Description.Source == MultiplayerSpawnSource.SdkSpawn, "a spawn that succeeds is recorded at spawn time, with its request");
+                 record.Description.Source == MultiplayerSpawnSource.SdkSpawn,
+                "a spawn that succeeds is recorded at spawn time, described without the request's prefab handle, which belongs to its scope");
+
+            // A prefab the runtime loaded names its bundle and asset, which is how a joined player builds the same replica.
+            var crate = new SeamEntity();
+            inner.SpawnResult = OperationResult<ISpawnedEntity>.Success(crate);
+            service.Spawn(new AssetSpawnRequest(new ProvenancePrefab("assets/blocks.bundle", "Crate"), TransformState.Identity));
+            That(replication.Services.Runtime.Spawns.Find(crate)?.Description.Descriptor is MultiplayerAssetDescriptor described &&
+                 described.IsPortable && described.BundlePath == "assets/blocks.bundle" && described.AssetName == "Crate",
+                "a prefab with provenance is described by its bundle path and asset name");
+            inner.SpawnResult = OperationResult<ISpawnedEntity>.Success(new SeamEntity());
+            That(MultiplayerAssetDescriptor.Of(new ProvenancePrefab(new string('b', MultiplayerAssetDescriptor.MaximumBundlePathLength + 1), "Crate")) ==
+                 MultiplayerAssetDescriptor.Unknown && MultiplayerAssetDescriptor.Of(new ProvenancePrefab("assets/blocks.bundle", "")) == MultiplayerAssetDescriptor.Unknown,
+                "a provenance past its bounds, or empty, describes nothing a joined player could build");
+            replication.Services.Runtime.Spawns.Remove(replication.Services.Runtime.Spawns.Find(crate)!);
 
             inner.SpawnResult = OperationResult<ISpawnedEntity>.Failure(ModErrorCode.InvalidArgument, "foreign prefab");
             That(ReferenceEquals(service.Spawn(request), inner.SpawnResult) && replication.Services.Runtime.Spawns.Live().Count == 1,
@@ -308,6 +322,28 @@ namespace TopiaForge.ModManager.Tests
         {
             public string RelativePath => "assets/blocks.bundle";
             public bool IsAlive => true;
+            public void Dispose()
+            {
+            }
+        }
+
+        /// <summary>A prefab handle as the runtime's asset service makes one: it knows its bundle and its asset name.</summary>
+        private sealed class ProvenancePrefab : IPrefabAsset, IPrefabAssetProvenance
+        {
+            internal ProvenancePrefab(string bundlePath, string assetName)
+            {
+                BundlePath = bundlePath;
+                AssetName = assetName;
+            }
+
+            public string BundlePath { get; }
+
+            public string AssetName { get; }
+
+            public string Name => AssetName;
+
+            public bool IsAlive => true;
+
             public void Dispose()
             {
             }

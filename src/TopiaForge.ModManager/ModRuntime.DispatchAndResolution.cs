@@ -48,11 +48,13 @@ namespace TopiaForge.ModManager
 
         private void DispatchSceneUnloadedCore(SceneLifecycleEvent scene)
         {
+            NetworkSceneUnloaded(scene.SceneInstanceId);
             DispatchSceneLifecycleCore(scene, "SceneUnloaded");
         }
 
         private void DispatchInitialBackgroundSceneCore(SceneLifecycleEvent scene)
         {
+            NetworkSceneLoaded(scene.SceneInstanceId);
             DispatchSceneLifecycleCore(scene, "InitialSceneLoaded");
         }
 

@@ -32,5 +32,13 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentInventory.cs" Link="Runtime\MultiplayerContentInventory.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerContentAdmission.cs" Link="Runtime\MultiplayerContentAdmission.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerDiagnosticRedactor.cs" Link="Runtime\MultiplayerDiagnosticRedactor.cs" />
+    <!-- The network world (WS3.6) over the real provider: its Unity-free half, the replication seam it plugs into, and
+         the fake engine the ModManager and ModRuntime harnesses share. -->
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerReplication.cs" Link="Runtime\MultiplayerReplication.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\MultiplayerMicrophoneArbiter.cs" Link="Runtime\MultiplayerMicrophoneArbiter.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\RuntimeReplication.cs" Link="Runtime\RuntimeReplication.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\UnityMainThreadGuard.cs" Link="Runtime\UnityMainThreadGuard.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\World\*.cs" Link="Runtime\World\%(Filename)%(Extension)" />
+    <Compile Include="..\TopiaForge.ModRuntime.Tests\FakeWorldScene.cs" Link="World\FakeWorldScene.cs" />
   </ItemGroup>
 </Project>

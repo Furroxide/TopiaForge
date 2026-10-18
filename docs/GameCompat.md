@@ -62,14 +62,18 @@ All constraints must hold on the same overload. Strict field/property mismatches
 criticality; older unconstrained type hints remain advisory.
 
 The active Manager bindings cover checkpoint and scene loads, player readiness, the exact public no-argument
-import-suppression constructor, and the supported UniTask awaiter shape. Worlds bindings cover native import
+import-suppression constructor, the supported UniTask awaiter shape, and the native systems a joined player turns
+off: robot brains (`LLMAgent` and its `llmDisabled` field), locomotion and spawners. Those four are degraded rather
+than critical, since a missing one leaves that system running on joined players instead of failing the game. The
+behaviour tree and path follower the network world also turns off are matched by name up the base chain, and
+neither is a GameCode type. Worlds bindings cover native import
 selection, overrides, owned import roots, and cleanup. Manager sources and actual source-linked files such as
 `mods/Shared/UgcNoOpLaunchRequest.cs` participate in the same drift audit as provider sources. The extractor
 retains the requested external types' own members and full nested generic type shapes.
 
 The build 2545 metadata capture currently contains 60 types and 15 simple-name lookups. Offline and installed
-metadata verification resolve 209 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
-bindings, errors, or warnings. All 33 Manager and 34 Worlds bindings are verifiable. The remaining uncheckable
+metadata verification resolve 213 bindings, classify 11 as explicitly uncheckable, and report no indeterminate
+bindings, errors, or warnings. All 37 Manager and 34 Worlds bindings are verifiable. The remaining uncheckable
 entries belong to existing dynamic Performance/PerfFixes helpers and RobotKit sampling/awaiter chains.
 `audit --strict` reports no undeclared or stale entries. These results establish metadata compatibility only;
 scene timing, player readiness, generated geometry, spawn placement, and teardown still require game acceptance.

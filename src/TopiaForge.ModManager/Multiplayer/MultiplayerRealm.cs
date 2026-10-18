@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
@@ -76,5 +77,23 @@ namespace TopiaForge.ModManager
     internal interface IMultiplayerPromotionCensus
     {
         void TakeCensus(MultiplayerPromotion promotion);
+    }
+
+    /// <summary>
+    /// A slice that keeps state alongside the provider: the network world (WS3.6) and session follow (WS3.8). It hears, on
+    /// the main thread, when a control attaches, when the realm changes and when the control is about to detach. A change
+    /// of realm is told after the pump that shows it, before that frame's world events, and before a new host's census.
+    /// None of these runs on an offline frame.
+    /// </summary>
+    internal interface IMultiplayerRuntimeObserver
+    {
+        /// <summary>A control attached; the runtime drives it from the next frame.</summary>
+        void Attached(IInternalMultiplayerControl control);
+
+        /// <summary>The realm changed from <paramref name="previous"/> to <paramref name="next"/>, as the last pump showed it.</summary>
+        void RealmChanged(NetRealm previous, NetRealm next);
+
+        /// <summary>The control is about to detach, after the realm has returned to offline.</summary>
+        void Detaching(IInternalMultiplayerControl control);
     }
 }
