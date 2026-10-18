@@ -12,6 +12,8 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     'io.github.furroxide.topiaforge.multiplayer': 'TopiaForge.Mods.Multiplayer',
     'io.github.furroxide.topiaforge.worlds': 'TopiaForge.Mods.Worlds',
   };
+  static const _multiplayerGeneratorPackage =
+      'TopiaForge.Mods.Multiplayer.Generators';
   Directory get _modTemplatesRoot =>
       Directory(p.join(_repositoryRoot.path, 'templates', 'mod'));
 
@@ -77,12 +79,36 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     SdkReferencePack sdk,
   ) async {
     final modulePackages = await _sdkModulePackages(root, sdk);
-    for (final project in _sdkPinnedProjects(root)) {
+    final projects = _sdkPinnedProjects(root);
+    final texts = <String, String>{
+      for (final project in projects)
+        project.path: await project.readAsString(),
+    };
+    // A test project that compiles the mod's own sources compiles its
+    // multiplayer contract with them, so it needs the generator that writes
+    // the contract's other half whenever the mod project has it. Without
+    // it, every generated member the mod calls is missing there (CS0103).
+    final sourcesNeedGenerator =
+        sdk.containsPackage(_multiplayerGeneratorPackage) &&
+        projects.any(
+          (project) =>
+              !_isSdkTestProject(project) &&
+              includedPackageReferences(texts[project.path]!, const [
+                _multiplayerGeneratorPackage,
+              ]).isNotEmpty,
+        );
+    for (final project in projects) {
       final isTest = _isSdkTestProject(project);
-      final original = await project.readAsString();
+      final original = texts[project.path]!;
       final updated = _withExactSdkPackageReferences(
         original,
-        packages: _pinnedSdkPackages(project, original, sdk, modulePackages),
+        packages: {
+          ..._pinnedSdkPackages(project, original, sdk, modulePackages),
+          if (isTest &&
+              sourcesNeedGenerator &&
+              _compilesSourcesFromOutside(original))
+            _multiplayerGeneratorPackage,
+        },
         version: sdk.version,
         safeProject: !isTest,
         devPropsPath: p.posix.joinAll(
@@ -371,3 +397,18 @@ bool _importsDevProps(String project) => startTags(project, 'Import').any(
         .endsWith('topiaforge.dev.props');
   }),
 );
+
+/// Whether [project] has a `Compile` item outside comments that includes
+/// files from outside its own folder, as the single-project templates' test
+/// projects compile the mod's sources with `<Compile Include="..\..\*.cs" />`.
+bool _compilesSourcesFromOutside(String project) =>
+    startTags(project, 'Compile', anyCase: true).any(
+      (found) => found.tag.attributes.any((attribute) {
+        if (!isAttributeNamed(project, attribute, 'Include')) return false;
+        final value = trimmedAttributeValue(project, attribute);
+        return project
+            .substring(value.start, value.end)
+            .split(';')
+            .any((spec) => spec.trim().replaceAll(r'\', '/').startsWith('../'));
+      }),
+    );
