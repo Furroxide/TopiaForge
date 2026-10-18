@@ -240,8 +240,10 @@ namespace TopiaForge.Mods.UnityUi
                     SetContentColor(theme.Text);
                     break;
                 default:
+                    // No fill: the label sits on the surface itself, so it takes the Primary tone's readable text color. On
+                    // Paper the brand orange reads at only 2.0 to 2.6:1, and labels in that tone are darkened the same way.
                     fill.color = Color.clear;
-                    SetContentColor(theme.Primary);
+                    SetContentColor(theme.TextToneColor(TopiaForgeTone.Primary));
                     break;
             }
 

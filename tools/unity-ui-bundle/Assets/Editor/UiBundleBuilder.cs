@@ -27,16 +27,24 @@ namespace TopiaForge
         // Assets that MUST be labeled into the bundle. Font assets are baked by
         // BakeFontAssets (idempotent — skipped when the committed .asset files exist);
         // this list is the contract the build verifies before producing a bundle.
-        // Bold text uses TMP faux-bold (the variable TTF only imports its default
-        // instance), so no separate bold asset is baked.
+        // Bold text uses TMP faux-bold over each style's face, so no separate bold
+        // asset is baked.
         private static readonly string[] RequiredAssets =
         {
             BodyAssetPath,
+            BodyMediumAssetPath,
             DisplayAssetPath,
             ManifestAssetPath,
         };
 
+        // Quicksand Light (300), the variable font's default instance: Quicksand text
+        // larger than body text, such as headings and numerals.
         private const string BodyAssetPath = "Assets/FontAssets/TopiaForge Body SDF.asset";
+
+        // Quicksand Medium (500), a static instance written by make_body_medium_font.py:
+        // body, label and caption text, whose Light strokes are thinner than a pixel.
+        private const string BodyMediumAssetPath = "Assets/FontAssets/TopiaForge Body Medium SDF.asset";
+        private const string BodyMediumFontPath = "Assets/Fonts/TopiaForgeBody-Medium.ttf";
         private const string DisplayAssetPath = "Assets/FontAssets/TopiaForge Display SDF.asset";
         private const string CharacterSet =
             " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~" +
@@ -146,6 +154,7 @@ namespace TopiaForge
             EnsureTmpEssentials();
             Directory.CreateDirectory("Assets/FontAssets");
             BakeFontAsset("Assets/Fonts/Quicksand-VariableFont_wght.ttf", BodyAssetPath, "TopiaForge Body SDF", 1024);
+            BakeFontAsset(BodyMediumFontPath, BodyMediumAssetPath, "TopiaForge Body Medium SDF", 1024);
             BakeFontAsset("Assets/Fonts/Audiowide-Regular.ttf", DisplayAssetPath, "TopiaForge Display SDF", 512);
             AssetDatabase.SaveAssets();
         }
@@ -265,6 +274,7 @@ namespace TopiaForge
 
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(assetPath);
+            UiBundleReproducibleAssets.Pin(assetPath, BundleName);
             Debug.Log("[UiBundleBuilder] Baked " + assetName + " (" + atlasSize + "px atlas) from " + ttfPath + ".");
         }
 

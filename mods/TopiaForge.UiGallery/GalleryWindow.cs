@@ -38,6 +38,7 @@ namespace TopiaForge.UiGallery
             if (!disposed)
             {
                 Pages.MultiplayerPage.Tick(deltaTime);
+                Pages.SessionsPage.Tick(deltaTime);
             }
         }
 
@@ -66,6 +67,7 @@ namespace TopiaForge.UiGallery
             Pages.OverlaysPage.Reset();
             Pages.ShopPage.Reset();
             Pages.MultiplayerPage.Reset();
+            Pages.SessionsPage.Reset();
         }
 
         private TopiaForgeWindow Build(TopiaForgeScheme scheme)
@@ -95,7 +97,7 @@ namespace TopiaForge.UiGallery
             uiScaleControls.Add(controls.Slider(
                 "UI scale", 0.75f, 1.5f, ui.AccessibilityProfile.UiScale, SetUiScale));
 
-            var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE");
+            var tabs = column.Tabs("WIDGETS", "STATES", "LISTS", "GRAPH", "SHOP", "OVERLAYS", "HUD", "MOTION", "ONLINE", "SESSIONS");
             var pageHost = column.Scroll(TopiaForgeGap.Md, TopiaForgeGap.Sm);
             pageHost.Flex(1f, 1f);
 
@@ -110,11 +112,13 @@ namespace TopiaForge.UiGallery
                 Pages.HudPage.Build,
                 Pages.MotionPage.Build,
                 page => Pages.MultiplayerPage.Build(page, player),
+                page => Pages.SessionsPage.Build(page, ui),
             };
 
             void ShowPage(int index)
             {
                 Pages.MultiplayerPage.Detach(pageHost.Content);
+                Pages.SessionsPage.Detach(pageHost.Content);
                 ui.Clear(pageHost.Content);
                 pages[index](pageHost.Content);
                 pageHost.ScrollToTop();

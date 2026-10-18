@@ -13,7 +13,9 @@ namespace TopiaForge.Multiplayer
     /// check. With no runtime attached nothing is announced and nobody is admitted, so a host can never let anyone in
     /// without the runtime's decision. The same holds while the runtime cannot read this game's packages, as when another
     /// program holds a file of one without an install receipt while it is hashed: the failure is reported, hosting does not
-    /// start and a running host refuses every player, and a joining player stops before anything connects. Main thread only.
+    /// start and a running host refuses every player, and a joining player stops before anything connects. The runtime
+    /// hashes off the main thread; while it does, <see cref="IsLocalContentPending"/> says so and hosting and joining wait.
+    /// Main thread only.
     /// </summary>
     internal sealed class RuntimeContent : ILiveSessionContent
     {
@@ -22,6 +24,7 @@ namespace TopiaForge.Multiplayer
         internal const string OfferUnreadable = "The host could not read this game's list of mods.";
         internal const string ContentUnreadable = "This game's mods could not be read: a file of one of them is in use or cannot be opened.";
         internal const string HostContentUnreadable = "The host could not read its own mods.";
+        internal const string ContentNotReady = "This game is still identifying its mods for multiplayer; try again in a moment.";
 
         private readonly string fallbackGameBuild;
         private readonly string fallbackRuntimeVersion;
@@ -51,6 +54,29 @@ namespace TopiaForge.Multiplayer
 
         /// <summary>Gets or sets where a failing runtime call is reported.</summary>
         internal Action<InternalMultiplayerDiagnostic>? Report { get; set; }
+
+        /// <summary>
+        /// Gets whether the attached runtime is still identifying this game's packages, which it does off the main thread.
+        /// Hosting and joining wait for it rather than treat the content as unreadable. Reading it starts that work when
+        /// nothing has yet, and never blocks.
+        /// </summary>
+        internal bool IsLocalContentPending
+        {
+            get
+            {
+                var current = runtime;
+                if (current == null) return false;
+                try
+                {
+                    return current.ContentReadiness.State == InternalContentState.Pending;
+                }
+                catch (Exception)
+                {
+                    // A runtime that cannot say is treated as settled: the content read that follows reports what failed.
+                    return false;
+                }
+            }
+        }
 
         public string GameBuild
         {
@@ -129,8 +155,11 @@ namespace TopiaForge.Multiplayer
             var current = runtime;
             if (current == null) return ContentAdmission.Refused(new[] { HostNotReady }, AdmissionCode.NotReady);
 
-            // A host that cannot read its own packages cannot judge anyone else's.
-            if (ReadLocalContent(current) == null) return ContentAdmission.Refused(new[] { HostContentUnreadable }, AdmissionCode.NotReady);
+            // A host that cannot read its own packages cannot judge anyone else's, nor can one still identifying them.
+            if (ReadLocalContent(current, out var pending) == null)
+            {
+                return ContentAdmission.Refused(new[] { pending ? HostNotReady : HostContentUnreadable }, AdmissionCode.NotReady);
+            }
             if (!ContentOfferCodec.TryDecode(clientContent, out var offer))
             {
                 return ContentAdmission.Refused(new[] { OfferUnreadable }, AdmissionCode.Protocol);
@@ -157,10 +186,11 @@ namespace TopiaForge.Multiplayer
             var current = runtime;
             if (current == null) return new ContentCheck(new[] { ClientNotReady });
 
-            // This game's own packages are read first, hashed where they have no receipt: one that cannot be read stops the
-            // join here, before anything connects.
-            var local = ReadLocalContent(current);
-            if (local == null) return new ContentCheck(new[] { ContentUnreadable }, unreadable: true);
+            // This game's own packages are read first, identified off the main thread where they have no receipt: one that
+            // cannot be read stops the join here, before anything connects, and so does identification still running, which
+            // the internal control's joins wait out before they start.
+            var local = ReadLocalContent(current, out var pending);
+            if (local == null) return new ContentCheck(new[] { pending ? ContentNotReady : ContentUnreadable }, unreadable: true);
             var packages = new InternalHostPackage[descriptor.Packages.Count];
             for (var index = 0; index < packages.Length; index++)
             {
@@ -199,13 +229,22 @@ namespace TopiaForge.Multiplayer
         /// Reads the runtime's packages, or returns null when it cannot, as when another program holds a file of a package
         /// without an install receipt while the runtime hashes it. The failure is reported and the content treated as
         /// unreadable: nothing is announced or offered and nobody is admitted, so the frame goes on, and the next read tries
-        /// again.
+        /// again. Content the runtime is still identifying is null too, unreported, since nothing failed.
         /// </summary>
-        private IReadOnlyList<InternalContentDescriptor>? ReadLocalContent(IInternalMultiplayerRuntimeHost current)
+        private IReadOnlyList<InternalContentDescriptor>? ReadLocalContent(IInternalMultiplayerRuntimeHost current) =>
+            ReadLocalContent(current, out _);
+
+        private IReadOnlyList<InternalContentDescriptor>? ReadLocalContent(IInternalMultiplayerRuntimeHost current, out bool pending)
         {
+            pending = false;
             try
             {
                 return current.LocalContent;
+            }
+            catch (InternalContentNotReadyException)
+            {
+                pending = true;
+                return null;
             }
             catch (Exception exception)
             {

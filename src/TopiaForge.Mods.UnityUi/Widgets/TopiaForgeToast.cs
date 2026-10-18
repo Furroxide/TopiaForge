@@ -8,7 +8,10 @@ namespace TopiaForge.Mods.UnityUi
     /// <summary>
     /// Toast notifications: queued, max 4 visible, pooled views stacked top-right on a
     /// shared toast-band canvas, slide+fade motion, auto-dismiss. Dark chip styling so
-    /// toasts read over both gameplay and paper surfaces.
+    /// toasts read over both gameplay and paper surfaces. A longer text wraps to three lines
+    /// and its toast grows to hold them. The bookkeeping, which view shows which toast and
+    /// where it rests, is <see cref="TopiaForgeToastStack{T}"/>: a view that takes a new
+    /// toast is always placed and brought in afresh, whatever it showed before.
     /// </summary>
     public static class TopiaForgeToasts
     {
@@ -18,6 +21,11 @@ namespace TopiaForge.Mods.UnityUi
         private const float DefaultDuration = 3.5f;
         private const float ToastWidth = 340f;
         private const float ToastHeight = 44f;
+        private const float TextInsetX = 14f;
+        private const float TextInsetY = 12f;
+
+        // The most text a toast shows: three lines, measured in its own face and size.
+        private const string ThreeLines = "A\nA\nA";
         private const float StackGap = 8f;
 
         private sealed class ToastView
@@ -26,25 +34,42 @@ namespace TopiaForge.Mods.UnityUi
             public UImage? Fill;
             public UImage? Ring;
             public TextMeshProUGUI? Label;
-            public float RemainingSeconds;
-            public bool Active;
-            public bool Leaving;
         }
 
         private struct Pending
         {
             public string Text;
             public TopiaForgeTone Tone;
-            public float Duration;
+            public bool Plain;
         }
 
+        private static readonly TopiaForgeToastStack<Pending> Stack = new TopiaForgeToastStack<Pending>(MaxVisible, MaxQueued, StackGap);
+
+        // Index-aligned with the stack's views: the Unity half of each pooled view.
         private static readonly List<ToastView> Views = new List<ToastView>();
-        private static readonly Queue<Pending> Queue = new Queue<Pending>();
+        private static readonly List<int> Expired = new List<int>(MaxVisible);
         private static TopiaForgeContainer? layer;
         private static bool queueOverflowLogged;
 
+        // Moves on with every reset, so an exit that finishes after one frees nothing in the views that came after it.
+        private static int generation;
+
         /// <summary>Shows a toast (queues when 4 are already visible).</summary>
         public static void Show(string text, TopiaForgeTone tone = TopiaForgeTone.Neutral, float duration = DefaultDuration)
+        {
+            Enqueue(text, tone, duration, plain: false);
+        }
+
+        /// <summary>
+        /// Shows a toast whose text renders exactly as written: markup in it is not parsed. Use it for text another player
+        /// wrote, such as a name or a message, once <see cref="TopiaForgePlainText"/> has bounded it.
+        /// </summary>
+        public static void ShowPlain(string text, TopiaForgeTone tone = TopiaForgeTone.Neutral, float duration = DefaultDuration)
+        {
+            Enqueue(text, tone, duration, plain: true);
+        }
+
+        private static void Enqueue(string text, TopiaForgeTone tone, float duration, bool plain)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -52,22 +77,18 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             TopiaForgeRuntime.Ensure();
-            if (Queue.Count >= MaxQueued)
-            {
-                Queue.Dequeue();
-                if (!queueOverflowLogged)
-                {
-                    queueOverflowLogged = true;
-                    TopiaForgeLog.Warn("Toast queue reached " + MaxQueued + " entries; dropping the oldest queued toast.");
-                }
-            }
-
-            Queue.Enqueue(new Pending
+            var pending = new Pending
             {
                 Text = text.Length > MaxTextChars ? text.Substring(0, MaxTextChars) : text,
                 Tone = tone,
-                Duration = Mathf.Clamp(duration, 0.25f, 30f),
-            });
+                Plain = plain,
+            };
+            if (Stack.Enqueue(pending, Mathf.Clamp(duration, 0.25f, 30f)) && !queueOverflowLogged)
+            {
+                queueOverflowLogged = true;
+                TopiaForgeLog.Warn("Toast queue reached " + MaxQueued + " entries; dropping the oldest queued toast.");
+            }
+
             Pump();
         }
 
@@ -85,27 +106,18 @@ namespace TopiaForge.Mods.UnityUi
 
         internal static void Tick(float unscaledDelta)
         {
-            var anyExpired = false;
-            for (var index = 0; index < Views.Count; index++)
+            Stack.Expire(unscaledDelta, Expired);
+            if (Expired.Count == 0)
             {
-                var view = Views[index];
-                if (!view.Active || view.Leaving)
-                {
-                    continue;
-                }
-
-                view.RemainingSeconds -= unscaledDelta;
-                if (view.RemainingSeconds <= 0f)
-                {
-                    DismissView(view);
-                    anyExpired = true;
-                }
+                return;
             }
 
-            if (anyExpired)
+            for (var index = 0; index < Expired.Count; index++)
             {
-                Pump();
+                DismissView(Expired[index]);
             }
+
+            Pump();
         }
 
         /// <summary>Releases the process-wide toast host, pending work, and pooled views.</summary>
@@ -118,54 +130,29 @@ namespace TopiaForge.Mods.UnityUi
             finally
             {
                 layer = null;
-                Queue.Clear();
+                Stack.Clear();
                 Views.Clear();
                 queueOverflowLogged = false;
+                generation++;
             }
         }
 
         private static void Pump()
         {
-            while (Queue.Count > 0 && ActiveCount() < MaxVisible)
+            while (Stack.TryShowNext(out var index, out var pending))
             {
-                var pending = Queue.Dequeue();
-                var view = AcquireView();
-                Present(view, pending);
+                while (Views.Count <= index)
+                {
+                    Views.Add(new ToastView());
+                }
+
+                Present(index, Views[index], pending);
             }
 
             Restack();
         }
 
-        private static int ActiveCount()
-        {
-            var count = 0;
-            for (var index = 0; index < Views.Count; index++)
-            {
-                if (Views[index].Active)
-                {
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        private static ToastView AcquireView()
-        {
-            for (var index = 0; index < Views.Count; index++)
-            {
-                if (!Views[index].Active)
-                {
-                    return Views[index];
-                }
-            }
-
-            var view = new ToastView();
-            Views.Add(view);
-            return view;
-        }
-
-        private static void Present(ToastView view, Pending pending)
+        private static void Present(int index, ToastView view, Pending pending)
         {
             EnsureLayer();
             if (view.Root == null)
@@ -184,7 +171,7 @@ namespace TopiaForge.Mods.UnityUi
                 view.Label = TopiaForgeTmp.Create(labelGo);
                 view.Label.fontSize = TopiaForgeTokens.LabelSize;
                 view.Label.alignment = TextAlignmentOptions.Left;
-                view.Label.textWrappingMode = TextWrappingModes.NoWrap;
+                view.Label.textWrappingMode = TextWrappingModes.Normal;
                 view.Label.overflowMode = TextOverflowModes.Ellipsis;
                 var font = TopiaForgeFonts.For(TopiaForgeTextStyle.Label);
                 if (font != null)
@@ -192,15 +179,25 @@ namespace TopiaForge.Mods.UnityUi
                     view.Label.font = font;
                 }
 
-                TopiaForgeAnchors.Stretch((RectTransform)labelGo.transform, 14f, 4f, 14f, 4f);
+                TopiaForgeAnchors.Stretch((RectTransform)labelGo.transform, TextInsetX, TextInsetY, TextInsetX, TextInsetY);
                 view.Root = root;
             }
 
-            view.Active = true;
-            view.Leaving = false;
-            view.RemainingSeconds = pending.Duration;
             view.Root.Go.SetActive(true);
-            view.Label!.text = pending.Text;
+
+            // Views are pooled, so each presentation says whether its text may hold markup.
+            view.Label!.richText = !pending.Plain;
+            view.Label.parseCtrlCharacters = !pending.Plain;
+            view.Label.text = pending.Text;
+
+            // A result that needs more than one line wraps, up to three, and its toast grows to hold them, so a second sentence
+            // saying what to do next is read, not cut off. The text box holds three lines at most, so a longer result
+            // overflows it and ends its third line in an ellipsis.
+            var width = ToastWidth - (2f * TextInsetX);
+            var textHeight = Mathf.Min(view.Label.GetPreferredValues(pending.Text, width, 0f).y, view.Label.GetPreferredValues(ThreeLines, width, 0f).y);
+            var height = Mathf.Max(ToastHeight, textHeight + (2f * TextInsetY));
+            view.Root.Rect.sizeDelta = new Vector2(ToastWidth, height);
+            Stack.SetHeight(index, height);
 
             // Dark chip styling with a tone-colored ring; readable over anything.
             var hudTheme = new TopiaForgeResolvedTheme(TopiaForgeScheme.Hud, null);
@@ -209,19 +206,25 @@ namespace TopiaForge.Mods.UnityUi
             view.Label.color = hudTheme.Text;
         }
 
-        private static void DismissView(ToastView view)
+        private static void DismissView(int index)
         {
-            if (view.Root == null || view.Leaving)
+            var view = Views[index];
+            if (view.Root == null)
             {
+                Stack.Release(index);
                 return;
             }
 
-            view.Leaving = true;
-            var restingX = view.Root.Rect.anchoredPosition.x;
-            TopiaForgeMotion.ToastOut(view.Root, restingX, () =>
+            // The exit slides from where a toast rests, so a view's exits never add up.
+            var owner = generation;
+            TopiaForgeMotion.ToastOut(view.Root, -TopiaForgeTokens.SafeMargin, () =>
             {
-                view.Active = false;
-                view.Leaving = false;
+                if (owner != generation)
+                {
+                    return;
+                }
+
+                Stack.Release(index);
                 if (view.Root != null)
                 {
                     view.Root.Go.SetActive(false);
@@ -233,30 +236,31 @@ namespace TopiaForge.Mods.UnityUi
 
         private static void Restack()
         {
-            var slot = 0;
+            var restingX = -TopiaForgeTokens.SafeMargin;
             for (var index = 0; index < Views.Count; index++)
             {
                 var view = Views[index];
-                if (!view.Active || view.Root == null || view.Leaving)
+                if (view.Root == null || !Stack.TryPlace(index, out var top, out var fresh))
                 {
                     continue;
                 }
 
-                var targetY = -TopiaForgeTokens.SafeMargin - (slot * (ToastHeight + StackGap));
-                var restingX = -TopiaForgeTokens.SafeMargin;
-                var position = view.Root.Rect.anchoredPosition;
-                if (Mathf.Approximately(position.x, 0f) && Mathf.Approximately(position.y, 0f))
+                var targetY = -TopiaForgeTokens.SafeMargin - top;
+                if (fresh)
                 {
-                    // Fresh presentation: place and slide in.
+                    // A new toast, in a new view or in one whose last exit left it faded out and slid aside: place it and
+                    // bring it in.
                     view.Root.Rect.anchoredPosition = new Vector2(restingX, targetY);
                     TopiaForgeMotion.ToastIn(view.Root, restingX);
                 }
-                else if (!Mathf.Approximately(position.y, targetY))
+                else
                 {
-                    TopiaForgeTween.MoveY(view.Root, position.y, targetY, TopiaForgeTokens.DurationFast);
+                    var position = view.Root.Rect.anchoredPosition;
+                    if (!Mathf.Approximately(position.y, targetY))
+                    {
+                        TopiaForgeTween.MoveY(view.Root, position.y, targetY, TopiaForgeTokens.DurationFast);
+                    }
                 }
-
-                slot++;
             }
         }
 

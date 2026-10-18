@@ -24,7 +24,7 @@ namespace TopiaForge.Multiplayer
             Context.Lifetime.Track(provider);
             Register<IMultiplayerSession>(provider);
 
-            var developer = provider.Live == null ? null : DeveloperSessions.Create(provider.Live, Context.Logger);
+            var developer = provider.Live == null ? null : DeveloperSessions.Create(provider.Live, Context.Logger, () => content.IsLocalContentPending);
             var control = new InternalControl(provider, content, diagnostics, developer);
             Context.Lifetime.Track(control);
             Register<IInternalMultiplayerControl>(control);

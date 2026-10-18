@@ -103,6 +103,16 @@ gameplay overlays. Safe consumers specify semantic tone (`Neutral`, `Success`, `
 `Danger`) rather than color literals. The provider owns layer bands, focus order, cursor state,
 font fallback, motion, high contrast, and UI scale.
 
+On Paper, labels and ghost buttons read in every tone on every surface. Muted text keeps 7:1 (WCAG
+AAA) against the sunken paper a tool's content sits on. Faint text, and body text in a status or
+brand tone, keep 4.5:1 (AA) against the darkest surface text sits on: the tint, or sunken paper
+under the kit's pressed tint. High contrast raises all of them to 7:1. Status and brand colors keep
+their own values for fills, rings, badges and display type, so a `Warning` label reads darker than
+a warning badge.
+
+Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
+showed before and under reduced motion too, and shows above every window and dialog.
+
 ## Testing UI without running Robotopia
 
 `FakeUiService` captures each immutable tree. `FakeUiSurface` can find controls by id; invoke button,
@@ -119,14 +129,23 @@ QA catalog. Provider work follows the repository's dirty-setter, pooling, virtua
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
 
-Every kit label comes from one TextMesh Pro factory, which turns on extra padding. The body face's
+Every kit label comes from one TextMesh Pro factory, which turns on extra padding. Quicksand's
 stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops
 whole letters: at UI scale 1.0 in a 1600x900 window, "default" rendered as "defau t".
 
-A window shown in the frame its canvas is built can find that canvas still 0x0, because Unity
-measures a new canvas only when it first lays it out. The window then keeps its size and position
-and finishes its screen clamp on the first frame the canvas has a size; clamping against 0x0 once
-collapsed the UI Gallery to nothing at 1920x1080.
+Every text style's face comes from `TopiaForgeTokens.FaceOf`, and widgets take it from
+`TopiaForgeFonts.For(style)`, never by weight. Body, label and caption text, and any style at body
+size or smaller, use Quicksand Medium (500). Quicksand Light's stems are half a pixel wide at 14 px:
+at UI scale 1.0 in a 1920x1080 window the dot of an i merged with its stem, and "TopiaForge" read as
+"ToplaForge". Headings and numerals keep Quicksand Light, display styles use Audiowide, and bold styles
+are TextMesh Pro's faux bold over their style's face.
+
+A kit canvas starts at zero size, and Unity gives it its real size in its next canvas update. A
+window shown in the frame its canvas is built finds that canvas still 0x0, so it keeps its size and
+position and finishes its screen clamp on the first frame the canvas has a size; clamping against 0x0
+once collapsed the UI Gallery to nothing at 1920x1080. Forcing a canvas update is no substitute: the
+CanvasScaler writes its factor only when it differs from the last one, which starts at 1, so at
+1920x1080 and UI scale 1 the canvas is still 0x0 after `Canvas.ForceUpdateCanvases()`.
 
 ## Multiplayer kit widgets
 
@@ -200,6 +219,29 @@ offscreen or out of range, and fades and scales the rest with `TopiaForgeNametag
 within 0.6 m and beyond 40 m by default). A handle sets the name, a secondary line, a badge such as
 HOST, and the talking glyph slot. Names, secondary lines and badges are plain text, and a removed
 handle stays inert even after its pooled tag is reused.
+
+### Dialogs, toasts and layout for flows across scenes
+
+These renderer members serve screens that show what other players wrote and follow a flow across
+scene loads, such as the manager's multiplayer screens. Like the widgets above, they are not part of
+the safe `Context.Ui` contract.
+
+- `Modal.Destructive(title, body, confirmLabel, onConfirm, onCancel, ...)` also says when the dialog
+  ends without a confirmation: `onCancel` runs once, after the dialog has closed, whether through its
+  cancel button, ESC or its owner, and never after confirming. With `plainText: true` the title and
+  body render exactly as written, so markup in a player's name shows as typed; with
+  `persistent: true` the dialog survives scene loads. It returns the dialog, so its owner can close
+  it once the decision no longer applies, which counts as cancelling.
+- `Modal.Custom(title, scheme, width, persistent)` makes the empty shell with the same choice. A
+  persistent modal survives scene loads, as a dialog that follows a flow across them must; one that
+  is not is destroyed with the scene it opened in. The owner closes it either way, and disposing the
+  host tears it down.
+- `TopiaForgeToasts.ShowPlain(...)` shows a toast whose text renders as written, markup unparsed.
+  Bound the text first, through `TopiaForgePlainText`.
+- `widget.SetShown(bool)` takes a widget out of its parent's layout, so the rest closes up, or puts
+  it back. It is dirty-checked: a call that changes nothing rebuilds no layout. `SetVisible` keeps a
+  hidden widget's space, which suits a momentary change.
+- `inputField.Password()` masks what is typed; the text itself is unchanged.
 
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.

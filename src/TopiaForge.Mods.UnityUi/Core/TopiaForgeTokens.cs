@@ -1,6 +1,6 @@
 namespace TopiaForge.Mods.UnityUi
 {
-    /// <summary>Text roles mapped to size + font family (Audiowide display, Quicksand body).</summary>
+    /// <summary>Text roles mapped to a size and a face (see <see cref="TopiaForgeTokens.FaceOf"/>).</summary>
     public enum TopiaForgeTextStyle
     {
         /// <summary>Selects the display option.</summary>
@@ -19,6 +19,26 @@ namespace TopiaForge.Mods.UnityUi
         Numeral,
         /// <summary>Selects the banner option.</summary>
         Banner,
+    }
+
+    /// <summary>
+    /// The font faces the type scale draws with. <see cref="TopiaForgeTokens.FaceOf"/> gives every
+    /// <see cref="TopiaForgeTextStyle"/> its face, so no widget or consumer picks a weight itself.
+    /// </summary>
+    public enum TopiaForgeFace
+    {
+        /// <summary>
+        /// Small text: body, label and caption styles, and any style at body size or smaller. Quicksand
+        /// Medium (500): at 12 to 14 px its stems are about a pixel wide, where Light's are half a pixel and
+        /// the dot of an i blurs into its stem.
+        /// </summary>
+        Text,
+
+        /// <summary>Quicksand styles larger than body text, headings and numerals: Quicksand Light (300).</summary>
+        Heading,
+
+        /// <summary>Display, title and banner styles: Audiowide.</summary>
+        Display,
     }
 
     /// <summary>Spacing steps used for gaps and padding.</summary>
@@ -153,7 +173,27 @@ namespace TopiaForge.Mods.UnityUi
             return style == TopiaForgeTextStyle.Display || style == TopiaForgeTextStyle.Title || style == TopiaForgeTextStyle.Banner;
         }
 
-        /// <summary>True for styles rendered with the bold Quicksand face.</summary>
+        /// <summary>
+        /// The face a style is drawn with: Audiowide for display styles, Quicksand Light for the Quicksand
+        /// styles larger than body text, and Quicksand Medium for everything else. A new style is small
+        /// text, and gets the Medium face, unless it is listed here.
+        /// </summary>
+        public static TopiaForgeFace FaceOf(TopiaForgeTextStyle style)
+        {
+            if (IsDisplay(style))
+            {
+                return TopiaForgeFace.Display;
+            }
+
+            return style == TopiaForgeTextStyle.Heading || style == TopiaForgeTextStyle.Numeral
+                ? TopiaForgeFace.Heading
+                : TopiaForgeFace.Text;
+        }
+
+        /// <summary>
+        /// True for styles drawn bold. No bold face ships, so they are drawn with TextMesh Pro's faux bold
+        /// over the face <see cref="FaceOf"/> gives them.
+        /// </summary>
         public static bool IsBold(TopiaForgeTextStyle style)
         {
             return style == TopiaForgeTextStyle.Heading || style == TopiaForgeTextStyle.Label || style == TopiaForgeTextStyle.Numeral;

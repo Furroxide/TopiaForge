@@ -18,6 +18,7 @@ namespace TopiaForge.ModManager.Tests
             AccentOverrideBehaviors();
             HighContrastParityWithHudColor();
             HighContrastTransformsScheme();
+            PaperTextReadsOnEveryPaperSurface();
             AccessibilityProfilesComposeAndClamp();
             EasingEndpointsAndShape();
             RoundedRectCoverage();
@@ -25,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             PreviewFramingMath();
             WindowMath();
             LayerBandAllocation();
+            UiKitToastStackTests.Run();
             Console.WriteLine("UiKitCoreTests passed.");
         }
 
@@ -125,6 +127,52 @@ namespace TopiaForge.ModManager.Tests
             Assert(TopiaForgeContrast.Ratio(paperContrast.Text, paperContrast.Surface) >
                    TopiaForgeContrast.Ratio(TopiaForgeSchemes.ResolvePaper(null, false).Text, TopiaForgePalette.Surface) - 0.001f,
                 "high contrast never reduces paper text contrast");
+        }
+
+        /// <summary>
+        /// Every Paper text role reads on every Paper surface: WCAG AA, and AAA in high contrast. Before, muted text read at
+        /// 4.4:1 on the tint, faint text at 3.0:1, and text in the status tones at 2.3 to 3.9:1 (warning, on paper, 2.7:1),
+        /// and high contrast changed none of the faint or status text. Fills keep the brand's own colors.
+        /// </summary>
+        private static void PaperTextReadsOnEveryPaperSurface()
+        {
+            foreach (var highContrast in new[] { false, true })
+            {
+                var paper = TopiaForgeSchemes.ResolvePaper(null, highContrast);
+                var minimum = highContrast ? 7f : 4.5f;
+                var surfaces = new[]
+                {
+                    ("surface", paper.Surface), ("raised surface", paper.SurfaceAlt), ("sunken paper", paper.SurfaceSunken), ("tint", paper.Tint),
+                    ("selection", paper.SelectedTint), ("a pressed row", paper.SurfaceSunken.Scale(TopiaForgeSchemes.PressedTint)),
+                };
+                var texts = new[]
+                {
+                    ("text", paper.Text), ("muted text", paper.TextMuted), ("faint text", paper.TextFaint),
+                    ("primary text", TopiaForgeSchemes.PaperText(paper.Primary, highContrast)),
+                    ("accent text", TopiaForgeSchemes.PaperText(paper.Accent, highContrast)),
+                    ("success text", TopiaForgeSchemes.PaperText(paper.Success, highContrast)),
+                    ("warning text", TopiaForgeSchemes.PaperText(paper.Warning, highContrast)),
+                    ("danger text", TopiaForgeSchemes.PaperText(paper.Danger, highContrast)),
+                };
+                foreach (var (textName, text) in texts)
+                {
+                    foreach (var (surfaceName, surface) in surfaces)
+                    {
+                        var ratio = TopiaForgeContrast.Ratio(text, surface);
+                        Assert(ratio >= minimum, (highContrast ? "high contrast " : string.Empty) + textName + " reads on " + surfaceName + " (" + ratio.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + ":1)");
+                    }
+                }
+
+                Assert(paper.Warning == TopiaForgePalette.Warning && paper.Success == TopiaForgePalette.Good && paper.Danger == TopiaForgePalette.Danger &&
+                       paper.Primary == TopiaForgePalette.Launch, "fills and rings keep the brand's own status colors");
+            }
+
+            var normal = TopiaForgeSchemes.ResolvePaper(null, false);
+            Assert(TopiaForgeContrast.Ratio(normal.TextMuted, normal.SurfaceSunken) >= 7f, "muted text reads at AAA on sunken paper, where a tool's content sits");
+            Assert(TopiaForgeContrast.Ratio(normal.Text, normal.SurfaceSunken) > TopiaForgeContrast.Ratio(normal.TextMuted, normal.SurfaceSunken) &&
+                   TopiaForgeContrast.Ratio(normal.TextMuted, normal.SurfaceSunken) > TopiaForgeContrast.Ratio(normal.TextFaint, normal.SurfaceSunken),
+                "text, muted text and faint text keep their order");
+            Assert(TopiaForgeSchemes.PaperText(TopiaForgePalette.Ink, false) == TopiaForgePalette.Ink, "a color that already reads is left as it is");
         }
 
         private static void AccessibilityProfilesComposeAndClamp()

@@ -43,11 +43,15 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeTween.MoveX(toast, restingX + 40f, restingX, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutCubic);
         }
 
-        /// <summary>Gets the toast exit-motion preset.</summary>
+        /// <summary>
+        /// Toast exit: slide out to the right + fade. <paramref name="onDone"/> may hand the view to the next toast, and under
+        /// reduced motion it runs at once, inside this call, so the slide starts first: started after it, the slide would push
+        /// that next toast aside.
+        /// </summary>
         public static void ToastOut(TopiaForgeWidget toast, float restingX, Action onDone)
         {
-            TopiaForgeTween.FadeTo(toast, 1f, 0f, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutQuad, onDone);
             TopiaForgeTween.MoveX(toast, restingX, restingX + 40f, TopiaForgeTokens.DurationBase, TopiaForgeEase.InQuad);
+            TopiaForgeTween.FadeTo(toast, 1f, 0f, TopiaForgeTokens.DurationBase, TopiaForgeEase.OutQuad, onDone);
         }
 
         /// <summary>Banner punch: scale 1.35 → 1 (HUD wave banners).</summary>
