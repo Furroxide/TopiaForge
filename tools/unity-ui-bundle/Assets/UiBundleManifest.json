@@ -3,6 +3,7 @@
   "editorVersion": "6000.0.23f1",
   "assets": [
     "Assets/FontAssets/TopiaForge Body SDF.asset",
+    "Assets/FontAssets/TopiaForge Body Medium SDF.asset",
     "Assets/FontAssets/TopiaForge Display SDF.asset",
     "Assets/UiBundleManifest.json"
   ]

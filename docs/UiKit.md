@@ -129,9 +129,16 @@ QA catalog. Provider work follows the repository's dirty-setter, pooling, virtua
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
 
-Every kit label comes from one TextMesh Pro factory, which turns on extra padding. The body face's
+Every kit label comes from one TextMesh Pro factory, which turns on extra padding. Quicksand's
 stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops
 whole letters: at UI scale 1.0 in a 1600x900 window, "default" rendered as "defau t".
+
+Every text style's face comes from `TopiaForgeTokens.FaceOf`, and widgets take it from
+`TopiaForgeFonts.For(style)`, never by weight. Body, label and caption text, and any style at body
+size or smaller, use Quicksand Medium (500). Quicksand Light's stems are half a pixel wide at 14 px:
+at UI scale 1.0 in a 1920x1080 window the dot of an i merged with its stem, and "TopiaForge" read as
+"ToplaForge". Headings and numerals keep Quicksand Light, display styles use Audiowide, and bold styles
+are TextMesh Pro's faux bold over their style's face.
 
 ## Multiplayer kit widgets
 

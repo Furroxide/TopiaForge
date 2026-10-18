@@ -21,10 +21,11 @@ namespace TopiaForge.Mods.UnityUi
             // later, so set a kit size first; callers then set the size of their style.
             tmp.fontSize = TopiaForgeTokens.BodySize;
             // TMP sizes each glyph quad to the glyph's outline plus a small material padding (1.25
-            // texels of the 90-point atlas). The body face's stems are 0.04 em, so at small sizes a
-            // thin glyph such as l or I gets a quad narrower than a pixel. The GPU skips a quad that
-            // covers no pixel centre, which drops whole letters, and a narrow quad also cuts off the
-            // anti-aliased edge. Extra padding widens every quad to the atlas's full distance range.
+            // texels of the 90-point atlas). Quicksand's stems are 0.04 em in Light and 0.08 em in
+            // Medium, so at small sizes a thin glyph such as l or I can get a quad narrower than a
+            // pixel. The GPU skips a quad that covers no pixel centre, which drops whole letters, and
+            // a narrow quad also cuts off the anti-aliased edge. Extra padding widens every quad to
+            // the atlas's full distance range.
             tmp.extraPadding = true;
             tmp.raycastTarget = false;
             return tmp;

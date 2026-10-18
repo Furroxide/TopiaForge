@@ -1,8 +1,9 @@
 {
   "bundle": "topiaforge-ui.bundle",
   "editorVersion": "6000.0.23f1",
-  "sha256": "3cc6624f2a3a5fabc83c4fde49b32f859869e1d1e202afdaf91a888089f9fedb",
+  "sha256": "9a88235dc00312efe1c2c71e3f100fb512dca8a18901551ffe93e19b21f6b458",
   "assets": [
+    "Assets/FontAssets/TopiaForge Body Medium SDF.asset",
     "Assets/FontAssets/TopiaForge Body SDF.asset",
     "Assets/FontAssets/TopiaForge Display SDF.asset",
     "Assets/UiBundleManifest.json"
