@@ -149,9 +149,9 @@ leaving you with no way in.
 
 ## Every mod is off for one start (safe mode)
 
-When Robotopia quits through its own **QUIT** button or you close its window, TopiaForge unloads
-every mod and records a clean exit before the game closes. That takes a moment, and never more than
-10 seconds.
+When Robotopia quits through its own **QUIT** button or you close its window, the game first finishes
+its own quit steps. TopiaForge then unloads every mod and records a clean exit before the game closes.
+That takes a moment, and TopiaForge's part never takes more than 10 seconds.
 
 If the game stops any other way, for example a crash, ending it from Task Manager, or a power cut,
 nothing is recorded. The next start then opens in safe mode: every mod is off for that one run, so a
