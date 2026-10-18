@@ -119,19 +119,39 @@ namespace TopiaForge.ModManager.Tests
         {
             var limited = Failed(InternalLiveFailure.ServiceRateLimited, retryAfter: 3);
             var overlay = limited.Presenter.Connecting;
-            That(overlay.HasFailed && !overlay.CanRetry && overlay.StatusText.EndsWith("try again in 3 seconds.", StringComparison.Ordinal),
-                "a service turning requests away counts down its named delay before RETRY (" + overlay.StatusText + ")");
+            var joins = JoinCalls(limited);
+            That(overlay.HasFailed && !overlay.CanRetry && overlay.StatusText.EndsWith("trying again in 3 seconds.", StringComparison.Ordinal) &&
+                 overlay.FailureMessage == LiveFailureMessages.WaitingOutTheService.Message,
+                "a service turning requests away counts down its named delay, and says the join starts again by itself (" + overlay.StatusText + ")");
             limited.Frame(10, deltaTime: 0.25f);
-            That(!overlay.CanRetry && overlay.StatusText.EndsWith("try again in 1 second.", StringComparison.Ordinal), "the count goes down (" + overlay.StatusText + ")");
+            That(!overlay.CanRetry && overlay.StatusText.EndsWith("trying again in 1 second.", StringComparison.Ordinal) && JoinCalls(limited) == joins,
+                "the count goes down, and nothing is asked of the service meanwhile (" + overlay.StatusText + ")");
             limited.Frame(5, deltaTime: 0.25f);
-            That(overlay.CanRetry && overlay.StatusText == overlay.FailureTitle, "and RETRY comes back once it ends");
+            That(JoinCalls(limited) == joins + 1 && overlay.IsVisible && !overlay.HasFailed && limited.Control.LastJoin!.AllowDirect == false,
+                "once it ends, the same join starts again by itself, still through the relay, without the player pressing RETRY");
+            limited.Frame(20, deltaTime: 0.25f);
+            That(JoinCalls(limited) == joins + 1, "and only once");
 
             var endless = Failed(InternalLiveFailure.ServiceRateLimited, retryAfter: int.MaxValue);
             var waiting = endless.Presenter.Connecting;
-            That(!waiting.CanRetry && waiting.StatusText.EndsWith("try again in 86400 seconds.", StringComparison.Ordinal),
+            var before = JoinCalls(endless);
+            That(!waiting.CanRetry && waiting.StatusText.EndsWith("trying again in 86400 seconds.", StringComparison.Ordinal),
                 "a named delay past a day waits a day (" + waiting.StatusText + ")");
+            endless.Frame(2000, deltaTime: 0.002f);
+            That(waiting.StatusText.EndsWith("trying again in 86396 seconds.", StringComparison.Ordinal),
+                "and counts it down at 500 frames a second too, where a float near a day would stand still (" + waiting.StatusText + ")");
             endless.Frame(1, deltaTime: 86_400f);
-            That(waiting.CanRetry, "and no longer");
+            That(JoinCalls(endless) == before + 1, "and no longer: then the join starts again");
+
+            var closed = Failed(InternalLiveFailure.ServiceRateLimited, retryAfter: 2);
+            var dismissed = JoinCalls(closed);
+            closed.Presenter.Connecting.Dismiss();
+            closed.Frame(20, deltaTime: 0.25f);
+            That(JoinCalls(closed) == dismissed && !closed.Presenter.Connecting.IsVisible, "a failure view the player closed joins nothing later");
+
+            var unnamed = Failed(InternalLiveFailure.ServiceRateLimited);
+            unnamed.Frame(20, deltaTime: 0.25f);
+            That(unnamed.Presenter.Connecting.CanRetry && JoinCalls(unnamed) == 1, "without a named delay, RETRY is offered at once and nothing starts by itself");
 
             var unlisted = new SessionsRig(service: true);
             var serverId = new string('9', 64);
@@ -191,6 +211,8 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             That(rig.Presenter.Session.InviteText.Length == 0, "and nothing once the session ended");
         }
+
+        private static int JoinCalls(SessionsRig rig) => rig.Control.Calls.Count(call => call.StartsWith("Join", StringComparison.Ordinal));
 
         private static string ListEmptyText(SessionsRig rig, BrowseList list)
         {

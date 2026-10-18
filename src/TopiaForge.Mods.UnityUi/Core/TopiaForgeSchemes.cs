@@ -7,6 +7,40 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeSchemes
     {
+        /// <summary>The contrast Paper text keeps on every Paper surface it sits on, the tint the darkest: WCAG AA.</summary>
+        internal const float PaperTextRatio = 4.5f;
+
+        /// <summary>
+        /// The contrast muted text keeps on sunken paper, where a tool's content sits: WCAG AAA. Muted text is drawn in the
+        /// regular face at 12 to 14 points, whose thin strokes render lighter than their color.
+        /// </summary>
+        internal const float PaperMutedTextRatio = 7f;
+
+        /// <summary>The contrast every Paper text role keeps on every Paper surface in high contrast: WCAG AAA.</summary>
+        internal const float PaperHighContrastTextRatio = 7f;
+
+        /// <summary>The kit's pressed tint, which darkens a row of sunken paper while it is pressed.</summary>
+        internal const float PressedTint = 0.94f;
+
+        /// <summary>The darkest Paper surface text sits on: the tint, or a row of sunken paper while pressed, whichever is darker.</summary>
+        internal static readonly TopiaForgeRgba DarkestTextSurface = Darker(TopiaForgePalette.SurfaceTint, TopiaForgePalette.Paper.Scale(PressedTint));
+
+        /// <summary>
+        /// Gets a color as Paper text: darkened, if it must be, until it reads at <see cref="PaperTextRatio"/> on the
+        /// darkest Paper surface text sits on, or at <see cref="PaperHighContrastTextRatio"/> in high contrast. The status
+        /// and brand colors are made for fills and rings; text in their tones takes this instead.
+        /// </summary>
+        internal static TopiaForgeRgba PaperText(TopiaForgeRgba color, bool highContrast)
+        {
+            return TopiaForgeContrast.DarkenForPaper(
+                color,
+                DarkestTextSurface,
+                highContrast ? PaperHighContrastTextRatio : PaperTextRatio);
+        }
+
+        private static TopiaForgeRgba Darker(TopiaForgeRgba first, TopiaForgeRgba second) =>
+            TopiaForgeContrast.Luminance(first) <= TopiaForgeContrast.Luminance(second) ? first : second;
+
         /// <summary>Resolves the effective value for the current theme.</summary>
         public static TopiaForgeSchemeColors Resolve(TopiaForgeScheme scheme, TopiaForgeRgba? accentOverride, bool highContrast)
         {
@@ -39,8 +73,11 @@ namespace TopiaForge.Mods.UnityUi
                 Accent = accent,
                 AccentPressed = accentPressed,
                 Text = TopiaForgePalette.Ink,
-                TextMuted = TopiaForgePalette.MutedText,
-                TextFaint = TopiaForgePalette.FaintText,
+
+                // The launcher's muted and faint text, darkened for the game's light face: muted text reads at AAA on
+                // sunken paper, and faint text, placeholders and disabled labels included, at AA on every surface.
+                TextMuted = TopiaForgeContrast.DarkenForPaper(TopiaForgePalette.MutedText, TopiaForgePalette.Paper, PaperMutedTextRatio),
+                TextFaint = PaperText(TopiaForgePalette.FaintText, highContrast: false),
                 Success = TopiaForgePalette.Good,
                 Warning = TopiaForgePalette.Warning,
                 Danger = TopiaForgePalette.Danger,
@@ -56,6 +93,7 @@ namespace TopiaForge.Mods.UnityUi
                 {
                     Text = TopiaForgeRgba.Hex(0x14181F),
                     TextMuted = TopiaForgeRgba.Hex(0x3D4450),
+                    TextFaint = PaperText(TopiaForgePalette.FaintText, highContrast: true),
                     Outline = TopiaForgePalette.LaunchDark,
                     Backdrop = TopiaForgePalette.Ink.WithAlpha(0.72f),
                 };

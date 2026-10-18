@@ -70,7 +70,7 @@ namespace TopiaForge.Mods.UnityUi
 
             tone = value;
             hasCustomColor = false;
-            text.color = Theme.ToneColor(tone);
+            text.color = ToneOn(Theme);
         }
 
         /// <summary>Aligns this element to the center.</summary>
@@ -268,8 +268,13 @@ namespace TopiaForge.Mods.UnityUi
         {
             if (!hasCustomColor)
             {
-                text.color = theme.ToneColor(tone);
+                text.color = ToneOn(theme);
             }
         }
+
+        // A display face is large brand type and keeps its tone's own color; every other style is body text, whose status
+        // tones the theme darkens until they read on every surface.
+        private Color ToneOn(TopiaForgeResolvedTheme theme) =>
+            TopiaForgeTokens.IsDisplay(style) ? theme.ToneColor(tone) : theme.TextToneColor(tone);
     }
 }

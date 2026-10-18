@@ -94,7 +94,7 @@ namespace TopiaForge.ModManager.Sessions
             }
             catch (Exception)
             {
-                context.Notify("This game could not listen on the local network.", ScreenTone.Danger);
+                context.Notify("This game could not listen on the local network. Close other programs that use the multiplayer port, then search again.", ScreenTone.Danger);
                 return;
             }
 

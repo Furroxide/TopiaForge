@@ -143,7 +143,8 @@ namespace TopiaForge.ModManager.Sessions
             title = join.Title;
             stage = next;
             cancelRequested = false;
-            retryWait = 0f;
+            retryWait = 0d;
+            retryWhenWaited = false;
             shownWait = -1;
             failure = null;
             failureStatus = null;
@@ -220,7 +221,10 @@ namespace TopiaForge.ModManager.Sessions
             switch (reason)
             {
                 case InternalLiveFailure.ServiceRateLimited when status.Internet.RetryAfterSeconds > 0:
+                    // The service named how long to wait: the overlay counts it down, then joins again by itself.
+                    failure = LiveFailureMessages.WaitingOutTheService;
                     retryWait = Math.Min(status.Internet.RetryAfterSeconds, MaximumRetryWaitSeconds);
+                    retryWhenWaited = true;
                     shownWait = -1;
                     CountDown(0f);
                     break;
@@ -251,16 +255,20 @@ namespace TopiaForge.ModManager.Sessions
                 () => stage == Stage.Failed && ReferenceEquals(request, failedJoin));
         }
 
-        /// <summary>Counts down the service's named delay; until it ends RETRY waits and the status line says how long.</summary>
+        /// <summary>
+        /// Counts down the service's named delay: until it ends RETRY waits and the status line says how long, and once it
+        /// ends the join starts again by itself, so the player never has to come back to press it.
+        /// </summary>
         private void CountDown(float deltaTime)
         {
-            retryWait = Math.Max(0f, retryWait - (deltaTime > 0f && !float.IsNaN(deltaTime) ? deltaTime : 0f));
+            retryWait = Math.Max(0d, retryWait - (deltaTime > 0f && !float.IsNaN(deltaTime) ? deltaTime : 0d));
             var seconds = (int)Math.Ceiling(retryWait);
             if (seconds == shownWait) return;
             shownWait = seconds;
             statusText = seconds > 0
-                ? failure!.Title + ": try again in " + seconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + (seconds == 1 ? " second." : " seconds.")
+                ? failure!.Title + ": trying again in " + seconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + (seconds == 1 ? " second." : " seconds.")
                 : failure!.Title;
+            if (seconds == 0 && retryWhenWaited) Retry();
         }
 
         /// <summary>A listed server the service no longer lists leaves the recent servers.</summary>

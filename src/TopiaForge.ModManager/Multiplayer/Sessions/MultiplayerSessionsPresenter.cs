@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Sessions
     /// </summary>
     internal sealed class MultiplayerSessionsPresenter : IMultiplayerScreens
     {
-        internal const string NotInstalled = "Multiplayer is not available: the TopiaForge Multiplayer mod is not loaded.";
+        internal const string NotInstalled = "Multiplayer is not available: the TopiaForge Multiplayer mod is not loaded. Enable it in the TopiaForge launcher, then start the game again.";
         internal const string SwitchedOff = "Live multiplayer is switched off in this build.";
         internal const string LoadingSettings = "Loading multiplayer settings...";
         internal const string SavingSettings = "Saving multiplayer settings...";

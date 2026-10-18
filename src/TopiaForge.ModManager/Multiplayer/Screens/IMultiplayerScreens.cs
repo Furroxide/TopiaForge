@@ -258,6 +258,12 @@ namespace TopiaForge.ModManager.Sessions
 
         string InviteText { get; }
 
+        /// <summary>Gets whether this game hosts a session that has an invite code to share.</summary>
+        bool CanCopyInvite { get; }
+
+        /// <summary>Puts the invite code on the clipboard, for the host to paste where its players are; nothing else keeps it.</summary>
+        void CopyInvite();
+
         /// <summary>Gets whether players are listed: once the session's host has listed them, never another host's list.</summary>
         bool PlayersVisible { get; }
 

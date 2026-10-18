@@ -165,15 +165,15 @@ namespace TopiaForge.ModManager.Tests
             _ = inventory.Readiness;
             work.RunAll();
             _ = inventory.Readiness;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            var ready = 0;
-            for (var frame = 0; frame < 10_000; frame++)
-            {
-                if (inventory.Readiness.State == InternalContentState.Ready) ready++;
-            }
 
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            That(ready == 10_000 && allocated == 0, "reading settled readiness every frame allocates nothing (" + allocated + " bytes)");
+            // Measured as the other frame checks are, so the runtime's own once-only work on this thread is not counted:
+            // measured in one pass, it failed about one run in twelve with 49,200 bytes while the machine was busy.
+            var notReady = 0;
+            var allocated = Seam.Allocated(() =>
+            {
+                if (inventory.Readiness.State != InternalContentState.Ready) notReady++;
+            });
+            That(notReady == 0 && allocated == 0, "reading settled readiness every frame allocates nothing (" + allocated + " bytes)");
         }
 
         private static string Package(string root, string name, int files, int bytes)

@@ -24,6 +24,8 @@ namespace TopiaForge.ModManager.Sessions
         internal const string InvitePrefix = "Invite code: ";
         internal const string InviteSuffix = ". Players join with it in CONNECT; share it only with players you want.";
         internal const string ListChanged = "The player list changed, so nothing was done. Select the player again.";
+        internal const string InviteCopied = "Copied the invite code. Paste it where your players are; share it only with players you want.";
+        internal const string InviteNotCopied = "The invite code could not be copied. Read it from this tab instead.";
 
         private readonly MultiplayerScreensContext context;
         private readonly Dictionary<string, MultiplayerPlayerKey> keys = new Dictionary<string, MultiplayerPlayerKey>(StringComparer.Ordinal);
@@ -52,6 +54,8 @@ namespace TopiaForge.ModManager.Sessions
         /// shows only here and is never logged, or how LAN players find it. Rebuilt only when the status moves.
         /// </summary>
         public string InviteText => inviteText;
+
+        public bool CanCopyInvite => HostedInvite() != null;
 
         public bool PlayersVisible => ListsPlayers(context.Status);
 
@@ -99,6 +103,28 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             selected = new Selection(key, playerKey, NameOf(key));
+        }
+
+        /// <summary>
+        /// Puts the invite code on the clipboard, so the host pastes it to its players instead of copying it out by hand. Only
+        /// the host's own click does this; the code reaches no toast or log.
+        /// </summary>
+        public void CopyInvite()
+        {
+            var invite = HostedInvite();
+            if (invite == null) return;
+            try
+            {
+                context.Environment.CopyToClipboard(invite.Display);
+            }
+            catch (Exception)
+            {
+                // Nothing the clipboard throws may carry the code into the kit's log of failed clicks.
+                context.Notify(InviteNotCopied, ScreenTone.Warning);
+                return;
+            }
+
+            context.Notify(InviteCopied, ScreenTone.Success);
         }
 
         public void Kick()
@@ -156,6 +182,9 @@ namespace TopiaForge.ModManager.Sessions
         }
 
         private Selection? Moderatable() => SelectedRow()?.CanModerate == true ? selected : null;
+
+        private InternalInvite? HostedInvite() =>
+            context.Status.Role == InternalSessionRole.ListenHost ? context.Status.Status.Internet.Invite : null;
 
         private string NameOf(string key) => Find(key)?.Name ?? string.Empty;
 

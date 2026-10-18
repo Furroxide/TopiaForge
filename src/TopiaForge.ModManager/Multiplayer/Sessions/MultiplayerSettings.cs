@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
+using TopiaForge.ModManager.Core;
 using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Sessions
@@ -26,9 +27,9 @@ namespace TopiaForge.ModManager.Sessions
 
     /// <summary>
     /// The player's multiplayer preferences in this game, kept in manager data: the acknowledged disclosure version, Hide my
-    /// IP, the display name, the last hosting settings (never a password), and favorite and recent servers by server id.
-    /// Immutable; every change returns a new value. Nothing here can make a direct connection the default without the
-    /// player turning Hide my IP off themselves.
+    /// IP, the display name, the last hosting settings (never a password) and the game last hosted, and favorite and recent
+    /// servers by server id. Immutable; every change returns a new value. Nothing here can make a direct connection the
+    /// default without the player turning Hide my IP off themselves.
     /// </summary>
     internal sealed class MultiplayerSettings
     {
@@ -41,7 +42,7 @@ namespace TopiaForge.ModManager.Sessions
         internal const int DefaultMaxPlayers = 8;
 
         internal static readonly MultiplayerSettings Default = new MultiplayerSettings(
-            0, true, DefaultDisplayName, null, DefaultMaxPlayers, InternalSessionVisibility.Lan, false,
+            0, true, DefaultDisplayName, null, DefaultMaxPlayers, InternalSessionVisibility.Lan, false, null, null,
             Array.Empty<ServerBookmark>(), Array.Empty<ServerBookmark>());
 
         private MultiplayerSettings(
@@ -52,6 +53,8 @@ namespace TopiaForge.ModManager.Sessions
             int hostMaxPlayers,
             InternalSessionVisibility hostVisibility,
             bool hostVoice,
+            string? hostedTarget,
+            string? hostedWorld,
             IReadOnlyList<ServerBookmark> favorites,
             IReadOnlyList<ServerBookmark> history)
         {
@@ -62,6 +65,11 @@ namespace TopiaForge.ModManager.Sessions
             HostMaxPlayers = hostMaxPlayers < InternalHostSettings.MinimumPlayers || hostMaxPlayers > InternalHostSettings.MaximumPlayers ? DefaultMaxPlayers : hostMaxPlayers;
             HostVisibility = Enum.IsDefined(typeof(InternalSessionVisibility), hostVisibility) ? hostVisibility : InternalSessionVisibility.Lan;
             HostVoice = hostVoice;
+
+            // A game is remembered by its launch target and world, both declaration ids; anything else is forgotten.
+            var target = IsDeclarationId(hostedTarget) ? hostedTarget : null;
+            HostedTarget = target;
+            HostedWorld = target != null && IsDeclarationId(hostedWorld) ? hostedWorld : null;
             Favorites = favorites;
             History = history;
         }
@@ -81,6 +89,12 @@ namespace TopiaForge.ModManager.Sessions
         internal InternalSessionVisibility HostVisibility { get; }
 
         internal bool HostVoice { get; }
+
+        /// <summary>Gets the launch target of the game last hosted, which HOST offers first at the menu; null when none.</summary>
+        internal string? HostedTarget { get; }
+
+        /// <summary>Gets the world of the game last hosted, or null for its target's own.</summary>
+        internal string? HostedWorld { get; }
 
         /// <summary>Gets the favorite servers, newest first, each once.</summary>
         internal IReadOnlyList<ServerBookmark> Favorites { get; }
@@ -107,7 +121,11 @@ namespace TopiaForge.ModManager.Sessions
         }
 
         internal MultiplayerSettings WithHosting(string? name, int maxPlayers, InternalSessionVisibility visibility, bool voice) =>
-            new MultiplayerSettings(AcknowledgedDisclosure, HideMyIp, DisplayName, name, maxPlayers, visibility, voice, Favorites, History);
+            new MultiplayerSettings(AcknowledgedDisclosure, HideMyIp, DisplayName, name, maxPlayers, visibility, voice, HostedTarget, HostedWorld, Favorites, History);
+
+        /// <summary>Remembers the game just hosted, by its launch target and world, so HOST offers it first next time.</summary>
+        internal MultiplayerSettings WithHostedGame(string targetId, string? worldId) =>
+            new MultiplayerSettings(AcknowledgedDisclosure, HideMyIp, DisplayName, ServerName, HostMaxPlayers, HostVisibility, HostVoice, targetId, worldId, Favorites, History);
 
         internal bool IsFavorite(string serverId)
         {
@@ -156,6 +174,8 @@ namespace TopiaForge.ModManager.Sessions
                 HostMaxPlayers = HostMaxPlayers,
                 HostVisibility = HostVisibility.ToString().ToLowerInvariant(),
                 HostVoice = HostVoice,
+                HostedTarget = HostedTarget,
+                HostedWorld = HostedWorld,
                 Favorites = Documents(Favorites),
                 History = Documents(History)
             };
@@ -185,6 +205,8 @@ namespace TopiaForge.ModManager.Sessions
                 document.HostMaxPlayers,
                 visibility,
                 document.HostVoice,
+                document.HostedTarget,
+                document.HostedWorld,
                 Bookmarks(document.Favorites, MaximumFavorites),
                 Bookmarks(document.History, MaximumHistory));
         }
@@ -203,8 +225,12 @@ namespace TopiaForge.ModManager.Sessions
                 HostMaxPlayers,
                 HostVisibility,
                 HostVoice,
+                HostedTarget,
+                HostedWorld,
                 favorites ?? Favorites,
                 history ?? History);
+
+        private static bool IsDeclarationId(string? value) => value != null && ManifestContributionValidator.IsValidDeclarationId(value);
 
         private static List<ServerBookmark> Without(IReadOnlyList<ServerBookmark> list, string serverId)
         {
@@ -267,6 +293,13 @@ namespace TopiaForge.ModManager.Sessions
 
         [DataMember(Name = "hostVoice")]
         public bool HostVoice { get; set; }
+
+        // Optional, and ignored by a reader that predates it, so the schema version stays 1.
+        [DataMember(Name = "hostedTarget", EmitDefaultValue = false)]
+        public string? HostedTarget { get; set; }
+
+        [DataMember(Name = "hostedWorld", EmitDefaultValue = false)]
+        public string? HostedWorld { get; set; }
 
         [DataMember(Name = "favorites", EmitDefaultValue = false)]
         public List<ServerBookmarkDocument>? Favorites { get; set; }

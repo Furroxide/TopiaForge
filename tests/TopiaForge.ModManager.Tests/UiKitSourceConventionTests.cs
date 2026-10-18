@@ -19,6 +19,8 @@ namespace TopiaForge.ModManager.Tests
             ComponentLookupHonorsUnityNullSemantics();
             CanvasSortingUsesAllocator();
             ProcessWideUiStateHasShutdownPath();
+            ToastsPresentEveryViewFresh();
+            PaperTextTonesReachLabels();
             UnityUiReferencesStayInternal();
             FirstPartyModsDoNotConstructRawUnityUi();
             FirstPartyModsDoNotMutateGlobalTheme();
@@ -178,7 +180,11 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(topiaForgeUi, "while (Hosts.Count > 0)", "TopiaForgeUi shutdown must reclaim forgotten hosts.");
             RequireSource(host, "TopiaForgeUi.OnHostDisposed(this)", "Disposed hosts must leave the global host registry.");
             RequireSource(toast, "TopiaForgeToastHost.Instance.Layer(", "The toast canvas must be owned by its UiHost.");
-            RequireSource(toast, "Queue.Clear();", "Toast shutdown must clear pending notifications.");
+            RequireSource(toast, "Stack.Clear();", "Toast shutdown must clear pending notifications.");
+            RequireSource(
+                File.ReadAllText(Path.Combine(kitRoot, "Core", "TopiaForgeToastStack.cs")),
+                "waiting.Clear();",
+                "Clearing the toast stack must drop its waiting notifications.");
             RequireSource(toast, "Views.Clear();", "Toast shutdown must release pooled view references.");
             if (toast.Contains("TopiaForgeLayers.CreateCanvas(\"TopiaForgeToasts\"", StringComparison.Ordinal))
             {
@@ -196,6 +202,49 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(brandBundle,
                 "ResourceName = \"TopiaForge.Mods.UnityUi.topiaforge-ui.bundle\"",
                 "The TopiaForge UI loader must resolve the renamed embedded resource identity.");
+        }
+
+        // Toast views are pooled. A view was presented fresh only while it sat at its creation spot, so every toast after a
+        // view's first kept the last exit's fade and slide, and each exit slid it 40 units further: in the game, every toast
+        // after the first was invisible, overlay open or not. TopiaForgeToastStack says when a view is fresh, which the core
+        // tests cover; the Unity side must place and bring in such a view, and slide exits from where toasts rest.
+        private static void ToastsPresentEveryViewFresh()
+        {
+            var toast = File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Widgets", "TopiaForgeToast.cs"));
+            RequireSource(toast, "Stack.TryPlace(index, out var top, out var fresh)", "Toasts must be placed as the toast stack says.");
+            RequireSource(toast, "view.Label.textWrappingMode = TextWrappingModes.Normal;", "A longer toast must wrap to its lines, not end after one.");
+            RequireSource(toast, "view.Label.GetPreferredValues(ThreeLines, width, 0f).y", "A toast's text must stop at three lines, so a longer one ends in an ellipsis.");
+            RequireSource(toast, "Stack.SetHeight(index, height);", "A toast that wraps must push the toasts below it down.");
+            if (!Regex.IsMatch(toast, @"if \(fresh\)\s*\{[^}]*anchoredPosition = new Vector2\(restingX, targetY\);[^}]*TopiaForgeMotion\.ToastIn\(view\.Root, restingX\);"))
+            {
+                throw new InvalidOperationException("A fresh toast view must be placed at its slot and brought in, whatever it showed before.");
+            }
+
+            RequireSource(toast, "TopiaForgeMotion.ToastOut(view.Root, -TopiaForgeTokens.SafeMargin,", "A toast's exit must slide from where toasts rest, so exits never add up.");
+            if (toast.Contains("Mathf.Approximately(position.x, 0f)", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("A toast view's freshness must come from the toast stack, not from where the view sits.");
+            }
+        }
+
+        // Status and brand colors are made for fills and rings, and on Paper they fail WCAG AA as text (warning reads at
+        // 2.7:1 on paper). The resolved theme takes each status tone's text color from TopiaForgeSchemes.PaperText, which
+        // the core tests measure, and labels draw body text with it.
+        private static void PaperTextTonesReachLabels()
+        {
+            var kitRoot = Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi");
+            var theme = File.ReadAllText(Path.Combine(kitRoot, "Theme", "TopiaForgeResolvedTheme.cs"));
+            foreach (var role in new[] { "Primary", "Accent", "Success", "Warning", "Danger" })
+            {
+                RequireSource(theme, "TopiaForgeSchemes.PaperText(colors." + role + ", HighContrast)", "On Paper, " + role + " text must take its readable color.");
+            }
+
+            var label = File.ReadAllText(Path.Combine(kitRoot, "Widgets", "TopiaForgeLabel.cs"));
+            RequireSource(label, "theme.TextToneColor(tone)", "Labels must draw body text in the tones' readable text colors.");
+            if (Regex.IsMatch(label, @"text\.color = [Tt]heme\.ToneColor\(tone\)"))
+            {
+                throw new InvalidOperationException("A label sets a tone's fill color on its text instead of its readable text color.");
+            }
         }
 
         private static void RequireSource(string source, string expected, string message)

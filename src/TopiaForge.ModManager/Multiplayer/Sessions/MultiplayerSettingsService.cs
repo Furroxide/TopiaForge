@@ -45,8 +45,8 @@ namespace TopiaForge.ModManager.Sessions
     /// </summary>
     internal sealed class MultiplayerSettingsService
     {
-        internal const string LoadFailedText = "Multiplayer settings could not be read, so changes last for this session only.";
-        internal const string SaveFailedText = "Multiplayer settings could not be saved.";
+        internal const string LoadFailedText = "Multiplayer settings could not be read, so changes last for this session only. Check that TopiaForge can read and write its data folder.";
+        internal const string SaveFailedText = "Multiplayer settings could not be saved; this game tries again with your next change. Check that TopiaForge can write its data folder.";
 
         private readonly MultiplayerBackgroundQueue queue;
         private readonly IMultiplayerSettingsStore store;

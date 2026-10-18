@@ -105,7 +105,7 @@ namespace TopiaForge.ModManager
 
         public long UnixSeconds => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        public IReadOnlyList<HostTargetChoice> ReadHostTargets() => HostTargets.AtTheMenu(plugin.GetLaunchPreviews());
+        public IReadOnlyList<HostTargetChoice> ReadHostTargets() => HostTargets.AtTheMenu(plugin.GetLaunchPreviews(), plugin.GetWorldNames());
 
         public async void Launch(HostTargetChoice choice, Action<bool, string> done)
         {
@@ -165,20 +165,23 @@ namespace TopiaForge.ModManager
             }
 
             var title = running.TargetId;
+            var worldName = running.WorldId ?? string.Empty;
             try
             {
                 foreach (var preview in plugin.GetLaunchPreviews())
                 {
                     if (string.Equals(preview.Id, running.TargetId, StringComparison.OrdinalIgnoreCase)) title = preview.Title;
                 }
+
+                worldName = HostTargets.WorldName(running.WorldId, plugin.GetWorldNames());
             }
             catch (Exception)
             {
-                // Without previews the target's id names the game.
+                // Without previews the target's id names the game, and the world's id names the world.
             }
 
-            currentGameText = "This game: " + title + " · " + running.WorldId;
-            currentGame = new HostTargetChoice(currentGameText, new LaunchRequest(running.TargetId, running.WorldId), title, running.WorldId);
+            currentGameText = "This game: " + title + " · " + worldName;
+            currentGame = new HostTargetChoice(currentGameText, new LaunchRequest(running.TargetId, running.WorldId), title, worldName);
         }
     }
 }

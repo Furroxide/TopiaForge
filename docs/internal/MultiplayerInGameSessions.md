@@ -45,9 +45,9 @@ developer switch until the release enables them: with them off, the tab says so 
 | --- | --- |
 | BROWSE | LAN, Internet, Favorites and History, in a sortable, virtualized table: lock, name, gamemode, world, players, ping and mods (Ready, Needs N, Incompatible). JOIN, INSTALL & JOIN IN LAUNCHER, and favorites |
 | HOST | The game to host (chosen at the menu from the games it can start, the running one otherwise), name (1 to 48 characters), players (2 to 16, 8 by default), password (optional, never kept), visibility (Public, Invite or LAN), and the host policy |
-| CONNECT | An invite code, or an invite or server link pasted as the address, which need the TopiaForge service; or an address and password the player types |
+| CONNECT | An invite code or the invite's link, or an invite or server link pasted as the address, which need the TopiaForge service; or an address and password the player types |
 | VOICE | A slot the voice slice fills (`IMultiplayerVoiceSlot`) |
-| SESSION | The invite, the players with kick, ban and mute for the host, and "End session for everyone" or "Leave server" |
+| SESSION | The invite, with COPY INVITE CODE for the host; the players with kick, ban and mute for the host; and "End session for everyone" or "Leave server" |
 
 - **Searching** the local network starts only when the player presses SEARCH LAN, and stops when they leave BROWSE or
   close the overlay. While it runs, each session heard is checked once, over the local network only, at most two at a
@@ -55,7 +55,12 @@ developer switch until the release enables them: with them off, the tab says so 
   problems and counts the rest; and a host may announce a new server id as each old one falls silent, so a check is
   kept only while the local network lists its server.
 - **Games to host.** At the main menu HOST offers each launch choice that replaces the scene. A choice that adds an
-  arena to a running game needs that game, and its launch is refused at the menu, so HOST leaves it out.
+  arena to a running game needs that game, and its launch is refused at the menu, so HOST leaves it out. Each choice,
+  the running game's line, and the world a hosted session announces to players browsing for one name the world as
+  players know it (`HostTargets.WorldNames`): a declared world by its declared name, a discovered one, such as a native
+  level, by the name its discovery gave it. Only a world with neither shows its id. HOST selects the game last hosted,
+  from the menu or opened in place, which the settings remember by launch target and world; a game the player picks
+  stays picked, by the same key, however the list changes; with neither, HOST selects the first.
 - **The TopiaForge service.** Whether this game reaches one comes from the runtime (`ServiceOrigin`, from the session
   launch or the manager's configuration) and shows in every status (`Internet.ServiceConfigured`). Without one, HOST
   keeps Public and Invite disabled with the reason, CONNECT takes addresses only, and the Internet list says the
@@ -63,8 +68,11 @@ developer switch until the release enables them: with them off, the tab says so 
   - **HOST** offers Public and Invite. Players join them through the relay, and directly too only when the player
     turned Hide my IP off; no per-session prompt is needed. While such a session runs, HOST says how the service lists
     it: registering, listed, retrying with the reason, or failed. SESSION shows the host its invite code once the
-    service has made one; it shows nowhere else and is never logged.
-  - **CONNECT** joins an invite, or a pasted invite or server link. The check asks the service alone, never the host,
+    service has made one; it shows nowhere else and is never logged. COPY INVITE CODE puts it on the clipboard on the
+    host's own click, so the host pastes it to its players; the toast that confirms it does not repeat the code.
+  - **CONNECT** joins an invite, or a pasted invite or server link. The invite field also reads the code out of the
+    invite's own `topiaforge://join/` link, and ignores spaces and line breaks around it, since players paste what the
+    host shared. The check asks the service alone, never the host,
     and the join goes through the relay unless Hide my IP is off. The overlay names the session by its server, or as an
     invited session or a listed server, never by the code.
   - **The Internet list** points to the TopiaForge launcher, which owns the Internet browser; the game does not browse
@@ -135,12 +143,16 @@ synchronizes. The stepper follows that order on the steps the plan names:
 Verifying mods is done once the host admits the player. A failure stops at its own step or at the step the join reached,
 whichever is later, and steps it never ran show skipped: mods that do not match this game's check fail at Verifying
 mods, with Connecting and Authenticating skipped. Every `InternalLiveFailure`, and every admission code of a refusal,
-has its own words; the TopiaForge service's codes follow the Internet sessions' design record. A service turning
-requests away counts down its named delay, a day at most, before RETRY; a server the service no longer lists leaves the
-recent servers; and a wrong or withdrawn invite offers no retry. Once the link is up, the Connecting step says the route
-the status reports, Relay or Direct. The failure view offers Retry where trying again can help, Open launcher where the
-launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server. Cancel,
-the close button and ESC stop a running join at any step, and leaving is never refused.
+has its own words, and every one the player can do something about says what: try again, check the code, ask the host,
+update, or that this game carries on by itself. The TopiaForge service's codes keep the Internet sessions' design
+record's sentences and add that next step. A service turning requests away with a named delay is waited out on the
+overlay, a day at most, which then joins again by itself, once; without a named delay RETRY is offered at once. A
+server the service no longer lists leaves the recent servers, and a wrong or withdrawn invite offers no retry. RETRY
+after the host refused the password, or turned away too many wrong ones, joins again without it, so the overlay asks
+for the password in place instead of sending the refused one again. Once the link is up, the Connecting step says the
+route the status reports, Relay or Direct. The failure view offers Retry where trying again can help, Open launcher
+where the launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server.
+Cancel, the close button and ESC stop a running join at any step, and leaving is never refused.
 
 The overlay and the prompts are persistent modals: joining from a running game returns to the main menu first, and a
 modal that is not persistent is destroyed with the scene it opened in, which in the game left the join running with no
@@ -191,7 +203,9 @@ has loaded, a native scene change, any other operation that holds the session, a
 ## 8. Work off the main thread
 
 - **Settings** live in `data/multiplayer-settings.json`: the acknowledged disclosure version, Hide my IP, the display
-  name (2 to 24 characters), the last hosting settings without the password, and favorites and history by server id.
+  name (2 to 24 characters), the last hosting settings without the password, the game last hosted by launch target
+  and world, and favorites and history by server id. A member a reader does not know is ignored, so an older game
+  reads the file as before.
   They load and save on `MultiplayerBackgroundQueue`, one write at a time, coalesced; the tab notes a pending write and
   stays responsive. Settings that cannot be read are kept for the session only, so the file is never overwritten with
   defaults.
@@ -223,9 +237,13 @@ has loaded, a native scene change, any other operation that holds the session, a
   bounding what a host lists, this game's own problem lines dropping addresses a host put in ids and versions, the
   address sweep over every screen, invites and listed servers through the service and nothing without one, the
   relay-unavailable direct prompt and its cancel path, the service's failures as their codes say, a host's listing and
-  invite, questions withdrawn once their game or session changes, one prompt at a time with a withdrawn one's modal
-  closed, a provider that throws while hosting or a join starts, and settled frames, a waiting question's included,
-  allocating nothing with mods loaded.
+  invite, questions withdrawn once their game or session changes, a premise that cannot be read counting as broken, the
+  bounded prompt queue, one prompt at a time with a withdrawn one's modal closed, a provider that throws while hosting
+  or a join starts and whose own words never reach the screen, worlds named as players know them in HOST and in what a
+  session announces, a refused password asked for again rather than resent, the host's invite code copied without a
+  toast repeating it, a named delay waited out at any frame rate and then joined again by itself, every failure saying
+  what to do next, an invite's link pasted as its code, the game last hosted offered first, and settled frames, a
+  waiting question's included, allocating nothing with mods loaded.
 - **The frame boundary** (`MultiplayerFrameGuardTests`): a throwing presenter, prompt stage or tab neither breaks the
   frame nor logs an address, in its words or its stack; each failure is logged once, and the log is bounded.
 - **Wording** (`MultiplayerPrivacyTextTests`): the constants against the approved document, parsed.

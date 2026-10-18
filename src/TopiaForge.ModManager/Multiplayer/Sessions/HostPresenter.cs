@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -60,6 +61,7 @@ namespace TopiaForge.ModManager.Sessions
         private int maxPlayers = MultiplayerSettings.DefaultMaxPlayers;
         private int visibility = 2;
         private int selectedTarget;
+        private LaunchRequest? chosen;
         private bool voice;
         private int listingVersion = -1;
 
@@ -162,7 +164,9 @@ namespace TopiaForge.ModManager.Sessions
 
         public void SelectTarget(int index)
         {
-            if (index >= 0 && index < targets.Count) selectedTarget = index;
+            if (index < 0 || index >= targets.Count) return;
+            selectedTarget = index;
+            chosen = targets[index].Request;
         }
 
         public void SetName(string value)
@@ -215,7 +219,7 @@ namespace TopiaForge.ModManager.Sessions
             var labels = new string[targets.Count];
             for (var index = 0; index < labels.Length; index++) labels[index] = targets[index].Label;
             targetOptions = labels;
-            if (selectedTarget >= targets.Count) selectedTarget = 0;
+            SelectGame();
         }
 
         /// <summary>Takes the remembered hosting settings once the multiplayer settings load.</summary>
@@ -228,6 +232,40 @@ namespace TopiaForge.ModManager.Sessions
             visibility = Array.IndexOf(VisibilityValues, settings.HostVisibility);
             if (visibility < 0) visibility = 2;
             voice = settings.HostVoice;
+            SelectGame();
+        }
+
+        /// <summary>
+        /// Selects the game the player picked while it is offered, otherwise the game last hosted, otherwise the first: the
+        /// games are found by launch target and world, so a list that changed between visits keeps the right one.
+        /// </summary>
+        private void SelectGame()
+        {
+            var index = IndexOfGame(chosen?.TargetId, chosen?.WorldOverride);
+            if (index < 0)
+            {
+                chosen = null;
+                var settings = context.Settings;
+                if (settings.IsLoaded) index = IndexOfGame(settings.Current.HostedTarget, settings.Current.HostedWorld);
+            }
+
+            selectedTarget = index < 0 ? 0 : index;
+        }
+
+        private int IndexOfGame(string? targetId, string? worldId)
+        {
+            if (targetId == null) return -1;
+            for (var index = 0; index < targets.Count; index++)
+            {
+                var request = targets[index].Request;
+                if (string.Equals(request.TargetId, targetId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(request.WorldOverride ?? string.Empty, worldId ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
         }
 
         /// <summary>Gets a server name from the player's name, such as "Sam's session".</summary>

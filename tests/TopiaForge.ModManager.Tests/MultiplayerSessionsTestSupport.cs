@@ -359,7 +359,14 @@ namespace TopiaForge.ModManager.Tests
 
         public void OpenUrl(string url) => Opened.Add(url);
 
-        public void CopyToClipboard(string text) => Copied.Add(text);
+        /// <summary>Gets or sets what the clipboard throws, as a failing system clipboard might; null to take the text.</summary>
+        internal Exception? CopyFailure { get; set; }
+
+        public void CopyToClipboard(string text)
+        {
+            if (CopyFailure != null) throw CopyFailure;
+            Copied.Add(text);
+        }
     }
 
     /// <summary>Settings kept in memory, written through the background queue as the file store is.</summary>
@@ -390,12 +397,13 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>The sessions presenter over the recording control, with file work held until the test runs it.</summary>
     internal sealed class SessionsRig
     {
-        internal SessionsRig(bool acknowledged = true, bool liveAvailable = true, bool withControl = true, bool service = false)
+        /// <param name="settings">What the settings file holds as the game starts, as an earlier run left it; null for defaults.</param>
+        internal SessionsRig(bool acknowledged = true, bool liveAvailable = true, bool withControl = true, bool service = false, MultiplayerSettings? settings = null)
         {
             Control = new RecordingSessionControl { IsLiveAvailable = liveAvailable, ServiceConfigured = service };
             Control.Status.IsLiveAvailable = liveAvailable;
             Environment = new FakeSessionEnvironment(withControl ? Control : null);
-            Store = new MemorySettingsStore { Stored = acknowledged ? MultiplayerSettings.Default.AcknowledgeDisclosure() : MultiplayerSettings.Default };
+            Store = new MemorySettingsStore { Stored = settings ?? (acknowledged ? MultiplayerSettings.Default.AcknowledgeDisclosure() : MultiplayerSettings.Default) };
             Presenter = new MultiplayerSessionsPresenter(Environment, Store, Work);
             Presenter.Start();
             Work.RunAll();

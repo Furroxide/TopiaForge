@@ -39,6 +39,9 @@ namespace TopiaForge.ModManager.Sessions
 
         /// <summary>The same join with a direct connection allowed, for this session only, as the approved prompt lets it.</summary>
         internal JoinRequest Direct() => new JoinRequest(Target, Title, allowDirect: true, Password, TrustedServerId, LauncherLink);
+
+        /// <summary>The same join without a password, so the session asks for one on the connecting overlay.</summary>
+        internal JoinRequest WithoutPassword() => new JoinRequest(Target, Title, AllowDirect, null, TrustedServerId, LauncherLink);
     }
 
     /// <summary>
@@ -57,8 +60,9 @@ namespace TopiaForge.ModManager.Sessions
         internal const string LeaveConfirm = "LEAVE AND JOIN";
         internal const string PasswordRule = "A password is 1 to 64 characters with no control characters.";
         internal const string WaitingText = "Waiting for the current game to finish starting or stopping...";
+        internal const string DetailsNotCopied = "The failure details could not be copied. Try again.";
 
-        /// <summary>The longest delay the overlay waits out before RETRY, a day, as the runtime keeps the service's own.</summary>
+        /// <summary>The longest delay the overlay waits out before it joins again, a day, as the runtime keeps the service's own.</summary>
         internal const int MaximumRetryWaitSeconds = 86_400;
 
         private static readonly string[] Labels =
@@ -76,7 +80,11 @@ namespace TopiaForge.ModManager.Sessions
         private bool cancelRequested;
         private bool held;
         private float linger;
-        private float retryWait;
+
+        // A double, so a wait of hours still counts down at a high frame rate: near a day a float cannot take off a frame's
+        // millisecond or two, and the count would stand still.
+        private double retryWait;
+        private bool retryWhenWaited;
         private int shownWait = -1;
         private int reached;
         private int active = -1;
@@ -144,7 +152,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public string HostSays => hostSays;
 
-        public bool CanRetry => HasFailed && request != null && failure != null && failure.Retryable && retryWait <= 0f;
+        public bool CanRetry => HasFailed && request != null && failure != null && failure.Retryable && retryWait <= 0d;
 
         public bool CanOpenLauncher => HasFailed && request?.LauncherLink != null && failure != null && (failure.LauncherHelps || failure.Retryable);
 
@@ -199,7 +207,7 @@ namespace TopiaForge.ModManager.Sessions
                     if (linger >= SuccessLingerSeconds) Hide();
                     break;
                 case Stage.Failed:
-                    if (retryWait > 0f) CountDown(deltaTime);
+                    if (retryWait > 0d) CountDown(deltaTime);
                     break;
             }
         }
@@ -242,6 +250,10 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (!CanRetry) return;
             var again = request!;
+
+            // A password the host turned away is asked for again on the overlay, never sent again: the same password cannot
+            // succeed, and every try counts toward the host's limit on wrong guesses.
+            if (failureCode == InternalLiveFailure.Rejected && IsPasswordRefusal(failureStatus!.RejectionCode)) again = again.WithoutPassword();
             Hide();
             Begin(again);
         }
@@ -266,8 +278,18 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (!CanCopyDetails) return;
             var step = (ConnectingStep)Math.Max(failed, 0);
-            context.Environment.CopyToClipboard(FailureDetails.Build(
-                failureCode, step, Labels[(int)step], failureStatus!, context.Environment.GameBuild, context.Environment.RuntimeVersion));
+            try
+            {
+                context.Environment.CopyToClipboard(FailureDetails.Build(
+                    failureCode, step, Labels[(int)step], failureStatus!, context.Environment.GameBuild, context.Environment.RuntimeVersion));
+            }
+            catch (Exception)
+            {
+                // A clipboard that fails is said in this game's words; nothing it throws reaches the kit's log of failed clicks.
+                context.Notify(DetailsNotCopied, ScreenTone.Warning);
+                return;
+            }
+
             context.Notify("Copied the failure details.", ScreenTone.Success);
         }
 
@@ -294,6 +316,9 @@ namespace TopiaForge.ModManager.Sessions
             if (IsBusy) Cancel();
             else Hide();
         }
+
+        private static bool IsPasswordRefusal(InternalAdmissionCode code) =>
+            code == InternalAdmissionCode.PasswordRequired || code == InternalAdmissionCode.PasswordWrong || code == InternalAdmissionCode.TooManyAttempts;
 
         private static bool HasControl(string value)
         {

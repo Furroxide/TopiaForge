@@ -4,8 +4,8 @@ using TopiaForge.Mods.UnityUi;
 namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>
-    /// SESSION's kit view: the session, the invite, a virtualized player table shown once the host has listed its players, the
-    /// host's kick, ban and mute, and "End session for everyone" or "Leave server".
+    /// SESSION's kit view: the session, the invite and a button that copies its code, a virtualized player table shown once the
+    /// host has listed its players, the host's kick, ban and mute, and "End session for everyone" or "Leave server".
     /// </summary>
     internal sealed class MultiplayerSessionView : IMultiplayerSubView
     {
@@ -14,6 +14,7 @@ namespace TopiaForge.ModManager.Sessions
         private readonly TopiaForgeLabel title;
         private readonly TopiaForgeLabel subtitle;
         private readonly TopiaForgeLabel invite;
+        private readonly TopiaForgeContainer inviteActions;
         private readonly TopiaForgeContainer list;
         private readonly TopiaForgeButton kick;
         private readonly TopiaForgeButton ban;
@@ -32,6 +33,12 @@ namespace TopiaForge.ModManager.Sessions
             title = parent.Label(screen.Title, TopiaForgeTextStyle.Heading).PlainText().Ellipsis();
             subtitle = MultiplayerViewKit.Note(parent, screen.Subtitle);
             invite = MultiplayerViewKit.Note(parent, screen.InviteText);
+
+            // The host shares the invite code by pasting it, never by copying it out by hand.
+            inviteActions = parent.Row(TopiaForgeGap.Sm);
+            inviteActions.FixedHeight(TopiaForgeTokens.ControlHeight);
+            inviteActions.Button("COPY INVITE CODE", screen.CopyInvite, TopiaForgeButtonStyle.Outline);
+            inviteActions.Spacer().Flex(1f, 0f);
             parent.SectionHeader("PLAYERS");
             list = parent.Column(TopiaForgeGap.Xs);
             list.Flex(1f, 1f);
@@ -53,6 +60,7 @@ namespace TopiaForge.ModManager.Sessions
             title.SetText(screen.Title);
             subtitle.SetText(screen.Subtitle);
             invite.SetText(screen.InviteText);
+            inviteActions.SetShown(screen.CanCopyInvite);
             if (screen.PlayersVisible != shownVisible)
             {
                 host.Clear(list);

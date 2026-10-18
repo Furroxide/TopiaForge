@@ -104,13 +104,20 @@ namespace TopiaForge.ModManager.Sessions
         private void Go(bool direct)
         {
             allowDirect = direct;
+            var decision = Decision();
+
+            // The game hosted now is the one HOST offers first next time: the running game opened in place, or the one chosen.
+            var game = decision == RealmDecision.PromoteInPlace ? context.Environment.CurrentGame?.Request
+                : decision == RealmDecision.StartAsHost && selectedTarget < targets.Count ? targets[selectedTarget].Request
+                : null;
             var settings = context.Settings;
             if (settings.IsLoaded)
             {
-                settings.Update(settings.Current.WithHosting(name, maxPlayers, VisibilityValues[visibility], voice));
+                var hosting = settings.Current.WithHosting(name, maxPlayers, VisibilityValues[visibility], voice);
+                settings.Update(game == null ? hosting : hosting.WithHostedGame(game.TargetId, game.WorldOverride));
             }
 
-            switch (Decision())
+            switch (decision)
             {
                 case RealmDecision.PromoteInPlace:
                     var current = context.Environment.CurrentGame;

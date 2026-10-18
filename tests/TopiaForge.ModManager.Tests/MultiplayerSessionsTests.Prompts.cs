@@ -124,6 +124,9 @@ namespace TopiaForge.ModManager.Tests
             That(host.Control.Calls.Count(call => call == "StartHosting") == 1, "opening the started game is tried once");
             That(host.Presenter.Host.ProgressTone == ScreenTone.Danger && host.Presenter.Host.FormEnabled && !Shows(host.Presenter.Host.ProgressText) &&
                  !host.Notices.Any(notice => Shows(notice.Text)), "and fails in this game's words, with no address, the form usable again");
+            That(host.Presenter.Host.ProgressText.IndexOf("socket", StringComparison.Ordinal) < 0 &&
+                 !host.Notices.Any(notice => notice.Text.IndexOf("socket", StringComparison.Ordinal) >= 0),
+                "and none of the provider's own words reach the screen or a toast (" + host.Presenter.Host.ProgressText + ")");
 
             var waited = BrowsingRig(ready: true);
             waited.Control.ThrowOnJoin = failure;
@@ -136,6 +139,8 @@ namespace TopiaForge.ModManager.Tests
             That(waited.Control.Calls.Count(call => call.StartsWith("Join", StringComparison.Ordinal)) == 1, "a join that waited is tried once");
             That(waited.Presenter.Connecting.HasFailed && !Shows(waited.Presenter.Connecting.FailureMessage) && waited.Presenter.Connecting.CanRetry,
                 "and its failure view shows, with no address and a retry");
+            That(waited.Presenter.Connecting.FailureMessage.IndexOf("socket", StringComparison.Ordinal) < 0,
+                "and in this game's words, not the provider's (" + waited.Presenter.Connecting.FailureMessage + ")");
 
             var clicked = BrowsingRig(ready: true);
             clicked.Control.ThrowOnJoin = failure;
@@ -190,6 +195,25 @@ namespace TopiaForge.ModManager.Tests
             var late = PrivacyPrompts.Destructive("Late?", "Five.", "YES", answers.Add, () => false);
             late.Answer(true);
             That(late.IsWithdrawn && answers.Last() == false, "a yes that lands after its game changed counts as no");
+
+            // A question whose premise cannot be read counts as one that stopped applying: nothing acts on a guess.
+            var unreadable = PrivacyPrompts.Destructive("Unreadable?", "Six.", "YES", answers.Add, () => throw new InvalidOperationException("the game could not say"));
+            var asked = new SessionsRig();
+            asked.Presenter.Context.Ask(unreadable);
+            asked.Frame();
+            That(unreadable.IsWithdrawn && answers.Last() == false && asked.Prompt == null && asked.Noticed(MultiplayerSessionsPresenter.PromptWithdrawn),
+                "a question whose premise cannot be read is withdrawn as no, and the player is told");
+
+            // Questions wait in a bounded queue: past it, another one answers no at once, so no action is left half done.
+            var full = new SessionsRig();
+            var waiting = Enumerable.Range(0, MultiplayerSessionsPresenter.MaximumPrompts)
+                .Select(index => PrivacyPrompts.Destructive("Question " + index + "?", "Body.", "YES", _ => { })).ToArray();
+            foreach (var question in waiting) full.Presenter.Context.Ask(question);
+            var refused = new System.Collections.Generic.List<bool>();
+            var extra = PrivacyPrompts.Destructive("One more?", "Body.", "YES", refused.Add);
+            full.Presenter.Context.Ask(extra);
+            That(extra.IsAnswered && refused.SequenceEqual(new[] { false }) && waiting.All(question => !question.IsAnswered) && ReferenceEquals(full.Prompt, waiting[0]),
+                "past " + MultiplayerSessionsPresenter.MaximumPrompts + " waiting questions another answers no at once, and the rest keep their order");
         }
 
         /// <summary>Dialogs as the view would open them, recorded; one can be made to fail as it opens.</summary>

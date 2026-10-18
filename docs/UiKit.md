@@ -103,6 +103,15 @@ gameplay overlays. Safe consumers specify semantic tone (`Neutral`, `Success`, `
 `Danger`) rather than color literals. The provider owns layer bands, focus order, cursor state,
 font fallback, motion, high contrast, and UI scale.
 
+On Paper, text in every tone reads on every surface. Muted text keeps 7:1 (WCAG AAA) against the
+sunken paper a tool's content sits on. Faint text, and body text in a status or brand tone, keep
+4.5:1 (AA) against the darkest surface text sits on, a pressed row. High contrast raises all of
+them to 7:1. Status and brand colors keep their own values for fills, rings and display type, so a
+`Warning` label reads darker than a warning badge's ring.
+
+Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
+showed before, and shows above every window and dialog.
+
 ## Testing UI without running Robotopia
 
 `FakeUiService` captures each immutable tree. `FakeUiSurface` can find controls by id; invoke button,

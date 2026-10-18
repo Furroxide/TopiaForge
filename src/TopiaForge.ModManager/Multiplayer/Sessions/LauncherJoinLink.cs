@@ -69,6 +69,20 @@ namespace TopiaForge.ModManager.Sessions
                    TryNormalizeHost(segments[2], out _) && TryParsePort(segments[3], out _);
         }
 
+        /// <summary>
+        /// Reads what a player pasted where an invite code goes: the code, read as <see cref="NormalizeInviteCode"/> reads one,
+        /// or the invite's own <c>topiaforge://join/</c> link, with any spaces or line breaks around it ignored. The canonical
+        /// code, or null for anything else, a server link included.
+        /// </summary>
+        internal static string? InviteCodeIn(string? pasted)
+        {
+            if (pasted == null) return null;
+            var text = pasted.Trim();
+            if (!IsSessionLink(text)) return NormalizeInviteCode(text);
+            var rest = text.Substring(Prefix.Length);
+            return rest.IndexOf('/') < 0 ? NormalizeInviteCode(rest) : null;
+        }
+
         /// <summary>Reads an invite code: case, hyphens and spaces ignored, O as 0, I and L as 1; the canonical upper-case code, or null.</summary>
         internal static string? NormalizeInviteCode(string? input)
         {

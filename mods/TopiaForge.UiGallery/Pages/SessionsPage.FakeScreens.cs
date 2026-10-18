@@ -240,6 +240,12 @@ namespace TopiaForge.UiGallery.Pages
 
         public void Select(string? key) => SelectedKey = key;
 
+        public bool CanCopyInvite => false;
+
+        public void CopyInvite()
+        {
+        }
+
         public void Kick() => Confirm("Remove", "can join again.");
 
         public void Ban() => Confirm("Ban", "cannot join it again while you host.");

@@ -57,6 +57,13 @@ namespace TopiaForge.ModManager.Tests
             PromptsCloseWhenTheirGameChanges();
             PromptsShowOneAtATimeAndCloseWhenWithdrawn();
             AThrowingProviderEndsTheAttemptOnce();
+            HostNamesWorldsAsPlayersKnowThem();
+            RetryAsksForARefusedPasswordAgain();
+            AHostCopiesItsInviteCode();
+            AFailingClipboardStaysInTheGamesWords();
+            EveryFailureSaysWhatToDoNext();
+            APastedInviteLinkJoins();
+            HostOffersTheGameLastHostedFirst();
             SettledFramesAllocateNothing();
             Console.WriteLine("MultiplayerSessionsTests passed.");
         }

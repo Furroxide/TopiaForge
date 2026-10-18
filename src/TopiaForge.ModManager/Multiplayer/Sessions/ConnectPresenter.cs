@@ -17,12 +17,12 @@ namespace TopiaForge.ModManager.Sessions
     internal sealed partial class ConnectPresenter : IConnectScreen
     {
         internal const string AddressRule = "Enter a host name or address with an optional port, or a topiaforge:// link.";
-        internal const string InviteRule = "An invite code is 10 letters and digits, such as ABCDE-12345.";
+        internal const string InviteRule = "An invite code is 10 letters and digits, such as ABCDE-12345, or the invite's topiaforge://join/ link.";
         internal const string NothingContacted = "Nothing was contacted. " + MultiplayerPrivacyText.HideMyIp + " stayed on.";
         internal const string TrustTitle = "Trust this server?";
         internal const string TrustBody = "This address now leads to a different server than it did before. Join it only if you trust it.";
         internal const string TrustConfirm = "TRUST AND JOIN";
-        internal const string InviteHelp = "Paste the invite code a host shared with you. The join goes through the TopiaForge service.";
+        internal const string InviteHelp = "Paste the invite code or link a host shared with you. The join goes through the TopiaForge service.";
 
         private readonly MultiplayerScreensContext context;
         private readonly ConnectingPresenter joins;
@@ -59,7 +59,7 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Gets whether the typed invite can be joined: it needs the TopiaForge service, and nothing else may be checking.</summary>
         public bool CanJoinInvite =>
             context.HasService && context.CanStartSession && !joins.IsBusy && query == null && inviteError.Length == 0 &&
-            LauncherJoinLink.NormalizeInviteCode(inviteCode) != null;
+            LauncherJoinLink.InviteCodeIn(inviteCode) != null;
 
         public string Address => address;
 
@@ -84,7 +84,7 @@ namespace TopiaForge.ModManager.Sessions
             if (string.Equals(next, inviteCode, StringComparison.Ordinal)) return;
             inviteCode = next;
             if (checkingInvite != null) CancelCheck();
-            inviteError = inviteCode.Trim().Length == 0 || LauncherJoinLink.NormalizeInviteCode(inviteCode) != null ? string.Empty : InviteRule;
+            inviteError = inviteCode.Trim().Length == 0 || LauncherJoinLink.InviteCodeIn(inviteCode) != null ? string.Empty : InviteRule;
         }
 
         public void JoinInvite()
@@ -97,7 +97,7 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             if (!CanJoinInvite) return;
-            var code = LauncherJoinLink.NormalizeInviteCode(inviteCode)!;
+            var code = LauncherJoinLink.InviteCodeIn(inviteCode)!;
             IInternalJoinTarget? parsed = null;
             var ok = false;
             try
@@ -221,7 +221,7 @@ namespace TopiaForge.ModManager.Sessions
             }
             catch (Exception)
             {
-                Result("This game could not check the server.", ScreenTone.Danger);
+                Result("This game could not check the server. Try again.", ScreenTone.Danger);
                 return;
             }
 
