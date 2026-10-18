@@ -152,10 +152,15 @@ namespace TopiaForge.ModManager.Tests
             stack.Release(-1);
             stack.Release(7);
             Assert(!stack.TryPlace(-1, out _, out _) && !stack.TryPlace(7, out _, out _), "a view the stack does not hold rests nowhere");
-            stack.Enqueue("One.", 1f);
-            stack.TryShowNext(out _, out _);
+            for (var index = 0; index < 5; index++) stack.Enqueue("Toast " + index + ".", 1f);
+            while (stack.TryShowNext(out _, out _))
+            {
+            }
+
+            Assert(stack.WaitingCount == 1, "a fifth toast waits for a view");
             stack.Clear();
-            Assert(stack.ViewCount == 0 && stack.WaitingCount == 0 && !stack.TryPlace(0, out _, out _), "clearing forgets every view and waiting toast");
+            Assert(stack.ViewCount == 0 && stack.WaitingCount == 0 && !stack.TryPlace(0, out _, out _) && !stack.TryShowNext(out _, out _),
+                "clearing forgets every view and every waiting toast, so nothing shows after it");
             stack.Release(0);
         }
 

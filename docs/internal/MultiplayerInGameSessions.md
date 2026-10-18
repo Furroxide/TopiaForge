@@ -136,7 +136,7 @@ synchronizes. The stepper follows that order on the steps the plan names:
 | Resolving | Resolving ("Finding the host") |
 | Awaiting the password, preparing it, connecting, reconnecting | Connecting ("Password needed", "LAN", "Direct" or "Relay") |
 | Synchronizing, before the host accepts | Authenticating ("Waiting for the host") |
-| Synchronizing, with a readiness hold | Loading world |
+| Synchronizing, with a readiness hold | Loading world (since WS3.6, the hold is the network world's while its baseline arrives) |
 | Synchronizing | Synchronizing ("Receiving the world", or n/m once the network world reports it) |
 | In session | every step done; Spawning completes until avatars land (WS3.10) |
 
@@ -222,7 +222,7 @@ has loaded, a native scene change, any other operation that holds the session, a
 | --- | --- |
 | `IMultiplayerVoiceSlot` in the VOICE sub-tab | The voice slice |
 | `HostPresenter.PendingPolicies` | The Sandbox host policy |
-| `ConnectingPresenter.ReportSynchronization(done, total)` | The network world's baseline (WS3.6) |
+| `ConnectingPresenter.ReportSynchronization(done, total)` | The network world's baseline: WS3.6 reports it as `NetworkWorld.Progress`, which nothing reads into the stepper yet |
 | The session-handoff channel and the preference journal, through `MultiplayerBackgroundQueue` | The launcher's handoff and preference flows (WS6) |
 
 ## 10. Tests

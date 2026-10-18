@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text.Json;
 using TopiaForge.ModManager.Core;
 using TopiaForge.ModManager.Sessions;
@@ -288,6 +290,68 @@ namespace TopiaForge.ModManager.Tests
             That(MultiplayerSettings.FromDocument(document).HostedTarget == null, "and settings written before this remember no game");
             That(stored.WithHideMyIp(false).HostedTarget == "io.example.freeplay" && stored.WithHosting("Night", 4, InternalSessionVisibility.Lan, false).HostedWorld == "io.example.sandbox",
                 "every other change keeps the game remembered");
+        }
+
+        /// <summary>
+        /// The settings file keeps schema 1 because a reader ignores the members it does not know. A game from before the game
+        /// last hosted was remembered reads a newer game's file, schema and all, and this game reads what that older game
+        /// writes back, remembering no game. Nothing tested the file both ways before, though the schema version rests on it.
+        /// </summary>
+        private static void TheSettingsFileReadsAcrossVersions(string root)
+        {
+            var directory = Path.Combine(root, "settings-across-versions");
+            Directory.CreateDirectory(directory);
+            var store = new FileMultiplayerSettingsStore(directory);
+            store.Save(MultiplayerSettings.Default.WithDisplayName("Sam").WithHideMyIp(false)
+                .WithHosting("Night", 4, InternalSessionVisibility.Invite, true).WithHostedGame("io.example.freeplay", "io.example.sandbox"));
+            var path = Path.Combine(directory, FileMultiplayerSettingsStore.FileName);
+            That(File.ReadAllText(path).IndexOf("\"hostedTarget\"", StringComparison.Ordinal) > 0, "the game last hosted is written to the file");
+
+            var older = JsonUtil.LoadPersistentFile<SettingsBeforeTheHostedGame?>(path, null);
+            That(older != null && older.SchemaVersion == 1 && older.DisplayName == "Sam" && older.HideMyIp == false && older.ServerName == "Night" &&
+                 older.HostMaxPlayers == 4 && older.HostVisibility == "invite" && older.HostVoice,
+                "a game from before the game last hosted reads the newer file as schema 1, keeping everything it knows");
+
+            JsonUtil.SaveFile(path, older!);
+            var reread = store.Load();
+            That(reread.DisplayName == "Sam" && !reread.HideMyIp && reread.ServerName == "Night" && reread.HostVisibility == InternalSessionVisibility.Invite &&
+                 reread.HostedTarget == null && reread.HostedWorld == null,
+                "and this game reads what that older game writes back, remembering no game");
+        }
+
+        /// <summary>The settings file as a game wrote it before it remembered the game last hosted.</summary>
+        [DataContract]
+        internal sealed class SettingsBeforeTheHostedGame
+        {
+            [DataMember(Name = "schemaVersion")]
+            public int SchemaVersion { get; set; }
+
+            [DataMember(Name = "acknowledgedPrivacyDisclosure")]
+            public int AcknowledgedPrivacyDisclosure { get; set; }
+
+            [DataMember(Name = "hideMyIp", EmitDefaultValue = false)]
+            public bool? HideMyIp { get; set; }
+
+            [DataMember(Name = "displayName", EmitDefaultValue = false)]
+            public string? DisplayName { get; set; }
+
+            [DataMember(Name = "serverName", EmitDefaultValue = false)]
+            public string? ServerName { get; set; }
+
+            [DataMember(Name = "hostMaxPlayers")]
+            public int HostMaxPlayers { get; set; }
+
+            [DataMember(Name = "hostVisibility", EmitDefaultValue = false)]
+            public string? HostVisibility { get; set; }
+
+            [DataMember(Name = "hostVoice")]
+            public bool HostVoice { get; set; }
+
+            [DataMember(Name = "favorites", EmitDefaultValue = false)]
+            public List<ServerBookmarkDocument>? Favorites { get; set; }
+
+            [DataMember(Name = "history", EmitDefaultValue = false)]
+            public List<ServerBookmarkDocument>? History { get; set; }
         }
 
         /// <summary>HOST at the main menu, with <paramref name="choices"/> to start and the settings an earlier run left.</summary>

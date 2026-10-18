@@ -225,6 +225,18 @@ namespace TopiaForge.ModManager.Tests
             {
                 throw new InvalidOperationException("A toast view's freshness must come from the toast stack, not from where the view sits.");
             }
+
+            // The exit's completion frees the view, and the next waiting toast takes it at once. Under reduced motion, or with the
+            // tween pool full, that completion runs inside ToastOut, so a slide started after it pushed the new toast 40 units
+            // aside, partly off the screen, for as long as it showed. The slide must start before the completing fade.
+            var presets = File.ReadAllText(Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.Mods.UnityUi", "Motion", "TopiaForgeMotionPresets.cs"));
+            var exit = Regex.Match(presets, @"void ToastOut\([^)]*\)\s*\{(?<body>[^}]*)\}");
+            var slide = exit.Groups["body"].Value.IndexOf("TopiaForgeTween.MoveX(", StringComparison.Ordinal);
+            var fade = exit.Groups["body"].Value.IndexOf("TopiaForgeTween.FadeTo(", StringComparison.Ordinal);
+            if (!exit.Success || slide < 0 || fade < 0 || slide > fade || !Regex.IsMatch(exit.Groups["body"].Value, @"FadeTo\([^;]*onDone\);"))
+            {
+                throw new InvalidOperationException("A toast's exit must start its slide before the fade whose completion hands the view to the next toast.");
+            }
         }
 
         // Status and brand colors are made for fills and rings, and on Paper they fail WCAG AA as text (warning reads at
@@ -244,6 +256,15 @@ namespace TopiaForge.ModManager.Tests
             if (Regex.IsMatch(label, @"text\.color = [Tt]heme\.ToneColor\(tone\)"))
             {
                 throw new InvalidOperationException("A label sets a tone's fill color on its text instead of its readable text color.");
+            }
+
+            // A ghost button has no fill, so its label sits on the surface like any body text: in the brand orange it read at
+            // 2.0 to 2.6:1 on Paper, in high contrast too (REFRESH, ADD TO FAVORITES, MUTE, COPY DETAILS and CLOSE among them).
+            var button = File.ReadAllText(Path.Combine(kitRoot, "Widgets", "TopiaForgeButton.cs"));
+            RequireSource(button, "SetContentColor(theme.TextToneColor(TopiaForgeTone.Primary));", "A ghost button's label must take the Primary tone's readable text color.");
+            if (button.Contains("SetContentColor(theme.Primary)", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("A button draws its label in the Primary fill color on its own surface.");
             }
         }
 
