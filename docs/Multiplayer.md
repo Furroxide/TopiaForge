@@ -121,12 +121,14 @@ session state. Only replicated-object handlers receive `ReplicatedObjectCommandC
 
 Unsupported native or polymorphic payloads, recursive graphs, unbounded strings/arrays, invalid handler signatures,
 duplicate IDs, and generated proxy-name collisions fail compilation. Owner-predicted command and object handlers also
-fail compilation when they touch process-local context/services, mutate arbitrary fields, hide work behind author
-helpers/getters/constructors, or use random/clock APIs; `command.CreateRandom()` is the prediction-safe source of
-random numbers. A warning flags a handler without prediction that drives local UI, input, player, audio, or Unity
-state, because only the host would see it. Each code is explained in the
-[diagnostics reference](Diagnostics.md#multiplayer-contract-diagnostics). Refresh the checked-in contract lock after
-changing a contract:
+fail compilation when they touch process-local context/services, mutate arbitrary fields, hide work behind getters or
+constructors, call a method the generator cannot read (another assembly's, or a virtual one), or use random/clock
+APIs. They may read their request, their state, their locals and arrays, copy and resize arrays, and call the mod's own
+methods, whose bodies answer to the same rules, so per-player state needs no host-only fallback.
+`command.CreateRandom()` is the prediction-safe source of random numbers. A warning flags a handler without prediction
+that drives local UI, input, player, audio, or Unity state, because only the host would see it. Each code is explained
+in the [diagnostics reference](Diagnostics.md#multiplayer-contract-diagnostics). Refresh the checked-in contract lock
+after changing a contract:
 
 ```sh
 topiaforge mod sync multiplayer

@@ -83,7 +83,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
         private static readonly DiagnosticDescriptor PredictedSideEffect = new DiagnosticDescriptor(
             "TFMP006",
             "Predicted command performs a process-local side effect",
-            "Predicted command '{0}' accesses '{1}'; predicted handlers may only mutate generated replicated state and emit buffered presentation events",
+            "Predicted command '{0}' uses '{1}'. A predicted handler runs on the sender and again on the host, so it may only read its request, its state, its locals and arrays, call this mod's own methods that follow the same rules, update replicated state and emit presentation events. Move other work into a [PresentationEvent] handler, or set Prediction = PredictionMode.None.",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
             true,
@@ -700,13 +700,28 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                     else if (operation is IInvocationOperation invocation &&
                              !IsAllowedPredictedInvocation(invocation))
                     {
-                        invalid |= ReportPredictedDiagnostic(
-                            context,
-                            reported,
-                            PredictedSideEffect,
-                            operation.Syntax.GetLocation(),
-                            predictedMethodName,
-                            display);
+                        if (IsPredictedHelper(compilation, invocation.TargetMethod))
+                        {
+                            // The mod's own method runs on both sides too, so its body answers to the same rules.
+                            invalid |= ReportPredictedMethodSafetyDiagnostics(
+                                context,
+                                compilation,
+                                predictedMethodName,
+                                invocation.TargetMethod.OriginalDefinition,
+                                generatedPresentationEmitters,
+                                reported,
+                                inspectedMethods);
+                        }
+                        else
+                        {
+                            invalid |= ReportPredictedDiagnostic(
+                                context,
+                                reported,
+                                PredictedSideEffect,
+                                operation.Syntax.GetLocation(),
+                                predictedMethodName,
+                                display);
+                        }
                     }
                     else if (operation is IObjectCreationOperation creation &&
                              !IsAllowedPredictedObjectCreation(creation))
@@ -838,6 +853,19 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             });
         }
 
+        /// <summary>
+        /// Whether a call from a predicted handler is to a method of this compilation whose body can be checked by the
+        /// same rules: an ordinary or local method with a body, which no override can replace.
+        /// </summary>
+        private static bool IsPredictedHelper(Compilation compilation, IMethodSymbol method)
+        {
+            method = method.OriginalDefinition;
+            if (method.MethodKind != MethodKind.Ordinary && method.MethodKind != MethodKind.LocalFunction) return false;
+            if (method.IsVirtual || method.IsAbstract || method.IsOverride || method.IsExtern) return false;
+            if (!SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, compilation.Assembly)) return false;
+            return HasPredictedMethodBody(method);
+        }
+
         private static bool TryGetAllowedPredictedCallback(
             IMethodReferenceOperation reference,
             out IMethodSymbol? callback)
@@ -946,8 +974,14 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             if (method.ContainingType is INamedTypeSymbol result &&
                 result.ConstructedFrom.ToDisplayString() == OperationResultType &&
                 method.Name == "TryGetValue" && IsRootedInLocal(invocation.Instance)) return true;
+            // Copying, cloning, resizing or emptying an array touches only the arrays it is given, and each of those
+            // operands answers to these rules where it appears.
+            if (method.ContainingType?.SpecialType == SpecialType.System_Array && IsPureArrayMember(method.Name)) return true;
             return false;
         }
+
+        private static bool IsPureArrayMember(string name) =>
+            name == "Copy" || name == "CopyTo" || name == "Clone" || name == "Resize" || name == "Empty";
 
         private static bool IsCommandRandom(IOperation? operation) =>
             Unwrap(operation) is IInvocationOperation invocation &&
@@ -1147,6 +1181,9 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 IsRootedInPredictedData(reference.Instance)) return true;
             if (property.ContainingType?.SpecialType == SpecialType.System_String && property.Name == "Length" &&
                 IsRootedInPredictedData(reference.Instance)) return true;
+            if (property.ContainingType?.SpecialType == SpecialType.System_Array &&
+                (property.Name == "Length" || property.Name == "LongLength") &&
+                IsRootedInPredictedData(reference.Instance)) return true;
             return property.Locations.Any(location => location.IsInSource) && IsAutoProperty(property) &&
                    IsRootedInPredictedData(reference.Instance);
         }
@@ -1188,7 +1225,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             operation = Unwrap(operation);
             return operation is IParameterReferenceOperation || operation is ILocalReferenceOperation ||
                    operation is IPropertyReferenceOperation property && IsRootedInPredictedData(property.Instance) ||
-                   operation is IFieldReferenceOperation field && IsRootedInPredictedData(field.Instance);
+                   operation is IFieldReferenceOperation field && IsRootedInPredictedData(field.Instance) ||
+                   operation is IArrayElementReferenceOperation element && IsRootedInPredictedData(element.ArrayReference);
         }
 
         private static IOperation? Unwrap(IOperation? operation)

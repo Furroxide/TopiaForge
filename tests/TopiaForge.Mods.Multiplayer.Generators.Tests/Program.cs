@@ -148,6 +148,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 AllowsPurePayloadInitializers();
                 AllowsDeterministicOperationResultInspection();
                 AllowsDeterministicPredictedStateUpdateMethodGroup();
+                RunPredictionPrecisionGeneratorTests();
                 ReportsGeneratedNameCollision();
                 ReportsAuthorGeneratedNameCollision();
                 ReportsMissingExplicitContractId();
