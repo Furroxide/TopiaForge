@@ -214,7 +214,7 @@ class SafeZipEntry {
       entryName: name,
       label: label,
     );
-    _entry.writeContent(bounded, freeMemory: false);
+    _decodeInto(bounded, label);
     if (bounded.length != size) {
       throw StateError(
         '$label expanded to ${bounded.length} bytes but declared $size: $name.',
@@ -242,7 +242,7 @@ class SafeZipEntry {
       label: label,
     );
     try {
-      _entry.writeContent(stream, freeMemory: false);
+      _decodeInto(stream, label);
       stream.closeSync();
       if (stream.length != size) {
         throw StateError(
@@ -255,6 +255,20 @@ class SafeZipEntry {
         output.deleteSync();
       }
       rethrow;
+    }
+  }
+
+  /// Decodes into [output]. Since archive 4.5 the decoder enforces the
+  /// declared size itself and throws a [FormatException] on overrun, before
+  /// the bounded output sees the extra bytes, so report it the same way.
+  void _decodeInto(OutputStream output, String label) {
+    try {
+      _entry.writeContent(output, freeMemory: false);
+    } on FormatException catch (error) {
+      throw StateError(
+        '$label could not be decoded within the $size bytes it declared: '
+        '$name (${error.message}).',
+      );
     }
   }
 }
