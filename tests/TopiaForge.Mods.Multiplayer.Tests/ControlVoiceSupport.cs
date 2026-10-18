@@ -1,4 +1,9 @@
+extern alias provider;
+
 using TopiaForge.Mods.Internal;
+using EngineChannel = provider::TopiaForge.Multiplayer.Engine.EngineChannel;
+using EngineLinkState = provider::TopiaForge.Multiplayer.Engine.EngineLinkState;
+using IEngineLink = provider::TopiaForge.Multiplayer.Engine.IEngineLink;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
@@ -141,7 +146,7 @@ internal static class ControlVoiceSteps
     internal static ControlVoice Host(ControlRig rig, string name = "Hoster")
     {
         rig.Host.Runtime.PreferredDisplayName = name;
-        rig.StartHosting(new InternalHostSettings("Voice host", 8));
+        rig.StartHosting(new InternalHostSettings("Voice host", 8) { Voice = true });
         var voice = new ControlVoice(rig.Host, rig.Network);
         voice.Service.Enabled = true;
         return voice;
@@ -165,7 +170,7 @@ internal static class ControlVoiceSteps
     {
         var second = rig.AddPeer(name, packages);
         second.Runtime.PreferredDisplayName = Display(name);
-        var started = second.Control.StartHosting(new InternalHostSettings("Second host", 8));
+        var started = second.Control.StartHosting(new InternalHostSettings("Second host", 8) { Voice = true });
         TransportAssert.That(started.Succeeded, "the second host starts (" + started.ErrorMessage + ")");
         TransportAssert.That(rig.Run(() => second.Control.GetStatus().HostPhase == InternalHostPhase.Hosting), "the second host serves");
         rig.Resolver.Host = () => second.Provider.Live!.Host?.Descriptor is { } descriptor && second.Factory.Networks.Count > 0
@@ -176,4 +181,25 @@ internal static class ControlVoiceSteps
 
     /// <summary>Gets the display name a peer is given: its name, capitalised.</summary>
     internal static string Display(string name) => char.ToUpperInvariant(name[0]) + name.Substring(1);
+
+    /// <summary>
+    /// Gets the link <paramref name="peer"/>'s join runs over: the newest connection its network made that is still up,
+    /// the one the join handed its engine. A modified client writes on it past its own engine.
+    /// </summary>
+    internal static IEngineLink LinkOf(ControlPeer peer)
+    {
+        var network = peer.Factory.Networks.LastOrDefault() ?? throw new InvalidOperationException("Assertion failed: " + peer.Name + " has a network");
+        var attempt = network.Attempts.LastOrDefault(candidate => candidate.Link is { } link && link.State != EngineLinkState.Closed);
+        return attempt?.Link ?? throw new InvalidOperationException("Assertion failed: " + peer.Name + " has a link that is up");
+    }
+
+    /// <summary>
+    /// Sends 25 malformed voice datagrams from <paramref name="peer"/> straight onto its link, past its own engine, as a
+    /// modified client would. Twenty strikes within ten seconds mute it automatically for 30 s.
+    /// </summary>
+    internal static void SendMalformedVoice(ControlPeer peer)
+    {
+        var link = LinkOf(peer);
+        for (var index = 0; index < 25; index++) link.Send(EngineChannel.Voice, new ArraySegment<byte>(new byte[] { 0x01, (byte)index }));
+    }
 }

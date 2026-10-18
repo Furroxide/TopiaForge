@@ -48,11 +48,11 @@ namespace TopiaForge.Mods.Internal
     /// <para>
     /// Listener mutes follow two rules. <b>Names belong to the host that listed them.</b> A participant id names a player
     /// only on the host that gave it, so names stay with that host: through an in-place replacement, and through a
-    /// reconnect to a host that kept this player's record. Leaving for solo play forgets them, and so does a join that
-    /// finds another host or a host without the record; names given after such a join, before its host lists its players,
-    /// name nobody and are dropped. <b>A wish to hear nobody holds across joins</b>: it names no one, so it follows the
-    /// player to every host until the player changes it. Read the set back with <see cref="GetListenerMutes"/> rather than
-    /// keeping a copy that could disagree.
+    /// reconnect to a host that kept this player's record. Leaving for solo play forgets them, whether a joined player
+    /// leaves or a host stops hosting, and so does a join that finds another host or a host without the record; names given
+    /// after such a join, before its host lists its players, name nobody and are dropped. <b>A wish to hear nobody holds
+    /// across joins</b> and across hosting again: it names no one, so it follows the player to every host until the player
+    /// changes it. Read the set back with <see cref="GetListenerMutes"/> rather than keeping a copy that could disagree.
     /// </para>
     /// <para>
     /// A playback stream plays the one speaker the session listed under its id when it was handed out, and never anybody
@@ -135,6 +135,10 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         bool GetListenerMutes(ICollection<ParticipantId> into);
 
+        /// <summary>
+        /// Gets the counters, for the settings page and diagnostics. It allocates, so read it a few times a second at most;
+        /// the meter that moves every frame is <see cref="InputLevelDb"/>.
+        /// </summary>
         InternalVoiceStatistics GetStatistics();
     }
 
@@ -179,13 +183,16 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Gets the frames coded for sending.</summary>
         internal long FramesEncoded { get; set; }
 
-        /// <summary>Gets the coded frames the session took to send: at once, or held to share a datagram with the next.</summary>
+        /// <summary>
+        /// Gets the coded frames the session took to send: at once, or held to share a datagram with the next. Each frame
+        /// counts once, when the session takes it, so a frame still held when the link goes counts though it never leaves.
+        /// </summary>
         internal long FramesSent { get; set; }
 
         /// <summary>Gets the frames the session delivered for playback.</summary>
         internal long FramesReceived { get; set; }
 
-        /// <summary>Gets the frames the session refused to send: rate limits, a host mute, or no connection.</summary>
+        /// <summary>Gets the frames the session refused to send when it was handed them: rate limits, a host mute, or no connection.</summary>
         internal long FramesRefused { get; set; }
 
         internal IReadOnlyList<InternalVoiceSpeakerStatistics> Speakers { get; set; } = Array.Empty<InternalVoiceSpeakerStatistics>();
@@ -208,7 +215,7 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Gets the frames rebuilt from forward error correction.</summary>
         internal long Recovered { get; set; }
 
-        /// <summary>Gets the frames concealed because nothing arrived in time, those faded to silence included.</summary>
+        /// <summary>Gets the frames concealed because nothing usable arrived in time, those faded to silence included.</summary>
         internal long Concealed { get; set; }
 
         /// <summary>Gets the frames that arrived after their turn to play, and were dropped.</summary>

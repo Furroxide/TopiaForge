@@ -142,9 +142,11 @@ hands out none once it has stopped.
   voice worker.
 - **Mutes.** Names belong to the host that listed them, and a wish to hear nobody holds across joins. A participant id
   names a player only on the host that gave it, so names stay with that host, through an in-place replacement and a
-  reconnect that finds this player's record kept. Leaving for solo play forgets them, and so does a join that finds
-  another host or one without the record; names given after such a join, before that host lists its players, are
-  dropped. The wish to hear nobody names nobody, so it follows the player to every host until they change it. The
+  reconnect that finds this player's record kept. Leaving for solo play forgets them, whether a joined player leaves or
+  a host stops hosting, and so does a join that finds another host or one without the record; names given after such a
+  join, before that host lists its players, are dropped. A host's names go when it stops hosting, because they named
+  players whose records closing every connection forgot, and a host never gives one id to two players. The wish to hear
+  nobody names nobody, so it follows the player to every host, and through hosting again, until they change it. The
   interface shows whom the player muted from `GetListenerMutes`, never from a list of its own.
 - **Streams.** The SPI hands out the service's own `VoicePlaybackStream`, never a wrapper, so a stream plays the
   speaker the session listed under its id, and nobody else. It lasts while the session lists them, through an in-place
@@ -170,10 +172,17 @@ The statistics are mapped by what each counter means:
 | `FramesEncoded` | `FramesEncoded` | Frames coded for sending |
 | `FramesSent` | `Sent` and `Held` | Frames the session took to send. The engine holds every other frame of a steady talker to share a datagram with the next, so `Sent` alone counts about half of them |
 | `FramesReceived` | `FramesReceived` | Frames the engine delivered for playback |
-| `FramesRefused` | `RateLimited`, `ServerMuted` and `NotConnected` | Frames the session refused to send. `Invalid` frames are a fault, not a refusal, and stay out |
+| `FramesRefused` | `RateLimited`, `ServerMuted` and `NotConnected` | Frames the session refused to send when it was handed them. `Invalid` frames are a fault, not a refusal, and stay out |
 | Each speaker's `Decoded`, `Recovered`, `Late`, `TargetDelayMicros`, `IsSpeaking` | The same, for that speaker | — |
-| Each speaker's `Concealed` | `Concealed` and `Faded` | Frames concealed because nothing arrived. After three, the jitter buffer fades two more to silence, and those are concealment too |
+| Each speaker's `Concealed` | `Concealed` and `Faded` | Frames concealed because nothing usable arrived in time. After three, the jitter buffer fades two more to silence, and those are concealment too. A frame it adds on purpose to keep its delay is not counted |
 | Each speaker's `Underruns` | The stream's `Underruns` | Reads that found too little audio |
+
+Each coded frame counts once, by the session's first answer, so `FramesSent` is what left only while every held frame
+leaves with its pair. A frame still held when the link goes counts as sent though it never leaves, and a pair the
+talker's own rate limit refused would count its first frame as sent and its second as refused. The service keeps only
+the newest part of a stall's capture, so a talker never reaches that limit: through a 2.5-second stall, every frame
+counted as sent reached the host (`InternalVoiceStreamTests.StatisticsAreMappedByMeaning`). A link that goes can
+therefore leave one frame counted as sent that never left.
 
 The service's other counters, such as stale capture, the worker's steps and the engine's own voice statistics, stay
 in the provider.
@@ -509,7 +518,7 @@ plug in here:
 | WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
-| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted |
+| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is only announced so far, in its descriptor and beacon: a session that says it offers no voice still relays a player who turned voice on, and enforcing it is still to come |
 
 Two rules hold for everything that plugs in:
 
@@ -537,11 +546,14 @@ answers no and is reported.
   mutes kept through an in-place replacement and a reconnect, left behind at a move to another host whose p1 is someone
   else, and a wish to hear nobody held across the move back; a host's server mute silencing the relay, read on joined
   players from the roster, and forgotten when hosting stops; an automatic mute for malformed voice sent past the
-  client's engine, counted by every control and at the chat ingress until it ends; the service's own streams, kept
+  client's engine, counted by every control and dropping chat at ingress until it ends, and not after; a host that
+  stops and hosts again keeping its bans and the wish to hear nobody, forgetting its mutes for everyone, by hand and
+  automatic, and the names its player muted, and taking a kicked player back at once; the service's own streams, kept
   across a rejoin within the grace and ended once the record goes; asking again for an unlisted or refused speaker
-  allocating nothing while `GetPlaybackStream` makes a ring each time; every statistic against the service's own; every
-  member refused off the main thread while a stream reads past the service's gate; and a stream for one host process's
-  p1 ending at the reconnect to its restarted process, never playing the new p1.
+  allocating nothing while `GetPlaybackStream` makes a ring each time; every statistic against the service's own, and
+  every frame counted as sent reaching the host through a 2.5-second stall; every member refused off the main thread
+  while a stream reads past the service's gate; and a stream for one host process's p1 ending at the reconnect to its
+  restarted process, never playing the new p1.
 - **Admission through the runtime host** (`RuntimeAdmissionTests`): the descriptor's packages by role, a stale player
   refused by the host's planner with its report reaching the player, the joining player's own check before connecting, a
   required session mod at a compatible version joining, the offer's format and its refusals, the content seam
@@ -791,7 +803,12 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   the service splits both further, and a field taken by name alone would undercount.
 - **One set of server mutes, the engine's.** The control kept its own set for chat, which the voice relay never saw.
   Now the engine's moderation drives both, automatic mutes included, and closing every connection forgets it, as the
-  control's set ended with hosting.
+  control's set ended with hosting. It forgets the names the host's own player muted too, since they named only the
+  players whose records went; bans are kept by identity, in the host's data.
+- **Chat follows automatic mutes.** A player muted automatically for abusing voice chat cannot chat until the mute
+  ends, 30 seconds later. The roster carries one muted flag, so a joined player learns only that the host muted it, and
+  chat that went through while its indicator said so would make the flag wrong. An honest client is never muted
+  automatically: it checks its own frames and keeps to the host's limits before anything leaves.
 - **The realm follows the provider's role** rather than the requests: a request only asks, and the realm moves when the
   pump shows the provider hosting or joined. A join that fails early therefore never leaves `Offline`, and nothing that
   reads the realm sees a session that did not happen.

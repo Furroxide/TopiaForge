@@ -339,6 +339,8 @@ record, so the set lasts as long as the client knows the host kept the record of
   everyone, applies to the session the join finds, whichever that is, whether it was made with no link or during the
   join.
 - **Role changes** forget the set.
+- **Stopping hosting** forgets the names the host's own player muted, because closing every connection forgets the
+  records they named, and a host never gives one id to two players. Mute-all names nobody, so it stays.
 
 So muting `p2` on one host never silences a different `p2` on the next, and never tells the next host whom the player
 had muted. Two earlier versions went by the session. The first cleared the set only on a role change, so a reconnect to

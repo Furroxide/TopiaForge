@@ -594,6 +594,7 @@ internal static class Program
             InternalVoiceTests.ListenerMutesStayWithTheHostThatListedThem();
             InternalVoiceTests.AHostsServerMuteReachesTheVoiceRelay();
             InternalVoiceTests.AutomaticMutesAreServerMutes();
+            InternalVoiceTests.AHostThatHostsAgainKeepsBansAndForgetsMutes();
             InternalVoiceStreamTests.PlaybackStreamsAreTheServicesOwnAndEndForGood();
             InternalVoiceStreamTests.AskingAgainPastTheBoundCostsNothing();
             InternalVoiceStreamTests.StatisticsAreMappedByMeaning();

@@ -107,7 +107,7 @@ internal static class InternalVoiceStreamTests
         That(rig.Peers.Remove(lee), "Lee's frames stall");
         var restarted = rig.RestartHost(Sandbox);
         restarted.Runtime.PreferredDisplayName = "Hoster";
-        rig.StartHosting(new InternalHostSettings("Voice host", 8));
+        rig.StartHosting(new InternalHostSettings("Voice host", 8) { Voice = true });
         var (_, yulMic) = Join(rig, "yul", Sandbox);
         RunUntilListed(rig, restarted, "yul");
         That(IdOf(restarted, "yul").Equals(p1), "the restarted host gives Yul Xan's id, " + p1);
@@ -258,6 +258,29 @@ internal static class InternalVoiceStreamTests
         That(spi.Concealed == real.Concealed + real.Faded, "and Concealed counts the faded frames too (" + spi.Concealed + ")");
         That(listener.FramesReceived == heard.FramesReceived && listener.FramesReceived > 0 && rig.Host.Control.GetStatistics().Voice!.FramesReceived > 0,
             "frames received carry over, and the control's statistics carry them as well");
+
+        // A held frame counts as sent when the session takes it, so FramesSent is what left only while every held frame
+        // leaves with its pair: a pair Sam's own rate limit refused would count its first frame as sent. The service keeps
+        // only the newest part of a stall's capture, so Sam stays within that limit even after a stall, and every frame
+        // counted as sent reaches the host.
+        mic.StopTalking();
+        That(rig.Host.Control.SetServerMute(IdOf(rig.Host, "sam"), false).Succeeded, "the host unmutes Sam");
+        RunFor(rig, 1_000_000);
+        var before = mic.Service.GetStatistics();
+        var limitedBefore = sam.Provider.Voice!.GetStatistics().RateLimited;
+        var arrivedBefore = rig.Host.Provider.Engine.GetVoiceStatistics().Delivered;
+        mic.Talk(Speech(6, 83));
+        RunFor(rig, 1_000_000);
+        That(rig.Peers.Remove(sam), "Sam's game stalls for 2.5 s mid-sentence");
+        RunFor(rig, 2_500_000);
+        rig.Peers.Add(sam);
+        RunFor(rig, 6_000_000);
+        var after = mic.Service.GetStatistics();
+        var sent = after.FramesSent - before.FramesSent;
+        var arrived = rig.Host.Provider.Engine.GetVoiceStatistics().Delivered - arrivedBefore;
+        That(!mic.Talking && sam.Provider.Voice!.GetStatistics().RateLimited == limitedBefore && after.FramesRefused == before.FramesRefused &&
+             sent == after.FramesEncoded - before.FramesEncoded && sent > 50 && sent == arrived,
+            "after the stall Sam's own pacing refused nothing, and every frame counted as sent reached the host (" + sent + " of " + arrived + ")");
     }
 
     internal static void TheVoiceSpiBelongsToTheMainThread()

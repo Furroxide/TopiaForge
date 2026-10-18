@@ -1,20 +1,15 @@
-extern alias provider;
-
-using System.Reflection;
+using System.Text;
 using TopiaForge.Mods.Internal;
 using static TopiaForge.Mods.Multiplayer.Tests.ControlVoiceSteps;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
-using EngineChannel = provider::TopiaForge.Multiplayer.Engine.EngineChannel;
-using IEngineLink = provider::TopiaForge.Multiplayer.Engine.IEngineLink;
-using LiveJoin = provider::TopiaForge.Multiplayer.Network.LiveJoin;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// The voice SPI over real providers on the deterministic network, with real cryptography, transport, engine and Opus
 /// codec, each provider composed with the runtime host and composition root: voice off until it is turned on,
-/// push-to-talk, listener mutes across a reconnect, an in-place replacement and a move to another host, and server mutes
-/// that reach the voice relay, by hand and automatically.
+/// push-to-talk, listener mutes across a reconnect, an in-place replacement and a move to another host, server mutes
+/// that reach the voice relay, by hand and automatically, and what a host keeps when it stops hosting and hosts again.
 /// </summary>
 internal static class InternalVoiceTests
 {
@@ -268,7 +263,7 @@ internal static class InternalVoiceTests
         rig.Host.Control.StopHosting();
         That(rig.Host.Control.GetStatistics().ServerMutes == 0, "stopping hosting forgets the mute");
         That(rig.Run(() => sam.Control.Role == InternalSessionRole.Solo && lee.Control.Role == InternalSessionRole.Solo), "and ends the players' sessions");
-        rig.StartHosting(new InternalHostSettings("Again", 8));
+        rig.StartHosting(new InternalHostSettings("Again", 8) { Voice = true });
         rig.JoinAndWait(sam);
         RunUntilListed(rig, rig.Host, "sam");
         var samAgain = IdOf(rig.Host, "sam");
@@ -290,8 +285,7 @@ internal static class InternalVoiceTests
         var maxToLee = IdOf(lee, "max");
         var maxToMax = max.Session.Snapshot.LocalParticipantId!.Value;
         That(!rig.Host.Control.IsServerMuted(maxOnHost), "Max starts unmuted");
-        var link = (IEngineLink)typeof(LiveJoin).GetField("link", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(max.Provider.Live!.Join)!;
-        for (var index = 0; index < 25; index++) link.Send(EngineChannel.Voice, new ArraySegment<byte>(new byte[] { 0x01, (byte)index }));
+        SendMalformedVoice(max);
         That(rig.Run(() => rig.Host.Control.IsServerMuted(maxOnHost), 2_000_000), "the relay mutes Max automatically, and the host's control says so");
         That(rig.Host.Control.GetStatistics().ServerMutes == 1, "it counts as a mute");
         That(rig.Run(() => lee.Control.IsServerMuted(maxToLee) && max.Control.IsServerMuted(maxToMax)), "so do the joined players' controls, from the roster");
@@ -305,5 +299,63 @@ internal static class InternalVoiceTests
         That(rig.Run(() => !rig.Host.Control.IsServerMuted(maxOnHost) && !lee.Control.IsServerMuted(maxToLee) && !max.Control.IsServerMuted(maxToMax), 35_000_000, 20_000),
             "the automatic mute ends on its own, for everyone");
         That(rig.Host.Control.GetStatistics().ServerMutes == 0, "and stops counting");
+        var said = string.Empty;
+        That(maxChat.Send(InternalControlTests.Bytes("sorry"), InternalSystemTarget.Host).Succeeded && rig.Run(() =>
+            {
+                if (hostChat.TryReceive(out var message)) said = Encoding.UTF8.GetString(message.Payload);
+                return said.Length > 0;
+            }) && said == "sorry" && hostChat.GetStatistics().Dropped == 1,
+            "and the host takes Max's chat in again once it has ended");
+    }
+
+    internal static void AHostThatHostsAgainKeepsBansAndForgetsMutes()
+    {
+        // Stopping hosting closes every connection. Mutes for everyone, by hand and automatic, end with hosting, and so do the
+        // names the host's own player muted, which named players whose records went with their connections. Bans are kept by
+        // identity. A kick leaves nothing behind, and the wish to hear nobody names no one, so it stays.
+        using var rig = ControlRig.WithVoice(342, Sandbox);
+        var hostEars = Host(rig);
+        var (sam, _) = Join(rig, "sam", Sandbox);
+        var (max, _) = Join(rig, "max", Sandbox);
+        var (ana, anaMic) = Join(rig, "ana", Sandbox);
+        var (ben, _) = Join(rig, "ben", Sandbox);
+        var (kai, _) = Join(rig, "kai", Sandbox);
+        RunUntilListed(rig, rig.Host, "sam", "max", "ana", "ben", "kai");
+        var host = rig.Host.Control;
+        var anaId = IdOf(rig.Host, "ana");
+        That(host.SetServerMute(IdOf(rig.Host, "sam"), true).Succeeded, "the host mutes Sam for everyone");
+        SendMalformedVoice(max);
+        That(rig.Run(() => host.IsServerMuted(IdOf(rig.Host, "max")), 2_000_000), "and the relay mutes Max automatically");
+        hostEars.Service.SetListenerMutes(new[] { anaId });
+        That(host.Ban(IdOf(rig.Host, "ben")).Succeeded && host.Kick(IdOf(rig.Host, "kai"), "Take a break.").Succeeded, "the host bans Ben and kicks Kai");
+        That(rig.Run(() => ben.Control.Role == InternalSessionRole.Solo && kai.Control.Role == InternalSessionRole.Solo), "both leave the session");
+        rig.JoinAndWait(kai);
+        That(kai.Control.Role == InternalSessionRole.Client, "a kick leaves nothing behind: Kai joins again at once");
+        var mutes = new List<ParticipantId>();
+        That(host.GetStatistics().ServerMutes == 2 && !hostEars.Service.GetListenerMutes(mutes) && mutes.SequenceEqual(new[] { anaId }),
+            "two players are muted for everyone, and the host's player does not want to hear Ana");
+
+        host.StopHosting();
+        That(host.GetStatistics().ServerMutes == 0 && host.GetBans().Count == 1, "stopping hosting forgets the mutes for everyone and keeps the ban");
+        That(!hostEars.Service.GetListenerMutes(mutes) && mutes.Count == 0, "and forgets the names the host's player muted, which name nobody now");
+        That(rig.Run(() => rig.Peers.All(peer => peer.Control.Role == InternalSessionRole.Solo)), "every player's session ends");
+
+        rig.StartHosting(new InternalHostSettings("Again", 8) { Voice = true });
+        foreach (var peer in new[] { sam, max, ana, kai }) rig.JoinAndWait(peer);
+        RunUntilListed(rig, rig.Host, "sam", "max", "ana", "kai");
+        var anaAgain = IdOf(rig.Host, "ana");
+        That(!anaAgain.Equals(anaId) && !host.IsServerMuted(IdOf(rig.Host, "sam")) && !host.IsServerMuted(IdOf(rig.Host, "max")) && host.GetStatistics().ServerMutes == 0,
+            "hosting again, Sam and Max come back unmuted, and Ana as " + anaAgain + ", a new id");
+        hostEars.Listen("ana", anaAgain);
+        anaMic.Talk(Speech(1, 56));
+        RunFor(rig, 1_500_000);
+        That(hostEars.LevelSince("ana", 0) > Heard, "so the host hears Ana");
+        That(ben.Control.Join(ben.Target(), new InternalJoinSettings()).Succeeded &&
+             rig.Run(() => ben.Control.GetStatus().JoinPhase == InternalJoinPhase.Ended, 20_000_000) &&
+             ben.Control.GetStatus().JoinFailure == InternalLiveFailure.Banned, "while Ben is still banned");
+
+        hostEars.Service.SetListenerMutes(new[] { anaAgain }, muteAll: true);
+        host.StopHosting();
+        That(hostEars.Service.GetListenerMutes(mutes) && mutes.Count == 0, "stopping hosting keeps the wish to hear nobody, and forgets the name beside it");
     }
 }

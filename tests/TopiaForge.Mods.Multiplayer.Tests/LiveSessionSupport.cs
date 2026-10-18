@@ -36,9 +36,16 @@ internal sealed class SteppedNetwork : INetworkControl
 
     public int LocalPort { get; }
 
+    /// <summary>
+    /// Gets every connection a join flow started through this network, oldest first. A succeeded one holds the link the
+    /// join hands its engine, which a test can write on as a modified client would, past its own engine.
+    /// </summary>
+    internal List<ConnectAttempt> Attempts { get; } = new();
+
     public ConnectAttempt Connect(TransportPath path, byte[]? expectedKey)
     {
         var attempt = new ConnectAttempt();
+        Attempts.Add(attempt);
         stack.Connect(attempt, path, expectedKey, network.Now);
         return attempt;
     }
