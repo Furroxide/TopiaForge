@@ -167,7 +167,8 @@ TopiaForge bundles the Quicksand font for body typography in the launcher UI and
   - Local changes: it is a Modified Version under the OFL. The licence reserves the name "Quicksand", so
     its font names read "TopiaForge Body Medium" (family "TopiaForge Body", style "Medium"). The STAT
     table and the variation name records, which only a variable font uses, are removed. The copyright
-    notice, the licence fields, the designer credits, the glyph set and the metrics are unchanged.
+    notice, the licence fields, the designer credits, the glyph set and the vertical metrics are
+    unchanged; the outlines and advance widths are those of the `wght` 500 instance.
   - SHA-256: `56ecf4637ddf31058616e7a469ce0705b2a031a7a5b8b9cddc0639b32e09c717`
   - License: SIL Open Font License 1.1, the same text as the variable font's.
 

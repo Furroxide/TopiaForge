@@ -21,7 +21,8 @@ namespace TopiaForge.ModManager.Tests
         private const string LightAssetPath = "tools/unity-ui-bundle/Assets/FontAssets/TopiaForge Body SDF.asset";
         private const string MediumFontPath = "tools/unity-ui-bundle/Assets/Fonts/TopiaForgeBody-Medium.ttf";
 
-        // Every style at body size or smaller gets the Medium face; Light is left to larger Quicksand styles.
+        // Every style at body size or smaller gets the Medium face. Larger Quicksand styles, headings and numerals,
+        // keep the Light face, and display styles keep Audiowide.
         private static void SmallTextStylesUseTheMediumFace()
         {
             foreach (TopiaForgeTextStyle style in Enum.GetValues(typeof(TopiaForgeTextStyle)))
@@ -37,7 +38,7 @@ namespace TopiaForge.ModManager.Tests
                 }
                 else
                 {
-                    Check(face != TopiaForgeFace.Display, style + " is a Quicksand style and must not use the display face.");
+                    Check(face == TopiaForgeFace.Heading, style + " is a Quicksand style larger than body text and keeps the Light face, not " + face + ".");
                 }
             }
 
@@ -58,11 +59,30 @@ namespace TopiaForge.ModManager.Tests
             var builder = File.ReadAllText(Path.Combine(root, "tools", "unity-ui-bundle", "Assets", "Editor", "UiBundleBuilder.cs"));
 
             RequireSource(fonts, "switch (TopiaForgeTokens.FaceOf(style))", "TopiaForgeFonts.For must choose every style's face through TopiaForgeTokens.FaceOf.");
-            Check(Regex.IsMatch(fonts, @"case TopiaForgeFace\.Heading:\s*return heading;\s*default:\s*return body;"),
-                "TopiaForgeFonts.For must draw the small-text face with the body font.");
-            RequireSource(fonts, "var bodyFont = TopiaForgeBrandBundle.BodyFont != null", "The brand tier must draw small text with the bundle's body face.");
+            Check(Regex.IsMatch(fonts, @"case TopiaForgeFace\.Display:\s*return display;\s*case TopiaForgeFace\.Heading:\s*return heading;\s*default:\s*return body;"),
+                "TopiaForgeFonts.For must draw display styles with the display font, headings with the heading font and small text with the body font.");
+
+            // The brand tier puts each bundle face in its own slot; only a face the bundle lacks borrows another.
+            foreach (var (pattern, message) in new[]
+            {
+                (@"var bodyFont = TopiaForgeBrandBundle\.BodyFont != null \? TopiaForgeBrandBundle\.BodyFont : TopiaForgeBrandBundle\.HeadingFont!;",
+                    "The brand tier must draw small text with the bundle's Medium face."),
+                (@"var headingFont = TopiaForgeBrandBundle\.HeadingFont != null \? TopiaForgeBrandBundle\.HeadingFont : bodyFont;",
+                    "The brand tier must draw headings with the bundle's Light face."),
+                (@"var displayFont = TopiaForgeBrandBundle\.DisplayFont != null \? TopiaForgeBrandBundle\.DisplayFont : headingFont;",
+                    "The brand tier must draw display text with the bundle's display face."),
+                (@"\bbody = bodyFont;\s*heading = headingFont;\s*display = displayFont;",
+                    "The brand tier must keep the Medium, Light and display faces in the body, heading and display slots."),
+            })
+            {
+                Check(Regex.IsMatch(fonts, pattern), message);
+            }
+
             RequireSource(bundle, "BodyName = \"" + MediumAssetName + "\";", "The brand bundle's body face must be the Medium SDF.");
             RequireSource(bundle, "BodyFont = bundle.LoadAsset<TMP_FontAsset>(BodyName);", "The brand bundle must load the Medium SDF as its body face.");
+            RequireSource(bundle, "HeadingName = \"" + LightAssetName + "\";", "The brand bundle's heading face must stay the Light SDF.");
+            RequireSource(bundle, "HeadingFont = bundle.LoadAsset<TMP_FontAsset>(HeadingName);", "The brand bundle must load the Light SDF as its heading face.");
+            RequireSource(bundle, "DisplayFont = bundle.LoadAsset<TMP_FontAsset>(DisplayName);", "The brand bundle must load the display SDF as its display face.");
             RequireSource(builder, "BodyMediumFontPath = \"Assets/Fonts/TopiaForgeBody-Medium.ttf\";", "The Medium SDF must be baked from the Medium instance.");
             RequireSource(builder, "BakeFontAsset(BodyMediumFontPath, BodyMediumAssetPath, \"" + MediumAssetName + "\", 1024);",
                 "The bundle must bake the Medium SDF at the Light SDF's 1024 px atlas size.");

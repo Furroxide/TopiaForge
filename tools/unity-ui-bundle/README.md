@@ -57,9 +57,13 @@ Run it again only when that source font changes.
 A re-bake is reproducible byte for byte. Unity gives a new asset a random GUID, and its
 material and atlas pages random local ids, so the builder writes each freshly baked SDF
 again with the GUID pinned in `Assets/Editor/UiBundleReproducibleAssets.cs` and fixed
-sub-asset ids. To re-bake an SDF, delete its `.asset` and `.asset.meta` and build; with
-an unchanged source font the result matches the committed files. A new SDF needs a
-pinned GUID there first.
+sub-asset ids. To re-bake an SDF, delete its `.asset` and `.asset.meta` and build. A new
+SDF needs a pinned GUID there first.
+
+With an unchanged source font, a re-bake of `TopiaForge Body Medium SDF` matches the
+committed files. `TopiaForge Body SDF` and `TopiaForge Display SDF` were baked before
+the ids were pinned, and the Body SDF from an earlier copy of the Quicksand font, so the
+first re-bake of either changes its `.asset` and the bundle; later re-bakes match.
 
 Every font-asset material stays on TMP's `TextMeshPro/Mobile/Distance Field` shader
 (`Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile.shader`) — building the bundle pulls the
