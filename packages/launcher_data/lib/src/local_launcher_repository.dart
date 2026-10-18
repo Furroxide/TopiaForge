@@ -32,7 +32,7 @@ import 'tomato_cake_launcher_state.dart';
 import 'multiplayer/multiplayer_repository.dart'
     show LocalMultiplayerRepository;
 import 'multiplayer/multiplayer_store.dart'
-    show MultiplayerStoreRecovery, ServerContentStore;
+    show ServerContentLoad, ServerContentStore;
 import 'windows_file_move.dart';
 
 part 'local_launcher_repository/atomic_backup_recovery.dart';
@@ -74,9 +74,11 @@ part 'local_launcher_repository/multiplayer_content_host.dart';
 part 'local_launcher_repository/join_content_downloads.dart';
 part 'local_launcher_repository/join_content_install.dart';
 part 'local_launcher_repository/join_install_journal.dart';
+part 'local_launcher_repository/join_install_preflight.dart';
 part 'local_launcher_repository/join_server_profile.dart';
 part 'local_launcher_repository/server_content_view.dart';
 part 'local_launcher_repository/server_content_cleanup.dart';
+part 'local_launcher_repository/server_content_judging.dart';
 
 class LocalLauncherRepository
     with _MultiplayerContentHosting
@@ -205,7 +207,10 @@ class LocalLauncherRepository
     final gameInstall = discovery.install;
     var installedMods = <InstalledMod>[];
     if (gameInstall != null) {
-      // A join's install the launcher did not live to finish is undone first.
+      // A damaged record of server content is repaired first, failing
+      // closed, then a join's install the launcher did not live to finish is
+      // undone.
+      await _repairServerContentWhenFree(gameInstall);
       await _sweepJoinInstallsWhenFree(gameInstall);
       try {
         installedMods = await _loadInstalledMods(gameInstall);

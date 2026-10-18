@@ -101,24 +101,68 @@ void main() {
     test('round trips in canonical form', () {
       final record = ServerContentRecord.empty().withInstalled(
         [
-          entry('example.sandbox', hidden: true),
           entry('example.tools', version: '2.0.0'),
+          entry('example.sandbox', hidden: true),
         ],
         addedRecords: ['Example.Tools'],
       );
       final bytes = record.encode();
-      final read = ServerContentRecord.read(bytes)!;
-      expect(read.damaged, isFalse);
-      expect(read.record.encode(), bytes);
-      expect(read.record.addedRecords, {'example.tools'});
-      final first = read.record.entryFor('EXAMPLE.SANDBOX', '1.0.0')!;
+      final read = ServerContentRecord.read(bytes);
+      expect(read.status, ServerContentStatus.valid);
+      expect(read.record!.encode(), bytes);
+      expect(read.record!.addedRecords, {'example.tools'});
+      final first = read.record!.entryFor('EXAMPLE.SANDBOX', '1.0.0')!;
       expect(first.hidden, isTrue);
       expect(first.sha256, testSha('example.sandbox'));
-      expect(read.record.entryFor('example.sandbox', '1.0.1'), isNull);
+      expect(read.record!.entryFor('example.sandbox', '1.0.1'), isNull);
+      final document = jsonDecode(utf8.decode(bytes)) as Map;
+      expect(document['schemaVersion'], ServerContentRecord.schemaVersion);
       expect(
-        jsonDecode(utf8.decode(bytes))['schema'],
-        ServerContentRecord.schema,
+        (document['versions'] as List).map((item) => (item as Map)['id']),
+        ['example.sandbox', 'example.tools'],
+        reason: 'entries are written in the order the contract sorts them',
       );
+    });
+
+    test('withholds hidden and withheld versions by their receipts', () {
+      final record = ServerContentRecord.empty()
+          .withInstalled([
+            entry('example.sandbox', hidden: true, receipt: 'a' * 64),
+            entry('example.tools', receipt: 'b' * 64),
+          ])
+          .withWithheld([
+            WithheldServerVersion(
+              modId: 'example.maps',
+              version: '1.0.0',
+              receiptSha256: 'c' * 64,
+            ),
+          ]);
+      expect(record.withholds('Example.Sandbox', '1.0.0', 'a' * 64), isTrue);
+      expect(
+        record.withholds('example.sandbox', '1.0.0', 'f' * 64),
+        isFalse,
+        reason: 'a version installed again since is the player\'s',
+      );
+      expect(record.withholds('example.sandbox', '1.0.1', 'a' * 64), isFalse);
+      expect(
+        record.withholds('example.tools', '1.0.0', 'b' * 64),
+        isFalse,
+        reason: 'a mod new to the player stays visible, its record disabled',
+      );
+      expect(record.withholds('example.maps', '1.0.0', 'c' * 64), isTrue);
+      expect(record.withholds('example.maps', '1.0.0', 'd' * 64), isFalse);
+      for (final (id, expected) in [
+        ('example.sandbox', true),
+        ('example.maps', true),
+        ('example.tools', false),
+        ('example.other', false),
+      ]) {
+        expect(
+          record.withholds(id, '1.0.0', null),
+          expected,
+          reason: 'a receipt that cannot be read fails closed for $id',
+        );
+      }
     });
 
     test('a later install of a version replaces its entry', () {
@@ -129,17 +173,40 @@ void main() {
       expect(record.entries.single.receiptSha256, 'b' * 64);
     });
 
-    test('removing entries and added records', () {
-      final record = ServerContentRecord.empty().withInstalled(
-        [entry('example.sandbox'), entry('example.tools')],
-        addedRecords: ['example.sandbox', 'example.tools'],
+    test('an install replaces a version withheld after a repair', () {
+      final record = ServerContentRecord.empty()
+          .withWithheld([
+            WithheldServerVersion(
+              modId: 'example.sandbox',
+              version: '1.0.0',
+              receiptSha256: 'a' * 64,
+            ),
+          ])
+          .withInstalled([entry('Example.Sandbox', hidden: true)]);
+      expect(record.withheld, isEmpty);
+      expect(record.entries, hasLength(1));
+    });
+
+    test('removing entries, withheld versions and added records', () {
+      final maps = WithheldServerVersion(
+        modId: 'example.maps',
+        version: '1.0.0',
+        receiptSha256: 'c' * 64,
       );
+      final record = ServerContentRecord.empty()
+          .withInstalled(
+            [entry('example.sandbox'), entry('example.tools')],
+            addedRecords: ['example.sandbox', 'example.tools'],
+          )
+          .withWithheld([maps]);
       final removed = record.without(
         [entry('EXAMPLE.SANDBOX')],
         addedRecords: ['Example.Sandbox'],
       );
       expect(removed.entries.map((item) => item.modId), ['example.tools']);
       expect(removed.addedRecords, {'example.tools'});
+      expect(removed.withheld, [maps]);
+      expect(removed.without(const [], unwithheld: [maps]).withheld, isEmpty);
       expect(removed.without([entry('example.tools')]).entries, isEmpty);
     });
 
@@ -159,12 +226,27 @@ void main() {
         full.withInstalled([entry('example.mod3', receipt: 'c' * 64)]).entries,
         hasLength(ServerContentRecord.maximumEntries),
       );
+      expect(
+        () => ServerContentRecord.empty().withWithheld([
+          for (
+            var index = 0;
+            index <= ServerContentRecord.maximumEntries;
+            index++
+          )
+            WithheldServerVersion(
+              modId: 'example.mod$index',
+              version: '1.0.0',
+              receiptSha256: 'a' * 64,
+            ),
+        ]),
+        throwsA(isA<StateError>()),
+      );
     });
 
-    test('salvages what is valid and says it was damaged', () {
-      final good = entry('example.sandbox').toJson();
+    test('reads none of a damaged record, and salvage keeps what reads', () {
+      final good = entry('example.sandbox', hidden: true).toJson();
       final document = {
-        'schema': ServerContentRecord.schema,
+        'schemaVersion': ServerContentRecord.schemaVersion,
         'versions': [
           good,
           {...good, 'version': 'not-a-version'},
@@ -174,48 +256,103 @@ void main() {
           good,
           entry('example.tools').toJson(),
         ],
+        'withheld': [
+          {'id': 'example.maps', 'version': '1.0.0', 'receipt': 'c' * 64},
+          {'id': 'example.maps', 'version': '1.0', 'receipt': 'c' * 64},
+        ],
         'addedRecords': ['example.sandbox', 7, '../escape', 'example.sandbox'],
         'unknown': 1,
       };
-      final read = ServerContentRecord.read(utf8.encode(jsonEncode(document)))!;
-      expect(read.damaged, isTrue);
-      expect(read.record.entries.map((item) => item.modId), [
+      final bytes = utf8.encode(jsonEncode(document));
+      final read = ServerContentRecord.read(bytes);
+      expect(read.status, ServerContentStatus.damaged);
+      expect(read.record, isNull);
+      final salvaged = ServerContentRecord.salvage(bytes);
+      expect(salvaged.entries.map((item) => item.modId), [
         'example.sandbox',
         'example.tools',
       ]);
-      expect(read.record.addedRecords, {'example.sandbox'});
+      expect(salvaged.withheld.map((item) => item.modId), ['example.maps']);
+      expect(salvaged.addedRecords, {'example.sandbox'});
+      for (final nothing in [
+        utf8.encode('not json'),
+        utf8.encode('[]'),
+        List.filled(ServerContentRecord.maximumBytes + 1, 0x20),
+      ]) {
+        expect(ServerContentRecord.salvage(nothing).isEmpty, isTrue);
+      }
     });
 
-    test('reads a valid record written another way, as damaged', () {
+    test('reads a valid record written another way', () {
       final record = ServerContentRecord.empty().withInstalled([
         entry('example.sandbox'),
       ]);
       final pretty = const JsonEncoder.withIndent(
         '  ',
       ).convert(jsonDecode(utf8.decode(record.encode())));
-      final read = ServerContentRecord.read(utf8.encode(pretty))!;
-      expect(read.damaged, isTrue);
-      expect(read.record.encode(), record.encode());
+      final read = ServerContentRecord.read(utf8.encode(pretty));
+      expect(read.status, ServerContentStatus.valid);
+      expect(read.record!.encode(), record.encode());
     });
 
-    test('nothing usable reads as null', () {
-      for (final bytes in [
-        utf8.encode('not json'),
-        utf8.encode('[]'),
-        utf8.encode(jsonEncode({'schema': 'topiaforge.server-content/2'})),
-        utf8.encode(jsonEncode({'versions': []})),
-        List.filled(ServerContentRecord.maximumBytes + 1, 0x20),
+    test('says why bytes are not a record', () {
+      for (final (bytes, status) in [
+        (utf8.encode('not json'), ServerContentStatus.damaged),
+        (utf8.encode('[]'), ServerContentStatus.damaged),
+        (
+          utf8.encode(jsonEncode({'versions': []})),
+          ServerContentStatus.damaged,
+        ),
+        (
+          utf8.encode(jsonEncode({'schema': 'topiaforge.server-content/1'})),
+          ServerContentStatus.damaged,
+        ),
+        (
+          List.filled(ServerContentRecord.maximumBytes + 1, 0x20),
+          ServerContentStatus.damaged,
+        ),
+        (
+          utf8.encode(jsonEncode({'schemaVersion': 2, 'future': true})),
+          ServerContentStatus.newer,
+        ),
       ]) {
-        expect(ServerContentRecord.read(bytes), isNull);
+        final read = ServerContentRecord.read(bytes);
+        expect(read.status, status);
+        expect(read.record, isNull);
+        expect(read.problem, isNotEmpty);
+      }
+      expect(ServerContentStatus.valid.isUsable, isTrue);
+      expect(ServerContentStatus.missing.isUsable, isTrue);
+      for (final status in [
+        ServerContentStatus.newer,
+        ServerContentStatus.damaged,
+        ServerContentStatus.unreadable,
+      ]) {
+        expect(status.isUsable, isFalse);
       }
     });
 
     test('entries refuse what is not an id, version or digest', () {
-      for (final make in <ServerContentEntry Function()>[
+      for (final make in <Object Function()>[
         () => entry('../escape'),
         () => entry('example.sandbox', version: '1'),
         () => entry('example.sandbox', receipt: 'A' * 64),
         () => entry('example.sandbox', installedAt: -1),
+        () => WithheldServerVersion(
+          modId: 'example sandbox',
+          version: '1.0.0',
+          receiptSha256: 'a' * 64,
+        ),
+        () => WithheldServerVersion(
+          modId: 'example.sandbox',
+          version: '1.0',
+          receiptSha256: 'a' * 64,
+        ),
+        () => WithheldServerVersion(
+          modId: 'example.sandbox',
+          version: '1.0.0',
+          receiptSha256: 'a' * 63,
+        ),
       ]) {
         expect(make, throwsA(anyOf(isA<ArgumentError>(), isA<RangeError>())));
       }

@@ -80,6 +80,32 @@ void main() {
       }
     });
 
+    test('the consent says whether it covered closing the player\'s game', () {
+      expect(installing().closeOwnedGameAcknowledged, isFalse);
+      final covered = run(startJoin(target), [
+        JoinTargetResolved(hostAServerId),
+        JoinDescriptorVerified(server),
+        JoinPlanReady(plan),
+        const JoinConsentGiven(closeOwnedGameAcknowledged: true),
+        const JoinDownloadsCompleted(),
+      ]);
+      expect(covered.stage, JoinStage.installing);
+      expect(covered.closeOwnedGameAcknowledged, isTrue);
+      // It is the player's consent, so it lasts through the steps after it.
+      final progressed = JoinSession.reduce(
+        covered,
+        JoinInstallProgressed(packagesDone: 0, packagesTotal: 1),
+      );
+      expect(progressed.closeOwnedGameAcknowledged, isTrue);
+      expect(
+        JoinSession.reduce(
+          progressed,
+          const JoinInstallCompleted(),
+        ).closeOwnedGameAcknowledged,
+        isTrue,
+      );
+    });
+
     test('an install undone for a cancel request ends as cancelled', () {
       final held = JoinSession.reduce(
         installing(),

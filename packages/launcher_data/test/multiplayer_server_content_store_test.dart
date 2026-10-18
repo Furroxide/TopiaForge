@@ -8,9 +8,11 @@ import 'package:test/test.dart';
 
 import 'held_file_support.dart';
 
-/// The record of server content keeps #214's store rules: atomic writes,
-/// damage salvaged with a copy kept aside, and a file that cannot be read
-/// never written over.
+/// The record of server content keeps #214's store rules where the game's
+/// loader allows: atomic writes, and a file that cannot be read never written
+/// over. Because the loader reads it too, a damaged record is read not at
+/// all, and only an explicit repair writes over it, with a copy kept aside;
+/// a newer launcher's record is never touched.
 void main() {
   late Directory folder;
   late File file;
@@ -35,11 +37,29 @@ void main() {
         installedAt: 1791849600,
       );
 
+  final withheld = WithheldServerVersion(
+    modId: 'example.two',
+    version: '1.0.0',
+    receiptSha256: 'c' * 64,
+  );
+
   List<String> damagedCopies() => [
     for (final entity in folder.listSync())
       if (p.basename(entity.path).startsWith('server-content.damaged-'))
         p.basename(entity.path),
   ];
+
+  Future<void> expectRefusedUpdate(ServerContentStore store) async {
+    var changed = false;
+    await expectLater(
+      store.update((record) {
+        changed = true;
+        return record.withInstalled([entry('example.three')]);
+      }),
+      throwsA(isA<MultiplayerStoreException>()),
+    );
+    expect(changed, isFalse);
+  }
 
   test(
     'a missing record is empty, and an update writes it canonically',
@@ -47,60 +67,123 @@ void main() {
       final store = ServerContentStore(folder.path);
       final load = await store.load();
       expect(load.record.isEmpty, isTrue);
-      expect(load.recovery, MultiplayerStoreRecovery.none);
+      expect(load.status, ServerContentStatus.missing);
+      await store.update((record) => record);
+      expect(file.existsSync(), isFalse, reason: 'nothing to record yet');
       final written = await store.update(
         (record) => record.withInstalled([entry('example.one')]),
       );
       expect(file.readAsBytesSync(), written.encode());
       final again = await ServerContentStore(folder.path).load();
       expect(again.record.entries.single.modId, 'example.one');
-      expect(again.recovery, MultiplayerStoreRecovery.none);
+      expect(again.status, ServerContentStatus.valid);
     },
   );
 
-  test('a damaged record keeps a copy aside and what was valid', () async {
+  test('a damaged record is read not at all and never updated', () async {
     final good = entry('example.one').toJson();
     file.writeAsStringSync(
       jsonEncode({
-        'schema': ServerContentRecord.schema,
+        'schemaVersion': ServerContentRecord.schemaVersion,
         'versions': [
           good,
           {'id': 7},
         ],
+        'withheld': <Object>[],
         'addedRecords': <String>[],
       }),
     );
     final original = file.readAsBytesSync();
-    final load = await ServerContentStore(folder.path).load();
-    expect(load.recovery, MultiplayerStoreRecovery.salvaged);
-    expect(load.record.entries.single.modId, 'example.one');
-    expect(damagedCopies(), hasLength(1));
-    expect(
-      File(p.join(folder.path, damagedCopies().single)).readAsBytesSync(),
-      original,
+    final store = ServerContentStore(folder.path);
+    final load = await store.load();
+    expect(load.status, ServerContentStatus.damaged);
+    expect(load.record.isEmpty, isTrue);
+    expect(load.problem, isNotEmpty);
+    expect(load.damagedBytes, original);
+    await expectRefusedUpdate(store);
+    expect(file.readAsBytesSync(), original);
+    expect(damagedCopies(), isEmpty);
+  });
+
+  test(
+    'a repair keeps a copy aside and writes what the rebuild makes',
+    () async {
+      final good = entry('example.one').toJson();
+      file.writeAsStringSync(
+        jsonEncode({
+          'schemaVersion': ServerContentRecord.schemaVersion,
+          'versions': [
+            good,
+            {'id': 7},
+          ],
+        }),
+      );
+      final original = file.readAsBytesSync();
+      final store = ServerContentStore(folder.path);
+      ServerContentRecord? given;
+      final repaired = await store.repair((salvaged) async {
+        given = salvaged;
+        return salvaged.withWithheld([withheld]);
+      });
+      expect(given!.entries.single.modId, 'example.one');
+      expect(repaired.status, ServerContentStatus.valid);
+      expect(repaired.record.withheld, [withheld]);
+      expect(file.readAsBytesSync(), repaired.record.encode());
+      expect(
+        File(p.join(folder.path, damagedCopies().single)).readAsBytesSync(),
+        original,
+      );
+      // A valid record is left as it is.
+      var rebuilt = false;
+      final again = await store.repair((salvaged) async {
+        rebuilt = true;
+        return salvaged;
+      });
+      expect(rebuilt, isFalse);
+      expect(again.status, ServerContentStatus.valid);
+    },
+  );
+
+  test('a repair that cannot rebuild leaves the damaged record', () async {
+    file.writeAsStringSync('{"schemaVersion":1,"versions":[');
+    final original = file.readAsBytesSync();
+    final store = ServerContentStore(folder.path);
+    final load = await store.repair(
+      (_) async => throw StateError('A receipt could not be read.'),
     );
-    expect(file.readAsBytesSync(), load.record.encode());
+    expect(load.status, ServerContentStatus.damaged);
+    expect(load.problem, contains('could not be repaired'));
+    expect(file.readAsBytesSync(), original);
+    expect(damagedCopies(), isEmpty);
   });
 
-  test('a record that cannot be used at all is reset, its copy kept', () async {
-    for (final text in [
-      'not json',
-      jsonEncode({'schema': 'topiaforge.server-content/9'}),
-    ]) {
-      file.writeAsStringSync(text);
-      final load = await ServerContentStore(folder.path).load();
-      expect(load.recovery, MultiplayerStoreRecovery.reset, reason: text);
-      expect(load.record.isEmpty, isTrue);
-      expect(file.readAsBytesSync(), ServerContentRecord.empty().encode());
-    }
-    expect(damagedCopies(), hasLength(2));
+  test('a newer launcher\'s record is never read or written over', () async {
+    file.writeAsStringSync('{"schemaVersion":2,"future":[]}');
+    final original = file.readAsBytesSync();
+    final store = ServerContentStore(folder.path);
+    final load = await store.load();
+    expect(load.status, ServerContentStatus.newer);
+    expect(load.damagedBytes, isNull);
+    await expectRefusedUpdate(store);
+    expect(
+      (await store.repair((salvaged) async => salvaged)).status,
+      ServerContentStatus.newer,
+    );
+    expect(file.readAsBytesSync(), original);
+    expect(damagedCopies(), isEmpty);
   });
 
-  test('a folder in the record\'s place is set aside', () async {
+  test('a folder in the record\'s place is set aside by a repair', () async {
     Directory(file.path).createSync();
-    final load = await ServerContentStore(folder.path).load();
-    expect(load.recovery, MultiplayerStoreRecovery.reset);
-    expect(FileSystemEntity.typeSync(file.path), FileSystemEntityType.notFound);
+    final store = ServerContentStore(folder.path);
+    final load = await store.load();
+    expect(load.status, ServerContentStatus.damaged);
+    expect(load.damagedBytes, isNull);
+    final repaired = await store.repair(
+      (salvaged) async => salvaged.withWithheld([withheld]),
+    );
+    expect(repaired.status, ServerContentStatus.valid);
+    expect(FileSystemEntity.typeSync(file.path), FileSystemEntityType.file);
     expect(damagedCopies(), hasLength(1));
   });
 
@@ -113,13 +196,9 @@ void main() {
     final release = await holdUnreadable(file);
     if (release == null) return;
     final load = await store.load();
-    expect(load.recovery, MultiplayerStoreRecovery.unreadable);
-    var changed = false;
+    expect(load.status, ServerContentStatus.unreadable);
     await expectLater(
-      store.update((record) {
-        changed = true;
-        return record.withInstalled([entry('example.two')]);
-      }),
+      store.update((record) => record.withInstalled([entry('example.two')])),
       throwsA(
         isA<MultiplayerStoreException>().having(
           (error) => error.unreadable,
@@ -128,7 +207,6 @@ void main() {
         ),
       ),
     );
-    expect(changed, isFalse);
     await release();
     expect(file.readAsBytesSync(), before);
   });
@@ -141,7 +219,7 @@ void main() {
       p.join(folder.path, '${ServerContentStore.fileName}.4242-1-7.bak'),
     ).writeAsBytesSync(record.encode());
     final load = await ServerContentStore(folder.path).load();
-    expect(load.recovery, MultiplayerStoreRecovery.none);
+    expect(load.status, ServerContentStatus.valid);
     expect(load.record.entries.single.modId, 'example.one');
     expect(file.readAsBytesSync(), record.encode());
   });

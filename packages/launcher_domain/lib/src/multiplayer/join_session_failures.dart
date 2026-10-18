@@ -96,7 +96,9 @@ enum JoinFailureCode {
 /// quits, over anything written while it ran.
 enum JoinGameOwnership {
   /// The launcher started it, so it can restart it into the join. An install
-  /// closes it first; it blocks only when closing it failed.
+  /// closes it when the consent covered that
+  /// ([JoinConsentGiven.closeOwnedGameAcknowledged]); it blocks when it did
+  /// not, or when closing it failed.
   owned,
 
   /// Something else started it; the player must close it.

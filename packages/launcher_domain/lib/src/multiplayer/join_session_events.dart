@@ -35,11 +35,22 @@ final class JoinPlanReady extends JoinEvent {
 /// The player accepted the consent sheet. The session's privacy was chosen
 /// before the join started ([JoinSession.start]) and does not change here.
 final class JoinConsentGiven extends JoinEvent {
-  const JoinConsentGiven({this.hostServedAcknowledged = false});
+  const JoinConsentGiven({
+    this.hostServedAcknowledged = false,
+    this.closeOwnedGameAcknowledged = false,
+  });
 
   /// Whether the player ticked the developer-mode host-served box. A plan
   /// with host-served packages needs it.
   final bool hostServedAcknowledged;
+
+  /// Whether the consent told the player that joining closes a game this
+  /// launcher started, and that progress not saved there is lost, as the
+  /// launcher stops it today. Without it, an install that finds such a game
+  /// running ends the join as [JoinFailureCode.gameRunning], owned, and the
+  /// player closes the game themselves. See
+  /// [JoinSessionState.closeOwnedGameAcknowledged].
+  final bool closeOwnedGameAcknowledged;
 }
 
 final class JoinDownloadProgressed extends JoinEvent {

@@ -6,6 +6,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'held_file_support.dart';
 import 'multiplayer_join_content_fixtures.dart';
 import 'multiplayer_join_rig.dart';
 
@@ -62,34 +63,79 @@ void main() {
     expect(joinFolders(rig.game), isEmpty);
   });
 
-  test('killed while moving packages into place, nothing new loads and the '
-      'next start undoes it', () async {
+  // Every step of the order that changes what the game reads: the manager
+  // records, the record of server content, and each package but the last.
+  for (final (step, placed) in [
+    ('state', 0),
+    ('record', 0),
+    ('committed 1', 1),
+    ('committed 2', 2),
+  ]) {
+    test('killed at "$step", nothing new loads and the next start undoes '
+        'it', () async {
+      final rig = await playerWithDownloads();
+      final before = await rig.everything(StandardJoin.downloads);
+      final profiles = [
+        for (final text in rig.storedProfiles().values)
+          LauncherProfile.fromJson(jsonDecode(text) as Map<String, Object?>),
+      ];
+      final loadsBefore = {
+        for (final profile in profiles) profile.id: await rig.loadsOf(profile),
+      };
+      final killed = await killedAt(rig, step);
+      expect(killed.exitCode, 86, reason: '${killed.stdout}${killed.stderr}');
+
+      // Packages may be in place, but no profile of the player's own loads
+      // them, and the mod new to the player is recorded off, so a game
+      // started without the launcher does not turn it on either. (A preview
+      // runs no sweep; a snapshot does.)
+      expect(
+        [
+          for (final archive in StandardJoin.downloads)
+            packageFolder(rig.game, archive.id, archive.version).existsSync(),
+        ].where((inPlace) => inPlace),
+        hasLength(placed),
+      );
+      for (final profile in profiles) {
+        expect(await rig.loadsOf(profile), loadsBefore[profile.id]);
+      }
+      expect(rig.storedProfiles(), before['profiles']);
+      final records = managerRecords(rig.game);
+      expect(jsonDecode(records['server.delta']!)['enabled'], isFalse);
+      expect(joinFolders(rig.game), hasLength(1));
+
+      // The next start undoes it.
+      rig.repository = rig.open();
+      expect(await rig.everything(StandardJoin.downloads), before);
+      expect(joinFolders(rig.game), isEmpty);
+    });
+  }
+
+  test('killed part way, the next start waits while a receipt it would judge '
+      'by cannot be read, then undoes it', () async {
     final rig = await playerWithDownloads();
     final before = await rig.everything(StandardJoin.downloads);
-    final profiles = [
-      for (final text in rig.storedProfiles().values)
-        LauncherProfile.fromJson(jsonDecode(text) as Map<String, Object?>),
-    ];
-    final loadsBefore = {
-      for (final profile in profiles) profile.id: await rig.loadsOf(profile),
-    };
     final killed = await killedAt(rig, 'committed 2');
     expect(killed.exitCode, 86, reason: '${killed.stdout}${killed.stderr}');
-
-    // Two packages are in place, but no profile of the player's own loads
-    // them, and the mod new to the player is recorded off, so a game started
-    // without the launcher does not turn it on either. (A preview runs no
-    // sweep; a snapshot does.)
-    expect(packageFolder(rig.game, 'own.alpha', '2.0.0').existsSync(), isTrue);
-    for (final profile in profiles) {
-      expect(await rig.loadsOf(profile), loadsBefore[profile.id]);
-    }
-    expect(rig.storedProfiles(), before['profiles']);
-    final records = managerRecords(rig.game);
-    expect(jsonDecode(records['server.delta']!)['enabled'], isFalse);
+    final release = await holdUnreadable(
+      File(
+        p.join(
+          packageFolder(rig.game, 'own.alpha', '2.0.0').path,
+          'topiaforge.install.json',
+        ),
+      ),
+    );
+    if (release == null) return;
+    rig.repository = rig.open();
+    await rig.repository.loadSnapshot();
+    // Nothing was put back: the server's Alpha keeps its record entry, so it
+    // stays hidden, and the journal waits.
     expect(joinFolders(rig.game), hasLength(1));
-
-    // The next start undoes it.
+    final record = ServerContentRecord.read(
+      serverContentFile(rig.game).readAsBytesSync(),
+    ).record!;
+    expect(record.entryFor('own.alpha', '2.0.0')!.hidden, isTrue);
+    await release();
     rig.repository = rig.open();
     expect(await rig.everything(StandardJoin.downloads), before);
     expect(joinFolders(rig.game), isEmpty);

@@ -1,130 +1,93 @@
 part of '../multiplayer.dart';
 
-/// One archive a join installed into a game install.
-final class ServerContentEntry {
-  ServerContentEntry({
-    required this.modId,
-    required this.version,
-    required this.sha256,
-    required this.receiptSha256,
-    required this.hidden,
-    required this.installedAt,
-  }) {
-    if (!DescriptorPackage.isModId(modId)) {
-      throw ArgumentError('Not a mod id.', 'modId');
-    }
-    if (!_isSemanticVersion(version)) {
-      throw ArgumentError('Not a semantic version.', 'version');
-    }
-    if (!WireText.isHex(sha256, 32)) {
-      throw ArgumentError('Not a SHA-256.', 'sha256');
-    }
-    if (!WireText.isHex(receiptSha256, 32)) {
-      throw ArgumentError('Not a SHA-256.', 'receiptSha256');
-    }
-    if (installedAt < 0 || installedAt > CanonicalJson.maximumSafeInteger) {
-      throw RangeError.range(
-        installedAt,
-        0,
-        CanonicalJson.maximumSafeInteger,
-        'installedAt',
-      );
-    }
-  }
+/// How a record of server content read, or why it cannot be used.
+enum ServerContentStatus {
+  /// There is no record: nothing was installed for servers.
+  missing,
 
-  /// The mod id as its manifest spells it.
-  final String modId;
-  final String version;
+  /// A record of [ServerContentRecord.schemaVersion], every entry as the
+  /// contract says.
+  valid,
 
-  /// The archive's SHA-256.
-  final String sha256;
+  /// A newer launcher wrote it. This one must not guess at it, so it never
+  /// reads or writes over it.
+  newer,
 
-  /// The SHA-256 of the install receipt the join wrote. A version whose
-  /// receipt no longer matches was installed again since, by the player or a
-  /// repair, and is no longer server content.
-  final String receiptSha256;
+  /// Anything else in the record's place: bytes that are not the contract,
+  /// a link or a folder. Nothing of it is read.
+  damaged,
 
-  /// Whether the player's own profiles never see this version: the mod was
-  /// already the player's, installed, recorded or named by one of their
-  /// profiles, when the join installed it. A mod new to the player is
-  /// visible, but its manager record starts disabled.
-  final bool hidden;
+  /// It is there but could not be read just now.
+  unreadable;
 
-  /// Unix seconds.
-  final int installedAt;
-
-  /// Whether this entry is for [id] (in any case) at [version].
-  bool names(String id, String version) =>
-      modId.toLowerCase() == id.toLowerCase() && this.version == version;
-
-  Map<String, Object?> toJson() => {
-    'id': modId,
-    'version': version,
-    'sha256': sha256,
-    'receipt': receiptSha256,
-    'hidden': hidden,
-    'installedAt': installedAt,
-  };
-
-  static ServerContentEntry? _tryRead(Object? value) {
-    if (value is! Map ||
-        value.length != 6 ||
-        value['id'] is! String ||
-        value['version'] is! String ||
-        value['sha256'] is! String ||
-        value['receipt'] is! String ||
-        value['hidden'] is! bool ||
-        value['installedAt'] is! int) {
-      return null;
-    }
-    try {
-      return ServerContentEntry(
-        modId: value['id'] as String,
-        version: value['version'] as String,
-        sha256: value['sha256'] as String,
-        receiptSha256: value['receipt'] as String,
-        hidden: value['hidden'] as bool,
-        installedAt: value['installedAt'] as int,
-      );
-    } on ArgumentError {
-      return null;
-    }
-  }
+  /// Whether the record says what is withheld: it is valid, or there is
+  /// none. Otherwise nothing may assume a version is the player's own.
+  bool get isUsable => this == valid || this == missing;
 }
 
-/// A record read from disk, and whether anything in it had to be dropped or
-/// rewritten.
-typedef ServerContentRecordRead = ({ServerContentRecord record, bool damaged});
+/// What [ServerContentRecord.read] made of a record's bytes.
+final class ServerContentRecordRead {
+  const ServerContentRecordRead._(this.status, this.record, this.problem);
 
-/// What joins installed into one game install: each archive, and the mods
-/// whose manager record a join added because they were new to the player.
+  /// [ServerContentStatus.valid], [ServerContentStatus.newer] or
+  /// [ServerContentStatus.damaged].
+  final ServerContentStatus status;
+
+  /// The record, when [status] is [ServerContentStatus.valid].
+  final ServerContentRecord? record;
+
+  /// Why the bytes are not a record, for the launcher log; empty when they
+  /// are one.
+  final String problem;
+}
+
+/// What joins installed into one game install, `server-content.json` beside
+/// its manager state: each archive, the versions withheld after a repair,
+/// and the mods whose manager record a join added because they were new to
+/// the player.
 ///
-/// The record is how the launcher tells server content from the player's
-/// own: a version counts as server content only while its install receipt
-/// still has the SHA-256 recorded here. It is bounded at [maximumEntries]
-/// versions and as many added records; a join that would pass either bound
-/// is refused, never trimmed, because a dropped entry would turn a server's
-/// version into one the player's own profiles could pick.
+/// The launcher writes it; the launcher and the game's loader both read it,
+/// to keep a server's versions out of the player's own play. The contract is
+/// held by `tests/fixtures/multiplayer/server-content`, which both languages
+/// replay: exactly the members `schemaVersion` (1), `versions`, `withheld`
+/// and `addedRecords`, at most [maximumBytes] bytes of UTF-8 and
+/// [maximumEntries] entries in each list, no member twice anywhere, and no
+/// version twice in one list. Anything else is damaged and read not at all:
+/// a reader that dropped a damaged entry would expose the version it
+/// withheld.
+///
+/// A version counts as server content only while its install receipt still
+/// has the SHA-256 recorded here. A join that would pass a bound is refused,
+/// never trimmed, for the same reason.
 final class ServerContentRecord {
   ServerContentRecord._(
-    List<ServerContentEntry> entries,
+    Iterable<ServerContentEntry> entries,
+    Iterable<WithheldServerVersion> withheld,
     Iterable<String> addedRecords,
   ) : entries = List.unmodifiable(entries),
+      withheld = List.unmodifiable(withheld),
       addedRecords = Set.unmodifiable(addedRecords);
 
-  ServerContentRecord.empty() : entries = const [], addedRecords = const {};
+  ServerContentRecord.empty()
+    : entries = const [],
+      withheld = const [],
+      addedRecords = const {};
 
-  static const schema = 'topiaforge.server-content/1';
+  static const schemaVersion = 1;
   static const maximumEntries = 1024;
-  static const maximumBytes = 512 * 1024;
+  static const maximumBytes = 1024 * 1024;
 
   /// Each installed archive once, by mod id and version.
   final List<ServerContentEntry> entries;
 
+  /// Each version withheld after a repair once, by mod id and version.
+  final List<WithheldServerVersion> withheld;
+
   /// The mods, by lowercase id, whose manager record a join added.
   final Set<String> addedRecords;
 
-  bool get isEmpty => entries.isEmpty && addedRecords.isEmpty;
+  bool get isEmpty =>
+      entries.isEmpty && withheld.isEmpty && addedRecords.isEmpty;
 
   /// The entry for [modId] at [version], if any.
   ServerContentEntry? entryFor(String modId, String version) {
@@ -134,17 +97,42 @@ final class ServerContentRecord {
     return null;
   }
 
-  /// This record with [installed] added, each replacing any entry for the
-  /// same mod and version, and [addedRecords] noted. Throws [StateError]
-  /// when the result would pass [maximumEntries].
+  /// Whether the player's own play passes over [modId] (in any case) at
+  /// [version] while its install receipt has the SHA-256 [receiptSha256]:
+  /// a hidden entry or a withheld version with that receipt. Null stands for
+  /// a receipt that cannot be read, which withholds every version the record
+  /// names that way, failing closed. As the game's loader decides.
+  bool withholds(String modId, String version, String? receiptSha256) {
+    bool matches(String recorded) =>
+        receiptSha256 == null || recorded == receiptSha256;
+    for (final entry in entries) {
+      if (entry.hidden &&
+          entry.names(modId, version) &&
+          matches(entry.receiptSha256)) {
+        return true;
+      }
+    }
+    for (final item in withheld) {
+      if (item.names(modId, version) && matches(item.receiptSha256)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// This record with [installed] added, each replacing any entry or
+  /// withheld version for the same mod and version, and [addedRecords]
+  /// noted. Throws [StateError] when the result would pass [maximumEntries].
   ServerContentRecord withInstalled(
     Iterable<ServerContentEntry> installed, {
     Iterable<String> addedRecords = const [],
   }) {
     final added = installed.toList();
+    bool replaced(String id, String version) =>
+        added.any((item) => item.names(id, version));
     final kept = [
       for (final entry in entries)
-        if (!added.any((item) => item.names(entry.modId, entry.version))) entry,
+        if (!replaced(entry.modId, entry.version)) entry,
     ];
     final ids = {
       ...this.addedRecords,
@@ -157,94 +145,222 @@ final class ServerContentRecord {
         'server content, then join again.',
       );
     }
-    return ServerContentRecord._([...kept, ...added], ids);
+    return ServerContentRecord._(
+      [...kept, ...added],
+      [
+        for (final item in withheld)
+          if (!replaced(item.modId, item.version)) item,
+      ],
+      ids,
+    );
   }
 
-  /// This record without the entries [removed] names and without the added
-  /// records of [addedRecords].
+  /// This record with [versions] withheld too, each version once. Throws
+  /// [StateError] when the result would pass [maximumEntries].
+  ServerContentRecord withWithheld(Iterable<WithheldServerVersion> versions) {
+    final all = [...withheld];
+    for (final item in versions) {
+      if (!all.any((kept) => kept.names(item.modId, item.version))) {
+        all.add(item);
+      }
+    }
+    if (all.length > maximumEntries) {
+      throw StateError('Too many installed versions to withhold.');
+    }
+    return ServerContentRecord._(entries, all, addedRecords);
+  }
+
+  /// This record without the entries [removed] and the versions [unwithheld]
+  /// name, and without the added records of [addedRecords].
   ServerContentRecord without(
     Iterable<ServerContentEntry> removed, {
     Iterable<String> addedRecords = const [],
+    Iterable<WithheldServerVersion> unwithheld = const [],
   }) {
     final gone = removed.toList();
+    final released = unwithheld.toList();
     final ids = {for (final id in addedRecords) id.toLowerCase()};
-    return ServerContentRecord._([
-      for (final entry in entries)
-        if (!gone.any((item) => item.names(entry.modId, entry.version))) entry,
-    ], this.addedRecords.where((id) => !ids.contains(id)));
+    return ServerContentRecord._(
+      [
+        for (final entry in entries)
+          if (!gone.any((item) => item.names(entry.modId, entry.version)))
+            entry,
+      ],
+      [
+        for (final item in withheld)
+          if (!released.any((other) => other.names(item.modId, item.version)))
+            item,
+      ],
+      this.addedRecords.where((id) => !ids.contains(id)),
+    );
   }
 
-  /// The canonical bytes of this record.
+  /// The canonical bytes of this record: members in ordinal order, no white
+  /// space, each list sorted by lowercase id, then version.
   Uint8List encode() => CanonicalJson.encode({
-    'schema': schema,
-    'versions': [for (final entry in entries) entry.toJson()],
+    'schemaVersion': schemaVersion,
+    'versions': [
+      for (final entry
+          in [...entries]..sort(
+            (left, right) => _compareVersionKeys(
+              left.modId,
+              left.version,
+              right.modId,
+              right.version,
+            ),
+          ))
+        entry.toJson(),
+    ],
+    'withheld': [
+      for (final item
+          in [...withheld]..sort(
+            (left, right) => _compareVersionKeys(
+              left.modId,
+              left.version,
+              right.modId,
+              right.version,
+            ),
+          ))
+        item.toJson(),
+    ],
     'addedRecords': [...addedRecords]..sort(),
   });
 
-  /// Reads a stored record, keeping every entry that is valid. Entries that
-  /// do not read, repeat a version or pass the bound are dropped, and so is
-  /// anything else the schema does not have; [ServerContentRecordRead.damaged]
-  /// says whether any was, or the bytes were not in canonical form. Null when
-  /// nothing can be used: the bytes are not a JSON object, or the record was
-  /// written for another schema, which this launcher must not guess at.
-  static ServerContentRecordRead? read(List<int> bytes) {
-    if (bytes.length > maximumBytes) return null;
+  /// Reads a record's bytes as the contract says, or says why they are not
+  /// one. Never throws.
+  static ServerContentRecordRead read(List<int> bytes) {
+    ServerContentRecordRead damaged(String problem) =>
+        ServerContentRecordRead._(ServerContentStatus.damaged, null, problem);
+    if (bytes.length > maximumBytes) {
+      return damaged('The record is larger than $maximumBytes bytes.');
+    }
+    // Dart's UTF-8 decoder drops a leading byte order mark without a word,
+    // and the game's reader refuses one, so it is looked for in the bytes.
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xEF &&
+        bytes[1] == 0xBB &&
+        bytes[2] == 0xBF) {
+      return damaged('The record starts with a byte order mark.');
+    }
     final Object? document;
     try {
-      document = jsonDecode(utf8.decode(bytes));
-    } on FormatException {
-      return null;
+      final text = utf8.decode(bytes);
+      rejectDuplicateJsonProperties(text, label: 'The record');
+      document = jsonDecode(text);
+    } on FormatException catch (error) {
+      return damaged(error.message);
     }
-    if (document is! Map || document['schema'] != schema) return null;
-    var damaged = document.keys.any(
-      (key) => key != 'schema' && key != 'versions' && key != 'addedRecords',
+    if (document is! Map) return damaged('The record is not a JSON object.');
+    final schema = document['schemaVersion'];
+    if (schema is! int) {
+      return damaged('The record has no integer schemaVersion.');
+    }
+    if (schema > schemaVersion) {
+      return ServerContentRecordRead._(
+        ServerContentStatus.newer,
+        null,
+        'A newer launcher wrote this record (schemaVersion $schema).',
+      );
+    }
+    if (schema != schemaVersion ||
+        !_hasMembers(document, const {
+          'schemaVersion',
+          'versions',
+          'withheld',
+          'addedRecords',
+        })) {
+      return damaged('The record does not have exactly the contract members.');
+    }
+    final entries = _readList(
+      document['versions'],
+      ServerContentEntry._tryRead,
     );
-    final entries = <ServerContentEntry>[];
-    final versions = document['versions'];
-    if (versions is List) {
-      for (final item in versions) {
-        final entry = ServerContentEntry._tryRead(item);
-        if (entry == null ||
-            entries.length == maximumEntries ||
-            entries.any((kept) => kept.names(entry.modId, entry.version))) {
-          damaged = true;
-        } else {
-          entries.add(entry);
-        }
-      }
-    } else if (document.containsKey('versions')) {
-      damaged = true;
+    final withheld = _readList(
+      document['withheld'],
+      WithheldServerVersion._tryRead,
+    );
+    final added = _readList(document['addedRecords'], _readAddedRecord);
+    if (entries == null || withheld == null || added == null) {
+      return damaged('An entry of the record is not as the contract says.');
     }
-    final ids = <String>{};
-    final added = document['addedRecords'];
-    if (added is List) {
-      for (final id in added) {
-        final lower = id is String && DescriptorPackage.isModId(id)
-            ? id.toLowerCase()
-            : null;
-        if (lower != null &&
-            !ids.contains(lower) &&
-            ids.length < maximumEntries) {
-          ids.add(lower);
-        } else {
-          damaged = true;
-        }
-      }
-    } else if (document.containsKey('addedRecords')) {
-      damaged = true;
+    if (!_unique(entries.map((item) => _key(item.modId, item.version))) ||
+        !_unique(withheld.map((item) => _key(item.modId, item.version))) ||
+        !_unique(added)) {
+      return damaged('The record names one version twice in a list.');
     }
-    final record = ServerContentRecord._(entries, ids);
-    final encoded = record.encode();
-    if (encoded.length != bytes.length) {
-      damaged = true;
-    } else {
-      for (var index = 0; index < encoded.length; index++) {
-        if (encoded[index] != bytes[index]) {
-          damaged = true;
-          break;
+    return ServerContentRecordRead._(
+      ServerContentStatus.valid,
+      ServerContentRecord._(entries, withheld, added),
+      '',
+    );
+  }
+
+  /// What damaged bytes still hold, for a launcher repairing the record:
+  /// each entry, withheld version and added record that reads on its own,
+  /// the first of any that repeat, within the bounds. Empty when nothing
+  /// reads. Never throws.
+  static ServerContentRecord salvage(List<int> bytes) {
+    try {
+      if (bytes.length > maximumBytes) return ServerContentRecord.empty();
+      final document = jsonDecode(utf8.decode(bytes));
+      if (document is! Map) return ServerContentRecord.empty();
+      List<T> keep<T>(
+        Object? list,
+        T? Function(Object?) read,
+        String Function(T) key,
+      ) {
+        final kept = <T>[];
+        final seen = <String>{};
+        if (list is! List) return kept;
+        for (final item in list) {
+          final value = read(item);
+          if (value != null &&
+              kept.length < maximumEntries &&
+              seen.add(key(value))) {
+            kept.add(value);
+          }
         }
+        return kept;
       }
+
+      return ServerContentRecord._(
+        keep(
+          document['versions'],
+          ServerContentEntry._tryRead,
+          (item) => _key(item.modId, item.version),
+        ),
+        keep(
+          document['withheld'],
+          WithheldServerVersion._tryRead,
+          (item) => _key(item.modId, item.version),
+        ),
+        keep(document['addedRecords'], _readAddedRecord, (id) => id),
+      );
+    } on Object {
+      return ServerContentRecord.empty();
     }
-    return (record: record, damaged: damaged);
+  }
+
+  static List<T>? _readList<T>(Object? value, T? Function(Object?) read) {
+    if (value is! List || value.length > maximumEntries) return null;
+    final items = <T>[];
+    for (final item in value) {
+      final parsed = read(item);
+      if (parsed == null) return null;
+      items.add(parsed);
+    }
+    return items;
+  }
+
+  static String? _readAddedRecord(Object? value) =>
+      value is String &&
+          DescriptorPackage.isModId(value) &&
+          value == value.toLowerCase()
+      ? value
+      : null;
+
+  static bool _unique(Iterable<String> keys) {
+    final seen = <String>{};
+    return keys.every(seen.add);
   }
 }

@@ -2,10 +2,25 @@ part of 'multiplayer_store.dart';
 
 /// What loading the record of server content found.
 final class ServerContentLoad {
-  const ServerContentLoad(this.record, this.recovery);
+  const ServerContentLoad(
+    this.record,
+    this.status, {
+    this.problem = '',
+    this.damagedBytes,
+  });
 
+  /// The record when [status] is [ServerContentStatus.valid], and empty
+  /// when it is [ServerContentStatus.missing]. Otherwise empty too, and it
+  /// must not be taken to mean that nothing is withheld.
   final ServerContentRecord record;
-  final MultiplayerStoreRecovery recovery;
+  final ServerContentStatus status;
+
+  /// Why the record cannot be used, for the launcher log; empty when it can.
+  final String problem;
+
+  /// What a damaged record's file held, for its repair; null for anything
+  /// else, and for a link, a folder or a file past the bound.
+  final List<int>? damagedBytes;
 }
 
 /// The record of what joins installed into one game install
@@ -17,13 +32,13 @@ final class ServerContentLoad {
 /// launch or install that holds the install's staging lease is the only
 /// writer.
 ///
-/// The file follows [MultiplayerStore]'s rules: writes replace it atomically
-/// and run one after another; a damaged record is never fatal, a copy is kept
-/// aside as `server-content.damaged-<UTC time>.json` and what was valid takes
-/// its place; and a record that cannot be read just now is never written
-/// over. Then [load] reports [MultiplayerStoreRecovery.unreadable] with an
-/// empty record that must not be mistaken for an empty install, and
-/// [update] throws [MultiplayerStoreException].
+/// The game's loader reads it too, so the store never guesses: a record is
+/// read whole or not at all ([ServerContentRecord.read]). Writes replace it
+/// atomically and run one after another, and a write a stopped launcher left
+/// half done is put back before anything reads it. A record that is newer,
+/// or cannot be read just now, is never written over; one that is damaged is
+/// written over only by [repair], with a copy of it kept aside as
+/// `server-content.damaged-<UTC time>.json`.
 final class ServerContentStore {
   ServerContentStore(this.directory, {DateTime Function()? clock})
     : _files = _StoreFiles(directory, clock ?? DateTime.now);
@@ -37,28 +52,78 @@ final class ServerContentStore {
 
   File get _file => File(p.join(directory, fileName));
 
-  /// Reads the record, recovering from any damage. Never throws.
+  /// Reads the record. Never throws, and never writes but to put back what
+  /// a stopped write moved aside.
   Future<ServerContentLoad> load() => _serial(_load);
 
   /// Reads the record, applies [change] and writes the result when it
   /// differs, with no other write in between. Throws
-  /// [MultiplayerStoreException] while the record cannot be read, before
-  /// [change] runs, and when the result cannot be written. Whatever [change]
-  /// throws is passed on, and nothing is written.
+  /// [MultiplayerStoreException] before [change] runs while the record
+  /// cannot be used, and when the result cannot be written. Whatever
+  /// [change] throws is passed on, and nothing is written.
   Future<ServerContentRecord> update(
     ServerContentRecord Function(ServerContentRecord current) change,
   ) => _serial(() async {
     final load = await _load();
-    if (load.recovery == MultiplayerStoreRecovery.unreadable) {
-      throw MultiplayerStore._unreadable('record of server content');
-    }
+    if (!load.status.isUsable) throw _unusable(load.status);
     final next = change(load.record);
     final encoded = next.encode();
-    if (!_sameBytes(encoded, load.record.encode()) ||
-        load.recovery != MultiplayerStoreRecovery.none) {
+    // A missing record reads as the empty one, so an empty result leaves it
+    // missing.
+    if (!_sameBytes(encoded, load.record.encode())) {
       await _files.write(_file, encoded, 'record of server content');
     }
     return next;
+  });
+
+  /// Replaces a damaged record with what [rebuild] makes of what is left of
+  /// it ([ServerContentRecord.salvage]), keeping a copy of the damaged one
+  /// aside. Anything other than a damaged record is left as it is. Returns
+  /// the record as it stands afterwards: still damaged when [rebuild] or the
+  /// write failed, which the launcher log says.
+  Future<ServerContentLoad> repair(
+    Future<ServerContentRecord> Function(ServerContentRecord salvaged) rebuild,
+  ) => _serial(() async {
+    final load = await _load();
+    if (load.status != ServerContentStatus.damaged) return load;
+    final bytes = load.damagedBytes;
+    final ServerContentRecord rebuilt;
+    try {
+      rebuilt = await rebuild(
+        bytes == null
+            ? ServerContentRecord.empty()
+            : ServerContentRecord.salvage(bytes),
+      );
+    } on Object catch (error) {
+      return ServerContentLoad(
+        ServerContentRecord.empty(),
+        ServerContentStatus.damaged,
+        problem: '${load.problem} It could not be repaired: $error',
+        damagedBytes: bytes,
+      );
+    }
+    final kept = bytes == null
+        ? await _files.setAside(_file)
+        : await _files.keepCopy(_file, bytes);
+    if (!kept) {
+      return ServerContentLoad(
+        ServerContentRecord.empty(),
+        ServerContentStatus.damaged,
+        problem: '${load.problem} No copy of it could be kept aside.',
+        damagedBytes: bytes,
+      );
+    }
+    try {
+      await _files.write(_file, rebuilt.encode(), 'record of server content');
+    } on MultiplayerStoreException {
+      return ServerContentLoad(
+        ServerContentRecord.empty(),
+        ServerContentStatus.damaged,
+        problem: '${load.problem} The repaired record could not be saved.',
+        damagedBytes: bytes,
+      );
+    }
+    return ServerContentLoad(rebuilt, ServerContentStatus.valid);
   });
 
   Future<T> _serial<T>(Future<T> Function() action) {
@@ -81,49 +146,47 @@ final class ServerContentStore {
       case _Missing():
         return ServerContentLoad(
           ServerContentRecord.empty(),
-          MultiplayerStoreRecovery.none,
+          ServerContentStatus.missing,
         );
       case _Unreadable():
         return ServerContentLoad(
           ServerContentRecord.empty(),
-          MultiplayerStoreRecovery.unreadable,
+          ServerContentStatus.unreadable,
+          problem: 'The record of server content could not be read just now.',
         );
       case _Damaged():
-        // A link, a folder or an oversized file in the record's place.
-        await _files.setAside(_file);
         return ServerContentLoad(
           ServerContentRecord.empty(),
-          MultiplayerStoreRecovery.reset,
+          ServerContentStatus.damaged,
+          problem:
+              'A link, a folder or a file past '
+              '${ServerContentRecord.maximumBytes} bytes stands where the '
+              'record of server content belongs.',
         );
       case _Read(:final bytes):
-        final salvaged = ServerContentRecord.read(bytes);
-        if (salvaged != null && !salvaged.damaged) {
-          return ServerContentLoad(
-            salvaged.record,
-            MultiplayerStoreRecovery.none,
-          );
-        }
-        final record = salvaged?.record ?? ServerContentRecord.empty();
-        // A copy of the original is kept aside, and the file stays in place
-        // until what replaces it is written, so a write that fails leaves it
-        // to be salvaged again.
-        if (await _files.keepCopy(_file, bytes)) {
-          try {
-            await _files.write(
-              _file,
-              record.encode(),
-              'record of server content',
-            );
-          } on MultiplayerStoreException {
-            // The next read salvages it again.
-          }
-        }
+        final read = ServerContentRecord.read(bytes);
         return ServerContentLoad(
-          record,
-          salvaged == null
-              ? MultiplayerStoreRecovery.reset
-              : MultiplayerStoreRecovery.salvaged,
+          read.record ?? ServerContentRecord.empty(),
+          read.status,
+          problem: read.problem,
+          damagedBytes: read.status == ServerContentStatus.damaged
+              ? bytes
+              : null,
         );
     }
   }
+
+  static MultiplayerStoreException _unusable(ServerContentStatus status) =>
+      switch (status) {
+        ServerContentStatus.newer => const MultiplayerStoreException(
+          'A newer TopiaForge launcher recorded the mods it installed for '
+          'servers in this game, so this launcher changes nothing there. '
+          'Update the launcher, then try again.',
+        ),
+        ServerContentStatus.damaged => const MultiplayerStoreException(
+          'The record of mods installed for servers is damaged, so nothing '
+          'was changed. Restart the launcher to repair it, then try again.',
+        ),
+        _ => MultiplayerStore._unreadable('record of server content'),
+      };
 }

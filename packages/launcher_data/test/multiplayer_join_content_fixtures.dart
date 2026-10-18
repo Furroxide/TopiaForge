@@ -189,6 +189,7 @@ JoinSessionState consentedJoin(
   VerifiedServerDescriptor server,
   JoinPlan plan, {
   bool onLocalNetwork = false,
+  bool closeOwnedGame = false,
 }) {
   if (!plan.isJoinable) {
     throw StateError('The plan is blocked: ${plan.blockers}');
@@ -204,19 +205,24 @@ JoinSessionState consentedJoin(
     JoinTargetResolved(server.serverId),
     JoinDescriptorVerified(server),
     JoinPlanReady(plan),
-    JoinConsentGiven(hostServedAcknowledged: plan.hasUnverifiedPackages),
+    JoinConsentGiven(
+      hostServedAcknowledged: plan.hasUnverifiedPackages,
+      closeOwnedGameAcknowledged: closeOwnedGame,
+    ),
   ].fold(
     JoinSession.start(JoinLinkTarget(link), privacy: SessionPrivacy.relayOnly),
     JoinSession.reduce,
   );
 }
 
-/// The same join once its downloads finished.
+/// The same join once its downloads finished. [closeOwnedGame] is whether
+/// the consent covered closing a game this launcher started.
 JoinSessionState installingJoin(
   VerifiedServerDescriptor server,
-  JoinPlan plan,
-) => JoinSession.reduce(
-  consentedJoin(server, plan),
+  JoinPlan plan, {
+  bool closeOwnedGame = false,
+}) => JoinSession.reduce(
+  consentedJoin(server, plan, closeOwnedGame: closeOwnedGame),
   const JoinDownloadsCompleted(),
 );
 

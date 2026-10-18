@@ -100,12 +100,14 @@ void main() {
       rig.install,
       installingJoin(server, plan),
     );
-    final record = ServerContentRecord.read(
-      serverContentFile(rig.game).readAsBytesSync(),
-    )!;
-    expect(record.damaged, isFalse);
+    final bytes = serverContentFile(rig.game).readAsBytesSync();
+    final read = ServerContentRecord.read(bytes);
+    expect(read.status, ServerContentStatus.valid);
+    final record = read.record!;
+    // Written exactly as the contract the game's loader reads spells it.
+    expect(record.encode(), bytes);
     final entries = {
-      for (final entry in record.record.entries)
+      for (final entry in record.entries)
         '${entry.modId}@${entry.version}': entry,
     };
     expect(entries.keys.toSet(), {
@@ -118,7 +120,7 @@ void main() {
     expect(entries['own.alpha@2.0.0']!.hidden, isTrue);
     expect(entries['own.beta@1.5.0']!.hidden, isTrue);
     expect(entries['server.delta@1.0.0']!.hidden, isFalse);
-    expect(record.record.addedRecords, {'server.delta'});
+    expect(record.addedRecords, {'server.delta'});
     expect(entries['server.delta@1.0.0']!.sha256, StandardJoin.delta.sha256Hex);
   });
 
@@ -221,114 +223,6 @@ void main() {
     );
     // The player's own install, not server content.
     expect(serverContentFile(rig.game).existsSync(), isFalse);
-  });
-
-  group('a running game', () {
-    test('that the launcher did not start ends the join', () async {
-      final rig = await JoinRig.create(probe: (_) async => true);
-      await preparePlayer(rig);
-      final (server, plan) = await StandardJoin.plan();
-      rig.cache(StandardJoin.downloads);
-      final records = managerRecords(rig.game);
-      final event = await rig.repository.installJoinContent(
-        rig.install,
-        installingJoin(server, plan),
-      );
-      final failure = event as JoinFailed;
-      expect(failure.code, JoinFailureCode.gameRunning);
-      expect(failure.gameOwnership, JoinGameOwnership.foreign);
-      expect(failure.detail, contains('Close the game, then join again'));
-      expect(managerRecords(rig.game), records);
-      expect(
-        packageFolder(rig.game, 'server.delta', '1.0.0').existsSync(),
-        isFalse,
-      );
-      final ended = JoinSession.reduce(installingJoin(server, plan), failure);
-      expect(ended.outcome!.failure!.gameOwnership, JoinGameOwnership.foreign);
-    });
-
-    test(
-      'that the launcher started is closed first, then the join installs',
-      () async {
-        var running = false;
-        var created = 0;
-        final stopped = <LaunchProcessIdentity>[];
-        late JoinRig rig;
-        rig = await JoinRig.create(
-          withRuntime: true,
-          probe: (_) async => running,
-          creator: (_) async {
-            created++;
-            running = true;
-            final identity = LaunchProcessIdentity(
-              pid: 900 + created,
-              executablePath: rig.install.executablePath,
-              startTimeUtc: DateTime.utc(2026, 10, 18, 0, 0, created),
-              nativeStartToken: 'generation:$created',
-            );
-            return LaunchProcessReceipt(pid: identity.pid, identity: identity);
-          },
-          liveness: (_) async => running,
-          stopper: (identity) async {
-            stopped.add(identity);
-            running = false;
-            return true;
-          },
-        );
-        final profile = (await rig.repository.loadSnapshot()).profiles.first;
-        final launched = await rig.repository.launch(rig.install, profile);
-        expect(launched.process, isNotNull, reason: launched.message);
-        final (server, plan) = await StandardJoin.plan();
-        rig.cache(StandardJoin.downloads);
-        await rig.installOwn(StandardJoin.gamma);
-        final event = await rig.repository.installJoinContent(
-          rig.install,
-          installingJoin(server, plan),
-        );
-        expect(event, isA<JoinInstallCompleted>());
-        expect(stopped, hasLength(1));
-        expect(
-          packageFolder(rig.game, 'server.delta', '1.0.0').existsSync(),
-          isTrue,
-        );
-      },
-    );
-
-    test('that will not close ends the join as owned', () async {
-      var running = false;
-      late JoinRig rig;
-      rig = await JoinRig.create(
-        withRuntime: true,
-        probe: (_) async => running,
-        creator: (_) async {
-          running = true;
-          final identity = LaunchProcessIdentity(
-            pid: 950,
-            executablePath: rig.install.executablePath,
-            startTimeUtc: DateTime.utc(2026, 10, 18),
-            nativeStartToken: 'generation:950',
-          );
-          return LaunchProcessReceipt(pid: identity.pid, identity: identity);
-        },
-        liveness: (_) async => null,
-        stopper: (_) async => throw StateError('not stopped'),
-      );
-      final profile = (await rig.repository.loadSnapshot()).profiles.first;
-      expect(
-        (await rig.repository.launch(rig.install, profile)).process,
-        isNotNull,
-      );
-      final (server, plan) = await StandardJoin.plan();
-      rig.cache(StandardJoin.downloads);
-      final event = await rig.repository.installJoinContent(
-        rig.install,
-        installingJoin(server, plan),
-      );
-      final failure = event as JoinFailed;
-      expect(failure.code, JoinFailureCode.gameRunning);
-      expect(failure.gameOwnership, JoinGameOwnership.owned);
-      expect(failure.detail, contains('could not be closed'));
-    });
   });
 
   test(

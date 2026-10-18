@@ -182,10 +182,10 @@ final class JoinRig {
       'mods': view.mods,
       'record': canonicalText([
         for (final entry
-            in record?.record.entries ?? const <ServerContentEntry>[])
+            in record?.record?.entries ?? const <ServerContentEntry>[])
           entry.toJson(),
       ]),
-      'added': [...?record?.record.addedRecords],
+      'added': [...?record?.record?.addedRecords],
       'folders': [
         for (final archive in archives)
           packageFolder(game, archive.id, archive.version).existsSync(),

@@ -259,7 +259,7 @@ void main() {
       );
       final record = ServerContentRecord.read(
         serverContentFile(rig.game).readAsBytesSync(),
-      )!.record;
+      ).record!;
       expect(record.entryFor('own.alpha', '2.0.0'), isNull);
       expect(record.entryFor('own.alpha', '2.1.0'), isNotNull);
       // The player's own Alpha keeps its record exactly.

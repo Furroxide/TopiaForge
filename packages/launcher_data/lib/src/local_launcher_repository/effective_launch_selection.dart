@@ -70,7 +70,7 @@ extension _EffectiveLaunchSelectionBuilder on LocalLauncherRepository {
     final serverProfile = ServerProfiles.isServerProfile(profile);
     final hiding = serverProfile ? null : await _hiddenServerVersions(install);
     if (hiding == null && !serverProfile && !profile.launchSettings.safeMode) {
-      issues.add(_serverContentUnreadable);
+      issues.add(await _serverContentIssue(install));
     }
     final catalog = await _loadInstalledVersionCatalog(
       install,

@@ -2,13 +2,15 @@ part of '../local_launcher_repository.dart';
 
 /// A cleanup's plan, and what applying it needs: the record entry of each
 /// removable version, the record as the plan read it, and what the record
-/// still names that is no longer there: entries whose folder is gone or was
-/// installed again since, and added records the manager state no longer has.
+/// still names that is no longer there: entries and withheld versions whose
+/// folder is gone or was installed again since, and added records the
+/// manager state no longer has.
 typedef _ServerContentWork = ({
   ServerContentCleanupPlan plan,
   List<ServerContentEntry> removable,
   ServerContentRecord record,
   List<ServerContentEntry> stale,
+  List<WithheldServerVersion> staleWithheld,
   Set<String> staleAdded,
 });
 
@@ -19,11 +21,17 @@ typedef _ServerContentWork = ({
 /// - **What is server content.** A version a join installed whose install
 ///   receipt is still the one the join wrote. The player's own installs, and
 ///   versions installed again since, never appear.
-/// - **What may go.** A version no profile of the player's own loads or pins
-///   (a pending uninstall counts as loading nothing), whose pinning server
-///   profiles all go too. A version no server profile pins goes in every
-///   cleanup, and after each join on its own ([_removeUnpinnedServerContent]),
-///   so the player only ever decides about whole servers.
+/// - **What may go.** A version no profile of the player's own loads or pins,
+///   and the manager state does not have on (what a game started without
+///   the launcher loads), whose pinning server profiles all go too. A
+///   pending uninstall counts as loading nothing. A version no server
+///   profile pins goes in every cleanup, and after each join on its own
+///   ([_removeUnpinnedServerContent]), so the player only ever decides about
+///   whole servers.
+/// - **What is never judged.** A version whose install receipt cannot be
+///   read just now is neither listed nor dropped from the record, so a file
+///   another program holds never turns a server's version into the
+///   player's own.
 /// - **Applying** follows the uninstall rules: the version folders go, and a
 ///   mod left with none loses its manager record when a join added it or its
 ///   uninstall is pending, as an uninstall removes it. It refuses while the
@@ -40,10 +48,16 @@ extension _ServerContentCleanup on LocalLauncherRepository {
     Set<String>? scope,
   }) async {
     final load = await _serverContentStore(install).load();
-    if (load.recovery == MultiplayerStoreRecovery.unreadable) {
+    if (!load.status.isUsable) {
+      throw StateError(_serverContentUnusable(load.status, 'cleanup'));
+    }
+    final Map<String, Map<dynamic, dynamic>> state;
+    try {
+      state = _stateByModId(await _readManagerState(install));
+    } on Object {
       throw StateError(
-        'The list of mods installed for servers could not be read just now. '
-        'Close any program using the game folder, then try again.',
+        "The game's list of mods could not be read just now, so nothing "
+        'can be planned. Open Mods to repair it, then clean up again.',
       );
     }
     final profiles = await _loadProfiles();
@@ -53,7 +67,15 @@ extension _ServerContentCleanup on LocalLauncherRepository {
         if (scope == null || scope.contains(server.id)) server,
     ];
     final removingIds = {for (final server in removing) server.id};
-    final used = <String>{};
+    // What a game started without the launcher loads is the player's too.
+    final used = <String>{
+      for (final record in state.values)
+        if (record['enabled'] == true &&
+            record['uninstallPending'] != true &&
+            record['id'] is String &&
+            record['version'] is String)
+          _versionKey(record['id'] as String, record['version'] as String),
+    };
     for (final profile in profiles) {
       if (ServerProfiles.isServerProfile(profile)) continue;
       for (final pin in profile.selectedVersions.entries) {
@@ -72,9 +94,9 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       final folder = Directory(
         p.join(packagesRoot.path, entry.modId, entry.version),
       );
-      if (FileSystemEntity.typeSync(folder.path, followLinks: false) !=
-              FileSystemEntityType.directory ||
-          await _receiptSha256(folder) != entry.receiptSha256) {
+      final judged = await _judgeRecorded(folder, entry.receiptSha256);
+      if (judged == null) continue;
+      if (!judged) {
         stale.add(entry);
         continue;
       }
@@ -100,13 +122,15 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       );
       if (kept == null) removable.add(entry);
     }
-    var recorded = const <String>{};
-    try {
-      recorded = _stateByModId(await _readManagerState(install)).keys.toSet();
-    } on Object {
-      // Added records are kept while the manager state cannot be read.
-      recorded = load.record.addedRecords;
-    }
+    final staleWithheld = <WithheldServerVersion>[
+      for (final item in load.record.withheld)
+        if (await _judgeRecorded(
+              Directory(p.join(packagesRoot.path, item.modId, item.version)),
+              item.receiptSha256,
+            ) ==
+            false)
+          item,
+    ];
     return (
       plan: ServerContentCleanupPlan(
         versions: versions,
@@ -123,7 +147,8 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       removable: removable,
       record: load.record,
       stale: stale,
-      staleAdded: load.record.addedRecords.difference(recorded),
+      staleWithheld: staleWithheld,
+      staleAdded: load.record.addedRecords.difference(state.keys.toSet()),
     );
   }
 
@@ -158,8 +183,10 @@ extension _ServerContentCleanup on LocalLauncherRepository {
           'Robotopia is running. Close the game, then clean up again.',
         );
       }
-      // A join install that stopped part way is settled first, so the plan
-      // is checked against what is really there.
+      // A damaged record is repaired and a join install that stopped part
+      // way is settled first, so the plan is checked against what is really
+      // there.
+      await _repairServerContent(install);
       await _sweepJoinInstalls(install);
       final _ServerContentWork work;
       try {
@@ -203,9 +230,11 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       if (lease == null) return;
       try {
         if (await _runningForLaunch(install)) return;
+        await _repairServerContent(install);
         final work = await _serverContentWork(install, scope: const {});
         if (work.removable.isEmpty &&
             work.stale.isEmpty &&
+            work.staleWithheld.isEmpty &&
             work.staleAdded.isEmpty) {
           return;
         }
@@ -248,10 +277,11 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       }
       // What the record names that is no longer there goes with them.
       await _serverContentStore(install).update(
-        (record) => record.without([
-          ...work.removable,
-          ...work.stale,
-        ], addedRecords: work.staleAdded),
+        (record) => record.without(
+          [...work.removable, ...work.stale],
+          addedRecords: work.staleAdded,
+          unwithheld: work.staleWithheld,
+        ),
       );
     } on Object catch (error) {
       for (final (folder, aside) in moved.reversed) {
@@ -430,35 +460,4 @@ extension _ServerContentCleanup on LocalLauncherRepository {
     }
     return freed;
   }
-}
-
-ServerContentCleanupResult _cleanupRefused(
-  ServerContentCleanupRefusal refusal,
-  String message,
-) => ServerContentCleanupResult.refused(refusal, message);
-
-String _versionKey(String id, String version) => '${id.toLowerCase()}@$version';
-
-bool _pinsVersion(LauncherProfile server, ServerContentEntry entry) {
-  final id = entry.modId.toLowerCase();
-  if (!server.enabledMods.any((item) => item.toLowerCase() == id)) {
-    return false;
-  }
-  for (final pin in server.selectedVersions.entries) {
-    if (pin.key.toLowerCase() == id) return pin.value == entry.version;
-  }
-  return false;
-}
-
-/// The bytes of the files beneath [folder], links left out.
-int _folderBytes(Directory folder) {
-  var total = 0;
-  try {
-    for (final entity in folder.listSync(recursive: true, followLinks: false)) {
-      if (entity is File) total += entity.lengthSync();
-    }
-  } on FileSystemException {
-    // A size that cannot be read counts what could.
-  }
-  return total;
 }

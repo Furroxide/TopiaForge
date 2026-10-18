@@ -38,6 +38,7 @@ final class JoinSessionState {
     this.descriptor,
     this.plan,
     this.consentKey,
+    this.closeOwnedGameAcknowledged = false,
     this.progress,
     this.installProgress,
     this.replans = 0,
@@ -66,6 +67,13 @@ final class JoinSessionState {
 
   /// The [JoinPlan.consentKey] the player consented to.
   final String? consentKey;
+
+  /// Whether the player's consent covered closing a game this launcher
+  /// started ([JoinConsentGiven.closeOwnedGameAcknowledged]). Only then does
+  /// an install close one, after everything is staged and nothing can be
+  /// cancelled any more; the launcher stops it outright, so the consent must
+  /// say that progress not saved there is lost.
+  final bool closeOwnedGameAcknowledged;
 
   /// Download progress while downloading.
   final JoinTransferProgress? progress;
@@ -125,6 +133,7 @@ final class JoinSessionState {
     Object? descriptor = _keep,
     Object? plan = _keep,
     Object? consentKey = _keep,
+    bool? closeOwnedGameAcknowledged,
     Object? progress = _keep,
     Object? installProgress = _keep,
     int? replans,
@@ -142,6 +151,8 @@ final class JoinSessionState {
     consentKey: identical(consentKey, _keep)
         ? this.consentKey
         : consentKey as String?,
+    closeOwnedGameAcknowledged:
+        closeOwnedGameAcknowledged ?? this.closeOwnedGameAcknowledged,
     progress: identical(progress, _keep)
         ? this.progress
         : progress as JoinTransferProgress?,

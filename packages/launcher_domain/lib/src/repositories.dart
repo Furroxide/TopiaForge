@@ -190,8 +190,12 @@ abstract interface class MultiplayerContentHost {
   ///
   /// Nothing installs beside a running game: it writes its manager state
   /// when it quits, over what an install changed. A game this launcher
-  /// started is closed first, as the join's restart would close it anyway; a
-  /// game it did not start ends the join as [JoinFailureCode.gameRunning].
+  /// started is closed only when [JoinSessionState.closeOwnedGameAcknowledged]
+  /// says the consent covered it, and only once every package is staged and
+  /// the install can no longer be cancelled, so a join that is refused or
+  /// cancelled leaves it running. Today the launcher stops it outright, which
+  /// loses progress not saved there. Otherwise a running game, or one this
+  /// launcher did not start, ends the join as [JoinFailureCode.gameRunning].
   Future<JoinEvent?> installJoinContent(
     GameInstall install,
     JoinSessionState state, {

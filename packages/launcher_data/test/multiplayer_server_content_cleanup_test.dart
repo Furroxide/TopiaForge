@@ -128,7 +128,7 @@ void main() {
       expect(
         ServerContentRecord.read(
           serverContentFile(rig.game).readAsBytesSync(),
-        )!.record.isEmpty,
+        ).record!.isEmpty,
         isTrue,
       );
     },
@@ -336,7 +336,7 @@ void main() {
       );
       final record = ServerContentRecord.read(
         serverContentFile(rig.game).readAsBytesSync(),
-      )!.record;
+      ).record!;
       expect(record.entryFor('own.alpha', '2.0.0'), isNull);
     },
   );
@@ -356,7 +356,7 @@ void main() {
       );
       final record = ServerContentRecord.read(
         serverContentFile(rig.game).readAsBytesSync(),
-      )!.record;
+      ).record!;
       expect(record.entryFor('server.zeta', '1.0.0'), isNull);
       expect(record.addedRecords, isNot(contains('server.zeta')));
       expect(record.addedRecords, contains('server.delta'));

@@ -30,9 +30,11 @@ part of '../multiplayer.dart';
 ///   reads reports [JoinInstallUndone], which ends the join as cancelled too.
 /// - Nothing installs beside a running game: a running game writes its
 ///   manager state when it quits, over what the install wrote. A game the
-///   launcher started is closed first, as the join's restart would close it;
-///   one it did not start ends the install as [JoinFailureCode.gameRunning],
-///   as it ends a launch.
+///   launcher started is closed only when the consent covered it
+///   ([JoinConsentGiven.closeOwnedGameAcknowledged]), and only once
+///   everything is staged, so a join that is refused or cancelled leaves it
+///   running. Otherwise it, and any game the launcher did not start, ends
+///   the install as [JoinFailureCode.gameRunning], as it ends a launch.
 /// - Packages only the host serves are not downloaded by this launcher: a
 ///   plan that needs one ends while downloading as
 ///   [JoinFailureCode.hostDownloadUnsupported], before anything is fetched.
@@ -397,7 +399,12 @@ abstract final class JoinSession {
     if (plan.hasUnverifiedPackages && !event.hostServedAcknowledged) {
       return state;
     }
-    return _afterConsent(state._copy(consentKey: plan.consentKey));
+    return _afterConsent(
+      state._copy(
+        consentKey: plan.consentKey,
+        closeOwnedGameAcknowledged: event.closeOwnedGameAcknowledged,
+      ),
+    );
   }
 
   static JoinSessionState _afterConsent(JoinSessionState state) =>

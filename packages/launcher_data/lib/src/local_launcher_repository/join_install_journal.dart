@@ -146,7 +146,9 @@ extension _JoinInstallJournal on LocalLauncherRepository {
   ///   it stopped, so it stays installed.
   /// - Committing, part way: everything the journal names is put back, as
   ///   the install's own rollback would: its folders, its entries in the
-  ///   record of server content, and the manager records it added.
+  ///   record of server content, and the manager records it added. While a
+  ///   receipt it would judge a folder by cannot be read, nothing is put back
+  ///   yet, so no entry is dropped for a folder that stays.
   /// - A cleanup's folder holds only content already taken out of the
   ///   packages folder, so it goes.
   Future<void> _sweepJoinInstalls(GameInstall install) async {
@@ -180,9 +182,12 @@ extension _JoinInstallJournal on LocalLauncherRepository {
       final target = Directory(
         p.join(packagesRoot.path, package.id, package.version),
       );
-      if (await _receiptSha256(target) == package.receiptSha256) {
-        placed.add(target);
-      }
+      final receipt = await _readReceiptDigest(target);
+      // A folder whose receipt cannot be read just now may be this join's:
+      // settling now would drop its record entry and leave it in place,
+      // where it would become the player's own. The next start settles it.
+      if (receipt.unreadable) return false;
+      if (receipt.sha256 == package.receiptSha256) placed.add(target);
     }
     if (placed.length == journal.packages.length) {
       await _appendLauncherLogBestEffort(

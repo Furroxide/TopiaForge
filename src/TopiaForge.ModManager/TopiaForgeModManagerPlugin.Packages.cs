@@ -89,6 +89,14 @@ namespace TopiaForge.ModManager
 
         private void LogExcludedPackages()
         {
+            var serverContent = registry.LastServerContent;
+            if (serverContent.Frozen)
+            {
+                managerLogger.Warn("The list of mods installed for servers could not be used (" + serverContent.Problem
+                    + "), so this start loads only the version of each mod that loaded before. Start the game from the"
+                    + " TopiaForge launcher once to repair the list.");
+            }
+
             foreach (var package in packages)
             {
                 if (!package.IsValid)

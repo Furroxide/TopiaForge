@@ -8,9 +8,10 @@ part of '../local_launcher_repository.dart';
 /// manager state when it quits, over whatever was written while it ran,
 /// which would drop the disabled records of mods new to the player. The
 /// package inbox follows the same rule, holding what arrives until the next
-/// start. An install closes a game this launcher started, as the join's
-/// restart would; a game it did not start must be closed by the player.
-/// Downloads and the server profile do not touch the game, so they go ahead.
+/// start. An install closes a game this launcher started only when the
+/// player's consent covered it, and only once everything is staged; a game
+/// it did not start must be closed by the player. Downloads and the server
+/// profile do not touch the game, so they go ahead.
 mixin _MultiplayerContentHosting implements MultiplayerContentHost {
   LocalLauncherRepository get _host => this as LocalLauncherRepository;
 
@@ -63,11 +64,37 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
 }
 
 extension _JoinGameClosing on LocalLauncherRepository {
-  /// Makes sure no game runs before an install. A game this launcher
-  /// started is closed, as the join's restart would close it at launch; one
-  /// it did not start, or one that will not close, ends the join. Null once
-  /// nothing runs.
-  Future<JoinFailed?> _closeGameForInstall(GameInstall install) async {
+  /// Whether an install may go ahead with the game as it is: null when
+  /// nothing runs, or when a game this launcher started runs and the consent
+  /// covered closing it, which [_closeOwnedGameForInstall] does once
+  /// everything is staged. The failure otherwise, before anything is staged.
+  Future<JoinFailed?> _gameBlockingJoinInstall(
+    GameInstall install, {
+    required bool closeOwnedGame,
+  }) async {
+    if (!await _runningForLaunch(install)) return null;
+    if (_ownedLaunchProcesses[_launchInstallIdentity(install)] == null) {
+      return _foreignGameRunning;
+    }
+    return closeOwnedGame
+        ? null
+        : const JoinFailed.gameRunning(
+            ownership: JoinGameOwnership.owned,
+            detail:
+                'Robotopia is running. Save your game and quit it, then join '
+                'again; what was downloaded is kept. Nothing was installed.',
+          );
+  }
+
+  /// Makes sure no game runs before an install changes anything. A game this
+  /// launcher started is closed, as the join's restart would close it at
+  /// launch; one it did not start, or one that will not close, ends the
+  /// join. Null once nothing runs.
+  ///
+  /// The launcher stops the process outright, as an owned restart does, so
+  /// progress not saved there is lost and the game's next start is its
+  /// one-shot safe mode until the launcher can ask it to quit instead.
+  Future<JoinFailed?> _closeOwnedGameForInstall(GameInstall install) async {
     if (!await _runningForLaunch(install)) return null;
     final identity = _launchInstallIdentity(install);
     final process = _ownedLaunchProcesses[identity];
@@ -101,12 +128,7 @@ extension _JoinGameClosing on LocalLauncherRepository {
       }
     }
     return process == null || alive == false
-        ? const JoinFailed.gameRunning(
-            ownership: JoinGameOwnership.foreign,
-            detail:
-                'Robotopia is running, and this launcher did not start it. '
-                'Close the game, then join again. Nothing was installed.',
-          )
+        ? _foreignGameRunning
         : const JoinFailed.gameRunning(
             ownership: JoinGameOwnership.owned,
             detail:
@@ -115,3 +137,10 @@ extension _JoinGameClosing on LocalLauncherRepository {
           );
   }
 }
+
+const _foreignGameRunning = JoinFailed.gameRunning(
+  ownership: JoinGameOwnership.foreign,
+  detail:
+      'Robotopia is running, and this launcher did not start it. Close the '
+      'game, then join again. Nothing was installed.',
+);

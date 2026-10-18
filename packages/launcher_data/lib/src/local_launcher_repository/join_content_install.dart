@@ -81,6 +81,9 @@ extension _JoinContentInstall on LocalLauncherRepository {
       );
     }
     try {
+      // A damaged record is repaired, failing closed, and a join install that
+      // stopped part way is settled, before anything is decided.
+      await _repairServerContent(install);
       await _sweepJoinInstalls(install);
       final current = await _validateGameDirectory(install.path);
       final blocking = current.issues.where((issue) => issue.isBlocking);
@@ -90,14 +93,13 @@ extension _JoinContentInstall on LocalLauncherRepository {
           'install in Setup, then join again.',
         );
       }
-      final running = await _closeGameForInstall(current);
-      if (running != null) return running;
       return await _JoinInstall(
         this,
         current,
         plan,
         cancellation,
         onProgress,
+        closeOwnedGame: state.closeOwnedGameAcknowledged,
       ).run();
     } on _JoinInstallRefused catch (refusal) {
       return _nothingInstalled(refusal.message);
@@ -129,6 +131,12 @@ extension _JoinContentInstall on LocalLauncherRepository {
 /// or a cancel before it undoes everything; a failure after it rolls back
 /// everything this join changed, and only that.
 ///
+/// A game this launcher started is closed only when the consent covered it,
+/// and only after everything is staged and the last cancel was looked for,
+/// so a join that is refused or cancelled leaves the player's game running.
+/// What was decided is then decided again, since the game writes its manager
+/// state when it quits.
+///
 /// A journal in the join's transaction folder (`launcher-join-*` in manager
 /// staging) says how far it got, so a launcher that stops part way is undone
 /// on its next start ([_JoinInstallJournal]).
@@ -138,14 +146,16 @@ final class _JoinInstall {
     this._install,
     this._plan,
     this._cancellation,
-    this._onProgress,
-  );
+    this._onProgress, {
+    required bool closeOwnedGame,
+  }) : _closeOwnedGame = closeOwnedGame;
 
   final LocalLauncherRepository _repository;
   final GameInstall _install;
   final JoinPlan _plan;
   final CancellationToken? _cancellation;
   final void Function(JoinInstallProgressed progress)? _onProgress;
+  final bool _closeOwnedGame;
   final _pending = <_PendingJoinPackage>[];
   final _staged = <_StagedJoinPackage>[];
 
@@ -156,8 +166,13 @@ final class _JoinInstall {
   bool get _cancelled => _cancellation?.isCancelled ?? false;
 
   Future<JoinEvent> run() async {
-    await _preflight();
+    _pending.addAll(await _decide());
     if (_pending.isEmpty) return const JoinInstallCompleted();
+    final blocked = await _repository._gameBlockingJoinInstall(
+      _install,
+      closeOwnedGame: _closeOwnedGame,
+    );
+    if (blocked != null) return blocked;
     await _progress(0);
     try {
       for (final pending in _pending) {
@@ -168,6 +183,18 @@ final class _JoinInstall {
       await _writeJournal(_JoinJournalPhase.staged);
       await _hook('staged');
       if (_cancelled) return await _undo();
+      final closing = await _repository._closeOwnedGameForInstall(_install);
+      if (closing != null) {
+        await _discard();
+        return closing;
+      }
+      if (!_decidedAsStaged(await _decide())) {
+        await _discard();
+        return _nothingInstalled(
+          'Your mods in this game changed while the join was preparing. Join '
+          'again.',
+        );
+      }
     } on _JoinInstallRefused {
       await _discard();
       rethrow;
@@ -210,93 +237,6 @@ final class _JoinInstall {
       '${_plan.derivedProfile.id}.',
     );
     return const JoinInstallCompleted();
-  }
-
-  /// Decides what to install, refusing before anything changes: a version
-  /// installed as another archive is never replaced, and an archive already
-  /// installed as the server runs it needs nothing.
-  Future<void> _preflight() async {
-    final Map<String, Object?> state;
-    try {
-      state = await _repository._readManagerState(_install);
-    } on Object catch (error) {
-      await _log('A join install could not read the manager state: $error');
-      throw const _JoinInstallRefused(
-        "The game's list of mods could not be read. Open Mods to repair it, "
-        'then join again.',
-      );
-    }
-    final recorded = _repository._stateByModId(state).keys.toSet();
-    final load = await _repository._serverContentStore(_install).load();
-    if (load.recovery == MultiplayerStoreRecovery.unreadable) {
-      throw const _JoinInstallRefused(
-        'The list of mods installed for servers could not be read just now. '
-        'Close any program using the game folder, then join again.',
-      );
-    }
-    final named = {
-      for (final profile in await _repository._loadProfiles())
-        if (!ServerProfiles.isServerProfile(profile))
-          for (final id in [
-            ...profile.enabledMods,
-            ...profile.selectedVersions.keys,
-          ])
-            id.toLowerCase(),
-    };
-    final packagesRoot = _repository._packagesRoot(_install);
-    final folders = {
-      for (final entity in packagesRoot.listSync(followLinks: false))
-        if (entity is Directory)
-          p.basename(entity.path).toLowerCase(): p.basename(entity.path),
-    };
-    for (final item in _plan.packages) {
-      if (item.disposition != JoinPackageDisposition.download) continue;
-      final manifest = item.manifest!;
-      final key = manifest.id.toLowerCase();
-      final folder = folders[key];
-      final name = _joinModName(item);
-      if (folder != null && folder != manifest.id) {
-        throw _JoinInstallRefused(
-          'You have ${manifest.name} installed under a folder named '
-          'differently than the server version needs, so it cannot be added '
-          'beside it. Uninstall ${manifest.name} in Mods, then join again.',
-        );
-      }
-      final target = Directory(
-        p.join(packagesRoot.path, manifest.id, manifest.version),
-      );
-      final type = FileSystemEntity.typeSync(target.path, followLinks: false);
-      if (type != FileSystemEntityType.notFound) {
-        if (type == FileSystemEntityType.directory &&
-            await _receiptArchiveSha256(target) == item.package.sha256) {
-          continue;
-        }
-        throw _JoinInstallRefused(
-          'You have $name installed, but as a different build than the '
-          'server runs, and joining never replaces your copy. Uninstall it in '
-          'Mods, then join again.',
-        );
-      }
-      _pending.add(
-        _PendingJoinPackage(
-          item,
-          hidden:
-              recorded.contains(key) || folder != null || named.contains(key),
-          addRecord: !recorded.contains(key) && folder == null,
-        ),
-      );
-    }
-    final kept = load.record.entries.where(
-      (entry) => !_pending.any(
-        (pending) => entry.names(pending.manifest.id, pending.manifest.version),
-      ),
-    );
-    if (kept.length + _pending.length > ServerContentRecord.maximumEntries) {
-      throw const _JoinInstallRefused(
-        'Too many mods are installed for servers. Clean up server content in '
-        'Settings, then join again.',
-      );
-    }
   }
 
   Future<void> _stage(_PendingJoinPackage pending) async {
