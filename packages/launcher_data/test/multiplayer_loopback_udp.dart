@@ -142,6 +142,9 @@ final class ObservedLanSocket implements LanDatagramSocket {
   int get port => _socket.port;
 
   @override
+  bool get isOpen => _socket.isOpen;
+
+  @override
   void listen(void Function(Datagram datagram) onDatagram) =>
       _socket.listen((datagram) {
         onDatagram(datagram);

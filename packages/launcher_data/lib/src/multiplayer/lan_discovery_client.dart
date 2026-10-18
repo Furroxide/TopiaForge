@@ -16,6 +16,7 @@ import 'lan_discovery_state.dart';
 import 'lan_sockets.dart';
 
 part 'lan_discovery_entries.dart';
+part 'lan_discovery_recovery.dart';
 
 /// Monotonic time in microseconds.
 typedef LanClock = int Function();
@@ -104,6 +105,7 @@ final class LanDiscoveryClient {
   Future<LanBrowseSnapshot>? _starting;
   var _generation = 0;
   var _disposed = false;
+  var _replacingQuerier = false;
   LanBrowseSnapshot _snapshot = LanBrowseSnapshot.stopped;
 
   /// The latest state, with current counters.
@@ -167,6 +169,7 @@ final class LanDiscoveryClient {
   }) async {
     _generation++;
     _starting = null;
+    _replacingQuerier = false;
     _sweeper?.cancel();
     _sweeper = null;
     _listener?.close();
@@ -284,6 +287,13 @@ final class LanDiscoveryClient {
   void _query(_Entry entry, int now) {
     final querier = _querier;
     if (querier == null) return;
+    // Left unqueried, the host is asked on its next beacon, through a new
+    // socket ([_replaceQuerier]).
+    if (!querier.isOpen) {
+      _counters.queriesUnsent++;
+      _replaceQuerier();
+      return;
+    }
     if (!_budget.admit(entry.hostKey, now)) {
       _counters.queriesThrottled++;
       return;

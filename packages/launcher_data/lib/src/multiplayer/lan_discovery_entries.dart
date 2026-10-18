@@ -75,6 +75,7 @@ final class _Counters {
   var unusableInfo = 0;
   var serversDropped = 0;
   var faults = 0;
+  var querySocketsReplaced = 0;
 
   LanDiscoveryCounters toCounters() => LanDiscoveryCounters(
     datagramsHeard: datagramsHeard,
@@ -87,6 +88,7 @@ final class _Counters {
     unusableInfo: unusableInfo,
     serversDropped: serversDropped,
     faults: faults,
+    querySocketsReplaced: querySocketsReplaced,
   );
 }
 

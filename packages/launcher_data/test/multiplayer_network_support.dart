@@ -129,13 +129,20 @@ final class FakeLanSocket implements LanDatagramSocket {
   var closed = false;
   var failSends = false;
 
+  /// Set when the system closed the socket, as it does after a send it
+  /// refused.
+  var closedBySystem = false;
+
+  @override
+  bool get isOpen => !closed && !closedBySystem;
+
   @override
   void listen(void Function(Datagram datagram) onDatagram) =>
       _onDatagram = onDatagram;
 
   @override
   bool send(List<int> datagram, InternetAddress address, int port) {
-    if (closed || failSends) return false;
+    if (!isOpen || failSends) return false;
     sent.add(SentDatagram(Uint8List.fromList(datagram), address, port));
     return true;
   }
