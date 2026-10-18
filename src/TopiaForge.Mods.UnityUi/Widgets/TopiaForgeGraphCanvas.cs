@@ -178,7 +178,7 @@ namespace TopiaForge.Mods.UnityUi
             if (!enabledState || !nodesById.TryGetValue(nodeId, out var view) || !view.Enabled) return;
             selectedNodeId = string.Equals(selectedNodeId, nodeId, StringComparison.Ordinal) ? null : nodeId;
             ApplyTheme(Theme);
-            TopiaForgeCallbacks.Invoke(graph.SelectionChanged, selectedNodeId, "Graph selection");
+            TopiaForgeCallbacks.Player(Host.OwnerId, graph.SelectionChanged, selectedNodeId, "Graph selection");
         }
 
         internal void HandlePortSelected(string nodeId, UiGraphPort port)
@@ -190,7 +190,7 @@ namespace TopiaForge.Mods.UnityUi
                 pendingSourcePortId = port.Id;
                 selectedNodeId = nodeId;
                 ApplyTheme(Theme);
-                TopiaForgeCallbacks.Invoke(graph.SelectionChanged, selectedNodeId, "Graph selection");
+                TopiaForgeCallbacks.Player(Host.OwnerId, graph.SelectionChanged, selectedNodeId, "Graph selection");
                 return;
             }
 
@@ -207,7 +207,7 @@ namespace TopiaForge.Mods.UnityUi
                 pendingSourceNodeId = null;
                 pendingSourcePortId = null;
                 ApplyTheme(Theme);
-                TopiaForgeCallbacks.Invoke(graph.ConnectionRequested, request, "Graph connection request");
+                TopiaForgeCallbacks.Player(Host.OwnerId, graph.ConnectionRequested, request, "Graph connection request");
                 return;
             }
 
@@ -219,7 +219,7 @@ namespace TopiaForge.Mods.UnityUi
         internal void HandleEdgeSelected(string edgeId)
         {
             if (!enabledState || graph.ConnectionRemoved == null) return;
-            TopiaForgeCallbacks.Invoke(graph.ConnectionRemoved, edgeId, "Graph connection removal");
+            TopiaForgeCallbacks.Player(Host.OwnerId, graph.ConnectionRemoved, edgeId, "Graph connection removal");
         }
 
         internal void HandleNodeDrag(string nodeId, Vector2 screenDelta)
@@ -238,7 +238,8 @@ namespace TopiaForge.Mods.UnityUi
         {
             if (!enabledState || graph.NodeMoved == null || !nodesById.TryGetValue(nodeId, out var view)) return;
             var position = view.GraphPosition;
-            TopiaForgeCallbacks.Invoke(
+            TopiaForgeCallbacks.Player(
+                Host.OwnerId,
                 graph.NodeMoved,
                 new UiGraphNodeMove(nodeId, new Vec2(position.x, position.y)),
                 "Graph node move");
@@ -261,7 +262,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             if (enabledState && graph.ViewportChanged != null)
             {
-                TopiaForgeCallbacks.Invoke(graph.ViewportChanged, viewport, "Graph viewport pan");
+                TopiaForgeCallbacks.Player(Host.OwnerId, graph.ViewportChanged, viewport, "Graph viewport pan");
             }
         }
 
@@ -277,7 +278,7 @@ namespace TopiaForge.Mods.UnityUi
             RenderGeometry();
             if (graph.ViewportChanged != null)
             {
-                TopiaForgeCallbacks.Invoke(graph.ViewportChanged, viewport, "Graph viewport zoom");
+                TopiaForgeCallbacks.Player(Host.OwnerId, graph.ViewportChanged, viewport, "Graph viewport zoom");
             }
         }
 
@@ -288,7 +289,7 @@ namespace TopiaForge.Mods.UnityUi
             pendingSourceNodeId = null;
             pendingSourcePortId = null;
             ApplyTheme(Theme);
-            TopiaForgeCallbacks.Invoke(graph.SelectionChanged, null, "Graph selection");
+            TopiaForgeCallbacks.Player(Host.OwnerId, graph.SelectionChanged, null, "Graph selection");
         }
 
         internal Color ToneColor(TopiaForgeResolvedTheme theme, UiTone tone)

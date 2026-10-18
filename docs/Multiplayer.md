@@ -266,6 +266,37 @@ Live sessions on a LAN or at a direct address already exist in the provider, beh
 (`TOPIAFORGE_LIVE_MULTIPLAYER=1`) until the in-game interface for hosting and joining arrives. That interface, Internet
 play through invite codes and a relay, and joining from the launcher are later work.
 
+## The player's own actions
+
+In a session, scripts run on the host and a player's own actions run where that player is. The runtime tells the two
+apart by itself, with no code or attribute from you, so that world replication, a later step, can send a joined player's
+own spawns to the host instead of making them twice. Offline nothing changes: every call takes effect at once, as it
+always has.
+
+- **What counts as the player's action:** your mod's Update and LateUpdate in a frame where one of its `Context.Input`
+  actions is pressed, released or held; a `Context.Ui` callback that the player's click, choice, typing or
+  confirmation raises; a command the player runs, or that such code runs; and a `Context.Interactions` handler.
+- **What keeps it:** everything that code awaits, and everything it schedules through `Context.Scheduler` (`NextFrame`,
+  `After`, and each run of `Every`), including what a background task it started hands back through `Context.Scheduler`.
+- **What never has it:** a timer your mod's scripted code scheduled, such as one scheduled at load; FixedUpdate; later
+  frames; other mods' code; and anything after the game starts or stops hosting, or joins or leaves a session.
+
+Code that looks like the player's action but counts as a script, with its fix:
+
+| If your code | It counts as a script because | Do this instead |
+| --- | --- | --- |
+| Reads input in FixedUpdate, or in a timer scheduled at load | Only Update and LateUpdate carry the frame's input | Read input in Update or LateUpdate |
+| Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling |
+| Calls a service another mod published | The player's action belongs to your mod, so the other mod's code sees none | Run the other mod's command with `Context.Commands.TryExecute` |
+| Subscribes to Update from a click, to act for the player every frame | Frame subscribers are scripts | Schedule the work with `Context.Scheduler.Every` or `NextFrame` from the click |
+| Reads Unity's input or runs a Unity coroutine directly, as an `unsafe-native` mod can | The runtime sees neither | Use `Context.Input`, `Context.Scheduler` and `await` |
+
+One case goes the other way: firing a kit control's event from code, such as `Button.onClick.Invoke()`, counts as the
+player's click. Call your handler directly instead.
+
+A frame with active input counts as the player's for your whole Update and LateUpdate, so keep scripted work, such as a
+timed spawn, in a timer rather than in your input handling.
+
 ## What solo cannot tell you
 
 Solo play runs everything once, inline, in one process, with one player and no network. A mod can pass every solo test

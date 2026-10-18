@@ -64,7 +64,30 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
-            Top()?.Dismiss();
+            var top = Top();
+            if (top == null)
+            {
+                return;
+            }
+
+            // The player's Escape dismisses the surface as that surface's owner's action.
+            using (TopiaForgeIntent.PlayerAction(OwnerOf(top)))
+            {
+                top.Dismiss();
+            }
+        }
+
+        private static string? OwnerOf(ITopiaForgeDismissable entry)
+        {
+            switch (entry)
+            {
+                case TopiaForgeWidget widget:
+                    return widget.Host.OwnerId;
+                case TopiaForgeModalInstance modal:
+                    return modal.OwnerId;
+                default:
+                    return null;
+            }
         }
 
         internal static void Reset()

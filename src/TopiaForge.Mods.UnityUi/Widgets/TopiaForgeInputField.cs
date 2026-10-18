@@ -55,7 +55,8 @@ namespace TopiaForge.Mods.UnityUi
             input.placeholder = placeholderComponent;
             input.lineType = TMP_InputField.LineType.SingleLine;
             input.text = value;
-            input.onValueChanged.AddListener(next => TopiaForgeCallbacks.Invoke(onChanged, next, "Input change"));
+            // Typing happens while the field has focus; a value set through Input.text runs in its setter's own scope.
+            input.onValueChanged.AddListener(next => TopiaForgeCallbacks.Player(input.isFocused ? Host.OwnerId : null, onChanged, next, "Input change"));
             input.onSelect.AddListener(_ =>
             {
                 focused = true;
@@ -85,7 +86,7 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Enter-to-submit hook (Packages path field, conversation send).</summary>
         public TopiaForgeInputField OnSubmit(Action<string> onSubmit)
         {
-            input.onSubmit.AddListener(value => TopiaForgeCallbacks.Invoke(onSubmit, value, "Input submit"));
+            input.onSubmit.AddListener(value => TopiaForgeCallbacks.Player(Host.OwnerId, onSubmit, value, "Input submit"));
             return this;
         }
 
@@ -222,7 +223,12 @@ namespace TopiaForge.Mods.UnityUi
                 button.targetGraphic = icon;
                 button.onClick.AddListener(() =>
                 {
-                    input.text = string.Empty;
+                    // The player's clear: the change it fires runs inside the player's action.
+                    using (TopiaForgeIntent.PlayerAction(Host.OwnerId))
+                    {
+                        input.text = string.Empty;
+                    }
+
                     clearGo.SetActive(false);
                 });
                 clearButtonGo = clearGo;

@@ -136,7 +136,7 @@ namespace TopiaForge.Mods.UnityUi
 
             dropdown.SetValueWithoutNotify(selected);
             dropdown.RefreshShownValue();
-            dropdown.onValueChanged.AddListener(next => TopiaForgeCallbacks.Invoke(onChanged, next, "Dropdown change"));
+            dropdown.onValueChanged.AddListener(next => TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, next, "Dropdown change"));
 
             this.FixedHeight(TopiaForgeTokens.ControlHeight);
             ApplyTheme(Theme);

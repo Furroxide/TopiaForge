@@ -109,6 +109,21 @@ namespace TopiaForge.Mods.Internal
         /// while one that comes before it takes the microphone later. Disposing the lease gives the microphone back.
         /// </summary>
         OperationResult<IInternalMicrophoneLease> AcquireMicrophone(InternalMicrophoneUse use, string reason);
+
+        /// <summary>
+        /// Gets the player intent the calling code acts on now, as this context's mod sees it (WS3.4): what caused it, and
+        /// whose it is, this process's own player or a participant a listen host acts for. Scripted code, another mod's code,
+        /// code on another thread than the main one, an intent from before the realm last changed, and anything offline see
+        /// none. Authority routing (WS3.7) asks it whether a spawn, a transform change or a destroy carries intent, and
+        /// whose. It allocates nothing.
+        /// </summary>
+        InternalIntentRecord CurrentIntent { get; }
+
+        /// <summary>
+        /// Says where a world-changing call from this context takes effect now: <see cref="Route"/> for
+        /// <see cref="CurrentIntent"/>'s source. It allocates nothing.
+        /// </summary>
+        InternalRoute RouteCurrentIntent();
     }
 
     /// <summary>

@@ -38,6 +38,7 @@ namespace TopiaForge.ModManager
 
             // The runtime stops driving multiplayer first, so the provider closes its sessions on its own as it unloads.
             Attempt(multiplayer.Disconnect, failures, "Multiplayer could not detach from its provider.");
+            UninstallIntentKitHook();
             sceneCoordinator.SetSessionAdmissionGate(() => true);
             sessionBindings?.BeginShutdown();
             // Publish the shutdown request before callbacks so reentrant unload requests share this completion.

@@ -103,7 +103,7 @@ namespace TopiaForge.Mods.UnityUi
             slider.onValueChanged.AddListener(next =>
             {
                 UpdateValueLabel(next);
-                TopiaForgeCallbacks.Invoke(onChanged, next, "Slider change");
+                TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, next, "Slider change");
             });
 
             ApplyTheme(Theme);

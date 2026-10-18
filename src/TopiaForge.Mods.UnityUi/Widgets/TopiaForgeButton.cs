@@ -120,7 +120,7 @@ namespace TopiaForge.Mods.UnityUi
 
             button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => TopiaForgeCallbacks.Invoke(onClick, "Button click"));
+            button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Button click"));
 
             var colors = button.colors;
             colors.normalColor = Color.white;

@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager.Tests
             RuntimeReplicationTests.Run(System.IO.Path.Combine(root, "multiplayer-replication"));
             ReplicationSpiPrivacyTests.Run();
             Console.WriteLine("Multiplayer realm and factory seam tests passed.");
+            MultiplayerIntentTests.Run(System.IO.Path.Combine(root, "multiplayer-intent"));
         }
     }
 

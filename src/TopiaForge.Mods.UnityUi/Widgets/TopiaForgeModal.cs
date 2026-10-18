@@ -189,6 +189,9 @@ namespace TopiaForge.Mods.UnityUi
 
         internal GameObject CanvasRoot => canvasRoot;
 
+        /// <summary>Gets the owner of the host the modal belongs to: whose action dismissing it is.</summary>
+        internal string OwnerId => host.OwnerId;
+
         TopiaForgeLayerBand ITopiaForgeDismissable.Band => TopiaForgeLayerBand.Modal;
 
         void ITopiaForgeDismissable.Dismiss()

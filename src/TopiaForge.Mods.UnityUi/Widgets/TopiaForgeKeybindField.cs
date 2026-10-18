@@ -178,7 +178,11 @@ namespace TopiaForge.Mods.UnityUi
             var pressed = TopiaForgeHotkeys.CapturePressedKey();
             if (pressed != TopiaForgeKey.None)
             {
-                Field.CompleteCapture(pressed);
+                // The key the player pressed is the player's own action on the field.
+                using (TopiaForgeIntent.PlayerAction(Field.Host.OwnerId))
+                {
+                    Field.CompleteCapture(pressed);
+                }
             }
         }
     }

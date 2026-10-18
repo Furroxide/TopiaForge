@@ -93,6 +93,7 @@ namespace TopiaForge.Mods.UnityUi
             TopiaForgeTween.Reset();
             TopiaForgeDismissStack.Reset();
             TopiaForgeHotkeys.Reset();
+            TopiaForgeIntent.Reset();
             TopiaForgeCursor.Reset();
             TopiaForgeSafeMode.Reset();
             TopiaForgeEventSystems.Reset();

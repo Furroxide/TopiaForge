@@ -44,4 +44,10 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\World\*.cs" Link="Runtime\World\%(Filename)%(Extension)" />
     <Compile Include="..\TopiaForge.ModRuntime.Tests\FakeWorldScene.cs" Link="World\FakeWorldScene.cs" />
   </ItemGroup>
+
+  <!-- The composition root's intent tracking (WS3.4), which its realm reports each change to. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerIntents.cs" Link="Runtime\MultiplayerIntents.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Intent\MultiplayerRuntime.Intent.cs" Link="Runtime\MultiplayerRuntime.Intent.cs" />
+  </ItemGroup>
 </Project>
