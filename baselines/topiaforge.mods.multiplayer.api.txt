@@ -123,6 +123,9 @@ type public interface TopiaForge.Mods.IScoreboardColumn : System.IDisposable
   property System.Boolean IsActive { get [abstract,virtual,newslot]; }
   property System.String Id { get [abstract,virtual,newslot]; }
 
+type public static class TopiaForge.Mods.MultiplayerAnswers : System.Object
+  method [static] System.Void Submit<TRequest, TResponse>(TopiaForge.Mods.IMultiplayerSession session, TopiaForge.Mods.MultiplayerCommandType<TRequest, TResponse> commandType, TRequest request, System.Action<TopiaForge.Mods.MultiplayerCommandConfirmation<TResponse>>? answered, System.Threading.CancellationToken ownerStopping, System.Threading.CancellationToken cancellationToken) where TRequest : class where TResponse : class
+
 type public enum TopiaForge.Mods.MultiplayerAudience : System.Int32
   field System.Int32 value__
   field const TopiaForge.Mods.MultiplayerAudience Everyone = 0 (Everyone)

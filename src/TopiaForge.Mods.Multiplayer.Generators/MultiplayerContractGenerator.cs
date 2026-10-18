@@ -544,6 +544,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 foreach (var name in new[]
                          {
                              PublicName(command.Id) + "CommandType",
+                             AnsweredSubmitName(command),
                              "Submit" + command.Method.Name + "Async"
                          })
                 {
@@ -1643,7 +1644,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             builder.Append("partial class ").Append(contract.Name).AppendLine(" : global::TopiaForge.Mods.IGeneratedMultiplayerBinding");
             builder.AppendLine("{");
             builder.AppendLine("    private global::TopiaForge.Mods.IMultiplayerSession? __topiaforgeMultiplayerSession;");
-            builder.AppendLine("    private global::System.IDisposable? __topiaforgeMultiplayerBinding;");
+            builder.AppendLine("    private __TopiaForgeMultiplayerBinding? __topiaforgeMultiplayerBinding;");
             builder.AppendLine();
             builder.AppendLine("    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
             builder.AppendLine("    public global::TopiaForge.Mods.MultiplayerContractDescriptor MultiplayerContractDescriptor { get; } =");
@@ -1830,6 +1831,11 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             builder.AppendLine();
             foreach (var command in commands)
             {
+                RenderAnsweredSubmit(builder, command);
+                builder.AppendLine("    /// <summary>");
+                builder.Append("    /// Submits one <c>").Append(Xml(command.Id)).AppendLine("</c> command and returns a task for its confirmation. In mod code, call");
+                builder.Append("    /// <see cref=\"").Append(AnsweredSubmitName(command)).AppendLine("\"/> instead: its answer needs no polling and never runs after the mod stops.");
+                builder.AppendLine("    /// </summary>");
                 builder.Append("    public global::System.Threading.Tasks.Task<global::TopiaForge.Mods.MultiplayerCommandConfirmation<")
                     .Append(TypeName(command.ResponseType)).Append(">> Submit").Append(command.Method.Name).Append("Async(")
                     .Append(TypeName(command.RequestType)).Append(" request, global::System.Threading.CancellationToken cancellationToken = default)")
@@ -1970,11 +1976,14 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             builder.AppendLine("    private sealed class __TopiaForgeMultiplayerBinding : global::System.IDisposable");
             builder.AppendLine("    {");
             builder.AppendLine("        private readonly global::System.Collections.Generic.List<global::System.IDisposable> items = new global::System.Collections.Generic.List<global::System.IDisposable>();");
+            builder.AppendLine("        // Cancelled when the binding is released, so no answer to a command it submitted runs after that.");
+            builder.AppendLine("        private readonly global::System.Threading.CancellationTokenSource stopping = new global::System.Threading.CancellationTokenSource();");
             builder.AppendLine("        private global::System.Action? onDispose;");
             builder.AppendLine("        private bool disposed;");
             builder.AppendLine("        internal __TopiaForgeMultiplayerBinding(global::System.Action onDispose) { this.onDispose = onDispose ?? throw new global::System.ArgumentNullException(nameof(onDispose)); }");
+            builder.AppendLine("        internal global::System.Threading.CancellationToken Stopping => stopping.Token;");
             builder.AppendLine("        public void Add(global::System.IDisposable item) { if (disposed) item.Dispose(); else items.Add(item); }");
-            builder.AppendLine("        public void Dispose() { if (disposed) return; disposed = true; for (var index = items.Count - 1; index >= 0; index--) items[index].Dispose(); items.Clear(); var callback = onDispose; onDispose = null; callback?.Invoke(); }");
+            builder.AppendLine("        public void Dispose() { if (disposed) return; disposed = true; stopping.Cancel(); for (var index = items.Count - 1; index >= 0; index--) items[index].Dispose(); items.Clear(); var callback = onDispose; onDispose = null; callback?.Invoke(); }");
             builder.AppendLine("    }");
             builder.AppendLine();
             builder.AppendLine("    private sealed class __TopiaForgeRepeatedBinding : global::System.IDisposable");

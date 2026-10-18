@@ -143,6 +143,35 @@ The command builds the mod, reads generator-owned metadata, and atomically write
 hashes. `topiaforge pack` independently rebuilds and refuses a missing, stale, or edited lock, so protocol changes are
 reviewable without making authors maintain hashes by hand.
 
+## Submit a command and read its answer
+
+Each command gets a `Submit...` method, named after its handler. It submits one command and hands the host's answer
+to a callback:
+
+```csharp
+private void AddFive() =>
+    SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
+    {
+        if (!answer.Result.Succeeded && answer.Result.ErrorCode != ModErrorCode.Cancelled)
+            Context.Ui.ShowToast("The host refused: " + answer.Result.ErrorMessage, UiTone.Warning);
+    });
+```
+
+The answer, a `MultiplayerCommandConfirmation<T>`, follows these rules:
+
+- It runs once, on the main thread. Where this process holds world authority, solo play included, the host answers
+  its own player before `Submit...` returns. A client's answer runs in the frame that brings the host's result, a
+  round trip later.
+- It never runs once the mod stops. To tie it to a shorter scope, pass that scope's token, such as a gamemode
+  session's `Context.Lifetime.StoppingToken`. Cancelling the token also withdraws the submission.
+- A session that ends or is replaced, or a connection that drops, answers a waiting submission with `Cancelled`.
+- A callback that throws is logged, and the session carries on.
+- Nothing polls, so a mod with nothing in flight pays nothing per frame. Pass no callback when the answer adds
+  nothing, for example when replicated state already shows the result.
+
+`Submit...Async` returns the same confirmation as a task, for tests. Game code uses `Submit...` instead: waiting on
+the task blocks the very frame its answer needs (TF1008), and an awaited continuation can run after the mod stops.
+
 ## Bandwidth budget
 
 A contract's declared client-to-server ceiling is the sum of `MaximumPerSecond` x `MaximumPayloadBytes` across its

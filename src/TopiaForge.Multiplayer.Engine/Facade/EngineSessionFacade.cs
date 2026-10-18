@@ -16,7 +16,7 @@ namespace TopiaForge.Multiplayer.Engine
     /// whole (see <see cref="SessionEngine.CloseFacade"/>). A closing facade refuses new work with
     /// <see cref="ModErrorCode.Cancelled"/>.
     /// </summary>
-    internal sealed class EngineSessionFacade : IMultiplayerSession, IDisposable
+    internal sealed class EngineSessionFacade : IMultiplayerSession, IInternalAnswerDispatch, IDisposable
     {
         private const string ClosingMessage = "The mod is stopping and cannot change its multiplayer session.";
         private readonly SessionEngine engine;
@@ -46,7 +46,8 @@ namespace TopiaForge.Multiplayer.Engine
 
         public IPlayerDirectory Players => players ??= new SnapshotPlayerDirectory(() => engine.Snapshot);
 
-        private bool IsClosing => disposed || (lifetime?.IsStopping ?? false);
+        /// <summary>Gets whether the facade refuses new work: it was disposed, or the mod lifetime it is bound to is stopping.</summary>
+        internal bool IsClosing => disposed || (lifetime?.IsStopping ?? false);
 
         public IDisposable SubscribeChanged(Action<MultiplayerSessionSnapshot> handler)
         {
@@ -83,6 +84,24 @@ namespace TopiaForge.Multiplayer.Engine
                 tick,
                 false,
                 OperationResult<TResponse>.Failure(ModErrorCode.Cancelled, ClosingMessage)));
+        }
+
+        /// <summary>
+        /// Submits a command whose answer runs at the settle point that completes it, on the owner thread. Nothing is
+        /// submitted, and nothing answers, once the mod is stopping, the binding is released or the caller has withdrawn.
+        /// </summary>
+        void IInternalAnswerDispatch.Submit<TRequest, TResponse>(
+            MultiplayerCommandType<TRequest, TResponse> commandType,
+            TRequest request,
+            Action<MultiplayerCommandConfirmation<TResponse>> answered,
+            CancellationToken ownerStopping,
+            CancellationToken cancellationToken)
+        {
+            if (commandType == null) throw new ArgumentNullException(nameof(commandType));
+            if (answered == null) throw new ArgumentNullException(nameof(answered));
+            var answer = new CommandAnswer<TResponse>(this, answered, ownerStopping, cancellationToken, commandType.Id);
+            if (!answer.IsWanted) return;
+            engine.SubmitCommand(OwnerModId, commandType, request, cancellationToken, submitter: this, answer: answer);
         }
 
         public OperationResult<IReplicatedObject<TState, TInput>> SpawnObject<TState, TInput>(

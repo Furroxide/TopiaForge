@@ -84,6 +84,7 @@ namespace TopiaForge.Multiplayer.Engine
         where TResponse : class
     {
         private readonly CommandBinding<TRequest, TResponse> binding;
+        private readonly ICommandAnswer<TResponse>? answer;
         private readonly TaskCompletionSource<MultiplayerCommandConfirmation<TResponse>> completion =
             new TaskCompletionSource<MultiplayerCommandConfirmation<TResponse>>();
 
@@ -94,10 +95,12 @@ namespace TopiaForge.Multiplayer.Engine
             ulong epoch,
             byte[] payload,
             NetworkTick submittedAt,
-            bool predicted)
+            bool predicted,
+            ICommandAnswer<TResponse>? answer = null)
             : base(engine, sequence, epoch, payload, submittedAt, predicted)
         {
             this.binding = binding;
+            this.answer = answer;
         }
 
         internal Task<MultiplayerCommandConfirmation<TResponse>> Task => completion.Task;
@@ -112,12 +115,16 @@ namespace TopiaForge.Multiplayer.Engine
                 ? binding.Invoke(scope.Sender, Sequence, Payload, scope)
                 : WireOutcome.Failure(ModErrorCode.InvalidState, "The command registration is inactive.");
 
-        protected override void CompleteTask(NetworkTick confirmedAt, WireOutcome outcome) =>
-            completion.TrySetResult(new MultiplayerCommandConfirmation<TResponse>(
+        protected override void CompleteTask(NetworkTick confirmedAt, WireOutcome outcome)
+        {
+            var confirmation = new MultiplayerCommandConfirmation<TResponse>(
                 SubmittedAt,
                 confirmedAt,
                 Predicted,
-                binding.DecodeResponse(outcome)));
+                binding.DecodeResponse(outcome));
+            completion.TrySetResult(confirmation);
+            answer?.Deliver(confirmation);
+        }
     }
 
     internal sealed class PendingObjectInput<TState, TInput> : PendingSubmission

@@ -76,14 +76,19 @@ namespace TopiaForge.Mods.Analyzers
             helpLinkUri: DocsRoot + "TF1007",
             customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
 
+        /// <summary>Names the generated method a TF1008 fix calls instead, when the blocked task is a generated command's.</summary>
+        internal const string AnsweredSubmitProperty = "TopiaForge.AnsweredSubmit";
+
+        private const string PollRemedy = "await the task instead, or drive the work with PendingOperation<T> and poll it from your per-frame update";
+
         private static readonly DiagnosticDescriptor BlockingWaitOnSdkTask = new DiagnosticDescriptor(
             "TF1008",
             "Blocking wait on an SDK task",
-            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; await the task instead, or drive the work with PendingOperation<T> and poll it from your per-frame update.",
+            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; {1}.",
             Category,
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Mod code awaits asynchronous SDK work, or polls it from its per-frame update, instead of waiting on it. In multiplayer, awaiting keeps a player's own action for the code after the await, while a result polled in a later frame counts as a script.",
+            description: "Mod code never waits on asynchronous SDK work: a multiplayer command's answer comes back to a callback, and other work is awaited, or polled from the per-frame update. In multiplayer, awaiting keeps a player's own action for the code after the await, while a result polled in a later frame counts as a script.",
             helpLinkUri: DocsRoot + "TF1008");
 
         private static readonly ImmutableDictionary<string, ModuleRequirement> ModuleAssemblies =
@@ -213,10 +218,16 @@ namespace TopiaForge.Mods.Analyzers
                 return;
             }
 
+            var remedy = BlockingWaitRemedies.Find(access, context.SemanticModel, context.CancellationToken, out var answeredSubmit);
+            var properties = answeredSubmit == null
+                ? ImmutableDictionary<string, string?>.Empty
+                : ImmutableDictionary<string, string?>.Empty.Add(AnsweredSubmitProperty, answeredSubmit);
             context.ReportDiagnostic(Diagnostic.Create(
                 BlockingWaitOnSdkTask,
                 access.GetLocation(),
-                access.ToString().Trim()));
+                properties,
+                access.ToString().Trim(),
+                remedy ?? PollRemedy));
         }
 
         private static bool IsBlockingTaskMember(ISymbol symbol, string name)

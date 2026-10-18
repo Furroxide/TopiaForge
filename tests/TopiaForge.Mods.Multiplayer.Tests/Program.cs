@@ -609,6 +609,14 @@ internal static class Program
             InternalVoiceStreamTests.TheVoiceSpiBelongsToTheMainThread();
             InternalVoiceStreamTests.TheVoiceSpiCarriesNoAddress();
             InternalVoiceStreamTests.AStreamNeverPlaysSomeoneElseAfterAJoin();
+            CommandAnswerTests.SoloPlayAnswersAtOnceAfterTheCommandsEvents();
+            CommandAnswerTests.AClientsAnswerArrivesWithTheHostsResult();
+            CommandAnswerTests.NoAnswerOnceTheBindingIsReleased();
+            CommandAnswerTests.NoAnswerOnceTheCallersScopeStops();
+            CommandAnswerTests.ASessionThatGoesAwayAnswersCancelled();
+            CommandAnswerTests.NoAnswerOnceTheModStops();
+            CommandAnswerTests.AFailingAnswerIsReportedNotThrownIntoTheEngine();
+            CommandAnswerTests.AJoinedPlayersAnswerCrossesTheNetworkOnce();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

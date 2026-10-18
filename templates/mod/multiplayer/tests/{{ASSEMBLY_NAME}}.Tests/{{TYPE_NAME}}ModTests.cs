@@ -105,8 +105,9 @@ namespace {{ASSEMBLY_NAME}}.Tests
             }
 
             Assert.That(guest.Hud, Is.EqualTo(Showing(Allowed + 1)), "the guest predicts every press");
+
+            // The host's answers reach the guest while the rig delivers them, as they do in the frame that brings them.
             rig.Flush();
-            guest.NextFrame();
             Assert.Multiple(() =>
             {
                 Assert.That(host.Hud, Is.EqualTo(Showing(Allowed)), "the host accepts only the allowed presses");
@@ -127,6 +128,27 @@ namespace {{ASSEMBLY_NAME}}.Tests
             });
 
             guest.Unload();
+            host.Unload();
+        }
+
+        [Test]
+        public void AnAnswerNeverReachesAModThatHasStopped()
+        {
+            using var rig = MultiplayerTestRig.CreateListenServer();
+            using var host = new Player(rig.Server);
+            using var guest = new Player(rig.AddRemoteClient("guest"));
+            rig.Flush();
+
+            // Presses past the limit, whose refusals are still on their way when the guest's mod stops.
+            for (var press = 0; press <= Allowed; press++)
+            {
+                guest.Press();
+            }
+
+            guest.Unload();
+            rig.Flush();
+            Assert.That(guest.Toasts, Is.Empty, "the host's answers arrive after the mod stopped, and never run");
+
             host.Unload();
         }
 
@@ -264,7 +286,7 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 NextFrame();
             }
 
-            /// <summary>Runs one frame, which is when the mod reads the host's answers.</summary>
+            /// <summary>Runs one frame.</summary>
             internal void NextFrame() => context.AdvanceFrame(Frame);
 
             /// <summary>Lets time pass on this player's clock, in one frame.</summary>

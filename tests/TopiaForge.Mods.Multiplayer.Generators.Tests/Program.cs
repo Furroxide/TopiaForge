@@ -164,6 +164,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 LowLevelSpiIsHiddenFromOrdinaryIntelliSense();
                 GeneratedBindingCleansUpFailedAndThrowingRegistrations();
                 RunLiveSessionGeneratorTests();
+                RunAnsweredSubmitGeneratorTests();
                 Console.WriteLine("All TopiaForge multiplayer generator tests passed.");
                 return 0;
             }
@@ -960,7 +961,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 typeof(PresentationEventDefinition<>),
                 typeof(IPresentationEventRegistration),
                 typeof(MultiplayerContractDescriptor),
-                typeof(IGeneratedMultiplayerBinding)
+                typeof(IGeneratedMultiplayerBinding),
+                typeof(MultiplayerAnswers)
             };
             foreach (var type in hiddenTypes)
             {
@@ -1168,6 +1170,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                                line.Contains("SpawnRobotObject", StringComparison.Ordinal) ||
                                line.Contains("SubscribeRobotObjects", StringComparison.Ordinal) ||
                                line.Contains("SubmitIncrementAsync", StringComparison.Ordinal) ||
+                               line.Contains("void SubmitIncrement(", StringComparison.Ordinal) ||
+                               line.Contains("MultiplayerAnswers.Submit<", StringComparison.Ordinal) ||
                                line.Contains("EmitOnSpark", StringComparison.Ordinal) ||
                                line.Contains("PublishOnSpark", StringComparison.Ordinal) ||
                                line.Contains("GetCodec<T>", StringComparison.Ordinal) ||
@@ -1353,6 +1357,19 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             internal int SubmissionCount { get; private set; }
             internal int ContractRegistrationCount { get; private set; }
 
+            /// <summary>Gets or sets whether submissions wait for <see cref="ReleaseHeldSubmissions"/>, as a client's do.</summary>
+            internal bool HoldSubmissions { get; set; }
+
+            private List<Action> HeldSubmissions { get; } = new List<Action>();
+
+            /// <summary>Completes every held submission, as the host's answers arriving would.</summary>
+            internal void ReleaseHeldSubmissions()
+            {
+                var held = HeldSubmissions.ToArray();
+                HeldSubmissions.Clear();
+                foreach (var release in held) release();
+            }
+
             internal void ReplaceRegisteredStateForTest(object value)
             {
                 if (states.Count != 1) throw new InvalidOperationException("The test expected exactly one generated state registration.");
@@ -1448,12 +1465,15 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 var response = (TResponse?)Activator.CreateInstance(typeof(TResponse));
                 if (response == null) throw new InvalidOperationException("Test response needs a parameterless constructor.");
                 var tick = Snapshot.Tick;
-                return System.Threading.Tasks.Task.FromResult(
-                    new MultiplayerCommandConfirmation<TResponse>(
-                        tick,
-                        tick,
-                        false,
-                        OperationResult<TResponse>.Success(response)));
+                var confirmation = new MultiplayerCommandConfirmation<TResponse>(
+                    tick,
+                    tick,
+                    false,
+                    OperationResult<TResponse>.Success(response));
+                if (!HoldSubmissions) return System.Threading.Tasks.Task.FromResult(confirmation);
+                var held = new System.Threading.Tasks.TaskCompletionSource<MultiplayerCommandConfirmation<TResponse>>();
+                HeldSubmissions.Add(() => held.TrySetResult(confirmation));
+                return held.Task;
             }
 
             public OperationResult<IReplicatedObject<TState, TInput>> SpawnObject<TState, TInput>(
