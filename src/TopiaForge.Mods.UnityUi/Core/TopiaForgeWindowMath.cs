@@ -42,14 +42,43 @@ namespace TopiaForge.Mods.UnityUi
         public const float SnapThreshold = 12f;
         /// <summary>The max viewport fraction design-token value.</summary>
         public const float MaxViewportFraction = 0.9f;
+        /// <summary>The minimum window width design-token value.</summary>
+        public const float MinWidth = 240f;
+        /// <summary>The minimum window height design-token value.</summary>
+        public const float MinHeight = 120f;
 
-        /// <summary>
-        /// Whether a screen size can bound a window: both sides positive and finite. A canvas
-        /// created this frame reads 0x0 until Unity first lays it out.
-        /// </summary>
+        /// <summary>Whether a screen size can bound a window: both sides positive and finite.</summary>
         public static bool HasViewport(float screenWidth, float screenHeight)
         {
             return IsMeasured(screenWidth) && IsMeasured(screenHeight);
+        }
+
+        /// <summary>
+        /// Places a window when it is shown. A window of fixed size is capped from its designed size,
+        /// so a cap taken on a smaller screen does not stick; a window sized by its content keeps the
+        /// size it has, since that size is never written back. The rect is then pulled fully on-screen.
+        /// Returns false, with the rect unchanged, while the screen is unmeasured.
+        /// </summary>
+        public static bool TryPlace(
+            TopiaForgeRect rect,
+            float designedWidth,
+            float designedHeight,
+            bool sizedByContent,
+            float screenWidth,
+            float screenHeight,
+            out TopiaForgeRect placed)
+        {
+            if (!HasViewport(screenWidth, screenHeight))
+            {
+                placed = rect;
+                return false;
+            }
+
+            var (width, height) = sizedByContent
+                ? (rect.Width, rect.Height)
+                : ClampSize(designedWidth, designedHeight, screenWidth, screenHeight, MinWidth, MinHeight);
+            placed = ClampToScreen(new TopiaForgeRect(rect.X, rect.Y, width, height), screenWidth, screenHeight);
+            return true;
         }
 
         /// <summary>
@@ -126,8 +155,7 @@ namespace TopiaForge.Mods.UnityUi
 
         private static bool IsMeasured(float extent)
         {
-            // False for NaN too, since every comparison with NaN is false.
-            return extent > 0f && extent < float.PositiveInfinity;
+            return extent > 0f && float.IsFinite(extent);
         }
     }
 }

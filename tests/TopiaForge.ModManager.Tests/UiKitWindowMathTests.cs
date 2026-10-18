@@ -4,10 +4,10 @@ using TopiaForge.Mods.UnityUi;
 namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
-    /// Window placement against a canvas Unity has not measured yet. A canvas created this frame
-    /// reads 0x0 until its first layout, and a kit window shown in that frame collapsed to 0x0
-    /// because its size was capped to 90% of nothing. An unmeasured canvas must leave a window's
-    /// size and position alone, while a measured small screen still clamps.
+    /// Window placement when a window is shown. A screen with no measured size (0x0, negative or
+    /// non-finite) must never shrink or move a window, so a window shown before its canvas is sized
+    /// keeps its size; measured screens, small ones included, still clamp it, and a cap from a smaller
+    /// screen does not stick.
     /// </summary>
     internal static class UiKitWindowMathTests
     {
@@ -25,26 +25,31 @@ namespace TopiaForge.ModManager.Tests
 
         public static void Run()
         {
-            WindowShownOnUnmeasuredCanvasKeepsItsSize();
+            ShowPlacementWaitsForAMeasuredScreen();
             UnmeasuredCanvasBoundsNothing();
             AnyPositiveFiniteCanvasIsMeasured();
             MeasuredSmallScreensStillClamp();
+            ShowPlacementCapsFromTheDesignedSize();
+            ShowPlacementKeepsContentSizedWindows();
             Console.WriteLine("UiKitWindowMathTests passed.");
         }
 
-        private static void WindowShownOnUnmeasuredCanvasKeepsItsSize()
+        private static void ShowPlacementWaitsForAMeasuredScreen()
         {
-            // The UI Gallery's centred 860x640 window as Show measures it in the frame its canvas
-            // was built: canvas-space x = 0 + (0 / 2) - (860 / 2).
+            // The UI Gallery's centred 860x640 window as Show measures it in the frame its canvas was
+            // built: canvas-space x = 0 + (0 / 2) - (860 / 2).
             var shown = new TopiaForgeRect(-430f, -320f, 860f, 640f);
-            var (w, h) = TopiaForgeWindowMath.ClampSize(shown.Width, shown.Height, 0f, 0f, 240f, 120f);
-            var placed = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(shown.X, shown.Y, w, h), 0f, 0f);
-            AssertSame(placed, shown, "a 0x0 canvas keeps the window at 860x640 where it was");
+            Assert(!TopiaForgeWindowMath.TryPlace(shown, 860f, 640f, false, 0f, 0f, out var placed), "a 0x0 canvas defers the placement");
+            AssertSame(placed, shown, "a deferred placement leaves the window at 860x640 where it was");
 
-            // The first measured frame then clamps as before, and a window that fits stays put.
+            // The clamp Show ran before this fix collapsed the window to 0x0 against that canvas.
+            var (w, h) = TopiaForgeWindowMath.ClampSize(shown.Width, shown.Height, 0f, 0f, TopiaForgeWindowMath.MinWidth, TopiaForgeWindowMath.MinHeight);
+            var clamped = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(shown.X, shown.Y, w, h), 0f, 0f);
+            AssertSame(clamped, shown, "a 0x0 canvas never shrinks or moves the window");
+
+            // The first measured frame places it, and a window that fits stays put.
             var measured = new TopiaForgeRect(530f, 220f, 860f, 640f);
-            (w, h) = TopiaForgeWindowMath.ClampSize(measured.Width, measured.Height, 1920f, 1080f, 240f, 120f);
-            placed = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(measured.X, measured.Y, w, h), 1920f, 1080f);
+            Assert(TopiaForgeWindowMath.TryPlace(measured, 860f, 640f, false, 1920f, 1080f, out placed), "a 1920x1080 canvas places the window");
             AssertSame(placed, measured, "a 1920x1080 canvas keeps a window that fits");
         }
 
@@ -64,6 +69,8 @@ namespace TopiaForge.ModManager.Tests
                 // A position restored from a larger screen must survive until a measured frame.
                 var restored = new TopiaForgeRect(-500f, 2000f, 860f, 640f);
                 AssertSame(TopiaForgeWindowMath.ClampToScreen(restored, width, height), restored, "position is not clamped" + canvas);
+                Assert(!TopiaForgeWindowMath.TryPlace(restored, 860f, 640f, false, width, height, out var placed), "placement waits" + canvas);
+                AssertSame(placed, restored, "a waiting placement leaves the window alone" + canvas);
 
                 // Within the snap threshold of the origin, where a 0x0 screen's edges would pull it.
                 var nearOrigin = new TopiaForgeRect(5f, 7f, 860f, 640f);
@@ -100,6 +107,35 @@ namespace TopiaForge.ModManager.Tests
                 1920f,
                 1080f);
             Assert(dragged.X == 1060f && dragged.Y == 0f, "drag end snaps right and clamps up, got " + dragged);
+        }
+
+        private static void ShowPlacementCapsFromTheDesignedSize()
+        {
+            // An 860x700 window shown at UI scale 1.5 on a 1920x1080 screen gets a 1280x720 canvas and is
+            // capped to 90% of its height.
+            Assert(TopiaForgeWindowMath.TryPlace(new TopiaForgeRect(210f, 10f, 860f, 700f), 860f, 700f, false, 1280f, 720f, out var small),
+                "a 1280x720 canvas places the window");
+            AssertNear(small.Height, 648f, "a 1280x720 canvas caps the height to 90%");
+
+            // Back at UI scale 1.0 the cap does not stick: the window returns to its designed size.
+            Assert(TopiaForgeWindowMath.TryPlace(small, 860f, 700f, false, 1920f, 1080f, out var large), "a 1920x1080 canvas places the window");
+            Assert(large.Width == 860f && large.Height == 700f && large.X == 210f && large.Y == 10f,
+                "a 1920x1080 canvas restores the designed 860x700, got " + large);
+        }
+
+        private static void ShowPlacementKeepsContentSizedWindows()
+        {
+            // A content-sized window one line high is below the minimum size. Its size is never written
+            // back, so placing it at the minimum would move it by half the difference on every Show.
+            var oneLine = new TopiaForgeRect(860f, 493f, 200f, 94f);
+            Assert(TopiaForgeWindowMath.TryPlace(oneLine, 200f, 0f, true, 1920f, 1080f, out var placed), "a 1920x1080 canvas places the window");
+            AssertSame(placed, oneLine, "a content-sized window inside the screen keeps its size and position");
+
+            // Off-screen, it is pulled back by its own size.
+            Assert(TopiaForgeWindowMath.TryPlace(new TopiaForgeRect(1800f, 1000f, 200f, 94f), 200f, 0f, true, 1920f, 1080f, out var pulled),
+                "a 1920x1080 canvas places the window");
+            Assert(pulled.X == 1720f && pulled.Y == 986f && pulled.Width == 200f && pulled.Height == 94f,
+                "a content-sized window is pulled on-screen at its own size, got " + pulled);
         }
 
         private static void AssertSame(TopiaForgeRect actual, TopiaForgeRect expected, string message)

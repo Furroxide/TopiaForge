@@ -17,6 +17,8 @@ namespace TopiaForge.Mods.UnityUi
     {
         private readonly UImage shadow;
         private readonly GameObject canvasRoot;
+        private readonly RectTransform canvasRect;
+        private readonly Vector2 designedSize;
         private readonly UImage fill;
         private readonly UImage ring;
         private readonly UImage titleBarFill;
@@ -33,6 +35,8 @@ namespace TopiaForge.Mods.UnityUi
             : base(host, layerRoot.Scheme, layerRoot.CreateChildGameObject("Window"))
         {
             canvasRoot = layerRoot.Go;
+            canvasRect = layerRoot.Rect;
+            designedSize = new Vector2(width, height);
             persistKey = "win:" + id;
             autoHeight = height <= 0f;
 
@@ -149,7 +153,7 @@ namespace TopiaForge.Mods.UnityUi
             closing = false;
             Go.SetActive(true);
 
-            // A canvas built this frame stays 0x0 until Unity first lays it out, so the clamp
+            // A canvas built this frame is 0x0 until Unity's next canvas update, so the clamp
             // then waits for the first frame the canvas has a size.
             deferredClamp.enabled = !TryClampToScreen();
             TopiaForgeMotion.WindowIn(this);
@@ -252,9 +256,12 @@ namespace TopiaForge.Mods.UnityUi
         internal void HandleDragEnd()
         {
             var (rect, canvasSize) = CanvasSpaceRect();
-            var snapped = TopiaForgeWindowMath.SnapToEdges(rect, canvasSize.x, canvasSize.y);
-            var clamped = TopiaForgeWindowMath.ClampToScreen(snapped, canvasSize.x, canvasSize.y);
-            ApplyCanvasSpaceRect(clamped, canvasSize);
+            if (TopiaForgeWindowMath.HasViewport(canvasSize.x, canvasSize.y))
+            {
+                var snapped = TopiaForgeWindowMath.SnapToEdges(rect, canvasSize.x, canvasSize.y);
+                ApplyCanvasSpaceRect(TopiaForgeWindowMath.ClampToScreen(snapped, canvasSize.x, canvasSize.y), canvasSize);
+            }
+
             PersistRect();
         }
 
@@ -277,26 +284,23 @@ namespace TopiaForge.Mods.UnityUi
         private bool TryClampToScreen()
         {
             var (rect, canvasSize) = CanvasSpaceRect();
-            if (!TopiaForgeWindowMath.HasViewport(canvasSize.x, canvasSize.y))
+            if (!TopiaForgeWindowMath.TryPlace(rect, designedSize.x, designedSize.y, autoHeight, canvasSize.x, canvasSize.y, out var placed))
             {
                 return false;
             }
 
-            var (w, h) = TopiaForgeWindowMath.ClampSize(rect.Width, rect.Height, canvasSize.x, canvasSize.y, 240f, 120f);
-            var clamped = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(rect.X, rect.Y, w, h), canvasSize.x, canvasSize.y);
-            ApplyCanvasSpaceRect(clamped, canvasSize);
+            ApplyCanvasSpaceRect(placed, canvasSize);
             return true;
         }
 
         private (TopiaForgeRect Rect, Vector2 CanvasSize) CanvasSpaceRect()
         {
-            var canvas = OwnCanvas;
-            var canvasRect = canvas != null ? ((RectTransform)canvas.transform).rect.size : new Vector2(TopiaForgeTokens.ReferenceWidth, TopiaForgeTokens.ReferenceHeight);
+            var canvasSize = canvasRect.rect.size;
             var size = Rect.rect.size;
             var position = Rect.anchoredPosition;
-            var x = position.x + (canvasRect.x / 2f) - (size.x / 2f);
-            var y = position.y + (canvasRect.y / 2f) - (size.y / 2f);
-            return (new TopiaForgeRect(x, y, size.x, size.y), canvasRect);
+            var x = position.x + (canvasSize.x / 2f) - (size.x / 2f);
+            var y = position.y + (canvasSize.y / 2f) - (size.y / 2f);
+            return (new TopiaForgeRect(x, y, size.x, size.y), canvasSize);
         }
 
         private void ApplyCanvasSpaceRect(TopiaForgeRect rect, Vector2 canvasSize)
@@ -331,21 +335,19 @@ namespace TopiaForge.Mods.UnityUi
                 return;
             }
 
+            // Only the position comes back: Show caps the designed size to the screen, so a persisted
+            // size would be a cap from some earlier screen.
             var parts = value.Split(';');
             if (parts.Length != 4
                 || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
                 || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
-                || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var w)
-                || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var h))
+                || !float.IsFinite(x)
+                || !float.IsFinite(y))
             {
                 return;
             }
 
             Rect.anchoredPosition = new Vector2(x, y);
-            if (!autoHeight && w > 0f && h > 0f)
-            {
-                Rect.sizeDelta = new Vector2(w, h);
-            }
         }
 
         private UImage CreateDecor(string name, Sprite sprite, bool raycast)
