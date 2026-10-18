@@ -46,3 +46,6 @@ part 'multiplayer/join_requests.dart';
 part 'multiplayer/join_session_events.dart';
 part 'multiplayer/join_session_state.dart';
 part 'multiplayer/join_session.dart';
+part 'multiplayer/server_profiles.dart';
+part 'multiplayer/server_content.dart';
+part 'multiplayer/server_content_cleanup.dart';

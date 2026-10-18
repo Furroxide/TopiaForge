@@ -10,8 +10,6 @@ library;
 
 import 'package:launcher_domain/launcher_domain.dart';
 
-import '../cancellation_token.dart';
-
 /// Whether this build names a multiplayer service.
 enum MultiplayerServiceStatus {
   /// No origin was configured; nothing is ever contacted.

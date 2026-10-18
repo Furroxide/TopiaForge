@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
-import '../cancellation_token.dart';
 import 'control_plane.dart';
 import 'descriptor_client.dart';
 import 'join_descriptor_resolver.dart';
@@ -77,12 +76,22 @@ abstract interface class MultiplayerRepository {
     CancellationToken? cancellation,
   });
 
-  /// Answers [state] when it waits on these clients: resolving a target
-  /// through the service, or fetching its descriptor. Null for any other
-  /// stage, and when [cancellation] stopped the work.
+  /// Answers [state] when it waits on the launcher, so every event
+  /// [JoinSession.reduce] takes comes from one place:
+  ///
+  /// - resolving a target through the service, and fetching its descriptor;
+  /// - with a [MultiplayerContentHost], downloading, installing into
+  ///   [install], and preparing the server profile. Download progress goes
+  ///   to [onProgress].
+  ///
+  /// Null for any other stage, for a content stage when there is no content
+  /// host, and when [cancellation] stopped the work. The content stages need
+  /// [install]; without one they throw [ArgumentError].
   Future<JoinEvent?> answerJoin(
     JoinSessionState state, {
     CancellationToken? cancellation,
+    GameInstall? install,
+    void Function(JoinDownloadProgressed progress)? onProgress,
   });
 
   /// Answers a join in [JoinStage.resolving]. Only targets the service
@@ -112,7 +121,9 @@ abstract interface class MultiplayerRepository {
 ///
 /// The store lives in `<dataRoot>/multiplayer/`. The service is whatever
 /// this build was compiled with; a build without one contacts no service at
-/// all ([UnavailableControlPlane]).
+/// all ([UnavailableControlPlane]). [content] answers the stages that need
+/// the game's files; the launcher passes its own launcher repository, which
+/// is a [MultiplayerContentHost].
 final class LocalMultiplayerRepository implements MultiplayerRepository {
   LocalMultiplayerRepository({
     required String dataRoot,
@@ -124,6 +135,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     HostLookup? lookup,
     MultiplayerNetworkDiagnostics? diagnostics,
     DateTime Function()? clock,
+    MultiplayerContentHost? content,
   }) : this._(
          controlPlane ??
              UnavailableControlPlane(
@@ -136,6 +148,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
          lookup,
          diagnostics ?? MultiplayerNetworkDiagnostics(),
          clock ?? DateTime.now,
+         content,
        );
 
   LocalMultiplayerRepository._(
@@ -146,6 +159,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     HostLookup? lookup,
     this._diagnostics,
     this._clock,
+    this._content,
   ) : _lan = lan ?? LanDiscoveryClient(descriptors: descriptors) {
     _resolver = JoinDescriptorResolver(
       descriptors: descriptors,
@@ -165,6 +179,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   final LanDiscoveryClient _lan;
   final MultiplayerNetworkDiagnostics _diagnostics;
   final DateTime Function() _clock;
+  final MultiplayerContentHost? _content;
   late final JoinDescriptorResolver _resolver;
 
   /// Counts the calls that decide whether LAN browsing runs, so a start still
@@ -271,17 +286,43 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   Future<JoinEvent?> answerJoin(
     JoinSessionState state, {
     CancellationToken? cancellation,
-  }) async => switch (state.stage) {
-    JoinStage.resolving => await resolveTarget(
-      state.target,
-      cancellation: cancellation,
-    ),
-    JoinStage.fetchingDescriptor => await fetchDescriptor(
-      state.descriptorRequest!,
-      cancellation: cancellation,
-    ),
-    _ => null,
-  };
+    GameInstall? install,
+    void Function(JoinDownloadProgressed progress)? onProgress,
+  }) async {
+    GameInstall requireInstall() =>
+        install ??
+        (throw ArgumentError(
+          'The ${state.stage.name} stage needs the game install.',
+          'install',
+        ));
+    final content = _content;
+    return switch (state.stage) {
+      JoinStage.resolving => await resolveTarget(
+        state.target,
+        cancellation: cancellation,
+      ),
+      JoinStage.fetchingDescriptor => await fetchDescriptor(
+        state.descriptorRequest!,
+        cancellation: cancellation,
+      ),
+      JoinStage.downloading when content != null =>
+        await content.downloadJoinContent(
+          requireInstall(),
+          state,
+          onProgress: onProgress,
+          cancellation: cancellation,
+        ),
+      JoinStage.installing when content != null =>
+        await content.installJoinContent(
+          requireInstall(),
+          state,
+          cancellation: cancellation,
+        ),
+      JoinStage.preparingProfile when content != null =>
+        await content.prepareJoinProfile(requireInstall(), state),
+      _ => null,
+    };
+  }
 
   @override
   Future<JoinEvent?> resolveTarget(

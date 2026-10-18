@@ -65,9 +65,17 @@ extension _EffectiveLaunchSelectionBuilder on LocalLauncherRepository {
       reject(issue.$1, issue.$2);
     }
     final stateById = _stateByModId(state);
+    // Only a server profile sees what joins installed for the player's own
+    // mods; it pins every package it loads.
+    final serverProfile = ServerProfiles.isServerProfile(profile);
+    final hiding = serverProfile ? null : await _hiddenServerVersions(install);
+    if (hiding == null && !serverProfile && !profile.launchSettings.safeMode) {
+      issues.add(_serverContentUnreadable);
+    }
     final catalog = await _loadInstalledVersionCatalog(
       install,
       stateById: stateById,
+      hiding: hiding,
     );
     for (final entry in catalog.entries) {
       if (entry.value.isEmpty) continue;

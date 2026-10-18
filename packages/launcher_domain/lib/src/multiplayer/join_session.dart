@@ -25,7 +25,17 @@ part of '../multiplayer.dart';
 /// - Cancelling stops at once wherever the work can be abandoned. While
 ///   installing, preparing the profile or launching it is held until the
 ///   step finishes, and the join then ends as cancelled instead of moving on;
-///   if the step fails instead, its failure is what the join reports.
+///   if the step fails instead, its failure is what the join reports. An
+///   install that stops for the request before it changes anything the game
+///   reads reports [JoinInstallUndone], which ends the join as cancelled too.
+/// - Nothing installs beside a running game: a running game writes its
+///   manager state when it quits, over what the install wrote. A game the
+///   launcher started is closed first, as the join's restart would close it;
+///   one it did not start ends the install as [JoinFailureCode.gameRunning],
+///   as it ends a launch.
+/// - Packages only the host serves are not downloaded by this launcher: a
+///   plan that needs one ends while downloading as
+///   [JoinFailureCode.hostDownloadUnsupported], before anything is fetched.
 /// - A game that exits ends the join from launching onwards, and ends the
 ///   session once it began.
 /// - When admission changes while connecting, the join fetches the
@@ -65,11 +75,15 @@ abstract final class JoinSession {
     JoinStage.awaitingConsent: {},
     JoinStage.downloading: {
       JoinFailureCode.downloadFailed,
+      JoinFailureCode.hostDownloadUnsupported,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
       JoinFailureCode.directNotAllowed,
     },
-    JoinStage.installing: {JoinFailureCode.installFailed},
+    JoinStage.installing: {
+      JoinFailureCode.installFailed,
+      JoinFailureCode.gameRunning,
+    },
     JoinStage.preparingProfile: {JoinFailureCode.profileSaveFailed},
     JoinStage.launching: {
       JoinFailureCode.repairNeeded,
@@ -210,6 +224,7 @@ abstract final class JoinSession {
         state,
         JoinStage.preparingProfile,
       ),
+      JoinInstallUndone() when stage == JoinStage.installing => _undone(state),
       JoinProfilePrepared() when stage == JoinStage.preparingProfile =>
         _finished(state, JoinStage.launching),
       JoinGameStarted() when stage == JoinStage.launching => _finished(
@@ -238,6 +253,20 @@ abstract final class JoinSession {
     }
     return state;
   }
+
+  /// An install that stopped and removed what it staged installed nothing:
+  /// the join ends as the cancel it answered, or, unasked, as an install
+  /// failure whose rollback completed. It never moves on.
+  static JoinSessionState _undone(JoinSessionState state) =>
+      state.cancelRequested
+      ? state._failed(JoinFailureCode.cancelled)
+      : state._failed(
+          JoinFailureCode.installFailed,
+          detail:
+              'The install stopped before it finished. Nothing was '
+              'installed; join again to install the server\'s mods.',
+          rollbackComplete: true,
+        );
 
   static JoinSessionState _gameExited(JoinSessionState state) {
     if (gameExitStages.contains(state.stage)) {

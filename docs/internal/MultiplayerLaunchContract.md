@@ -1,10 +1,11 @@
 # Multiplayer session launches — design record
 
-Status: Implementing (WS6.2 and WS6.3 of the live-multiplayer plan) · Date: 2026-10-15 · Owner: multiplayer
+Status: Implementing (WS6.2, WS6.3 and the exact installs of WS6.5 of the live-multiplayer plan) · Date: 2026-10-18 ·
+Owner: multiplayer
 
 This records how the launcher starts a game to host or join a live session, what the game reports back, the channels
-the two keep open while a session runs, and how the launcher finds the exact package versions a server runs. The
-transport and the live sessions themselves are recorded in `MultiplayerLiveSessions.md`.
+the two keep open while a session runs, how the launcher finds the exact package versions a server runs, and how a
+join installs them. The transport and the live sessions themselves are recorded in `MultiplayerLiveSessions.md`.
 
 | Piece | Dart (launcher) | C# (game) |
 | --- | --- | --- |
@@ -14,6 +15,7 @@ transport and the live sessions themselves are recorded in `MultiplayerLiveSessi
 | Vocabulary and value rules | `session_values.dart` | `LaunchContractValues.cs`, `LaunchSessionValues.cs`, `LaunchSessionHosts.cs` |
 | Staging | `launch_staging_store.dart`, `launch_staging_sessions.dart` | `LaunchStagingStore.Sessions.cs` |
 | Exact-version resolution | `multiplayer/exact_package_resolution.dart`, `exact_package_catalog_loading.dart` | — |
+| Exact installs and server content | `MultiplayerContentHost` in `repositories.dart`; `multiplayer/server_content*.dart`, `server_profiles.dart`; `join_content_*.dart`, `join_install_journal.dart`, `join_server_profile.dart`, `server_content_*.dart`, `multiplayer/server_content_store.dart`, `secure_http_download.dart` | — |
 
 ## 1. One launch, one version
 
@@ -259,3 +261,81 @@ The generator takes its server pins (`serverId`, `descriptorSha256` and `package
 and both runtimes check that every pinned target, and every handoff listing, names a server those descriptor fixtures
 describe. A change to the descriptor fixtures therefore fails until `generate_launch.py` runs again after
 `generate.py`.
+
+## 11. Exact installs, server profiles and server content
+
+After consent, a join installs exactly the archives its plan names and saves the server's profile; the player matches
+nothing by hand, and nothing the player's own profiles load changes. `MultiplayerContentHost`, an optional capability
+of a launcher repository that `LocalLauncherRepository` has, answers the three stages, and the multiplayer facade's
+`answerJoin` hands them to it, so every event the reducer takes still comes from one place.
+
+| Stage | What happens | What it can report |
+| --- | --- | --- |
+| Downloading | Each `download` package, from the source the plan names | `JoinDownloadProgressed`, `downloadFailed`, `integrityFailed`, `manifestMismatch`, `hostDownloadUnsupported`; a cancel stops it at once |
+| Installing | Every downloaded package, as one change | `installFailed` with `rollbackComplete`, `gameRunning`, `JoinInstallUndone` |
+| Preparing the profile | The server profile, saved | `profileSaveFailed` |
+
+Every failure detail says, in plain words, what happened and what to do next. What went wrong underneath goes to the
+launcher log, and neither ever names a URL or an address.
+
+- **Downloads.** An HTTPS source goes through `downloadHttpsToFile`, which follows redirects only to HTTPS, as
+  `fetchHttpsBytes` does; a local source is copied under the same rules. The body streams to a temporary file beside
+  the package cache, with its SHA-256 computed as it arrives. It is bounded by `ModRegistryFormat.maxPackageBytes` and
+  by the size the source states: an announced length past either is refused before the body is read, a body that
+  passes its bound as soon as it does, and one that ends short once it ends. The SHA-256 must be the pinned one before
+  anything is kept. Then the archive's `topiaforge.mod.json` must equal the trusted manifest the plan used, compared as
+  package installs compare it. Verified archives stay in the cache by SHA-256, so a join tried again fetches nothing
+  twice. A plan that needs a package only the host serves ends as `hostDownloadUnsupported` before anything is
+  fetched; host-served downloads are a later slice.
+- **The player's state is untouched.** A join never writes the manager record of a mod that already has one. A mod
+  new to the player, with neither a record nor an installed version, gets a disabled record before its folder
+  appears, so neither the game nor an inheriting profile turns it on by default.
+- **What the player's own profiles see.** A version a join installed for a mod the player already had (installed,
+  recorded, or named by one of their profiles) is hidden from every profile that is not a server profile, and from the
+  Mods list. So an unpinned profile never moves to a server's newer version. Server profiles pin every package and see
+  every version. A mod new to the player stays visible, but disabled; if the player turns it on, it is theirs to use.
+  A version counts as server content only while its install receipt is still the one the join wrote, so a version the
+  player installs again is theirs.
+- **One change, with a journal.** The install stages every package with the package installs' stage, commit and
+  rollback path (`_stagePackageInstall`), in one folder, `launcher-join-*` in manager staging. A journal there says how
+  far it got. In this order it then records the mods new to the player, adds its archives to the record of server
+  content, and moves each package into place. A failure after that order begins rolls back everything this join
+  changed, and only that: packages an earlier join installed stay. A cancel before it begins removes what was staged
+  and reports `JoinInstallUndone`. Once it begins the install finishes, and the reducer then ends the join as
+  cancelled.
+- **Crash safety.** A launcher stopped before the order begins left only staged folders, which nothing loads. One
+  stopped part way through it left disabled records and hidden versions, which no profile of the player's own loads.
+  Either way the next start, the next install or the next cleanup takes the staging lease and settles the journal: it
+  undoes a partial install, keeps one whose every package is in place, and removes the folder.
+- **A running game.** It writes its manager state when it quits, over anything written while it ran, which would drop
+  the disabled records. So nothing installs or cleans up beside one; the package inbox likewise holds what arrives
+  until the next start. An install closes a game this launcher started, as the join's restart at launch would, then
+  goes ahead. A game it did not start, or one that will not close, ends the join as `gameRunning` with its ownership.
+  Downloads and the server profile do not touch the game, so they go ahead while it runs.
+- **The staging lease.** Installs and cleanups take `acquireLaunchLease`, so no launch stages while they change the
+  game's files. A lease another launch or install holds ends the install at once with a plain "try again".
+- **The server profile.** `mp-<sha16(serverId)>`, named `Server · <name>`, with `inheritManagerModState: false` and
+  every package pinned (`ServerProfiles`). A join owns the id and name, the inheritance, the enabled packages and their
+  pins, and Safe Mode, which is always off since Safe Mode never joins. A re-join replaces those and keeps everything
+  else the player set: extra launch arguments, the launch environment, the remembered launch selection, and the config
+  and backup metadata. The profiles file is replaced in one step, so a failed save leaves the earlier profile as it
+  was. A profile of the player's own under that id is never taken over. Which profile is selected never changes.
+- **The record of server content.** `server-content.json` beside the manager state, `topiaforge.server-content/1`:
+  each archive a join installed (id, version, SHA-256, the SHA-256 of its install receipt, whether it is hidden, when)
+  and the mods whose manager record a join added. It lives with the install so it moves with the packages, and the
+  staging lease serializes its writes. It keeps the multiplayer store's rules: atomic writes, damage salvaged with a
+  copy kept aside, and a file that cannot be read never written over. It holds at most 1,024 versions; a join that
+  would pass that is refused, never trimmed, since a dropped entry would expose a hidden version. While it cannot be
+  read, a launch of a profile that is not a server profile is blocked rather than risk loading a server's version.
+- **Cleanup.** `planServerContentCleanup` lists each version of server content with its size and the server profiles
+  that pin it, and whether it can go: not while a profile of the player's own loads or pins it, and not while a server
+  profile the cleanup keeps pins it. The player's own installs never appear. A plan for every server, or for the ones
+  it names, removes those server profiles too. `applyServerContentCleanup` applies exactly that plan, checked by its
+  fingerprint, and refuses one gone stale, a running game, and a held lease. It moves every version out of the packages
+  folder first, undoing the moves if one fails, then removes the manager records of mods left with no version that a
+  join added or whose uninstall is pending, as an uninstall does, then the profiles, then the downloaded archives no
+  installed version names. Versions no server profile pins any more, such as the ones a re-join replaced, are removed
+  after each profile save on their own, so the player only ever decides about whole servers.
+- **Known limit.** A game started without the launcher selects versions from the manager state alone. For a mod the
+  player leaves unpinned, it can pick a version a join installed if that one is newer; every launch the launcher makes
+  is unaffected. Closing this needs the runtime to read the record too.

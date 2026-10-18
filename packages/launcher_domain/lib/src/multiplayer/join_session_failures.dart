@@ -52,6 +52,10 @@ enum JoinFailureCode {
   cancelled,
   downloadFailed,
 
+  /// The plan needs packages only the host serves, and this launcher does not
+  /// download packages from a host. Nothing was downloaded.
+  hostDownloadUnsupported,
+
   /// A downloaded archive's SHA-256 differs from the pinned one.
   integrityFailed,
 
@@ -87,9 +91,12 @@ enum JoinFailureCode {
   disconnected,
 }
 
-/// Who owns a game process that blocks a launch.
+/// Who owns a game process that blocks a launch or an install. An install
+/// never runs beside a game: a running game writes its manager state when it
+/// quits, over anything written while it ran.
 enum JoinGameOwnership {
-  /// The launcher started it, so it can restart it into the join.
+  /// The launcher started it, so it can restart it into the join. An install
+  /// closes it first; it blocks only when closing it failed.
   owned,
 
   /// Something else started it; the player must close it.

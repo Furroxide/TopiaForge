@@ -9,7 +9,6 @@ import 'dart:typed_data';
 
 import 'package:launcher_domain/launcher_domain.dart';
 
-import '../cancellation_token.dart';
 import 'descriptor_response.dart';
 import 'descriptor_signature_verifier.dart';
 

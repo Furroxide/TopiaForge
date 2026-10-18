@@ -61,6 +61,14 @@ final class JoinInstallCompleted extends JoinEvent {
   const JoinInstallCompleted();
 }
 
+/// The install stopped for a cancel request before it changed anything the
+/// game reads, and removed everything it had staged. The join then ends as
+/// cancelled. Without a cancel request it ends as an install failure whose
+/// rollback completed, never as an install.
+final class JoinInstallUndone extends JoinEvent {
+  const JoinInstallUndone();
+}
+
 final class JoinProfilePrepared extends JoinEvent {
   const JoinProfilePrepared();
 }

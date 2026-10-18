@@ -42,12 +42,19 @@ void main() {
     JoinStage.awaitingConsent: {},
     JoinStage.downloading: {
       JoinFailureCode.downloadFailed,
+      // Packages only the host serves are never downloaded by the launcher.
+      JoinFailureCode.hostDownloadUnsupported,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
       // A host download the contact rules forbid once names are resolved.
       JoinFailureCode.directNotAllowed,
     },
-    JoinStage.installing: {JoinFailureCode.installFailed},
+    JoinStage.installing: {
+      JoinFailureCode.installFailed,
+      // A running game writes its manager state when it quits, over what an
+      // install wrote, so nothing installs beside one.
+      JoinFailureCode.gameRunning,
+    },
     JoinStage.preparingProfile: {JoinFailureCode.profileSaveFailed},
     JoinStage.launching: {
       JoinFailureCode.repairNeeded,
@@ -149,6 +156,7 @@ void main() {
         JoinDownloadProgressed(bytesDone: 5, bytesTotal: 10),
     'downloadsCompleted': () => const JoinDownloadsCompleted(),
     'installCompleted': () => const JoinInstallCompleted(),
+    'installUndone': () => const JoinInstallUndone(),
     'profilePrepared': () => const JoinProfilePrepared(),
     'gameStarted': () => const JoinGameStarted(),
     'connected': () => const JoinConnected(),
@@ -228,6 +236,14 @@ void main() {
           } else if (stage == JoinStage.inSession && name == 'sessionEnded') {
             expect(after.stage, JoinStage.ended);
             expect(after.outcome!.sessionEnd, JoinSessionEndReason.left);
+          } else if (stage == JoinStage.installing && name == 'installUndone') {
+            // Unasked for, an undone install ends as a failed install whose
+            // rollback completed; it never moves on.
+            expect(after.stage, JoinStage.ended);
+            final failure = after.outcome!.failure!;
+            expect(failure.code, JoinFailureCode.installFailed);
+            expect(failure.stage, JoinStage.installing);
+            expect(failure.rollbackComplete, isTrue);
           } else if (name == 'cancelRequested' &&
               cancelAtOnce.contains(stage)) {
             expect(after.stage, JoinStage.ended);

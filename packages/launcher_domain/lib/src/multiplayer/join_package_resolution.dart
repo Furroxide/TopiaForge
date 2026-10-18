@@ -14,6 +14,10 @@ enum JoinPackageAvailability {
   /// Only a disabled source offers the exact archive.
   inDisabledSource,
 
+  /// This id and version are installed as another archive. Both would need
+  /// the same folder, and a join never replaces an installed archive.
+  installedAsOtherArchive,
+
   /// A source offers this id and version, but as a different archive.
   hashMismatch,
 
@@ -72,6 +76,7 @@ final class JoinPackageResolution {
   }
 
   /// No usable copy: [reason] is [JoinPackageAvailability.inDisabledSource],
+  /// [JoinPackageAvailability.installedAsOtherArchive],
   /// [JoinPackageAvailability.hashMismatch],
   /// [JoinPackageAvailability.versionUnavailable] or
   /// [JoinPackageAvailability.notInSources]. [sourceName] names the source

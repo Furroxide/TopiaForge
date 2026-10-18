@@ -251,18 +251,23 @@ extension _PackageInstallationHelpers on LocalLauncherRepository {
     );
   }
 
+  /// Stages [package] for [install] in a transaction folder of its own,
+  /// beneath [transactionParent] when given (a join keeps all of its
+  /// packages in one folder it can sweep), else in manager staging.
   Future<_StagedPackageInstall> _stagePackageInstall(
     _PackageReadResult package,
     GameInstall install, {
     required String source,
+    Directory? transactionParent,
   }) async {
     if (!ModManifest.isValidId(package.manifest.id)) {
       throw StateError('Unsafe package id: ${package.manifest.id}.');
     }
     final packagesRoot = _packagesRoot(install);
-    final transactionRoot = (_managerStaging(
-      install,
-    )..createSync(recursive: true)).createTempSync('launcher-install-');
+    final transactionRoot =
+        (transactionParent ?? _managerStaging(install)
+              ..createSync(recursive: true))
+            .createTempSync('launcher-install-');
     final target = Directory(
       p.join(packagesRoot.path, package.manifest.id, package.manifest.version),
     );
