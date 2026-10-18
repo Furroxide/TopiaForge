@@ -1309,6 +1309,15 @@ world events, and every other runtime callback.
   `InteractionIntent.Handler`, rather than the local player's relay.
 - **Motion leases.** WS3.7 opens `EnterMotionLease(mod)` around the code that drives a lease the local player holds,
   such as GravityGun's FixedUpdate, which moves the body the player holds.
+- **Providers that act for another mod.** A provider's own seam answers for the provider's mod, so it sees none of a
+  consumer's intent. CreatorContent's and RobotKit's facades are bound by owner id alone (`IOwnerBoundExtensionFactory`).
+  To route a spawn they make for a consumer by that consumer's intent, WS3.7 binds them to the consumer's context
+  (`IOwnerContextBoundExtensionFactory`, as Worlds already is) and asks that context's seam
+  (`IInternalReplicationContext.Replication.CurrentIntent`).
+- **Input-active frames are coarse.** A mod's whole Update and LateUpdate carry `InputActiveFrame` while its own input
+  is active, scripted work included. On a joined player, a scripted spawn made there reads as the player's, although the
+  host's own run of the same script makes it too. The record names its source, so WS3.7 can weigh `InputActiveFrame`
+  apart from a click, a command or an interaction when it decides between forwarding a spawn and shadowing it.
 
 ### Privacy
 
