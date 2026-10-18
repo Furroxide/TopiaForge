@@ -204,6 +204,58 @@ void main() {
     );
   });
 
+  test('another server\'s build of a version says to remove that server\'s '
+      'content, never to uninstall the player\'s mod', () async {
+    final rig = await JoinRig.create();
+    await preparePlayer(rig);
+    final (first, firstPlan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    expect(
+      await rig.repository.installJoinContent(
+        rig.install,
+        installingJoin(first, firstPlan),
+      ),
+      isA<JoinInstallCompleted>(),
+    );
+    // A second server runs Alpha 2.0.0 too, as another build. The first
+    // server's Alpha 2.0.0 is hidden: the Mods list shows only the player's
+    // Alpha 1.0.0, and uninstalling Alpha there would take it too.
+    final otherBuild = TestArchive(
+      'own.alpha',
+      '2.0.0',
+      name: 'Alpha',
+      payload: 'another build',
+    );
+    final second = await verifiedServer(
+      [otherBuild.package],
+      name: 'Other Server',
+      issuedAt: 1791850200,
+    );
+    final catalog = await rig.repository.loadExactPackageCatalog(rig.install);
+    final plan = const JoinPlanner().planFromCatalog(
+      server: second,
+      catalog: catalog,
+      environment: testJoinEnvironment,
+      mayContactHost: true,
+    );
+    final message = plan.blockers.single.message;
+    expect(message, contains("Remove that server's content in Settings"));
+    expect(message, isNot(contains('Mods')));
+    // The install says the same, should it get that far.
+    final forced = planJoin(second, {
+      otherBuild.sha256Hex: otherBuild.offeredAt(
+        'https://packages.example/other-alpha.topiaforgemod',
+      ),
+    });
+    rig.cache([otherBuild]);
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(second, forced),
+    );
+    expect((event as JoinFailed).detail, contains("Remove that server's"));
+    expect(event.detail, contains('Alpha 2.0.0'));
+  });
+
   test('the exact build already installed needs nothing', () async {
     final rig = await JoinRig.create();
     await rig.installOwn(StandardJoin.serverAlpha);

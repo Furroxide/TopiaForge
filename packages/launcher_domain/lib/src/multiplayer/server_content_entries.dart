@@ -99,10 +99,11 @@ final class ServerContentEntry {
 /// An installed version the record keeps out of the player's own play
 /// without knowing it as server content. A launcher that finds the record
 /// damaged cannot tell which installed versions joins brought in, so it
-/// withholds each one that neither the manager state nor a profile of the
-/// player's own names, by its install receipt, rather than risk exposing a
-/// server's version. Installing it again, which writes another receipt,
-/// makes it the player's.
+/// withholds each one the manager state does not name, by its install
+/// receipt, rather than risk exposing a server's version. Unpinned selection
+/// never takes it; an exact pin still does, as the game's loader loads every
+/// exact pin, so a profile that pins it keeps loading it. Installing it
+/// again, which writes another receipt, makes it the player's.
 final class WithheldServerVersion {
   WithheldServerVersion({
     required this.modId,

@@ -61,10 +61,17 @@ extension _JoinInstallPreflight on _JoinInstall {
             await _receiptArchiveSha256(target) == item.package.sha256) {
           continue;
         }
+        final other = load.record.entryFor(manifest.id, manifest.version);
         throw _JoinInstallRefused(
-          'You have $name installed, but as a different build than the '
-          'server runs, and joining never replaces your copy. Uninstall it in '
-          'Mods, then join again.',
+          other != null &&
+                  other.hidden &&
+                  other.receiptSha256 == await _receiptSha256(target)
+              ? 'Another server you joined runs a different build of $name, '
+                    'and joining never replaces it. Remove that server\'s '
+                    'content in Settings, then join again.'
+              : 'You have $name installed, but as a different build than '
+                    'the server runs, and joining never replaces your copy. '
+                    'Uninstall it in Mods, then join again.',
         );
       }
       pending.add(

@@ -346,33 +346,49 @@ final class _JoinInstall {
 
   /// Puts back everything this join changed, newest first; says whether all
   /// of it went back. What could not stays in the journal for the next
-  /// start.
+  /// start. A folder that could not be taken back out, as when another
+  /// program holds one of its files, keeps its entry in the record of server
+  /// content and its added record, so it stays out of the player's own play
+  /// until the next start removes it.
   Future<bool> _rollBack() async {
-    var complete = true;
+    final stuck = <_StagedJoinPackage>[];
     for (final item in _staged.reversed) {
       try {
         item.staged.rollback();
       } on Object {
-        complete = false;
+        stuck.add(item);
       }
     }
+    var complete = stuck.isEmpty;
     for (final item in _staged) {
       item.staged.clean(stateSaved: false);
     }
+    final kept = {
+      for (final item in stuck) item.pending.manifest.id.toLowerCase(),
+    };
     try {
-      final entries = [for (final item in _staged) item.entry(0)];
+      final entries = [
+        for (final item in _staged)
+          if (!stuck.contains(item)) item.entry(0),
+      ];
       await _repository
           ._serverContentStore(_install)
           .update(
-            (record) => record.without([
-              for (final entry in record.entries)
-                if (entries.any(
-                  (item) =>
-                      entry.names(item.modId, item.version) &&
-                      entry.receiptSha256 == item.receiptSha256,
-                ))
-                  entry,
-            ], addedRecords: _addedRecords),
+            (record) => record.without(
+              [
+                for (final entry in record.entries)
+                  if (entries.any(
+                    (item) =>
+                        entry.names(item.modId, item.version) &&
+                        entry.receiptSha256 == item.receiptSha256,
+                  ))
+                    entry,
+              ],
+              addedRecords: [
+                for (final id in _addedRecords)
+                  if (!kept.contains(id.toLowerCase())) id,
+              ],
+            ),
           );
     } on Object {
       complete = false;

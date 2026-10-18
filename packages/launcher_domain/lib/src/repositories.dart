@@ -194,8 +194,11 @@ abstract interface class MultiplayerContentHost {
   /// says the consent covered it, and only once every package is staged and
   /// the install can no longer be cancelled, so a join that is refused or
   /// cancelled leaves it running. Today the launcher stops it outright, which
-  /// loses progress not saved there. Otherwise a running game, or one this
-  /// launcher did not start, ends the join as [JoinFailureCode.gameRunning].
+  /// loses progress not saved there and makes the game's next start its
+  /// one-shot safe mode, which refuses the session, so a consent should not
+  /// cover closing until the launcher can ask the game to quit. Otherwise a
+  /// running game, or one this launcher did not start, ends the join as
+  /// [JoinFailureCode.gameRunning].
   Future<JoinEvent?> installJoinContent(
     GameInstall install,
     JoinSessionState state, {

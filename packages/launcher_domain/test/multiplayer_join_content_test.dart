@@ -258,6 +258,42 @@ void main() {
       expect(blocker.message, contains('then join again'));
     });
 
+    test('says to remove the other server\'s content when it is that '
+        'server\'s, which the player\'s Mods list does not show', () {
+      final catalog = ExactPackageCatalog(
+        installed: [
+          ExactInstalledArchive(
+            sha256: other,
+            manifest: sandbox,
+            serverOnly: true,
+          ),
+        ],
+      );
+      expect(
+        catalog
+            .resolvePackage(
+              testPackage('example.sandbox'),
+              developerMode: false,
+              hostServesPackages: false,
+            )
+            .availability,
+        JoinPackageAvailability.installedForAnotherServer,
+      );
+      final blocker = const JoinPlanner()
+          .planFromCatalog(
+            server: server,
+            catalog: catalog,
+            environment: testEnvironment,
+            mayContactHost: true,
+          )
+          .blockers
+          .single;
+      expect(blocker.code, JoinBlockerCode.contentUnavailable);
+      expect(blocker.message, contains("Remove that server's content"));
+      // Uninstalling the mod in Mods would take the player's own versions.
+      expect(blocker.message, isNot(contains('Mods')));
+    });
+
     test('another installed version is no conflict', () {
       final catalog = ExactPackageCatalog(
         installed: [

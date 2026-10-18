@@ -3,8 +3,8 @@ part of '../local_launcher_repository.dart';
 /// A cleanup's plan, and what applying it needs: the record entry of each
 /// removable version, the record as the plan read it, and what the record
 /// still names that is no longer there: entries and withheld versions whose
-/// folder is gone or was installed again since, and added records the
-/// manager state no longer has.
+/// folder is gone or was installed again since, and added records of mods
+/// with neither a manager record nor a version left.
 typedef _ServerContentWork = ({
   ServerContentCleanupPlan plan,
   List<ServerContentEntry> removable,
@@ -148,7 +148,11 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       record: load.record,
       stale: stale,
       staleWithheld: staleWithheld,
-      staleAdded: load.record.addedRecords.difference(state.keys.toSet()),
+      staleAdded: _uninstalledAddedRecords(
+        packagesRoot,
+        load.record,
+        state.keys,
+      ),
     );
   }
 

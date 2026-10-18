@@ -50,6 +50,12 @@ final class JoinConsentGiven extends JoinEvent {
   /// running ends the join as [JoinFailureCode.gameRunning], owned, and the
   /// player closes the game themselves. See
   /// [JoinSessionState.closeOwnedGameAcknowledged].
+  ///
+  /// Leave it false until the launcher can ask the game to quit. A game it
+  /// stops outright records no clean exit, so its next start is the one-shot
+  /// safe mode, which refuses a session launch: a join that closed it would
+  /// fail at its session after the player lost that progress, where saving
+  /// and quitting, then joining again, works.
   final bool closeOwnedGameAcknowledged;
 }
 

@@ -143,7 +143,7 @@ valid_cases = [
            probe("Io.Example.Paint", "3.1.0-beta.2+build.7", "paint 3.1.0", False)]),
     valid("rebuilt",
           "A record the launcher rebuilt after damage: the entry that still read, and every other installed version "
-          "withheld, except the ones the manager state and the player's own profiles name.", REBUILT,
+          "withheld, except the ones the manager state names.", REBUILT,
           [probe("io.example.tools", "1.0.0", "tools 1.0.0", True),
            probe("io.example.tools", "1.2.0", "tools 1.2.0", True),
            probe("io.example.maps", "0.9.1", "maps 0.9.1", True),

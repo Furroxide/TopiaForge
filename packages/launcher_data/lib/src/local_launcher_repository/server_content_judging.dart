@@ -25,6 +25,35 @@ Future<bool?> _judgeRecorded(Directory folder, String receiptSha256) async {
   return receipt.sha256 == receiptSha256;
 }
 
+/// The added records of [record] that name a mod with neither a manager
+/// record (lowercase ids [recorded]) nor any installed version: what an
+/// uninstall left. One whose mod still has a version stays, even once its
+/// manager record is gone, since it is what starts that mod disabled again.
+/// None while [packagesRoot] cannot be listed.
+Set<String> _uninstalledAddedRecords(
+  Directory packagesRoot,
+  ServerContentRecord record,
+  Iterable<String> recorded,
+) {
+  final unrecorded = record.addedRecords.difference(recorded.toSet());
+  if (unrecorded.isEmpty) return const {};
+  try {
+    if (!packagesRoot.existsSync()) return unrecorded;
+    final installed = {
+      for (final folder in packagesRoot.listSync(followLinks: false))
+        if (folder is Directory &&
+            folder
+                .listSync(followLinks: false)
+                .whereType<Directory>()
+                .isNotEmpty)
+          p.basename(folder.path).toLowerCase(),
+    };
+    return unrecorded.difference(installed);
+  } on FileSystemException {
+    return const {};
+  }
+}
+
 bool _pinsVersion(LauncherProfile server, ServerContentEntry entry) {
   final id = entry.modId.toLowerCase();
   if (!server.enabledMods.any((item) => item.toLowerCase() == id)) {

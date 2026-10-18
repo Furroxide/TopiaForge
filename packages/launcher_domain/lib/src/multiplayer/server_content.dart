@@ -83,7 +83,10 @@ final class ServerContentRecord {
   /// Each version withheld after a repair once, by mod id and version.
   final List<WithheldServerVersion> withheld;
 
-  /// The mods, by lowercase id, whose manager record a join added.
+  /// The mods, by lowercase id, whose manager record a join added. Such a
+  /// mod, found with no manager record, starts disabled, in the launcher and
+  /// in the game's loader alike; the id stays here while any version of the
+  /// mod is installed.
   final Set<String> addedRecords;
 
   bool get isEmpty =>

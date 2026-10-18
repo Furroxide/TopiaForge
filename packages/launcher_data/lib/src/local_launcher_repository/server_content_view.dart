@@ -9,11 +9,62 @@ part of '../local_launcher_repository.dart';
 /// installs a newer version of a mod they leave unpinned. Server profiles pin
 /// every package and see every version. A mod new to the player stays
 /// visible; its manager record starts disabled, so nothing loads it unless
-/// the player turns it on.
+/// the player turns it on, and it starts disabled again if that record is
+/// lost, as the game's loader starts it ([records]).
+///
+/// While the record cannot be used, the view freezes as the game's loader
+/// freezes its selection: each mod offers only the version its manager
+/// record names, and a mod with no manager record offers nothing, so no view
+/// of the player's own play ever shows a version the record may withhold.
 final class _HiddenServerVersions {
-  _HiddenServerVersions(this._record);
+  _HiddenServerVersions(this._record) : _named = null, _exactPins = false;
+
+  _HiddenServerVersions.frozen(Map<String, Map<dynamic, dynamic>> stateById)
+    : _record = ServerContentRecord.empty(),
+      _exactPins = false,
+      _named = {
+        for (final entry in stateById.entries)
+          if (entry.value['version'] case final String version)
+            entry.key: version,
+      };
+
+  _HiddenServerVersions._pinned(this._record)
+    : _named = null,
+      _exactPins = true;
 
   final ServerContentRecord _record;
+
+  /// While the record cannot be used: the version each mod's manager record
+  /// names, by lowercase id.
+  final Map<String, String>? _named;
+  final bool _exactPins;
+
+  /// Whether the record could be used. While it cannot, a launch of a
+  /// profile of the player's own waits for it.
+  bool get usable => _named == null;
+
+  /// What an exact pin of a profile of the player's own sees, when that is
+  /// more: a version a repair withheld stays out of unpinned selection only,
+  /// as the game's loader loads every exact pin, while a version a join hid
+  /// stays the server's. Null when exact pins see what unpinned selection
+  /// sees.
+  _HiddenServerVersions? get forExactPins =>
+      usable && !_exactPins && _record.withheld.isNotEmpty
+      ? _HiddenServerVersions._pinned(_record)
+      : null;
+
+  /// [stateById] with a disabled record for each mod a join added whose
+  /// manager record is gone, so that it starts disabled, as the game's loader
+  /// starts it.
+  Map<String, Map<dynamic, dynamic>> records(
+    Map<String, Map<dynamic, dynamic>> stateById,
+  ) => _record.addedRecords.every(stateById.containsKey)
+      ? stateById
+      : {
+          for (final id in _record.addedRecords)
+            id: <dynamic, dynamic>{'enabled': false},
+          ...stateById,
+        };
 
   /// Whether [versionDirectory], a version folder in the mod folder
   /// [idDirectory], is hidden. A version the record names whose receipt
@@ -21,6 +72,14 @@ final class _HiddenServerVersions {
   Future<bool> hides(Directory idDirectory, Directory versionDirectory) async {
     final id = p.basename(idDirectory.path);
     final version = p.basename(versionDirectory.path);
+    final named = _named;
+    if (named != null) return named[id.toLowerCase()] != version;
+    if (_exactPins) {
+      final entry = _record.entryFor(id, version);
+      if (entry == null || !entry.hidden) return false;
+      final receipt = (await _readReceiptDigest(versionDirectory)).sha256;
+      return receipt == null || receipt == entry.receiptSha256;
+    }
     if (!_record.withholds(id, version, null)) return false;
     return _record.withholds(
       id,
@@ -96,12 +155,16 @@ extension _ServerContentAccess on LocalLauncherRepository {
   }
 
   /// What a selection that is not a server profile's must not see in
-  /// [install]; null while the record of server content cannot be used.
-  Future<_HiddenServerVersions?> _hiddenServerVersions(
+  /// [install], whose manager records are [stateById]: frozen at what they
+  /// name while the record of server content cannot be used.
+  Future<_HiddenServerVersions> _hiddenServerVersions(
     GameInstall install,
+    Map<String, Map<dynamic, dynamic>> stateById,
   ) async {
     final load = await _serverContentStore(install).load();
-    return load.status.isUsable ? _HiddenServerVersions(load.record) : null;
+    return load.status.isUsable
+        ? _HiddenServerVersions(load.record)
+        : _HiddenServerVersions.frozen(stateById);
   }
 
   /// Why a launch of a profile of the player's own is blocked while the
@@ -138,9 +201,12 @@ extension _ServerContentAccess on LocalLauncherRepository {
 
   /// Under the staging lease: replaces a damaged record of server content
   /// with one that fails closed. It keeps every entry that still reads, and
-  /// withholds each other installed version that neither the manager state
-  /// nor a profile of the player's own names, so no version a join hid can
-  /// become the player's own. Returns the record as it then stands.
+  /// withholds each other installed version the manager state does not name,
+  /// so no version a join hid can become the player's own. A pin of a
+  /// profile of the player's own is no evidence, since a copy of a server
+  /// profile pins the server's versions; an exact pin still loads a withheld
+  /// version ([_HiddenServerVersions.forExactPins]). Returns the record as it
+  /// then stands.
   Future<ServerContentLoad> _repairServerContent(GameInstall install) async {
     final store = _serverContentStore(install);
     final before = await store.load();
@@ -169,10 +235,6 @@ extension _ServerContentAccess on LocalLauncherRepository {
       ).entries)
         if (entry.value['version'] case final String version)
           _versionKey(entry.key, version),
-      for (final profile in await _loadProfiles())
-        if (!ServerProfiles.isServerProfile(profile))
-          for (final pin in profile.selectedVersions.entries)
-            _versionKey(pin.key, pin.value),
     };
     final withheld = <WithheldServerVersion>[];
     final packagesRoot = _packagesRoot(install);

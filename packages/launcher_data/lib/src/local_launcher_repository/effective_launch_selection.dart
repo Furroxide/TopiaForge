@@ -67,9 +67,10 @@ extension _EffectiveLaunchSelectionBuilder on LocalLauncherRepository {
     final stateById = _stateByModId(state);
     // Only a server profile sees what joins installed for the player's own
     // mods; it pins every package it loads.
-    final serverProfile = ServerProfiles.isServerProfile(profile);
-    final hiding = serverProfile ? null : await _hiddenServerVersions(install);
-    if (hiding == null && !serverProfile && !profile.launchSettings.safeMode) {
+    final hiding = ServerProfiles.isServerProfile(profile)
+        ? null
+        : await _hiddenServerVersions(install, stateById);
+    if (hiding != null && !hiding.usable && !profile.launchSettings.safeMode) {
       issues.add(await _serverContentIssue(install));
     }
     final catalog = await _loadInstalledVersionCatalog(
@@ -77,22 +78,37 @@ extension _EffectiveLaunchSelectionBuilder on LocalLauncherRepository {
       stateById: stateById,
       hiding: hiding,
     );
-    for (final entry in catalog.entries) {
-      if (entry.value.isEmpty) continue;
+    // An exact pin also sees what a repair withheld from unpinned play, as
+    // the game's loader loads every exact pin.
+    final pinsSee = hiding?.forExactPins;
+    final pinnable = pinsSee == null
+        ? catalog
+        : await _loadInstalledVersionCatalog(
+            install,
+            stateById: stateById,
+            hiding: pinsSee,
+          );
+    for (final entry in pinnable.entries) {
+      final visible = catalog[entry.key] ?? const <InstalledMod>[];
+      String? pin;
+      for (final item in profile.selectedVersions.entries) {
+        if (item.key.toLowerCase() == entry.key) {
+          pin = item.value;
+          break;
+        }
+      }
+      if (visible.isEmpty && (pin == null || entry.value.isEmpty)) continue;
       final stateItem = stateById[entry.key];
-      var selected = _pickCurrentVersion(entry.value, stateItem);
+      var selected = _pickCurrentVersion(
+        visible.isEmpty ? entry.value : visible,
+        stateItem,
+      );
       final isEnabled = profile.inheritManagerModState
           ? selected.enabled
           : explicit.contains(entry.key);
+      if (!isEnabled && visible.isEmpty) continue;
       if (isEnabled) {
         enabled.add(entry.key);
-        String? pin;
-        for (final item in profile.selectedVersions.entries) {
-          if (item.key.toLowerCase() == entry.key) {
-            pin = item.value;
-            break;
-          }
-        }
         if (pin != null) {
           selected = _pickCurrentVersion(entry.value, {
             ...?stateItem,

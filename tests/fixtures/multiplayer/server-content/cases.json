@@ -141,7 +141,7 @@
     },
     {
       "id": "rebuilt",
-      "about": "A record the launcher rebuilt after damage: the entry that still read, and every other installed version withheld, except the ones the manager state and the player's own profiles name.",
+      "about": "A record the launcher rebuilt after damage: the entry that still read, and every other installed version withheld, except the ones the manager state names.",
       "document": {
         "schemaVersion": 1,
         "versions": [

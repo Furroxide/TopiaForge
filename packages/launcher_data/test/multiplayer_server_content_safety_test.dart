@@ -12,7 +12,8 @@ import 'multiplayer_join_rig.dart';
 /// Nothing that happens to the record of server content, or beside it, ever
 /// turns a server's version into one the player's own profiles load: a
 /// receipt another program holds, a damaged record, a newer launcher's
-/// record, or a mod the player turned on for their own play.
+/// record, a copy of a server profile, a lost manager record, or a mod the
+/// player turned on for their own play.
 void main() {
   /// The standard player, joined to the standard server: Alpha 2.0.0 and
   /// Beta 1.5.0 hidden, Delta new to them.
@@ -196,8 +197,8 @@ void main() {
       },
     );
 
-    test('that holds nothing withholds every version no profile of the '
-        'player\'s own names', () async {
+    test('that holds nothing withholds every version the manager state does '
+        'not name', () async {
       final (rig, _, _) = await joined();
       final before = await playerLoads(rig);
       serverContentFile(rig.game).writeAsStringSync('not a record');
@@ -278,4 +279,135 @@ void main() {
     );
     expect(serverContentFile(rig.game).readAsStringSync(), newer);
   });
+
+  test('while the record cannot be used, the Mods list shows only what the '
+      'manager state names, as the game loads it', () async {
+    final (rig, _, _) = await joined();
+    serverContentFile(rig.game).writeAsStringSync('{"schemaVersion":2}');
+    // A mod with no manager record does not load while the game's selection
+    // is frozen, so the Mods list leaves it out too.
+    final stray = TestArchive('own.stray', '1.0.0');
+    await rig.installOwn(stray);
+    dropManagerRecord(rig, 'own.stray');
+    rig.repository = rig.open();
+    final mods = {
+      for (final mod in (await rig.repository.loadSnapshot()).installedMods)
+        mod.id: [
+          mod.version,
+          for (final item in mod.installedVersions) item.version,
+        ],
+    };
+    // What a new profile, or the profile editor, would pin from this list is
+    // the player's own: never the server's Alpha 2.0.0 or Beta 1.5.0.
+    expect(mods['own.alpha'], ['1.0.0', '1.0.0']);
+    expect(mods['own.beta'], ['1.0.0', '1.0.0']);
+    expect(mods['server.delta'], ['1.0.0', '1.0.0']);
+    expect(mods.containsKey('own.stray'), isFalse);
+  });
+
+  test('a copy of a server profile does not make its versions the player\'s '
+      'when a damaged record is repaired', () async {
+    final (rig, _, _) = await joined();
+    final snapshot = await rig.repository.loadSnapshot();
+    final server = snapshot.profiles.singleWhere(
+      ServerProfiles.isServerProfile,
+    );
+    // Duplicating it in Profiles gives a profile of the player's own that
+    // pins the server's versions.
+    final copy = server.copyWith(id: 'profile-1791849600000', name: 'Copy');
+    await rig.repository.saveProfiles([...snapshot.profiles, copy], 'default');
+    final before = await playerLoads(rig);
+    serverContentFile(rig.game).writeAsStringSync('not a record');
+    rig.repository = rig.open();
+    final after = await playerLoads(rig);
+    expect(after['default'], before['default']);
+    expect(after['unpinned'], before['unpinned']);
+    expect(after['default'], contains('own.alpha@1.0.0'));
+    final withheld = {
+      for (final item in storedRecord(rig).withheld)
+        '${item.modId}@${item.version}',
+    };
+    expect(withheld, containsAll(['own.alpha@2.0.0', 'own.beta@1.5.0']));
+    // The copy pins them exactly, and an exact pin loads a withheld version,
+    // as the game's loader loads every exact pin.
+    expect(
+      after[copy.id],
+      containsAll(['own.alpha@2.0.0', 'own.beta@1.5.0', 'server.delta@1.0.0']),
+    );
+  });
+
+  test('a version of the player\'s own that a profile pins keeps loading '
+      'once a repair withholds it', () async {
+    final (rig, _, _) = await joined();
+    // The player moves on to Alpha 1.5.0 and keeps a profile on 1.0.0.
+    await rig.installOwn(TestArchive('own.alpha', '1.5.0', name: 'Alpha'));
+    final snapshot = await rig.repository.loadSnapshot();
+    await rig.repository.saveProfiles([
+      ...snapshot.profiles,
+      const LauncherProfile(
+        id: 'old-alpha',
+        name: 'Old Alpha',
+        enabledMods: {'own.alpha'},
+        selectedVersions: {'own.alpha': '1.0.0'},
+      ),
+    ], 'default');
+    final before = await playerLoads(rig);
+    expect(before['old-alpha'], ['own.alpha@1.0.0']);
+    expect(before['default'], contains('own.alpha@1.5.0'));
+    serverContentFile(rig.game).writeAsStringSync('not a record');
+    rig.repository = rig.open();
+    expect(await playerLoads(rig), before);
+    expect(
+      storedRecord(rig).withheld.map((item) => '${item.modId}@${item.version}'),
+      containsAll(['own.alpha@1.0.0', 'own.alpha@2.0.0']),
+    );
+  });
+
+  group('a mod a join added whose manager record is lost', () {
+    test('stays off in the player\'s own profiles', () async {
+      final (rig, _, _) = await joined();
+      final before = await playerLoads(rig);
+      // As a game that read its manager state before the join wrote it, then
+      // quit, or a player who deleted the manager state, leaves it.
+      dropManagerRecord(rig, 'server.delta');
+      expect(await playerLoads(rig), before);
+      final delta = (await rig.repository.loadSnapshot()).installedMods
+          .singleWhere((mod) => mod.id == 'server.delta');
+      expect(delta.enabled, isFalse);
+    });
+
+    test('keeps its added record while it is installed, so a game started '
+        'without the launcher keeps it off too', () async {
+      final (rig, server, plan) = await joined();
+      dropManagerRecord(rig, 'server.delta');
+      // Joining again tidies up the record of server content.
+      expect(
+        await rig.repository.prepareJoinProfile(
+          rig.install,
+          preparingJoin(server, plan),
+        ),
+        isA<JoinProfilePrepared>(),
+      );
+      expect(storedRecord(rig).addedRecords, contains('server.delta'));
+      // Once the mod is uninstalled, its added record goes.
+      await rig.repository.uninstallMod(rig.install, 'server.delta');
+      expect(
+        await rig.repository.prepareJoinProfile(
+          rig.install,
+          preparingJoin(server, plan),
+        ),
+        isA<JoinProfilePrepared>(),
+      );
+      expect(storedRecord(rig).addedRecords, isNot(contains('server.delta')));
+    });
+  });
+}
+
+/// Drops [id]'s manager record, as a game that quit over a join's write, or
+/// a player who deleted the manager state, leaves it.
+void dropManagerRecord(JoinRig rig, String id) {
+  final file = managerStateFile(rig.game);
+  final state = jsonDecode(file.readAsStringSync()) as Map<String, Object?>;
+  (state['mods'] as List).removeWhere((item) => (item as Map)['id'] == id);
+  file.writeAsStringSync(jsonEncode(state));
 }

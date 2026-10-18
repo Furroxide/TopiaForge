@@ -14,6 +14,9 @@ extension _ExactPackageCatalogLoading on LocalLauncherRepository {
   ) async {
     final installed = <ExactInstalledArchive>[];
     final versions = await _loadInstalledVersionCatalog(install);
+    // Empty while it cannot be used: every install then reads as the
+    // player's, which only words a conflict more cautiously.
+    final record = (await _serverContentStore(install).load()).record;
     for (final candidates in versions.values) {
       for (final version in candidates) {
         final manifest = version.manifest;
@@ -24,8 +27,17 @@ extension _ExactPackageCatalogLoading on LocalLauncherRepository {
             !_exactSha256Pattern.hasMatch(sha256)) {
           continue;
         }
+        final entry = record.entryFor(manifest.id, manifest.version);
         installed.add(
-          ExactInstalledArchive(sha256: sha256, manifest: manifest),
+          ExactInstalledArchive(
+            sha256: sha256,
+            manifest: manifest,
+            serverOnly:
+                entry != null &&
+                entry.hidden &&
+                entry.receiptSha256 ==
+                    await _receiptSha256(Directory(version.packagePath)),
+          ),
         );
       }
     }

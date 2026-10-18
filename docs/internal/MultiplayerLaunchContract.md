@@ -242,9 +242,12 @@ A join must install the exact `id@version@sha256` a server runs, which is often 
   Such rows fill the exact-version candidate map that dependency installs use, after every current entry, and never
   become catalog tiles.
 - **Classification.** `ExactPackageCatalog` classifies each descriptor package by its exact SHA-256: installed,
-  available (with its source), in a disabled source, host-offered (developer mode, when the host serves packages, after
-  every registry option), hash mismatch, version unavailable, or not in sources. Only the first two carry a manifest,
-  and both come from the player's own receipts and sources. `JoinPlanner.planFromCatalog` plans from it.
+  installed as another archive (or, when that archive is another server's hidden content, installed for another
+  server), available (with its source), in a disabled source, host-offered (developer mode, when the host serves
+  packages, after every registry option), hash mismatch, version unavailable, or not in sources. Only installed and
+  available carry a manifest, and both come from the player's own receipts and sources. `JoinPlanner.planFromCatalog`
+  plans from it. An archive installed as another one blocks the join, since both need the same folder and a join never
+  replaces one: the player uninstalls their copy, or removes the other server's content.
 - **Loading.** `LocalLauncherRepository.loadExactPackageCatalog` lists every valid installed archive with its receipt's
   manifest, and every row of every source, history included. A disabled source is read only when it is local, so the
   launcher never contacts a remote source the player switched off.
@@ -295,7 +298,9 @@ launcher log, and neither ever names a URL or an address.
   fetched; host-served downloads are a later slice.
 - **The player's state is untouched.** A join never writes the manager record of a mod that already has one. A mod
   new to the player, with neither a record nor an installed version, gets a disabled record before its folder
-  appears, so neither the game nor an inheriting profile turns it on by default.
+  appears, so neither the game nor an inheriting profile turns it on by default. If that record is lost, as when a
+  game that read its manager state before the join quits, or the player deletes the manager state, the mod still
+  starts disabled, in the launcher and the game's loader alike (`addedRecords`).
 - **What the player's own profiles see.** A version a join installed for a mod the player already had (installed,
   recorded, or named by one of their profiles) is hidden from every profile that is not a server profile, from the
   Mods list, and from a game started without the launcher. So an unpinned profile, or the game's own unpinned
@@ -307,9 +312,10 @@ launcher log, and neither ever names a URL or an address.
   rollback path (`_stagePackageInstall`), in one folder, `launcher-join-*` in manager staging. A journal there says how
   far it got. In this order it then records the mods new to the player, adds its archives to the record of server
   content, and moves each package into place. A failure after that order begins rolls back everything this join
-  changed, and only that: packages an earlier join installed stay. A cancel before it begins removes what was staged
-  and reports `JoinInstallUndone`. Once it begins the install finishes, and the reducer then ends the join as
-  cancelled.
+  changed, and only that: packages an earlier join installed stay. A folder the rollback cannot take out, as when
+  another program holds one of its files, keeps its entry in the record of server content and its added record, so it
+  stays hidden until the next start takes it out. A cancel before the order begins removes what was staged and reports
+  `JoinInstallUndone`. Once it begins the install finishes, and the reducer then ends the join as cancelled.
 - **Crash safety.** A launcher stopped before the order begins left only staged folders, which nothing loads. One
   stopped part way through it left disabled records and hidden versions, which no profile of the player's own loads.
   Either way the next start, the next install or the next cleanup takes the staging lease and settles the journal: it
@@ -327,7 +333,9 @@ launcher log, and neither ever names a URL or an address.
     launch does, so progress not saved there is lost, and the game records no clean exit: its next start is the
     one-shot safe mode, in which a session launch is refused (section 8). So a join that has to close the player's
     game cannot start its session until the launcher asks the game to quit and waits, which the launcher hardening work
-    plans. The consent sheet must say what closing costs before it acknowledges it.
+    plans. Until then the consent sheet leaves `closeOwnedGameAcknowledged` false: the install then ends as
+    `gameRunning`, owned, asking the player to save and quit, and the join that follows keeps what was downloaded and
+    starts its session. Once the launcher can ask, the consent sheet acknowledges closing after saying what it costs.
 - **The staging lease.** Installs and cleanups take `acquireLaunchLease`, so no launch stages while they change the
   game's files. A lease another launch or install holds ends the install at once with a plain "try again".
 - **The server profile.** `mp-<sha16(serverId)>`, named `Server · <name>`, with `inheritManagerModState: false` and
@@ -356,18 +364,24 @@ launcher log, and neither ever names a URL or an address.
     what is withheld, so none is ever taken to mean that nothing is.
   - **What it withholds.** A `hidden` entry or a `withheld` one keeps its version, matched by id in any case and by
     exact version, out of the player's own play while the version's install receipt has the recorded SHA-256. A
-    receipt that cannot be read withholds every version the record names, failing closed.
+    receipt that cannot be read withholds every version the record names, failing closed. Unpinned selection never
+    takes such a version. An exact pin of a profile of the player's own still takes a `withheld` one, as the game's
+    loader takes every exact pin, so a profile that pins a version of the player's own keeps loading it after a
+    repair; a `hidden` version is for server profiles alone.
   - **Writes.** Atomic, one after another, never over a newer record or one that cannot be read. A write a stopped
     launcher left between its two moves (`server-content.json.<token>.bak`) is put back before anything reads it; the
     game's loader reads such backups too, withholding what any of them withholds.
   - **Repair.** A damaged record is repaired under the staging lease, at the launcher's next start and before an
     install or a cleanup. A copy is kept aside (`server-content.damaged-<UTC time>.json`). The repaired record keeps
-    every entry that still reads, and withholds each other installed version that neither the manager state nor a
-    profile of the player's own names. So no version a join hid becomes the player's own, and what the player loaded
-    before stays theirs. A repair waits while a receipt it would read cannot be read.
+    every entry that still reads, and withholds each other installed version the manager state does not name. A pin of
+    a profile of the player's own is no evidence, since a copy of a server profile pins the server's versions; exact
+    pins still load what a repair withheld. So no version a join hid becomes the player's own, and what the player
+    loaded before stays theirs. A repair waits while a receipt it would read cannot be read.
   - **While it cannot be used.** A launch of a profile that is not a server profile is blocked, and so are installs and
     cleanups, each with what to do next: update the launcher for a newer record, restart it for a damaged one, close
-    the program holding the file for an unreadable one.
+    the program holding the file for an unreadable one. The launcher's own view of the player's mods, the Mods list
+    and what a new or edited profile pins from it, freezes as the game's loader does: each mod shows only the version
+    its manager record names, and a mod with no manager record shows nothing.
 - **The game's loader.** `ModRegistry` reads the record (`ServerContentSelection`) on every scan, through
   `ServerContentRecord`, the same contract in C#.
   - **Unpinned selection.** This is a game started without the launcher, the player's own play. It never takes a
@@ -383,10 +397,13 @@ launcher log, and neither ever names a URL or an address.
   that pin it, and whether it can go: not while a profile of the player's own loads or pins it, or the manager state
   has it on (what a game started without the launcher loads), and not while a server profile the cleanup keeps pins
   it. A version whose install receipt cannot be read just now is neither listed nor dropped from the record, so a file
-  another program holds never exposes a server's version; the next cleanup judges it. The player's own installs never appear. A plan for every server, or for the ones
-  it names, removes those server profiles too. `applyServerContentCleanup` applies exactly that plan, checked by its
-  fingerprint, and refuses one gone stale, a running game, and a held lease. It moves every version out of the packages
-  folder first, undoing the moves if one fails, then removes the manager records of mods left with no version that a
-  join added or whose uninstall is pending, as an uninstall does, then the profiles, then the downloaded archives no
-  installed version names. Versions no server profile pins any more, such as the ones a re-join replaced, are removed
-  after each profile save on their own, so the player only ever decides about whole servers.
+  another program holds never exposes a server's version; the next cleanup judges it. The player's own installs never
+  appear. A plan for every server, or for the ones it names, removes those server profiles too.
+  `applyServerContentCleanup` applies exactly that plan, checked by its fingerprint, and refuses one gone stale, a
+  running game, and a held lease. It moves every version out of the packages folder first, undoing the moves if one
+  fails, then removes the manager records of mods left with no version that a join added or whose uninstall is
+  pending, as an uninstall does, then the profiles, then the downloaded archives no installed version names. An added
+  record goes once its mod has neither a manager record nor an installed version, as an uninstall leaves it; while a
+  version is installed it stays, since it is what starts that mod disabled again. Versions no server profile pins any
+  more, such as the ones a re-join replaced, are removed after each profile save on their own, so the player only ever
+  decides about whole servers.

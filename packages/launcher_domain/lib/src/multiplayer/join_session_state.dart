@@ -72,7 +72,8 @@ final class JoinSessionState {
   /// started ([JoinConsentGiven.closeOwnedGameAcknowledged]). Only then does
   /// an install close one, after everything is staged and nothing can be
   /// cancelled any more; the launcher stops it outright, so the consent must
-  /// say that progress not saved there is lost.
+  /// say that progress not saved there is lost, and until the launcher can
+  /// ask the game to quit, the session that follows is refused.
   final bool closeOwnedGameAcknowledged;
 
   /// Download progress while downloading.

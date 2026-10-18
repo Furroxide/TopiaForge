@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import 'held_file_support.dart';
@@ -101,6 +104,74 @@ void main() {
       expect(managerRecords(rig.game).keys, isNot(contains('server.epsilon')));
     },
   );
+
+  test('folders another program holds stay out of the player\'s own play '
+      'until the next start takes them out', () async {
+    late JoinRig rig;
+    final releases = <Future<void> Function()?>[];
+    rig = await JoinRig.create(
+      hook: (step) async {
+        if (step != 'committed 3') return;
+        // Something holds the server Alpha's and Delta's assemblies, as an
+        // antivirus scan of files just moved into place can, so the rollback
+        // cannot take their folders out.
+        for (final (id, version, assembly) in [
+          ('own.alpha', '2.0.0', 'OwnAlpha.dll'),
+          ('server.delta', '1.0.0', 'ServerDelta.dll'),
+        ]) {
+          releases.add(
+            await holdInPlace(
+              File(p.join(packageFolder(rig.game, id, version).path, assembly)),
+            ),
+          );
+        }
+        throw StateError('Stopped.');
+      },
+    );
+    await preparePlayer(rig);
+    final (server, plan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    final before = await rig.everything(StandardJoin.downloads);
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    // Skipped: this account moves any file.
+    if (releases.length != 2 || releases.contains(null)) return;
+    expect((event as JoinFailed).rollbackComplete, isFalse);
+    expect(
+      [
+        for (final archive in StandardJoin.downloads)
+          packageFolder(rig.game, archive.id, archive.version).existsSync(),
+      ],
+      [true, false, true],
+    );
+    // Their entries and Delta's added record stay, so neither the launcher
+    // nor a game started without it loads the server's Alpha, or turns Delta
+    // on, in the player's own play.
+    final record = ServerContentRecord.read(
+      serverContentFile(rig.game).readAsBytesSync(),
+    ).record!;
+    expect(record.entryFor('own.alpha', '2.0.0')?.hidden, isTrue);
+    expect(record.entryFor('own.beta', '1.5.0'), isNull);
+    expect(record.entryFor('server.delta', '1.0.0'), isNotNull);
+    expect(record.addedRecords, {'server.delta'});
+    final view = await rig.playerView();
+    expect(view.loads, before['loads']);
+    // Delta, new to the player, shows as it would after the join: off.
+    expect(
+      view.mods.where((mod) => !mod.startsWith('server.delta@')),
+      before['mods'],
+    );
+    expect(view.mods, contains('server.delta@1.0.0 off 1.0.0'));
+
+    for (final release in releases) {
+      await release!();
+    }
+    rig.repository = rig.open();
+    expect(await rig.everything(StandardJoin.downloads), before);
+    expect(joinFolders(rig.game), isEmpty);
+  });
 
   test(
     'a rollback that cannot finish says so, and the next start finishes it',
