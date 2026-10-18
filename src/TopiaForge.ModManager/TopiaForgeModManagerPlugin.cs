@@ -53,6 +53,7 @@ namespace TopiaForge.ModManager
         // cleanup cannot keep the game open after the player quits.
         private static readonly TimeSpan QuitTeardownLimit = TimeSpan.FromSeconds(10);
         private PluginQuitCoordinator? quitCoordinator;
+        private PluginQuitHandler? quitHandler;
         private bool teardownFinished;
         private bool quitDeadlineLogged;
 
@@ -82,10 +83,13 @@ namespace TopiaForge.ModManager
             catch (Exception error) { Logger.LogError("TopiaForge storage was rejected: " + error); return; }
 
             // Unity runs no frame once a quit starts destroying objects, and cleanup begun in OnDestroy needs
-            // later frames, so a quit is held until the teardown it starts has finished.
+            // later frames, so a quit is held until the teardown it starts has finished. The handler answers last,
+            // so the game's own quit steps run while every mod, and every patch, is still in place.
             quitCoordinator = new PluginQuitCoordinator(BeginPluginTeardown, () => teardownFinished,
                 () => startupStopwatch.Elapsed, QuitTeardownLimit,
                 error => LogCleanupFailure(error, "TopiaForge teardown could not start when the game quit."));
+            quitHandler = new PluginQuitHandler(quitCoordinator, MoveQuitHandlerLast,
+                error => LogCleanupFailure(error, "TopiaForge could not wait for the game's own quit steps, so mods unload now."));
             Application.wantsToQuit += OnWantsToQuit;
 
             try
@@ -227,7 +231,7 @@ namespace TopiaForge.ModManager
         private void Update()
         {
             RequestProvisioningQuitOnUpdate();
-            if (quitCoordinator?.ShouldResumeQuit() == true)
+            if (quitHandler?.ShouldRequestQuit() == true)
             {
                 LogQuitDeadline();
                 Application.Quit();
@@ -260,9 +264,21 @@ namespace TopiaForge.ModManager
 
         private bool OnWantsToQuit()
         {
-            var proceed = quitCoordinator?.RequestQuit() ?? true;
+            var proceed = quitHandler?.Answer() ?? true;
             if (proceed) LogQuitDeadline();
             return proceed;
+        }
+
+        // Unity asks wantsToQuit handlers in the order they subscribed, so subscribing again puts this one last.
+        private void MoveQuitHandlerLast()
+        {
+            Application.wantsToQuit -= OnWantsToQuit;
+            Application.wantsToQuit += OnWantsToQuit;
+            try
+            {
+                managerLogger?.Info("Quit requested. Mods unload once the game has finished its own quit steps.");
+            }
+            catch { /* The quit goes ahead even when logging has stopped. */ }
         }
 
         private void LogQuitDeadline()
