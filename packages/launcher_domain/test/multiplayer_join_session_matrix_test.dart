@@ -90,6 +90,7 @@ void main() {
     (JoinStage.awaitingConsent, 'consentGiven'): JoinStage.downloading,
     (JoinStage.downloading, 'downloadProgressed'): JoinStage.downloading,
     (JoinStage.downloading, 'downloadsCompleted'): JoinStage.installing,
+    (JoinStage.installing, 'installProgressed'): JoinStage.installing,
     (JoinStage.installing, 'installCompleted'): JoinStage.preparingProfile,
     (JoinStage.preparingProfile, 'profilePrepared'): JoinStage.launching,
     (JoinStage.launching, 'gameStarted'): JoinStage.connecting,
@@ -155,6 +156,8 @@ void main() {
     'downloadProgressed': () =>
         JoinDownloadProgressed(bytesDone: 5, bytesTotal: 10),
     'downloadsCompleted': () => const JoinDownloadsCompleted(),
+    'installProgressed': () =>
+        JoinInstallProgressed(packagesDone: 1, packagesTotal: 3),
     'installCompleted': () => const JoinInstallCompleted(),
     'installUndone': () => const JoinInstallUndone(),
     'profilePrepared': () => const JoinProfilePrepared(),
@@ -232,6 +235,10 @@ void main() {
             expect(after.outcome, isNull);
             if (name == 'downloadProgressed') {
               expect(after.progress!.bytesDone, 5);
+            }
+            if (name == 'installProgressed') {
+              expect(after.installProgress!.packagesDone, 1);
+              expect(after.installProgress!.packagesTotal, 3);
             }
           } else if (stage == JoinStage.inSession && name == 'sessionEnded') {
             expect(after.stage, JoinStage.ended);

@@ -272,7 +272,7 @@ of a launcher repository that `LocalLauncherRepository` has, answers the three s
 | Stage | What happens | What it can report |
 | --- | --- | --- |
 | Downloading | Each `download` package, from the source the plan names | `JoinDownloadProgressed`, `downloadFailed`, `integrityFailed`, `manifestMismatch`, `hostDownloadUnsupported`; a cancel stops it at once |
-| Installing | Every downloaded package, as one change | `installFailed` with `rollbackComplete`, `gameRunning`, `JoinInstallUndone` |
+| Installing | Every downloaded package, as one change | `JoinInstallProgressed`, `installFailed` with `rollbackComplete`, `gameRunning`, `JoinInstallUndone` |
 | Preparing the profile | The server profile, saved | `profileSaveFailed` |
 
 Every failure detail says, in plain words, what happened and what to do next. What went wrong underneath goes to the

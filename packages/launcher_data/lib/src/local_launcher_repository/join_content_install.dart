@@ -50,6 +50,7 @@ extension _JoinContentInstall on LocalLauncherRepository {
   Future<JoinEvent?> _installJoinContent(
     GameInstall install,
     JoinSessionState state, {
+    void Function(JoinInstallProgressed progress)? onProgress,
     CancellationToken? cancellation,
   }) async {
     final plan = state.plan;
@@ -91,7 +92,13 @@ extension _JoinContentInstall on LocalLauncherRepository {
       }
       final running = await _closeGameForInstall(current);
       if (running != null) return running;
-      return await _JoinInstall(this, current, plan, cancellation).run();
+      return await _JoinInstall(
+        this,
+        current,
+        plan,
+        cancellation,
+        onProgress,
+      ).run();
     } on _JoinInstallRefused catch (refusal) {
       return _nothingInstalled(refusal.message);
     } on Object catch (error) {
@@ -126,12 +133,19 @@ extension _JoinContentInstall on LocalLauncherRepository {
 /// staging) says how far it got, so a launcher that stops part way is undone
 /// on its next start ([_JoinInstallJournal]).
 final class _JoinInstall {
-  _JoinInstall(this._repository, this._install, this._plan, this._cancellation);
+  _JoinInstall(
+    this._repository,
+    this._install,
+    this._plan,
+    this._cancellation,
+    this._onProgress,
+  );
 
   final LocalLauncherRepository _repository;
   final GameInstall _install;
   final JoinPlan _plan;
   final CancellationToken? _cancellation;
+  final void Function(JoinInstallProgressed progress)? _onProgress;
   final _pending = <_PendingJoinPackage>[];
   final _staged = <_StagedJoinPackage>[];
 
@@ -144,10 +158,12 @@ final class _JoinInstall {
   Future<JoinEvent> run() async {
     await _preflight();
     if (_pending.isEmpty) return const JoinInstallCompleted();
+    await _progress(0);
     try {
       for (final pending in _pending) {
         if (_cancelled) return await _undo();
         await _stage(pending);
+        await _progress(_staged.length);
       }
       await _writeJournal(_JoinJournalPhase.staged);
       await _hook('staged');
@@ -453,6 +469,23 @@ final class _JoinInstall {
   Future<void> _hook(String step) async {
     final hook = _repository._joinInstallHook;
     if (hook != null) await hook(step);
+  }
+
+  /// Tells the listener how many packages are prepared. Progress is only
+  /// shown, so a listener that throws is logged and the install goes on.
+  Future<void> _progress(int done) async {
+    final report = _onProgress;
+    if (report == null) return;
+    try {
+      report(
+        JoinInstallProgressed(
+          packagesDone: done,
+          packagesTotal: _pending.length,
+        ),
+      );
+    } on Object catch (error) {
+      await _log('A join install progress listener failed: $error');
+    }
   }
 
   Future<void> _log(String message) =>

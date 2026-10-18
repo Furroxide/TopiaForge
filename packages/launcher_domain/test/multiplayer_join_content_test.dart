@@ -140,6 +140,50 @@ void main() {
         expect(ended.outcome!.failure!.rollbackComplete, complete);
       }
     });
+
+    test('install progress is kept while installing, and only then', () {
+      expect(installing().installProgress, isNull);
+      final counted = run(installing(), [
+        JoinInstallProgressed(packagesDone: 0, packagesTotal: 2),
+        JoinInstallProgressed(packagesDone: 1, packagesTotal: 2),
+      ]);
+      expect(counted.stage, JoinStage.installing);
+      expect(counted.installProgress!.packagesDone, 1);
+      expect(counted.installProgress!.fraction, 0.5);
+      // Finishing the step, or ending the join, clears it.
+      expect(
+        JoinSession.reduce(
+          counted,
+          const JoinInstallCompleted(),
+        ).installProgress,
+        isNull,
+      );
+      expect(
+        JoinSession.reduce(counted, const JoinInstallUndone()).installProgress,
+        isNull,
+      );
+      // Outside installing it changes nothing.
+      final early = downloading();
+      expect(
+        JoinSession.reduce(
+          early,
+          JoinInstallProgressed(packagesDone: 1, packagesTotal: 2),
+        ),
+        same(early),
+      );
+      expect(
+        () => JoinInstallProgressed(packagesDone: 3, packagesTotal: 2),
+        throwsArgumentError,
+      );
+      expect(
+        () => JoinInstallProgressed(packagesDone: -1, packagesTotal: 2),
+        throwsArgumentError,
+      );
+      expect(
+        const JoinInstallProgress(packagesDone: 0, packagesTotal: 0).fraction,
+        0,
+      );
+    });
   });
 
   group('an archive installed under the same id and version', () {

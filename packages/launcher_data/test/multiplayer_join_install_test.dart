@@ -422,4 +422,40 @@ void main() {
       isNull,
     );
   });
+
+  test('progress counts each package as it is prepared, and a listener '
+      'that throws never stops the install', () async {
+    final rig = await JoinRig.create();
+    await preparePlayer(rig);
+    final (server, plan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    final reports = <String>[];
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+      onProgress: (progress) {
+        reports.add('${progress.packagesDone}/${progress.packagesTotal}');
+        throw StateError('A listener that fails.');
+      },
+    );
+    expect(event, isA<JoinInstallCompleted>());
+    // Counted first, then one more as each of the three is staged.
+    expect(reports, ['0/3', '1/3', '2/3', '3/3']);
+    expect(
+      packageFolder(rig.game, 'server.delta', '1.0.0').existsSync(),
+      isTrue,
+    );
+
+    // A join whose packages are all in place already has nothing to count.
+    final again = <JoinInstallProgressed>[];
+    expect(
+      await rig.repository.installJoinContent(
+        rig.install,
+        installingJoin(server, plan),
+        onProgress: again.add,
+      ),
+      isA<JoinInstallCompleted>(),
+    );
+    expect(again, isEmpty);
+  });
 }

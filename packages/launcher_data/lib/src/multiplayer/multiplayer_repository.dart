@@ -81,8 +81,9 @@ abstract interface class MultiplayerRepository {
   ///
   /// - resolving a target through the service, and fetching its descriptor;
   /// - with a [MultiplayerContentHost], downloading, installing into
-  ///   [install], and preparing the server profile. Download progress goes
-  ///   to [onProgress].
+  ///   [install], and preparing the server profile. Download and install
+  ///   progress go to [onProgress] as the events the reducer takes for them,
+  ///   [JoinDownloadProgressed] and [JoinInstallProgressed].
   ///
   /// Null for any other stage, for a content stage when there is no content
   /// host, and when [cancellation] stopped the work. The content stages need
@@ -91,7 +92,7 @@ abstract interface class MultiplayerRepository {
     JoinSessionState state, {
     CancellationToken? cancellation,
     GameInstall? install,
-    void Function(JoinDownloadProgressed progress)? onProgress,
+    void Function(JoinEvent progress)? onProgress,
   });
 
   /// Answers a join in [JoinStage.resolving]. Only targets the service
@@ -287,7 +288,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     JoinSessionState state, {
     CancellationToken? cancellation,
     GameInstall? install,
-    void Function(JoinDownloadProgressed progress)? onProgress,
+    void Function(JoinEvent progress)? onProgress,
   }) async {
     GameInstall requireInstall() =>
         install ??
@@ -316,6 +317,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
         await content.installJoinContent(
           requireInstall(),
           state,
+          onProgress: onProgress,
           cancellation: cancellation,
         ),
       JoinStage.preparingProfile when content != null =>

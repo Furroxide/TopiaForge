@@ -34,8 +34,14 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
   Future<JoinEvent?> installJoinContent(
     GameInstall install,
     JoinSessionState state, {
+    void Function(JoinInstallProgressed progress)? onProgress,
     CancellationToken? cancellation,
-  }) => _host._installJoinContent(install, state, cancellation: cancellation);
+  }) => _host._installJoinContent(
+    install,
+    state,
+    onProgress: onProgress,
+    cancellation: cancellation,
+  );
 
   @override
   Future<JoinEvent?> prepareJoinProfile(

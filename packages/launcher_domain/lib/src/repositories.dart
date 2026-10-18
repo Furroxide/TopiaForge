@@ -184,7 +184,9 @@ abstract interface class MultiplayerContentHost {
   /// package into [install] as one change. A failure part way rolls back
   /// everything this join installed and says whether the rollback completed;
   /// a cancel before anything the game reads changed undoes it all
-  /// ([JoinInstallUndone]).
+  /// ([JoinInstallUndone]). Reports to [onProgress] how many of the packages
+  /// it installs are prepared: none once it has counted them, then one more
+  /// as each is staged. A listener that throws never stops the install.
   ///
   /// Nothing installs beside a running game: it writes its manager state
   /// when it quits, over what an install changed. A game this launcher
@@ -193,6 +195,7 @@ abstract interface class MultiplayerContentHost {
   Future<JoinEvent?> installJoinContent(
     GameInstall install,
     JoinSessionState state, {
+    void Function(JoinInstallProgressed progress)? onProgress,
     CancellationToken? cancellation,
   });
 

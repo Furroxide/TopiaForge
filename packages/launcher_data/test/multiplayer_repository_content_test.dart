@@ -32,11 +32,13 @@ final class _RecordingHost implements MultiplayerContentHost {
   Future<JoinEvent?> installJoinContent(
     GameInstall install,
     JoinSessionState state, {
+    void Function(JoinInstallProgressed progress)? onProgress,
     CancellationToken? cancellation,
   }) async {
     calls.add('install ${state.stage.name}');
     this.install = install;
     this.cancellation = cancellation;
+    onProgress?.call(JoinInstallProgressed(packagesDone: 1, packagesTotal: 1));
     return const JoinInstallCompleted();
   }
 
@@ -105,7 +107,8 @@ void main() {
       archive.sha256Hex: archive.offeredAt('https://packages.example/a.zip'),
     });
     final cancellation = CancellationToken();
-    final progress = <JoinDownloadProgressed>[];
+    final progress = <JoinEvent>[];
+    final seen = <String>[];
     var state = consentedJoin(server, plan);
     for (final expected in [
       'download downloading',
@@ -116,7 +119,15 @@ void main() {
         state,
         cancellation: cancellation,
         install: install,
-        onProgress: progress.add,
+        onProgress: (update) {
+          progress.add(update);
+          // Progress events are the reducer's own, taken in its stage.
+          state = JoinSession.reduce(state, update);
+          seen.add(
+            '${state.progress?.bytesDone}/'
+            '${state.installProgress?.packagesDone}',
+          );
+        },
       );
       expect(host.calls.last, expected);
       expect(host.install, same(install));
@@ -124,7 +135,12 @@ void main() {
     }
     expect(state.stage, JoinStage.launching);
     expect(host.cancellation, same(cancellation));
-    expect(progress.single.bytesDone, 1);
+    expect(progress, [
+      isA<JoinDownloadProgressed>(),
+      isA<JoinInstallProgressed>(),
+    ]);
+    expect(seen, ['1/null', 'null/1']);
+    expect(state.installProgress, isNull, reason: 'cleared once installed');
     // Stages the launcher's game process or the game answers are not
     // content stages.
     expect(await repository.answerJoin(state, install: install), isNull);

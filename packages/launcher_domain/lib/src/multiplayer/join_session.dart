@@ -220,6 +220,12 @@ abstract final class JoinSession {
         ),
       JoinDownloadsCompleted() when stage == JoinStage.downloading =>
         state._copy(stage: JoinStage.installing, progress: null),
+      JoinInstallProgressed() when stage == JoinStage.installing => state._copy(
+        installProgress: JoinInstallProgress(
+          packagesDone: event.packagesDone,
+          packagesTotal: event.packagesTotal,
+        ),
+      ),
       JoinInstallCompleted() when stage == JoinStage.installing => _finished(
         state,
         JoinStage.preparingProfile,
@@ -406,7 +412,7 @@ abstract final class JoinSession {
   static JoinSessionState _finished(JoinSessionState state, JoinStage next) =>
       state.cancelRequested
       ? state._failed(JoinFailureCode.cancelled)
-      : state._copy(stage: next);
+      : state._copy(stage: next, installProgress: null);
 
   static JoinFailureCode _failureOf(JoinBlockerCode code) => switch (code) {
     JoinBlockerCode.gameBuildMismatch => JoinFailureCode.gameBuildMismatch,

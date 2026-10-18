@@ -57,6 +57,22 @@ final class JoinDownloadsCompleted extends JoinEvent {
   const JoinDownloadsCompleted();
 }
 
+/// How many of the packages this join installs are prepared so far: each is
+/// staged, and none moves into place until all of them are.
+final class JoinInstallProgressed extends JoinEvent {
+  JoinInstallProgressed({
+    required this.packagesDone,
+    required this.packagesTotal,
+  }) {
+    if (packagesTotal < 0 || packagesDone < 0 || packagesDone > packagesTotal) {
+      throw ArgumentError('Progress is 0 to packagesTotal packages.');
+    }
+  }
+
+  final int packagesDone;
+  final int packagesTotal;
+}
+
 final class JoinInstallCompleted extends JoinEvent {
   const JoinInstallCompleted();
 }

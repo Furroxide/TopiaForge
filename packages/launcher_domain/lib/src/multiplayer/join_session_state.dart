@@ -13,6 +13,19 @@ final class JoinTransferProgress {
   double get fraction => bytesTotal == 0 ? 0 : bytesDone / bytesTotal;
 }
 
+/// Packages prepared so far while installing.
+final class JoinInstallProgress {
+  const JoinInstallProgress({
+    required this.packagesDone,
+    required this.packagesTotal,
+  });
+
+  final int packagesDone;
+  final int packagesTotal;
+
+  double get fraction => packagesTotal == 0 ? 0 : packagesDone / packagesTotal;
+}
+
 const _keep = Object();
 
 /// Where a join stands. Only [JoinSession] creates and advances it.
@@ -26,6 +39,7 @@ final class JoinSessionState {
     this.plan,
     this.consentKey,
     this.progress,
+    this.installProgress,
     this.replans = 0,
     this.cancelRequested = false,
     this.outcome,
@@ -55,6 +69,10 @@ final class JoinSessionState {
 
   /// Download progress while downloading.
   final JoinTransferProgress? progress;
+
+  /// Install progress while installing, once the install has counted the
+  /// packages it installs.
+  final JoinInstallProgress? installProgress;
 
   /// Automatic re-plans so far; at most one.
   final int replans;
@@ -108,6 +126,7 @@ final class JoinSessionState {
     Object? plan = _keep,
     Object? consentKey = _keep,
     Object? progress = _keep,
+    Object? installProgress = _keep,
     int? replans,
     bool? cancelRequested,
     Object? outcome = _keep,
@@ -126,6 +145,9 @@ final class JoinSessionState {
     progress: identical(progress, _keep)
         ? this.progress
         : progress as JoinTransferProgress?,
+    installProgress: identical(installProgress, _keep)
+        ? this.installProgress
+        : installProgress as JoinInstallProgress?,
     replans: replans ?? this.replans,
     cancelRequested: cancelRequested ?? this.cancelRequested,
     outcome: identical(outcome, _keep) ? this.outcome : outcome as JoinOutcome?,
@@ -134,6 +156,7 @@ final class JoinSessionState {
   JoinSessionState _ended(JoinOutcome outcome) => _copy(
     stage: JoinStage.ended,
     progress: null,
+    installProgress: null,
     cancelRequested: false,
     outcome: outcome,
   );
