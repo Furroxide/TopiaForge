@@ -242,16 +242,19 @@ void main() {
         ('https://localhost:8787', 'https://localhost:8787'),
         ('HTTPS://Play.Example/', 'https://play.example'),
         ('  https://play.example  ', 'https://play.example'),
+        // A number that is not the last label, or not a number at all.
+        ('https://0x7f.example.org', 'https://0x7f.example.org'),
+        ('https://example.0x7g', 'https://example.0x7g'),
+        ('https://123.example:8443/', 'https://123.example:8443'),
       ]) {
         final configuration = MultiplayerServiceConfiguration.parse(text);
         expect(configuration.status, MultiplayerServiceStatus.configured);
         expect(configuration.isConfigured, isTrue);
         expect(configuration.origin.toString(), origin, reason: text);
-        // The spelling the launch request accepts: `https://`, a lowercase
-        // DNS name, a port without a leading zero, and nothing after.
-        final host = configuration.origin!.host;
-        expect(NetworkHost.tryNormalize(host), host);
-        expect(NetworkHost.pathKindOf(host), isNull);
+        // An origin every launch can carry, in the one spelling it carries:
+        // `https://`, a lowercase DNS name, a port without a leading zero,
+        // and nothing after.
+        expect(LaunchSessionRequest.isServiceOrigin(origin), isTrue);
         expect(origin, matches(RegExp(r'^https://[a-z0-9.-]+(:[1-9]\d*)?$')));
       }
       for (final (about, texts) in [
@@ -275,6 +278,18 @@ void main() {
             'https://[::ffff:203.0.113.5]',
             'https://::1',
             'https://2001:db8::1',
+          ],
+        ),
+        (
+          'a name whose last label is a number, an IPv4 address to a URL',
+          [
+            'https://0x7f000001',
+            'HTTPS://0X7F000001/',
+            'https://0x7f000001:8443',
+            'https://0x',
+            'https://lan.0x1f',
+            'https://example.123',
+            'https://play.example.42:443',
           ],
         ),
         (
@@ -329,6 +344,54 @@ void main() {
             reason: '$about: $text',
           );
           expect(configuration.origin, isNull);
+        }
+      }
+    });
+
+    test('reads as itself exactly the origins a launch carries', () {
+      // One rule decides both: the configuration reads a text as itself
+      // exactly when a launch carries that text, and every origin it reads is
+      // one a launch carries.
+      final texts = [
+        for (final host in [
+          'play.example',
+          'localhost',
+          '0x7f.example.org',
+          'example.0x7g',
+          '123.example',
+          '0x7f000001',
+          '0x',
+          'lan.0x1f',
+          'example.123',
+          'play.example.42',
+          '127.1',
+          '203.0.113.5',
+          '[::1]',
+          'Play.Example',
+          'play..example',
+        ])
+          for (final port in ['', ':1', ':443', ':8443', ':0', ':08443'])
+            for (final end in ['', '/']) 'https://$host$port$end',
+        'http://play.example',
+        'https://',
+        'https://user@play.example',
+        ' https://play.example',
+      ];
+      for (final text in texts) {
+        final origin = MultiplayerServiceConfiguration.parse(
+          text,
+        ).origin?.toString();
+        expect(
+          LaunchSessionRequest.isServiceOrigin(text),
+          origin == text,
+          reason: text,
+        );
+        if (origin != null) {
+          expect(
+            LaunchSessionRequest.isServiceOrigin(origin),
+            isTrue,
+            reason: text,
+          );
         }
       }
     });

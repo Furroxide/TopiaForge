@@ -44,13 +44,18 @@ final class MultiplayerServiceConfiguration {
 
   /// Reads an origin such as `https://play.example`: HTTPS, a DNS name, an
   /// optional port of 1 to 65535 in plain decimal, at most a trailing `/`,
-  /// and nothing else. An IP literal is refused, bracketed or not, as the
-  /// launch request refuses it. Empty text is no service; anything else that
-  /// is not such an origin is [MultiplayerServiceStatus.invalid].
+  /// and nothing else. Empty text is no service; anything else that is not
+  /// such an origin is [MultiplayerServiceStatus.invalid].
   ///
   /// The [origin] is the one spelling the launch request carries: lowercase,
-  /// with no trailing `/` and no default port, so any text read here as
-  /// configured is an origin the launch request accepts.
+  /// with no trailing `/` and no default port. The launch request's own rule,
+  /// [LaunchSessionRequest.isServiceOrigin], then decides whether it is
+  /// accepted, so a build is configured only with an origin every launch can
+  /// carry. That rule refuses an address in any spelling: an IP literal,
+  /// bracketed or not, and a name whose last label is a number, decimal or
+  /// `0x` hexadecimal, which the URL Standard reads as an IPv4 address:
+  /// `https://0x7f000001` is 127.0.0.1, and `https://example.123` is no valid
+  /// URL at all.
   factory MultiplayerServiceConfiguration.parse(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return none;
@@ -90,11 +95,12 @@ final class MultiplayerServiceConfiguration {
         ? null
         : _tryParsePort(authority.substring(colon + 1));
     if (colon >= 0 && port == null) return null;
-    // A DNS name only: an IPv4 literal is refused here, and an IPv6 one never
-    // gets this far.
     final name = NetworkHost.tryNormalize(host);
-    if (name == null || NetworkHost.pathKindOf(name) != null) return null;
-    return Uri(scheme: 'https', host: name, port: port);
+    if (name == null) return null;
+    final origin = Uri(scheme: 'https', host: name, port: port);
+    // One rule decides which origins a build may name and which a launch
+    // carries: the launch request's, read on the spelling a launch carries.
+    return LaunchSessionRequest.isServiceOrigin('$origin') ? origin : null;
   }
 
   /// One to five digits without a leading zero, from 1 to 65535.
