@@ -17,6 +17,15 @@ extension _ExactPackageCatalogLoading on LocalLauncherRepository {
     // Empty while it cannot be used: every install then reads as the
     // player's, which only words a conflict more cautiously.
     final record = (await _serverContentStore(install).load()).record;
+    // What a join that failed or stopped part way left in place goes at the
+    // next sweep, so no plan counts it as installed: the join downloads it
+    // instead, and its install waits until that sweep can take it out.
+    final unsettled = {
+      for (final journal in await _unsettledJoinJournals(install))
+        for (final package in journal.packages)
+          '${_versionKey(package.id, package.version)} '
+              '${package.receiptSha256}',
+    };
     for (final candidates in versions.values) {
       for (final version in candidates) {
         final manifest = version.manifest;
@@ -25,6 +34,13 @@ extension _ExactPackageCatalogLoading on LocalLauncherRepository {
             !version.isValid ||
             version.uninstallPending ||
             !_exactSha256Pattern.hasMatch(sha256)) {
+          continue;
+        }
+        if (unsettled.isNotEmpty &&
+            unsettled.contains(
+              '${_versionKey(manifest.id, manifest.version)} '
+              '${await _receiptSha256(Directory(version.packagePath))}',
+            )) {
           continue;
         }
         final entry = record.entryFor(manifest.id, manifest.version);

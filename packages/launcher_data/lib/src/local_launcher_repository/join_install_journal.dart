@@ -233,9 +233,16 @@ extension _JoinInstallJournal on LocalLauncherRepository {
   /// unsettled after a sweep, as while another program holds a file in one
   /// of its folders. Those folders keep their record entries until a later
   /// sweep takes them out, so nothing may build on them meanwhile.
-  Future<bool> _hasUnsettledJoinInstall(GameInstall install) async {
+  Future<bool> _hasUnsettledJoinInstall(GameInstall install) async =>
+      (await _unsettledJoinJournals(install)).isNotEmpty;
+
+  /// The journals of the joins in manager staging whose install failed or
+  /// stopped part way. What each names that is still in place goes at the
+  /// next sweep that can finish, so no plan may count it as installed.
+  Future<List<_JoinJournal>> _unsettledJoinJournals(GameInstall install) async {
     final staging = _managerStaging(install);
-    if (!staging.existsSync()) return false;
+    if (!staging.existsSync()) return const [];
+    final unsettled = <_JoinJournal>[];
     for (final entity in staging.listSync(followLinks: false)) {
       if (entity is! Directory ||
           !p.basename(entity.path).startsWith('launcher-join-')) {
@@ -243,10 +250,10 @@ extension _JoinInstallJournal on LocalLauncherRepository {
       }
       final journal = await _readJoinJournal(entity);
       if (journal != null && journal.phase != _JoinJournalPhase.staged) {
-        return true;
+        unsettled.add(journal);
       }
     }
-    return false;
+    return unsettled;
   }
 
   /// Removes the manager records a join added for [ids], as long as each is

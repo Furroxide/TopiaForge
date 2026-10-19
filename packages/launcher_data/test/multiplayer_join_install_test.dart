@@ -290,6 +290,34 @@ void main() {
     expect(await rig.everything(StandardJoin.downloads), before);
   });
 
+  test('a list of mods that cannot be read stops a join and a cleanup with '
+      'what to do, and names no repair the launcher lacks', () async {
+    final rig = await JoinRig.create();
+    await preparePlayer(rig);
+    final (server, plan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    final cleanup = await rig.repository.planServerContentCleanup(rig.install);
+    managerStateFile(rig.game).writeAsStringSync('{"mods": [');
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    expect((event as JoinFailed).rollbackComplete, isTrue);
+    expect(event.detail, contains('BepInEx/TopiaForge/state.json'));
+    expect(event.detail, contains('then join again'));
+    // The Mods screen lists nothing while it cannot be read, and has no
+    // repair for it.
+    expect(event.detail, isNot(contains('Mods')));
+    final refused = await rig.repository.applyServerContentCleanup(
+      rig.install,
+      cleanup,
+    );
+    expect(refused.refusal, ServerContentCleanupRefusal.unreadable);
+    expect(refused.message, contains('BepInEx/TopiaForge/state.json'));
+    expect(refused.message, contains('then clean up again'));
+    expect(refused.message, isNot(contains('Mods')));
+  });
+
   test('the exact build already installed needs nothing', () async {
     final rig = await JoinRig.create();
     await rig.installOwn(StandardJoin.serverAlpha);

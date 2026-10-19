@@ -56,8 +56,10 @@ extension _ServerContentCleanup on LocalLauncherRepository {
       state = _stateByModId(await _readManagerState(install));
     } on Object {
       throw StateError(
-        "The game's list of mods could not be read just now, so nothing "
-        'can be planned. Open Mods to repair it, then clean up again.',
+        "The game's list of mods, BepInEx/TopiaForge/state.json, could not be "
+        'read, so nothing can be planned. Close any program using the game '
+        'folder, then clean up again. If it still cannot be read, it is '
+        'damaged: repair or restore that file first.',
       );
     }
     final profiles = await _loadProfiles();

@@ -5,8 +5,9 @@ part of '../local_launcher_repository.dart';
 extension _JoinInstallPreflight on _JoinInstall {
   /// Decides what to install, refusing before anything changes: a version
   /// installed as another archive is never replaced, an archive already
-  /// installed as the server runs it needs nothing, and a record of server
-  /// content that cannot be used, or that would pass its bound, refuses.
+  /// installed as the server runs it needs nothing, a version the plan found
+  /// installed must still be there, and a record of server content that
+  /// cannot be used, or that would pass its bound, refuses.
   Future<List<_PendingJoinPackage>> _decide() async {
     final Map<String, Object?> state;
     try {
@@ -14,8 +15,10 @@ extension _JoinInstallPreflight on _JoinInstall {
     } on Object catch (error) {
       await _log('A join install could not read the manager state: $error');
       throw const _JoinInstallRefused(
-        "The game's list of mods could not be read. Open Mods to repair it, "
-        'then join again.',
+        "The game's list of mods, BepInEx/TopiaForge/state.json, could not be "
+        'read. Close any program using the game folder, then join again. If '
+        'it still cannot be read, it is damaged: repair or restore that file '
+        'first.',
       );
     }
     final recorded = _repository._stateByModId(state).keys.toSet();
@@ -51,6 +54,22 @@ extension _JoinInstallPreflight on _JoinInstall {
     };
     final pending = <_PendingJoinPackage>[];
     for (final item in _plan.packages) {
+      if (item.disposition == JoinPackageDisposition.useInstalled) {
+        // The plan was made before this install's lease and sweep, so what
+        // it found installed must still be there, as the same archive.
+        final installed = item.manifest!;
+        final folder = folders[installed.id.toLowerCase()];
+        final target = Directory(
+          p.join(packagesRoot.path, folder ?? installed.id, installed.version),
+        );
+        if (folder == null ||
+            FileSystemEntity.typeSync(target.path, followLinks: false) !=
+                FileSystemEntityType.directory ||
+            await _receiptArchiveSha256(target) != item.package.sha256) {
+          throw const _JoinInstallRefused(_joinModsChanged);
+        }
+        continue;
+      }
       if (item.disposition != JoinPackageDisposition.download) continue;
       final manifest = item.manifest!;
       final key = manifest.id.toLowerCase();
@@ -125,3 +144,8 @@ extension _JoinInstallPreflight on _JoinInstall {
     return true;
   }
 }
+
+/// Why an install ends when what its plan or its staging was made from
+/// changed before it began; the join's next plan sees what is there now.
+const _joinModsChanged =
+    'Your mods in this game changed while the join was preparing. Join again.';

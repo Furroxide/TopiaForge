@@ -318,9 +318,14 @@ launcher log, and neither ever names a URL or an address.
   names. A folder that cannot move, as when another program holds one of its files, stays whole, receipt and all, and
   keeps its entry in the record of server content and its added record, so it stays hidden until a later start moves
   it out. Until then a join is refused with "try again" rather than count that folder as installed, since the start
-  that settles it would take it from under the new server profile. A cancel before the order begins removes what was
-  staged and reports `JoinInstallUndone`. Once it begins the install finishes, and the reducer then ends the join as
-  cancelled.
+  that settles it would take it from under the new server profile. For the same reason no plan counts it as
+  installed: the catalog a join plans from (`loadExactPackageCatalog`) leaves out what an unsettled journal names, so
+  the join downloads that version and reaches the install, which refuses while the folder stays and installs it afresh
+  once a sweep took it out. A plan that downloads nothing never reaches the install, so without that it would save a
+  server profile on the folder. The plan is made before the install's lease and its sweep, so the install also checks
+  again that every version its plan found installed is still there, as the same archive, and otherwise ends with
+  "join again". A cancel before the order begins removes what was staged and reports `JoinInstallUndone`. Once it
+  begins the install finishes, and the reducer then ends the join as cancelled.
 - **Crash safety.** A launcher stopped before the order begins left only staged folders, which nothing loads. One
   stopped part way through it left disabled records and hidden versions, which no profile of the player's own loads.
   Either way the next start, the next install or the next cleanup takes the staging lease and settles the journal: it

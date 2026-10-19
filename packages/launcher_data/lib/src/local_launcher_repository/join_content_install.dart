@@ -190,10 +190,7 @@ final class _JoinInstall {
       }
       if (!_decidedAsStaged(await _decide())) {
         await _discard();
-        return _nothingInstalled(
-          'Your mods in this game changed while the join was preparing. Join '
-          'again.',
-        );
+        return _nothingInstalled(_joinModsChanged);
       }
     } on _JoinInstallRefused {
       await _discard();
