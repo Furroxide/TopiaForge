@@ -119,5 +119,13 @@ QA catalog. Provider work follows the repository's dirty-setter, pooling, virtua
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
 
+A kit canvas starts at zero size, and Unity gives it its real size in its next canvas update. A
+window shown in the frame its canvas is built finds that canvas still 0x0, so it keeps its size and
+position and finishes its screen clamp on the first frame the canvas has a size; clamping against 0x0
+once collapsed the UI Gallery to nothing at 1920x1080. Forcing a canvas update is no substitute: the
+CanvasScaler writes its factor only when it differs from the last one, which starts at 1, so at
+1920x1080 and UI scale 1 the canvas is still 0x0 after `Canvas.ForceUpdateCanvases()`. The clamp
+caps a window from its designed size, so a cap taken on a smaller canvas does not stick.
+
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.
