@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers.Tests
 {
-    internal static class Program
+    internal static partial class Program
     {
         private static readonly ModuleFixture[] SpecialistModules =
         {
@@ -70,6 +70,8 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 AllowsDrainSplitAcrossPartialFiles();
                 ReportsBlockingWaitInNonSafeProject();
                 AllowsAuthorsOwnMemberNamedLikeARetiredApi();
+                RunFixedUpdateInputTests();
+                EveryRuleLinksToItsEntry();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }
@@ -303,6 +305,9 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 Manifest());
             Assert(diagnostics.Any(item => item.Id == "TF1008"),
                 "GetAwaiter().GetResult() on a task should report TF1008");
+            var message = diagnostics.First(item => item.Id == "TF1008").GetMessage();
+            Assert(message.Contains("await the task instead") && message.Contains("PendingOperation<T>"),
+                "TF1008 offers awaiting first, which in multiplayer keeps a player's action, and the poll: " + message);
         }
 
         private static void ReportsBlockingResultProperty()

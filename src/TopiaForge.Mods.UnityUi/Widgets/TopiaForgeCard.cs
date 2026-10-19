@@ -151,7 +151,7 @@ namespace TopiaForge.Mods.UnityUi
 
             button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => TopiaForgeCallbacks.Invoke(onClick, "Card click"));
+            button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "Card click"));
 
             var colors = button.colors;
             colors.normalColor = Color.white;

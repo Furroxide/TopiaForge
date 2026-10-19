@@ -79,6 +79,7 @@ namespace TopiaForge.ModManager
             ownerLifetime = scope.OwnerLifetime;
             Lifetime = scope.Lifetime;
             replication = replicationServices.Bind(Identity.Id, NetProfile, Lifetime);
+            inputActivity = parent.inputActivity;
             if (parent.sessionOwner != null) ConfigureSessions(parent.sessionOwner);
             modEvents = new ModEvents(parent.modEvents, Lifetime);
             Events = modEvents;
@@ -87,14 +88,14 @@ namespace TopiaForge.ModManager
             LocalStorage = new ScopedStorageService(parent.LocalStorage, Lifetime);
             var gameplay = gameplayFactory?.Create(Identity.Id, packagePath, dataPath, Lifetime, Logger, NetProfile, transitionAccess)
                 ?? GameplayContextServices.Unavailable(Lifetime);
-            Input = gameplay.Input;
+            Input = new NetInputService(gameplay.Input, inputActivity, Lifetime);
             Time = gameplay.Time;
-            Scheduler = gameplay.Scheduler;
+            Scheduler = new NetScheduler(gameplay.Scheduler, replication);
             LocalPlayer = new LifetimePlayerService(gameplay.LocalPlayer, Lifetime);
             Scenes = gameplay.Scenes;
             Entities = new LifetimeEntityService(new NetEntityService(gameplay.Entities, replication), Lifetime);
             Physics = gameplay.Physics;
-            Interactions = gameplay.Interactions;
+            Interactions = new NetInteractionService(gameplay.Interactions, replication);
             Items = new NetItemService(gameplay.Items, replication);
             Assets = new NetAssetService(gameplay.Assets, replication);
             if (Assets is IParentAssetScope assetScope) assetScope.AttachParent(parent.Assets);
@@ -105,7 +106,7 @@ namespace TopiaForge.ModManager
             WorldRuntime = gameplay.WorldRuntime;
             unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
             Localization = new OwnerLocalizationService(Lifetime, (OwnerLocalizationService)parent.Localization);
-            Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry);
+            Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry, replication.Intents);
             Diagnostics = parent.Diagnostics;
             Extensions = new OwnerExtensionService(Identity.Id, visibleDependencies, Lifetime, serviceRegistry, this);
         }

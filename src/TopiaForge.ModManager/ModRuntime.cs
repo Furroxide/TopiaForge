@@ -131,6 +131,7 @@ namespace TopiaForge.ModManager
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;
             loadedModIdsView = loadedModIds.AsReadOnly();
+            InstallIntentKitHook();
             AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
         }
 

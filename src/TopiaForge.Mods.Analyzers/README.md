@@ -11,6 +11,9 @@ This package is included automatically by the TopiaForge V1 SDK. It reports acti
 - references the loader-owned `TopiaForge.Mods.UnityUi` renderer instead of `Context.Ui`; or
 - calls a retired pre-V1 authoring API.
 
+It also warns when a mod reads an input press or release in a FixedUpdate handler, which misses or
+repeats presses and, in multiplayer, never counts as the player's own action.
+
 Manifest checks parse the JSON structure: matching text in descriptions, dependency range values,
 or `x-*` metadata never satisfies a dependency or capability. Each diagnostic links to a stable
 remediation page. The package has no runtime component.

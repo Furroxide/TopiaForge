@@ -11,7 +11,7 @@ namespace TopiaForge.Mods.Analyzers
 {
     /// <summary>Enforces the safe V1 authoring boundary and keeps source dependencies aligned with the manifest.</summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
-    public sealed class TopiaForgeModAnalyzer : DiagnosticAnalyzer
+    public sealed partial class TopiaForgeModAnalyzer : DiagnosticAnalyzer
     {
         private const string Category = "TopiaForge";
         private const string DocsRoot = "https://docs.topiaforge.dev/diagnostics/";
@@ -79,11 +79,11 @@ namespace TopiaForge.Mods.Analyzers
         private static readonly DiagnosticDescriptor BlockingWaitOnSdkTask = new DiagnosticDescriptor(
             "TF1008",
             "Blocking wait on an SDK task",
-            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; drive the work with PendingOperation<T> and poll it from your per-frame update.",
+            "'{0}' blocks the calling thread. TopiaForge SDK tasks complete on the game's main thread, so waiting on one from that thread stops the engine's update pump and hangs the game; await the task instead, or drive the work with PendingOperation<T> and poll it from your per-frame update.",
             Category,
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Mod code polls asynchronous SDK work from its per-frame update instead of waiting on it.",
+            description: "Mod code awaits asynchronous SDK work, or polls it from its per-frame update, instead of waiting on it. In multiplayer, awaiting keeps a player's own action for the code after the await, while a result polled in a later frame counts as a script.",
             helpLinkUri: DocsRoot + "TF1008");
 
         private static readonly ImmutableDictionary<string, ModuleRequirement> ModuleAssemblies =
@@ -122,7 +122,8 @@ namespace TopiaForge.Mods.Analyzers
                 ObsoletePreV1Api,
                 MissingRequiredCapability,
                 LoaderOwnedUiReference,
-                BlockingWaitOnSdkTask);
+                BlockingWaitOnSdkTask,
+                InputEdgeInFixedUpdate);
 
         /// <inheritdoc/>
         public override void Initialize(AnalysisContext context)
@@ -149,6 +150,9 @@ namespace TopiaForge.Mods.Analyzers
             context.RegisterSyntaxNodeAction(
                 AnalyzeBlockingWait,
                 SyntaxKind.SimpleMemberAccessExpression);
+
+            // FixedUpdate's timing is the game loop's too, whichever profile the mod builds with.
+            RegisterFixedUpdateInput(context);
 
             if (HasBooleanBuildProperty(
                     context.Options.AnalyzerConfigOptionsProvider,
