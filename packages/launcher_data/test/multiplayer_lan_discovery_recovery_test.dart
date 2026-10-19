@@ -59,6 +59,66 @@ void main() {
     },
   );
 
+  test('replaces a replacement the system closes in turn', () async {
+    final rig = LanRig.fresh();
+    await rig.client.start();
+    rig.querier.closedBySystem = true;
+    rig.beacon(hostAServerId, lanHost);
+    await pumpEventQueue();
+    rig.binder.sockets.last.closedBySystem = true;
+    rig.beacon(hostAServerId, lanHost);
+    await pumpEventQueue();
+    expect(rig.binder.sockets, hasLength(4));
+    expect(rig.client.snapshot.counters.querySocketsReplaced, 2);
+
+    rig.beacon(hostAServerId, lanHost);
+    expect(rig.binder.sockets.last.sent, hasLength(1));
+  });
+
+  test('a run restarted while a replacement was binding still replaces its own '
+      'socket when the system closes it', () async {
+    final held = Completer<void>();
+    final binds = <int, FakeLanSocket>{};
+    var calls = 0;
+    final client = LanDiscoveryClient(
+      listenAddress: InternetAddress.loopbackIPv4,
+      port: 0,
+      queryAddress: InternetAddress.loopbackIPv4,
+      bind: (address, port, {required reuseAddress}) async {
+        final call = ++calls;
+        if (call == 3) await held.future;
+        return binds[call] = FakeLanSocket(50000 + call);
+      },
+      clock: FakeClock().call,
+      ticker: ManualTicker().call,
+    );
+    addTearDown(client.dispose);
+    await client.start();
+    binds[2]!.closedBySystem = true;
+    binds[1]!.deliver(
+      LanBeacon(serverId: hostAServerId, gamePort: 27250).encode(),
+      lanHost,
+      40000,
+    );
+    await client.stop();
+    await client.start();
+    held.complete();
+    await pumpEventQueue();
+
+    // Binds 4 and 5 are the restarted run's; the system closes its query
+    // socket, and the next query binds a replacement.
+    binds[5]!.closedBySystem = true;
+    binds[4]!.deliver(
+      LanBeacon(serverId: hostBServerId, gamePort: 27250).encode(),
+      otherLanHost,
+      40000,
+    );
+    await pumpEventQueue();
+    expect(binds.keys, contains(6));
+    expect(binds[6]!.closed, isFalse);
+    expect(client.snapshot.counters.querySocketsReplaced, 1);
+  });
+
   test(
     'a replacement bound after browsing restarted is closed, not used',
     () async {

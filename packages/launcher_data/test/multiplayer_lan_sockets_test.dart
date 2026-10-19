@@ -65,11 +65,46 @@ void main() {
       final retry = timers.timers.single;
       expect(retry.delay, const Duration(milliseconds: 1));
 
+      // While the retry waits, a send and another write event without
+      // progress start no second timer.
+      socket.send([2], lanHost, 27250);
+      raw.becomeWritable();
+      expect(timers.timers, hasLength(1));
+
       raw.takesDatagrams = true;
       timers.fireLatest();
       expect(raw.sent, [
         [1],
+        [2],
       ]);
+    });
+
+    test('a waiting datagram keeps the bytes it was given when the caller '
+        'reuses its buffer', () {
+      raw.takesDatagrams = false;
+      final buffer = Uint8List.fromList([1, 2, 3]);
+      expect(socket.send(buffer, lanHost, 27250), isTrue);
+      buffer.fillRange(0, buffer.length, 9);
+      raw.takesDatagrams = true;
+      raw.becomeWritable();
+      expect(raw.sent, [
+        [1, 2, 3],
+      ]);
+    });
+
+    test('reads nothing until it is listened to, so a datagram that comes '
+        'first waits for the listener instead of spinning on read events', () {
+      // Dart raises a read event again at once while a datagram waits
+      // unread, so a socket that took read events with no listener would
+      // hold the event loop until the listener came.
+      raw.arrive([7]);
+      expect(raw.readEventsLeftUnread, 0);
+      final heard = <List<int>>[];
+      socket.listen((datagram) => heard.add(datagram.data));
+      expect(heard, [
+        [7],
+      ]);
+      expect(raw.readEventsLeftUnread, 0);
     });
 
     test('keeps at most 64 datagrams waiting, and refuses the next', () {
@@ -195,9 +230,22 @@ final class _ScriptedRawSocket extends Stream<RawSocketEvent>
   var partialSends = false;
   var closed = false;
   var _writeEventsEnabled = true;
+  var _readEventsEnabled = true;
+  final _arrived = <Datagram>[];
+
+  /// Read events after which a datagram still waited unread. Dart raises
+  /// the event again at once then, so on a real socket each would repeat
+  /// without end.
+  var readEventsLeftUnread = 0;
 
   @override
-  bool readEventsEnabled = true;
+  bool get readEventsEnabled => _readEventsEnabled;
+
+  @override
+  set readEventsEnabled(bool value) {
+    _readEventsEnabled = value;
+    _raiseReads();
+  }
 
   @override
   bool get writeEventsEnabled => _writeEventsEnabled;
@@ -221,7 +269,29 @@ final class _ScriptedRawSocket extends Stream<RawSocketEvent>
   }
 
   @override
-  Datagram? receive() => null;
+  Datagram? receive() => _arrived.isEmpty ? null : _arrived.removeAt(0);
+
+  /// A datagram arrives from the network.
+  void arrive(List<int> data) {
+    _arrived.add(
+      Datagram(Uint8List.fromList(data), InternetAddress('192.168.1.20'), 1),
+    );
+    _raiseReads();
+  }
+
+  /// Raises read events while someone listens, reads are enabled and a
+  /// datagram waits, as Dart does: again after each one that left a datagram
+  /// unread. A few rounds are enough to see a socket that does not read.
+  void _raiseReads() {
+    for (var round = 0; round < 4; round++) {
+      if (!_events.hasListener || !_readEventsEnabled || _arrived.isEmpty) {
+        return;
+      }
+      final waiting = _arrived.length;
+      _events.add(RawSocketEvent.read);
+      if (_arrived.length == waiting) readEventsLeftUnread++;
+    }
+  }
 
   @override
   void close() => closed = true;

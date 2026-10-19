@@ -5,8 +5,8 @@
 ///   send in flight per socket. A send made before the previous one has
 ///   completed returns 0 and sends nothing. A reply sent right behind another
 ///   one therefore vanished on loaded runners, and the test waited for it
-///   until it timed out. [LoopbackUdpHost.send] checks every result and sends
-///   again once the socket is writable.
+///   until it timed out. [LoopbackUdpHost.send] checks every result and tries
+///   again a moment later, for as long as a loaded runner may need.
 /// - **A dropped datagram is sent again, not waited for.**
 ///   [LoopbackUdpHost.repeatUntil] repeats a send on an interval until what
 ///   the test waits for has happened, within a bound that names it.
@@ -23,42 +23,49 @@ import 'package:launcher_data/src/multiplayer/lan_sockets.dart';
 /// A game host's UDP socket, bound to the loopback interface.
 final class LoopbackUdpHost {
   LoopbackUdpHost._(this._socket) {
-    _socket.listen(_onEvent);
+    _socket
+      ..writeEventsEnabled = false
+      ..listen(_onEvent);
   }
 
   static Future<LoopbackUdpHost> bind() async => LoopbackUdpHost._(
     await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0),
   );
 
-  /// How long a refused send waits for a write event before it tries again
-  /// anyway.
-  static const _writableWait = Duration(milliseconds: 100);
-  static const _sendAttempts = 100;
+  /// How long a send may wait for the socket to take its datagram.
+  static const _sendWithin = Duration(seconds: 5);
+
+  /// How long a refused send waits before it tries again. A write event is
+  /// no sign that the send in flight has completed: after a datagram send
+  /// Dart still reports the socket writable, so the event comes at once. On
+  /// a loaded runner that send can take milliseconds, and retries paced by
+  /// write events alone ran out in less than one.
+  static const _retryAfter = Duration(milliseconds: 1);
 
   final RawDatagramSocket _socket;
   final _firstReceived = Completer<Datagram>();
-  Completer<void>? _writable;
 
   int get port => _socket.port;
 
   /// The first datagram this socket receives.
   Future<Datagram> get firstReceived => _firstReceived.future;
 
-  /// Sends [datagram] whole to [address] and [port], or throws.
+  /// Sends [datagram] whole to [address] and [port], or throws once
+  /// [_sendWithin] has passed without the socket taking it.
   Future<void> send(
     List<int> datagram,
     InternetAddress address,
     int port,
   ) async {
-    for (var attempt = 0; attempt < _sendAttempts; attempt++) {
-      if (_socket.send(datagram, address, port) == datagram.length) return;
-      final writable = _writable = Completer<void>();
-      _socket.writeEventsEnabled = true;
-      await writable.future.timeout(_writableWait, onTimeout: () {});
+    final clock = Stopwatch()..start();
+    while (_socket.send(datagram, address, port) != datagram.length) {
+      if (clock.elapsed >= _sendWithin) {
+        throw StateError(
+          'The loopback socket did not send a datagram within $_sendWithin.',
+        );
+      }
+      await Future<void>.delayed(_retryAfter);
     }
-    throw StateError(
-      'The loopback socket did not send a datagram in $_sendAttempts tries.',
-    );
   }
 
   /// Runs [sendOnce] now, and again every [every], until [done] completes,
@@ -87,18 +94,13 @@ final class LoopbackUdpHost {
   void close() => _socket.close();
 
   void _onEvent(RawSocketEvent event) {
-    if (event == RawSocketEvent.read) {
-      for (
-        var datagram = _socket.receive();
-        datagram != null;
-        datagram = _socket.receive()
-      ) {
-        if (!_firstReceived.isCompleted) _firstReceived.complete(datagram);
-      }
-    } else if (event == RawSocketEvent.write) {
-      final writable = _writable;
-      _writable = null;
-      if (writable != null && !writable.isCompleted) writable.complete();
+    if (event != RawSocketEvent.read) return;
+    for (
+      var datagram = _socket.receive();
+      datagram != null;
+      datagram = _socket.receive()
+    ) {
+      if (!_firstReceived.isCompleted) _firstReceived.complete(datagram);
     }
   }
 }
