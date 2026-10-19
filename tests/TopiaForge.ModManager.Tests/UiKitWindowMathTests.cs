@@ -31,6 +31,7 @@ namespace TopiaForge.ModManager.Tests
             MeasuredSmallScreensStillClamp();
             ShowPlacementCapsFromTheDesignedSize();
             ShowPlacementKeepsContentSizedWindows();
+            TallWindowsKeepTheirTitleBarOnScreen();
             Console.WriteLine("UiKitWindowMathTests passed.");
         }
 
@@ -136,6 +137,41 @@ namespace TopiaForge.ModManager.Tests
                 "a 1920x1080 canvas places the window");
             Assert(pulled.X == 1720f && pulled.Y == 986f && pulled.Width == 200f && pulled.Height == 94f,
                 "a content-sized window is pulled on-screen at its own size, got " + pulled);
+        }
+
+        private static void TallWindowsKeepTheirTitleBarOnScreen()
+        {
+            // A content-sized window keeps its height, so on a 1280x720 canvas (UI scale 1.5 on a 1920x1080
+            // screen) an 800-high one cannot fit. Its title bar is its top edge: that edge must stay at the
+            // top of the canvas, wherever the window was, or the window can be neither dragged nor closed
+            // with the mouse.
+            foreach (var shownY in new[] { -40f, -300f, 200f })
+            {
+                Assert(TopiaForgeWindowMath.TryPlace(new TopiaForgeRect(410f, shownY, 460f, 800f), 460f, 0f, true, 1280f, 720f, out var placed),
+                    "a 1280x720 canvas places the window");
+                Assert(placed.Y == -80f && placed.Y + placed.Height == 720f && placed.X == 410f && placed.Height == 800f,
+                    "a window taller than its canvas keeps its title bar at the top, from y " + shownY + ", got " + placed);
+            }
+
+            // Drag end snaps and clamps the same way.
+            var dragged = TopiaForgeWindowMath.ClampToScreen(
+                TopiaForgeWindowMath.SnapToEdges(new TopiaForgeRect(410f, 50f, 460f, 800f), 1280f, 720f),
+                1280f,
+                720f);
+            Assert(dragged.Y + dragged.Height == 720f, "drag end keeps a tall window's title bar at the top, got " + dragged);
+
+            // Exactly as tall as the canvas, it fills it; wider than the canvas, it keeps its left edge, where
+            // the title starts, at the left.
+            var exact = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(410f, 30f, 460f, 720f), 1280f, 720f);
+            Assert(exact.Y == 0f, "a window as tall as its canvas sits at its bottom edge, got " + exact);
+            var wide = TopiaForgeWindowMath.ClampToScreen(new TopiaForgeRect(-60f, 100f, 1400f, 300f), 1280f, 720f);
+            Assert(wide.X == 0f && wide.Y == 100f, "a window wider than its canvas keeps its left edge on-screen, got " + wide);
+
+            // A fixed-size window never reaches this: it is capped to 90% of the canvas first.
+            Assert(TopiaForgeWindowMath.TryPlace(new TopiaForgeRect(210f, -90f, 860f, 900f), 860f, 900f, false, 1280f, 720f, out var capped),
+                "a 1280x720 canvas places the fixed-size window");
+            AssertNear(capped.Height, 648f, "a fixed-size window is capped to 90% of its canvas");
+            Assert(capped.Y >= 0f && capped.Y + capped.Height <= 720f, "a capped fixed-size window fits fully inside its canvas, got " + capped);
         }
 
         private static void AssertSame(TopiaForgeRect actual, TopiaForgeRect expected, string message)

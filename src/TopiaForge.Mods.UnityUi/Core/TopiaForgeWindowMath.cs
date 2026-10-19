@@ -56,8 +56,9 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>
         /// Places a window when it is shown. A window of fixed size is capped from its designed size,
         /// so a cap taken on a smaller screen does not stick; a window sized by its content keeps the
-        /// size it has, since that size is never written back. The rect is then pulled fully on-screen.
-        /// Returns false, with the rect unchanged, while the screen is unmeasured.
+        /// size it has, since that size is never written back. The rect is then pulled on-screen, its
+        /// title bar first when the window is taller than the screen. Returns false, with the rect
+        /// unchanged, while the screen is unmeasured.
         /// </summary>
         public static bool TryPlace(
             TopiaForgeRect rect,
@@ -103,7 +104,11 @@ namespace TopiaForge.Mods.UnityUi
             return (Math.Min(w, screenWidth * MaxViewportFraction), Math.Min(h, screenHeight * MaxViewportFraction));
         }
 
-        /// <summary>Clamps a window rect so it sits fully inside the screen.</summary>
+        /// <summary>
+        /// Clamps a window rect so it sits fully inside the screen. A window taller than the screen
+        /// keeps its top edge, where its title bar is, at the top of the screen, and one wider than
+        /// the screen keeps its left edge, where its title starts, at the left.
+        /// </summary>
         public static TopiaForgeRect ClampToScreen(TopiaForgeRect rect, float screenWidth, float screenHeight)
         {
             if (!HasViewport(screenWidth, screenHeight))
@@ -112,7 +117,9 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             var x = Clamp(rect.X, 0f, Math.Max(0f, screenWidth - rect.Width));
-            var y = Clamp(rect.Y, 0f, Math.Max(0f, screenHeight - rect.Height));
+            var y = rect.Height > screenHeight
+                ? screenHeight - rect.Height
+                : Clamp(rect.Y, 0f, screenHeight - rect.Height);
             return new TopiaForgeRect(x, y, rect.Width, rect.Height);
         }
 
