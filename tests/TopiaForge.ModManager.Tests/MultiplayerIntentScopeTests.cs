@@ -258,6 +258,12 @@ namespace TopiaForge.ModManager.Tests
                 "nor one where a value set while a captured context runs escapes into the code that ran it");
             True(!TrustedApart(new EmptiedLater().Store),
                 "nor one that empties a slot only when the thread next changes context, where an await right after a scope ends would carry its record on");
+
+            // Each of the next two passes every check but one, so each of the probe's emptied-slot checks is needed on .NET too.
+            True(!TrustedApart(new StaleUntilSwitch().Store),
+                "nor one whose thread reads a slot it emptied until it next changes context, where code right after a scope ends would act on its record");
+            True(!TrustedApart(new ComesBack().Store),
+                "nor one that hands an emptied slot's value back once the thread has changed context, where a scope's record would return in a later frame");
             True(!IntentLogicalStore.KeepsCapturedValues(new IntentLogicalStore(_ => throw new NotSupportedException("refused"), (_, _) => { }, _ => { })),
                 "nor one that refuses access, and the check never throws");
             Throws<ArgumentNullException>(() => IntentLogicalStore.KeepsCapturedValues(null!), "the check needs a store");
@@ -476,6 +482,84 @@ namespace TopiaForge.ModManager.Tests
                 foreach (var slot in pending) next.Remove(slot);
                 pending.Clear();
                 slots.Value = next.Count == 0 ? null : next;
+            }
+        }
+
+        /// <summary>
+        /// Empties a slot in its context, so captures keep what they should, but the thread goes on reading the emptied value
+        /// until it next changes context. On .NET a capture taken right after is the live context, so only the check that an
+        /// emptied slot reads empty refuses it.
+        /// </summary>
+        private sealed class StaleUntilSwitch
+        {
+            private readonly AsyncLocal<Dictionary<string, object>?> slots;
+            private readonly Dictionary<string, object> stale = new Dictionary<string, object>();
+
+            internal StaleUntilSwitch()
+            {
+                slots = new AsyncLocal<Dictionary<string, object>?>(change =>
+                {
+                    if (change.ThreadContextChanged) stale.Clear();
+                });
+                Store = new IntentLogicalStore(Get, Set, Free);
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            private object? Get(string slot) =>
+                stale.TryGetValue(slot, out var held) ? held : slots.Value != null && slots.Value.TryGetValue(slot, out var value) ? value : null;
+
+            private void Set(string slot, object value)
+            {
+                stale.Remove(slot);
+                slots.Value = new Dictionary<string, object>(slots.Value ?? new Dictionary<string, object>()) { [slot] = value };
+            }
+
+            private void Free(string slot)
+            {
+                if (slots.Value == null || !slots.Value.TryGetValue(slot, out var value)) return;
+                stale[slot] = value;
+                var next = new Dictionary<string, object>(slots.Value);
+                next.Remove(slot);
+                slots.Value = next.Count == 0 ? null : next;
+            }
+        }
+
+        /// <summary>
+        /// Empties a slot in place, but hands its old value back once the thread has changed context, until something sets
+        /// it again. Only the check that a context captured after the slot was emptied holds none refuses it on .NET.
+        /// </summary>
+        private sealed class ComesBack
+        {
+            private readonly AsyncLocal<Dictionary<string, object>?> slots;
+            private readonly Dictionary<string, object> freed = new Dictionary<string, object>();
+            private bool switched;
+
+            internal ComesBack()
+            {
+                slots = new AsyncLocal<Dictionary<string, object>?>(change => switched |= change.ThreadContextChanged);
+                Store = new IntentLogicalStore(Get, Set, Free);
+            }
+
+            internal IntentLogicalStore Store { get; }
+
+            private object? Get(string slot) =>
+                switched && freed.TryGetValue(slot, out var back) ? back : slots.Value != null && slots.Value.TryGetValue(slot, out var value) ? value : null;
+
+            private void Set(string slot, object value)
+            {
+                freed.Remove(slot);
+                slots.Value = new Dictionary<string, object>(slots.Value ?? new Dictionary<string, object>()) { [slot] = value };
+            }
+
+            private void Free(string slot)
+            {
+                if (slots.Value == null || !slots.Value.TryGetValue(slot, out var value)) return;
+                freed[slot] = value;
+                var next = new Dictionary<string, object>(slots.Value);
+                next.Remove(slot);
+                slots.Value = next.Count == 0 ? null : next;
+                switched = false;
             }
         }
 

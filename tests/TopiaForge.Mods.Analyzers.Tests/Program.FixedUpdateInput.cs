@@ -17,6 +17,11 @@ namespace TopiaForge.Mods.Analyzers.Tests
             + "System.IDisposable SubscribeFixedUpdate(System.Action<GameTimeSample> handler); "
             + "System.IDisposable SubscribeLateUpdate(System.Action<GameTimeSample> handler); } "
             + "public interface IModScheduler { System.IDisposable NextFrame(System.Action action); } "
+            + "public readonly struct SceneLoadEvent { } public readonly struct SceneLifecycleEvent { } "
+            + "public interface ISceneLoadEventSource { System.IDisposable SubscribeSceneLoaded(System.Action<SceneLoadEvent> handler); } "
+            + "public static class ModEventExtensions { "
+            + "public static System.IDisposable SubscribeSceneLoaded(this IModEvents events, System.Action<SceneLoadEvent> handler) => null!; "
+            + "public static System.IDisposable SubscribeSceneLifecycle(this IModEvents events, System.Action<SceneLifecycleEvent> handler) => null!; } "
             + "public interface IInputAction : System.IDisposable { "
             + "bool WasPressed { get; } bool WasReleased { get; } bool IsHeld { get; } float Value { get; } } }";
 
@@ -28,7 +33,9 @@ namespace TopiaForge.Mods.Analyzers.Tests
             AllowsEdgesInUpdateAndHeldInputInFixedUpdate();
             IgnoresAnotherTypesMemberNamedLikeAnEdge();
             AllowsWhatAFixedUpdateHandlerHandsTheSdkForLater();
+            AllowsSceneSubscriptionsAndHandOffsKeptAside();
             ReportsALambdaTheHandlerRunsAtOnce();
+            ReportsALocalFunctionTheHandlerCalls();
             ReportsAHandlerKeptInALocal();
             NamesAConditionalReadWithItsReceiverAndNeverASetter();
         }
@@ -58,6 +65,42 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 + "public sealed class Mod { public void Load(IModEvents events, IInputAction[] actions) { "
                 + "events.SubscribeFixedUpdate(_ => { if (actions.Any(action => action.WasPressed)) { } }); } }");
             Assert(diagnostics.Count(item => item.Id == "TF1009") == 1, "an edge read in a lambda the FixedUpdate handler runs at once should report TF1009");
+        }
+
+        // The SDK's scene subscriptions run later too, its own extensions among them, and so do a local function and a
+        // delegate kept in a local that the handler only hands on that way: an author must not be told to move any of it.
+        private static void AllowsSceneSubscriptionsAndHandOffsKeptAside()
+        {
+            var diagnostics = AnalyzeSources(
+                "using TopiaForge.Mods; public sealed class Mod { IInputAction jump = null!; IModScheduler scheduler = null!; IModEvents events = null!; "
+                + "public void Load() { "
+                + "events.SubscribeFixedUpdate(_ => { events.SubscribeSceneLoaded((SceneLoadEvent scene) => { if (jump.WasPressed) { } }); }); "
+                + "events.SubscribeFixedUpdate(_ => { ModEventExtensions.SubscribeSceneLifecycle(events, change => { if (jump.WasPressed) { } }); }); "
+                + "events.SubscribeFixedUpdate(_ => { ((ISceneLoadEventSource)events).SubscribeSceneLoaded(scene => { if (jump.WasReleased) { } }); }); "
+                + "events.SubscribeFixedUpdate(_ => { void Later() { if (jump.WasPressed) { } } scheduler.NextFrame(Later); }); "
+                + "events.SubscribeFixedUpdate(_ => { System.Action later = () => { if (jump.WasReleased) { } }; scheduler.NextFrame(later); }); "
+                + "events.SubscribeFixedUpdate(OnFixedUpdate); } "
+                + "void OnFixedUpdate(GameTimeSample time) { System.Action later; later = () => { if (jump.WasPressed) { } }; scheduler.NextFrame(later); "
+                + "void Again() { if (jump.WasReleased) { } } scheduler.NextFrame(Again); } }");
+            var found = diagnostics.Where(item => item.Id == "TF1009").ToArray();
+            Assert(found.Length == 0, "an edge read in a scene subscription, or in a local function or a delegate in a local that a FixedUpdate handler "
+                + "only hands on for later, must not report TF1009 (" + string.Join("; ", found.Select(item => item.Location.SourceSpan.Start + ": " + item.GetMessage().Split('\'')[1])) + ")");
+        }
+
+        // A local function or a kept delegate that the handler calls runs in FixedUpdate, whichever kind of handler calls it,
+        // and so does one that it both calls and hands on.
+        private static void ReportsALocalFunctionTheHandlerCalls()
+        {
+            var diagnostics = AnalyzeSources(
+                "using TopiaForge.Mods; public sealed class Mod { IInputAction jump = null!; IModScheduler scheduler = null!; "
+                + "public void Load(IModEvents events) { "
+                + "events.SubscribeFixedUpdate(OnFixedUpdate); "
+                + "events.SubscribeFixedUpdate(_ => { void Check() { if (jump.WasPressed) { } } Check(); scheduler.NextFrame(Check); }); "
+                + "events.SubscribeFixedUpdate(_ => { System.Action check = () => { if (jump.WasReleased) { } }; check(); scheduler.NextFrame(check); }); } "
+                + "void OnFixedUpdate(GameTimeSample time) { bool Pressed() => jump.WasPressed; if (Pressed()) { } } }");
+            Assert(diagnostics.Count(item => item.Id == "TF1009") == 3,
+                "a local function or a delegate in a local that a FixedUpdate handler calls, lambda or method, reports TF1009, though it is also handed on ("
+                + diagnostics.Count(item => item.Id == "TF1009") + ")");
         }
 
         private static void ReportsAHandlerKeptInALocal()

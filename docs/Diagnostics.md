@@ -162,14 +162,16 @@ protected override void OnLoad()
 ```
 
 Held input (`IsHeld`) and analog values (`Value`) hold for the whole frame, so reading them in
-FixedUpdate is fine and is not reported. Nor is an edge read in code the handler hands on to run later,
-such as an Update subscription or a `Context.Scheduler.NextFrame` callback, since that runs on the
-frame's own clock. A spawn, a transform change or a destroy that answers the press belongs in Update,
-where it counts as the player's own action.
+FixedUpdate is fine and is not reported. Nor is an edge read in code the handler only hands on to run
+later, such as an Update or scene subscription or a `Context.Scheduler` callback, written in place,
+kept in a local or written as a local function, since that runs on the frame's own clock. A spawn, a
+transform change or a destroy that answers the press belongs in Update, where it counts as the player's
+own action.
 
-The rule follows a handler written in place or kept in a local first, and a handler method wherever it
-is declared. It does not follow the handler into the methods it calls, or into a handler kept in a
-field. The rule is a warning, applies to every mod project like TF1008, and exempts test projects.
+The rule follows a handler written in place or kept in a local first, a handler method wherever it is
+declared, and the local functions either one calls. It does not follow the handler into other methods
+it calls, or into a handler kept in a field. The rule is a warning, applies to every mod project like
+TF1008, and exempts test projects.
 
 ### TF1101
 

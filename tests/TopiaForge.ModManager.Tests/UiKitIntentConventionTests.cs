@@ -44,6 +44,7 @@ namespace TopiaForge.ModManager.Tests
         public static void Run()
         {
             var kit = KitSources();
+            EveryCallbackIsListed(kit);
             PlayerInputOpensTheOwnersAction(kit);
             WhatRunsInsideAnActionOpensNothing(kit);
             DeferredCompletionsCarryWhatTheyCaptured(kit);
@@ -51,6 +52,36 @@ namespace TopiaForge.ModManager.Tests
             LeafHandlersOpenTheAction(kit);
             TheRuntimeConnectsTheKit();
             Console.WriteLine("UiKitIntentConventionTests passed.");
+        }
+
+        /// <summary>
+        /// Every callback the kit raises through TopiaForgeCallbacks is in one of the lists above, so a callback a later
+        /// change adds, raised from an event as the modal cancellation is, never escapes the checks that follow.
+        /// </summary>
+        private static void EveryCallbackIsListed(IReadOnlyDictionary<string, string> kit)
+        {
+            var listed = new HashSet<string>(PlayerCallbacks.Concat(InheritingCallbacks), StringComparer.Ordinal) { "Tween completion" };
+            var calls = 0;
+            foreach (var (file, source) in kit)
+            {
+                if (file.EndsWith("TopiaForgeCallbacks.cs", StringComparison.Ordinal)) continue;
+                foreach (var call in new[] { "TopiaForgeCallbacks.Invoke(", "TopiaForgeCallbacks.Player(", "TopiaForgeCallbacks.Resume(" })
+                {
+                    for (var index = source.IndexOf(call, StringComparison.Ordinal); index >= 0; index = source.IndexOf(call, index + call.Length, StringComparison.Ordinal))
+                    {
+                        // The description is the call's last argument, a literal or a literal and the name it is built with.
+                        var arguments = Balanced(source, index + call.Length);
+                        var end = arguments.LastIndexOf('"');
+                        var start = end <= 0 ? -1 : arguments.LastIndexOf('"', end - 1);
+                        var description = start < 0 ? "(no description)" : arguments.Substring(start + 1, end - start - 1);
+                        Require(listed.Contains(description),
+                            "'" + description + "' in " + Path.GetFileName(file) + " is listed as a player callback or as one that inherits the action around it");
+                        calls++;
+                    }
+                }
+            }
+
+            Require(calls >= listed.Count, "every listed callback is raised somewhere (" + calls + " calls for " + listed.Count + " descriptions)");
         }
 
         private static void PlayerInputOpensTheOwnersAction(IReadOnlyDictionary<string, string> kit)

@@ -140,16 +140,41 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>
         /// The game's own action refuses a dispose off the main thread and says to dispose it there instead. The decorator
-        /// leaves everything as it was until the host's action agrees, so its activity list is only ever the main thread's,
-        /// and the retry the error asks for ends the action.
+        /// leaves everything as it was until the host's action agrees, its activity list and its lifetime lease included, so
+        /// the list is only ever the main thread's, the retry the error asks for ends the action, and so does the mod's
+        /// unload when it never retries.
         /// </summary>
         private static void ADisposeTheHostRefusesChangesNothing()
         {
+            var lifetime = new OwnerModLifetime();
             var activity = new ModInputActivity();
             var host = new MainThreadAction();
+            var action = Tracked(host, activity, lifetime);
+            var refused = DisposeOffTheMainThread(action);
+            True(refused != null && !host.Disposed, "the game's action refuses a dispose off the main thread");
+            True(activity.Count == 1, "and the refused dispose leaves the action counted, without touching the activity list off the main thread");
+            action.Dispose();
+            True(host.Disposed && activity.Count == 0, "so disposing it again on the main thread, as the error says to, ends it and stops counting it");
+            True(DisposeOffTheMainThread(action) == null, "and once it has ended, disposing it again, from any thread, changes nothing");
+
+            // A mod that never retries: the refused dispose left the action in its lifetime, so the mod's unload ends it.
+            var abandoned = new MainThreadAction();
+            var kept = Tracked(abandoned, activity, lifetime);
+            True(DisposeOffTheMainThread(kept) != null && activity.Count == 1, "another action's refused dispose leaves it counted");
+            lifetime.Dispose();
+            True(abandoned.Disposed && activity.Count == 0, "and the mod's unload still ends it, since the refusal left it in its lifetime");
+        }
+
+        private static NetInputAction Tracked(IInputAction host, ModInputActivity activity, OwnerModLifetime lifetime)
+        {
             var action = new NetInputAction(host, activity);
+            action.AttachLease(lifetime.Track(action));
             activity.Add(action);
-            var refused = Task.Run(() =>
+            return action;
+        }
+
+        private static InvalidOperationException? DisposeOffTheMainThread(IDisposable action) =>
+            Task.Run(() =>
             {
                 try
                 {
@@ -161,11 +186,6 @@ namespace TopiaForge.ModManager.Tests
                     return exception;
                 }
             }).GetAwaiter().GetResult();
-            True(refused != null && !host.Disposed, "the game's action refuses a dispose off the main thread");
-            True(activity.Count == 1, "and the refused dispose leaves the action counted, without touching the activity list off the main thread");
-            action.Dispose();
-            True(host.Disposed && activity.Count == 0, "so disposing it again on the main thread, as the error says to, ends it and stops counting it");
-        }
 
         private static void ScheduledCallbacksCaptureWhereTheyWereScheduled(string root)
         {

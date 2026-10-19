@@ -1392,7 +1392,9 @@ active, scripted work in them included, so scripted spawning belongs in a timer 
   replace and restore, failures restore, other threads open nothing, the logical call context is left empty at rest,
   the probe trusts only a logical call context whose captures keep their values, and refuses one whose captures share
   its slots, one that empties a slot in place under the captures taken before, one that empties it only at the next
-  change of context, one where a value set in a captured run escapes, and one that refuses access, the store binds
+  change of context, one whose thread reads an emptied slot until it next changes context, one that hands an emptied
+  slot's value back after a change of context, one where a value set in a captured run escapes, and one that refuses
+  access, the store binds
   `CallContext`'s three public members by name, checked against a stand-in with the same names and shapes, and never
   members that are not public, the mode follows the runtime, and the reusing and logical ways allocate nothing. The
   game's Mono is outside the harnesses; the costs above record the same rules checked on it.
@@ -1406,17 +1408,21 @@ active, scripted work in them included, so scripted spawning belongs in a timer 
   and held input make a mod's Update and LateUpdate input-active while FixedUpdate, quiet frames and another mod's
   Update never are; a session scope's action counts for its mod; the input decorator passes everything through, ends
   actions with their lifetime, and changes nothing when the game's action refuses a dispose off the main thread, so the
-  retry its error asks for works; scheduled callbacks, `Every`, a coroutine and a worker's hand-back capture where
+  retry its error asks for works, the mod's unload still ends an action whose dispose was refused, and a second
+  dispose changes nothing; scheduled callbacks, `Every`, a coroutine and a worker's hand-back capture where
   they were scheduled, another mod's and scripted ones none, and a realm change ends them; interactions; and frames
   that allocate nothing offline, at rest and with input held.
 - **The analyzer** (the analyzer harness): TF1009 reports an edge read in a FixedUpdate lambda, method in another file,
-  local function, handler kept in a local, or lambda the handler runs at once, naming a conditional read with its
-  receiver; and not one in Update or LateUpdate, in what a FixedUpdate handler subscribes or schedules for later, held
-  or analog input in FixedUpdate, a mod's own member named like an edge, or a mod's own edge being set. TF1008 offers
-  awaiting before polling.
-- **The kit** (`UiKitIntentConventionTests`): every callback a player's input raises opens the owner's action, every
-  one raised inside an action or by what only happens to a control opens nothing of its own, tweens carry what they
-  captured, every listener is accounted for, and the runtime connects and disconnects the kit.
+  local function, handler kept in a local, lambda the handler runs at once, or local function or delegate in a local
+  the handler calls, even when it also hands it on, naming a conditional read with its receiver; and not one in Update
+  or LateUpdate, in what a FixedUpdate handler subscribes, the SDK's scene subscriptions and their extensions included,
+  or schedules for later, written in place, kept in a local or as a local function, held or analog input in
+  FixedUpdate, a mod's own member named like an edge, or a mod's own edge being set. TF1008 offers awaiting before
+  polling, and every rule's help link redirects to its entry.
+- **The kit** (`UiKitIntentConventionTests`): every callback the kit raises is listed, every callback a player's input
+  raises opens the owner's action, every one raised inside an action or by what only happens to a control opens nothing
+  of its own, tweens carry what they captured, every listener is accounted for, and the runtime connects and
+  disconnects the kit.
 - **The real runtime** (the ModRuntime harness): a mod's input handler, a callback its input scheduled, its UI
   callback and that callback's continuation, its command and its interaction each act on the player's intent; its
   scripted timer, its FixedUpdate, and another mod's Update and published callback in the same frames see none;
