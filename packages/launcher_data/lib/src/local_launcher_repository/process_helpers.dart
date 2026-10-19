@@ -177,6 +177,7 @@ extension _ProcessHelpers on LocalLauncherRepository {
       // Disposal closes monitoring, but cannot release a created acceptance
       // process: its original receipt must remain available for owned cleanup.
       _ownedLaunchProcesses[identity] = process;
+      _ownedLaunchRequests[process] = requestId;
       if (acceptance != null) _acceptanceReceipts[requestId] = process;
     }
     final activity = LaunchActivity(

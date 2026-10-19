@@ -67,6 +67,10 @@ Future<int> runCliLaunch({
       );
       return 1;
     }
+    // A restart says how the game it replaced ended: quit when asked, or
+    // stopped, which leaves this start in safe mode.
+    final replaced = result.replacedGame;
+    if (replaced != null) write(replaced.message);
     write(
       'Game process started${result.requestId == null ? '' : ' (request ${result.requestId})'}; session start is unconfirmed.',
     );

@@ -166,6 +166,13 @@ Quit normally from that run, and the following start loads your mods again. If t
 one mod was still loading, TopiaForge turns off just that mod and keeps it off until you turn it on
 again in the manager; `manager.log` names it on a line that begins `Automatically quarantined`.
 
+When the launcher restarts a game it started, it asks the game to quit the same way, so the restarted
+game loads your mods. It stops the game itself only if the game has not taken the request within 10
+seconds, or has not closed within 30, for example because it hangs. The restarted game then opens in
+safe mode, and the launcher says so; restart from the launcher once more to load your mods. Like the
+**QUIT** button, a restart runs the game's own quit steps, the shutdown feedback page included unless
+the No Feedback URL mod is on.
+
 ## Logs
 
 | Log | Location |

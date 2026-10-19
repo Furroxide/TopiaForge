@@ -11,6 +11,8 @@ part of 'launch_staging_store.dart';
 ///   projection.
 /// - `multiplayer-preferences-journal-v1.json`, game to launcher: changes the
 ///   player made in game.
+/// - `launcher-quit-<request key>.json`, launcher to game: the launcher asks a
+///   game it started to quit before a restart.
 ///
 /// A taker claims a channel file by renaming it to a private name before it
 /// reads it, so a newer file the other side writes meanwhile lands at the
@@ -70,9 +72,41 @@ extension LaunchStagingSessions on LaunchStagingStore {
 
   /// Withdraws [expected] if the game has not taken it, and says whether it
   /// did. False means the game took it, or it was already gone or replaced.
-  Future<bool> withdrawSessionJoin(SessionJoinRequest expected) async {
-    final file = _channel('session-join', expected.requestId);
-    final staged = LaunchTransport.writeSessionJoin(expected);
+  Future<bool> withdrawSessionJoin(SessionJoinRequest expected) => _withdraw(
+    _channel('session-join', expected.requestId),
+    LaunchTransport.writeSessionJoin(expected),
+  );
+
+  /// Asks the process launched as [LauncherQuitRequest.requestId] to quit
+  /// (`launcher-quit-<request key>.json`). Its manager looks twice a second,
+  /// takes the request once, and quits as the game's Quit button would.
+  Future<File> writeLauncherQuit(LauncherQuitRequest value) => _replace(
+    _channel('launcher-quit', value.requestId),
+    LaunchTransport.writeLauncherQuit(value),
+  );
+
+  /// Whether [expected] still waits at its name: false once the game took it,
+  /// or it was withdrawn or replaced, or when it cannot be read.
+  Future<bool> isLauncherQuitPending(LauncherQuitRequest expected) async {
+    try {
+      return await _readText(
+            _channel('launcher-quit', expected.requestId),
+            LaunchTransport.maxChannelBytes,
+          ) ==
+          LaunchTransport.writeLauncherQuit(expected);
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Withdraws [expected] if the game has not taken it, and says whether it
+  /// did. False means the game took it, or it was already gone or replaced.
+  Future<bool> withdrawLauncherQuit(LauncherQuitRequest expected) => _withdraw(
+    _channel('launcher-quit', expected.requestId),
+    LaunchTransport.writeLauncherQuit(expected),
+  );
+
+  Future<bool> _withdraw(File file, String staged) async {
     try {
       if (await _readText(file, LaunchTransport.maxChannelBytes) != staged) {
         return false;
@@ -82,7 +116,7 @@ extension LaunchStagingSessions on LaunchStagingStore {
       file.deleteSync();
       return true;
     } on Object {
-      /* A foreign or changed join is not ours to remove. */
+      /* A foreign or changed file is not ours to remove. */
       return false;
     }
   }

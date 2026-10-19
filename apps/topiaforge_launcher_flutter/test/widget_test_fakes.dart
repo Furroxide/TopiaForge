@@ -55,6 +55,10 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
     started: true,
     message: 'Launched TopiaForge.',
   );
+  LaunchResult restartResult = const LaunchResult(
+    started: true,
+    message: 'Restarted TopiaForge.',
+  );
   Completer<void>? loadGate;
   Completer<void>? loadEntered;
   int loadCount = 0;
@@ -246,7 +250,7 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
     LaunchSelection? selectionOverride,
   }) async {
     restartCount += 1;
-    return const LaunchResult(started: true, message: 'Restarted TopiaForge.');
+    return restartResult;
   }
 
   @override

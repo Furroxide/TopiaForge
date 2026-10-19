@@ -81,4 +81,29 @@ void _registerHomeLaunchTests(_PumpHome pumpHome) {
     expect(repository.restartCount, 1);
     expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
+  testWidgets('a restart that had to stop the game says this start is in '
+      'safe mode', (tester) async {
+    final repository = _FakeLauncherRepository(
+      snapshot: _updateSnapshot(needsRepair: true),
+    )..restartResult = const LaunchResult(
+        started: true,
+        message: 'Restarted TopiaForge.',
+        replacedGame: ReplacedGameExit.stopped,
+      );
+    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mods'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Restart').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
+    await tester.pumpAndSettle();
+
+    expect(repository.restartCount, 1);
+    expect(
+      find.textContaining(ReplacedGameExit.stopped.message),
+      findsOneWidget,
+    );
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
+  });
 }

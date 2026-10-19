@@ -59,6 +59,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
       );
     }
     LaunchStagingLease? lease;
+    ReplacedGameExit? replaced;
     try {
       final profile = _requireValidLauncherProfile(
         LauncherProfile.fromJson(
@@ -136,7 +137,18 @@ extension _LaunchAdmission on LocalLauncherRepository {
             message: 'The launcher repository is closed.',
           );
         }
-        await _gameProcessStopper(process);
+        // Asked to quit, as its own Quit button would, and stopped only if
+        // it does not, so the replacement is not forced into safe mode.
+        replaced = await _closeOwnedGame(current, process);
+        if (replaced == null) {
+          return const LaunchResult(
+            started: false,
+            message:
+                'The launcher repository closed while the running game was '
+                'asked to quit. No process was stopped.',
+          );
+        }
+        _ownedLaunchRequests.remove(process);
       }
       _ownedLaunchProcesses.remove(identity);
       final retired = _launchMonitors.entries
@@ -146,7 +158,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
         await entry.value.dispose();
         _launchMonitors.remove(entry.key);
       }
-      return await _startGame(
+      final started = await _startGame(
         current,
         profile,
         selectionOverride: selectionOverride,
@@ -157,11 +169,12 @@ extension _LaunchAdmission on LocalLauncherRepository {
             ? 'Started replacement TopiaForge process.'
             : 'Started TopiaForge process.',
       );
+      return started.replacing(replaced);
     } on Object catch (error) {
       return LaunchResult(
         started: false,
         message: 'Launch could not proceed: $error',
-      );
+      ).replacing(replaced);
     } finally {
       try {
         await lease?.release();

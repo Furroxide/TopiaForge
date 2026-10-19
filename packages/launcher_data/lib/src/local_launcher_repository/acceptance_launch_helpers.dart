@@ -28,6 +28,7 @@ extension AcceptanceLaunchAccess on LocalLauncherRepository {
       throw StateError('Acceptance process exit could not be confirmed.');
     }
     _ownedLaunchProcesses.removeWhere((_, value) => identical(value, owned));
+    _ownedLaunchRequests.remove(owned);
     _acceptanceReceipts.remove(result.requestId);
     _acceptanceRequests.remove(result.requestId);
   }

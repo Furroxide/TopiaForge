@@ -212,6 +212,7 @@ extension LauncherLaunchActions on LauncherBloc {
             ? receipt
             : null;
         _activeLaunchRequest = _launchReceipt?.requestId;
+        _replacedGame = result.processStarted ? result.replacedGame : null;
         emit(_launchResultState(result));
         final latest = result.latestActivity;
         if (latest != null) {
@@ -229,7 +230,9 @@ extension LauncherLaunchActions on LauncherBloc {
       ...result.blocks.map((block) => block.message),
     ];
     final message = result.processStarted
-        ? 'Game process started; session start is unconfirmed.'
+        ? _withReplacedGame(
+            'Game process started; session start is unconfirmed.',
+          )
         : [
             result.message,
             ...failures,
@@ -244,6 +247,11 @@ extension LauncherLaunchActions on LauncherBloc {
       errorMessage: result.processStarted ? null : message,
       clearError: result.processStarted,
     );
+  }
+
+  String _withReplacedGame(String message) {
+    final replaced = _replacedGame;
+    return replaced == null ? message : '${replaced.message} $message';
   }
 
   Future<void> _onLaunchActivityUpdated(
@@ -299,7 +307,7 @@ extension LauncherLaunchActions on LauncherBloc {
     final outcome = accepted.sessionOutcome ?? accepted.launchOutcome;
     final failed =
         outcome?.status == 'failed' || outcome?.status == 'cancelled';
-    final message = _launchActivityMessage(accepted);
+    final message = _withReplacedGame(_launchActivityMessage(accepted));
     emit(
       state.copyWith(
         launchActivity: accepted,
@@ -307,6 +315,8 @@ extension LauncherLaunchActions on LauncherBloc {
         statusSeverity: failed
             ? IssueSeverity.error
             : accepted.unconfirmed ||
+                  // A stopped game leaves this start in safe mode.
+                  _replacedGame == ReplacedGameExit.stopped ||
                   (accepted.processExited &&
                       accepted.command == 'launch-target' &&
                       accepted.sessionOutcome == null)

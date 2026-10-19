@@ -16,7 +16,10 @@ extension LauncherBlocHelpers on LauncherBloc {
               profile.id == state.selectedProfile?.id &&
               profile.revision == state.selectedProfile?.revision,
         );
-    if (changedLaunchContext) _activeLaunchRequest = null;
+    if (changedLaunchContext) {
+      _activeLaunchRequest = null;
+      _replacedGame = null;
+    }
     final selected =
         selectedModId ??
         (snapshot.installedMods.any((mod) => mod.id == state.selectedModId)

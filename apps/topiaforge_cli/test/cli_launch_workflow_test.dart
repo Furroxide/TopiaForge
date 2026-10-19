@@ -12,17 +12,21 @@ void main() {
     messages = [];
   });
   tearDown(() => repository.controller.close());
-  Future<int> launch({CliLaunchOptions? options, Future<void>? cancelled}) =>
-      runCliLaunch(
-        repository: repository,
-        install: repository.install,
-        profile: repository.profile,
-        options:
-            options ??
-            const CliLaunchOptions(waitTimeout: Duration(milliseconds: 15)),
-        write: messages.add,
-        cancelled: cancelled,
-      );
+  Future<int> launch({
+    CliLaunchOptions? options,
+    Future<void>? cancelled,
+    bool restart = false,
+  }) => runCliLaunch(
+    repository: repository,
+    install: repository.install,
+    profile: repository.profile,
+    options:
+        options ??
+        const CliLaunchOptions(waitTimeout: Duration(milliseconds: 15)),
+    write: messages.add,
+    cancelled: cancelled,
+    restart: restart,
+  );
 
   test(
     'process start without acknowledgement is unconfirmed, not success',
@@ -104,6 +108,28 @@ void main() {
       expect(messages.join(' '), contains('Main menu confirmed'));
     },
   );
+  test('a restart says the game it replaced quit when asked', () async {
+    repository.replaced = ReplacedGameExit.quit;
+    repository.latest = repository.succeeded();
+    expect(await launch(restart: true), 0);
+    expect(repository.restarts, 1);
+    expect(messages.first, 'The running game quit when asked.');
+    expect(messages[1], startsWith('Game process started'));
+  });
+  test('a restart that had to stop the game says this start is in safe '
+      'mode, and what to do', () async {
+    repository.replaced = ReplacedGameExit.stopped;
+    repository.latest = repository.succeeded();
+    expect(await launch(restart: true), 0);
+    expect(messages.first, ReplacedGameExit.stopped.message);
+    expect(messages.first, contains('safe mode'));
+    expect(messages.first, contains('restart it from the launcher'));
+  });
+  test('a launch that replaced no game says nothing about one', () async {
+    repository.latest = repository.succeeded();
+    expect(await launch(), 0);
+    expect(messages.first, startsWith('Game process started'));
+  });
 }
 
 class _Repository implements LauncherRepository {
@@ -125,6 +151,8 @@ class _Repository implements LauncherRepository {
   void Function()? onLaunch;
   LaunchSelection? selectionReceived;
   LaunchActivity? latest;
+  ReplacedGameExit? replaced;
+  int restarts = 0;
   LaunchActivity base({
     String requestId = 'request-one',
     int revision = 2,
@@ -205,6 +233,20 @@ class _Repository implements LauncherRepository {
       requestId: 'request-one',
       latestActivity: latest ?? base(),
     );
+  }
+
+  @override
+  Future<LaunchResult> restart(
+    GameInstall install,
+    LauncherProfile profile, {
+    LaunchSelection? selectionOverride,
+  }) async {
+    restarts++;
+    return (await launch(
+      install,
+      profile,
+      selectionOverride: selectionOverride,
+    )).replacing(replaced);
   }
 
   @override
