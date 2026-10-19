@@ -140,6 +140,14 @@ at UI scale 1.0 in a 1920x1080 window the dot of an i merged with its stem, and 
 "ToplaForge". Headings and numerals keep Quicksand Light, display styles use Audiowide, and bold styles
 are TextMesh Pro's faux bold over their style's face.
 
+A kit canvas starts at zero size, and Unity gives it its real size in its next canvas update. A
+window shown in the frame its canvas is built finds that canvas still 0x0, so it keeps its size and
+position and finishes its screen clamp on the first frame the canvas has a size; clamping against 0x0
+once collapsed the UI Gallery to nothing at 1920x1080. Forcing a canvas update is no substitute: the
+CanvasScaler writes its factor only when it differs from the last one, which starts at 1, so at
+1920x1080 and UI scale 1 the canvas is still 0x0 after `Canvas.ForceUpdateCanvases()`. The clamp
+caps a window from its designed size, so a cap taken on a smaller canvas does not stick.
+
 ## Multiplayer kit widgets
 
 These renderer widgets are the building blocks for multiplayer screens such as the scoreboard, chat,

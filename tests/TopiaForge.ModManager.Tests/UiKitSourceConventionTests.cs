@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             MediumInstanceMatchesItsRecordedProvenance();
             ComponentLookupHonorsUnityNullSemantics();
             CanvasSortingUsesAllocator();
+            WindowClampWaitsForAMeasuredCanvas();
             ProcessWideUiStateHasShutdownPath();
             ToastsPresentEveryViewFresh();
             PaperTextTonesReachLabels();

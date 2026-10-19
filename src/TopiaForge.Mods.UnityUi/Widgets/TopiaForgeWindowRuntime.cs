@@ -38,6 +38,23 @@ namespace TopiaForge.Mods.UnityUi
     }
 
     /// <summary>
+    /// Finishes a show-time clamp on the first frame the canvas has a size. Enabled only while
+    /// a clamp is pending, so it costs nothing per frame otherwise.
+    /// </summary>
+    internal sealed class TopiaForgeWindowDeferredClamp : MonoBehaviour
+    {
+        public TopiaForgeWindow? Window;
+
+        private void Update()
+        {
+            if (Window == null || Window.FinishDeferredClamp())
+            {
+                enabled = false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Process-wide window z-order. Focus permutes only the canvas orders allocated to
     /// registered windows, preserving custom layers in the same band and avoiding new allocations.
     /// </summary>
