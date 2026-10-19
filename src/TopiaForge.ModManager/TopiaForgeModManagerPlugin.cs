@@ -52,6 +52,9 @@ namespace TopiaForge.ModManager
         // Long enough for session, package and UI cleanup to drain over a few frames; short enough that a stuck
         // cleanup cannot keep the game open after the player quits.
         private static readonly TimeSpan QuitTeardownLimit = TimeSpan.FromSeconds(10);
+        // Quit timing reads a clock that never stops. The startup stopwatch stops once startup is reported, and a
+        // stopped clock freezes every deadline read from it: a stuck teardown would keep the game open for good.
+        private readonly Stopwatch quitClock = Stopwatch.StartNew();
         private PluginQuitCoordinator? quitCoordinator;
         private PluginQuitHandler? quitHandler;
         private bool teardownFinished;
@@ -85,7 +88,7 @@ namespace TopiaForge.ModManager
             // later frames, so a quit is held until the teardown it starts has finished. The handler answers last,
             // so the game's own quit steps run while every mod, and every patch, is still in place.
             quitCoordinator = new PluginQuitCoordinator(BeginPluginTeardown, () => teardownFinished,
-                () => startupStopwatch.Elapsed, QuitTeardownLimit,
+                () => quitClock.Elapsed, QuitTeardownLimit,
                 error => LogCleanupFailure(error, "TopiaForge teardown could not start when the game quit."));
             quitHandler = new PluginQuitHandler(quitCoordinator, MoveQuitHandlerLast,
                 error => LogCleanupFailure(error, "TopiaForge could not wait for the game's own quit steps, so mods unload now."));
