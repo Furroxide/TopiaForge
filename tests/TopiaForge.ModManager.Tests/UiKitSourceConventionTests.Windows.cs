@@ -70,7 +70,8 @@ namespace TopiaForge.ModManager.Tests
 
         private static void RequireMatch(string source, string pattern, string message)
         {
-            if (!Regex.IsMatch(source, pattern, RegexOptions.CultureInvariant))
+            // A timeout bounds the match: a pattern that backtracks badly fails this test instead of hanging the run.
+            if (!Regex.IsMatch(source, pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(10)))
             {
                 throw new InvalidOperationException(message);
             }
