@@ -158,6 +158,96 @@ internal static class LaunchedSessionTests
         Clean(screens, rig.Host.Log.Lines);
     }
 
+    /// <summary>
+    /// A join launched after an earlier session in this process ended, through "Leave current game?": the provider still
+    /// reports the earlier join's end when the launched one starts, and only the launched join's own status settles it.
+    /// </summary>
+    internal static void AJoinAfterAnEarlierSessionIsSettledByItsOwnStatus()
+    {
+        using var rig = new ControlRig(7_806, Sandbox);
+        rig.StartHosting(new InternalHostSettings("Sam's Sandbox", 4));
+        var descriptor = rig.Host.Provider.Live!.Host!.Descriptor!;
+        var guest = rig.AddPeer("guest", Sandbox);
+        using var screens = PeerScreens.Of(guest, RequestId, Digest);
+        rig.JoinAndWait(guest);
+        guest.Control.Leave();
+        That(rig.Run(() => Frame(screens, () => screens.Presenter.Context.Status.Status.JoinPhase == InternalJoinPhase.Ended)), "an earlier session ended");
+        screens.Phase = SessionPhase.Running;
+
+        var joined = LaunchJoin(screens, guest.Control, descriptor.Descriptor.ServerId, descriptor.Sha256);
+        That(rig.Run(() => Frame(screens, () => screens.Presenter.PendingPrompt?.Title == ConnectingPresenter.LeaveTitle)), "the launched join asks to leave the running game");
+        screens.Presenter.PendingPrompt!.Answer(true);
+        That(rig.Run(() => Frame(screens, () => screens.MenuRequested)), "confirming returns to the menu first");
+        screens.ReturnedToMenu();
+        That(rig.Run(() => Frame(screens, () => joined.HasResult)), "the launch settles (" + joined + ")");
+        That(joined.Outcome!.Status == "succeeded" && joined.Outcome.Multiplayer.ServerId == descriptor.Descriptor.ServerId && guest.Composition.Realm == NetRealm.Client,
+            "it reports the join it started, never the earlier one's end (" + joined + ")");
+        Clean(screens, guest.Log.Lines);
+    }
+
+    /// <summary>
+    /// The pin holds against a server that moved on and against an impostor: a host that signed its descriptor again after
+    /// the launcher fetched it, an answer with another server's descriptor, and the planned server's own descriptor replayed
+    /// byte for byte from another endpoint, which cannot complete the handshake its transport key pins. Each is refused as
+    /// admission changed, and nothing joins.
+    /// </summary>
+    internal static void AChangedOrReplayedDescriptorIsRefused()
+    {
+        using (var rig = new ControlRig(7_807, Sandbox))
+        {
+            rig.StartHosting(new InternalHostSettings("Sam's Sandbox", 4));
+            var live = rig.Host.Provider.Live!.Host!;
+            var fetched = live.Descriptor!;
+            live.UpdateWorld("Freeplay", "Sandbox");
+            That(live.Descriptor!.Sha256 != fetched.Sha256, "the host signs its descriptor again when its world changes");
+            Refused(rig, fetched, "a host that signed its descriptor again since the launcher fetched it", SessionLaunchRecords.AdmissionChangedDetail);
+        }
+
+        using (var rig = new ControlRig(7_808, Sandbox))
+        {
+            rig.StartHosting(new InternalHostSettings("Sam's Sandbox", 4));
+            var planned = rig.Host.Provider.Live!.Host!.Descriptor!;
+            var other = Hosting(rig, "other");
+            var host = rig.Host.Factory.Networks[^1].Node;
+            var answer = other.Provider.Live!.Host!.Descriptor!;
+            rig.Resolver.Host = () => (host, answer);
+            Refused(rig, planned, "an answer with another server's descriptor", SessionLaunchRecords.AdmissionChangedDetail);
+        }
+
+        using (var rig = new ControlRig(7_809, Sandbox))
+        {
+            rig.StartHosting(new InternalHostSettings("Sam's Sandbox", 4));
+            var planned = rig.Host.Provider.Live!.Host!.Descriptor!;
+            var impostor = Hosting(rig, "impostor");
+            var node = impostor.Factory.Networks[^1].Node;
+            rig.Resolver.Host = () => (node, planned);
+            Refused(rig, planned, "the planned server's descriptor replayed from another endpoint", "The host did not prove it is the server you planned to join.");
+            That(impostor.Session.Snapshot.Participants.Count == 1, "and nothing joined the impostor");
+        }
+    }
+
+    /// <summary>A second server on the rig's network, hosting, with its descriptor signed.</summary>
+    private static ControlPeer Hosting(ControlRig rig, string name)
+    {
+        var peer = rig.AddPeer(name, Sandbox);
+        That(peer.Control.StartHosting(new InternalHostSettings(name, 4)).Succeeded && rig.Run(() => peer.Provider.Live!.Host?.Descriptor != null),
+            name + " hosts");
+        return peer;
+    }
+
+    /// <summary>A launched join pinned to <paramref name="planned"/> fails as admission changed, with <paramref name="detail"/>, and joins nothing.</summary>
+    private static void Refused(ControlRig rig, provider::TopiaForge.Multiplayer.Network.SignedServerDescriptor planned, string what, string detail)
+    {
+        var guest = rig.AddPeer("guest", Sandbox);
+        using var screens = PeerScreens.Of(guest, RequestId, Digest);
+        var hosted = rig.Host.Session.Snapshot.Participants.Count;
+        var joined = LaunchJoin(screens, guest.Control, planned.Descriptor.ServerId, planned.Sha256);
+        That(rig.Run(() => Frame(screens, () => joined.HasResult), 60_000_000), what + ": the launch settles (" + joined + ")");
+        That(joined.Outcome!.Multiplayer.Failure == "admission-changed" && joined.Outcome.Multiplayer.Detail == detail &&
+             guest.Composition.Realm == NetRealm.Offline && rig.Host.Session.Snapshot.Participants.Count == hosted, what + " is refused, and nothing joins (" + joined + ")");
+        Clean(screens, guest.Log.Lines);
+    }
+
     /// <summary>Plans a launched join of a host typed by address, through the provider's control as the runtime does, and hands it to the screens.</summary>
     private static StoredLaunch LaunchJoin(PeerScreens screens, IInternalMultiplayerControl control, string serverId, string descriptorSha256, bool consent = false)
     {

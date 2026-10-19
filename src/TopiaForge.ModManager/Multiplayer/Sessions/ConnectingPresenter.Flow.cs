@@ -157,8 +157,8 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
-            join.Launch?.Started();
             readsAtStart = context.Status.Reads;
+            join.Launch?.Started(readsAtStart);
             details[(int)ConnectingStep.Resolving] = ConnectingStepMap.FindingHost;
             statusText = "Joining " + title + "...";
             context.Status.RequestRefresh();

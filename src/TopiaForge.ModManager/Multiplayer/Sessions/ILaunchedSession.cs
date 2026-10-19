@@ -49,11 +49,26 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Gets whether nothing more is reported: the launch failed, or the session it started has ended.</summary>
         bool IsFinished { get; }
 
-        /// <summary>Says the session began: the provider took the hosting or the join.</summary>
-        void Started();
+        /// <summary>
+        /// Says the session began: the provider took the hosting or the join. <paramref name="reads"/> is the status tracker's
+        /// count of reads then (<see cref="MultiplayerStatusTracker.Reads"/>): a status read no later than that still shows
+        /// what came before the session, such as an earlier join's end, so only a later read can settle it.
+        /// </summary>
+        void Started(int reads);
 
-        /// <summary>Follows the session in the provider's status into the launcher's records; every frame, allocating only on change.</summary>
-        void Follow(InternalLiveStatus status, int version);
+        /// <summary>
+        /// Follows the session in the provider's status into the launcher's records; every frame, allocating only on change.
+        /// <paramref name="reads"/> is the status tracker's count of reads, which says whether <paramref name="status"/> was
+        /// read after the session began.
+        /// </summary>
+        void Follow(InternalLiveStatus status, int version, int reads);
+
+        /// <summary>
+        /// The game closes while this session runs. A live join's own records end it as the player leaving it, since nothing
+        /// else writes them; the session this game was launched with is ended by the runtime's publisher, which knows whether
+        /// the runtime stopped cleanly.
+        /// </summary>
+        void Closing();
 
         /// <summary>Reports that the session did not start, for a reason of this game's own, unless its result is in already.</summary>
         void Refuse(ModErrorCode code, string message);

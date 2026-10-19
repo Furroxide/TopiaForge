@@ -65,8 +65,11 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
-            context.Notify(LiveJoinArrived, ScreenTone.Neutral);
-            Begin(new LaunchedSession(identity, plan, records, () => LaunchedGame.Ready, liveJoin: true, handoff: LauncherHandoff.ForTarget(target)));
+            var launched = new LaunchedSession(identity, plan, records, () => LaunchedGame.Ready, liveJoin: true, handoff: LauncherHandoff.ForTarget(target));
+            Begin(launched);
+
+            // Only a join that goes ahead is announced; one turned away while another launch starts says so in its records.
+            if (ReferenceEquals(current, launched)) context.Notify(LiveJoinArrived, ScreenTone.Neutral);
         }
 
         /// <summary>Remembers <paramref name="joinId"/>; true when it was seen before, so a replayed join is never acted on.</summary>

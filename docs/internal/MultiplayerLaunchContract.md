@@ -245,10 +245,11 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
 - **Records.** `RuntimeLaunchPublisher` is the request's one writer of progress and outcomes V2 (sections 4 and 5). The
   runtime's command and the provider's session share one sequence, the session block follows the provider's status
   (`SessionLaunchRecords`), the phase is the join's own while it connects or synchronizes, and a success comes only from
-  the provider: hosting open, or the join in session. The session's end is written when it ends, or as the process exits
-  with it still running (`host-ended` or `left`, failed with an `external` error when the runtime did not stop
-  cleanly). A failed command settles the launch with the runtime's outcome, and a rejected V5 request is correlated by
-  its intent and reported the same way.
+  the provider: hosting open, or the join in session. Only a status read after the session began settles it, since the
+  provider reports an earlier join's end until the next join starts. The session's end is written when it ends, even
+  once a newer launch has begun, or as the process exits with it still running (`host-ended` or `left`, failed with an
+  `external` error when the runtime did not stop cleanly). A failed command settles the launch with the runtime's
+  outcome, on whichever frame it fails, and a rejected V5 request is correlated by its intent and reported the same way.
 - **Handoffs.** When the launcher owns this game, INSTALL & JOIN IN LAUNCHER and the failure view's Open launcher write
   a `session-handoff` naming the invite, the listing or the current session, on the background queue; a write that
   fails opens the link instead. A game no launcher started, and a server typed by address, open the
@@ -257,7 +258,8 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   (`LiveJoinIntake`); the store's take refuses a join for another request and one it cannot read. A join whose
   package-set digest is not this game's fails as `admission-changed`, one through another service is refused as
   `unavailable`, and a join id seen before is ignored. The rest are planned and started as a launched join is, and report
-  under their join id; a success stands at `idle`.
+  under their join id; a success stands at `idle`. A live join whose session still runs as the game closes ends in its
+  records as `left`.
 - **Preferences.** The game reads the projection and its journal once at start, applying the journal's changes the
   projection does not count yet, as the launcher applies them (section 7). The display name and the hosting defaults
   are the launcher's: a change in game takes effect at once and is recorded with `RecordPreferenceChange`, one write at

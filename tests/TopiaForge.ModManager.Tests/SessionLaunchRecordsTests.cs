@@ -80,25 +80,25 @@ namespace TopiaForge.ModManager.Tests
             ["join-connecting"] = Join(run =>
             {
                 run.Runtime(2, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Connecting; s.Server = Server(JoinServer); });
             }),
             ["join-awaiting-password"] = Join(run =>
             {
                 run.Runtime(4, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.AwaitingPassword; s.Server = Server(JoinServer); });
             }),
             ["join-in-session"] = Join(run =>
             {
                 run.Runtime(8, "running", GameSession);
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.InSession; s.Server = Server(JoinServer, 8); s.ConnectedPlayers = 3; });
             }),
             ["host-hosting"] = Host(run =>
             {
                 run.Runtime(11, "running", GameSession, nativeBusy: false);
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => Hosting(s, players: 1, maximum: 16, invite: "ABCDE12345"));
             }),
 
@@ -106,20 +106,20 @@ namespace TopiaForge.ModManager.Tests
             ["join-started"] = Join(run =>
             {
                 run.Runtime(8, "running", GameSession);
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.InSession; s.Server = Server(JoinServer); });
             }),
             ["join-password-rejected"] = Join(run =>
             {
                 run.Runtime(7, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.AwaitingPassword; s.Server = Server(JoinServer); });
                 run.Status(s => Rejected(s, InternalAdmissionCode.PasswordWrong, JoinServer));
             }),
             ["join-admission-changed"] = Join(run =>
             {
                 run.Runtime(7, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Connecting; s.Server = Server(JoinServer); });
                 run.Status(s =>
                 {
@@ -131,20 +131,20 @@ namespace TopiaForge.ModManager.Tests
             ["host-port-in-use"] = Host(run =>
             {
                 run.Runtime(7, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => s.HostPhase = InternalHostPhase.Preparing);
                 run.Status(s => { s.HostPhase = InternalHostPhase.Failed; s.HostFailure = InternalLiveFailure.PortInUse; });
             }, hostPort: 27250),
             ["host-started-at-menu"] = Host(run =>
             {
                 run.Runtime(8, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => Hosting(s, players: 0, maximum: 0, invite: null));
             }),
             ["join-session-ended"] = Join(run =>
             {
                 run.Runtime(8, "running", GameSession);
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.InSession; s.Server = Server(JoinServer); });
                 run.Runtime(38, "running", GameSession);
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Ended; s.JoinFailure = InternalLiveFailure.HostEnded; s.Server = Server(JoinServer); });
@@ -152,7 +152,7 @@ namespace TopiaForge.ModManager.Tests
             ["join-session-rejected"] = Join(run =>
             {
                 run.Runtime(8, "running", GameSession);
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.InSession; s.Server = Server(JoinServer); });
                 run.Runtime(39, "idle");
                 run.Status(s => Rejected(s, InternalAdmissionCode.Full, null));
@@ -160,7 +160,7 @@ namespace TopiaForge.ModManager.Tests
             ["join-cancelled"] = Join(run =>
             {
                 run.Runtime(4, "idle");
-                run.Launch.Started();
+                run.Started();
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Synchronizing; s.Server = Server(JoinServer); });
                 run.Status(s => { s.JoinPhase = InternalJoinPhase.Ended; s.JoinFailure = InternalLiveFailure.Cancelled; });
             }),
@@ -195,17 +195,17 @@ namespace TopiaForge.ModManager.Tests
                 "once the target runs the launch may open, its session still pending");
             That(!File.Exists(store.OutcomePath("owned-host")), "the runtime's success is not the host's");
 
-            launch.Started();
+            launch.Started(0);
             var status = new InternalLiveStatus { IsLiveAvailable = true, Role = InternalSessionRole.ListenHost, HostPhase = InternalHostPhase.Preparing };
-            launch.Follow(status, 1);
+            launch.Follow(status, 1, 1);
             Read();
             Hosting(status, players: 1, maximum: 8, invite: null);
-            launch.Follow(status, 2);
+            launch.Follow(status, 2, 2);
             Read();
             var outcome = LaunchTransportJson.ReadOutcome(File.ReadAllText(store.OutcomePath("owned-host")));
             That(outcome.Status == "succeeded" && outcome.Phase == "running" && outcome.SessionId == running.SessionId && outcome.Multiplayer!.ServerId == HostServer &&
                  outcome.Sequence > sequences[sequences.Count - 1], "the provider's hosting is the launch's success, after every progress record");
-            launch.Follow(status, 3);
+            launch.Follow(status, 3, 3);
             That(!launch.IsFinished && !File.Exists(store.OutcomePath("owned-host", true)), "a session still open has not ended");
 
             publisher.Dispose(clean: true);
@@ -226,7 +226,7 @@ namespace TopiaForge.ModManager.Tests
             fixture.Wait(fixture.Hosted.RejectCommandAsync("failed-join", "main-menu", ModErrorCode.InvalidArgument, "The launcher request was rejected."));
             var written = File.ReadAllText(store.OutcomePath("failed-join"));
             That(launch.Game == LaunchedGame.Failed && LaunchTransportJson.ReadOutcome(written).Error!.Code == "invalidArgument", "the runtime's failure is the launch's");
-            launch.Follow(new InternalLiveStatus { JoinPhase = InternalJoinPhase.InSession, Server = Server(JoinServer) }, 1);
+            launch.Follow(new InternalLiveStatus { JoinPhase = InternalJoinPhase.InSession, Server = Server(JoinServer) }, 1, 1);
             That(launch.IsSettled && launch.IsFinished && File.ReadAllText(store.OutcomePath("failed-join")) == written,
                 "and the launch settles on it without a second result");
             That(errors.Count == 0, "the failure is published without failures");
@@ -239,8 +239,8 @@ namespace TopiaForge.ModManager.Tests
             var identity = new LaunchSessionIdentity("unclean-join", "join", IntentId);
             var publisher = new RuntimeLaunchPublisher(fixture.Hosted, store, "unclean-join", errors.Add, session: identity);
             var launch = new LaunchedSession(identity, Plan("join"), publisher, () => LaunchedGame.Ready);
-            launch.Started();
-            launch.Follow(new InternalLiveStatus { JoinPhase = InternalJoinPhase.InSession, Server = Server(JoinServer) }, 1);
+            launch.Started(0);
+            launch.Follow(new InternalLiveStatus { JoinPhase = InternalJoinPhase.InSession, Server = Server(JoinServer) }, 1, 1);
             publisher.Dispose(clean: false);
             var end = LaunchTransportJson.ReadOutcome(File.ReadAllText(store.OutcomePath("unclean-join", true)));
             That(end.Status == "failed" && end.Error!.Code == "external" && end.Multiplayer!.EndReason == "left" && end.Multiplayer.ServerId == JoinServer,
@@ -313,6 +313,7 @@ namespace TopiaForge.ModManager.Tests
         {
             private readonly GamemodeSessionOrchestrator sessions;
             private int version;
+            private int reads;
 
             internal Script(GamemodeSessionOrchestrator sessions, LaunchedSession launch)
             {
@@ -326,12 +327,15 @@ namespace TopiaForge.ModManager.Tests
             internal void Runtime(int sequence, string phase, string? sessionId = null, bool? nativeBusy = null) =>
                 ((Action<LaunchProgress>?)ProgressEvent.GetValue(sessions))?.Invoke(new LaunchProgress(RequestId, sequence, phase, sessionId, nativeBusy));
 
-            /// <summary>The provider's status moves, and the launch follows it.</summary>
+            /// <summary>The session begins, as the screens start it, after the status reads so far.</summary>
+            internal void Started() => Launch.Started(reads);
+
+            /// <summary>The provider's status moves in a new read, and the launch follows it.</summary>
             internal void Status(Action<InternalLiveStatus> change)
             {
                 var status = new InternalLiveStatus { IsLiveAvailable = true };
                 change(status);
-                Launch.Follow(status, ++version);
+                Launch.Follow(status, ++version, ++reads);
             }
         }
     }

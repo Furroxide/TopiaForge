@@ -69,6 +69,7 @@ namespace TopiaForge.ModManager.Tests
             TheSettingsFileReadsAcrossVersions(root);
             LaunchedSessionsStart();
             LiveJoinsAndTheLauncher(root);
+            LaunchesEndOnTheirOwnRecords();
             SettledFramesAllocateNothing();
             VoiceSaysWhenTheSessionOffersNone();
             Console.WriteLine("MultiplayerSessionsTests passed.");

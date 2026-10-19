@@ -272,6 +272,8 @@ internal static class Program
             LaunchedSessionTests.RelayOnlyNeverGoesDirect();
             LaunchedSessionTests.ALiveJoinLeavesTheRunningGameWhenTold();
             LaunchedSessionTests.AnInGamePreferenceChangeReachesTheJournal();
+            LaunchedSessionTests.AJoinAfterAnEarlierSessionIsSettledByItsOwnStatus();
+            LaunchedSessionTests.AChangedOrReplayedDescriptorIsRefused();
             LiveSessionFailureTests.ALinkLostBeforeTheSessionStartsEndsTheJoin();
             LiveSessionFailureTests.SilentConnectionsCannotFillAHost();
             LiveSessionFailureTests.OneSourceHoldsOnlyItsShareOfAHost();

@@ -13,7 +13,8 @@ namespace TopiaForge.ModManager.Sessions
     /// the connecting overlay, with "Leave current game?" when a game is running, and a LAN session is looked for on the local
     /// network first. Neither asks this game's own disclosure again: the launcher told the player before it planned the
     /// session, and the session keeps the launch's own privacy. Each is followed into the launcher's records until its
-    /// session ends. Main thread only; a frame with nothing to start allocates nothing.
+    /// session ends, even once a newer launch begins, and a launch that cannot start says why in game too, where the player
+    /// is looking. Main thread only; a frame with nothing to start allocates nothing.
     /// </summary>
     internal sealed partial class LaunchSessionPresenter
     {
@@ -26,11 +27,17 @@ namespace TopiaForge.ModManager.Sessions
         internal const string GameStopped = "The launched game stopped before it could be opened to other players.";
         internal const string Opened = "Your session is open to other players.";
         internal const string AlreadyStarting = "This game is already starting a session the TopiaForge launcher asked for.";
+        internal const string NotStarted = "The session the TopiaForge launcher asked for did not start.";
+        internal const string LookingOnLan = "Looking for the session on your local network...";
+        internal const string NotHeardHere = "The session the TopiaForge launcher asked for was not heard on your local network. Check that its host is still hosting on this network, then join it again from the launcher.";
 
         private readonly MultiplayerScreensContext context;
         private readonly ConnectingPresenter connecting;
         private readonly MultiplayerBackgroundQueue queue;
         private ILaunchedSession? current;
+
+        // A launch whose session still ran when a newer launch began: followed to that session's end, for its record.
+        private ILaunchedSession? earlier;
         private Stage stage;
         private float searched;
         private bool browsingForLaunch;
@@ -69,7 +76,11 @@ namespace TopiaForge.ModManager.Sessions
                 return;
             }
 
+            // A launch whose session still runs is followed on to that session's end, so its record says when and why it
+            // ended; the realm turns the newer launch away while that session runs.
+            var running = current != null && !current.IsFinished ? current : null;
             Finish();
+            if (running != null) earlier = running;
             current = launch;
             stage = Stage.Waiting;
             toldOpened = false;
@@ -78,9 +89,17 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Main thread, every frame: follows the launch into its records, and takes its next step once the game allows.</summary>
         internal void Tick(float deltaTime)
         {
+            var status = context.Status;
+            var before = earlier;
+            if (before != null)
+            {
+                before.Follow(status.Status, status.Version, status.Reads);
+                if (before.IsFinished) earlier = null;
+            }
+
             var launch = current;
             if (launch == null) return;
-            launch.Follow(context.Status.Status, context.Status.Version);
+            launch.Follow(status.Status, status.Version, status.Reads);
             switch (stage)
             {
                 case Stage.Waiting:
@@ -95,6 +114,7 @@ namespace TopiaForge.ModManager.Sessions
                     break;
                 case Stage.Following:
                     TellOpened(launch);
+                    TellNotOpened(launch);
                     break;
             }
 
@@ -102,10 +122,16 @@ namespace TopiaForge.ModManager.Sessions
             if (launch.IsFinished && ReferenceEquals(current, launch)) Finish();
         }
 
-        /// <summary>Stops looking on the local network for a launch, as the game closes.</summary>
+        /// <summary>
+        /// Stops looking on the local network for a launch and lets go of every launch, as the game closes: a live join whose
+        /// session still runs ends in its records as the player leaving it.
+        /// </summary>
         internal void Stop()
         {
             StopLanSearch();
+            earlier?.Closing();
+            current?.Closing();
+            earlier = null;
             current = null;
             stage = Stage.None;
         }
@@ -115,20 +141,20 @@ namespace TopiaForge.ModManager.Sessions
             if (launch.IsSettled || launch.Game != LaunchedGame.Ready) return;
             if (context.Environment.Control == null)
             {
-                launch.Refuse(ModErrorCode.Unavailable, SessionLaunch.ProviderMissing);
+                Refuse(launch, ModErrorCode.Unavailable, SessionLaunch.ProviderMissing);
                 return;
             }
 
             if (!context.Status.IsLiveAvailable)
             {
-                launch.Refuse(ModErrorCode.Unavailable, MultiplayerRuntime.LiveSwitchedOff);
+                Refuse(launch, ModErrorCode.Unavailable, MultiplayerRuntime.LiveSwitchedOff);
                 return;
             }
 
             if (!context.Settings.IsLoaded || !context.Preferences.IsLoaded) return;
             if (context.Content.State == ContentReadinessState.Unreadable)
             {
-                launch.Refuse(ModErrorCode.Io, LiveFailureMessages.UnreadableContent);
+                Refuse(launch, ModErrorCode.Io, LiveFailureMessages.UnreadableContent);
                 return;
             }
 
@@ -149,16 +175,16 @@ namespace TopiaForge.ModManager.Sessions
                 case RealmDecision.StartAsHost:
                     // A launch that started a game opens that game; one that stopped before it could be opened opens nothing.
                     if (!launch.StartsGame) break;
-                    launch.Refuse(ModErrorCode.InvalidState, GameStopped);
+                    Refuse(launch, ModErrorCode.InvalidState, GameStopped);
                     return;
                 case RealmDecision.AlreadyThere:
-                    launch.Refuse(ModErrorCode.Conflict, MultiplayerRuntime.AlreadyHosting);
+                    Refuse(launch, ModErrorCode.Conflict, MultiplayerRuntime.AlreadyHosting);
                     return;
                 case RealmDecision.StandaloneRefused:
-                    launch.Refuse(ModErrorCode.InvalidState, MultiplayerRuntime.StandaloneRefusal(environment.StandaloneMods, "host"));
+                    Refuse(launch, ModErrorCode.InvalidState, MultiplayerRuntime.StandaloneRefusal(environment.StandaloneMods, "host"));
                     return;
                 default:
-                    launch.Refuse(ModErrorCode.InvalidState, MultiplayerRuntime.LeaveSessionFirst);
+                    Refuse(launch, ModErrorCode.InvalidState, MultiplayerRuntime.LeaveSessionFirst);
                     return;
             }
 
@@ -214,7 +240,7 @@ namespace TopiaForge.ModManager.Sessions
             catch (Exception exception)
             {
                 var thrown = LiveFailureMessages.Thrown(exception);
-                launch.Refuse(thrown.ErrorCode, thrown.ErrorMessage);
+                Refuse(launch, thrown.ErrorCode, thrown.ErrorMessage);
                 return;
             }
             finally
@@ -231,11 +257,11 @@ namespace TopiaForge.ModManager.Sessions
 
             if (!change.Succeeded)
             {
-                launch.Refuse(change.Result.ErrorCode, change.Result.ErrorMessage);
+                Refuse(launch, change.Result.ErrorCode, change.Result.ErrorMessage);
                 return;
             }
 
-            launch.Started();
+            launch.Started(context.Status.Reads);
             stage = Stage.Following;
             context.Status.RequestRefresh();
         }
@@ -250,6 +276,7 @@ namespace TopiaForge.ModManager.Sessions
                 StartLanSearch();
                 searched = 0f;
                 stage = Stage.FindingLan;
+                context.Notify(LookingOnLan, ScreenTone.Neutral);
                 return;
             }
 
@@ -271,6 +298,7 @@ namespace TopiaForge.ModManager.Sessions
             if (searched < LanSearchSeconds) return;
             StopLanSearch();
             launch.Fail("timeout", NotHeard);
+            context.Notify(NotHeardHere, ScreenTone.Warning);
         }
 
         /// <summary>Tells the player once that a launched host opened, as HOST tells it of its own.</summary>
@@ -279,6 +307,27 @@ namespace TopiaForge.ModManager.Sessions
             if (toldOpened || !launch.IsHost || context.Status.Role != InternalSessionRole.ListenHost) return;
             toldOpened = true;
             context.Notify(Opened, ScreenTone.Success);
+        }
+
+        /// <summary>
+        /// Tells the player when a launched host's hosting failed before it opened, in the words HOST uses for its own; once it
+        /// opened, HOST follows the hosting and tells of a later failure itself.
+        /// </summary>
+        private void TellNotOpened(ILaunchedSession launch)
+        {
+            if (toldOpened || !launch.IsHost || !launch.IsFinished || context.Status.Status.HostPhase != InternalHostPhase.Failed) return;
+            var failure = LiveFailureMessages.ForHost(context.Status.Status.HostFailure);
+            context.Notify(failure.Title + ". " + failure.Message, ScreenTone.Danger);
+        }
+
+        /// <summary>
+        /// Refuses <paramref name="launch"/> for a reason of this game's own, and tells the player too: the launcher reads the
+        /// launch's records, but the player is looking at this game.
+        /// </summary>
+        private void Refuse(ILaunchedSession launch, ModErrorCode code, string message)
+        {
+            launch.Refuse(code, message);
+            context.Notify(NotStarted + " " + HostText.ForDisplay(message, HostText.LineChars), ScreenTone.Warning);
         }
 
         /// <summary>Gets whether the local network lists <paramref name="serverId"/>, by index: enumerating the list would allocate.</summary>

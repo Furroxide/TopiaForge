@@ -9,8 +9,9 @@ namespace TopiaForge.ModManager
     /// <summary>
     /// A planned session launch as the screens start it (<see cref="ILaunchedSession"/>), reporting into its sink: the
     /// runtime's publisher for the session this game was launched to host or join, or a live join's own records. It follows
-    /// the provider's status into the launch's progress, its one result and, once the session started, its end. A frame
-    /// whose status has not moved allocates nothing. Main thread only; nothing here holds an address.
+    /// the provider's status into the launch's progress, its one result and, once the session started, its end. Only a
+    /// status read after the session began speaks for it. A frame whose status has not moved allocates nothing. Main thread
+    /// only; nothing here holds an address.
     /// </summary>
     internal sealed class LaunchedSession : ILaunchedSession
     {
@@ -19,6 +20,8 @@ namespace TopiaForge.ModManager
         private readonly int hostPort;
         private int followed = -1;
         private bool followedStarted;
+        private int startedReads;
+        private InternalLiveStatus? followedStatus;
         private LaunchProgressSession block;
         private string? reachedPhase;
         private bool synchronized;
@@ -61,19 +64,20 @@ namespace TopiaForge.ModManager
 
         public bool IsFinished { get; private set; }
 
-        public void Started()
+        public void Started(int reads)
         {
-            if (!IsSettled) HasStarted = true;
+            if (IsSettled) return;
+            HasStarted = true;
+            startedReads = reads;
         }
 
-        public void Follow(InternalLiveStatus status, int version)
+        public void Follow(InternalLiveStatus status, int version, int reads)
         {
             if (status == null) throw new ArgumentNullException(nameof(status));
-            if (IsFinished || (version == followed && HasStarted == followedStarted)) return;
-            followed = version;
-            followedStarted = HasStarted;
+            if (IsFinished) return;
 
             // The runtime's own command failed first, as when the host's target did not start: that outcome is the launch's.
+            // It can fail on a frame the provider's status does not move, so it is looked at before that is.
             if (!IsSettled && sink.HasResult)
             {
                 IsSettled = true;
@@ -81,7 +85,15 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            var next = SessionLaunchRecords.Progress(Identity, HasStarted, status, succeeded);
+            // A status read when the session began, or before, still shows what came before it, such as an earlier join that
+            // ended: as on the connecting overlay, the session counts as begun only in a status read after.
+            var begun = HasStarted && reads > startedReads;
+            if (version == followed && begun == followedStarted) return;
+            followed = version;
+            followedStarted = begun;
+            followedStatus = status;
+
+            var next = SessionLaunchRecords.Progress(Identity, begun, status, succeeded);
             if (!Same(next, block))
             {
                 block = next;
@@ -91,7 +103,7 @@ namespace TopiaForge.ModManager
                 sink.Progress(next, phase);
             }
 
-            if (!HasStarted) return;
+            if (!begun) return;
             if (!IsSettled)
             {
                 var result = SessionLaunchRecords.Result(Identity, status, synchronized, hostPort);
@@ -124,6 +136,14 @@ namespace TopiaForge.ModManager
             IsSettled = true;
             IsFinished = true;
             sink.Result(new SessionLaunchResult("failed", new LaunchOutcomeMultiplayer(Identity.Role, Identity.IntentId, null, failure, detail)), reachedPhase);
+        }
+
+        public void Closing()
+        {
+            var status = followedStatus;
+            if (!IsLiveJoin || IsFinished || !succeeded || status == null) return;
+            IsFinished = true;
+            sink.Ended(SessionLaunchRecords.Ended(Identity, status), clean: true);
         }
 
         /// <summary>Never names the target.</summary>

@@ -247,7 +247,12 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
   packages this game runs and the service it reaches, planned by the provider, and started as a launched join is; a join
   id seen before is ignored, and one launch starts at a time.
 - **Records.** A launched session reports into the runtime's publisher, a live join under its own id: its progress as
-  the provider's status moves, its one result, and its session's end.
+  the provider's status moves, its one result, and its session's end. Only a status read after the session began
+  speaks for it, as on the connecting overlay; a session still running when a newer launch begins is followed to its
+  end; and a live join whose session runs as the game closes ends as the player leaving it.
+- **Said in game too.** The player is looking at the game, not the launcher: a launch this game cannot start says why
+  in a toast, a launched host whose hosting fails before it opens says so in HOST's words, and a LAN session that is
+  looked for says so, and what to do next when it is never heard.
 - **Back to the launcher.** A failure the launcher can fix, mods that differ or a server that changed since the launcher
   checked it ("Server no longer matches"), offers the launcher. A launched join goes back as the current session, which
   the launcher plans again.
@@ -284,12 +289,15 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
   opened in place or at the menu, its password typed in game, and a stopped game or a missing provider failing at once;
   a launched join under its own privacy and name with no direct prompt, leaving a running game only when told, a LAN
   session listened for, and one launch at a time; live joins checked and acted on once, through the staging store too;
-  handoffs to the launcher that owns the game; the preferences as the launcher's journal apply makes them; and frames
-  with a launch at rest allocating nothing. Over the real runtime and provider (`LaunchedSessionTests`, in the
-  multiplayer harness): a hosted launch on its own port and privacy, a join pinned to the descriptor the launcher
-  checked and refused when it differs, relay-only never going direct, a live join from a running game, the handoff, and
-  a preference change reaching the journal, with no channel touched on the frame's thread and no address in any record,
-  handoff, toast or log.
+  handoffs to the launcher that owns the game; the preferences as the launcher's journal apply makes them; frames
+  with a launch at rest allocating nothing; and each launch's records its own: a join started after a wait settled by
+  its own status, a running session followed past a newer launch, a command failing while its launch waits, a live
+  join's end as the game closes, and a launch that cannot start saying so in game. Over the real runtime and provider
+  (`LaunchedSessionTests`, in the multiplayer harness): a hosted launch on its own port and privacy, a join pinned to
+  the descriptor the launcher checked and refused when it differs, re-signed, another server's, or replayed from
+  another endpoint, relay-only never going direct, a live join from a running game, a join after an earlier session,
+  the handoff, and a preference change reaching the journal, with no channel touched on the frame's thread and no
+  address in any record, handoff, toast or log.
 - **Records** (`SessionLaunchRecordsTests`): every progress and outcome V2 fixture written byte for byte through the
   runtime's publisher and the staging store.
 - **The frame boundary** (`MultiplayerFrameGuardTests`): a throwing presenter, prompt stage or tab neither breaks the
