@@ -189,6 +189,25 @@ namespace TopiaForge.Multiplayer.Engine
         internal int VoiceModerationCount => voiceModeration.Count;
 
         /// <summary>
+        /// Gets how many players the host has muted for everyone, by hand or automatically, whether they are in the session
+        /// now or will be given the mute back when they return. Allocation-free.
+        /// </summary>
+        internal int ServerMuteCount
+        {
+            get
+            {
+                RequireOwnerThread();
+                var muted = 0;
+                foreach (var moderation in voiceModeration.Values)
+                {
+                    if (moderation.IsMuted(nowMicros)) muted++;
+                }
+
+                return muted;
+            }
+        }
+
+        /// <summary>
         /// Creates the voice state of a participant record: a new speaker index, its first stream, and the moderation the
         /// session keeps for <paramref name="identity"/>, or a fresh one for the host's own player, who has none.
         /// </summary>
@@ -229,6 +248,12 @@ namespace TopiaForge.Multiplayer.Engine
             moderation.LastSeenMicros = nowMicros;
             return moderation;
         }
+
+        /// <summary>
+        /// Forgets every player's moderation, server mutes and strikes included, as a host that closes every connection does
+        /// when it stops hosting: whoever joins it next starts with none.
+        /// </summary>
+        private void ForgetVoiceModeration() => voiceModeration.Clear();
 
         /// <summary>The table is full: forget the absent player seen longest ago, preferring one with nothing to remember.</summary>
         private void ForgetOneModeration()

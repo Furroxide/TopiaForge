@@ -131,6 +131,13 @@ namespace TopiaForge.Multiplayer.Engine
             if (string.Equals(listedHost, host, StringComparison.Ordinal)) listedHost = NoMutesHost;
         }
 
+        /// <summary>
+        /// Forgets whom a host's own player muted by name, as closing every connection does: the names named the players
+        /// whose records went with their connections, and a host never gives one id to two players, so they name nobody
+        /// else from then on. The wish to hear nobody names no one, so it stays.
+        /// </summary>
+        private void ForgetListenerMuteNames() => localVoiceMutes.Clear();
+
         /// <summary>Forgets the set and the hosts it named, as leaving a session for another role does.</summary>
         private void RetireListenerMutes()
         {

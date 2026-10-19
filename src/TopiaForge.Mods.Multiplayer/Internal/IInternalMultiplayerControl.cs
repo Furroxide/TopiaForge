@@ -114,7 +114,11 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         OperationResult<bool> SetServerMute(ParticipantId participant, bool muted);
 
-        /// <summary>Gets whether the host muted <paramref name="participant"/>.</summary>
+        /// <summary>
+        /// Gets whether the host muted <paramref name="participant"/>, by hand or automatically for abusing voice chat; while
+        /// it lasts the host drops their chat and voice at ingress. A host answers from its moderation, and a joined player
+        /// from the host's voice roster, so a player can see that the host muted them.
+        /// </summary>
         bool IsServerMuted(ParticipantId participant);
 
         /// <summary>Gets whether <paramref name="participant"/> has finished joining: it holds the session's world and is Ready.</summary>

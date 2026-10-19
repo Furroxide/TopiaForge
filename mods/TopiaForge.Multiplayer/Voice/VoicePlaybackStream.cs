@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.Multiplayer.Voice
 {
@@ -20,11 +21,11 @@ namespace TopiaForge.Multiplayer.Voice
     /// way: it publishes a position, and the reader skips to it on its next read.
     /// </para>
     /// <para>
-    /// The members the audio side uses, <see cref="Speaker"/>, <see cref="SampleRate"/>, <see cref="IsEnded"/> and
-    /// <see cref="Read"/>, are public, so the stream can serve as the runtime's playback stream as it is.
+    /// It is the runtime's <see cref="IVoicePlaybackStream"/> as it is: the SPI hands out this stream, never a wrapper
+    /// that could move to another stream, so a stream that ends stays ended and never plays anybody else.
     /// </para>
     /// </remarks>
-    internal sealed class VoicePlaybackStream
+    internal sealed class VoicePlaybackStream : IVoicePlaybackStream
     {
         /// <summary>The rate of every sample, in hertz.</summary>
         internal const int Rate = 48_000;

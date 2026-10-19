@@ -338,7 +338,7 @@ internal static class RuntimePrivacyTests
             "the diagnostic names the object's type, never the id the host chose (" + failure.Message + ")");
     }
 
-    private static bool IsAddressShaped(string name)
+    internal static bool IsAddressShaped(string name)
     {
         foreach (var word in AddressWords)
         {
@@ -348,7 +348,7 @@ internal static class RuntimePrivacyTests
         return name.EndsWith("Port", StringComparison.Ordinal) || name == "port" || name.EndsWith("Ip", StringComparison.Ordinal) || name == "ip";
     }
 
-    private static IEnumerable<Type> Types(MemberInfo member) => member switch
+    internal static IEnumerable<Type> Types(MemberInfo member) => member switch
     {
         PropertyInfo property => new[] { property.PropertyType },
         FieldInfo field => new[] { field.FieldType },
@@ -358,13 +358,13 @@ internal static class RuntimePrivacyTests
         _ => Array.Empty<Type>()
     };
 
-    private static IEnumerable<ParameterInfo> Parameters(MemberInfo member) => member switch
+    internal static IEnumerable<ParameterInfo> Parameters(MemberInfo member) => member switch
     {
         MethodBase method => method.GetParameters(),
         _ => Array.Empty<ParameterInfo>()
     };
 
-    private static bool IsNetworkType(Type type)
+    internal static bool IsNetworkType(Type type)
     {
         if (type.HasElementType) return IsNetworkType(type.GetElementType()!);
         if (type.IsGenericType && type.GetGenericArguments().Any(IsNetworkType)) return true;

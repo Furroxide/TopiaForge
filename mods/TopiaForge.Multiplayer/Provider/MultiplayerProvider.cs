@@ -30,7 +30,7 @@ namespace TopiaForge.Multiplayer
             if (!ProtocolLimits.IsValidIdentity(providerModId)) throw new ArgumentException("A provider mod id is required.", nameof(providerModId));
             this.providerModId = providerModId;
             this.clockMicros = clockMicros ?? MonotonicMicros;
-            var options = new EngineOptions { Diagnostics = diagnostics, Voice = CreateVoiceOptions() };
+            var options = new EngineOptions { Diagnostics = diagnostics, Voice = CreateVoiceOptions(live) };
             engine = SessionEngine.CreateHost(
                 options,
                 MultiplayerProcessKind.Interactive,
@@ -39,7 +39,7 @@ namespace TopiaForge.Multiplayer
                 new ParticipantId(LocalParticipantId),
                 LocalDisplayName,
                 this.clockMicros());
-            voice = StartVoice(diagnostics);
+            voice = StartVoice(diagnostics, live?.VoiceWorkerThread ?? true);
             reserved = engine.CreateFacade(providerModId);
             if (live != null)
             {
@@ -266,5 +266,17 @@ namespace TopiaForge.Multiplayer.Network
         /// Null uses the production defaults.
         /// </summary>
         internal System.Func<NatTraversal.NatAgentOptions>? NatOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the provider runs voice chat beside these live sessions; null follows the live switch, as the
+        /// game does, which turns both on together.
+        /// </summary>
+        internal bool? Voice { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether the voice worker runs on a thread of its own. False leaves its steps to the caller, as tests on
+        /// a virtual clock do.
+        /// </summary>
+        internal bool VoiceWorkerThread { get; set; } = true;
     }
 }
