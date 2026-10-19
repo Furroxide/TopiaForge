@@ -67,6 +67,8 @@ namespace TopiaForge.ModManager.Tests
             APastedInviteLinkJoins();
             HostOffersTheGameLastHostedFirst();
             TheSettingsFileReadsAcrossVersions(root);
+            LaunchedSessionsStart();
+            LiveJoinsAndTheLauncher(root);
             SettledFramesAllocateNothing();
             VoiceSaysWhenTheSessionOffersNone();
             Console.WriteLine("MultiplayerSessionsTests passed.");
@@ -123,14 +125,28 @@ namespace TopiaForge.ModManager.Tests
             }
 
             rig.Frame(3);
-            That(rig.Store.Stored!.DisplayName == "Sam", "and the name is kept in manager data");
-            var next = new SessionsRig();
+            That(rig.Launcher.Journal!.Changes[rig.Launcher.Journal.Changes.Count - 1].NewDisplayName == "Sam",
+                "and the name is recorded in the launcher's journal, the one writable copy of it");
+            var next = new SessionsRig(launcher: rig.Launcher);
             next.Store.Stored = rig.Store.Stored;
             var reloaded = new MultiplayerSessionsPresenter(next.Environment, next.Store, next.Work);
             reloaded.Start();
             next.Work.RunAll();
             reloaded.Tick(0.05f);
-            That(reloaded.DisplayName == "Sam" && next.Environment.DisplayName == "Sam", "a saved name applies to the runtime when the game starts");
+            That(reloaded.DisplayName == "Sam" && next.Environment.DisplayName == "Sam",
+                "a name changed in game applies to the runtime when the game starts again, from the journal the launcher has not taken in");
+
+            // Once the launcher took the journal in, its projection holds the name; a newer one it set in the launcher wins.
+            var launcher = new MemoryLauncherChannels
+            {
+                Projection = new TopiaForge.ModManager.Core.MultiplayerPreferencesProjection(4, rig.Launcher.Journal.Changes[rig.Launcher.Journal.Changes.Count - 1].Sequence,
+                    "Ada", 1, 0, false, true, false, new TopiaForge.ModManager.Core.MultiplayerHostingDefaults("Ada's den", 4, "lan", 27250, false), null,
+                    rig.Launcher.Journal.Epoch),
+                Journal = rig.Launcher.Journal
+            };
+            var projected = new SessionsRig(launcher: launcher);
+            That(projected.Presenter.DisplayName == "Ada" && projected.Environment.DisplayName == "Ada",
+                "the launcher's projection is read at start, and a change it already counts is not applied again");
         }
 
         private static void DisclosureShowsOnceForEachVersion()
@@ -194,21 +210,34 @@ namespace TopiaForge.ModManager.Tests
 
         private static void SettingsAreWrittenOffTheMainThread()
         {
+            // The name is the launcher's preference: it goes to the launcher's journal, on the worker, coalesced.
             var rig = new SessionsRig();
-            var saves = rig.Store.Saves;
+            var records = rig.Launcher.Records;
             rig.Presenter.SetDisplayName("Ada");
             rig.Presenter.SetDisplayName("Bo");
-            That(rig.Store.Saves == saves && rig.Presenter.SettingsNote == MultiplayerSessionsPresenter.SavingSettings,
-                "a change is written by the worker, not on this thread, and the tab says it is saving");
+            That(rig.Launcher.Records == records && rig.Presenter.SettingsNote == MultiplayerSessionsPresenter.SavingSettings,
+                "a change is recorded by the worker, not on this thread, and the tab says it is saving");
             rig.Frame(3);
-            That(rig.Store.Stored!.DisplayName == "Bo" && rig.Store.Saves <= saves + 2 && rig.Presenter.SettingsNote.Length == 0,
-                "the newest value is written, coalesced, and the note clears");
+            var changes = rig.Launcher.Journal!.Changes;
+            That(changes[changes.Count - 1].NewDisplayName == "Bo" && rig.Launcher.Records <= records + 2 && rig.Presenter.SettingsNote.Length == 0,
+                "the newest name is recorded, coalesced, and the note clears");
+
+            // Hide my IP is this game's own setting: the settings file is written on the worker too.
+            var saves = rig.Store.Saves;
+            rig.Presenter.SetHideMyIp(false);
+            rig.Answer(ScreenPromptKind.Disclosure, yes: true);
+            That(rig.Store.Stored!.HideMyIp == false && rig.Store.Saves == saves + 1, "and the settings file is written by the worker");
 
             var failing = new SessionsRig();
-            failing.Store.FailSave = true;
+            failing.Launcher.FailRecord = true;
             failing.Presenter.SetDisplayName("Cy");
             failing.Frame(3);
-            That(failing.Noticed(MultiplayerSettingsService.SaveFailedText) && failing.Presenter.DisplayName == "Cy", "a failed write is reported, and the change stays");
+            That(failing.Noticed(MultiplayerPreferencesService.RecordFailedText) && failing.Presenter.DisplayName == "Cy", "a failed record is reported, and the change stays");
+            failing.Store.FailSave = true;
+            failing.Presenter.SetHideMyIp(false);
+            failing.Answer(ScreenPromptKind.Disclosure, yes: true);
+            failing.Frame(3);
+            That(failing.Noticed(MultiplayerSettingsService.SaveFailedText), "a failed settings write is reported too");
 
             var unreadable = new SessionsRig();
             unreadable.Store.FailLoad = true;
@@ -218,7 +247,8 @@ namespace TopiaForge.ModManager.Tests
             presenter.Tick(0.05f);
             That(presenter.TryTakeNotice(out var notice) && notice.Text == MultiplayerSettingsService.LoadFailedText, "unreadable settings are reported");
             var before = unreadable.Store.Saves;
-            presenter.SetDisplayName("Dee");
+            presenter.SetHideMyIp(false);
+            presenter.PendingPrompt?.Answer(true);
             unreadable.Work.RunAll();
             presenter.Tick(0.05f);
             That(unreadable.Store.Saves == before, "and never overwritten with defaults");

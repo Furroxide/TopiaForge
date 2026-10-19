@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>
     /// Session launch staging under concurrency and against V4: a take claims its file before it reads, a reader shares
     /// deletion, a channel write waits briefly for the launcher's reader, the game records preference changes under its
-    /// journal's epoch, stale claims are swept and live ones kept, an untaken ticket is withdrawn, and every V4 wire-profile
+    /// journal's epoch, stale claims are swept and live ones kept, an untaken session is withdrawn, and every V4 wire-profile
     /// fixture reads through the request readers V5 added exactly as the V4 readers read it.
     /// </summary>
     internal static class LaunchSessionStagingTests
@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 ("take-claims", TakeClaims), ("read-shares-deletion", ReadSharesDeletion), ("channel-write-retry", ChannelWriteRetry),
                 ("journal-record", JournalRecord), ("claims-swept", ClaimsSwept),
-                ("ticket-withdrawn", _ => TicketWithdrawn()), ("v4-fixtures", paths => V4Fixtures(repositoryRoot, paths))
+                ("session-withdrawn", _ => SessionWithdrawn()), ("v4-fixtures", paths => V4Fixtures(repositoryRoot, paths))
             })
             {
                 var owned = Directory.CreateTempSubdirectory("TopiaForgeSessionStaging-");
@@ -221,18 +221,46 @@ namespace TopiaForge.ModManager.Tests
         private static MultiplayerPreferencesProjection Projection(int applied, string epoch) => new MultiplayerPreferencesProjection(3, applied,
             "Sam", 1, 0, false, true, false, new MultiplayerHostingDefaults("Sam's server", 8, "lan", 27250, false), null, epoch);
 
-        private static void TicketWithdrawn()
+        /// <summary>
+        /// The provider takes the offered session through its control as mods finish loading, once; a session no provider took
+        /// is withdrawn, and either way nothing keeps the session, whose direct target is an address, afterwards.
+        /// </summary>
+        private static void SessionWithdrawn()
         {
-            var session = new LaunchSessionRequest("join", "intent-1", "Sam", new LaunchSessionTransport("relay-only", null, 0, false, true),
+            var request = new LaunchSessionRequest("join", "intent-1", "Sam", new LaunchSessionTransport("relay-only", null, 0, false, true),
                 target: LaunchSessionTarget.Direct("192.168.1.20", 27250, ServerId, new string('a', 64), new string('b', 64)));
-            using (ModManager.LaunchSessionOffer.Offer(session)) { }
-            Assert(LaunchSessionTickets.Take() == null, "An untaken ticket is withdrawn once startup ends.");
-            var taken = ModManager.LaunchSessionOffer.Offer(session);
-            Assert(LaunchSessionTickets.Take() != null && !taken.Withdraw(), "A taken ticket is the provider's; nothing is withdrawn.");
-            var earlier = ModManager.LaunchSessionOffer.Offer(session);
-            var later = ModManager.LaunchSessionOffer.Offer(session);
-            Assert(!earlier.Withdraw() && later.Withdraw() && LaunchSessionTickets.Take() == null,
-                "An earlier offering never withdraws a later ticket.");
+            var identity = new LaunchSessionIdentity("request-1", "join", "intent-1");
+            ModManager.SessionLaunch Offered() => new ModManager.SessionLaunch(identity, ModManager.LaunchSessionOffer.ToSession(request), startsGame: false);
+
+            var untaken = Offered();
+            Assert(untaken.Withdraw() && !untaken.IsOffered && untaken.RefusalCode == TopiaForge.Mods.ModErrorCode.Unavailable
+                && untaken.Refusal == ModManager.SessionLaunch.ProviderMissing && !untaken.Withdraw(),
+                "A session no provider took is withdrawn once startup ends, and its launch fails as unavailable.");
+            Assert(!untaken.Take(new Tests.RecordingSessionControl()) && untaken.Plan == null, "A withdrawn session is never taken later.");
+
+            var missing = Offered();
+            Assert(!missing.Take(null) && missing.Refusal == ModManager.SessionLaunch.ProviderMissing, "Without the provider's control the launch fails at once.");
+
+            var control = new Tests.RecordingSessionControl();
+            var taken = Offered();
+            Assert(taken.Take(control) && taken.Plan != null && control.Planned.Count == 1 && !taken.Withdraw() && !taken.IsRefused,
+                "The provider takes the offered session once, through its control; nothing is withdrawn after.");
+            Assert(!taken.Take(control) && control.Planned.Count == 1, "A session is taken once.");
+
+            control.PlanResult = TopiaForge.Mods.OperationResult<IInternalLaunchPlan>.Failure(TopiaForge.Mods.ModErrorCode.Unavailable,
+                "The relay at 203.0.113.7:3478 is down.");
+            var refused = Offered();
+            Assert(!refused.Take(control) && refused.RefusalCode == TopiaForge.Mods.ModErrorCode.Unavailable && !refused.Refusal.Contains("203.0.113", StringComparison.Ordinal),
+                "A provider's refusal is the launch's, redacted (" + refused.Refusal + ").");
+
+            foreach (var launch in new[] { untaken, missing, taken, refused })
+            {
+                foreach (var field in typeof(ModManager.SessionLaunch).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))
+                {
+                    Assert(field.FieldType != typeof(InternalLaunchSession) || field.GetValue(launch) == null,
+                        "Once taken or withdrawn, nothing keeps the session or its address (" + field.Name + ").");
+                }
+            }
         }
 
         private static void V4Fixtures(string repositoryRoot, ManagerPaths paths)

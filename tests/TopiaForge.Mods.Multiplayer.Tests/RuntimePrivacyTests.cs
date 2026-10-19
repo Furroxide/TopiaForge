@@ -13,13 +13,25 @@ using RoutedDiagnostics = provider::TopiaForge.Multiplayer.RoutedDiagnostics;
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
-/// No address crosses the internal SPI. Its types have no address-shaped member or parameter and no network type; a
-/// typed host and port stays inside the provider's handle; and what the runtime logs and keeps for diagnostics is
-/// redacted, whatever text reaches it, as is what the provider logs on its own.
+/// No address comes out of the internal SPI. Its types have no address-shaped member or parameter and no network type,
+/// apart from the launch session's, which only go in; a typed host and port stays inside the provider's handle; and what
+/// the runtime logs and keeps for diagnostics is redacted, whatever text reaches it, as is what the provider logs on its own.
 /// </summary>
 internal static class RuntimePrivacyTests
 {
     private static readonly string[] AddressWords = { "address", "endpoint", "hostname", "socket" };
+
+    /// <summary>
+    /// The one way an address enters the SPI: a launched direct join's host and port, and the port a launched host listens
+    /// on, as the TopiaForge launcher planned them. They only go in, which the scan proves below, so they are named here
+    /// rather than renamed past it.
+    /// </summary>
+    private static readonly string[] InboundLaunchMembers =
+    {
+        "InternalLaunchSession.get_Port", "InternalLaunchSession.set_Port", "InternalLaunchSession.Port", "InternalLaunchSession.port",
+        "InternalLaunchSession.MaximumPort", "InternalLaunchTarget.Direct(port)", "InternalLaunchTarget.get_Port", "InternalLaunchTarget..ctor(port)",
+        "InternalLaunchTarget.Port"
+    };
 
     internal static void TheSpiCarriesNoAddress()
     {
@@ -44,7 +56,28 @@ internal static class RuntimePrivacyTests
             }
         }
 
+        var inbound = offenders.Where(InboundLaunchMembers.Contains).ToArray();
+        offenders.RemoveAll(InboundLaunchMembers.Contains);
         That(offenders.Count == 0, "no SPI member, parameter or type is shaped like an address (" + string.Join(", ", offenders) + ")");
+        That(inbound.Length == InboundLaunchMembers.Length, "the launch's inbound members are each still there to be named (" + string.Join(", ", inbound) + ")");
+
+        // A launch session goes in and never comes back: outside the two launch types, only the control's planning call
+        // names one, as its parameter, and what it returns is a plan the scan above found no address in.
+        var launch = new[] { typeof(InternalLaunchSession), typeof(InternalLaunchTarget) };
+        bool NamesLaunch(Type type) => launch.Contains(type) || (type.IsGenericType && type.GetGenericArguments().Any(NamesLaunch));
+        var carriers = new List<string>();
+        foreach (var type in spi.Except(launch))
+        {
+            foreach (var member in type.GetMembers(All))
+            {
+                if (!Types(member).Any(NamesLaunch)) continue;
+                var takesOnly = member is MethodInfo method && method.Name == nameof(IInternalMultiplayerControl.PlanLaunchSession) &&
+                                type == typeof(IInternalMultiplayerControl) && !NamesLaunch(method.ReturnType);
+                if (!takesOnly) carriers.Add(type.Name + "." + member.Name);
+            }
+        }
+
+        That(carriers.Count == 0, "nothing in the SPI returns or keeps a launch session (" + string.Join(", ", carriers) + ")");
     }
 
     internal static void TypedHostsStayInsideTheProvider()

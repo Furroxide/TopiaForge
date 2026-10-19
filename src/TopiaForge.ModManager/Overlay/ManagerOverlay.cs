@@ -103,6 +103,7 @@ namespace TopiaForge.ModManager
             {
                 multiplayerUi?.Close();
                 multiplayer.OnHidden();
+                multiplayer.Stop();
             });
             cursorLease.Release();
             TopiaForgeDismissStack.Remove(this);
@@ -127,9 +128,14 @@ namespace TopiaForge.ModManager
             RefreshContent();
         }
 
-        /// <summary>Shows the multiplayer prompts, toasts and connecting overlay; before the overlay is built, only the toasts.</summary>
+        /// <summary>
+        /// Shows the multiplayer prompts, toasts and connecting overlay. Before the overlay is built only the toasts show, until
+        /// a question or a join needs the screen, as a session the launcher asked for does before the player opened anything:
+        /// the overlay is then built, closed, for its prompts and its connecting overlay.
+        /// </summary>
         private void TickMultiplayerOutside()
         {
+            if (multiplayerUi == null && (multiplayer.PendingPrompt != null || multiplayer.Connecting.IsVisible)) Build();
             if (multiplayerUi != null) multiplayerUi.Tick();
             else MultiplayerSessionsUi.ShowNotices(multiplayer);
         }

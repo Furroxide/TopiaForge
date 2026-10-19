@@ -65,6 +65,7 @@ namespace TopiaForge.ModManager.Sessions
 
             var modal = host.Modal.Custom(prompt.Title, TopiaForgeScheme.Paper, 560f, persistent: true);
             foreach (var paragraph in prompt.Paragraphs) modal.Content.Label(paragraph, TopiaForgeTextStyle.Body).PlainText();
+            if (prompt.Kind == ScreenPromptKind.Password) return ShowPassword(modal, prompt);
             var row = modal.Content.Row(TopiaForgeGap.Sm);
             row.Spacer().Flex(1f, 0f);
             TopiaForgeButton primary;
@@ -84,6 +85,33 @@ namespace TopiaForge.ModManager.Sessions
             modal.Show();
             primary.Focus();
             return new PromptDialog(modal);
+        }
+
+        /// <summary>
+        /// A session password typed in game, in a masked field: the answer carries it once, and the field is emptied before the
+        /// modal closes, so nothing on screen keeps it. Cancel stays the focused choice, as on the connecting overlay.
+        /// </summary>
+        private static IPromptDialog ShowPassword(TopiaForgeModalInstance modal, ScreenPrompt prompt)
+        {
+            var field = modal.Content.Input("Session password", string.Empty, _ => { }).Password();
+            field.SetCharacterLimit(64);
+            field.OnSubmit(_ => AnswerTyped(modal, prompt, field));
+            var row = modal.Content.Row(TopiaForgeGap.Sm);
+            row.Spacer().Flex(1f, 0f);
+            row.Button(prompt.ConfirmLabel, () => AnswerTyped(modal, prompt, field), TopiaForgeButtonStyle.Outline);
+            var cancel = row.Button(prompt.CancelLabel.Length == 0 ? "CANCEL" : prompt.CancelLabel, () => Answer(modal, prompt, false));
+            modal.Closed += () => prompt.Answer(false);
+            modal.Show();
+            cancel.Focus();
+            return new PromptDialog(modal);
+        }
+
+        private static void AnswerTyped(TopiaForgeModalInstance modal, ScreenPrompt prompt, TopiaForgeInputField field)
+        {
+            var typed = field.Text;
+            field.SetText(string.Empty);
+            prompt.Answer(true, typed);
+            modal.Close();
         }
 
         private static void Answer(TopiaForgeModalInstance modal, ScreenPrompt prompt, bool confirmed)

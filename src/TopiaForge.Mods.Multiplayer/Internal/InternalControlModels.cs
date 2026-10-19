@@ -324,6 +324,12 @@ namespace TopiaForge.Mods.Internal
         KnownHostsUnreadable = 38,
 
         /// <summary>
+        /// The server no longer serves the descriptor a session launch was planned from: its packages, its world or its
+        /// settings changed since the launcher checked it. Nothing connected; the launcher plans the join once more.
+        /// </summary>
+        AdmissionChanged = 39,
+
+        /// <summary>
         /// This host's list of the players it banned could not be read just now, as when another program holds it, so hosting
         /// did not start rather than admit players it banned; nothing was written over the list. Hosting again reads it
         /// again.
@@ -439,6 +445,12 @@ namespace TopiaForge.Mods.Internal
         internal int MaxPlayers { get; set; }
 
         internal bool IsReadinessHeld { get; set; }
+
+        /// <summary>
+        /// Gets the server id this process serves its session under while it hosts: the hash of its signing key, which its
+        /// LAN announcements and session links name too. Null while it does not host.
+        /// </summary>
+        internal string? HostServerId { get; set; }
 
         /// <summary>Gets the session's standing with the TopiaForge service: its listing and invite as a host, its route as a joiner.</summary>
         internal InternalInternetStatus Internet { get; set; } = new InternalInternetStatus();

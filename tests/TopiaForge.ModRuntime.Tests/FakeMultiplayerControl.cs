@@ -166,6 +166,8 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public OperationResult<bool> RevokeInvite(string code) => Unsupported<bool>();
 
+        public OperationResult<IInternalLaunchPlan> PlanLaunchSession(InternalLaunchSession session) => Unsupported<IInternalLaunchPlan>();
+
         private static OperationResult<T> Unsupported<T>() where T : notnull =>
             OperationResult<T>.Failure(ModErrorCode.Unavailable, "The fake control does not do this.");
     }

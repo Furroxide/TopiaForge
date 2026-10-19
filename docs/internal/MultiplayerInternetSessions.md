@@ -42,8 +42,8 @@ The origin is read once, when the runtime attaches to the internal control:
 3. **Neither.** No service is configured. Nothing is ever contacted, and the session offers only LAN and direct play.
 
 The ModManager plugin reads both at startup and sets `IInternalMultiplayerRuntimeHost.ServiceOrigin` to the first that
-names one (`MultiplayerRuntimeHost.ConfigureServiceOrigin`). Reading the origin leaves the launch ticket untaken, so
-the runtime still withdraws it once mods have loaded and a direct target's address does not stay in memory.
+names one (`MultiplayerRuntimeHost.ConfigureServiceOrigin`). The launch's session goes to the provider apart from its
+origin, as a call on the internal control once mods have loaded, so a direct target's address does not stay in memory.
 
 - **Spelling.** The game accepts only the spelling both sources write: `https://`, a lowercase DNS name, and an
   optional port of 1 to 65535 other than 443, with no trailing slash, path, query or credentials, and at most 256

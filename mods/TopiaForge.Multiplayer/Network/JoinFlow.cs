@@ -23,6 +23,8 @@ namespace TopiaForge.Multiplayer.Network
     {
         internal const long ReconnectWindowMicros = 30_000_000;
         internal const long ReconnectIntervalMicros = 2_000_000;
+        internal const string AdmissionChangedDetail =
+            "The server changed after the TopiaForge launcher checked it, so nothing was joined. The launcher plans the join again.";
         private const long StopGraceMicros = 100_000;
 
         private readonly SessionEngine engine;
@@ -256,6 +258,16 @@ namespace TopiaForge.Multiplayer.Network
             {
                 ChangedServerId = resolved.ServedServerId;
                 End(resolved.Failure, resolved.Detail);
+                return;
+            }
+
+            // A session launch pinned the exact descriptor the launcher planned from, by the hash of the signed bytes the host
+            // served it, as this one is. A host serving any other changed its packages, world or settings since: the join ends
+            // here, before any other check and before anything connects, and the launcher plans it once more.
+            var expected = settings.ExpectedDescriptorSha256;
+            if (expected != null && !string.Equals(resolved.Descriptor!.Sha256, expected, StringComparison.Ordinal))
+            {
+                End(LiveFailure.AdmissionChanged, AdmissionChangedDetail);
                 return;
             }
 

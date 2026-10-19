@@ -186,7 +186,23 @@ namespace TopiaForge.Multiplayer.Network
             }
         }
 
+        /// <summary>
+        /// Gets or sets the SHA-256 of the signed descriptor a session launch planned this join from, or null for a join the
+        /// player started in game. A host whose descriptor hashes otherwise ends the join as
+        /// <see cref="LiveFailure.AdmissionChanged"/> before anything is checked or connected.
+        /// </summary>
+        internal string? ExpectedDescriptorSha256
+        {
+            get => expectedDescriptorSha256;
+            set
+            {
+                if (value != null && !WireText.IsHex(value, 32)) throw new ArgumentException("A descriptor hash is 64 lowercase hexadecimal characters.", nameof(value));
+                expectedDescriptorSha256 = value;
+            }
+        }
+
         private string? trustedServerId;
+        private string? expectedDescriptorSha256;
     }
 
     internal enum JoinPhase
@@ -284,6 +300,9 @@ namespace TopiaForge.Multiplayer.Network
         /// reads, an address that served another server is <see cref="HostIdentityChanged"/> again.
         /// </summary>
         KnownHostsUnreadable = 38,
+
+        /// <summary>The host no longer serves the descriptor a session launch was planned from; nothing connected.</summary>
+        AdmissionChanged = 39,
 
         /// <summary>
         /// This host's list of the players it banned could not be read just now, as when another program holds it, so hosting

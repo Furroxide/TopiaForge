@@ -18,7 +18,7 @@ namespace TopiaForge.ModManager.Tests
     /// one exception being CONNECT's typed address; its views use the TopiaForgeUi kit and nothing else, so the UI Gallery
     /// compiles them; none of it logs; and every file stays within the 400-line UI cap.
     /// </summary>
-    internal static class MultiplayerUiArchitectureTests
+    internal static partial class MultiplayerUiArchitectureTests
     {
         internal const int UiFileCap = 400;
 
@@ -40,6 +40,8 @@ namespace TopiaForge.ModManager.Tests
             OtherPlayersTextRendersPlain(root);
             ModalsSurviveSceneLoadsAndRowsKeepTheirHeight(root);
             PresentersGoOnlineThroughTheRealm(root);
+            LauncherChannelsAreCalledOffTheFrame();
+            LaunchesShowBeforeTheOverlayOpens(root);
             TheOverlayFrameRunsThroughTheGuard(root);
             NothingLogs(root);
             UiFilesStayWithinTheirCap(root);

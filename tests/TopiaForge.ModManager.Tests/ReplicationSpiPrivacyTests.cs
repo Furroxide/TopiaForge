@@ -139,8 +139,7 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>
         /// The replication SPI: its context interface and the limits it enforces, with every SDK-internal type their members
         /// name, transitively, so a type the SPI starts to use is scanned at once. The namespace holds other internal
-        /// contracts too, such as the launch contract's session ticket, which carries a direct target's address to the
-        /// provider by design; they are held to their own rules and are not part of this seam.
+        /// contracts too; they are held to their own rules and are not part of this seam.
         /// </summary>
         private static Type[] ReplicationSpi()
         {

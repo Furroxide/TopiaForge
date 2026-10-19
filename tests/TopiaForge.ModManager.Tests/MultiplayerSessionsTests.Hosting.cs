@@ -75,7 +75,9 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             That(host.CanEnd && host.ProgressTone == ScreenTone.Success && rig.Noticed("open to other players") && rig.Presenter.StatusText.StartsWith("Hosting", StringComparison.Ordinal),
                 "hosting is reported");
-            That(rig.Store.Stored!.HostMaxPlayers == 8 && rig.Store.Stored.HostVisibility == InternalSessionVisibility.Lan, "the hosting settings are remembered, but never the password");
+            var hosting = rig.Launcher.Journal!.Changes[rig.Launcher.Journal.Changes.Count - 1].NewHosting;
+            That(hosting != null && hosting.MaxPlayers == 8 && hosting.Visibility == "lan" && hosting.Port == MultiplayerPreferenceValues.DefaultPort,
+                "the hosting defaults are recorded in the launcher's journal, which holds no password");
 
             var failed = new SessionsRig();
             ReadyHost(failed);

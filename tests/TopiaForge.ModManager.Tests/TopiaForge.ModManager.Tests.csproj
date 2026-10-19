@@ -283,7 +283,10 @@
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Commands.cs" Link="Runtime/GamemodeSessionOrchestrator.Commands.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingRegistry.Observations.cs" Link="Runtime/RuntimeBindingRegistry.Observations.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeLaunchPublisher.cs" Link="Runtime/RuntimeLaunchPublisher.cs" />
-    <Compile Include="../../src/TopiaForge.ModManager/LaunchSessionOffer.cs" Link="Runtime/LaunchSessionOffer.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/RuntimeLaunchPublisher.Sessions.cs" Link="Runtime/RuntimeLaunchPublisher.Sessions.cs" />
+    <!-- Session launches and live joins, from the consumed request to the provider's plan and the launcher's records. Globbed,
+         so a part added later cannot fall out of test scope; the folder is Unity-free. -->
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Launch/*.cs" Link="Runtime/Multiplayer/Launch/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionImplementation.cs" Link="Runtime/RuntimeSessionImplementation.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingModels.cs" Link="Runtime/RuntimeBindingModels.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeBindingAttempts.cs" Link="Runtime/RuntimeBindingAttempts.cs" />

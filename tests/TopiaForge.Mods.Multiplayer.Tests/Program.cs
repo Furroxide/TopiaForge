@@ -265,7 +265,13 @@ internal static class Program
             NetworkPrivacyTests.ARelayOnlyResolveContactsOnlyTheLan();
             LaunchSessionPlanTests.HostsAndJoinsAreMappedOntoLiveSessions();
             LaunchSessionPlanTests.APlanNeverShowsItsAddress();
-            LaunchSessionPlanTests.TheProviderTakesTheOfferedTicketOnce();
+            LaunchSessionPlanTests.TheControlPlansALaunchedSession();
+            LaunchSessionPlanTests.EveryLaunchFixtureIsPlanned();
+            LaunchedSessionTests.AHostedLaunchOpensOnItsOwnPortUnderItsOwnPrivacy();
+            LaunchedSessionTests.AJoinLaunchIsPinnedToTheDescriptorTheLauncherChecked();
+            LaunchedSessionTests.RelayOnlyNeverGoesDirect();
+            LaunchedSessionTests.ALiveJoinLeavesTheRunningGameWhenTold();
+            LaunchedSessionTests.AnInGamePreferenceChangeReachesTheJournal();
             LiveSessionFailureTests.ALinkLostBeforeTheSessionStartsEndsTheJoin();
             LiveSessionFailureTests.SilentConnectionsCannotFillAHost();
             LiveSessionFailureTests.OneSourceHoldsOnlyItsShareOfAHost();

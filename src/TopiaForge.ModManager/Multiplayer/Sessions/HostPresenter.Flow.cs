@@ -110,12 +110,10 @@ namespace TopiaForge.ModManager.Sessions
             var game = decision == RealmDecision.PromoteInPlace ? context.Environment.CurrentGame?.Request
                 : decision == RealmDecision.StartAsHost && selectedTarget < targets.Count ? targets[selectedTarget].Request
                 : null;
+            // The hosting defaults are the launcher's preferences, recorded in its journal; the game last hosted is this game's own.
+            if (context.Preferences.IsLoaded) context.Preferences.ChangeHosting(name, maxPlayers, VisibilityValues[visibility], voice);
             var settings = context.Settings;
-            if (settings.IsLoaded)
-            {
-                var hosting = settings.Current.WithHosting(name, maxPlayers, VisibilityValues[visibility], voice);
-                settings.Update(game == null ? hosting : hosting.WithHostedGame(game.TargetId, game.WorldOverride));
-            }
+            if (settings.IsLoaded && game != null) settings.Update(settings.Current.WithHostedGame(game.TargetId, game.WorldOverride));
 
             switch (decision)
             {

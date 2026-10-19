@@ -94,6 +94,8 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Server changed", "This address now leads to a different server than it did before. Join it only if you trust it.", ConnectingStep.Resolving, false, canTrust: true);
                 case InternalLiveFailure.KnownHostsUnreadable:
                     return new FailureMessage("Server not checked", UncheckedServer, ConnectingStep.Resolving, true, canTrust: true);
+                case InternalLiveFailure.AdmissionChanged:
+                    return new FailureMessage("Server no longer matches", "The server changed after the TopiaForge launcher checked it, so nothing was joined. The launcher can check it again and join for you.", ConnectingStep.Resolving, false, launcherHelps: true);
                 case InternalLiveFailure.WrongGameBuild:
                     return new FailureMessage("Different game build", "The host runs a different build of Robotopia. Both players need the same build to play together: update the game, or ask the host to.", ConnectingStep.VerifyingMods, false);
                 case InternalLiveFailure.ProtocolMismatch:

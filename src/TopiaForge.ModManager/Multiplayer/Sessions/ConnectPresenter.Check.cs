@@ -56,7 +56,7 @@ namespace TopiaForge.ModManager.Sessions
                     var title = server == null ? string.Empty : HostText.ForDisplay(server.Name);
                     if (title.Length == 0) title = UnnamedTitle(chosen.Kind);
                     Result("Joining " + title + ".", ScreenTone.Success);
-                    joins.Begin(new JoinRequest(chosen, title, JoinAllowsDirect(chosen), TakePassword(), trustedServerId, launcherLink));
+                    joins.Begin(new JoinRequest(chosen, title, JoinAllowsDirect(chosen), TakePassword(), trustedServerId, LauncherHandoff.ForLink(launcherLink)));
                     break;
                 case InternalLiveFailure.ContentMismatch:
                     launcherLink = LinkFor(invite, server?.ServerId);
@@ -72,7 +72,7 @@ namespace TopiaForge.ModManager.Sessions
                         if (!confirmed || target != chosen) return;
                         trustedServerId = changed;
                         launcherLink = LauncherJoinLink.ForTyped(address, changed);
-                        joins.Begin(new JoinRequest(chosen, "Direct session", queryAllowsDirect, TakePassword(), changed, launcherLink));
+                        joins.Begin(new JoinRequest(chosen, "Direct session", queryAllowsDirect, TakePassword(), changed, LauncherHandoff.ForLink(launcherLink)));
                     }));
                     break;
                 default:

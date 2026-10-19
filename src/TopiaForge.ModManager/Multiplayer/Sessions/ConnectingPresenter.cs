@@ -7,43 +7,6 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Sessions
 {
-    /// <summary>One join the player asked for: where it goes, how the overlay names it, and the choices made for it.</summary>
-    internal sealed class JoinRequest
-    {
-        internal JoinRequest(IInternalJoinTarget target, string title, bool allowDirect, string? password = null, string? trustedServerId = null, string? launcherLink = null)
-        {
-            Target = target ?? throw new ArgumentNullException(nameof(target));
-            Title = title ?? string.Empty;
-            AllowDirect = allowDirect;
-            Password = password;
-            TrustedServerId = trustedServerId;
-            LauncherLink = launcherLink;
-        }
-
-        internal IInternalJoinTarget Target { get; }
-
-        /// <summary>Gets the server's name as the overlay shows it, already redacted.</summary>
-        internal string Title { get; }
-
-        /// <summary>Gets the player's choice for this session: a direct path, allowed through the approved prompt.</summary>
-        internal bool AllowDirect { get; }
-
-        internal string? Password { get; }
-
-        internal string? TrustedServerId { get; }
-
-        /// <summary>Gets the link the launcher can take this join over with; null when there is none.</summary>
-        internal string? LauncherLink { get; }
-
-        internal JoinRequest Trusting(string serverId) => new JoinRequest(Target, Title, AllowDirect, Password, serverId, LauncherLink);
-
-        /// <summary>The same join with a direct connection allowed, for this session only, as the approved prompt lets it.</summary>
-        internal JoinRequest Direct() => new JoinRequest(Target, Title, allowDirect: true, Password, TrustedServerId, LauncherLink);
-
-        /// <summary>The same join without a password, so the session asks for one on the connecting overlay.</summary>
-        internal JoinRequest WithoutPassword() => new JoinRequest(Target, Title, AllowDirect, null, TrustedServerId, LauncherLink);
-    }
-
     /// <summary>
     /// Runs a join the screens ask for and presents it on the connecting overlay. It asks the runtime's realm rules first,
     /// and joins only through the runtime: a game that is running is left only after "Leave current game?" is confirmed,
@@ -61,6 +24,8 @@ namespace TopiaForge.ModManager.Sessions
         internal const string PasswordRule = "A password is 1 to 64 characters with no control characters.";
         internal const string WaitingText = "Waiting for the current game to finish starting or stopping...";
         internal const string DetailsNotCopied = "The failure details could not be copied. Try again.";
+        internal const string AlreadyJoining = "A join is already running.";
+        internal const string KeptGame = "The current game kept running, so nothing was joined.";
 
         /// <summary>The longest delay the overlay waits out before it joins again, a day, as the runtime keeps the service's own.</summary>
         internal const int MaximumRetryWaitSeconds = 86_400;
@@ -154,7 +119,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public bool CanRetry => HasFailed && request != null && failure != null && failure.Retryable && retryWait <= 0d;
 
-        public bool CanOpenLauncher => HasFailed && request?.LauncherLink != null && failure != null && (failure.LauncherHelps || failure.Retryable);
+        public bool CanOpenLauncher => HasFailed && failure != null && (failure.LauncherHelps || failure.Retryable) && context.Handoffs.CanHandOff(request?.Launcher);
 
         public bool CanCopyDetails => HasFailed && failureStatus != null;
 
@@ -170,17 +135,18 @@ namespace TopiaForge.ModManager.Sessions
             if (join == null) throw new ArgumentNullException(nameof(join));
             if (IsBusy)
             {
-                context.Notify("A join is already running.", ScreenTone.Warning);
+                context.Notify(AlreadyJoining, ScreenTone.Warning);
+                join.Launch?.Refuse(ModErrorCode.Conflict, AlreadyJoining);
                 return;
             }
 
             if (!context.CanStartSession)
             {
-                context.Notify(
-                    !context.Status.IsLiveAvailable ? "Live multiplayer is not available."
-                    : !context.Settings.IsLoaded ? MultiplayerSessionsPresenter.LoadingSettings
-                    : ContentReadinessPresenter.PendingText,
-                    ScreenTone.Warning);
+                var reason = !context.Status.IsLiveAvailable ? "Live multiplayer is not available."
+                    : !context.Settings.IsLoaded || !context.Preferences.IsLoaded ? MultiplayerSessionsPresenter.LoadingSettings
+                    : ContentReadinessPresenter.PendingText;
+                context.Notify(reason, ScreenTone.Warning);
+                join.Launch?.Refuse(ModErrorCode.Unavailable, reason);
                 return;
             }
 
@@ -269,8 +235,7 @@ namespace TopiaForge.ModManager.Sessions
         public void OpenLauncher()
         {
             if (!CanOpenLauncher) return;
-            context.Environment.OpenUrl(request!.LauncherLink!);
-            context.Notify("Handed the join to the TopiaForge launcher.", ScreenTone.Success);
+            context.Handoffs.HandOff(request!.Launcher!, "Handed the join to the TopiaForge launcher.");
             Hide();
         }
 
@@ -305,6 +270,11 @@ namespace TopiaForge.ModManager.Sessions
             else if (stage != Stage.Leaving && stage != Stage.Waiting)
             {
                 return;
+            }
+            else
+            {
+                // The provider never heard of this join, so only the launch it carries out can say it was cancelled.
+                request?.Launch?.Refuse(ModErrorCode.Cancelled, "The join was cancelled before it started.");
             }
 
             Hide();

@@ -214,25 +214,58 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
 - **Hosting defaults.** Until the launcher's store holds hosting defaults, the source gives none, and the projection
   keeps its own, a change made in game included. The first projection starts from `MultiplayerHostingDefaults.forPlayer`.
 
-## 8. The game side today
+## 8. The game side
 
 - `TopiaForgeModManagerPlugin` consumes a V4 or V5 request (`LaunchStagingStore.ConsumeLaunchRequest`), logs its role
   but never its target, and runs the executable profile through the V4 path.
-- Before mods load, a V5 session is offered to the multiplayer provider as an internal ticket
-  (`TopiaForge.Mods.Internal.LaunchSessionTickets`), unless the command was rejected or recovery runs. The provider's
-  narrow entry point is `MultiplayerProvider.TakeLaunchSession`, which takes the ticket once, while mods load, and maps
-  it onto live sessions (`LaunchSessionPlan`): host settings, or a join target pinned by the verified server and its
-  settings. Invites and Internet listings go through the control plane (`MultiplayerInternetSessions.md`), and the
-request's `serviceOrigin` comes before the manager's own. Once mods have loaded, the runtime withdraws a
-  ticket no one took, so a direct target's address does not stay in memory for the whole process. When the runtime's
-  internal multiplayer control merges (#211), the ticket becomes a call on it.
-- The ticket is internal, and the manager's package validator keeps it so: a package may not bundle any assembly a
-  TopiaForge assembly names in `InternalsVisibleTo`, unless it is the first-party package that ships it. Test and
-  tool assemblies never ship.
-- `RuntimeLaunchPublisher` reports a session launch's runtime records as version 2: progress with the session still
-  `pending`, and a failure before the session started as the session launch's own outcome. A running target or the
-  main menu is not yet a session's success, and a gamemode session's end is not the live session's, so both are left
-  for the provider to report. A rejected V5 request is correlated by its intent and reported the same way.
+- **Offered, then planned.** Before mods load, a V5 session becomes an `InternalLaunchSession` (`LaunchSessionOffer`),
+  unless the command was rejected or recovery runs. Direct play is allowed only when the request carries the player's
+  consent for this very intent, under the disclosure version this game shows (`MultiplayerPrivacyText`); any other
+  launch is relay-only, whatever this game's own settings say. Once mods have loaded, the runtime hands the session to
+  the reserved provider's internal control (`IInternalMultiplayerControl.PlanLaunchSession`) once, and lets go of it
+  either way. A session no provider took is withdrawn, and its launch fails at once as `unavailable` ("The multiplayer
+  provider is not loaded."), so a direct target's address never stays in memory for the whole process.
+- **The one inbound address.** The launch session is the only SPI type that carries an address, a direct target's host
+  and port, and a host's own port: it only goes in. Nothing in the SPI returns or keeps one, which
+  `RuntimePrivacyTests.TheSpiCarriesNoAddress` proves from the compiled types, and the plan the provider returns names
+  none. The session is internal to the multiplayer SDK, and the manager's package validator keeps it so: a package may
+  not bundle any assembly a TopiaForge assembly names in `InternalsVisibleTo`, unless it is the first-party package that
+  ships it. Test and tool assemblies never ship.
+- **The plan.** The provider maps the session onto live sessions (`LaunchSessionPlan`): host settings on exactly the
+  launch's port, with no fallback to another one, under the launch's privacy, with router forwarding only for direct
+  play; or a join target pinned by the server id and the descriptor SHA-256 the launcher verified. A server that answers
+  with another descriptor is refused before anything connects (`admission-changed`). Invites and Internet listings go
+  through the control plane (`MultiplayerInternetSessions.md`), and the request's `serviceOrigin` comes before the
+  manager's own.
+- **Started through the realm.** The in-game screens start the plan as their own flows start sessions
+  (`MultiplayerInGameSessions.md`, section 9): a host once the launch's own game runs, opened in place, or at the
+  menu, after its password is typed in game; a join through the connecting overlay, with "Leave current game?" while a
+  game runs. A LAN session is listened for first, for up to 15 seconds. Neither asks this game's disclosure again, and a
+  launched join never offers the in-game direct prompt: the launcher plans any change to its privacy.
+- **Records.** `RuntimeLaunchPublisher` is the request's one writer of progress and outcomes V2 (sections 4 and 5). The
+  runtime's command and the provider's session share one sequence, the session block follows the provider's status
+  (`SessionLaunchRecords`), the phase is the join's own while it connects or synchronizes, and a success comes only from
+  the provider: hosting open, or the join in session. The session's end is written when it ends, or as the process exits
+  with it still running (`host-ended` or `left`, failed with an `external` error when the runtime did not stop
+  cleanly). A failed command settles the launch with the runtime's outcome, and a rejected V5 request is correlated by
+  its intent and reported the same way.
+- **Handoffs.** When the launcher owns this game, INSTALL & JOIN IN LAUNCHER and the failure view's Open launcher write
+  a `session-handoff` naming the invite, the listing or the current session, on the background queue; a write that
+  fails opens the link instead. A game no launcher started, and a server typed by address, open the
+  `topiaforge://join/` link as before. A handoff never carries an address.
+- **Live joins.** A game the launcher started looks for its `session-join` file once a second, on a pool thread
+  (`LiveJoinIntake`); the store's take refuses a join for another request and one it cannot read. A join whose
+  package-set digest is not this game's fails as `admission-changed`, one through another service is refused as
+  `unavailable`, and a join id seen before is ignored. The rest are planned and started as a launched join is, and report
+  under their join id; a success stands at `idle`.
+- **Preferences.** The game reads the projection and its journal once at start, applying the journal's changes the
+  projection does not count yet, as the launcher applies them (section 7). The display name and the hosting defaults
+  are the launcher's: a change in game takes effect at once and is recorded with `RecordPreferenceChange`, one write at
+  a time, the newest of each preference only. The game's own settings file keeps only what is the game's: the
+  disclosure acknowledgement, Hide my IP, the game last hosted, favorites and history.
+- **Off the main thread.** Every channel read and write runs on the background queue or the live-join poll, so a refused
+  write's retries, about 310 ms in all, never hold a frame. `MultiplayerUiArchitectureTests` reads the compiled code to
+  keep it so.
 - In crash recovery, the session is not offered, and its launch fails at once (`unavailable`, with the reason), so the
   launcher never waits on a session nothing will report.
 - At startup the manager sweeps the join and quit claims an earlier, crashed process left behind (section 6).
@@ -247,10 +280,6 @@ request's `serviceOrigin` comes before the manager's own. Once mods have loaded,
     channel names one launch request, lives beside the install it concerns, and is TopiaForge's to keep. Its only cost is
     that it works while the manager runs, which every launch the launcher owns has; a game whose manager does not answer
     is stopped once the answer window passes.
-
-What later slices wire: starting the session from the plan when live sessions are on, the provider's progress and
-outcomes V2 from its live flows, writing handoffs, polling for live joins, reading the projection in game, and recording
-in-game changes with `RecordPreferenceChange`, off the main thread.
 
 ## 9. Exact-version resolution
 

@@ -7,9 +7,10 @@ namespace TopiaForge.ModManager.Sessions
 {
     /// <summary>
     /// The Multiplayer tab's presenter: the header, the five sub-tabs, the connecting overlay, the prompts and the toasts,
-    /// over the runtime's multiplayer SPI. It ticks every frame, overlay open or not, so a join and the end of a session are
-    /// followed while the player plays; in a settled state a frame allocates nothing. It reaches the network only when the
-    /// player acts: searching the local network, checking a server, hosting or joining. Main thread only.
+    /// over the runtime's multiplayer SPI, and the sessions the TopiaForge launcher asks of this game. It ticks every frame,
+    /// overlay open or not, so a join and the end of a session are followed while the player plays; in a settled state a
+    /// frame allocates nothing. It reaches the network only when the player acts (searching the local network, checking a
+    /// server, hosting or joining) or the launcher asks it to host or join. Main thread only.
     /// </summary>
     internal sealed class MultiplayerSessionsPresenter : IMultiplayerScreens
     {
@@ -25,6 +26,9 @@ namespace TopiaForge.ModManager.Sessions
         private readonly IMultiplayerSessionEnvironment environment;
         private readonly MultiplayerBackgroundQueue queue;
         private readonly MultiplayerSettingsService settings;
+        private readonly MultiplayerPreferencesService preferences;
+        private readonly LaunchSessionPresenter launches;
+        private readonly LiveJoinIntake? intake;
         private readonly MultiplayerStatusTracker status = new MultiplayerStatusTracker();
         private readonly ContentReadinessPresenter content;
         private readonly MultiplayerScreensContext context;
@@ -53,13 +57,17 @@ namespace TopiaForge.ModManager.Sessions
             this.environment = environment ?? throw new ArgumentNullException(nameof(environment));
             queue = new MultiplayerBackgroundQueue(scheduler ?? throw new ArgumentNullException(nameof(scheduler)));
             settings = new MultiplayerSettingsService(queue, store ?? throw new ArgumentNullException(nameof(store)));
+            var launcher = environment.Launcher;
+            preferences = new MultiplayerPreferencesService(queue, launcher);
             content = new ContentReadinessPresenter(environment);
-            context = new MultiplayerScreensContext(environment, settings, status, content, Ask, Notify);
+            context = new MultiplayerScreensContext(environment, settings, preferences, status, content, queue, Ask, Notify);
             connecting = new ConnectingPresenter(context);
             browse = new BrowsePresenter(context, connecting);
             host = new HostPresenter(context);
             connect = new ConnectPresenter(context, connecting);
             session = new SessionPresenter(context);
+            launches = new LaunchSessionPresenter(context, connecting, queue);
+            intake = launcher == null ? null : new LiveJoinIntake(launcher);
         }
 
         public bool IsAvailable => status.IsLiveAvailable;
@@ -76,7 +84,10 @@ namespace TopiaForge.ModManager.Sessions
 
         public string DisplayNameError => displayNameError;
 
-        public string SettingsNote => !settings.IsLoaded ? LoadingSettings : settings.IsSaving || queue.IsBusy ? SavingSettings : string.Empty;
+        public string SettingsNote =>
+            !settings.IsLoaded || !preferences.IsLoaded ? LoadingSettings
+            : settings.IsSaving || preferences.IsSaving || queue.IsBusy ? SavingSettings
+            : string.Empty;
 
         public string VoiceNote
         {
@@ -122,6 +133,15 @@ namespace TopiaForge.ModManager.Sessions
 
         internal MultiplayerSettingsService Settings => settings;
 
+        /// <summary>Gets the launcher's preferences as this game uses them, for tests.</summary>
+        internal MultiplayerPreferencesService Preferences => preferences;
+
+        /// <summary>Gets what starts the sessions the launcher asks for, for tests.</summary>
+        internal LaunchSessionPresenter Launches => launches;
+
+        /// <summary>Gets what takes the launcher's live joins, for tests; null when no launcher started this game.</summary>
+        internal LiveJoinIntake? Intake => intake;
+
         public void SelectTab(MultiplayerSubTab tab)
         {
             if (!Enum.IsDefined(typeof(MultiplayerSubTab), tab) || tab == selectedTab) return;
@@ -146,8 +166,10 @@ namespace TopiaForge.ModManager.Sessions
             }
 
             displayNameError = string.Empty;
-            if (!settings.IsLoaded) return;
-            settings.Update(settings.Current.WithDisplayName(displayName));
+            if (!preferences.IsLoaded) return;
+
+            // The name is the launcher's preference: it is recorded in the launcher's journal, never in manager data too.
+            preferences.ChangeDisplayName(displayName);
             ApplyDisplayName(displayName);
         }
 
@@ -167,6 +189,7 @@ namespace TopiaForge.ModManager.Sessions
         {
             shown = true;
             settings.Load(Loaded);
+            preferences.Load(PreferencesLoaded);
             if (selectedTab == MultiplayerSubTab.Host) host.RefreshTargets();
         }
 
@@ -176,8 +199,23 @@ namespace TopiaForge.ModManager.Sessions
             browse.OnHidden();
         }
 
-        /// <summary>Starts loading the settings, so a saved name applies to sessions started without the tab.</summary>
-        internal void Start() => settings.Load(Loaded);
+        /// <summary>
+        /// Starts loading the settings and the launcher's preferences, so a saved name applies to sessions started without the
+        /// tab, and, in a game a launcher started, starts taking its live joins.
+        /// </summary>
+        internal void Start()
+        {
+            settings.Load(Loaded);
+            preferences.Load(PreferencesLoaded);
+            intake?.Start();
+        }
+
+        /// <summary>Stops taking live joins and lets go of a launch still starting, as the game closes.</summary>
+        internal void Stop()
+        {
+            intake?.Dispose();
+            launches.Stop();
+        }
 
         /// <summary>Main thread, every frame.</summary>
         internal void Tick(float deltaTime)
@@ -185,6 +223,8 @@ namespace TopiaForge.ModManager.Sessions
             queue.Pump();
             var failure = settings.TakeFailure();
             if (failure.Length > 0) Notify(failure, ScreenTone.Warning);
+            var recorded = preferences.TakeFailure();
+            if (recorded.Length > 0) Notify(recorded, ScreenTone.Warning);
             MultiplayerSessionSnapshot? snapshot = null;
             try
             {
@@ -197,9 +237,16 @@ namespace TopiaForge.ModManager.Sessions
 
             status.Tick(environment.Control, snapshot, deltaTime);
 
-            // Reading readiness starts identifying the mods, so it waits for a player who opened multiplayer.
-            if (shown || connecting.IsBusy) content.Tick();
+            // What the launcher asks for: the session this game was launched to host or join, once planned, and live joins.
+            var launched = environment.TakeLaunchedSession();
+            if (launched != null) launches.Begin(launched);
+            var join = intake?.TakeArrived();
+            if (join != null) launches.Offer(join);
+
+            // Reading readiness starts identifying the mods, so it waits for a player who opened multiplayer, or a launch.
+            if (shown || connecting.IsBusy || launches.IsActive) content.Tick();
             connecting.Tick(deltaTime);
+            launches.Tick(deltaTime);
             host.Tick();
             connect.Tick();
             session.Tick();
@@ -210,10 +257,15 @@ namespace TopiaForge.ModManager.Sessions
 
         private void Loaded(MultiplayerSettings loaded)
         {
+            if (preferences.IsLoaded) host.ApplyDefaults(preferences.Current);
+        }
+
+        private void PreferencesLoaded(MultiplayerPreferenceValues loaded)
+        {
             displayName = loaded.DisplayName;
             displayNameError = string.Empty;
             ApplyDisplayName(loaded.DisplayName);
-            host.ApplyDefaults(loaded);
+            if (settings.IsLoaded) host.ApplyDefaults(loaded);
         }
 
         private void ApplyDisplayName(string name)

@@ -658,11 +658,12 @@ and it is off by default:
 Progress is logged by phase and reason, never by address. The switch never allows direct play, so a joining player
 reaches LAN addresses only.
 
-The launcher's session launches (request V5, `MultiplayerLaunchContract.md`) reach the provider as a ticket the runtime
-offers before mods load. `MultiplayerProvider.TakeLaunchSession` takes it once, while mods load, and plans it: host
-settings, or a join target pinned by the server the launcher verified, so the join never repeats trust on first use.
-The runtime withdraws a ticket no one took once mods have loaded. Planning starts nothing: the in-game flows of WS5,
-which replace the developer switch, start the planned session.
+The launcher's session launches (request V5, `MultiplayerLaunchContract.md`) reach the provider as a call on its
+internal control, `PlanLaunchSession`, once mods have loaded. It plans host settings on the launch's own port, or a join
+target pinned by the server and the descriptor the launcher verified, so the join never repeats trust on first use and
+refuses a server that changed since (`AdmissionChanged`). The runtime withdraws a session no provider took. Planning
+starts nothing: the in-game screens of WS5 start the planned session through the realm
+([MultiplayerInGameSessions.md](MultiplayerInGameSessions.md), section 9).
 
 These choices differ from the plan:
 
