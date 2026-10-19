@@ -198,6 +198,51 @@ void main() {
       );
       expect(result.exitCode, 0);
     });
+    test('a progress record from loading the CIM module still establishes '
+        'absence', () async {
+      // Windows PowerShell reports the module that Get-CimInstance loads as
+      // a progress record, and under -EncodedCommand it writes that to a
+      // redirected stderr. Any stderr makes the answer unknown, and an
+      // unknown answer refuses every launch as Busy. This runs the product's
+      // own flags and script, with a Get-CimInstance that reports progress
+      // as loading its module does.
+      var stderr = '';
+      final answer = await probeWindowsLaunchProcessRunning(
+        r'C:\Test Game\Robotopia.exe',
+        runProbe: (arguments, environment) async {
+          final encoded = base64Decode(arguments.last);
+          final script = String.fromCharCodes([
+            for (var index = 0; index + 1 < encoded.length; index += 2)
+              encoded[index] | encoded[index + 1] << 8,
+          ]);
+          final mocked =
+              'function Get-CimInstance { [CmdletBinding()] '
+              'param(\$ClassName, \$Filter) Write-Progress -Activity '
+              "'Preparing modules for first use.' -Completed; return @() }\n"
+              '& {\n$script\n}\n';
+          final result = await runBoundedProcess(
+            '${Platform.environment['SystemRoot']}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+            [
+              ...arguments.take(arguments.length - 1),
+              base64Encode(
+                mocked.codeUnits
+                    .expand((unit) => [unit & 255, unit >> 8])
+                    .toList(),
+              ),
+            ],
+            environment: environment,
+            timeout: const Duration(seconds: 10),
+            maxStdoutBytes: 4096,
+            maxStderrBytes: 4096,
+          );
+          stderr = result.stderr;
+          return result;
+        },
+        resolveImage: (value) => value,
+      );
+      expect(stderr, isEmpty);
+      expect(answer, isFalse);
+    });
   }, skip: !Platform.isWindows);
 }
 

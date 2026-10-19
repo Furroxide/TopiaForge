@@ -161,17 +161,25 @@ namespace TopiaForge.ModManager
         private readonly IModLifetime lifetime;
         private readonly IModLogger logger;
         private readonly ModServiceRegistry registry;
+        private readonly MultiplayerIntents? intents;
 
+        /// <param name="intents">
+        /// The runtime's intent tracking (WS3.4): a command this mod runs while its code acts on the player's intent runs its
+        /// handler with that player's intent, as the command's own mod. Without it, as for a context made outside the runtime,
+        /// commands carry none.
+        /// </param>
         public OwnerCommandService(
             string ownerModId,
             IModLifetime lifetime,
             IModLogger logger,
-            ModServiceRegistry registry)
+            ModServiceRegistry registry,
+            MultiplayerIntents? intents = null)
         {
             this.ownerModId = ownerModId;
             this.lifetime = lifetime;
             this.logger = logger;
             this.registry = registry;
+            this.intents = intents;
         }
 
         public OperationResult<ICommandRegistration> Register(
@@ -238,7 +246,7 @@ namespace TopiaForge.ModManager
                 result = OperationResult<string>.Failure(ModErrorCode.Cancelled, "The context is stopping.");
                 return false;
             }
-            return registry.TryExecuteCommand(ownerModId, name, arguments, out result);
+            return registry.TryExecuteCommand(ownerModId, name, arguments, out result, intents);
         }
     }
 

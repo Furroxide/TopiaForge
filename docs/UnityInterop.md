@@ -21,9 +21,9 @@ callbacks on that thread. Blocking it with `.Result`, `.Wait()`, or `.GetAwaiter
 therefore stops the very loop that would complete the work: the task never finishes and the game
 hangs until the process is killed.
 
-Drive the work with `PendingOperation<T>` and poll it from your per-frame update. This holds for
-interop mods exactly as it does for safe mods — opting out of the safe profile does not move your
-code off the game loop, so [TF1008](Diagnostics.md#tf1008) applies to both.
+Await the task, or drive the work with `PendingOperation<T>` and poll it from your per-frame update.
+This holds for interop mods exactly as it does for safe mods — opting out of the safe profile does
+not move your code off the game loop, so [TF1008](Diagnostics.md#tf1008) applies to both.
 
 ## Before opting in
 

@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.3 and WS3.6 of the live-multiplayer plan) · Date: 2026-10-17 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4 and WS3.6 of the live-multiplayer plan) · Date: 2026-10-18 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -15,8 +15,9 @@ The work lands in three steps:
 3. **The network world** (WS3.6, section 13): scene objects, spawns and world content that exist, move and baseline on
    every player.
 
-All three have landed. Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where
-authority routing (WS3.7) and session follow (WS3.8) attach to the network world.
+All three have landed, and so have the voice service behind the SPI (section 2, "Voice") and intent tracking (WS3.4,
+section 14). Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where authority
+routing (WS3.7) and session follow (WS3.8) attach to the network world.
 
 ## 1. Shape
 
@@ -59,7 +60,7 @@ authority routing (WS3.7) and session follow (WS3.8) attach to the network world
 | Moderation | `Kick`, `Ban`, `Unban`, `GetBans`, `SetServerMute`, `IsServerMuted` | Host only. |
 | Session | `ReplaceSession`, `OpenSystemChannel`, `HoldReadiness`, `IsReadinessHeld`, `IsParticipantReady` | Sections 5 and 6. |
 | Sources | `SetEntityIdentitySource`, `SetAvatarSource` | Shape only for now; section 8. |
-| Voice and counters | `Voice`, `GetStatistics`, `GetStatus` | `Voice` is null until the voice service implements the SPI. |
+| Voice and counters | `Voice`, `GetStatistics`, `GetStatus` | `Voice` is the provider's voice service, or null without one; see "Voice" below. |
 | Internet | `CreateInvite`, `RevokeInvite` | Host only, once the session is registered with the TopiaForge service: `MultiplayerInternetSessions.md`. |
 
 - **Results.** Commands answer with `OperationResult<bool>`: `NotAuthoritative` for a host-only action on a joined
@@ -73,8 +74,13 @@ authority routing (WS3.7) and session follow (WS3.8) attach to the network world
   `JoinDetail` is always this game's own words; what the host wrote is kept apart, as the next section sets out.
 - **Bans.** A ban is listed by an opaque 32-character id, the first 128 bits of a labelled SHA-256 of the banned key,
   so the interface can lift a ban without ever holding the key.
-- **Server mute.** A mute follows the player's identity until hosting stops. The host drops a muted player's chat at
-  ingress (section 5), so nothing the host relays can carry it. Voice joins it when the voice engine lands.
+- **Server mute.** A mute is the engine's voice moderation, the one set the voice relay and the chat ingress both read.
+  It follows the player's identity, through rejoins, until hosting stops: closing every connection forgets it. The
+  host drops a muted player's voice at the relay and their chat at ingress (section 5), so nothing the host relays can
+  carry either. `IsServerMuted` counts the automatic mutes the relay makes for abusing voice chat
+  ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.4), and answers on a joined player too, from the host's voice
+  roster. Live sessions always run with voice; a provider without it, as some tests compose, answers `SetServerMute`
+  with `Unavailable`.
 - **Names.** The provider names this player after the runtime's display name whenever it hosts, in solo play too, and
   again whenever the name changes. A joining player sends the name in its join request.
 - **Developer switch.** The `TOPIAFORGE_LIVE_MULTIPLAYER` switch still drives live sessions directly through the
@@ -112,6 +118,74 @@ launcher and anything else that shows a status:
 The provider and the runtime keep to the same rules for their own logs: the developer switch and the runtime log a join's
 failure by name only, and an engine diagnostic about a replicated object names the type this game registered, never the
 id the host chose for it.
+
+### Voice
+
+`Voice` is the provider's voice service ([MultiplayerVoice.md](MultiplayerVoice.md), part 3) behind
+`ProviderVoiceService`, or null when the provider has none: it runs voice only with live multiplayer switched on, and
+hands out none once it has stopped.
+
+| Members | What they do |
+| --- | --- |
+| `Enabled` | Off until the player turns it on, which the interface does only after consent. Until then nothing is captured, coded or sent |
+| `SubmitCapture`, `SetTransmitting` | Capture at the device's rate. `SetTransmitting(true)` while push-to-talk is held or voice activation listens, and `false` at the release, which ends the talk spurt |
+| `Mode`, `ActivationThresholdDb` | Push-to-talk or voice activation, and its threshold. An undefined mode, or a threshold outside -96 to 0 dBFS, is refused |
+| `InputLevelDb`, `TransmitState`, `IsSpeaking` | The meter, the transmit indicator and the talk glyph |
+| `GetPlaybackStream`, `TryGetPlaybackStream` | Each speaker's stream, read on the audio thread |
+| `SetListenerMutes`, `GetListenerMutes` | Whom the player does not want to hear, and the set as the engine kept it |
+| `GetStatistics` | The counters, mapped below; the control's `GetStatistics` carries them as well |
+
+- **Threads.** The voice service belongs to the main thread, the engine's owner, so every member runs there and refuses
+  any other with `InvalidOperationException`. The one exception is a stream's `Read`, which is wait-free on the audio
+  thread: it takes no lock, never blocks and allocates nothing, so it runs even while the main thread holds the
+  service's gate. Capture taken on an audio callback is handed to the main thread first. Coding runs on the provider's
+  voice worker.
+- **Mutes.** Names belong to the host that listed them, and a wish to hear nobody holds across joins. A participant id
+  names a player only on the host that gave it, so names stay with that host, through an in-place replacement and a
+  reconnect that finds this player's record kept. Leaving for solo play forgets them, whether a joined player leaves or
+  a host stops hosting, and so does a join that finds another host or one without the record; names given after such a
+  join, before that host lists its players, are dropped. A host's names go when it stops hosting, because they named
+  players whose records closing every connection forgot, and a host never gives one id to two players. The wish to hear
+  nobody names nobody, so it follows the player to every host, and through hosting again, until they change it. The
+  interface shows whom the player muted from `GetListenerMutes`, never from a list of its own.
+- **Streams.** The SPI hands out the service's own `VoicePlaybackStream`, never a wrapper, so a stream plays the
+  speaker the session listed under its id, and nobody else. It lasts while the session lists them, through an in-place
+  replacement and a rejoin within the grace, and ends for good, playing silence, when the session stops listing them,
+  when the bound of 16 streams leaves no room, and when a join lets go of the list that named them: the engine's
+  `ParticipantListGeneration` moves at a join that finds another host or one without this player's record, and at a
+  return to solo play, and from then on the same id may name someone else. Follow a player across a join by player key,
+  never by id alone.
+- **Asking again.** `TryGetPlaybackStream` gives the speaker's stream, or makes one for a speaker the session listed at
+  the last pump while there is room, and otherwise returns false, making and allocating nothing, so it may run every
+  frame. `GetPlaybackStream` always gives a stream: for a speaker the session does not list it makes one, a 64 KiB ring
+  and a decoder kept for 2 s, and when the bound leaves no room it makes a new 64 KiB ring at every call. Asking it every
+  frame for an ended stream costs that much each time, so ask once per speaker and ask again with
+  `TryGetPlaybackStream`.
+
+The statistics are mapped by what each counter means:
+
+| `InternalVoiceStatistics` | From `VoiceServiceStatistics` | Meaning |
+| --- | --- | --- |
+| `Mode`, `State` | `Mode`, `State` | The same values, mapped by name |
+| `InputLevelDb`, `ExpectedLossPercent` | The same | The meter, and the loss the encoder plans for |
+| `SubmittedSamples` | `SubmittedSamples` | Capture handed in while voice was on |
+| `FramesEncoded` | `FramesEncoded` | Frames coded for sending |
+| `FramesSent` | `Sent` and `Held` | Frames the session took to send. The engine holds every other frame of a steady talker to share a datagram with the next, so `Sent` alone counts about half of them |
+| `FramesReceived` | `FramesReceived` | Frames the engine delivered for playback |
+| `FramesRefused` | `RateLimited`, `ServerMuted` and `NotConnected` | Frames the session refused to send when it was handed them. `Invalid` frames are a fault, not a refusal, and stay out |
+| Each speaker's `Decoded`, `Recovered`, `Late`, `TargetDelayMicros`, `IsSpeaking` | The same, for that speaker | — |
+| Each speaker's `Concealed` | `Concealed` and `Faded` | Frames concealed because nothing usable arrived in time. After three, the jitter buffer fades two more to silence, and those are concealment too. A frame it adds on purpose to keep its delay is not counted |
+| Each speaker's `Underruns` | The stream's `Underruns` | Reads that found too little audio |
+
+Each coded frame counts once, by the session's first answer, so `FramesSent` is what left only while every held frame
+leaves with its pair. A frame still held when the link goes counts as sent though it never leaves, and a pair the
+talker's own rate limit refused would count its first frame as sent and its second as refused. The service keeps only
+the newest part of a stall's capture, so a talker never reaches that limit: through a 2.5-second stall, every frame
+counted as sent reached the host (`InternalVoiceStreamTests.StatisticsAreMappedByMeaning`). A link that goes can
+therefore leave one frame counted as sent that never left.
+
+The service's other counters, such as stale capture, the worker's steps and the engine's own voice statistics, stay
+in the provider.
 
 ## 3. Join targets
 
@@ -345,7 +419,8 @@ contract. `OpenSystemChannel` opens one of four channels, one owner each: `World
 - **Unknown kinds**, which a newer peer may send, are left unclaimed and credited as taken at once, and so are messages
   for a channel nobody has open. A minor protocol version can therefore add a channel: the joining checks compare major
   versions only, and an older peer's credits keep a newer sender's window open.
-- **Server mute.** The host's chat channel refuses a muted player's messages as they arrive.
+- **Server mute.** The host's chat channel refuses a muted player's messages as they arrive, by the engine's voice
+  moderation: a mute by hand, or one the voice relay made for abuse.
 - **Delivery** is by polling: the owner takes messages with `TryReceive` during its frame stage, which opens its sender's
   window again.
 
@@ -430,7 +505,7 @@ plug in here:
 
 | Slice | Plugs in |
 | --- | --- |
-| WS3.4 intent tracking | `IntentScope`, fed after the input sample, from UI renderer callbacks, from `OwnerCommandService` and from interaction handlers. `IRuntimeReplication.Route` takes the intent from its caller today; the intent scope makes the current one available to the network decorators and the SPI |
+| WS3.4 intent tracking | Landed (section 14): `IntentScope`, fed by input-active frames, the UI kit's controls and the SDK UI service, commands and interaction handlers, and read through `IRuntimeReplication.CurrentIntent` and `RouteCurrentIntent()` and the decorators' `RuntimeReplication.VisibleIntent` |
 | WS3.5 core replication model | Landed in Core (`MultiplayerReplicationModel.md`); the slices below drive it |
 | WS3.6 network world | Landed (section 13): `PromotionCensus`, `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`, an observer of the realm, the spawn ledger's observer, the `WorldReplication` channel, `SetEntityIdentitySource`, `MultiplayerReplication.References` and `LocalContent`, and replicas through `TryGetReplicaFactory` |
 | WS3.7 authority routing | The `Net*Service` decorators and the SPI's spawn and command stubs, each call routed by `ExecutionRouting.Route(realm, profile, intent)`: spawn adoption, and shadows bound by `NetSpawnOrigin`; `NetEntityMotion` behind `AcquireMotion`; `HeldItemOwnershipTracker` behind `NetItemService`; forwarded commands naming their sender in `InternalCommand.Sender`. Its traffic is message types 64 to 127 on the network world's channel, and its hooks into the network world are listed in section 13 |
@@ -443,7 +518,7 @@ plug in here:
 | WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
-| WS5 voice | `IInternalVoiceService` from the provider's voice service, `SubmitCapture` from `PresenceSend`'s capture, and each speaker's `IVoicePlaybackStream` in an audio callback; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted |
+| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is only announced so far, in its descriptor and beacon: a session that says it offers no voice still relays a player who turned voice on, and enforcing it is still to come |
 
 Two rules hold for everything that plugs in:
 
@@ -465,6 +540,20 @@ answers no and is reported.
   replacement, role refusals, queries and their owner thread, readiness holds and their idle, total and
   resynchronization bounds, on the virtual network with real cryptography, transport and engine, each provider composed
   with the real runtime host and composition root.
+- **Voice through the SPI** (`InternalVoiceTests`, `InternalVoiceStreamTests`), over the same peers with the real Opus
+  codec, each voice worker stepped on the network's clock: no voice without voice options; voice off until it is turned
+  on, and off again at once; push-to-talk and voice activation following the SPI's binding, mode and threshold; listener
+  mutes kept through an in-place replacement and a reconnect, left behind at a move to another host whose p1 is someone
+  else, and a wish to hear nobody held across the move back; a host's server mute silencing the relay, read on joined
+  players from the roster, and forgotten when hosting stops; an automatic mute for malformed voice sent past the
+  client's engine, counted by every control and dropping chat at ingress until it ends, and not after; a host that
+  stops and hosts again keeping its bans and the wish to hear nobody, forgetting its mutes for everyone, by hand and
+  automatic, and the names its player muted, and taking a kicked player back at once; the service's own streams, kept
+  across a rejoin within the grace and ended once the record goes; asking again for an unlisted or refused speaker
+  allocating nothing while `GetPlaybackStream` makes a ring each time; every statistic against the service's own, and
+  every frame counted as sent reaching the host through a 2.5-second stall; every member refused off the main thread
+  while a stream reads past the service's gate; and a stream for one host process's p1 ending at the reconnect to its
+  restarted process, never playing the new p1.
 - **Admission through the runtime host** (`RuntimeAdmissionTests`): the descriptor's packages by role, a stale player
   refused by the host's planner with its report reaching the player, the joining player's own check before connecting, a
   required session mod at a compatible version joining, the offer's format and its refusals, the content seam
@@ -502,7 +591,10 @@ answers no and is reported.
 - **Privacy** (`RuntimePrivacyTests`): no SPI member, parameter or type is shaped like an address or names a network
   type; typed hosts stay inside the handle; what the runtime logs and keeps is redacted, every address form above
   included, and the provider's own log gets the same redacted lines with no runtime attached and behind one that throws;
-  and the host's words reach neither a log, through the developer switch or the runtime, nor a mod.
+  and the host's words reach neither a log, through the developer switch or the runtime, nor a mod. For voice
+  (`InternalVoiceStreamTests.TheVoiceSpiCarriesNoAddress`): the voice SPI with every SDK type it names, transitively,
+  and the provider's types behind it, scanned the same way, and every name it answers in a live session a listed
+  participant's id.
 - **The realm at the runtime** (`MultiplayerRealmRuntimeTests`, and `RuntimeRealmTests` over real providers): the realm
   follows the provider's role at each pump; opening to multiplayer while a world runs promotes the solo session in
   place, keeping its session id, and the census baselines the live spawns recorded offline, in order, once per
@@ -534,6 +626,7 @@ answers no and is reported.
   or names a network type, and nothing the realm and the seam log or answer holds one, however many addresses the
   failures they report carry. Other internal contracts in the namespace, such as the launch contract's session ticket,
   are held to their own rules.
+- **Intent tracking** (section 14 lists its suites).
 
 ## 10. The realm
 
@@ -655,7 +748,8 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | Members | Now | From |
   | --- | --- | --- |
   | `Realm`, `NetworkClass`, `ExecutionContext` | The runtime's realm and the context's profile | — |
-  | `Route(intent)` | `ExecutionRouting.Route` for the realm, the profile and the given intent | WS3.4 supplies the current intent |
+  | `Route(intent)` | `ExecutionRouting.Route` for the realm, the profile and the given intent | — |
+  | `CurrentIntent`, `RouteCurrentIntent()` | The intent the calling code acts on, as the context's mod sees it, and the route for it (section 14) | WS3.7 routes spawns, transform changes and destroys by it |
   | `RegisterReplicaFactory` | Kept, one per kind in the process; a joined player builds the host's entities of that kind through it, and releases them through `ReleaseReplica` | — |
   | `RegisterCanonical` | Offline and on a host, records at once, and a host announces it. On a joined player records nothing: world content waits to bind by key to the host's | WS3.7 binds a joined player's other registrations as shadows |
   | `RequestSpawn` | Runs the spawn here in every realm (stub), and records it offline and on a host | WS3.7 forwards from a joined player, predicts, then adopts or rolls back |
@@ -702,7 +796,21 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   nothing and a frame never waits for it. Hand-copied builds are development work, and section 4 measures the cost;
   content reports as pending, with its progress, until the work is done.
 - **Bans are listed by id, not by key**, so the interface never holds a player's key.
-- **Voice is null** until the voice lane adapts the provider's voice service to `IInternalVoiceService`.
+- **The voice service's own streams, not wrappers.** A wrapper that looked a speaker up by id at each read would carry
+  on into whoever has that id after a join; the service's stream ends there, and stays ended.
+- **`TryGetPlaybackStream` beside `GetPlaybackStream`.** The plan's emitter asks for one stream per avatar; once one
+  ends, asking again must cost nothing until there is something to give, and the service's own `GetPlaybackStream`
+  makes a stream for anybody it is asked about. The new member gives only what exists or what the session lists.
+- **`FramesSent` counts held frames, and `Concealed` faded ones.** The SPI's counters say what happened to the frames;
+  the service splits both further, and a field taken by name alone would undercount.
+- **One set of server mutes, the engine's.** The control kept its own set for chat, which the voice relay never saw.
+  Now the engine's moderation drives both, automatic mutes included, and closing every connection forgets it, as the
+  control's set ended with hosting. It forgets the names the host's own player muted too, since they named only the
+  players whose records went; bans are kept by identity, in the host's data.
+- **Chat follows automatic mutes.** A player muted automatically for abusing voice chat cannot chat until the mute
+  ends, 30 seconds later. The roster carries one muted flag, so a joined player learns only that the host muted it, and
+  chat that went through while its indicator said so would make the flag wrong. An honest client is never muted
+  automatically: it checks its own frames and keeps to the host's limits before anything leaves.
 - **The realm follows the provider's role** rather than the requests: a request only asks, and the realm moves when the
   pump shows the provider hosting or joined. A join that fails early therefore never leaves `Offline`, and nothing that
   reads the realm sees a session that did not happen.
@@ -722,6 +830,7 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   replication SPI adds no visibility to it. The Core assembly grants its internals to the ModRuntime and multiplayer
   harnesses, which compile and implement the seam's realm and profile types.
 - **The network world's choices** are recorded with it, at the end of section 13.
+- **Intent tracking's choices** are recorded with it, at the end of section 14.
 
 ## 13. The network world
 
@@ -1085,3 +1194,263 @@ Session follow (WS3.8):
   indexes them and reads poses.
 - **A world instance in every baseline**, rather than a signal from the engine, so a player tells another world of the
   same host by what world replication itself sends.
+
+## 14. Intent tracking
+
+WS3.4 records, for the code that runs now, whether it acts on a player's intent and whose: the local player's, or a
+participant's that a listen host acts for. Code that acts without intent, as scripted code does, has none. Authority
+routing (WS3.7) reads it to decide whether a client's spawn, transform change or destroy is forwarded to the host or is
+a shadow of the host's own (the execution model's context table). Authors never annotate anything: the runtime opens
+the scope around the mod code that runs for a player's own action, and the rules below decide what that code's
+continuations, timers and callbacks see.
+
+| Part | Where | What it does |
+| --- | --- | --- |
+| `IntentRecord`, `IntentScope` | `Core/Multiplayer/IntentScope.cs` | The record, and the scope that carries it with the execution context |
+| `IntentLogicalStore` | `Core/Multiplayer/IntentLogicalStore.cs` | The logical call context, where a scope keeps its record on the game's Mono |
+| `IntentEntryRules`, `IntentFlowRules` | `Core/Multiplayer/IntentTables.cs` | The two rule tables, and the decisions that apply them |
+| `MultiplayerIntents` | `MM/Multiplayer/Intent/` | The runtime's tracking: the realm epoch, the entry points, the motion lease and forwarded-request seams |
+| `NetInputService`, `NetScheduler`, `NetInteractionService` | `MM/Multiplayer/Intent/` | The decorators that feed and carry it, beside section 11's |
+| `ModContext.RaiseUpdate`, `RaiseLateUpdate` | `MM/ModContext.Intent.cs` | Input-active frames |
+| `OwnerCommandService`, `ModServiceRegistry` | `MM/OwnerCoreServices.cs`, `MM/ModServiceRegistry.cs` | Commands, and the player's own command for the chat overlay (`ModRuntime.TryExecutePlayerCommand`) |
+| `TopiaForgeIntent`, `TopiaForgeCallbacks.Player` | `src/TopiaForge.Mods.UnityUi/Runtime/` and the widgets | The kit's half: a player's input on a control |
+| `MultiplayerIntentKitHook` | `MM/Multiplayer/Intent/Kit/` | The runtime's sink for the kit, which ModRuntime installs and removes |
+| `IRuntimeReplication.CurrentIntent`, `RouteCurrentIntent`, `InternalIntentRecord` | `src/TopiaForge.Mods.Abstractions/Internal/` | The SPI first-party providers and WS3.7 ask |
+
+### The record and the scope
+
+- **A record** names what caused the intent (`IntentSource`), the mod whose code acts on it, whose intent it is (null
+  for this process's own player, or the participant id the host gave a player), the realm epoch it was recorded in,
+  and whether an input-active frame made it (`IsInputFrame`, below). It never holds an address. The runtime keeps one
+  record per mod and source for an epoch, so the steady state makes none.
+- **The scope** carries the record with the execution context, as an `AsyncLocal` would. Opening one runs the mod code
+  with the record flowing to it and to every continuation that code starts, then restores what flowed before, on
+  success and on failure alike. It is observed only on the thread that made it, the game's main thread; every other
+  thread reads none.
+- **How it carries the record** (`IntentScopeMode`) is the cheapest way the runtime has that keeps every rule, picked
+  once per process by a probe that checks the runtime's behaviour first:
+  - **.NET** runs a captured execution context more than once, so the scope keeps, on each record, the context that is
+    the caller's plus the record, and runs that again (`ExecutionContext.Run`).
+  - **The game's Mono**, like the .NET Framework, runs a captured context once only. There the scope keeps the record
+    in the logical call context (`IntentLogicalStore`): set in place on the main thread, copied only when something
+    captures the context, as an await, `Task.Run` or a timer does, and removed, never set to null, when the scope ends,
+    so a capture at rest copies nothing of it. It uses the public static members of corlib's
+    `System.Runtime.Remoting.Messaging.CallContext` (`LogicalGetData`, `LogicalSetData`, `FreeNamedDataSlot`), bound
+    by name because the netstandard2.1 surface does not name the type, and only after the probe has seen that a
+    capture keeps the value it held, a later capture does not, and a value set while a captured context runs stays in
+    it. Nothing private in corlib is touched.
+  - **Elsewhere** it sets an `AsyncLocal` and restores it, which copies the runtime's map of async-locals on each
+    change. That is the fallback when neither way above exists, and the probe falls back to it on any failure.
+
+  The manager log names the way once, when the runtime first attaches to the provider, as information, and as a
+  warning when it is the fallback, so a corlib that stops offering the logical call context shows there rather than
+  only as allocations in a profiler.
+- **Online only.** Offline every route is canonical whatever the intent, so no scope opens, and each entry point costs
+  one field read. The realm reports each change to the tracking at the pump that shows it (`FollowRealm`), and each
+  change starts a new epoch.
+- **Who observes a record** (`IntentFlowRules.Observe`): the mod the record names, on the main thread, in the record's
+  epoch. Mod ids compare as the runtime's do, ignoring case.
+
+### Where intent comes from
+
+`IntentEntryRules` classifies every place the runtime runs mod code. Only the player's own actions carry intent:
+
+| Entry point | Source | Opened by | Whose |
+| --- | --- | --- | --- |
+| A mod's Update in a frame where one of its own SDK input actions, in any of its contexts, was pressed or released at that frame's sample, or is held | `InputActiveFrame` | `ModContext.RaiseUpdate`, around that mod's Update only, after `CoreGameplayServices.BeginFrame` sampled input | The local player |
+| The same mod's LateUpdate in that frame | `InputActiveFrame` | `ModContext.RaiseLateUpdate`, by the same test | The local player |
+| The player's own input on a TopiaForgeUi control: a click or confirm, a value chosen, typed, dragged or submitted, a selection, a close by the close button or Escape, a hotkey, a key pressed into a keybind field | `UiCallback` | The kit, where the input arrives (`TopiaForgeCallbacks.Player`, `TopiaForgeIntent.PlayerAction`); the SDK UI service renders through the kit, so its callbacks run inside it | The local player, as the control's owner: `UiHost.OwnerId`, the mod's id for `Context.Ui` and for `TopiaForgeUi.For(context)` |
+| A command the player runs, or that code acting on a player's intent runs | `OwnerCommand` | `ModServiceRegistry`, around the command's handler, as the command's own mod; `ModRuntime.TryExecutePlayerCommand` for the chat overlay (WS5) | The player whose intent ran it |
+| An interaction handler | `InteractionHandler` | `NetInteractionService`, around each call the game makes when the local player interacts | The local player |
+| Code driving a motion lease the player holds | `MotionLease` | `MultiplayerIntents.EnterMotionLease`, the seam WS3.7 calls; nothing calls it yet | The local player |
+| On a listen host, the code that carries out a participant's forwarded request | The request's own | `MultiplayerIntents.EnterForwarded`, the seam WS3.7 calls; a joined player never acts for another, so there it opens nothing | That participant, by id |
+
+**Input-active frames are the coarse source.** A mod's whole Update and LateUpdate carry the player's intent while its
+input is active, scripted work in them included, so a record says whether an input-active frame made it
+(`IsInputFrame`), and what such a frame starts stays coarse: a command it runs, and a control's event its code fires,
+whichever mod owns the control, since the player's own input never reaches a control from inside mod code. A click, a
+command the player runs, an interaction and a motion lease are direct actions.
+
+Everything else is scripted and carries none: a mod's Update and LateUpdate in a frame where none of its own input is
+active, FixedUpdate (it runs before the frame's input sample), a timer that scripted code scheduled, a command that
+scripted code runs, what only happens to a control (hover, focus, row binding, a theme or accessibility change, and
+anything code does to a control itself: a value set without notifying, a programmatic close, show or selection, a
+value set through an input field's `Input.text` while it has no focus), load and unload, scene and session events,
+world events, and every other runtime callback.
+
+### How intent flows
+
+`IntentFlowRules` states what each way out of the intent's code does with it. These are the exact rules:
+
+| Flow | What it does |
+| --- | --- |
+| An await's continuation | Keeps it, whenever and wherever it resumes on the main thread, also frames later: the record flows with the execution context. `DelayAsync` is an await |
+| Code on a worker thread (Task.Run, the thread pool, a timer's thread, a thread of the mod's own) | Observes none. An await that comes back to the main thread observes it again |
+| Work a worker hands back through the SDK scheduler, as the SDK tells background work to | Captures it, when the intent's own code started the worker: the worker never observes the record, but the execution context carries it there |
+| `NextFrame`, `After`, `Every` | Capture what the scheduling code observes, its own mod's intent, and run with it each time, `Every` on every run, while the realm lasts. Scripted code's schedules capture none and are handed to the host's scheduler unchanged. A coroutine stepped through `NextFrame` keeps what its first step captured |
+| A callback the kit defers, such as a window's or modal's close animation finishing | Captures what flowed where it began, and its completion runs with it |
+| A native Unity coroutine's steps after its first | None: Unity runs them from its own loop. Its first step runs inside the code that starts it |
+| An event subscription made inside a scope | Carries nothing: the subscriber is a frame or scene callback, decided by the table above |
+| Later frames | Never: a frame's scope ends with that mod's callback, and the next frame, its timers included, starts with none |
+| Another mod's code run from inside the scope: its callbacks, the services it published, and their continuations | None: only the mod the record names observes it. A first-party provider bound to the calling mod's context acts as that mod, so it does |
+| A change of realm: hosting, joining, leaving, stopping | Ends it: nothing recorded before is observed after, also mid-scope |
+| A command run from inside the scope | Re-attributed: the handler acts for the same player, as an owner command of the command's own mod, and stays coarse when an input-active frame ran it. A command scripted code runs clears what else flows, so it never borrows another mod's intent through the mod that ran it |
+| A control's event that code fires while an input-active frame's intent flows | Coarse: the control's owner acts on the player's UI intent as that frame's (`IsInputFrame`), never as a click |
+| A scope opened inside another | The inner one flows for its duration, and the outer one again after it. The same record nested changes nothing |
+
+### What it costs
+
+- **Offline and online at rest** a frame allocates nothing: measured over 10,000 frames through the real `ModRuntime`
+  and through real contexts, the B3 tests included. Online at rest each mod's frame reads its tracked actions.
+- **An input-active frame** allocates nothing in the steady state on .NET, measured the same way, by reusing its
+  context. The async-local fallback costs 160 bytes a scope there.
+- **On the game's Mono** an input-active frame's scope allocates nothing in the steady state either. Measured with the
+  built Core assembly on the game's own 64-bit runtime (`mono-2.0-bdwgc.dll`, the Boehm collector) and its own corlib,
+  embedded the way the Unity player embeds Mono, with an allocation profiler counting what the main thread allocates:
+  0 bytes a scope over 1,000,000 scopes, with no collection, at about 0.10 microseconds a scope. The
+  async-local way, which this slice first shipped there, measured 456 bytes and 0.5 microseconds a scope on the same
+  runtime. The same runs checked every rule there, under the logical call context and the fallback alike: awaits keep
+  the record, also when the awaited work completes on a worker or while another scope is open; a capture is a snapshot;
+  `Task.Run`'s thread observes none while its context carries the record for what it hands back; nested scopes and
+  failures restore; a scope opened inside an async method or a continuation ends there; other threads open nothing.
+  A second run on the same runtime added that reads inside a scope allocate nothing, a thread left after running a
+  captured context carries none, an await resumed at once inside another scope keeps its own record and the other
+  returns after it, and 2,000 frames of awaits leave nothing flowing between frames while every continuation keeps its
+  own record. It also showed that the startup probe, run while execution-context flow is suppressed, refuses the
+  logical call context, which is why the way records run is logged.
+- **An await inside a scope** copies the record's slot along with the context: on the game's Mono a capture there costs
+  384 bytes rather than 72. Every await already allocates its state machine and continuation, and at rest a capture
+  copies nothing of the scope.
+- **UI activations, commands and interactions** allocate a little each time a player's action opens one: a command a
+  record, an interaction the delivery of its arguments. A control's activation reuses one record per owner, whether
+  the player's click opened it or an input frame's code fired it.
+- **Time.** The ModRuntime harness reports a whole frame's time in each case and never asserts it, since it depends on
+  the machine. On a Windows 11 x64 machine on 2026-10-18, the fewest of five 10,000-frame runs took 0.15 microseconds a
+  frame offline, 0.23 online at rest and 0.35 online with input held, for a mod with one input action.
+
+### The SPI, and what WS3.7 can ask
+
+- **"Does this call carry intent, and whose?"** `IRuntimeReplication.CurrentIntent` answers for the context's own mod:
+  its source, `IsPlayerIntent`, `IsLocalPlayer`, the participant id when a host acts for a participant, and whether it
+  is one of the player's direct actions (`IsDirectAction`) or an input-active frame's coarse intent (`IsInputFrame`). It
+  allocates nothing. `RouteCurrentIntent()` is `Route` for that source, so on a joined player a call on intent is
+  `Forwarded` and a scripted one a `Shadow`; a gamemode server there is `NotRun`, and a client-local mod's `LocalOnly`.
+  Inside the runtime the network decorators read the same through `RuntimeReplication.VisibleIntent`.
+- **Forwarded requests.** On the host, WS3.7 runs the code that carries out a participant's request inside
+  `EnterForwarded(mod, source, participantId, fromInputFrame)`, so a spawn made there knows whose it is, for its
+  `ProxyParticipant` scope, and a command it runs keeps that participant. The request carries whether the participant's
+  process made it from an input-active frame, so the host weighs it as that process did. An interaction forwarded that
+  way runs the mod's own handler, `InteractionIntent.Handler`, rather than the local player's relay.
+- **Motion leases.** WS3.7 opens `EnterMotionLease(mod)` around the code that drives a lease the local player holds,
+  such as GravityGun's FixedUpdate, which moves the body the player holds.
+- **Providers that act for another mod.** A provider's own seam answers for the provider's mod, so it sees none of a
+  consumer's intent. CreatorContent's and RobotKit's facades are bound by owner id alone (`IOwnerBoundExtensionFactory`),
+  and their spawns run in another mod's code: RobotKit's own for a robot, and the content source's factory for creator
+  content. Binding those facades to the consumer's context (`IOwnerContextBoundExtensionFactory`, as Worlds already
+  is) lets them ask the consumer's seam (`IInternalReplicationContext.Replication.CurrentIntent`), but that answer still
+  has to reach the seam that routes the spawn. WS3.7 decides how: re-attributing the consumer's current intent to the
+  mod whose code spawns, for the call's duration, as a command does, or handing the route down with the request.
+- **Input-active frames are coarse.** A mod's whole Update and LateUpdate carry `InputActiveFrame` while its own input
+  is active, scripted work included. On a joined player, a scripted spawn made there reads as the player's, although the
+  host's own run of the same script makes it too. `CurrentIntent.IsDirectAction` is false for it and for what it starts,
+  so WS3.7 can weigh it apart from a click, a command or an interaction when it decides between forwarding a spawn and
+  shadowing it.
+
+### Privacy
+
+Records name players by participant id alone; nothing in the tracking is shaped like an address or names a network
+type, and an architecture test scans every type it adds. A record's text names its source and whether the local player
+or a participant acts, never the participant's id. The tracking logs one line, the way it runs records, and names no
+player in it.
+
+### What an author needs to know
+
+The four sources cover the common cases by themselves: input read in Update or LateUpdate, UI callbacks, commands,
+interactions, and whatever their code awaits or schedules. Code that does any of the following is treated as scripted
+on purpose, and the fix keeps it the player's:
+
+| Code | Why it is scripted | Fix |
+| --- | --- | --- |
+| Input read in FixedUpdate, or in a timer that load scheduled | Only a mod's Update and LateUpdate in an input-active frame carry the frame's input | Read input in Update or LateUpdate; the analyzer warns about an edge read in FixedUpdate (TF1009). A body the player drives with physics gets a motion lease (WS3.7) |
+| A completion polled in a later Update, as `PendingOperation<T>` polls | The later frame is quiet | Await the call's task in the code that started it, rather than polling; its continuation keeps the intent |
+| Work another mod's published service does when this mod's code calls it | Intent stays with the mod whose code acted on it | Run that work as the other mod's command (`Context.Commands.TryExecute`), which acts for the same player |
+| An Update subscription made from a click, meant to act for the player each frame | Subscribers are frame callbacks | Schedule the work instead (`Every`, `NextFrame`), which keeps the click's intent |
+| Native Unity input or coroutines (`unsafe-native`) | The runtime sees neither | Use `Context.Input`, `Context.Scheduler` and `await` |
+| A kit control's event fired from code, such as `Button.onClick.Invoke()` | It looks like the player's input | Call the handler directly |
+
+An input-active frame is coarse: the mod's whole Update and LateUpdate carry the player's intent while its input is
+active, scripted work in them included, so scripted spawning belongs in a timer rather than in input handling code.
+
+### Tests
+
+- **Core** (`MultiplayerIntentRulesTests`, `MultiplayerIntentScopeTests`): both tables, every entry point and flow;
+  observation by mod, thread and epoch; captures and their resumption; commands, which stay coarse when an input frame
+  ran them; a control's event fired inside any mod's input frame; records' bounds and text; and the scope with each of
+  its ways to run a record, the logical call context emulated since .NET has none: a scope ends with its callback,
+  awaits keep the intent after the scope ended and after an await completed from scripted code, Task.Run's thread and
+  the work an await hands it observe none while the context carries the record for what it hands back, nested scopes
+  replace and restore, failures restore, other threads open nothing, the logical call context is left empty at rest,
+  the probe trusts only a logical call context whose captures keep their values, and refuses one whose captures share
+  its slots, one that empties a slot in place under the captures taken before, one that empties it only at the next
+  change of context, one whose thread reads an emptied slot until it next changes context, one that hands an emptied
+  slot's value back after a change of context, one where a value set in a captured run escapes, and one that refuses
+  access, the store binds
+  `CallContext`'s three public members by name, checked against a stand-in with the same names and shapes, and never
+  members that are not public, the mode follows the runtime, and the reusing and logical ways allocate nothing. The
+  game's Mono is outside the harnesses; the costs above record the same rules checked on it.
+- **The runtime** (`MultiplayerIntentRuntimeTests`, `MultiplayerIntentServicesTests`): the epoch follows the realm and
+  ends an intent mid-scope; attaching names the way records run once, the fallback as a warning; the kit's hook opens,
+  nests and carries deferred completions, and survives a sink that throws; commands act for the player who ran them, as
+  their own mod, a participant's included, and scripted runs clear what else flows; the seam answers and routes by the
+  current intent in every realm; the motion lease and forwarded seams; what an input frame starts stays coarse while a
+  click, the player's command, an interaction, a lease and a forwarded click are direct
+  (`MultiplayerIntentCoarsenessTests`); the privacy scan. Over real contexts: input edges
+  and held input make a mod's Update and LateUpdate input-active while FixedUpdate, quiet frames and another mod's
+  Update never are; a session scope's action counts for its mod; the input decorator passes everything through, ends
+  actions with their lifetime, and changes nothing when the game's action refuses a dispose off the main thread, so the
+  retry its error asks for works, the mod's unload still ends an action whose dispose was refused, and a second
+  dispose changes nothing; scheduled callbacks, `Every`, a coroutine and a worker's hand-back capture where
+  they were scheduled, another mod's and scripted ones none, and a realm change ends them; interactions; and frames
+  that allocate nothing offline, at rest and with input held.
+- **The analyzer** (the analyzer harness): TF1009 reports an edge read in a FixedUpdate lambda, method in another file,
+  local function, handler kept in a local, lambda the handler runs at once, or local function or delegate in a local
+  the handler calls, even when it also hands it on, naming a conditional read with its receiver; and not one in Update
+  or LateUpdate, in what a FixedUpdate handler subscribes, the SDK's scene subscriptions and their extensions included,
+  or schedules for later, written in place, kept in a local or as a local function, held or analog input in
+  FixedUpdate, a mod's own member named like an edge, or a mod's own edge being set. TF1008 offers awaiting before
+  polling, and every rule's help link redirects to its entry.
+- **The kit** (`UiKitIntentConventionTests`): every callback the kit raises is listed, every callback a player's input
+  raises opens the owner's action, every one raised inside an action or by what only happens to a control opens nothing
+  of its own, tweens carry what they captured, every listener is accounted for, and the runtime connects and
+  disconnects the kit.
+- **The real runtime** (the ModRuntime harness): a mod's input handler, a callback its input scheduled, its UI
+  callback and that callback's continuation, its command and its interaction each act on the player's intent; its
+  scripted timer, its FixedUpdate, and another mod's Update and published callback in the same frames see none;
+  another mod's command it runs acts for the same player; offline nothing records; the UI kit is connected while the
+  runtime runs; and frames allocate nothing offline, at rest or with input held.
+
+### Choices
+
+- **Online only.** Offline every route is canonical whatever the intent, so recording there would cost without
+  changing anything, and an intent recorded before a realm change is never observed after it anyway.
+- **Ownership by mod.** A record belongs to the mod whose code received it, so another mod's callbacks never see it
+  however they are reached; commands are the one explicit way to act for the same player as another mod.
+- **Epochs.** Every realm change starts a new epoch, so a continuation of a click made while hosting never acts for the
+  player after joining another host.
+- **Capture by the scheduler, not by subscription.** A timer a click schedules is the click's continuation; a frame or
+  scene subscriber is not, and stays scripted.
+- **Worker hand-back.** The SDK tells background work to continue through `Context.Scheduler`, so what a worker the
+  intent's code started hands back keeps the intent, while the worker itself never observes it.
+- **Decorators, not host changes.** Input activity, scheduler capture and interactions live in Unity-free decorators
+  every gameplay host passes through, as section 11's do, so the harnesses run the same code the game does; the kit's
+  half is the one Unity-side part, checked in its sources.
+- **Three ways to run a record**, picked by a probe: the cheapest the runtime has that keeps every rule, with the same
+  rules each way and the async-local as the fallback.
+- **The logical call context on Mono, not corlib's internals.** The plan asks that an input-active frame's scope
+  allocate nothing in the steady state. On the game's Mono an async-local cannot: each change copies its map. Re-arming
+  a cached execution context through corlib's internal `isNewCapture` reached zero too, but needs private corlib
+  access twice over. The logical call context reaches zero through public members of a public corlib type, which Mono
+  and the .NET Framework both document, and the startup probe falls back rather than trust one that behaves otherwise.
+  It is bound by name, so a corlib without it, as .NET is, simply never uses it.
+- **Coarse stays coarse.** An input-active frame cannot tell the player's input handling from scripted work in the same
+  Update, so what it starts never passes for a direct action: WS3.7 sees which is which instead of a guess.

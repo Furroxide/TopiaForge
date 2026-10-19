@@ -185,11 +185,16 @@ namespace TopiaForge.ModManager
             }
         }
 
+        /// <param name="intents">
+        /// The runtime's intent tracking (WS3.4). The handler acts on the player's intent the requesting mod's code acts on,
+        /// as an owner command of the command's own mod, and on none when that code is scripted.
+        /// </param>
         internal bool TryExecuteCommand(
             string requestingOwnerModId,
             string name,
             IReadOnlyList<string> arguments,
-            out OperationResult<string>? result)
+            out OperationResult<string>? result,
+            MultiplayerIntents? intents = null)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -198,23 +203,57 @@ namespace TopiaForge.ModManager
             }
 
             var qualifiedName = name.IndexOf(':') >= 0 ? name : requestingOwnerModId + ":" + name;
-            Func<CommandInvocation, OperationResult<string>>? handler;
-            lock (sync)
-            {
-                handler = commands.FirstOrDefault(item => string.Equals(
-                    item.QualifiedName,
-                    qualifiedName,
-                    StringComparison.OrdinalIgnoreCase))?.Handler;
-            }
-
-            if (handler == null)
+            var entry = FindCommand(qualifiedName);
+            if (entry == null)
             {
                 result = null;
                 return false;
             }
 
-            result = handler(new CommandInvocation(qualifiedName, arguments));
+            using (intents == null ? default : intents.EnterCommand(entry.OwnerModId, intents.VisibleTo(requestingOwnerModId)))
+            {
+                result = entry.Handler(new CommandInvocation(qualifiedName, arguments));
+            }
+
             return true;
+        }
+
+        /// <summary>
+        /// Runs a command the local player runs, as the chat overlay will (WS5): its handler acts on the player's intent, as
+        /// an owner command of the command's own mod. The name must be qualified, <c>mod:command</c>.
+        /// </summary>
+        internal bool TryExecutePlayerCommand(
+            string qualifiedName,
+            IReadOnlyList<string> arguments,
+            MultiplayerIntents intents,
+            out OperationResult<string>? result)
+        {
+            if (arguments == null) throw new ArgumentNullException(nameof(arguments));
+            if (intents == null) throw new ArgumentNullException(nameof(intents));
+            var entry = string.IsNullOrWhiteSpace(qualifiedName) || qualifiedName.IndexOf(':') < 0 ? null : FindCommand(qualifiedName);
+            if (entry == null)
+            {
+                result = null;
+                return false;
+            }
+
+            using (intents.EnterPlayerCommand(entry.OwnerModId))
+            {
+                result = entry.Handler(new CommandInvocation(qualifiedName, arguments));
+            }
+
+            return true;
+        }
+
+        private CommandEntry? FindCommand(string qualifiedName)
+        {
+            lock (sync)
+            {
+                return commands.FirstOrDefault(item => string.Equals(
+                    item.QualifiedName,
+                    qualifiedName,
+                    StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         private void RemoveExtension(ExtensionEntry entry, ExtensionRegistration registration)

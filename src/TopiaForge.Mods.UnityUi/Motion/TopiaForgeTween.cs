@@ -31,6 +31,9 @@ namespace TopiaForge.Mods.UnityUi
             public float Elapsed;
             public TopiaForgeEase Ease;
             public Action? OnDone;
+
+            // The intent the code that began the tween acted on: its completion runs with it (TopiaForgeIntent).
+            public object? Intent;
         }
 
         private const int Capacity = 96;
@@ -76,6 +79,7 @@ namespace TopiaForge.Mods.UnityUi
                 {
                     Pool[index].Active = false;
                     Pool[index].OnDone = null;
+                    Pool[index].Intent = null;
                     ActiveCount--;
                 }
             }
@@ -99,6 +103,7 @@ namespace TopiaForge.Mods.UnityUi
                 {
                     Pool[index].Active = false;
                     Pool[index].OnDone = null;
+                    Pool[index].Intent = null;
                     ActiveCount--;
                     continue;
                 }
@@ -109,11 +114,13 @@ namespace TopiaForge.Mods.UnityUi
                     var kind = Pool[index].Kind;
                     var endValue = Pool[index].To;
                     var onDone = Pool[index].OnDone;
+                    var intent = Pool[index].Intent;
                     Pool[index].Active = false;
                     Pool[index].OnDone = null;
+                    Pool[index].Intent = null;
                     ActiveCount--;
                     Apply(target, kind, endValue);
-                    TopiaForgeCallbacks.Invoke(onDone, "Tween completion");
+                    TopiaForgeCallbacks.Resume(intent, onDone, "Tween completion");
                     continue;
                 }
 
@@ -126,10 +133,12 @@ namespace TopiaForge.Mods.UnityUi
                 if (t >= 1f)
                 {
                     var onDone = Pool[index].OnDone;
+                    var intent = Pool[index].Intent;
                     Pool[index].Active = false;
                     Pool[index].OnDone = null;
+                    Pool[index].Intent = null;
                     ActiveCount--;
-                    TopiaForgeCallbacks.Invoke(onDone, "Tween completion");
+                    TopiaForgeCallbacks.Resume(intent, onDone, "Tween completion");
                 }
             }
         }
@@ -164,6 +173,7 @@ namespace TopiaForge.Mods.UnityUi
                     Pool[index].Elapsed = 0f;
                     Pool[index].Ease = ease;
                     Pool[index].OnDone = onDone;
+                    Pool[index].Intent = onDone == null ? null : TopiaForgeIntent.Capture();
                     return;
                 }
             }
@@ -183,6 +193,7 @@ namespace TopiaForge.Mods.UnityUi
                         Elapsed = 0f,
                         Ease = ease,
                         OnDone = onDone,
+                        Intent = onDone == null ? null : TopiaForgeIntent.Capture(),
                     };
                     highWater = Math.Max(highWater, index + 1);
                     ActiveCount++;

@@ -212,12 +212,15 @@ frames only from speakers in its roster, and never frames carrying its own index
 A rejoin within the participant record's 30-second grace keeps the speaker; it resets only the stream position, so
 the new connection's sequences are accepted, and gives the stream a new generation. Moderation outlives the record: the
 server mute, an automatic mute, and the strike and mute history live in a table keyed by the player's authenticated
-identity for the whole session, and a player admitted again later gets them back with a new speaker index. The table
+identity for as long as the host hosts the session, and a player admitted again later gets them back with a new
+speaker index. The table
 holds 1,024 players by default (`VoiceOptions.ModerationCapacity`); when it is full, the absent player seen longest ago
 is forgotten first, preferring one with nothing on record, and players still present are never forgotten. A player is
 seen when admitted, when they leave, and when their record expires, so one who stayed long and left last is not
 mistaken for the oldest; an earlier version noted only admissions, and a player muted by hand who joined first was
-forgotten before one who had left 91 seconds earlier. Leaving the session for another role clears the table.
+forgotten before one who had left 91 seconds earlier. Leaving the session for another role clears the table, and so
+does closing every connection when the host stops hosting, so a host that opens its session again starts with nobody
+muted.
 
 ### 2.4 The relay policy
 
@@ -336,6 +339,8 @@ record, so the set lasts as long as the client knows the host kept the record of
   everyone, applies to the session the join finds, whichever that is, whether it was made with no link or during the
   join.
 - **Role changes** forget the set.
+- **Stopping hosting** forgets the names the host's own player muted, because closing every connection forgets the
+  records they named, and a host never gives one id to two players. Mute-all names nobody, so it stays.
 
 So muting `p2` on one host never silences a different `p2` on the next, and never tells the next host whom the player
 had muted. Two earlier versions went by the session. The first cleared the set only on a role change, so a reconnect to
@@ -365,6 +370,7 @@ its own thread and trades frames with the main thread through queues.
 | `SetListenerMutes(participants, muteAll)` | Section 2.5. |
 | `GetListenerMutes(into)` | Copies the listener mute set, as section 2.5 kept or forgot it, and returns mute-all. A voice service reads it rather than keeping a copy that could disagree. |
 | `IsServerMuted(participant)` | Answers from the host's records, or from a client's roster. |
+| `ServerMuteCount` | How many players the host has muted, by hand or automatically, present or remembered. |
 | `GetVoiceStatistics()` | Counts frames submitted, datagrams sent and relayed, frames delivered, drops by reason, strikes, automatic mutes and removals. |
 
 Received frames wait in a bounded queue, 256 by default. When it is full the oldest frame goes (`InboxOverflow`),
@@ -529,11 +535,11 @@ and selecting the loudest of them is later work too.
 
 The provider's side of voice lives in `mods/TopiaForge.Multiplayer/Voice/`, and every type is internal. It covers
 everything between the microphone's samples and each speaker's playback samples. The Unity pieces come later: capture
-from the microphone, emitters, the push-to-talk binding, consent and the settings page (WS5), and the internal SPI that
-ModManager calls (WS3). The public members of `VoicePlaybackStream` are those of that SPI's playback stream, so WS3
-hands out the streams as they are. `VoiceService`'s members are close to its voice service, but the SPI as drafted has
-no way to turn voice on or to say when the player transmits, so WS3 adds `Enabled` and `SetTransmitting` to it or
-drives them itself. `OpusVoiceCodec`, `OpusVoiceEncoder` and `OpusVoiceDecoder` now implement the engine's seam from
+from the microphone, emitters, the push-to-talk binding, consent and the settings page (WS5). The internal SPI that
+ModManager calls carries the service: `IInternalMultiplayerControl.Voice` is `ProviderVoiceService` over it, the SPI
+gained `Enabled`, `SetTransmitting`, `GetListenerMutes` and `TryGetPlaybackStream`, and `VoicePlaybackStream` is the
+SPI's `IVoicePlaybackStream` as it is, handed out without a wrapper ([MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md),
+section 2, "Voice"). `OpusVoiceCodec`, `OpusVoiceEncoder` and `OpusVoiceDecoder` now implement the engine's seam from
 part 2.
 
 ### 3.1 Threads
@@ -607,7 +613,11 @@ it; otherwise every mute, stream and capture the session went on producing would
   - One they do not list yet, as when voice comes just before the participant update that names its speaker, gets one
     only while there is room. It keeps it for 2 s unless the participants list them by then; after that the stream
     ends, and a later frame takes a new one only while there is room.
-  - Past the bound, frames are dropped and counted, and `GetPlaybackStream` returns an ended stream that plays silence.
+  - Past the bound, frames are dropped and counted, and `GetPlaybackStream` returns an ended stream that plays silence,
+    a new one, with its own ring, at every call.
+  - `TryGetPlaybackStream` gives the stream a speaker has, or a new one only for a speaker the participants list while
+    there is room, and otherwise nothing: it makes and allocates nothing for a speaker they do not list or one the bound
+    refuses, so a caller whose stream ended may ask every frame.
   - A host that names 2,000 strangers, a hundred to a roster, leaves a listener at most 16 streams, and none of them
     2 s later.
 - On the worker, each speaker has a `VoiceJitterBuffer` with an Opus decoder. Every 20 ms slot pulls one frame and
@@ -679,7 +689,8 @@ it; otherwise every mute, stream and capture the session went on producing would
   this player's record. While a join is under way the service makes it again, so the engine applies it to whichever
   session the join finds, and that host never relays the player a datagram they did not want. A set that also names
   people is left for the join to keep or forget, so whom the player muted on one host never reaches another.
-- `SetServerMute` passes through for a host.
+- `SetServerMute` passes through for a host. The control mutes through the engine too, so the host's one set, the
+  engine's moderation, drives the voice relay and the chat ingress alike.
 - `RateLimited` and `ServerMuted` results are counted, not reported, and the transmit indicator shows `MutedByHost`.
 - `ReportTransportCounters(sent, lost)` takes the transport link's running packet totals. Every 250 packets yield a
   loss rate, rounded up and capped at 25%, which becomes the encoder's FEC hint. A rise applies at once; a fall halves
@@ -779,6 +790,8 @@ engine, deterministic except where noted:
   - a real worker thread, the one test that waits on the wall clock, for at most five seconds;
   - the loss hint;
   - a code of its own for each engine diagnostic the provider passes on, the worker's failure included.
+- `InternalVoiceTests` and `InternalVoiceStreamTests`: the service through the runtime's SPI, over real providers on
+  the deterministic network; [MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md), section 9.
 
 | Measurement | Result |
 | --- | --- |

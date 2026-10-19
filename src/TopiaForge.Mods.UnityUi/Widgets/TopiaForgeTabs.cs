@@ -96,7 +96,13 @@ namespace TopiaForge.Mods.UnityUi
 
                 var button = itemGo.AddComponent<Button>();
                 button.targetGraphic = fill;
-                button.onClick.AddListener(() => Select(captured));
+                button.onClick.AddListener(() =>
+                {
+                    using (TopiaForgeIntent.PlayerAction(Host.OwnerId))
+                    {
+                        Select(captured);
+                    }
+                });
 
                 items.Add(new TabItem(fill, ring, label, button));
             }

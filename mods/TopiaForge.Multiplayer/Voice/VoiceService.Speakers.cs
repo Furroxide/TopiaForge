@@ -60,6 +60,22 @@ namespace TopiaForge.Multiplayer.Voice
             return refused;
         }
 
+        /// <summary>
+        /// Gets <paramref name="speaker"/>'s playback stream without making one the session has no use for: the stream the
+        /// speaker has, or a new one, made as <see cref="GetPlaybackStream"/> makes it, for a speaker the session's
+        /// participants listed at the last pump while the bound has room. Otherwise it returns false, and makes and allocates
+        /// nothing, so a caller whose stream ended may ask every frame. Asking <see cref="GetPlaybackStream"/> instead makes a
+        /// stream with a decoder for 2 s for a speaker the participants do not list, and a new ring at every call the bound
+        /// refuses.
+        /// </summary>
+        internal bool TryGetPlaybackStream(ParticipantId speaker, out VoicePlaybackStream? stream)
+        {
+            if (!speaker.IsValid) throw new ArgumentException("A speaker is required.", nameof(speaker));
+            engine.RequireOwnerThread();
+            stream = disposed ? null : EnsureStream(speaker, clock(), listedOnly: true);
+            return stream != null;
+        }
+
         /// <summary>Gets whether <paramref name="speaker"/> was heard in the last 250 ms, on the main thread: it refuses any other.</summary>
         internal bool IsSpeaking(ParticipantId speaker)
         {
@@ -177,13 +193,17 @@ namespace TopiaForge.Multiplayer.Voice
             return any;
         }
 
-        /// <summary>Gets or creates <paramref name="speaker"/>'s stream, or returns null when the bound leaves no room.</summary>
-        private VoicePlaybackStream? EnsureStream(ParticipantId speaker, long nowMicros)
+        /// <summary>
+        /// Gets or creates <paramref name="speaker"/>'s stream, or returns null when the bound leaves no room. With
+        /// <paramref name="listedOnly"/>, only a speaker the participants list gets a new one.
+        /// </summary>
+        private VoicePlaybackStream? EnsureStream(ParticipantId speaker, long nowMicros, bool listedOnly = false)
         {
             CatchUpWithTheList();
             var id = speaker.Value;
             if (streams.TryGetValue(id, out var stream)) return stream;
             var listed = present.Contains(id);
+            if (listedOnly && !listed) return null;
             if (streams.Count >= streamLimit && !(listed && EndOldestUnlisted())) return null;
             stream = new VoicePlaybackStream(speaker);
             streams[id] = stream;

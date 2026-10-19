@@ -589,6 +589,18 @@ internal static class Program
             RuntimeContentReadinessTests.PendingContentIsNeitherAnnouncedNorAdmitted();
             RuntimeContentReadinessTests.HostingWaitsForIdentification();
             RuntimeContentReadinessTests.JoinsAndTheDeveloperSwitchWaitForIdentification();
+            InternalVoiceTests.VoiceIsOffUntilThePlayerTurnsItOn();
+            InternalVoiceTests.PushToTalkAndVoiceActivationFollowTheSpi();
+            InternalVoiceTests.ListenerMutesStayWithTheHostThatListedThem();
+            InternalVoiceTests.AHostsServerMuteReachesTheVoiceRelay();
+            InternalVoiceTests.AutomaticMutesAreServerMutes();
+            InternalVoiceTests.AHostThatHostsAgainKeepsBansAndForgetsMutes();
+            InternalVoiceStreamTests.PlaybackStreamsAreTheServicesOwnAndEndForGood();
+            InternalVoiceStreamTests.AskingAgainPastTheBoundCostsNothing();
+            InternalVoiceStreamTests.StatisticsAreMappedByMeaning();
+            InternalVoiceStreamTests.TheVoiceSpiBelongsToTheMainThread();
+            InternalVoiceStreamTests.TheVoiceSpiCarriesNoAddress();
+            InternalVoiceStreamTests.AStreamNeverPlaysSomeoneElseAfterAJoin();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

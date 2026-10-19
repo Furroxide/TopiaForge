@@ -97,7 +97,7 @@ namespace TopiaForge.Mods.UnityUi
 
             var button = Go.AddComponent<Button>();
             button.targetGraphic = fill;
-            button.onClick.AddListener(() => TopiaForgeCallbacks.Invoke(onClick, "List row click"));
+            button.onClick.AddListener(() => TopiaForgeCallbacks.Player(Host.OwnerId, onClick, "List row click"));
 
             ApplyTheme(Theme);
         }

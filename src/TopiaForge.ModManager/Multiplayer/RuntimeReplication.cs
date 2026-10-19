@@ -11,7 +11,7 @@ namespace TopiaForge.ModManager
     /// to the context's mod, network profile and lifetime: what it registers ends with the lifetime, and a stopping context
     /// is refused. Main thread only. The stubs are documented on <see cref="IRuntimeReplication"/>.
     /// </summary>
-    internal sealed class RuntimeReplication : IRuntimeReplication
+    internal sealed partial class RuntimeReplication : IRuntimeReplication
     {
         private const string Stopping = "The context is stopping.";
         private const string NotRunHere = "This context does not run in this realm, so it changes nothing here.";

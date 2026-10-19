@@ -182,6 +182,7 @@ namespace TopiaForge.ModManager
             if (next == realmRole) return;
             var previous = realmRole;
             realmRole = next;
+            Intents.FollowRealm(RealmOf(next));
             log.Info("Multiplayer: this game is now " + Describe(RealmOf(next)) + " (it was " + Describe(RealmOf(previous)) + ").");
 
             // Observers end what the old realm held, and a joined player starts, before a new host takes its census.

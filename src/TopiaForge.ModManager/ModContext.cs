@@ -74,6 +74,7 @@ namespace TopiaForge.ModManager
             ownerLifetime = new OwnerModLifetime();
             Lifetime = ownerLifetime;
             replication = this.replicationServices.Bind(Identity.Id, NetProfile, Lifetime);
+            inputActivity = new ModInputActivity();
             try
             {
                 modEvents = new ModEvents(ownerLifetime, logger);
@@ -94,14 +95,14 @@ namespace TopiaForge.ModManager
                         Logger,
                         NetProfile)
                     ?? GameplayContextServices.Unavailable(Lifetime);
-                Input = gameplay.Input;
+                Input = new NetInputService(gameplay.Input, inputActivity, Lifetime);
                 Time = gameplay.Time;
-                Scheduler = gameplay.Scheduler;
+                Scheduler = new NetScheduler(gameplay.Scheduler, replication);
                 LocalPlayer = new LifetimePlayerService(gameplay.LocalPlayer, Lifetime);
                 Scenes = gameplay.Scenes;
                 Entities = new LifetimeEntityService(new NetEntityService(gameplay.Entities, replication), Lifetime);
                 Physics = gameplay.Physics;
-                Interactions = gameplay.Interactions;
+                Interactions = new NetInteractionService(gameplay.Interactions, replication);
                 Items = new NetItemService(gameplay.Items, replication);
                 Assets = new NetAssetService(gameplay.Assets, replication);
                 Audio = gameplay.Audio;
@@ -111,7 +112,7 @@ namespace TopiaForge.ModManager
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;
 
                 Localization = new OwnerLocalizationService(Lifetime);
-                Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry);
+                Commands = new OwnerCommandService(Identity.Id, Lifetime, Logger, serviceRegistry, replication.Intents);
                 Diagnostics = new OwnerDiagnosticsService(Logger);
                 Extensions = new OwnerExtensionService(
                     Identity.Id,
@@ -185,12 +186,12 @@ namespace TopiaForge.ModManager
             ?? throw new InvalidOperationException(
                 "Unity interop requires the 'unsafe-native' manifest capability and the TopiaForge.Mods.Interop.Unity package.");
 
-        internal void RaiseUpdate(float deltaTime) => modEvents.RaiseUpdate(deltaTime);
+        internal void RaiseUpdate(float deltaTime) => RaiseFrameUpdate(deltaTime);
         internal void RaiseSceneLoaded(SceneLoadEvent scene) => modEvents.RaiseSceneLoaded(scene);
         internal void RaiseSceneActivated(SceneLoadEvent scene) => modEvents.RaiseSceneActivated(scene);
         internal void RaiseSceneLifecycle(SceneLifecycleEvent scene) => modEvents.RaiseSceneLifecycle(scene);
         internal void RaiseFixedUpdate(GameTimeSample sample) => modEvents.RaiseFixedUpdate(sample);
-        internal void RaiseLateUpdate(GameTimeSample sample) => modEvents.RaiseLateUpdate(sample);
+        internal void RaiseLateUpdate(GameTimeSample sample) => RaiseFrameLateUpdate(sample);
         internal void DisposeLifetime()
         {
             lock (scopeSync)

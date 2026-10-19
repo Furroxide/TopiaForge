@@ -77,7 +77,7 @@ namespace TopiaForge.Mods.UnityUi
 
                 if (WasPressedThisFrame(registration.Key))
                 {
-                    TopiaForgeCallbacks.Invoke(registration.Action, "Hotkey " + registration.Key);
+                    TopiaForgeCallbacks.Player(registration.Owner, registration.Action, "Hotkey " + registration.Key);
                 }
             }
         }

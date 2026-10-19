@@ -365,4 +365,14 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Sessions/*.cs" Link="Runtime/Multiplayer/Sessions/%(Filename)%(Extension)" />
     <Compile Include="../../src/TopiaForge.ModManager/Overlay/ManagerTabLookup.cs" Link="Runtime/ManagerTabLookup.cs" />
   </ItemGroup>
+
+  <!-- Intent tracking (WS3.4) is Unity-free too: the runtime's tracker, the decorators that feed it, the frame dispatch in
+       ModContext, and both halves of the UI kit's hook. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Intent/*.cs" Link="Runtime/Multiplayer/Intent/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Intent/Kit/*.cs" Link="Runtime/Multiplayer/Intent/Kit/%(Filename)%(Extension)" />
+    <Compile Include="../../src/TopiaForge.ModManager/ModContext.Intent.cs" Link="Runtime/ModContext.Intent.cs" />
+    <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeIntent.cs" Link="Runtime/TopiaForgeIntent.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/MainThreadPump.cs" Link="Multiplayer/MainThreadPump.cs" />
+  </ItemGroup>
 </Project>

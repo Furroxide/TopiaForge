@@ -207,9 +207,13 @@ Future<bool> _linuxKernelProcess(Directory process) async {
 
 // A failed query or unreadable candidate never establishes absence. The target
 // arrives as data in an environment value, never as interpolated PowerShell code.
+// Progress is silenced: Windows PowerShell reports the module Get-CimInstance
+// loads as a progress record on a redirected stderr, and any stderr makes the
+// answer unknown, which would refuse every launch as Busy.
 const String windowsLaunchRunningProbeScript = r'''
 param([string]$TargetPath = $env:TOPIAFORGE_PROCESS_PROBE_TARGET)
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 try {
   if ([string]::IsNullOrWhiteSpace($TargetPath) -or
       -not [System.IO.Path]::IsPathRooted($TargetPath)) { exit 3 }

@@ -105,7 +105,7 @@ namespace TopiaForge.Mods.UnityUi
 
                 value = next;
                 Repaint();
-                TopiaForgeCallbacks.Invoke(onChanged, next, "Toggle change");
+                TopiaForgeCallbacks.Player(Host.OwnerId, onChanged, next, "Toggle change");
             });
 
             Repaint();

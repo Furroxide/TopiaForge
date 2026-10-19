@@ -18,6 +18,7 @@ namespace TopiaForge.Multiplayer
     {
         private const string LiveOff = "Live multiplayer is switched off in this build.";
         private const string NoRuntime = "The TopiaForge runtime has not attached to multiplayer yet.";
+        private const string NoVoice = "Muting players for everyone needs voice chat, which is switched off in this build.";
 
         private readonly MultiplayerProvider provider;
         private readonly SessionEngine engine;
@@ -25,7 +26,7 @@ namespace TopiaForge.Multiplayer
         private readonly RuntimeContent content;
         private readonly RoutedDiagnostics diagnostics;
         private readonly DeveloperSessions? developer;
-        private readonly HashSet<string> serverMutes = new HashSet<string>(StringComparer.Ordinal);
+        private readonly ProviderVoiceService? voice;
         private IInternalMultiplayerRuntimeHost? runtime;
         private PendingJoin? pendingJoin;
         private InternalLiveFailure pendingJoinFailure;
@@ -46,6 +47,7 @@ namespace TopiaForge.Multiplayer
             this.developer = developer;
             engine = provider.Engine;
             live = provider.Live;
+            voice = provider.Voice == null ? null : new ProviderVoiceService(engine, provider.Voice);
             lastSession = engine.CurrentSessionId;
         }
 
@@ -58,8 +60,11 @@ namespace TopiaForge.Multiplayer
 
         public bool IsReadinessHeld => engine.ReadinessHolds > 0;
 
-        /// <summary>Gets the voice service; the voice lane adapts the provider's service to it, so it is null until then.</summary>
-        public IInternalVoiceService? Voice => null;
+        /// <summary>
+        /// Gets the provider's voice service, or null while it has none: the provider runs voice only with live multiplayer
+        /// switched on, and none once it has stopped. It hands out the service's own playback streams.
+        /// </summary>
+        public IInternalVoiceService? Voice => disposed ? null : voice;
 
         /// <summary>Gets the attached runtime, or null.</summary>
         internal IInternalMultiplayerRuntimeHost? Runtime => runtime;
@@ -168,15 +173,15 @@ namespace TopiaForge.Multiplayer
                 return Fail(ModErrorCode.InvalidState, exception.Message);
             }
 
-            serverMutes.Clear();
             return OperationResult<bool>.Success(true);
         }
 
         public void StopHosting()
         {
             engine.RequireOwnerThread();
+
+            // Stopping closes every connection, and the engine forgets the moderation it kept, server mutes included.
             live?.StopHosting();
-            serverMutes.Clear();
         }
 
         public bool TryCreateJoinTarget(string text, out IInternalJoinTarget? target)
@@ -292,24 +297,33 @@ namespace TopiaForge.Multiplayer
             return entries;
         }
 
+        /// <summary>
+        /// Mutes or unmutes a player for everyone through the engine's voice moderation, the one set that drives the voice
+        /// relay and the chat ingress alike. It follows the player's identity until hosting stops; unmuting also ends an
+        /// automatic mute.
+        /// </summary>
         public OperationResult<bool> SetServerMute(ParticipantId participant, bool muted)
         {
             engine.RequireOwnerThread();
-            if (live?.Host == null) return Fail(ModErrorCode.NotAuthoritative, "Only a listen host mutes players for everyone.");
+            if (live?.Host == null || engine.Role != EngineRole.Host) return Fail(ModErrorCode.NotAuthoritative, "Only a listen host mutes players for everyone.");
             if (IsLocal(participant)) return Fail(ModErrorCode.InvalidArgument, "The host cannot mute its own player for everyone.");
-            var identity = engine.ParticipantIdentityOf(participant);
-            if (identity == null) return Fail(ModErrorCode.NotFound, "No player in this session has that id.");
-            if (muted) serverMutes.Add(identity);
-            else serverMutes.Remove(identity);
+            if (!engine.IsVoiceEnabled) return Fail(ModErrorCode.Unavailable, NoVoice);
+            if (engine.ParticipantIdentityOf(participant) == null || !engine.SetServerMute(participant, muted))
+            {
+                return Fail(ModErrorCode.NotFound, "No player in this session has that id.");
+            }
+
             return OperationResult<bool>.Success(true);
         }
 
+        /// <summary>
+        /// Gets whether the host muted <paramref name="participant"/>, by hand or automatically for abusing voice chat: a host
+        /// answers from its moderation, and a joined player from the host's voice roster.
+        /// </summary>
         public bool IsServerMuted(ParticipantId participant)
         {
             engine.RequireOwnerThread();
-            if (engine.Role != EngineRole.Host || serverMutes.Count == 0) return false;
-            var identity = engine.ParticipantIdentityOf(participant);
-            return identity != null && serverMutes.Contains(identity);
+            return engine.IsVoiceEnabled && participant.IsValid && engine.IsServerMuted(participant);
         }
 
         public void Dispose()
@@ -383,7 +397,6 @@ namespace TopiaForge.Multiplayer
             var role = Role;
             if (role != lastRole)
             {
-                if (lastRole == InternalSessionRole.ListenHost) serverMutes.Clear();
                 lastRole = role;
                 SetRunInBackground(role != InternalSessionRole.Solo);
             }
