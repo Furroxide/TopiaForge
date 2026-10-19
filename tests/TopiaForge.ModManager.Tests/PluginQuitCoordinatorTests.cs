@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using TopiaForge.ModManager.Core;
 
 namespace TopiaForge.ModManager.Tests
@@ -29,6 +30,7 @@ namespace TopiaForge.ModManager.Tests
                 (nameof(InvalidArgumentsAreRejected), InvalidArgumentsAreRejected),
                 (nameof(HeldQuitRecordsACleanExit), () => HeldQuitRecordsACleanExit(root)),
                 (nameof(QuitAtTheDeadlineLeavesSafeModeForTheNextStart), () => QuitAtTheDeadlineLeavesSafeModeForTheNextStart(root)),
+                (nameof(TeardownLimitReadsTheQuitClock), TeardownLimitReadsTheQuitClock),
             };
             foreach (var (name, test) in cases)
             {
@@ -153,6 +155,30 @@ namespace TopiaForge.ModManager.Tests
 
             StartupJournal.Begin(path, out var recovery);
             Check(recovery.SafeMode, "Unfinished cleanup must still open the next start in safe mode.");
+        }
+
+        private static void TeardownLimitReadsTheQuitClock() => ReadsTheQuitClock("new PluginQuitCoordinator(");
+
+        /// <summary>
+        /// The plugin stops its startup stopwatch once startup is reported, and a deadline read from a stopped clock never
+        /// passes: a stuck teardown would keep the game open for good. Every quit timer the plugin makes reads its quit
+        /// clock instead, which starts with the plugin and is never stopped.
+        /// </summary>
+        internal static void ReadsTheQuitClock(string construction)
+        {
+            var sources = string.Join("\n", Directory.GetFiles(Path.Combine(Program.FindRepoRoot(), "src", "TopiaForge.ModManager"),
+                "TopiaForgeModManagerPlugin*.cs").OrderBy(file => file, StringComparer.Ordinal).Select(File.ReadAllText));
+            Check(sources.Contains("startupStopwatch.Stop()", StringComparison.Ordinal),
+                "The startup stopwatch stops after startup; if that changes, revisit this test.");
+            Check(sources.Contains("private readonly Stopwatch quitClock = Stopwatch.StartNew();", StringComparison.Ordinal),
+                "The plugin keeps a quit clock that starts with it.");
+            foreach (var stop in new[] { "quitClock.Stop(", "quitClock.Reset(", "quitClock.Restart(" })
+                Check(!sources.Contains(stop, StringComparison.Ordinal), "The quit clock is never stopped or reset.");
+            var start = sources.IndexOf(construction, StringComparison.Ordinal);
+            Check(start >= 0, construction + " is made in the plugin.");
+            var call = sources.Substring(start, sources.IndexOf(");", start, StringComparison.Ordinal) - start);
+            Check(call.Contains("() => quitClock.Elapsed", StringComparison.Ordinal) && !call.Contains("startupStopwatch", StringComparison.Ordinal),
+                construction + " reads the quit clock, never the startup stopwatch.");
         }
 
         private static void Check(bool condition, string message)
