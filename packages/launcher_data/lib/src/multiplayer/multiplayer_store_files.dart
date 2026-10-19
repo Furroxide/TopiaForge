@@ -25,12 +25,22 @@ final class _StoreFiles {
   static final _token = RegExp(r'^[0-9]+-(-?[0-9]+)-[0-9]+$');
 
   /// Reads [file], refusing more than [maximumBytes]. A missing file is
-  /// first put back from the newest backup an interrupted write left.
-  Future<_ReadResult> read(File file, int maximumBytes) async {
+  /// first put back from the newest backup an interrupted write left, unless
+  /// [restore] is false: that backup is then read where it stands, and
+  /// nothing moves. A reader that moved a backup back could move it over the
+  /// file a write in another process had just moved in, so where processes
+  /// share a file, only a writer that holds the lock keeping their writes
+  /// apart puts backups back.
+  Future<_ReadResult> read(
+    File file,
+    int maximumBytes, {
+    bool restore = true,
+  }) async {
+    var source = file;
     FileSystemEntityType type;
     try {
       type = await FileSystemEntity.type(file.path, followLinks: false);
-      if (type == FileSystemEntityType.notFound) {
+      if (type == FileSystemEntityType.notFound && restore) {
         switch (await _restoreBackup(file)) {
           case _Restore.held:
             // What the backup or the file holds is unread, not missing.
@@ -39,6 +49,13 @@ final class _StoreFiles {
             type = await FileSystemEntity.type(file.path, followLinks: false);
           case _Restore.none:
             break;
+        }
+      } else if (type == FileSystemEntityType.notFound) {
+        final backups = await _backupsNewestFirst(file);
+        if (backups == null) return const _Unreadable();
+        if (backups.isNotEmpty) {
+          source = backups.first;
+          type = FileSystemEntityType.file;
         }
       }
     } on FileSystemException {
@@ -50,28 +67,25 @@ final class _StoreFiles {
     // A link or a folder in a file's place is set aside, never followed.
     if (type != FileSystemEntityType.file) return const _Damaged();
     try {
-      if (await file.length() > maximumBytes) return const _Damaged();
-      final bytes = await file.readAsBytes();
+      if (await source.length() > maximumBytes) return const _Damaged();
+      final bytes = await source.readAsBytes();
       return bytes.length > maximumBytes ? const _Damaged() : _Read(bytes);
     } on FileSystemException {
       return const _Unreadable();
     }
   }
 
-  /// Puts back the newest `<name>.<token>.bak` of [file], which a write
-  /// stopped between its two moves left behind, and drops older ones. Only
-  /// regular files count, never a link or a folder. A backup that is still
-  /// there but cannot be moved just now, as when another program holds it,
-  /// is [_Restore.held]: an older one never stands in for it, and nothing is
-  /// dropped. A folder that is there but cannot be listed throws, since it
-  /// may hold one.
+  /// The `<name>.<token>.bak` files of [file], which writes stopped between
+  /// their two moves left behind, newest first. Only regular files count,
+  /// never a link or a folder. Null while [file] may be there but cannot be
+  /// looked at; throws when the folder is there but cannot be listed, since
+  /// it may hold one.
   ///
   /// A folder that can be listed but not searched, as `chmod 444` leaves
-  /// one, lists every name in it while each file looks missing, and moving
-  /// one reads as missing too. So the file listed under its own name, or a
-  /// backup listed with nothing to look at, is [_Restore.held]: unread, not
-  /// gone.
-  Future<_Restore> _restoreBackup(File file) async {
+  /// one, lists every name in it while each file looks missing. So the file
+  /// listed under its own name, or a backup listed with nothing to look at,
+  /// is unread, not gone.
+  Future<List<File>?> _backupsNewestFirst(File file) async {
     final fileName = p.basename(file.path);
     final backups = <({File file, DateTime modified, int writtenAt})>[];
     try {
@@ -79,11 +93,11 @@ final class _StoreFiles {
         directory,
       ).list(followLinks: false)) {
         final name = p.basename(entity.path);
-        if (name == fileName) return _Restore.held;
+        if (name == fileName) return null;
         final writtenAt = _writtenAt(name, fileName, '.bak');
         if (entity is File && writtenAt != null) {
           final stat = await entity.stat();
-          if (stat.type == FileSystemEntityType.notFound) return _Restore.held;
+          if (stat.type == FileSystemEntityType.notFound) return null;
           backups.add((
             file: entity,
             modified: stat.modified,
@@ -92,9 +106,8 @@ final class _StoreFiles {
         }
       }
     } on FileSystemException catch (error) {
-      // No folder holds no backup. A folder that cannot be listed may hold
-      // one, so that failure reaches [read].
-      if (_namesNoFolder(error)) return _Restore.none;
+      // No folder holds no backup.
+      if (_namesNoFolder(error)) return const [];
       rethrow;
     }
     // Newest first. A file system may keep whole seconds only, as Windows
@@ -104,23 +117,49 @@ final class _StoreFiles {
       final byTime = right.modified.compareTo(left.modified);
       return byTime != 0 ? byTime : right.writtenAt.compareTo(left.writtenAt);
     });
+    return [for (final backup in backups) backup.file];
+  }
+
+  /// Puts back the newest backup of [file] ([_backupsNewestFirst]) and drops
+  /// older ones. A backup that is still there but cannot be moved just now,
+  /// as when another program holds it, is [_Restore.held]: an older one
+  /// never stands in for it, and nothing is dropped. So is [file] when it
+  /// may be there but cannot be looked at.
+  Future<_Restore> _restoreBackup(File file) async {
+    final backups = await _backupsNewestFirst(file);
+    if (backups == null) return _Restore.held;
     for (final backup in backups) {
       try {
-        await backup.file.rename(file.path);
+        await backup.rename(file.path);
       } on FileSystemException {
         // One that vanished meanwhile is passed over; one still there is
         // held, and only it has the latest contents.
-        if (await _exists(backup.file)) return _Restore.held;
+        if (await _exists(backup)) return _Restore.held;
         continue;
       }
       for (final stale in backups) {
-        if (!identical(stale.file, backup.file)) {
-          await _deleteEntity(stale.file.path);
-        }
+        if (!identical(stale, backup)) await _deleteEntity(stale.path);
       }
       return _Restore.restored;
     }
     return _Restore.none;
+  }
+
+  /// Whether a damaged copy of `<stem>.json` that this store set aside is
+  /// beside it, of any kind: a file, a link or a folder. Throws when the
+  /// folder is there but cannot be listed.
+  Future<bool> hasDamagedCopy(String stem) async {
+    try {
+      await for (final entity in Directory(
+        directory,
+      ).list(followLinks: false)) {
+        if (_isDamagedCopy(p.basename(entity.path), stem)) return true;
+      }
+    } on FileSystemException catch (error) {
+      if (_namesNoFolder(error)) return false;
+      rethrow;
+    }
+    return false;
   }
 
   /// Deletes the temporary files of [fileNames] that writes stopped part way
@@ -232,23 +271,27 @@ final class _StoreFiles {
   /// made.
   static final _damagedStamp = RegExp(r'^[0-9]+T[0-9]+Z(-[0-9]+)?$');
 
+  /// Whether [name] is one this store gives a damaged copy of `<stem>.json`.
+  static bool _isDamagedCopy(String name, String stem) {
+    final prefix = '$stem.damaged-';
+    return name.length > prefix.length + '.json'.length &&
+        name.startsWith(prefix) &&
+        name.endsWith('.json') &&
+        _damagedStamp.hasMatch(
+          name.substring(prefix.length, name.length - '.json'.length),
+        );
+  }
+
   /// Drops all but the newest [MultiplayerStore.keptDamagedCopies] damaged
   /// copies of `<stem>.json`. Only names this store gives them count, so a
   /// copy the player keeps beside them under another name is never dropped.
   Future<void> _pruneDamaged(String stem) async {
-    final prefix = '$stem.damaged-';
     try {
       final copies = <String>[];
       await for (final entity in Directory(
         directory,
       ).list(followLinks: false)) {
-        final name = p.basename(entity.path);
-        if (name.length > prefix.length + '.json'.length &&
-            name.startsWith(prefix) &&
-            name.endsWith('.json') &&
-            _damagedStamp.hasMatch(
-              name.substring(prefix.length, name.length - '.json'.length),
-            )) {
+        if (_isDamagedCopy(p.basename(entity.path), stem)) {
           copies.add(entity.path);
         }
       }

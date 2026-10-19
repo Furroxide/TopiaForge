@@ -292,6 +292,8 @@ void main() {
       expect(blocker.message, contains("Remove that server's content"));
       // Uninstalling the mod in Mods would take the player's own versions.
       expect(blocker.message, isNot(contains('Mods')));
+      // It names no screen, so it holds whichever screen offers the cleanup.
+      expect(blocker.message, isNot(contains('Settings')));
     });
 
     test('another installed version is no conflict', () {

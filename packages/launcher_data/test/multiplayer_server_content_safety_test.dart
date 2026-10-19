@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:launcher_data/launcher_data.dart' show LaunchStagingStore;
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -217,6 +218,49 @@ void main() {
           .singleWhere(ServerProfiles.isServerProfile);
       expect(
         await rig.loadsOf(serverProfile),
+        containsAll(['own.alpha@2.0.0', 'own.beta@1.5.0']),
+      );
+    });
+
+    test('set aside by a repair that could not write its record stays '
+        'damaged, never empty', () async {
+      final (rig, _, _) = await joined();
+      final before = await playerLoads(rig);
+      // A folder stood where the record belongs. A repair moved it aside as
+      // a damaged copy, then could not write the record that replaces it, as
+      // on a full disk, or the launcher stopped there.
+      final file = serverContentFile(rig.game);
+      file.deleteSync();
+      Directory(
+        p.join(
+          file.parent.path,
+          'server-content.damaged-20261019T120000000000Z.json',
+        ),
+      ).createSync();
+      // While a launch holds the game's files nothing repairs it, and the
+      // player's own play stays at what the manager state names.
+      final lease = (await LaunchStagingStore(
+        rig.install.path,
+      ).acquireLaunchLease())!;
+      addTearDown(lease.release);
+      rig.repository = rig.open();
+      final snapshot = await rig.repository.loadSnapshot();
+      final own = snapshot.profiles.firstWhere((item) => item.id == 'unpinned');
+      expect(await rig.loadsOf(own), ['own.alpha@1.0.0', 'own.beta@1.0.0']);
+      final preview = await rig.repository.previewLaunch(rig.install, own);
+      expect(preview.canLaunch, isFalse);
+      expect(
+        preview.issues.map((issue) => issue.message).join(' '),
+        contains('is damaged'),
+      );
+      await lease.release();
+      // The next start repairs it.
+      rig.repository = rig.open();
+      expect(await playerLoads(rig), before);
+      expect(
+        storedRecord(
+          rig,
+        ).withheld.map((item) => '${item.modId}@${item.version}'),
         containsAll(['own.alpha@2.0.0', 'own.beta@1.5.0']),
       );
     });

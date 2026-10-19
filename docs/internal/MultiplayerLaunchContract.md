@@ -312,14 +312,20 @@ launcher log, and neither ever names a URL or an address.
   rollback path (`_stagePackageInstall`), in one folder, `launcher-join-*` in manager staging. A journal there says how
   far it got. In this order it then records the mods new to the player, adds its archives to the record of server
   content, and moves each package into place. A failure after that order begins rolls back everything this join
-  changed, and only that: packages an earlier join installed stay. A folder the rollback cannot take out, as when
-  another program holds one of its files, keeps its entry in the record of server content and its added record, so it
-  stays hidden until the next start takes it out. A cancel before the order begins removes what was staged and reports
-  `JoinInstallUndone`. Once it begins the install finishes, and the reducer then ends the join as cancelled.
+  changed, and only that: packages an earlier join installed stay. The rollback first notes in the journal that it is
+  undoing the install, then moves each folder out of the packages folder whole, in one move, before deleting it, since a
+  recursive delete in place would take the install receipt first and leave the rest as a broken version no record
+  names. A folder that cannot move, as when another program holds one of its files, stays whole, receipt and all, and
+  keeps its entry in the record of server content and its added record, so it stays hidden until a later start moves
+  it out. Until then a join is refused with "try again" rather than count that folder as installed, since the start
+  that settles it would take it from under the new server profile. A cancel before the order begins removes what was
+  staged and reports `JoinInstallUndone`. Once it begins the install finishes, and the reducer then ends the join as
+  cancelled.
 - **Crash safety.** A launcher stopped before the order begins left only staged folders, which nothing loads. One
   stopped part way through it left disabled records and hidden versions, which no profile of the player's own loads.
   Either way the next start, the next install or the next cleanup takes the staging lease and settles the journal: it
-  undoes a partial install, keeps one whose every package is in place, and removes the folder.
+  undoes a partial install, or one whose rollback began, moving each folder out whole as the rollback does; it keeps an
+  install whose every package is in place and whose rollback never began; and it removes the folder.
 - **A running game.** It writes its manager state when it quits, over anything written while it ran, which would drop
   the disabled records. So nothing installs or cleans up beside one; the package inbox likewise holds what arrives
   until the next start. An install closes a game this launcher started only when the player's consent covered it
@@ -368,15 +374,20 @@ launcher log, and neither ever names a URL or an address.
     takes such a version. An exact pin of a profile of the player's own still takes a `withheld` one, as the game's
     loader takes every exact pin, so a profile that pins a version of the player's own keeps loading it after a
     repair; a `hidden` version is for server profiles alone.
-  - **Writes.** Atomic, one after another, never over a newer record or one that cannot be read. A write a stopped
-    launcher left between its two moves (`server-content.json.<token>.bak`) is put back before anything reads it; the
-    game's loader reads such backups too, withholding what any of them withholds.
+  - **Writes.** Atomic, one after another under the staging lease, never over a newer record or one that cannot be
+    read. A write a stopped launcher left between its two moves (`server-content.json.<token>.bak`) is read where it
+    stands, by the launcher as by the game's loader, which withholds what any such backup withholds. Only the next
+    write, which holds the lease, puts it back: the desktop launcher and the command line can both have the install
+    open, and a reader that moved a backup back could land it on the record a write in the other had just moved in.
   - **Repair.** A damaged record is repaired under the staging lease, at the launcher's next start and before an
     install or a cleanup. A copy is kept aside (`server-content.damaged-<UTC time>.json`). The repaired record keeps
     every entry that still reads, and withholds each other installed version the manager state does not name. A pin of
     a profile of the player's own is no evidence, since a copy of a server profile pins the server's versions; exact
     pins still load what a repair withheld. So no version a join hid becomes the player's own, and what the player
-    loaded before stays theirs. A repair waits while a receipt it would read cannot be read.
+    loaded before stays theirs. A repair waits while a receipt it would read cannot be read. A link, a folder or an
+    oversized file in the record's place is moved aside under that name before the repaired record is written, so a
+    write that fails there, as on a full disk, or a launcher stopped there, leaves the damaged copy with no record
+    beside it. Both languages read that as damaged, never as missing, and the next start repairs it again.
   - **While it cannot be used.** A launch of a profile that is not a server profile is blocked, and so are installs and
     cleanups, each with what to do next: update the launcher for a newer record, restart it for a damaged one, close
     the program holding the file for an unreadable one. The launcher's own view of the player's mods, the Mods list
@@ -387,10 +398,10 @@ launcher log, and neither ever names a URL or an address.
   - **Unpinned selection.** This is a game started without the launcher, the player's own play. It never takes a
     version the record withholds, and a mod whose every installed version is withheld offers nothing to it. A mod the
     record lists in `addedRecords`, found with no manager record, starts disabled.
-  - **A record that cannot be used** (damaged, newer or unreadable) freezes unpinned selection. Each mod loads only the
-    version the manager state names, which is what loaded before, and a mod with no manager record does not load. Its
-    message says why and to start the game from the launcher once, which repairs the record; the manager log says the
-    same once.
+  - **A record that cannot be used** (damaged, newer or unreadable, or missing beside a damaged copy a repair set
+    aside) freezes unpinned selection. Each mod loads only the version the manager state names, which is what loaded
+    before, and a mod with no manager record does not load. Its message says why and to start the game from the
+    launcher once, which repairs the record; the manager log says the same once.
   - **Exact pins**, which every launch the launcher makes writes, see every version, so server profiles are
     unaffected.
 - **Cleanup.** `planServerContentCleanup` lists each version of server content with its size and the server profiles

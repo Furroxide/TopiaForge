@@ -211,17 +211,81 @@ void main() {
     expect(file.readAsBytesSync(), before);
   });
 
-  test('a write stopped between its moves is put back', () async {
+  test('a write stopped between its moves is read where it stands, and put '
+      'back by the next change', () async {
     final record = ServerContentRecord.empty().withInstalled([
       entry('example.one'),
     ]);
-    File(
+    final backup = File(
       p.join(folder.path, '${ServerContentStore.fileName}.4242-1-7.bak'),
-    ).writeAsBytesSync(record.encode());
-    final load = await ServerContentStore(folder.path).load();
+    )..writeAsBytesSync(record.encode());
+    final store = ServerContentStore(folder.path);
+    final load = await store.load();
     expect(load.status, ServerContentStatus.valid);
     expect(load.record.entries.single.modId, 'example.one');
+    // A load moves nothing: in another launcher it could land on the record
+    // a write had just moved in.
+    expect(file.existsSync(), isFalse);
+    expect(backup.readAsBytesSync(), record.encode());
+    await store.update((current) => current);
     expect(file.readAsBytesSync(), record.encode());
+    expect(backup.existsSync(), isFalse);
+  });
+
+  test('a damaged backup a load reads where it stands fails closed', () async {
+    File(
+      p.join(folder.path, '${ServerContentStore.fileName}.4242-1-7.bak'),
+    ).writeAsStringSync('{');
+    final load = await ServerContentStore(folder.path).load();
+    expect(load.status, ServerContentStatus.damaged);
+    expect(file.existsSync(), isFalse);
+  });
+
+  for (final kind in ['folder', 'file']) {
+    test('a damaged record set aside as a $kind, with no record beside it, '
+        'stays damaged until a repair writes one', () async {
+      // A repair moves a link, a folder or an oversized file aside before
+      // it writes the record that replaces it; that write failed, as on a
+      // full disk, or the launcher stopped there.
+      final aside = p.join(
+        folder.path,
+        'server-content.damaged-20261019T120000000000Z.json',
+      );
+      kind == 'folder'
+          ? Directory(aside).createSync()
+          : File(aside).writeAsStringSync('x' * 64);
+      final store = ServerContentStore(folder.path);
+      final load = await store.load();
+      expect(load.status, ServerContentStatus.damaged);
+      expect(load.problem, contains('set aside as damaged'));
+      await expectRefusedUpdate(store);
+      final repaired = await store.repair(
+        (salvaged) async => salvaged.withWithheld([withheld]),
+      );
+      expect(repaired.status, ServerContentStatus.valid);
+      expect(repaired.record.withheld, [withheld]);
+      expect(
+        (await ServerContentStore(folder.path).load()).status,
+        ServerContentStatus.valid,
+      );
+      expect(damagedCopies(), [
+        'server-content.damaged-20261019T120000000000Z.json',
+      ]);
+    });
+  }
+
+  test('only a damaged copy this store names keeps a missing record '
+      'damaged', () async {
+    File(
+      p.join(folder.path, 'server-content.damaged-copy.json'),
+    ).writeAsStringSync('the player keeps this');
+    File(
+      p.join(folder.path, 'other.damaged-20261019T120000000000Z.json'),
+    ).writeAsStringSync('another store');
+    expect(
+      (await ServerContentStore(folder.path).load()).status,
+      ServerContentStatus.missing,
+    );
   });
 
   test('stale temporary files of the record are swept once', () async {

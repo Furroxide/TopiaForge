@@ -23,6 +23,17 @@ extension _JoinInstallPreflight on _JoinInstall {
     if (!load.status.isUsable) {
       throw _JoinInstallRefused(_serverContentUnusable(load.status, 'join'));
     }
+    // An earlier join whose rollback could not finish keeps its folders, and
+    // their record entries, until a later sweep takes them out, so nothing
+    // may count them as installed meanwhile.
+    if (await _repository._hasUnsettledJoinInstall(_install)) {
+      throw const _JoinInstallRefused(
+        'A join that failed earlier is still being put back: some of its '
+        'files are in use or could not be removed yet. Close any program '
+        'using the game folder, such as an antivirus scan, and make sure the '
+        'drive has free space, then join again.',
+      );
+    }
     final named = {
       for (final profile in await _repository._loadProfiles())
         if (!ServerProfiles.isServerProfile(profile))
@@ -68,7 +79,7 @@ extension _JoinInstallPreflight on _JoinInstall {
                   other.receiptSha256 == await _receiptSha256(target)
               ? 'Another server you joined runs a different build of $name, '
                     'and joining never replaces it. Remove that server\'s '
-                    'content in Settings, then join again.'
+                    'content, then join again.'
               : 'You have $name installed, but as a different build than '
                     'the server runs, and joining never replaces your copy. '
                     'Uninstall it in Mods, then join again.',
@@ -90,8 +101,8 @@ extension _JoinInstallPreflight on _JoinInstall {
     );
     if (kept.length + pending.length > ServerContentRecord.maximumEntries) {
       throw const _JoinInstallRefused(
-        'Too many mods are installed for servers. Clean up server content in '
-        'Settings, then join again.',
+        'Too many mods are installed for servers. Remove the content of '
+        'servers you no longer join, then join again.',
       );
     }
     return pending;

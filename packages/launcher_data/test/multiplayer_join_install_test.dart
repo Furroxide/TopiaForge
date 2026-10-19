@@ -239,8 +239,10 @@ void main() {
       mayContactHost: true,
     );
     final message = plan.blockers.single.message;
-    expect(message, contains("Remove that server's content in Settings"));
+    expect(message, contains("Remove that server's content, then join again"));
     expect(message, isNot(contains('Mods')));
+    // It names no screen, so it holds whichever screen offers the cleanup.
+    expect(message, isNot(contains('Settings')));
     // The install says the same, should it get that far.
     final forced = planJoin(second, {
       otherBuild.sha256Hex: otherBuild.offeredAt(
@@ -254,6 +256,38 @@ void main() {
     );
     expect((event as JoinFailed).detail, contains("Remove that server's"));
     expect(event.detail, contains('Alpha 2.0.0'));
+    expect(event.detail, isNot(contains('Settings')));
+  });
+
+  test('a join that would fill the record past its bound is refused before '
+      'anything changes', () async {
+    final rig = await JoinRig.create();
+    await preparePlayer(rig);
+    final (server, plan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    serverContentFile(rig.game).writeAsBytesSync(
+      ServerContentRecord.empty().withInstalled([
+        for (var index = 0; index < ServerContentRecord.maximumEntries; index++)
+          ServerContentEntry(
+            modId: 'example.mod$index',
+            version: '1.0.0',
+            sha256: 'a' * 64,
+            receiptSha256: 'b' * 64,
+            hidden: true,
+            installedAt: 1,
+          ),
+      ]).encode(),
+    );
+    final before = await rig.everything(StandardJoin.downloads);
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    expect((event as JoinFailed).rollbackComplete, isTrue);
+    expect(event.detail, contains('Too many mods are installed for servers'));
+    expect(event.detail, contains('then join again'));
+    expect(event.detail, isNot(contains('Settings')));
+    expect(await rig.everything(StandardJoin.downloads), before);
   });
 
   test('the exact build already installed needs nothing', () async {

@@ -19,7 +19,8 @@ final class ServerContentLoad {
   final String problem;
 
   /// What a damaged record's file held, for its repair; null for anything
-  /// else, and for a link, a folder or a file past the bound.
+  /// else, and for a link, a folder, a file past the bound, or a record a
+  /// repair already moved aside.
   final List<int>? damagedBytes;
 }
 
@@ -34,11 +35,18 @@ final class ServerContentLoad {
 ///
 /// The game's loader reads it too, so the store never guesses: a record is
 /// read whole or not at all ([ServerContentRecord.read]). Writes replace it
-/// atomically and run one after another, and a write a stopped launcher left
-/// half done is put back before anything reads it. A record that is newer,
-/// or cannot be read just now, is never written over; one that is damaged is
-/// written over only by [repair], with a copy of it kept aside as
+/// atomically and run one after another. A record that is newer, or cannot
+/// be read just now, is never written over; one that is damaged is written
+/// over only by [repair], with a copy of it kept aside as
 /// `server-content.damaged-<UTC time>.json`.
+///
+/// The desktop launcher and the command line can both have the install
+/// open. [update] and [repair] run only under the install's staging lease,
+/// which keeps their writes apart, and only they put back what a write
+/// stopped between its two moves left aside. A [load] reads that backup
+/// where it stands, as the game's loader does, and never moves anything: a
+/// backup moved back by a reader could land on the record a write in the
+/// other process had just moved in, and replace it with the older one.
 final class ServerContentStore {
   ServerContentStore(this.directory, {DateTime Function()? clock})
     : _files = _StoreFiles(directory, clock ?? DateTime.now);
@@ -52,19 +60,19 @@ final class ServerContentStore {
 
   File get _file => File(p.join(directory, fileName));
 
-  /// Reads the record. Never throws, and never writes but to put back what
-  /// a stopped write moved aside.
-  Future<ServerContentLoad> load() => _serial(_load);
+  /// Reads the record. Never throws, and never moves or writes anything.
+  Future<ServerContentLoad> load() => _serial(() => _load(restore: false));
 
   /// Reads the record, applies [change] and writes the result when it
   /// differs, with no other write in between. Throws
   /// [MultiplayerStoreException] before [change] runs while the record
   /// cannot be used, and when the result cannot be written. Whatever
-  /// [change] throws is passed on, and nothing is written.
+  /// [change] throws is passed on, and nothing is written. Runs under the
+  /// install's staging lease.
   Future<ServerContentRecord> update(
     ServerContentRecord Function(ServerContentRecord current) change,
   ) => _serial(() async {
-    final load = await _load();
+    final load = await _load(restore: true);
     if (!load.status.isUsable) throw _unusable(load.status);
     final next = change(load.record);
     final encoded = next.encode();
@@ -80,11 +88,17 @@ final class ServerContentStore {
   /// it ([ServerContentRecord.salvage]), keeping a copy of the damaged one
   /// aside. Anything other than a damaged record is left as it is. Returns
   /// the record as it stands afterwards: still damaged when [rebuild] or the
-  /// write failed, which the launcher log says.
+  /// write failed, which the launcher log says. Runs under the install's
+  /// staging lease.
+  ///
+  /// A link, a folder or a file past the bound is moved aside before the
+  /// record that replaces it is written, so a write that fails or stops
+  /// there leaves the damaged copy with no record beside it, which still
+  /// reads as damaged, never as a record that withholds nothing.
   Future<ServerContentLoad> repair(
     Future<ServerContentRecord> Function(ServerContentRecord salvaged) rebuild,
   ) => _serial(() async {
-    final load = await _load();
+    final load = await _load(restore: true);
     if (load.status != ServerContentStatus.damaged) return load;
     final bytes = load.damagedBytes;
     final ServerContentRecord rebuilt;
@@ -102,9 +116,10 @@ final class ServerContentStore {
         damagedBytes: bytes,
       );
     }
-    final kept = bytes == null
-        ? await _files.setAside(_file)
-        : await _files.keepCopy(_file, bytes);
+    final kept = bytes != null
+        ? await _files.keepCopy(_file, bytes)
+        // With no record there, an earlier repair already moved it aside.
+        : !await _StoreFiles._exists(_file) || await _files.setAside(_file);
     if (!kept) {
       return ServerContentLoad(
         ServerContentRecord.empty(),
@@ -140,10 +155,33 @@ final class ServerContentStore {
     return result;
   }
 
-  Future<ServerContentLoad> _load() async {
-    final read = await _files.read(_file, ServerContentRecord.maximumBytes);
+  Future<ServerContentLoad> _load({required bool restore}) async {
+    final read = await _files.read(
+      _file,
+      ServerContentRecord.maximumBytes,
+      restore: restore,
+    );
     switch (read) {
       case _Missing():
+        try {
+          if (await _files.hasDamagedCopy(
+            p.basenameWithoutExtension(fileName),
+          )) {
+            return ServerContentLoad(
+              ServerContentRecord.empty(),
+              ServerContentStatus.damaged,
+              problem:
+                  'The record of server content was set aside as damaged, '
+                  'and the record that repairs it was not written.',
+            );
+          }
+        } on FileSystemException {
+          return ServerContentLoad(
+            ServerContentRecord.empty(),
+            ServerContentStatus.unreadable,
+            problem: 'The record of server content could not be read just now.',
+          );
+        }
         return ServerContentLoad(
           ServerContentRecord.empty(),
           ServerContentStatus.missing,

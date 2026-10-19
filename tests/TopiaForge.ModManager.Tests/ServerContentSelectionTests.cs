@@ -38,6 +38,8 @@ namespace TopiaForge.ModManager.Tests
                 ("an unreadable record keeps what loaded before", UnreadableRecordFreezesSelection),
                 ("a backup a stopped write left is read", BackupRecordIsRead),
                 ("a damaged backup keeps what loaded before", DamagedBackupFreezesSelection),
+                ("a record set aside as damaged, with none beside it, keeps what loaded before", SetAsideRecordFreezesSelection),
+                ("a copy only the player named is no damaged record", ForeignCopyDoesNotFreezeSelection),
                 ("an unreadable receipt withholds a version the record names", UnreadableReceiptWithholds),
             };
             var index = 0;
@@ -185,6 +187,30 @@ namespace TopiaForge.ModManager.Tests
             state.Find(ModId)!.Version = "1.0.0";
             File.WriteAllText(Path.Combine(paths.Root, ServerContentRecord.FileName + ".4242--5-7.bak"), "{");
             AssertFrozenAtOldVersion(paths, state);
+        }
+
+        private static void SetAsideRecordFreezesSelection(ManagerPaths paths, string archives)
+        {
+            var state = Install(paths, archives, "1.0.0", "2.0.0");
+            state.Find(ModId)!.Version = "1.0.0";
+            // A repair moved a folder in the record's place aside, then could not write the record that replaces it,
+            // as on a full disk, or the launcher stopped there.
+            var folder = Path.Combine(paths.Root, "server-content.damaged-20261019T120000000000Z.json");
+            Directory.CreateDirectory(folder);
+            AssertFrozenAtOldVersion(paths, state);
+            Directory.Delete(folder);
+            File.WriteAllText(Path.Combine(paths.Root, "server-content.damaged-20261019T120000000000Z-2.json"), "x");
+            AssertFrozenAtOldVersion(paths, state);
+        }
+
+        private static void ForeignCopyDoesNotFreezeSelection(ManagerPaths paths, string archives)
+        {
+            var state = Install(paths, archives, "1.0.0", "2.0.0");
+            File.WriteAllText(Path.Combine(paths.Root, "server-content.damaged-copy.json"), "the player keeps this");
+            var registry = new ModRegistry();
+            var package = registry.Scan(paths, state).Single();
+            Assert(!registry.LastServerContent.Frozen && package.Manifest!.Version == "2.0.0",
+                "only a damaged copy the launcher names keeps a missing record damaged");
         }
 
         private static void UnreadableReceiptWithholds(ManagerPaths paths, string archives)

@@ -345,15 +345,28 @@ final class _JoinInstall {
   }
 
   /// Puts back everything this join changed, newest first; says whether all
-  /// of it went back. What could not stays in the journal for the next
-  /// start. A folder that could not be taken back out, as when another
-  /// program holds one of its files, keeps its entry in the record of server
-  /// content and its added record, so it stays out of the player's own play
-  /// until the next start removes it.
+  /// of it went back. What could not stays in the journal, which from here
+  /// on says the install is being undone, for a later start. A folder that
+  /// could not be taken back out, as when another program holds one of its
+  /// files, stays whole, receipt and all, and keeps its entry in the record
+  /// of server content and its added record, so it stays out of the
+  /// player's own play until a later start removes it.
   Future<bool> _rollBack() async {
+    try {
+      await _writeJournal(_JoinJournalPhase.rollingBack);
+    } on Object catch (error) {
+      await _log('A join install could not note its rollback: $error');
+    }
     final stuck = <_StagedJoinPackage>[];
     for (final item in _staged.reversed) {
       try {
+        if (item.staged.committed) {
+          _moveJoinFolderAside(
+            item.staged.target,
+            _root!,
+            item.pending.manifest.id,
+          );
+        }
         item.staged.rollback();
       } on Object {
         stuck.add(item);

@@ -7,6 +7,10 @@ enum _JoinJournalPhase {
 
   /// It began recording and moving packages into place.
   committing,
+
+  /// It failed once it began, and began putting back what it changed. A
+  /// later start finishes that, whatever is still in place.
+  rollingBack,
 }
 
 /// A package the journal names: where it goes and the receipt it carries,
@@ -144,11 +148,13 @@ extension _JoinInstallJournal on LocalLauncherRepository {
   ///   changed, so the folder just goes.
   /// - Committing, with every package in place: the install finished before
   ///   it stopped, so it stays installed.
-  /// - Committing, part way: everything the journal names is put back, as
-  ///   the install's own rollback would: its folders, its entries in the
-  ///   record of server content, and the manager records it added. While a
-  ///   receipt it would judge a folder by cannot be read, nothing is put back
-  ///   yet, so no entry is dropped for a folder that stays.
+  /// - Committing part way, or rolling back: everything the journal names is
+  ///   put back, as the install's own rollback would: its folders, its
+  ///   entries in the record of server content, and the manager records it
+  ///   added. While a receipt it would judge a folder by cannot be read, or
+  ///   a folder cannot leave whole because another program holds a file in
+  ///   it, nothing more is put back yet, so no entry is dropped for a folder
+  ///   that stays.
   /// - A cleanup's folder holds only content already taken out of the
   ///   packages folder, so it goes.
   Future<void> _sweepJoinInstalls(GameInstall install) async {
@@ -177,7 +183,7 @@ extension _JoinInstallJournal on LocalLauncherRepository {
       return true;
     }
     final packagesRoot = _packagesRoot(install);
-    final placed = <Directory>[];
+    final placed = <(Directory, String)>[];
     for (final package in journal.packages) {
       final target = Directory(
         p.join(packagesRoot.path, package.id, package.version),
@@ -187,16 +193,21 @@ extension _JoinInstallJournal on LocalLauncherRepository {
       // settling now would drop its record entry and leave it in place,
       // where it would become the player's own. The next start settles it.
       if (receipt.unreadable) return false;
-      if (receipt.sha256 == package.receiptSha256) placed.add(target);
+      if (receipt.sha256 == package.receiptSha256) {
+        placed.add((target, package.id));
+      }
     }
-    if (placed.length == journal.packages.length) {
+    if (journal.phase == _JoinJournalPhase.committing &&
+        placed.length == journal.packages.length) {
       await _appendLauncherLogBestEffort(
         'Kept a join install that finished before the launcher stopped.',
       );
       return true;
     }
-    for (final target in placed) {
-      target.deleteSync(recursive: true);
+    for (final (target, id) in placed) {
+      // Whole or not at all: one another program holds throws here, and
+      // stays with its receipt and its record entry for a later start.
+      _moveJoinFolderAside(target, root, id);
       final parent = target.parent;
       if (parent.existsSync() && parent.listSync().isEmpty) parent.deleteSync();
     }
@@ -216,6 +227,26 @@ extension _JoinInstallJournal on LocalLauncherRepository {
       'Undid a join install that stopped part way.',
     );
     return true;
+  }
+
+  /// Whether a join's install that failed or stopped part way is still
+  /// unsettled after a sweep, as while another program holds a file in one
+  /// of its folders. Those folders keep their record entries until a later
+  /// sweep takes them out, so nothing may build on them meanwhile.
+  Future<bool> _hasUnsettledJoinInstall(GameInstall install) async {
+    final staging = _managerStaging(install);
+    if (!staging.existsSync()) return false;
+    for (final entity in staging.listSync(followLinks: false)) {
+      if (entity is! Directory ||
+          !p.basename(entity.path).startsWith('launcher-join-')) {
+        continue;
+      }
+      final journal = await _readJoinJournal(entity);
+      if (journal != null && journal.phase != _JoinJournalPhase.staged) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Removes the manager records a join added for [ids], as long as each is
@@ -290,6 +321,29 @@ String _failureText(Object error) => switch (error) {
   FormatException(:final message) => message,
   _ => '$error',
 };
+
+/// Moves [target], a version folder of the mod [id], out of the packages
+/// folder into the join folder [root], whole and in one step; removing the
+/// join folder then deletes it. Throws, changing nothing, while another
+/// program holds a file in it. A recursive delete in place would take the
+/// receipt and leave the rest: a broken version of the mod that no record
+/// names any more.
+void _moveJoinFolderAside(Directory target, Directory root, String id) {
+  if (!target.existsSync()) return;
+  final aside = Directory(p.join(root.path, 'undone', id))
+    ..createSync(recursive: true);
+  final name = p.basename(target.path);
+  var destination = p.join(aside.path, name);
+  for (
+    var attempt = 2;
+    FileSystemEntity.typeSync(destination, followLinks: false) !=
+        FileSystemEntityType.notFound;
+    attempt++
+  ) {
+    destination = p.join(aside.path, '$name-$attempt');
+  }
+  target.renameSync(destination);
+}
 
 /// Deletes a join's or a cleanup's folder in manager staging; one that
 /// stays is swept on a later start.

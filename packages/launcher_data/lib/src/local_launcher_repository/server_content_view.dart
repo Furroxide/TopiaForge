@@ -292,8 +292,9 @@ String _serverContentUnusable(ServerContentStatus status, String action) {
           'the launcher, $next.',
     ServerContentStatus.damaged =>
       'The record of mods installed for servers in this game is damaged and '
-          'could not be repaired just now. Close any program using the game '
-          'folder and restart the launcher, which repairs it, $next.',
+          'could not be repaired just now. Free some space on the game\'s '
+          'drive if it is full, close any program using the game folder, and '
+          'restart the launcher, which repairs it; $next.',
     _ =>
       'The record of mods installed for servers could not be read just now. '
           'Close any program using BepInEx/TopiaForge/server-content.json, '

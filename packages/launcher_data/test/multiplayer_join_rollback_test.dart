@@ -173,6 +173,117 @@ void main() {
     expect(joinFolders(rig.game), isEmpty);
   });
 
+  test('a held folder is never half deleted, by the rollback or by a start '
+      'while it is still held', () async {
+    late JoinRig rig;
+    Future<void> Function()? release;
+    rig = await JoinRig.create(
+      hook: (step) async {
+        if (step != 'committed 3') return;
+        // The manifest sorts after the install receipt, so a recursive
+        // delete in place would take the receipt first and stop there.
+        release = await holdInPlace(
+          File(
+            p.join(
+              packageFolder(rig.game, 'own.alpha', '2.0.0').path,
+              'topiaforge.mod.json',
+            ),
+          ),
+        );
+        throw StateError('Stopped.');
+      },
+    );
+    await preparePlayer(rig);
+    final (server, plan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    final before = await rig.everything(StandardJoin.downloads);
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    if (release == null) return; // Skipped: this account moves any file.
+    expect((event as JoinFailed).rollbackComplete, isFalse);
+    final alpha = packageFolder(rig.game, 'own.alpha', '2.0.0');
+    final receipt = File(p.join(alpha.path, 'topiaforge.install.json'));
+    expect(receipt.existsSync(), isTrue, reason: 'the folder stays whole');
+    // A start while it is still held leaves it whole too.
+    rig.repository = rig.open();
+    expect((await rig.playerView()).loads, before['loads']);
+    expect(receipt.existsSync(), isTrue);
+    await release!();
+    rig.repository = rig.open();
+    expect(await rig.everything(StandardJoin.downloads), before);
+    expect(joinFolders(rig.game), isEmpty);
+    // So nothing is left to block joining the same server again.
+    expect(
+      await rig.repository.installJoinContent(
+        rig.install,
+        installingJoin(server, plan),
+      ),
+      isA<JoinInstallCompleted>(),
+    );
+  });
+
+  test('a join while an earlier one cannot be put back yet is refused, and '
+      'builds on none of its folders', () async {
+    late JoinRig rig;
+    final releases = <Future<void> Function()?>[];
+    var held = false;
+    rig = await JoinRig.create(
+      hook: (step) async {
+        if (step != 'committed 3' || held) return;
+        held = true;
+        // Every folder this join moved in is held, so the rollback can take
+        // none of them out.
+        for (final archive in StandardJoin.downloads) {
+          final folder = packageFolder(rig.game, archive.id, archive.version);
+          releases.add(
+            await holdInPlace(
+              File(p.join(folder.path, 'topiaforge.install.json')),
+            ),
+          );
+        }
+        throw StateError('Stopped.');
+      },
+    );
+    await preparePlayer(rig);
+    final (server, plan) = await StandardJoin.plan();
+    rig.cache(StandardJoin.downloads);
+    final before = await rig.everything(StandardJoin.downloads);
+    final first = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    if (releases.length != 3 || releases.contains(null)) return;
+    expect((first as JoinFailed).rollbackComplete, isFalse);
+    expect((await rig.playerView()).loads, before['loads']);
+    // Trying again at once would count the held folders as installed, and a
+    // later start would take them from under its server profile.
+    final again = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    expect(again, isA<JoinFailed>());
+    expect((again as JoinFailed).rollbackComplete, isTrue);
+    expect(again.detail, contains('still being put back'));
+    expect(again.detail, contains('then join again'));
+    for (final release in releases) {
+      await release!();
+    }
+    // Every folder was still in place, yet the join had failed: the next
+    // start puts it all back rather than keep it as finished.
+    rig.repository = rig.open();
+    expect(await rig.everything(StandardJoin.downloads), before);
+    expect(joinFolders(rig.game), isEmpty);
+    expect(
+      await rig.repository.installJoinContent(
+        rig.install,
+        installingJoin(server, plan),
+      ),
+      isA<JoinInstallCompleted>(),
+    );
+  });
+
   test(
     'a rollback that cannot finish says so, and the next start finishes it',
     () async {

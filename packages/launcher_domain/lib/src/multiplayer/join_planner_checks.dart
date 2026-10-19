@@ -145,8 +145,8 @@ String _unavailableMessage(
           'in Mods, then join again.',
     JoinPackageAvailability.installedForAnotherServer =>
       'Another server you joined runs a different build of this version, '
-          'and joining never replaces it. Remove that server\'s content in '
-          'Settings, then join again.',
+          'and joining never replaces it. Remove that server\'s content, then '
+          'join again.',
     JoinPackageAvailability.hashMismatch =>
       'Your sources offer this version as a different archive than the '
           'server runs.',

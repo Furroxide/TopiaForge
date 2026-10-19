@@ -21,6 +21,9 @@ namespace TopiaForge.ModManager.Core
     /// <para>The launcher replaces the record by moving it aside and moving the new one in, and Windows can stop it
     /// between the two moves. A record that is missing beside such a <c>server-content.json.&lt;token&gt;.bak</c> is
     /// read from the backups: what any of them withholds stays withheld.</para>
+    /// <para>A repair moves a link, a folder or an oversized file in the record's place aside as
+    /// <c>server-content.damaged-&lt;UTC time&gt;.json</c> before it writes the record that replaces it. A record
+    /// missing beside such a copy is a repair that failed or stopped there, so it is damaged, never missing.</para>
     /// </remarks>
     internal sealed class ServerContentSelection
     {
@@ -28,6 +31,8 @@ namespace TopiaForge.ModManager.Core
         private const string ReceiptFileName = "topiaforge.install.json";
         private static readonly Regex BackupName = new Regex(
             @"\Aserver-content\.json\.[0-9]+--?[0-9]+-[0-9]+\.bak\z", RegexOptions.CultureInvariant);
+        private static readonly Regex DamagedCopyName = new Regex(
+            @"\Aserver-content\.damaged-[0-9]+T[0-9]+Z(?:-[0-9]+)?\.json\z", RegexOptions.CultureInvariant);
 
         private readonly IReadOnlyList<ServerContentRecord> records;
         private readonly Dictionary<string, string?> receipts = new Dictionary<string, string?>(StringComparer.Ordinal);
@@ -80,14 +85,19 @@ namespace TopiaForge.ModManager.Core
             var primary = ReadFile(file);
             if (primary.Status != ServerContentStatus.Missing) return For(primary);
             string[] backups;
+            bool setAside;
             try
             {
-                backups = Directory.Exists(paths.Root)
+                var exists = Directory.Exists(paths.Root);
+                backups = exists
                     ? Directory.GetFiles(paths.Root, ServerContentRecord.FileName + ".*.bak", SearchOption.TopDirectoryOnly)
                         .Where(path => BackupName.IsMatch(Path.GetFileName(path)))
                         .OrderBy(path => path, StringComparer.Ordinal)
                         .ToArray()
                     : Array.Empty<string>();
+                setAside = exists && Directory
+                    .EnumerateFileSystemEntries(paths.Root, "server-content.damaged-*.json", SearchOption.TopDirectoryOnly)
+                    .Any(path => DamagedCopyName.IsMatch(Path.GetFileName(path)));
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
@@ -95,7 +105,13 @@ namespace TopiaForge.ModManager.Core
                     "The folder of the record of server content could not be listed: " + error.Message));
             }
 
-            if (backups.Length == 0) return None;
+            if (backups.Length == 0)
+            {
+                return setAside
+                    ? For(ServerContentRecord.Unusable(ServerContentStatus.Damaged,
+                        "The record of server content was set aside as damaged, and the record that repairs it was not written."))
+                    : None;
+            }
             var read = backups.Select(ReadFile).ToList();
             var unusable = read.FirstOrDefault(record => record.Status != ServerContentStatus.Valid);
             return unusable != null
