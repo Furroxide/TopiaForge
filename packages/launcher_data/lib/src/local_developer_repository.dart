@@ -9,6 +9,8 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 import 'agpl_3_0_text.g.dart';
+import 'atomic_file_writes.dart';
+import 'atomic_files.dart';
 import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';

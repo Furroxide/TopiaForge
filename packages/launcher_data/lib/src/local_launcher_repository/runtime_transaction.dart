@@ -64,7 +64,7 @@ class _RuntimeRepairTransaction {
     _requireRuntimeDirectory(gameRoot, root, label: 'Runtime transaction');
     final transaction = _RuntimeRepairTransaction._(gameRoot, root);
     // Rolling back needs the journal an interrupted save moved aside.
-    await _recoverAtomicBackupIfMissing(
+    await recoverAtomicBackupIfMissing(
       transaction._journal,
       label: 'Runtime repair journal',
     );

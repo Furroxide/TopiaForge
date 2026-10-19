@@ -28,6 +28,7 @@ extension _DiagnosticsHelpers on LocalLauncherRepository {
       now,
       gamePaths,
     );
+    _tidyLauncherLog();
     await _addDiagnosticFileIfExists(
       archive,
       included,
