@@ -58,6 +58,8 @@ namespace TopiaForge.ModManager.Tests
                 text => LaunchTransportJson.WritePreferences(LaunchTransportJson.ReadPreferences(text)), Check);
             Replay("journal", channels.RootElement.GetProperty("journal"),
                 text => LaunchTransportJson.WritePreferencesJournal(LaunchTransportJson.ReadPreferencesJournal(text)), Check);
+            Replay("quit", channels.RootElement.GetProperty("quit"),
+                text => LaunchTransportJson.WriteLauncherQuit(LaunchTransportJson.ReadLauncherQuit(text)), Check);
             foreach (var item in channels.RootElement.GetProperty("journalApply").EnumerateArray())
             {
                 // The launcher applies journals; the game only reads both documents, so each must read here too.

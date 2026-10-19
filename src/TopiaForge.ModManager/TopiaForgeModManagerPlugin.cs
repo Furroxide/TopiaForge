@@ -117,6 +117,7 @@ namespace TopiaForge.ModManager
 
                 stageStart = startupStopwatch.ElapsedMilliseconds;
                 launchProfile = ConsumeLaunchProfile();
+                WatchForLauncherQuit();
                 stateStore = ManagerStateStartupStore.Open(paths.StateFile);
                 state = stateStore.State;
                 if (!stateStore.CanSave)
@@ -239,6 +240,7 @@ namespace TopiaForge.ModManager
 
         private void Update()
         {
+            if (QuitIfLauncherAsks()) return;
             if (quitHandler?.ShouldRequestQuit() == true)
             {
                 LogQuitDeadline();

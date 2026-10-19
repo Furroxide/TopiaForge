@@ -140,6 +140,7 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
 | --- | --- | --- |
 | `session-handoff-<request key>.json` | Game to launcher | A join the game cannot make as it is: `requestId` (the process's launch request), `handoffId`, and a `target` that is an invite, a listing, or `current` (this process's own join, planned once more) |
 | `session-join-<request key>.json` | Launcher to game | A live join for a game whose packages already match: `requestId`, its own `joinId`, the running `packageSetDigest`, and a join `session` |
+| `launcher-quit-<request key>.json` | Launcher to game | A request to quit, before an owned restart: `requestId` (the process's launch request) and its own `quitId` |
 
 - **The handoff never carries an address.** A server typed by address in game goes to the launcher as a
   `topiaforge://join/…` link. The launcher takes a handoff once and restarts into the server's profile through its
@@ -147,14 +148,20 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
 - **A live join never carries an address.** Its target is an invite or a listing; a direct target needs a launch
   request. The game refuses a join whose package-set digest is not its own, and reports it under `joinId` as it would
   a launch request. A newer join replaces one the game has not taken.
+- **A quit request reaches only the game the launcher started.** The launcher writes one only for a process it owns
+  and has just verified, named by that process's launch request, which no other game knows. The manager looks for its
+  own request twice a second, takes it once and quits as the game's **QUIT** button does, so mods unload and the clean
+  exit is recorded. The launcher waits up to 10 seconds for the request to be taken and 30 in all for the process to
+  exit, then withdraws an untaken request (`withdrawLauncherQuit`) and stops the process. Section 8 has why this is
+  TopiaForge's own channel.
 - **A take claims before it reads.** The taker renames the file to a private `.taking-<milliseconds>-<nonce>` name,
   the claim time in Unix milliseconds and 32 random hexadecimal digits, then reads, checks and removes that, so a newer
   file the other side writes meanwhile lands at the channel's name again and is never removed unread. A malformed or
   foreign file is removed without being acted on. `withdrawSessionJoin` says whether it withdrew the join, since the
   game may have taken it.
 - **Stale claims are swept.** A take that crashes leaves its claim behind, so each side sweeps its own: the launcher its
-  handoff claims whenever it takes a handoff (`sweepStaleClaims`), the game its join claims at startup and whenever it
-  takes a join (`SweepStaleClaims`). A sweep removes only its own side's claim pattern, and only a claim whose recorded
+  handoff claims whenever it takes a handoff (`sweepStaleClaims`), the game its join and quit claims at startup and
+  whenever it takes either (`SweepStaleClaims`). A sweep removes only its own side's claim pattern, and only a claim whose recorded
   claim time is more than an hour past. The time comes from the name, because a rename keeps a file's own timestamps. A
   live take holds its claim for milliseconds. Neither sweep removes a claim another process holds open: the game opens a
   claim sharing nothing but deletion before it deletes it, and Windows refuses the launcher's deletion while another
@@ -223,7 +230,18 @@ request's `serviceOrigin` comes before the manager's own. Once mods have loaded,
   for the provider to report. A rejected V5 request is correlated by its intent and reported the same way.
 - In crash recovery, the session is not offered, and its launch fails at once (`unavailable`, with the reason), so the
   launcher never waits on a session nothing will report.
-- At startup the manager sweeps the join claims an earlier, crashed process left behind (section 6).
+- At startup the manager sweeps the join and quit claims an earlier, crashed process left behind (section 6).
+- **The launcher's quit request** (`LauncherQuitWatcher`). A process the launcher started, rejected command and safe
+  mode included, looks for its `launcher-quit` request twice a second from the plugin's `Update`, and quits with
+  `Application.Quit` once it has taken it. The plugin's quit handler then lets the game's own quit steps run and holds
+  the quit while mods unload, as for the **QUIT** button. A game started any other way has no request id, so nothing can
+  ask it to quit.
+  - **Why TopiaForge's own channel.** Robotopia itself quits when a `quit-request` file appears in its persistent-data
+    folder. That folder belongs to every copy of the game on the machine, so a request there would reach a game the
+    launcher did not start, and it is an undocumented game behaviour, a binding no surface check can prove. The staging
+    channel names one launch request, lives beside the install it concerns, and is TopiaForge's to keep. Its only cost is
+    that it works while the manager runs, which every launch the launcher owns has; a game whose manager does not answer
+    is stopped once the answer window passes.
 
 What later slices wire: starting the session from the plan when live sessions are on, the provider's progress and
 outcomes V2 from its live flows, writing handoffs, polling for live joins, reading the projection in game, and recording
