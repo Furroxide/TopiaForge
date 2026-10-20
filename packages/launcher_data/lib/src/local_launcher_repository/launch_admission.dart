@@ -59,7 +59,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
       );
     }
     LaunchStagingLease? lease;
-    ReplacedGameExit? replaced;
+    ReplacedGame? replaced;
     try {
       final profile = _requireValidLauncherProfile(
         LauncherProfile.fromJson(

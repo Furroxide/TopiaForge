@@ -32,22 +32,26 @@ final class OwnedGameQuitPolicy {
   final Future<void> Function(Duration delay)? pause;
 }
 
+/// The manager's own bound on its startup journal (`JsonUtil`).
+const _maxStartupJournalBytes = 4 * 1024 * 1024;
+
 extension _OwnedGameQuit on LocalLauncherRepository {
   /// Closes [process], the verified game this launcher started in
   /// [install], and says how it ended: asked to quit, and stopped only if it
-  /// did not. Null when the repository closed while it waited; then nothing
-  /// was stopped, and a request the game had not taken is withdrawn.
+  /// did not, and whether the game's next start opens in safe mode. Null when
+  /// the repository closed while it waited; then nothing was stopped, and a
+  /// request the game had not taken is withdrawn.
   ///
   /// Callers pass only a process [_ownedLaunchProcesses] holds and
   /// [_gameProcessLiveness] verified. The request names that process's own
   /// launch request, which no other game knows, so nothing this launcher did
   /// not start is ever asked to quit, or stopped.
-  Future<ReplacedGameExit?> _closeOwnedGame(
+  Future<ReplacedGame?> _closeOwnedGame(
     GameInstall install,
     LaunchProcessIdentity process,
   ) async {
     if (await _gameProcessLiveness(process) == false) {
-      return ReplacedGameExit.exited;
+      return _replacedGame(install, ReplacedGameExit.exited);
     }
     final requestId = _ownedLaunchRequests[process];
     final store = LaunchStagingStore(install.path);
@@ -66,18 +70,78 @@ extension _OwnedGameQuit on LocalLauncherRepository {
         );
       }
     }
+    var reason = 'The running game was stopped.';
     if (request != null) {
       switch (await _waitForOwnedGameQuit(store, request, process)) {
         case _OwnedGameWait.quit:
-          return ReplacedGameExit.quit;
+          return _replacedGame(install, ReplacedGameExit.quit);
         case _OwnedGameWait.repositoryClosed:
           return null;
-        case _OwnedGameWait.boundsPassed:
-          break;
+        case _OwnedGameWait.notTaken:
+          reason =
+              'The running game did not take the quit request within '
+              '${_ownedGameQuit.answerWithin.inSeconds} s, so it was stopped.';
+        case _OwnedGameWait.notExited:
+          reason =
+              'The running game took the quit request but did not exit within '
+              '${_ownedGameQuit.exitWithin.inSeconds} s, so it was stopped.';
       }
     }
+    // A launcher that closed while it waited stops nothing, even when it
+    // closed during the last look, as the bound passed.
+    if (_disposed) return null;
     await _gameProcessStopper(process);
-    return ReplacedGameExit.stopped;
+    await _appendLauncherLogBestEffort(reason);
+    return _replacedGame(install, ReplacedGameExit.stopped);
+  }
+
+  Future<ReplacedGame> _replacedGame(
+    GameInstall install,
+    ReplacedGameExit exit,
+  ) async {
+    final safeMode = await _nextStartOpensInSafeMode(install);
+    if (safeMode && exit != ReplacedGameExit.stopped) {
+      await _appendLauncherLogBestEffort(
+        'The running game ended without recording a clean exit, so the next '
+        'start opens in safe mode.',
+      );
+    }
+    return ReplacedGame(exit, safeMode: safeMode);
+  }
+
+  /// Whether the game's next start opens in safe mode, as its manager reads
+  /// the startup journal the game just closed left (`StartupJournal`): only a
+  /// recorded clean exit, or no journal at all, starts normally. A journal
+  /// naming a mod that was loading turns that one mod off, which the manager
+  /// reports itself, and one that cannot be read now claims nothing.
+  Future<bool> _nextStartOpensInSafeMode(GameInstall install) async {
+    final file = File(
+      p.join(_managerRoot(install).path, 'startup-journal.json'),
+    );
+    final List<int> bytes;
+    try {
+      if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+          FileSystemEntityType.notFound) {
+        return false;
+      }
+      bytes = await _readLauncherFileBounded(file, _maxStartupJournalBytes);
+    } on Object {
+      return false;
+    }
+    final Object? journal;
+    try {
+      journal = jsonDecode(utf8.decode(bytes));
+    } on FormatException {
+      // The manager cannot read it either, and starts in safe mode.
+      return true;
+    }
+    if (journal is! Map || journal['schemaVersion'] != 1) return true;
+    final state = journal['state'];
+    if (state == 'clean-exit') return false;
+    final loading = journal['currentModId'];
+    return !(state == 'loading' &&
+        loading is String &&
+        ModManifest.isValidId(loading));
   }
 
   Future<_OwnedGameWait> _waitForOwnedGameQuit(
@@ -109,15 +173,8 @@ extension _OwnedGameQuit on LocalLauncherRepository {
       waited += policy.lookEvery;
     }
     await store.withdrawLauncherQuit(request);
-    await _appendLauncherLogBestEffort(
-      taken
-          ? 'The running game took the quit request but did not exit within '
-                '${policy.exitWithin.inSeconds} s, so it is stopped.'
-          : 'The running game did not take the quit request within '
-                '${policy.answerWithin.inSeconds} s, so it is stopped.',
-    );
-    return _OwnedGameWait.boundsPassed;
+    return taken ? _OwnedGameWait.notExited : _OwnedGameWait.notTaken;
   }
 }
 
-enum _OwnedGameWait { quit, repositoryClosed, boundsPassed }
+enum _OwnedGameWait { quit, repositoryClosed, notTaken, notExited }

@@ -59,6 +59,8 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
     started: true,
     message: 'Restarted TopiaForge.',
   );
+  // Holds a restart, as one waits for the running game to quit.
+  Completer<void>? restartGate;
   Completer<void>? loadGate;
   Completer<void>? loadEntered;
   int loadCount = 0;
@@ -250,6 +252,7 @@ class _FakeLauncherRepository extends _InstallFakeLauncherRepository {
     LaunchSelection? selectionOverride,
   }) async {
     restartCount += 1;
+    await restartGate?.future;
     return restartResult;
   }
 

@@ -78,7 +78,7 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   String? _activeLaunchRequest;
   LaunchActivity? _launchReceipt;
   // How the game the active launch replaced ended, kept on its status line.
-  ReplacedGameExit? _replacedGame;
+  ReplacedGame? _replacedGame;
 
   String get dataRoot => _repository.dataRoot;
 

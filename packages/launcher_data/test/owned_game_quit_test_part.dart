@@ -4,9 +4,16 @@ Future<void> _noPause(Duration _) async {}
 
 /// A game this launcher started, as a restart sees it. Its manager takes the
 /// launcher's quit request for the launch it was started with and quits, or
-/// never takes it, or takes it and hangs.
+/// never takes it, or takes it and hangs. Like the manager, it keeps a startup
+/// journal: startup complete while it runs, and a clean exit when it quits
+/// cleanly.
 final class _FakeOwnedGame {
-  _FakeOwnedGame(this.gameRoot, {this.takes = true, this.exits = true});
+  _FakeOwnedGame(
+    this.gameRoot, {
+    this.takes = true,
+    this.exits = true,
+    this.recordsCleanExit = true,
+  });
 
   final Directory gameRoot;
 
@@ -15,6 +22,10 @@ final class _FakeOwnedGame {
 
   /// Whether it exits once it has taken the request: false as if it hung.
   final bool exits;
+
+  /// Whether its quit records a clean exit: false as if its mods took longer
+  /// than the manager's 10 seconds to unload.
+  final bool recordsCleanExit;
   var running = false;
   var starts = 0;
   var stops = 0;
@@ -35,6 +46,24 @@ final class _FakeOwnedGame {
 
   Directory get staging =>
       Directory(p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'staging'));
+
+  File get journal => File(
+    p.join(gameRoot.path, 'BepInEx', 'TopiaForge', 'startup-journal.json'),
+  );
+
+  /// Writes the startup journal as the manager does.
+  void record(String state, {String currentModId = ''}) => journal
+    ..parent.createSync(recursive: true)
+    ..writeAsStringSync(
+      jsonEncode({
+        'currentModId': currentModId,
+        'schemaVersion': 1,
+        'sessionId': '0f1e2d3c4b5a69788796a5b4c3d2e1f0',
+        'startedAtUtc': '2026-10-19T00:00:00.0000000Z',
+        'state': state,
+        'updatedAtUtc': '2026-10-19T00:00:01.0000000Z',
+      }),
+    );
 
   List<String> get quitRequests => staging.existsSync()
       ? [
@@ -59,6 +88,7 @@ final class _FakeOwnedGame {
     if (_exitOnNextLook) {
       _exitOnNextLook = false;
       running = false;
+      if (recordsCleanExit) record('clean-exit');
     }
     if (running && takes && requestId != null) {
       // The game's manager takes only the request for its own launch.
@@ -79,6 +109,7 @@ final class _FakeOwnedGame {
 
   Future<int> start(GameProcessRequest _) async {
     running = true;
+    record('startup-complete');
     return ++starts + 600;
   }
 
@@ -100,13 +131,14 @@ void _registerOwnedGameQuitTests({
     Future<(LocalLauncherRepository, GameInstall, LaunchResult)> launched(
       _FakeOwnedGame game, {
       OwnedGameQuitPolicy quit = const OwnedGameQuitPolicy(pause: _noPause),
+      GameProcessStarter? starter,
     }) async {
       final (repo, install) = await _prepareProfileLaunchRepository(
         dataRoot: dataRoot(),
         repositoryRoot: repositoryRoot(),
         gameRoot: gameRoot(),
         probe: game.probe,
-        starter: game.start,
+        starter: starter ?? game.start,
         identityReader: (pid, path) async => LaunchProcessIdentity(
           pid: pid,
           startTimeUtc: DateTime.utc(2026),
@@ -138,8 +170,13 @@ void _registerOwnedGameQuitTests({
 
       final restarted = await repo.restart(install, profile);
       expect(restarted.processStarted, isTrue, reason: restarted.message);
-      expect(restarted.replacedGame, ReplacedGameExit.quit);
-      expect(restarted.message, startsWith(ReplacedGameExit.quit.message));
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.quit);
+      expect(restarted.replacedGame?.safeMode, isFalse);
+      expect(
+        restarted.message,
+        startsWith('The running game quit when asked.'),
+      );
+      expect(restarted.message, isNot(contains('safe mode')));
       expect(game.stops, 0);
       expect(game.starts, 2);
       // The request named the game's own launch, and nothing is left behind.
@@ -159,8 +196,16 @@ void _registerOwnedGameQuitTests({
 
       final restarted = await repo.restart(install, profile);
       expect(restarted.processStarted, isTrue, reason: restarted.message);
-      expect(restarted.replacedGame, ReplacedGameExit.stopped);
-      expect(restarted.message, startsWith(ReplacedGameExit.stopped.message));
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.stopped);
+      expect(restarted.replacedGame?.safeMode, isTrue);
+      expect(
+        restarted.message,
+        startsWith(
+          'The running game did not quit when asked, so it was stopped. This '
+          'start opens in safe mode, with every mod off; restart it from the '
+          'launcher to load them.',
+        ),
+      );
       expect(paused, const Duration(seconds: 2));
       expect(game.stops, 1);
       expect(game.quitRequests, isEmpty, reason: 'It is withdrawn.');
@@ -177,7 +222,7 @@ void _registerOwnedGameQuitTests({
 
       final restarted = await repo.restart(install, profile);
       expect(restarted.processStarted, isTrue, reason: restarted.message);
-      expect(restarted.replacedGame, ReplacedGameExit.stopped);
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.stopped);
       expect(paused, const Duration(seconds: 6));
       expect(game.taken, hasLength(1));
       expect(game.stops, 1);
@@ -224,6 +269,36 @@ void _registerOwnedGameQuitTests({
       expect(game.quitRequests, isEmpty);
     });
 
+    for (final (window, takes) in [('answer', false), ('exit', true)]) {
+      test('a launcher closed during the last pause of the $window window '
+          'stops nothing either', () async {
+        late LocalLauncherRepository repository;
+        var pauses = 0;
+        final game = _FakeOwnedGame(gameRoot(), takes: takes, exits: false);
+        final (repo, install, _) = await launched(
+          game,
+          quit: OwnedGameQuitPolicy(
+            answerWithin: const Duration(milliseconds: 200),
+            exitWithin: const Duration(milliseconds: 300),
+            lookEvery: const Duration(milliseconds: 100),
+            // The window's last pause: the next look is past its bound.
+            pause: (_) async {
+              if (++pauses == (takes ? 3 : 2)) unawaited(repository.dispose());
+            },
+          ),
+        );
+        repository = repo;
+
+        final result = await repo.restart(install, profile);
+        expect(result.processStarted, isFalse);
+        expect(result.message, contains('No process was stopped.'));
+        expect(game.stops, 0);
+        expect(game.running, isTrue);
+        expect(game.starts, 1);
+        expect(game.quitRequests, isEmpty);
+      });
+    }
+
     test(
       'a game that exits before it is asked is reported as exited',
       () async {
@@ -233,7 +308,7 @@ void _registerOwnedGameQuitTests({
 
         final restarted = await repo.restart(install, profile);
         expect(restarted.processStarted, isTrue, reason: restarted.message);
-        expect(restarted.replacedGame, ReplacedGameExit.exited);
+        expect(restarted.replacedGame?.exit, ReplacedGameExit.exited);
         expect(game.taken, isEmpty);
         expect(game.quitRequests, isEmpty);
         expect(game.stops, 0);
@@ -253,7 +328,7 @@ void _registerOwnedGameQuitTests({
 
       final restarted = await repo.restart(install, profile);
       expect(restarted.processStarted, isTrue, reason: restarted.message);
-      expect(restarted.replacedGame, ReplacedGameExit.stopped);
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.stopped);
       expect(game.stops, 1);
       expect(blocked.existsSync(), isTrue);
     });
@@ -270,10 +345,118 @@ void _registerOwnedGameQuitTests({
         );
 
         final restarted = await repo.restart(install, profile);
-        expect(restarted.replacedGame, ReplacedGameExit.stopped);
+        expect(restarted.replacedGame?.exit, ReplacedGameExit.stopped);
         expect(paused, const Duration(seconds: 2));
         expect(game.stops, 1);
       },
     );
+
+    test('a game that quits without recording a clean exit leaves this start '
+        'in safe mode, and says so', () async {
+      final game = _FakeOwnedGame(gameRoot(), recordsCleanExit: false);
+      final (repo, install, _) = await launched(game);
+
+      final restarted = await repo.restart(install, profile);
+      expect(restarted.processStarted, isTrue, reason: restarted.message);
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.quit);
+      expect(restarted.replacedGame?.safeMode, isTrue);
+      expect(
+        restarted.message,
+        startsWith(
+          'The running game quit when asked, but did not close cleanly. This '
+          'start opens in safe mode, with every mod off; restart it from the '
+          'launcher to load them.',
+        ),
+      );
+      expect(game.stops, 0);
+    });
+
+    test('safe mode is claimed only when the journal left for the next start '
+        'means it', () async {
+      // What the manager makes of the journal at its next start.
+      final cases = <(String, void Function(_FakeOwnedGame), bool)>[
+        ('a recorded clean exit', (game) => game.record('clean-exit'), false),
+        ('no journal', (game) => game.journal.deleteSync(), false),
+        ('startup complete, no clean exit', (game) {}, true),
+        ('startup never completed', (game) => game.record('loaded'), true),
+        ('an unknown state', (game) => game.record('closing'), true),
+        (
+          'a journal it cannot read',
+          (game) => game.journal.writeAsStringSync('{"state":'),
+          true,
+        ),
+        (
+          'another schema',
+          (game) => game.journal.writeAsStringSync(
+            jsonEncode({'schemaVersion': 2, 'state': 'clean-exit'}),
+          ),
+          true,
+        ),
+        // One mod is turned off then, not every mod, and the manager says so.
+        (
+          'a mod that was loading',
+          (game) => game.record('loading', currentModId: 'example.loading'),
+          false,
+        ),
+      ];
+      for (final (name, journal, safeMode) in cases) {
+        final game = _FakeOwnedGame(gameRoot())..exitsUnasked = true;
+        final (repo, install, _) = await launched(game);
+        journal(game);
+
+        final restarted = await repo.restart(install, profile);
+        expect(restarted.replacedGame?.exit, ReplacedGameExit.exited);
+        expect(restarted.replacedGame?.safeMode, safeMode, reason: name);
+        expect(
+          restarted.message.contains('safe mode'),
+          safeMode,
+          reason: '$name: ${restarted.message}',
+        );
+        await repo.dispose();
+      }
+    });
+
+    test('a stopped game whose manager never ran its startup claims no safe '
+        'mode', () async {
+      // The journal is still the previous run's, which ended cleanly.
+      final game = _FakeOwnedGame(gameRoot(), takes: false);
+      final (repo, install, _) = await launched(game);
+      game.record('clean-exit');
+
+      final restarted = await repo.restart(install, profile);
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.stopped);
+      expect(restarted.replacedGame?.safeMode, isFalse);
+      expect(
+        restarted.message,
+        startsWith(
+          'The running game did not quit when asked, so it was stopped. '
+          'Started replacement',
+        ),
+      );
+    });
+
+    test('a stop that no replacement follows says the next start opens in '
+        'safe mode, not this one', () async {
+      final game = _FakeOwnedGame(gameRoot(), takes: false);
+      final (repo, install, _) = await launched(
+        game,
+        starter: (request) async {
+          if (game.starts == 1) throw StateError('Creation was refused.');
+          return game.start(request);
+        },
+      );
+
+      final result = await repo.restart(install, profile);
+      expect(result.processStarted, isFalse);
+      expect(game.stops, 1);
+      expect(
+        result.message,
+        startsWith(
+          'The running game did not quit when asked, so it was stopped. Its '
+          'next start opens in safe mode, with every mod off. TopiaForge could '
+          'not be started.',
+        ),
+      );
+    });
   });
 }

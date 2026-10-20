@@ -109,21 +109,39 @@ void main() {
     },
   );
   test('a restart says the game it replaced quit when asked', () async {
-    repository.replaced = ReplacedGameExit.quit;
+    repository.replaced = const ReplacedGame(ReplacedGameExit.quit);
     repository.latest = repository.succeeded();
     expect(await launch(restart: true), 0);
     expect(repository.restarts, 1);
     expect(messages.first, 'The running game quit when asked.');
     expect(messages[1], startsWith('Game process started'));
   });
-  test('a restart that had to stop the game says this start is in safe '
-      'mode, and what to do', () async {
-    repository.replaced = ReplacedGameExit.stopped;
-    repository.latest = repository.succeeded();
-    expect(await launch(restart: true), 0);
-    expect(messages.first, ReplacedGameExit.stopped.message);
-    expect(messages.first, contains('safe mode'));
-    expect(messages.first, contains('restart it from the launcher'));
+  for (final exit in ReplacedGameExit.values) {
+    test('a restart whose replaced game ${exit.name} into safe mode says this '
+        'start is in safe mode, and what to do', () async {
+      repository.replaced = ReplacedGame(exit, safeMode: true);
+      repository.latest = repository.succeeded();
+      expect(await launch(restart: true), 0);
+      expect(messages.first, repository.replaced!.message());
+      expect(messages.first, contains('This start opens in safe mode'));
+      expect(messages.first, contains('restart it from the launcher'));
+    });
+  }
+  test('a failed restart says the next start opens in safe mode', () async {
+    repository.replaced = const ReplacedGame(
+      ReplacedGameExit.stopped,
+      safeMode: true,
+    );
+    repository.replacementStarts = false;
+    expect(await launch(restart: true), 1);
+    expect(
+      messages.single,
+      startsWith(
+        'The running game did not quit when asked, so it was stopped. Its '
+        'next start opens in safe mode, with every mod off.',
+      ),
+    );
+    expect(messages.single, isNot(contains('This start')));
   });
   test('a launch that replaced no game says nothing about one', () async {
     repository.latest = repository.succeeded();
@@ -151,7 +169,8 @@ class _Repository implements LauncherRepository {
   void Function()? onLaunch;
   LaunchSelection? selectionReceived;
   LaunchActivity? latest;
-  ReplacedGameExit? replaced;
+  ReplacedGame? replaced;
+  bool replacementStarts = true;
   int restarts = 0;
   LaunchActivity base({
     String requestId = 'request-one',
@@ -242,6 +261,12 @@ class _Repository implements LauncherRepository {
     LaunchSelection? selectionOverride,
   }) async {
     restarts++;
+    if (!replacementStarts) {
+      return const LaunchResult(
+        started: false,
+        message: 'TopiaForge could not be started.',
+      ).replacing(replaced);
+    }
     return (await launch(
       install,
       profile,

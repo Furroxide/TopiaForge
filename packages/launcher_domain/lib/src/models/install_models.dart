@@ -353,30 +353,6 @@ class RepairReport {
   bool get ok => issues.every((issue) => !issue.isBlocking);
 }
 
-/// How the running game a restart replaced ended.
-enum ReplacedGameExit {
-  /// It quit when the launcher asked, as its own Quit button would: its mods
-  /// unloaded and it recorded a clean exit, so the new start loads them.
-  quit,
-
-  /// It did not quit when asked, so the launcher stopped it. It recorded no
-  /// clean exit, so the new start opens in safe mode, with every mod off.
-  stopped,
-
-  /// It had already exited when the launcher came to close it.
-  exited;
-
-  /// What happened, in the player's words.
-  String get message => switch (this) {
-    ReplacedGameExit.quit => 'The running game quit when asked.',
-    ReplacedGameExit.stopped =>
-      'The running game did not quit when asked, so it was stopped. This '
-          'start opens in safe mode, with every mod off; restart it from the '
-          'launcher to load them.',
-    ReplacedGameExit.exited => 'The running game had already exited.',
-  };
-}
-
 class LaunchResult {
   const LaunchResult({
     required this.started,
@@ -400,14 +376,16 @@ class LaunchResult {
   final List<LaunchBlock> blocks;
   final LaunchActivity? latestActivity;
 
-  /// How the running game this launch replaced ended; null when it replaced
-  /// none.
-  final ReplacedGameExit? replacedGame;
+  /// How the running game this launch replaced ended, and whether that leaves
+  /// this start in safe mode; null when it replaced none.
+  final ReplacedGame? replacedGame;
 
   /// This result, saying how the running game it replaced ended.
-  LaunchResult replacing(ReplacedGameExit? replaced) => LaunchResult(
+  LaunchResult replacing(ReplacedGame? replaced) => LaunchResult(
     started: started,
-    message: replaced == null ? message : '${replaced.message} $message',
+    message: replaced == null
+        ? message
+        : '${replaced.message(started: started)} $message',
     processId: processId,
     requestId: requestId,
     process: process,

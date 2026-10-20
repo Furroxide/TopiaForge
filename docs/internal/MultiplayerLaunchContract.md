@@ -152,8 +152,13 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
   and has just verified, named by that process's launch request, which no other game knows. The manager looks for its
   own request twice a second, takes it once and quits as the game's **QUIT** button does, so mods unload and the clean
   exit is recorded. The launcher waits up to 10 seconds for the request to be taken and 30 in all for the process to
-  exit, then withdraws an untaken request (`withdrawLauncherQuit`) and stops the process. Section 8 has why this is
-  TopiaForge's own channel.
+  exit, then withdraws an untaken request (`withdrawLauncherQuit`) and stops the process. A launcher that closes while
+  it waits withdraws the request and stops nothing. Section 8 has why this is TopiaForge's own channel.
+- **The launcher reports what the next start will be.** Once the game has ended, however it ended, the launcher reads
+  the state the manager left in its startup journal (`startup-journal.json`), as the manager's next start will:
+  only a recorded clean exit, or no journal, starts normally. A quit whose mods took longer than the manager's 10
+  seconds to unload records none, so `LaunchResult.replacedGame` then says the start opens in safe mode, as it does
+  after a stop.
 - **A take claims before it reads.** The taker renames the file to a private `.taking-<milliseconds>-<nonce>` name,
   the claim time in Unix milliseconds and 32 random hexadecimal digits, then reads, checks and removes that, so a newer
   file the other side writes meanwhile lands at the channel's name again and is never removed unread. A malformed or

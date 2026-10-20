@@ -274,4 +274,49 @@ void _registerLaunchActivityTests() {
       await bloc.close();
     },
   );
+
+  for (final safeMode in [false, true]) {
+    test('a confirmed restart ${safeMode ? 'keeps warning' : 'stops warning'} '
+        'when the game it replaced '
+        '${safeMode ? 'left this start in safe mode' : 'quit cleanly'}', () async {
+      final profile = selected();
+      final fake = repository(profile);
+      final base = _activity(profile);
+      fake.restartResult = LaunchResult(
+        started: true,
+        message: 'Restarted.',
+        requestId: base.requestId,
+        latestActivity: base,
+        replacedGame: ReplacedGame(ReplacedGameExit.quit, safeMode: safeMode),
+      );
+      final bloc = LauncherBloc(fake)..add(const LauncherStarted());
+      await _waitLaunchState(bloc, () => bloc.state.launchPreview != null);
+      bloc.add(const GameRestartRequested());
+      await _waitLaunchState(bloc, () => bloc.state.launchActivity != null);
+      fake.activityController.add(
+        base.applyOutcome(
+          LaunchOutcome(
+            kind: 'launch',
+            requestId: base.requestId,
+            command: 'launch-target',
+            sessionId: 'session-one',
+            sequence: 1,
+            status: 'succeeded',
+            phase: 'running',
+          ),
+        ),
+      );
+      await _waitLaunchState(
+        bloc,
+        () => bloc.state.launchActivity!.sessionStarted,
+      );
+      expect(bloc.state.statusMessage, endsWith('Session is running.'));
+      expect(bloc.state.statusMessage.contains('safe mode'), safeMode);
+      expect(
+        bloc.state.statusSeverity,
+        safeMode ? IssueSeverity.warning : IssueSeverity.info,
+      );
+      await bloc.close();
+    });
+  }
 }

@@ -168,10 +168,11 @@ again in the manager; `manager.log` names it on a line that begins `Automaticall
 
 When the launcher restarts a game it started, it asks the game to quit the same way, so the restarted
 game loads your mods. It stops the game itself only if the game has not taken the request within 10
-seconds, or has not closed within 30, for example because it hangs. The restarted game then opens in
-safe mode, and the launcher says so; restart from the launcher once more to load your mods. Like the
-**QUIT** button, a restart runs the game's own quit steps, the shutdown feedback page included unless
-the No Feedback URL mod is on.
+seconds, or has not closed within 30, for example because it hangs. Whenever the game it closed did
+not record a clean exit, because it was stopped or because its mods took longer than those 10
+seconds to unload, the restarted game opens in safe mode and the launcher says so; restart from the
+launcher once more to load your mods. Like the **QUIT** button, a restart runs the game's own quit
+steps, the shutdown feedback page included unless the No Feedback URL mod is on.
 
 ## Logs
 

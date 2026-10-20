@@ -10,6 +10,7 @@ part 'models/developer_vpm_models.dart';
 part 'models/developer_models.dart';
 part 'models/developer_unity_models.dart';
 part 'models/install_models.dart';
+part 'models/replaced_game_models.dart';
 part 'models/game_install_discovery_models.dart';
 part 'models/package_inbox_models.dart';
 part 'models/json_helpers.dart';
