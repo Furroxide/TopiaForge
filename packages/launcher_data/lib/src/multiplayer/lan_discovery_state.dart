@@ -49,6 +49,7 @@ final class LanDiscoveryCounters {
     this.unusableInfo = 0,
     this.serversDropped = 0,
     this.faults = 0,
+    this.querySocketsReplaced = 0,
   });
 
   /// Datagrams that arrived on the discovery port.
@@ -83,6 +84,10 @@ final class LanDiscoveryCounters {
   /// Datagrams whose handling failed unexpectedly; each was dropped.
   final int faults;
 
+  /// Query sockets the system closed, each after a send it refused, and
+  /// replaced with a new one.
+  final int querySocketsReplaced;
+
   Map<String, Object?> toJson() => {
     'datagramsHeard': datagramsHeard,
     'invalidBeacons': invalidBeacons,
@@ -94,6 +99,7 @@ final class LanDiscoveryCounters {
     'unusableInfo': unusableInfo,
     'serversDropped': serversDropped,
     'faults': faults,
+    'querySocketsReplaced': querySocketsReplaced,
   };
 }
 

@@ -23,6 +23,9 @@ void main() {
     repository = LocalDeveloperRepository(
       dataRoot: dataRoot.path,
       repositoryRoot: repoRoot.path,
+      // Nothing on the machine's PATH: each real lookup is a process bounded
+      // to five seconds, which a loaded runner has missed.
+      executableLocator: (_) async => '',
     );
   });
 
@@ -290,9 +293,10 @@ void main() {
   });
 
   test('Unity Editor check falls back to the Hub install-root scan', () async {
-    // Machine-dependent by nature: the invariant is that editor detection never
-    // throws, and that a Hub-scanned editor implies the check is not "missing"
-    // even when Unity is absent from PATH.
+    // The Hub install-root scan is machine-dependent by nature: the invariant
+    // is that editor detection never throws, and that a Hub-scanned editor
+    // implies the check is not "missing" even when Unity is absent from PATH,
+    // as it is here.
     final environment = await repository.checkEnvironment();
     final unityCheck = environment.checks.firstWhere(
       (check) => check.name == 'Unity Editor',

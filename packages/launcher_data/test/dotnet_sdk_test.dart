@@ -121,11 +121,20 @@ void main() {
   });
 
   test('doctor reports an exact-SDK resolution failure as blocking', () async {
+    // Nothing here waits on the machine. The real PATH lookups and editor
+    // scan run processes with a five-second bound, which a loaded runner
+    // has missed.
+    final lookedUp = <String>[];
     final repository = LocalDeveloperRepository(
       dataRoot: p.join(root.path, 'data'),
       repositoryRoot: root.path,
       dotnetSdkResolver: (_) async =>
           throw StateError('Required .NET SDK 10.0.301 was not found.'),
+      executableLocator: (executable) async {
+        lookedUp.add(executable);
+        return '';
+      },
+      unityEditorScanner: () async => const [],
     );
 
     final environment = await repository.checkEnvironment();
@@ -134,8 +143,9 @@ void main() {
     );
     expect(sdk.status, ToolStatus.missing);
     expect(sdk.detail, contains('10.0.301'));
+    expect(lookedUp, isNotEmpty);
 
-    final doctor = await repository.runDoctor();
+    final doctor = await repository.runDoctor(projectPath: root.path);
     expect(
       doctor.issues,
       contains(
