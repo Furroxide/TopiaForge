@@ -1,6 +1,12 @@
 part of '../local_launcher_repository.dart';
 
 typedef PackageInstallCommitHook = FutureOr<void> Function(int committedCount);
+
+/// Runs as a join's install reaches [step]: `staged` once every package is
+/// staged, `state` once the manager state is written, `record` once the
+/// record of server content is written, and `committed <n>` after the n-th
+/// package moves into place. Tests stop or fail an install there.
+typedef JoinInstallHook = FutureOr<void> Function(String step);
 typedef PackageMetadataValidator =
     Future<List<String>> Function(Directory packageRoot);
 typedef RuntimeRepairCommitHook = FutureOr<void> Function(int committedCount);

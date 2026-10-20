@@ -350,6 +350,7 @@ namespace TopiaForge.ModManager.Tests
                 TestScanSelectsDependencyCompatibleProviderVersion(root);
                 TestScanBacktracksConsumerVersionForCompleteAssignment(root);
                 InstalledVersionCoexistenceTests.Run(root);
+                ServerContentSelectionTests.Run(root);
                 TestRequiredDependenciesHelper();
                 TestDependencyOrder(root);
                 TestFrameworkDependencyOrder(root);
@@ -476,6 +477,7 @@ namespace TopiaForge.ModManager.Tests
                 UiKitMultiplayerConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
                 LaunchSessionFixtureTests.Run(FindRepoRoot());
+                ServerContentFixtureTests.Run(FindRepoRoot());
                 LaunchSessionContractTests.Run(FindRepoRoot());
                 RuntimeSessionPublicationTests.Run(Path.Combine(root, "runtime-session-publication"));
                 LaunchSessionStagingTests.Run(FindRepoRoot());

@@ -35,11 +35,28 @@ final class JoinPlanReady extends JoinEvent {
 /// The player accepted the consent sheet. The session's privacy was chosen
 /// before the join started ([JoinSession.start]) and does not change here.
 final class JoinConsentGiven extends JoinEvent {
-  const JoinConsentGiven({this.hostServedAcknowledged = false});
+  const JoinConsentGiven({
+    this.hostServedAcknowledged = false,
+    this.closeOwnedGameAcknowledged = false,
+  });
 
   /// Whether the player ticked the developer-mode host-served box. A plan
   /// with host-served packages needs it.
   final bool hostServedAcknowledged;
+
+  /// Whether the consent told the player that joining closes a game this
+  /// launcher started, and that progress not saved there is lost, as the
+  /// launcher stops it today. Without it, an install that finds such a game
+  /// running ends the join as [JoinFailureCode.gameRunning], owned, and the
+  /// player closes the game themselves. See
+  /// [JoinSessionState.closeOwnedGameAcknowledged].
+  ///
+  /// Leave it false until the launcher can ask the game to quit. A game it
+  /// stops outright records no clean exit, so its next start is the one-shot
+  /// safe mode, which refuses a session launch: a join that closed it would
+  /// fail at its session after the player lost that progress, where saving
+  /// and quitting, then joining again, works.
+  final bool closeOwnedGameAcknowledged;
 }
 
 final class JoinDownloadProgressed extends JoinEvent {
@@ -57,8 +74,32 @@ final class JoinDownloadsCompleted extends JoinEvent {
   const JoinDownloadsCompleted();
 }
 
+/// How many of the packages this join installs are prepared so far: each is
+/// staged, and none moves into place until all of them are.
+final class JoinInstallProgressed extends JoinEvent {
+  JoinInstallProgressed({
+    required this.packagesDone,
+    required this.packagesTotal,
+  }) {
+    if (packagesTotal < 0 || packagesDone < 0 || packagesDone > packagesTotal) {
+      throw ArgumentError('Progress is 0 to packagesTotal packages.');
+    }
+  }
+
+  final int packagesDone;
+  final int packagesTotal;
+}
+
 final class JoinInstallCompleted extends JoinEvent {
   const JoinInstallCompleted();
+}
+
+/// The install stopped for a cancel request before it changed anything the
+/// game reads, and removed everything it had staged. The join then ends as
+/// cancelled. Without a cancel request it ends as an install failure whose
+/// rollback completed, never as an install.
+final class JoinInstallUndone extends JoinEvent {
+  const JoinInstallUndone();
 }
 
 final class JoinProfilePrepared extends JoinEvent {

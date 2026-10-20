@@ -11,9 +11,11 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     final packages = <InstalledMod>[];
     final state = await _readManagerState(install);
     final stateById = _stateByModId(state);
+    // The player's view: what joins installed for their own mods stays out.
     final catalog = await _loadInstalledVersionCatalog(
       install,
       stateById: stateById,
+      hiding: await _hiddenServerVersions(install, stateById),
     );
     for (final entry in catalog.entries) {
       final versions = entry.value;
@@ -82,12 +84,16 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
     );
   }
 
+  /// Every installed version of every mod, by lowercase id, less what
+  /// [hiding] hides, each read with what [hiding] says starts disabled.
   Future<Map<String, List<InstalledMod>>> _loadInstalledVersionCatalog(
     GameInstall install, {
     Map<String, Map<dynamic, dynamic>>? stateById,
+    _HiddenServerVersions? hiding,
   }) async {
-    final effectiveState =
+    final records =
         stateById ?? _stateByModId(await _readManagerState(install));
+    final effectiveState = hiding?.records(records) ?? records;
     final catalog = <String, List<InstalledMod>>{};
     final root = _packagesRoot(install);
     if (!root.existsSync()) {
@@ -100,6 +106,7 @@ extension _ManagerStateHelpers on LocalLauncherRepository {
       final versions = catalog.putIfAbsent(key, () => <InstalledMod>[]);
       for (final versionDir
           in idDir.listSync(followLinks: false).whereType<Directory>()) {
+        if (await hiding?.hides(idDir, versionDir) ?? false) continue;
         versions.add(
           await _readInstalledVersion(
             install,

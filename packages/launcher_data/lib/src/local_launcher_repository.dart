@@ -31,6 +31,8 @@ import 'acceptance_isolation_bootstrap.dart';
 import 'tomato_cake_launcher_state.dart';
 import 'multiplayer/multiplayer_repository.dart'
     show LocalMultiplayerRepository;
+import 'multiplayer/multiplayer_store.dart'
+    show ServerContentLoad, ServerContentStore;
 import 'windows_file_move.dart';
 
 part 'local_launcher_repository/atomic_backup_recovery.dart';
@@ -68,8 +70,19 @@ part 'local_launcher_repository/repository_hooks.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
+part 'local_launcher_repository/multiplayer_content_host.dart';
+part 'local_launcher_repository/join_content_downloads.dart';
+part 'local_launcher_repository/join_content_install.dart';
+part 'local_launcher_repository/join_install_journal.dart';
+part 'local_launcher_repository/join_install_preflight.dart';
+part 'local_launcher_repository/join_server_profile.dart';
+part 'local_launcher_repository/server_content_view.dart';
+part 'local_launcher_repository/server_content_cleanup.dart';
+part 'local_launcher_repository/server_content_judging.dart';
 
-class LocalLauncherRepository implements GameInstallDiscoveryRepository {
+class LocalLauncherRepository
+    with _MultiplayerContentHosting
+    implements GameInstallDiscoveryRepository {
   LocalLauncherRepository({
     String? dataRoot,
     AcceptanceIsolationContext? acceptanceIsolation,
@@ -89,7 +102,9 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     GameProcessIdentityReader? gameProcessIdentityReader,
     GameProcessLiveness? gameProcessLiveness,
     GameProcessStopper? gameProcessStopper,
-  }) : _acceptanceIsolation = acceptanceIsolation,
+    JoinInstallHook? joinInstallHook,
+  }) : _joinInstallHook = joinInstallHook,
+       _acceptanceIsolation = acceptanceIsolation,
        _acceptanceChallenge = acceptanceChallenge,
        _dataRoot = Directory(dataRoot ?? resolveTopiaForgeDataRoot()),
        _repositoryRoot = Directory(
@@ -134,6 +149,7 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
       );
     }
   }
+  final JoinInstallHook? _joinInstallHook;
   final AcceptanceIsolationContext? _acceptanceIsolation;
   final String? _acceptanceChallenge;
   final Map<String, AcceptanceIsolationRequest> _acceptanceRequests = {};
@@ -191,6 +207,11 @@ class LocalLauncherRepository implements GameInstallDiscoveryRepository {
     final gameInstall = discovery.install;
     var installedMods = <InstalledMod>[];
     if (gameInstall != null) {
+      // A damaged record of server content is repaired first, failing
+      // closed, then a join's install the launcher did not live to finish is
+      // undone.
+      await _repairServerContentWhenFree(gameInstall);
+      await _sweepJoinInstallsWhenFree(gameInstall);
       try {
         installedMods = await _loadInstalledMods(gameInstall);
       } on _ManagerStateContentException {

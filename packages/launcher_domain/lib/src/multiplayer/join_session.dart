@@ -25,7 +25,19 @@ part of '../multiplayer.dart';
 /// - Cancelling stops at once wherever the work can be abandoned. While
 ///   installing, preparing the profile or launching it is held until the
 ///   step finishes, and the join then ends as cancelled instead of moving on;
-///   if the step fails instead, its failure is what the join reports.
+///   if the step fails instead, its failure is what the join reports. An
+///   install that stops for the request before it changes anything the game
+///   reads reports [JoinInstallUndone], which ends the join as cancelled too.
+/// - Nothing installs beside a running game: a running game writes its
+///   manager state when it quits, over what the install wrote. A game the
+///   launcher started is closed only when the consent covered it
+///   ([JoinConsentGiven.closeOwnedGameAcknowledged]), and only once
+///   everything is staged, so a join that is refused or cancelled leaves it
+///   running. Otherwise it, and any game the launcher did not start, ends
+///   the install as [JoinFailureCode.gameRunning], as it ends a launch.
+/// - Packages only the host serves are not downloaded by this launcher: a
+///   plan that needs one ends while downloading as
+///   [JoinFailureCode.hostDownloadUnsupported], before anything is fetched.
 /// - A game that exits ends the join from launching onwards, and ends the
 ///   session once it began.
 /// - When admission changes while connecting, the join fetches the
@@ -65,11 +77,15 @@ abstract final class JoinSession {
     JoinStage.awaitingConsent: {},
     JoinStage.downloading: {
       JoinFailureCode.downloadFailed,
+      JoinFailureCode.hostDownloadUnsupported,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
       JoinFailureCode.directNotAllowed,
     },
-    JoinStage.installing: {JoinFailureCode.installFailed},
+    JoinStage.installing: {
+      JoinFailureCode.installFailed,
+      JoinFailureCode.gameRunning,
+    },
     JoinStage.preparingProfile: {JoinFailureCode.profileSaveFailed},
     JoinStage.launching: {
       JoinFailureCode.repairNeeded,
@@ -206,10 +222,17 @@ abstract final class JoinSession {
         ),
       JoinDownloadsCompleted() when stage == JoinStage.downloading =>
         state._copy(stage: JoinStage.installing, progress: null),
+      JoinInstallProgressed() when stage == JoinStage.installing => state._copy(
+        installProgress: JoinInstallProgress(
+          packagesDone: event.packagesDone,
+          packagesTotal: event.packagesTotal,
+        ),
+      ),
       JoinInstallCompleted() when stage == JoinStage.installing => _finished(
         state,
         JoinStage.preparingProfile,
       ),
+      JoinInstallUndone() when stage == JoinStage.installing => _undone(state),
       JoinProfilePrepared() when stage == JoinStage.preparingProfile =>
         _finished(state, JoinStage.launching),
       JoinGameStarted() when stage == JoinStage.launching => _finished(
@@ -238,6 +261,20 @@ abstract final class JoinSession {
     }
     return state;
   }
+
+  /// An install that stopped and removed what it staged installed nothing:
+  /// the join ends as the cancel it answered, or, unasked, as an install
+  /// failure whose rollback completed. It never moves on.
+  static JoinSessionState _undone(JoinSessionState state) =>
+      state.cancelRequested
+      ? state._failed(JoinFailureCode.cancelled)
+      : state._failed(
+          JoinFailureCode.installFailed,
+          detail:
+              'The install stopped before it finished. Nothing was '
+              'installed; join again to install the server\'s mods.',
+          rollbackComplete: true,
+        );
 
   static JoinSessionState _gameExited(JoinSessionState state) {
     if (gameExitStages.contains(state.stage)) {
@@ -362,7 +399,12 @@ abstract final class JoinSession {
     if (plan.hasUnverifiedPackages && !event.hostServedAcknowledged) {
       return state;
     }
-    return _afterConsent(state._copy(consentKey: plan.consentKey));
+    return _afterConsent(
+      state._copy(
+        consentKey: plan.consentKey,
+        closeOwnedGameAcknowledged: event.closeOwnedGameAcknowledged,
+      ),
+    );
   }
 
   static JoinSessionState _afterConsent(JoinSessionState state) =>
@@ -377,7 +419,7 @@ abstract final class JoinSession {
   static JoinSessionState _finished(JoinSessionState state, JoinStage next) =>
       state.cancelRequested
       ? state._failed(JoinFailureCode.cancelled)
-      : state._copy(stage: next);
+      : state._copy(stage: next, installProgress: null);
 
   static JoinFailureCode _failureOf(JoinBlockerCode code) => switch (code) {
     JoinBlockerCode.gameBuildMismatch => JoinFailureCode.gameBuildMismatch,

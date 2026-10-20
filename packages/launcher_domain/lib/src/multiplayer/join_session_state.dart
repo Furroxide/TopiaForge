@@ -13,6 +13,19 @@ final class JoinTransferProgress {
   double get fraction => bytesTotal == 0 ? 0 : bytesDone / bytesTotal;
 }
 
+/// Packages prepared so far while installing.
+final class JoinInstallProgress {
+  const JoinInstallProgress({
+    required this.packagesDone,
+    required this.packagesTotal,
+  });
+
+  final int packagesDone;
+  final int packagesTotal;
+
+  double get fraction => packagesTotal == 0 ? 0 : packagesDone / packagesTotal;
+}
+
 const _keep = Object();
 
 /// Where a join stands. Only [JoinSession] creates and advances it.
@@ -25,7 +38,9 @@ final class JoinSessionState {
     this.descriptor,
     this.plan,
     this.consentKey,
+    this.closeOwnedGameAcknowledged = false,
     this.progress,
+    this.installProgress,
     this.replans = 0,
     this.cancelRequested = false,
     this.outcome,
@@ -53,8 +68,20 @@ final class JoinSessionState {
   /// The [JoinPlan.consentKey] the player consented to.
   final String? consentKey;
 
+  /// Whether the player's consent covered closing a game this launcher
+  /// started ([JoinConsentGiven.closeOwnedGameAcknowledged]). Only then does
+  /// an install close one, after everything is staged and nothing can be
+  /// cancelled any more; the launcher stops it outright, so the consent must
+  /// say that progress not saved there is lost, and until the launcher can
+  /// ask the game to quit, the session that follows is refused.
+  final bool closeOwnedGameAcknowledged;
+
   /// Download progress while downloading.
   final JoinTransferProgress? progress;
+
+  /// Install progress while installing, once the install has counted the
+  /// packages it installs.
+  final JoinInstallProgress? installProgress;
 
   /// Automatic re-plans so far; at most one.
   final int replans;
@@ -107,7 +134,9 @@ final class JoinSessionState {
     Object? descriptor = _keep,
     Object? plan = _keep,
     Object? consentKey = _keep,
+    bool? closeOwnedGameAcknowledged,
     Object? progress = _keep,
+    Object? installProgress = _keep,
     int? replans,
     bool? cancelRequested,
     Object? outcome = _keep,
@@ -123,9 +152,14 @@ final class JoinSessionState {
     consentKey: identical(consentKey, _keep)
         ? this.consentKey
         : consentKey as String?,
+    closeOwnedGameAcknowledged:
+        closeOwnedGameAcknowledged ?? this.closeOwnedGameAcknowledged,
     progress: identical(progress, _keep)
         ? this.progress
         : progress as JoinTransferProgress?,
+    installProgress: identical(installProgress, _keep)
+        ? this.installProgress
+        : installProgress as JoinInstallProgress?,
     replans: replans ?? this.replans,
     cancelRequested: cancelRequested ?? this.cancelRequested,
     outcome: identical(outcome, _keep) ? this.outcome : outcome as JoinOutcome?,
@@ -134,6 +168,7 @@ final class JoinSessionState {
   JoinSessionState _ended(JoinOutcome outcome) => _copy(
     stage: JoinStage.ended,
     progress: null,
+    installProgress: null,
     cancelRequested: false,
     outcome: outcome,
   );

@@ -139,6 +139,14 @@ String _unavailableMessage(
   final reason = switch (resolution.availability) {
     JoinPackageAvailability.inDisabledSource =>
       'Only the disabled source $source offers it. Enable it to join.',
+    JoinPackageAvailability.installedAsOtherArchive =>
+      'You have this version installed, but as a different build than the '
+          'server runs, and joining never replaces your copy. Uninstall it '
+          'in Mods, then join again.',
+    JoinPackageAvailability.installedForAnotherServer =>
+      'Another server you joined runs a different build of this version, '
+          'and joining never replaces it. Remove that server\'s content, then '
+          'join again.',
     JoinPackageAvailability.hashMismatch =>
       'Your sources offer this version as a different archive than the '
           'server runs.',

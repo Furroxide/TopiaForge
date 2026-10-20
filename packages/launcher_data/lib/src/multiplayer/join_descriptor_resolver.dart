@@ -6,7 +6,6 @@ import 'dart:io';
 
 import 'package:launcher_domain/launcher_domain.dart';
 
-import '../cancellation_token.dart';
 import 'control_plane.dart';
 import 'descriptor_client.dart';
 import 'lan_discovery_client.dart';

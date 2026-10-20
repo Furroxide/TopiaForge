@@ -1,5 +1,7 @@
+import 'cancellation.dart';
 import 'dependency_planner.dart';
 import 'models.dart';
+import 'multiplayer.dart';
 
 abstract interface class LauncherRepository {
   String get dataRoot;
@@ -144,6 +146,95 @@ abstract interface class LauncherUpdateRepository {
 abstract interface class GameInstallDiscoveryRepository
     implements LauncherRepository {
   Future<List<GameInstallCandidate>> discoverGameInstalls();
+}
+
+/// Optional launcher-repository capability for the join stages that need the
+/// game's files once a plan exists, and for cleaning up what joins installed.
+///
+/// Callers test for it with `is`: a repository without it cannot download,
+/// install or prepare a join, and holds no server content. Each join method
+/// answers its stage with the event [JoinSession.reduce] takes, and null for
+/// any other stage or once its [CancellationToken] stopped the work. Each
+/// failure detail says, in plain words, what happened and what to do next,
+/// and names no address.
+///
+/// The player matches nothing by hand: a join installs exactly the archives
+/// the server runs, and what joins install never changes what the player's
+/// own profiles load. The manager record of a mod the player already has is
+/// never touched, a mod new to the player is recorded disabled, and a version
+/// installed for a mod the player already had is seen only by server profiles
+/// ([ServerProfiles]). Versions no profile pins any more are removed after
+/// each join on their own, so the player cleans up only whole servers.
+abstract interface class MultiplayerContentHost {
+  /// Answers a join in [JoinStage.downloading]: fetches each package the
+  /// plan downloads from the source the plan names, bounded by
+  /// [ModRegistryFormat.maxPackageBytes] and the size the source states,
+  /// checks its SHA-256 as it streams and its manifest against the trusted
+  /// one, and keeps it in the package cache. Reports progress to
+  /// [onProgress]. Packages only the host serves end the join as
+  /// [JoinFailureCode.hostDownloadUnsupported] before anything is fetched.
+  Future<JoinEvent?> downloadJoinContent(
+    GameInstall install,
+    JoinSessionState state, {
+    void Function(JoinDownloadProgressed progress)? onProgress,
+    CancellationToken? cancellation,
+  });
+
+  /// Answers a join in [JoinStage.installing]: installs every downloaded
+  /// package into [install] as one change. A failure part way rolls back
+  /// everything this join installed and says whether the rollback completed;
+  /// a cancel before anything the game reads changed undoes it all
+  /// ([JoinInstallUndone]). Reports to [onProgress] how many of the packages
+  /// it installs are prepared: none once it has counted them, then one more
+  /// as each is staged. A listener that throws never stops the install.
+  ///
+  /// Nothing installs beside a running game: it writes its manager state
+  /// when it quits, over what an install changed. A game this launcher
+  /// started is closed only when [JoinSessionState.closeOwnedGameAcknowledged]
+  /// says the consent covered it, and only once every package is staged and
+  /// the install can no longer be cancelled, so a join that is refused or
+  /// cancelled leaves it running. Today the launcher stops it outright, which
+  /// loses progress not saved there and makes the game's next start its
+  /// one-shot safe mode, which refuses the session, so a consent should not
+  /// cover closing until the launcher can ask the game to quit. Otherwise a
+  /// running game, or one this launcher did not start, ends the join as
+  /// [JoinFailureCode.gameRunning].
+  Future<JoinEvent?> installJoinContent(
+    GameInstall install,
+    JoinSessionState state, {
+    void Function(JoinInstallProgressed progress)? onProgress,
+    CancellationToken? cancellation,
+  });
+
+  /// Answers a join in [JoinStage.preparingProfile]: saves the plan's server
+  /// profile, merged with the one an earlier join of the same server saved
+  /// ([ServerProfiles.merge]). A failed save leaves the earlier one as it was.
+  /// Once it is saved, the versions of server content no profile pins any
+  /// more are removed from [install], unless the game runs or a launch or
+  /// install holds the game's files just then; that tidying never fails the
+  /// join.
+  Future<JoinEvent?> prepareJoinProfile(
+    GameInstall install,
+    JoinSessionState state,
+  );
+
+  /// What a cleanup of [install]'s server content would remove: every server
+  /// profile and the content only they need, or only the server profiles
+  /// [serverProfileIds] names and the versions only they pin. Versions no
+  /// server profile pins go in every plan. Throws [StateError] while the
+  /// record of server content or the profiles cannot be read.
+  Future<ServerContentCleanupPlan> planServerContentCleanup(
+    GameInstall install, {
+    Set<String>? serverProfileIds,
+  });
+
+  /// Applies exactly [plan] to [install], or refuses it: while the game runs,
+  /// while a launch or install is using the game's files, and once anything
+  /// the plan was made from has changed.
+  Future<ServerContentCleanupResult> applyServerContentCleanup(
+    GameInstall install,
+    ServerContentCleanupPlan plan,
+  );
 }
 
 abstract interface class DeveloperRepository {

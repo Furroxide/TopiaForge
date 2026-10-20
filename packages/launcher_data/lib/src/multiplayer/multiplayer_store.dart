@@ -1,5 +1,6 @@
 /// The launcher's own multiplayer files: settings with favorites and
-/// history, and the trust-on-first-use record for typed addresses.
+/// history, the trust-on-first-use record for typed addresses, and the
+/// record of what joins installed into each game install.
 library;
 
 import 'dart:convert';
@@ -12,6 +13,7 @@ import 'package:path/path.dart' as p;
 import 'multiplayer_store_salvage.dart';
 
 part 'multiplayer_store_files.dart';
+part 'server_content_store.dart';
 
 /// What loading did about a stored file.
 enum MultiplayerStoreRecovery {

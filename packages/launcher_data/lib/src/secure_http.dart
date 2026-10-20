@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:launcher_domain/launcher_domain.dart'
     show CanonicalJson, CanonicalJsonException;
 
@@ -10,6 +11,7 @@ import 'cancellation_token.dart';
 import 'public_url.dart';
 
 part 'secure_http_json.dart';
+part 'secure_http_download.dart';
 
 /// Reports how many bytes of a response body have arrived, and the total
 /// when the server announced one.
@@ -98,6 +100,46 @@ Future<SecureHttpFetchResult> _fetchFollowingHttpsRedirects(
   required Duration responseTimeout,
   SecureHttpProgress? onProgress,
 }) async {
+  final (response, current) = await _openFollowingHttpsRedirects(
+    client,
+    initialUri,
+    label: label,
+    maxRedirects: maxRedirects,
+    responseTimeout: responseTimeout,
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw HttpException(
+      '$label failed with HTTP ${response.statusCode}.',
+      uri: current.replace(query: '', fragment: ''),
+    );
+  }
+  if (response.contentLength > maxBytes) {
+    throw StateError('$label is larger than its $maxBytes-byte limit.');
+  }
+
+  final bytes = await _readBodyBounded(
+    response,
+    maxBytes: maxBytes,
+    timeout: responseTimeout,
+    onProgress: onProgress,
+    tooLarge: () =>
+        StateError('$label is larger than its $maxBytes-byte limit.'),
+  );
+  return SecureHttpFetchResult(bytes: bytes, effectiveUri: current);
+}
+
+/// Sends a GET for [initialUri] and follows its redirects by hand, each to
+/// another HTTPS URL that [requirePublicHttpsUri] accepts and at most
+/// [maxRedirects] of them, so a fetch can never downgrade to plain HTTP.
+/// Returns the first answer that is not a redirect, whatever its status, and
+/// the URL that gave it.
+Future<(HttpClientResponse, Uri)> _openFollowingHttpsRedirects(
+  HttpClient client,
+  Uri initialUri, {
+  required String label,
+  required int maxRedirects,
+  required Duration responseTimeout,
+}) async {
   var current = initialUri;
   for (var redirectCount = 0; ; redirectCount++) {
     final request = await client.getUrl(current).timeout(responseTimeout);
@@ -105,43 +147,21 @@ Future<SecureHttpFetchResult> _fetchFollowingHttpsRedirects(
       ..followRedirects = false
       ..maxRedirects = 0;
     final response = await request.close().timeout(responseTimeout);
+    if (!response.isRedirect) return (response, current);
 
-    if (response.isRedirect) {
-      final location = response.headers.value(HttpHeaders.locationHeader);
-      if (location == null || location.trim().isEmpty) {
-        throw StateError('$label returned a redirect without a location.');
-      }
-      if (redirectCount >= maxRedirects) {
-        throw StateError('$label exceeded its $maxRedirects-redirect limit.');
-      }
-      current = requirePublicHttpsUri(current.resolve(location), label);
-      await _drainRedirectBodyBounded(
-        response,
-        label: label,
-        timeout: responseTimeout,
-      );
-      continue;
+    final location = response.headers.value(HttpHeaders.locationHeader);
+    if (location == null || location.trim().isEmpty) {
+      throw StateError('$label returned a redirect without a location.');
     }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw HttpException(
-        '$label failed with HTTP ${response.statusCode}.',
-        uri: current.replace(query: '', fragment: ''),
-      );
+    if (redirectCount >= maxRedirects) {
+      throw StateError('$label exceeded its $maxRedirects-redirect limit.');
     }
-    if (response.contentLength > maxBytes) {
-      throw StateError('$label is larger than its $maxBytes-byte limit.');
-    }
-
-    final bytes = await _readBodyBounded(
+    current = requirePublicHttpsUri(current.resolve(location), label);
+    await _drainRedirectBodyBounded(
       response,
-      maxBytes: maxBytes,
+      label: label,
       timeout: responseTimeout,
-      onProgress: onProgress,
-      tooLarge: () =>
-          StateError('$label is larger than its $maxBytes-byte limit.'),
     );
-    return SecureHttpFetchResult(bytes: bytes, effectiveUri: current);
   }
 }
 

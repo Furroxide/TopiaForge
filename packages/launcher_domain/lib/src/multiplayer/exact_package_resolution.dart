@@ -4,11 +4,18 @@ part of '../multiplayer.dart';
 /// install receipt recorded. The data layer lists only installs that
 /// validate, so their manifests are trusted.
 final class ExactInstalledArchive {
-  ExactInstalledArchive({required String sha256, required this.manifest})
-    : sha256 = _exactSha256(sha256);
+  ExactInstalledArchive({
+    required String sha256,
+    required this.manifest,
+    this.serverOnly = false,
+  }) : sha256 = _exactSha256(sha256);
 
   final String sha256;
   final ModManifest manifest;
+
+  /// Whether a join installed it for a mod the player already had, so only
+  /// server profiles load it ([ServerContentEntry.hidden]).
+  final bool serverOnly;
 }
 
 /// One archive a registry source offers, from its current entry or from a
@@ -81,19 +88,24 @@ final class ExactPackageCatalog {
   /// Classifies one package by its exact archive, in this order:
   ///
   /// 1. **installed**: an install has the exact archive.
-  /// 2. **available**: an enabled source offers the exact archive.
-  /// 3. **inDisabledSource**: only a disabled source offers it.
-  /// 4. **hostOffered**: in developer mode, when the host serves its
+  /// 2. **installedAsOtherArchive**: this id and version are installed as
+  ///    another archive. Both would need the same folder, and a join never
+  ///    replaces an installed archive, so no source or host can supply it.
+  ///    It is **installedForAnotherServer** when that archive is another
+  ///    server's, for server profiles only ([ExactInstalledArchive.serverOnly]).
+  /// 3. **available**: an enabled source offers the exact archive.
+  /// 4. **inDisabledSource**: only a disabled source offers it.
+  /// 5. **hostOffered**: in developer mode, when the host serves its
   ///    packages, any other package comes from the host, checked after
   ///    download. Registry archives always come first.
-  /// 5. **hashMismatch**: an enabled source offers this id and version as
+  /// 6. **hashMismatch**: an enabled source offers this id and version as
   ///    another archive.
-  /// 6. **versionUnavailable**: enabled sources know the mod, not this
+  /// 7. **versionUnavailable**: enabled sources know the mod, not this
   ///    version.
-  /// 7. **notInSources**: no enabled source knows the mod.
+  /// 8. **notInSources**: no enabled source knows the mod.
   ///
-  /// Only the first two carry a manifest, and both manifests come from the
-  /// player's own receipts and sources, never from the host.
+  /// Only installed and available carry a manifest, and both manifests come
+  /// from the player's own receipts and sources, never from the host.
   JoinPackageResolution resolvePackage(
     DescriptorPackage package, {
     required bool developerMode,
@@ -102,6 +114,16 @@ final class ExactPackageCatalog {
     for (final archive in installed) {
       if (archive.sha256 == package.sha256) {
         return JoinPackageResolution.installed(archive.manifest);
+      }
+    }
+    for (final archive in installed) {
+      if (archive.manifest.id.toLowerCase() == package.id.toLowerCase() &&
+          archive.manifest.version == package.version) {
+        return JoinPackageResolution.unavailable(
+          archive.serverOnly
+              ? JoinPackageAvailability.installedForAnotherServer
+              : JoinPackageAvailability.installedAsOtherArchive,
+        );
       }
     }
     final enabled = sources.where((item) => item.enabled).toList();

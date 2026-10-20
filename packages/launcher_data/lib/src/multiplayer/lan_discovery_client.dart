@@ -9,7 +9,6 @@ import 'dart:typed_data';
 
 import 'package:launcher_domain/launcher_domain.dart';
 
-import '../cancellation_token.dart';
 import 'descriptor_client.dart';
 import 'lan_datagrams.dart';
 import 'lan_discovery_state.dart';

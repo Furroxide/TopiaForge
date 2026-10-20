@@ -14,6 +14,15 @@ enum JoinPackageAvailability {
   /// Only a disabled source offers the exact archive.
   inDisabledSource,
 
+  /// This id and version are installed as another archive. Both would need
+  /// the same folder, and a join never replaces an installed archive.
+  installedAsOtherArchive,
+
+  /// Another server's join installed this id and version as another archive,
+  /// for server profiles only, so the player's own Mods list does not show
+  /// it. Removing that server's content frees the folder.
+  installedForAnotherServer,
+
   /// A source offers this id and version, but as a different archive.
   hashMismatch,
 
@@ -72,6 +81,8 @@ final class JoinPackageResolution {
   }
 
   /// No usable copy: [reason] is [JoinPackageAvailability.inDisabledSource],
+  /// [JoinPackageAvailability.installedAsOtherArchive],
+  /// [JoinPackageAvailability.installedForAnotherServer],
   /// [JoinPackageAvailability.hashMismatch],
   /// [JoinPackageAvailability.versionUnavailable] or
   /// [JoinPackageAvailability.notInSources]. [sourceName] names the source
