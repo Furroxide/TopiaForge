@@ -46,21 +46,15 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
     return restored;
   }
 
-  Future<void> _restoreNuGetPackages(String root, SdkReferencePack sdk) async {
-    final projects =
-        Directory(root)
-            .listSync(recursive: true, followLinks: false)
-            .whereType<File>()
-            .where((file) => p.extension(file.path).toLowerCase() == '.csproj')
-            .where(
-              (file) =>
-                  !p.split(file.path).contains('unity-companion') &&
-                  !p.split(file.path).contains('obj') &&
-                  !p.split(file.path).contains('bin'),
-            )
-            .toList()
-          ..sort((left, right) => left.path.compareTo(right.path));
-    if (projects.isEmpty) return;
+  /// Restores every mod project under [root] with NuGet, then checks what
+  /// each lock file says NuGet resolved against the SDK pin
+  /// ([_checkRestoredSdkPackages]); the issues are that check's.
+  Future<List<LauncherIssue>> _restoreNuGetPackages(
+    String root,
+    SdkReferencePack sdk,
+  ) async {
+    final projects = _sdkPinnedProjects(root);
+    if (projects.isEmpty) return const [];
     if (!sdk.feed.existsSync()) {
       throw StateError(
         'TF1002: The cached TopiaForge NuGet source is missing. Run '
@@ -92,15 +86,8 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
           'See https://docs.topiaforge.dev/diagnostics/TF1003',
         );
       }
-      final lock = File(p.join(project.parent.path, 'packages.lock.json'));
-      if (!lock.existsSync()) {
-        throw StateError(
-          'TF1004: NuGet did not create ${lock.path}. Ensure the project keeps '
-          'RestorePackagesWithLockFile enabled. '
-          'See https://docs.topiaforge.dev/diagnostics/TF1004',
-        );
-      }
     }
+    return _checkRestoredSdkPackages(root, sdk, projects);
   }
 
   SdkReferencePack? _loadCachedSdkPack(_DeveloperSdkLock lock) {

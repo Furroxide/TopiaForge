@@ -76,54 +76,13 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     String root,
     SdkReferencePack sdk,
   ) async {
-    final manifest = await _readModManifest(root);
-    final modulePackages = manifest.dependencies
-        .map(
-          (dependency) => _sdkModulePackagesByRuntimeDependency[dependency.id],
-        )
-        .whereType<String>()
-        .where(sdk.containsPackage)
-        .toSet();
-    final projects =
-        Directory(root)
-            .listSync(recursive: true, followLinks: false)
-            .whereType<File>()
-            .where((file) => p.extension(file.path).toLowerCase() == '.csproj')
-            .where(
-              (file) =>
-                  !p.split(file.path).contains('unity-companion') &&
-                  !p.split(file.path).contains('obj') &&
-                  !p.split(file.path).contains('bin'),
-            )
-            .toList()
-          ..sort((left, right) => left.path.compareTo(right.path));
-    final sdkPackages = sdk.packages
-        .map((package) => package.id)
-        .where(sdk.containsPackage)
-        .toList();
-    for (final project in projects) {
-      final isTest = p
-          .basenameWithoutExtension(project.path)
-          .endsWith('.Tests');
+    final modulePackages = await _sdkModulePackages(root, sdk);
+    for (final project in _sdkPinnedProjects(root)) {
+      final isTest = _isSdkTestProject(project);
       final original = await project.readAsString();
-      final packages = <String>{
-        'TopiaForge.Mods.Abstractions',
-        ...modulePackages,
-        // The feed holds no other version of an SDK package, so every SDK
-        // item the project has moves with the SDK too, including those the
-        // manifest's dependencies do not imply: the multiplayer generator,
-        // the Unity interop contracts, or an optional module.
-        ...includedPackageReferences(original, sdkPackages),
-      };
-      if (!isTest && sdk.containsPackage('TopiaForge.Mods.Analyzers')) {
-        packages.add('TopiaForge.Mods.Analyzers');
-      }
-      if (isTest && sdk.containsPackage('TopiaForge.Mods.Testing')) {
-        packages.add('TopiaForge.Mods.Testing');
-      }
       final updated = _withExactSdkPackageReferences(
         original,
-        packages: packages,
+        packages: _pinnedSdkPackages(project, original, sdk, modulePackages),
         version: sdk.version,
         safeProject: !isTest,
         devPropsPath: p.posix.joinAll(
@@ -139,6 +98,69 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
         _writeDeveloperTextAtomic(project, updated);
       }
     }
+  }
+
+  /// The mod projects under [root] whose SDK packages are pinned: every
+  /// `.csproj` outside `unity-companion`, `obj` and `bin`, in path order.
+  List<File> _sdkPinnedProjects(String root) =>
+      Directory(root)
+          .listSync(recursive: true, followLinks: false)
+          .whereType<File>()
+          .where((file) => p.extension(file.path).toLowerCase() == '.csproj')
+          .where(
+            (file) =>
+                !p.split(file.path).contains('unity-companion') &&
+                !p.split(file.path).contains('obj') &&
+                !p.split(file.path).contains('bin'),
+          )
+          .toList()
+        ..sort((left, right) => left.path.compareTo(right.path));
+
+  bool _isSdkTestProject(File project) =>
+      p.basenameWithoutExtension(project.path).endsWith('.Tests');
+
+  /// The SDK packages that the dependencies in [root]'s manifest imply, of
+  /// those [sdk] holds.
+  Future<Set<String>> _sdkModulePackages(
+    String root,
+    SdkReferencePack sdk,
+  ) async {
+    final manifest = await _readModManifest(root);
+    return manifest.dependencies
+        .map(
+          (dependency) => _sdkModulePackagesByRuntimeDependency[dependency.id],
+        )
+        .whereType<String>()
+        .where(sdk.containsPackage)
+        .toSet();
+  }
+
+  /// The SDK packages [project], whose text is [text], is pinned to [sdk]'s
+  /// version.
+  Set<String> _pinnedSdkPackages(
+    File project,
+    String text,
+    SdkReferencePack sdk,
+    Set<String> modulePackages,
+  ) {
+    final isTest = _isSdkTestProject(project);
+    final sdkPackages = sdk.packages
+        .map((package) => package.id)
+        .where(sdk.containsPackage)
+        .toList();
+    return {
+      'TopiaForge.Mods.Abstractions',
+      ...modulePackages,
+      // The feed holds no other version of an SDK package, so every SDK item
+      // the project has moves with the SDK too, including those the
+      // manifest's dependencies do not imply: the multiplayer generator, the
+      // Unity interop contracts, or an optional module.
+      ...includedPackageReferences(text, sdkPackages),
+      if (!isTest && sdk.containsPackage('TopiaForge.Mods.Analyzers'))
+        'TopiaForge.Mods.Analyzers',
+      if (isTest && sdk.containsPackage('TopiaForge.Mods.Testing'))
+        'TopiaForge.Mods.Testing',
+    };
   }
 
   String _compatibleMinorRange(String version) {
