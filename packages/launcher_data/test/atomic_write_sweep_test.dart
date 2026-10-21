@@ -162,6 +162,35 @@ void main() {
     });
   });
 
+  test('a save replaces the file in one move, so the file is never missing '
+      'while it saves', () async {
+    // Another process that finds the file missing puts back the newest
+    // backup, and on Linux and macOS that move cannot refuse to replace a
+    // file that came back, so a save there must never leave it missing.
+    var looks = 0;
+    var missing = 0;
+    void look() {
+      looks++;
+      if (!IOOverrides.runWithIOOverrides(settings.existsSync, _plain)) {
+        missing++;
+      }
+    }
+
+    await IOOverrides.runZoned(
+      () async {
+        await writeFileBytesAtomic(settings, [0x5B, 0x5D]);
+        writeFileBytesAtomicSync(settings, [0x7B, 0x7D]);
+      },
+      createFile: (path) =>
+          path.endsWith('.tmp') ? _BeforeRename(path, look) : _realFile(path),
+    );
+
+    // Each save looked once, just before its temporary file moved in.
+    expect(looks, 2);
+    expect(missing, 0);
+    expect(settings.readAsStringSync(), '{}');
+  });
+
   test(
     'a leftover another program holds waits for a later sweep, and the save '
     'goes ahead',
@@ -209,7 +238,7 @@ void main() {
   });
 }
 
-/// A temporary file whose first move runs [_beforeRename] first.
+/// A temporary file whose moves run [_beforeRename] first.
 final class _BeforeRename implements File {
   _BeforeRename(this.path, this._beforeRename);
 
@@ -227,9 +256,22 @@ final class _BeforeRename implements File {
   }) => _real.writeAsBytes(bytes, mode: mode, flush: flush);
 
   @override
+  void writeAsBytesSync(
+    List<int> bytes, {
+    FileMode mode = FileMode.write,
+    bool flush = false,
+  }) => _real.writeAsBytesSync(bytes, mode: mode, flush: flush);
+
+  @override
   Future<File> rename(String newPath) {
     _beforeRename();
     return _real.rename(newPath);
+  }
+
+  @override
+  File renameSync(String newPath) {
+    _beforeRename();
+    return _real.renameSync(newPath);
   }
 
   @override

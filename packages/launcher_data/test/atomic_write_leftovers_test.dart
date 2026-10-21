@@ -82,6 +82,42 @@ void main() {
       expect(mine.readAsStringSync(), saved);
     });
 
+    test('a save stopped part way is put back from its own backup, and an '
+        'author\'s `<name>.bak` beside it is left alone', () async {
+      final saved = projectFile.readAsStringSync();
+      // What a save stopped between its two moves leaves: the file moved
+      // aside under the save's own name, and the new version, never moved
+      // in, as its temporary file.
+      final aside = projectFile.renameSync(
+        beside('topiaforge.project.json.${token(4242, old)}.bak').path,
+      );
+      beside(
+        'topiaforge.project.json.${token(4242, old)}.tmp',
+      ).writeAsStringSync('{"unfinished": true}');
+      final mine = beside('topiaforge.project.json.bak')
+        ..writeAsStringSync('mine');
+
+      expect(await loadedId(), 'test.leftovers');
+      expect(projectFile.readAsStringSync(), saved);
+      expect(aside.existsSync(), isFalse);
+      expect(mine.readAsStringSync(), 'mine');
+    });
+
+    test('an author\'s own `<name>.bak` never stands in for a missing file, '
+        'even beside their own `<name>.tmp`', () async {
+      final saved = projectFile.readAsStringSync();
+      projectFile.deleteSync();
+      final mine = beside('topiaforge.project.json.bak')
+        ..writeAsStringSync(saved);
+      final draft = beside('topiaforge.project.json.tmp')
+        ..writeAsStringSync('{');
+
+      expect(await loadedId(), isNull);
+      expect(projectFile.existsSync(), isFalse);
+      expect(mine.readAsStringSync(), saved);
+      expect(draft.readAsStringSync(), '{');
+    });
+
     test('a save stopped part way is put back from the newest of its '
         'backups', () async {
       final newer = projectFile.renameSync(
