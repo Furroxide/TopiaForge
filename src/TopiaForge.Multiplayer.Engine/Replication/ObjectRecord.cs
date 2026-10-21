@@ -138,6 +138,12 @@ namespace TopiaForge.Multiplayer.Engine
         internal ParticipantId? CurrentOwner { get; set; }
         internal ObjectLife Life { get; set; } = ObjectLife.Live;
 
+        /// <summary>
+        /// Gets or sets the facade that spawned this object on the host, so closing that facade despawns it and no other
+        /// facade's. Null for a joined player's copy of the host's object.
+        /// </summary>
+        internal object? Spawner { get; set; }
+
         /// <summary>Gets how many senders have a rate limiter on this object.</summary>
         internal int LimiterCount => limiters?.Count ?? 0;
 

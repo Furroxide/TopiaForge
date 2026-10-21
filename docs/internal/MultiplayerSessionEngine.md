@@ -17,8 +17,18 @@ agree on one set of rules. The public contract it implements is `IMultiplayerSes
 - **Dependencies:** the base class library and the `TopiaForge.Mods.Multiplayer` SDK only. No Unity, no sockets, no
   third-party code.
 
-One engine instance is one process's view of one session line. Facades (`EngineSessionFacade`, one per owner mod) give
-mods an `IMultiplayerSession`; every facade of an engine shares its snapshot, clock and tables.
+One engine instance is one process's view of one session line. Facades (`EngineSessionFacade`) give mods an
+`IMultiplayerSession`: one for a mod's own context, and one for each scope of it that resolves the session, such as a
+gamemode's server or a player's participant controller. Every facade of an engine shares its snapshot, clock and
+tables, and every facade of one mod sees that mod's registrations, objects and states.
+
+**Closing a facade** (disposing it, or the end of the lifetime it is bound to) disposes what was registered through it
+and retires what it made, at the next settle point: on a host the objects it spawned leave canonically, so every peer
+sees them go, and on a client the commands it submitted that still wait for the host complete as cancelled. Other
+facades of the same mod keep theirs, so a gamemode scope that stops never takes the mod's own objects with it. The
+engine counts each mod's open facades, and only the mod's last facade retires the mod as a whole: a host's remaining
+objects of the mod, a client's copies of them, and the mod's replicated-object inputs, which belong to the mod rather
+than to a facade.
 
 ## Roles
 
