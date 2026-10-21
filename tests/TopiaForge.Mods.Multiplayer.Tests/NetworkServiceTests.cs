@@ -10,7 +10,10 @@ using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
-/// <summary>The services the network thread runs beside its stack, over real loopback sockets: descriptors and LAN discovery.</summary>
+/// <summary>
+/// The services the network thread runs beside its stack, over real loopback sockets: descriptors and LAN discovery, over
+/// the game's sockets and the IPv4 ones a system without IPv6 gets.
+/// </summary>
 internal static class NetworkServiceTests
 {
     internal static void TheDescriptorEndpointServesOnlyWhatItShould()
@@ -97,36 +100,91 @@ internal static class NetworkServiceTests
         That(Raw(noPackages.LocalPort, "TFD1 package " + packageSha + "\n", out _) == "TFD1 404", "outside developer mode no package is served");
     }
 
+    /// <summary>
+    /// Without IPv6 the descriptor endpoint listens, and its client connects, over IPv4, by the game socket's rule. Either
+    /// client reaches the IPv4 listener at the plain or the mapped form of its address, so a typed address and a LAN path
+    /// lead to the same host; an IPv6 host is unreachable from the IPv4 client, which contacts nothing and names no
+    /// address; and an IPv6-only address to listen on is refused for its family, never replaced by another.
+    /// </summary>
+    internal static void WithoutIPv6TheDescriptorEndpointAndClientUseIPv4()
+    {
+        var fixture = NetworkFixtures.Load("descriptor/cases.json");
+        var signed = SignedServerDescriptor.Sign(
+            NetworkDescriptorTests.Build(fixture.GetProperty("valid")[0].GetProperty("descriptor")),
+            NetworkFixtures.Hex(fixture.GetProperty("keys")[0].Text("signingSeed")));
+        using var host = StartThread(132, withoutIPv6: true);
+
+        // The IPv4 listener binds the IPv4 form of its address, so the mapped loopback is the IPv4 loopback. As a relay-only
+        // host's, it still tells a LAN client by the plain address an IPv4 socket reports.
+        var endpoint = new DescriptorEndpoint(0, relayOnly: true, bindAddress: IPAddress.Loopback.MapToIPv6(), withoutIPv6: true);
+        host.Attach(endpoint);
+        endpoint.SetDescriptor(signed);
+        foreach (var address in new[] { IPAddress.Loopback, IPAddress.Loopback.MapToIPv6() })
+        {
+            foreach (var withoutIPv6 in new[] { false, true })
+            {
+                var fetched = Fetch(address, endpoint.LocalPort, signed.Descriptor.ServerId, withoutIPv6);
+                That(fetched.Outcome == DescriptorFetchOutcome.Fetched && fetched.Descriptor!.Sha256 == signed.Sha256,
+                    "the IPv4 listener serves " + (withoutIPv6 ? "the IPv4 client" : "the game's client") + " at the " +
+                    (address.IsIPv4MappedToIPv6 ? "mapped" : "plain") + " form of its address: " + fetched.Detail);
+            }
+        }
+
+        var unreachable = Fetch(IPAddress.IPv6Loopback, endpoint.LocalPort, null, withoutIPv6: true);
+        That(unreachable.Outcome == DescriptorFetchOutcome.Unreachable && unreachable.Detail.Length > 0 &&
+             !unreachable.Detail.Contains("::1", StringComparison.Ordinal),
+            "an IPv6 host is unreachable from the IPv4 client, for a reason that names no address (" + unreachable.Detail + ")");
+
+        try
+        {
+            using var refused = new DescriptorEndpoint(0, bindAddress: IPAddress.IPv6Loopback, withoutIPv6: true);
+            That(false, "listening on the IPv6 loopback without IPv6 is refused (it listened on port " + refused.LocalPort + ")");
+        }
+        catch (SocketException exception)
+        {
+            That(exception.SocketErrorCode == SocketError.AddressFamilyNotSupported && !exception.Message.Contains("::1", StringComparison.Ordinal),
+                "listening on the IPv6 loopback without IPv6 is refused for its family, naming no address (" + exception.SocketErrorCode + ")");
+        }
+    }
+
     internal static void LanBrowsersFindAnnouncedHosts()
     {
+        // A browser matches each host's answer to its beacon by path, so it browses over the IPv4 socket as well.
+        FindAnnouncedHosts(withoutIPv6: false);
+        FindAnnouncedHosts(withoutIPv6: true);
+    }
+
+    private static void FindAnnouncedHosts(bool withoutIPv6)
+    {
+        var socket = withoutIPv6 ? " over the IPv4 socket" : " over the game's socket";
         var info = new SessionInfo(new string('a', 64), new string('b', 64), "LAN Party", "2545", "0.2.0", "1.0.0", "Open Sandbox", null, 2, 8, false, true);
-        using var host = StartThread(124);
+        using var host = StartThread(124, withoutIPv6);
         host.Post((stack, _) => stack.Endpoint.SetInfo(info.Encode()));
-        using var browserThread = StartThread(125);
+        using var browserThread = StartThread(125, withoutIPv6);
         var browser = new LanBrowser(0, expiryMicros: 1_500_000, bindAddress: IPAddress.Loopback);
         browserThread.Attach(browser);
         var targets = new[] { new IPEndPoint(IPAddress.Loopback, browser.LocalPort) };
         var announcer = new LanAnnouncer(new LanBeacon(info.ServerId, host.LocalPort), targets, IPAddress.Loopback);
         host.Attach(announcer);
 
-        That(WaitFor(() => browser.Servers.Any(server => server.Info != null), 3_000), "the browser hears the host and learns its info");
+        That(WaitFor(() => browser.Servers.Any(server => server.Info != null), 3_000), "the browser hears the host and learns its info" + socket);
         var found = browser.Servers.Single();
         That(found.ServerId == info.ServerId && found.Info!.Name == "LAN Party" && found.Info.Players == 2 && found.RoundTripMicros > 0 &&
              found.Path.Kind == TransportPathKind.Lan && UdpPaths.TryGetEndPoint(found.Path, out var to) && to.Port == host.LocalPort,
-            "with the host's info, round trip, and a LAN path to its game port");
+            "with the host's info, round trip, and a LAN path to its game port" + socket);
 
         // A beacon naming another server at the same game socket never borrows that server's info.
         var impostor = new LanAnnouncer(new LanBeacon(new string('c', 64), host.LocalPort), targets, IPAddress.Loopback);
         host.Attach(impostor);
-        That(WaitFor(() => browser.Servers.Any(server => server.ServerId == new string('c', 64)), 3_000), "the second beacon is heard");
+        That(WaitFor(() => browser.Servers.Any(server => server.ServerId == new string('c', 64)), 3_000), "the second beacon is heard" + socket);
         Thread.Sleep(300);
         That(browser.Servers.Single(server => server.ServerId == new string('c', 64)).Info == null &&
              browser.Servers.Single(server => server.ServerId == info.ServerId).Info != null,
-            "but its entry stays without info, since the info names another server");
+            "but its entry stays without info, since the info names another server" + socket);
 
         host.Detach(announcer);
         host.Detach(impostor);
-        That(WaitFor(() => browser.Servers.Count == 0, 4_000), "silent hosts leave the list");
+        That(WaitFor(() => browser.Servers.Count == 0, 4_000), "silent hosts leave the list" + socket);
     }
 
     internal static void AMovedServerIsHeardAfresh()
@@ -204,18 +262,18 @@ internal static class NetworkServiceTests
             "a service attached to a stopped thread is disposed at once, and a connection fails at once");
     }
 
-    private static NetworkThread StartThread(int seed)
+    private static NetworkThread StartThread(int seed, bool withoutIPv6 = false)
     {
         var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(seed, 1), new TransportOptions(), Clock()));
-        var thread = new NetworkThread("TopiaForge test " + seed, new UdpSocketDriver(0, IPAddress.Loopback), stack, Clock);
+        var thread = new NetworkThread("TopiaForge test " + seed, new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6), stack, Clock);
         thread.Start();
         return thread;
     }
 
     private static long Clock() => provider::TopiaForge.Multiplayer.MultiplayerProvider.MonotonicMicros();
 
-    private static DescriptorFetch Fetch(IPAddress address, int port, string? expected) =>
-        DescriptorClient.FetchAsync(new IPEndPoint(address, port), expected, TimeSpan.FromSeconds(3), CancellationToken.None).GetAwaiter().GetResult();
+    private static DescriptorFetch Fetch(IPAddress address, int port, string? expected, bool withoutIPv6 = false) =>
+        DescriptorClient.FetchAsync(new IPEndPoint(address, port), expected, TimeSpan.FromSeconds(3), CancellationToken.None, withoutIPv6).GetAwaiter().GetResult();
 
     /// <summary>Sends one raw request and returns the status line, with any body that follows it.</summary>
     private static string Raw(int port, string request, out byte[] body)

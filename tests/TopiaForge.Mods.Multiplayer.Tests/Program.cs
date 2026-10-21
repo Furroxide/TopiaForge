@@ -216,9 +216,11 @@ internal static class Program
             NetworkStackTests.DisposingTheStackClosesEveryLink();
             NetworkSocketTests.UdpPathsKeepAddressesInsideTheNetworkLayer();
             NetworkSocketTests.TheUdpDriverCarriesDatagramsAndShrugsOffNoise();
+            NetworkSocketTests.WithoutIPv6TheDriverFallsBackToIPv4();
             NetworkSocketTests.EnginesJoinOverRealSocketsQuickly();
             NetworkSocketTests.StoppingHonoursItsGracePeriod();
             NetworkServiceTests.TheDescriptorEndpointServesOnlyWhatItShould();
+            NetworkServiceTests.WithoutIPv6TheDescriptorEndpointAndClientUseIPv4();
             NetworkServiceTests.LanBrowsersFindAnnouncedHosts();
             NetworkServiceTests.AMovedServerIsHeardAfresh();
             NetworkServiceTests.ServicesStopWithTheirThread();

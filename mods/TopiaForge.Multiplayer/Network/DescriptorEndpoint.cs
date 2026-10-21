@@ -16,7 +16,9 @@ namespace TopiaForge.Multiplayer.Network
     /// <c>TFD1 descriptor\n</c> or <c>TFD1 package &lt;sha256&gt;\n</c>, answered by <c>TFD1 200 &lt;length&gt;\n</c> and the
     /// bytes, or by <c>TFD1 400</c>, <c>404</c>, <c>429</c> or <c>503</c> and a newline. It runs on the network thread
     /// without blocking: at most eight connections, a request of at most 128 bytes within five seconds, ten requests a
-    /// second per address, and responses written 64 KiB per turn. A relay-only host serves LAN addresses only.
+    /// second per address, and responses written 64 KiB per turn. A relay-only host serves LAN addresses only. Its
+    /// listener follows the game socket's rule (<see cref="UdpSocketDriver"/>): dual-mode IPv6, or IPv4 alone where the
+    /// operating system has no IPv6.
     /// </summary>
     internal sealed class DescriptorEndpoint : INetworkService
     {
@@ -42,26 +44,27 @@ namespace TopiaForge.Multiplayer.Network
         /// <param name="packages">Opens a package archive by SHA-256 in developer mode; null serves none.</param>
         /// <param name="relayOnly">Serves only LAN addresses, for a host that hides its own.</param>
         /// <param name="bindAddress">The address to listen on, every local address by default; tests use loopback.</param>
+        /// <param name="withoutIPv6">Listens as a system without IPv6 does, on IPv4 alone, on any system; tests use it.</param>
         internal DescriptorEndpoint(
             int port,
             Func<string, Stream?>? packages = null,
             bool relayOnly = false,
             long requestTimeoutMicros = 5_000_000,
             long transferTimeoutMicros = 120_000_000,
-            IPAddress? bindAddress = null)
+            IPAddress? bindAddress = null,
+            bool withoutIPv6 = false)
         {
             if (port < 0 || port > 65535) throw new ArgumentOutOfRangeException(nameof(port));
             this.packages = packages;
             this.relayOnly = relayOnly;
             this.requestTimeoutMicros = requestTimeoutMicros;
             this.transferTimeoutMicros = transferTimeoutMicros;
-            listener = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+            listener = IPSockets.Open(SocketType.Stream, ProtocolType.Tcp, withoutIPv6);
             try
             {
-                listener.DualMode = true;
                 listener.Blocking = false;
                 if (port != 0 && Environment.OSVersion.Platform == PlatformID.Win32NT) listener.ExclusiveAddressUse = true;
-                listener.Bind(new IPEndPoint(UdpSocketDriver.AsDualMode(bindAddress ?? IPAddress.IPv6Any), port));
+                listener.Bind(IPSockets.LocalEndPoint(listener, bindAddress, port));
                 listener.Listen(16);
                 LocalPort = ((IPEndPoint)listener.LocalEndPoint!).Port;
             }

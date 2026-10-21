@@ -244,6 +244,10 @@ in under five seconds. `NetworkServiceTests` covers the descriptor endpoint's an
 browsing (a moved server included), and services and connections the thread still owns when it stops. Every real
 socket in the tests binds a loopback address, because binding every address makes Windows ask to let the test program
 through its firewall; the socket classes take an optional bind address for this, and the game binds every address.
+They also take a switch that opens the IPv4 socket a system without IPv6 gets (section 13), so the driver's checks,
+the engines' join, LAN browsing, the descriptor endpoint and its client, and the NAT layer's relay over real sockets
+(`NatSocketTests`) run over both sockets on any machine, and the IPv4 one keeps every path in the form the dual-mode one
+gives.
 
 `LiveSessionTests` runs whole providers on the virtual network, with real cryptography, transport, engine and flows:
 joining and leaving, passwords (proved, never sent, and limited), kicking, banning and stopping, every check before
@@ -337,8 +341,8 @@ never by address. Both directions are bounded queues between the two threads.
 
 ## 13. The UDP socket
 
-`UdpSocketDriver` is one dual-mode socket bound to every local address. It carries the workarounds the Mono spike
-measured (`MultiplayerMonoSpike.md`, section 1):
+`UdpSocketDriver` is the game's socket, bound to every local address. Where the operating system has IPv6 it is one
+dual-mode socket, and it carries the workarounds the Mono spike measured (`MultiplayerMonoSpike.md`, section 1):
 
 - IPv4 destinations are sent as IPv4-mapped IPv6, because Mono fails to send to a plain IPv4 endpoint from a dual-mode
   socket.
@@ -349,6 +353,23 @@ measured (`MultiplayerMonoSpike.md`, section 1):
 - Transient socket errors lose that one datagram, as any network may, and recovery resends what mattered.
 - Each read consumes at most one datagram. A dropped one yields no path, and the thread counts it against its turn,
   so a flood of junk cannot starve the timers.
+
+**Without IPv6.** Where the operating system has no IPv6, as on a Linux kernel with IPv6 turned off, the game under
+Proton included, creating the IPv6 socket fails with `AddressFamilyNotSupported`. The driver then opens one IPv4 socket
+with the same settings, bound to the IPv4 form of its bind address: every IPv4 address in the game, and the IPv4
+loopback for a test that names the loopback in either form.
+
+- **One form for every peer.** The stack still names an IPv4 peer by its IPv4-mapped IPv6 form, as a dual-mode socket
+  reports it: a path keys the plain IPv4 source the socket reports by that form, and the socket turns a path back into
+  plain IPv4 to send. Paths, sources, password limits, LAN entries and the NAT layer compare exactly as before.
+- **What it cannot reach.** A path to an IPv6 address is dropped, as any path the socket cannot reach is. An IPv6-only
+  bind address, such as the IPv6 loopback, is refused for its family rather than replaced by another.
+- **The signal.** The fallback follows that one error, the operating system's own answer to the very call the
+  dual-mode socket needs, which Windows, Linux and Wine give alike. `Socket.OSSupportsIPv6` is not asked: the game's
+  Mono derives it from the IPv6 interface index each network adapter reports, and upstream Wine reports none, so under
+  Wine it would read false even where IPv6 works.
+- **Errors** still carry only their socket error code. The descriptor endpoint and its client (section 15) open their
+  TCP sockets by the same rule, through `IPSockets`.
 
 Paths come from `UdpPaths`. A key is a type byte, the 16-byte IPv6 form of the address, the port and the IPv6 scope
 id: 23 bytes that only this layer and the transport see. The scope keeps a link-local address on the interface it was
@@ -393,6 +414,9 @@ Every line ends in a single newline (`\n`).
 - **The client** (`DescriptorClient`) connects with a deadline, bounds the response to 256 KiB, and verifies the
   descriptor before returning it, against the server id it expects when it has one. Its failures name a reason:
   unreachable, timed out, refused or invalid. They never name an address.
+- **Without IPv6** the endpoint listens and the client connects over IPv4, by the game socket's rule (section 13). The
+  client takes a host in either form the stack holds, plain as a typed address resolves or mapped as a LAN path names
+  it, and reports an IPv6 host as unreachable without contacting it.
 
 ## 16. LAN discovery
 

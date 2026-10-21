@@ -8,13 +8,18 @@ using provider::TopiaForge.Multiplayer.Network;
 using provider::TopiaForge.Multiplayer.Transport;
 using CallbackFailureMode = provider::TopiaForge.Multiplayer.Engine.EngineCallbackFailureMode;
 using EngineOptions = provider::TopiaForge.Multiplayer.Engine.EngineOptions;
+using NatAddresses = provider::TopiaForge.Multiplayer.NatTraversal.NatAddresses;
 using ProviderLinkState = provider::TopiaForge.Multiplayer.Engine.EngineLinkState;
+using RelayServers = provider::TopiaForge.Multiplayer.NatTraversal.Turn.RelayServers;
 using SessionEngine = provider::TopiaForge.Multiplayer.Engine.SessionEngine;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
-/// <summary>Real sockets on the loopback interface: the UDP driver, and two engines joining across network threads.</summary>
+/// <summary>
+/// Real sockets on the loopback interface: the UDP driver over both its sockets, the dual-mode one and the IPv4 one a
+/// system without IPv6 gets, and two engines joining across network threads over each.
+/// </summary>
 internal static class NetworkSocketTests
 {
     private const string Owner = "socket-test";
@@ -55,25 +60,83 @@ internal static class NetworkSocketTests
 
     internal static void TheUdpDriverCarriesDatagramsAndShrugsOffNoise()
     {
+        // The game's own socket, dual mode wherever this system has IPv6, then the IPv4 socket a system without IPv6 gets.
+        CarryDatagramsAndShrugOffNoise(withoutIPv6: false);
+        CarryDatagramsAndShrugOffNoise(withoutIPv6: true);
+    }
+
+    /// <summary>
+    /// Without IPv6 the driver falls back to one IPv4 socket, and the stack cannot tell: an IPv4 peer keeps the path a
+    /// dual-mode socket gives it, IPv4 mapped into IPv6, with the same source, network and family, both ways between the
+    /// two kinds of socket. A path the IPv4 socket cannot reach is dropped, and an IPv6-only bind address is refused for
+    /// its family, with an error that names no address, rather than replaced by another.
+    /// </summary>
+    internal static void WithoutIPv6TheDriverFallsBackToIPv4()
+    {
+        var buffer = new byte[TransportOptions.MaximumDatagramBytes];
+        using var system = new UdpSocketDriver(0, IPAddress.Loopback);
+        That(system.IPv4Only == !Socket.OSSupportsIPv6,
+            "the game's socket is IPv4 only exactly where this system has no IPv6 (" + (system.IPv4Only ? "IPv4 only" : "dual mode") + ")");
+
+        // The IPv4 socket binds the IPv4 form of its address, so the mapped loopback binds the IPv4 loopback.
+        using var ipv4 = new UdpSocketDriver(0, IPAddress.Loopback.MapToIPv6(), withoutIPv6: true);
+        That(ipv4.IPv4Only, "a system without IPv6 gets the IPv4 socket");
+        system.Send(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, ipv4.LocalPort)), new byte[] { 7 }, 0, 1);
+        That(Receive(ipv4, buffer, out var count, out var heard) && count == 1 && buffer[0] == 7, "the IPv4 socket hears the game's socket");
+        var mapped = UdpPaths.For(new IPEndPoint(IPAddress.Loopback.MapToIPv6(), system.LocalPort));
+        That(heard!.Equals(mapped) && heard.Equals(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, system.LocalPort))) &&
+             UdpPaths.TryGetEndPoint(heard, out var form) && form.Address.IsIPv4MappedToIPv6 && form.Port == system.LocalPort,
+            "and names the sender by the path a dual-mode socket gives it, IPv4 mapped into IPv6");
+        That(heard.Kind == TransportPathKind.Lan && UdpPaths.SourceOf(heard) == UdpPaths.SourceOf(mapped) &&
+             UdpPaths.NetworkOf(heard)!.SequenceEqual(new byte[] { 4, 127, 0, 0, 1 }) && NatAddresses.IsPlausibleSource(heard) &&
+             RelayServers.FamilyOf(heard) == AddressFamily.InterNetwork,
+            "so its kind, source, network and family read as they always have, for the stack and the NAT layer alike");
+        ipv4.Send(heard, new byte[] { 8 }, 0, 1);
+        That(Receive(system, buffer, out count, out var back) && count == 1 && buffer[0] == 8 &&
+             back!.Equals(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, ipv4.LocalPort))),
+            "a reply on that path reaches the game's socket, which names the IPv4 socket by the same form");
+
+        // A path to an IPv6 address is one the IPv4 socket cannot reach: it is dropped, never sent or thrown.
+        var dropped = ipv4.Dropped;
+        ipv4.Send(UdpPaths.For(new IPEndPoint(IPAddress.IPv6Loopback, system.LocalPort)), new byte[] { 1 }, 0, 1);
+        That(ipv4.Dropped == dropped + 1, "a path to an IPv6 address is dropped, not sent or thrown");
+
+        // An IPv6-only address has no IPv4 form: binding it is refused for its family, never replaced by another address.
+        try
+        {
+            using var refused = new UdpSocketDriver(0, IPAddress.IPv6Loopback, withoutIPv6: true);
+            That(false, "binding the IPv6 loopback without IPv6 is refused (it bound " + (refused.IPv4Only ? "IPv4" : "dual mode") + ")");
+        }
+        catch (SocketException exception)
+        {
+            That(exception.SocketErrorCode == SocketError.AddressFamilyNotSupported && !exception.Message.Contains("::1", StringComparison.Ordinal),
+                "binding the IPv6 loopback without IPv6 is refused for its family, naming no address (" + exception.SocketErrorCode + ")");
+        }
+    }
+
+    private static void CarryDatagramsAndShrugOffNoise(bool withoutIPv6)
+    {
         // Every socket here binds a loopback address: binding every address would make Windows ask to let the test
         // program through its firewall. Each family gets its own pair, as a dual-mode socket bound to one loopback
         // address hears only that family.
+        var socket = withoutIPv6 ? " on the IPv4 socket" : " on the game's socket";
         var buffer = new byte[TransportOptions.MaximumDatagramBytes];
-        var loopbacks = Socket.OSSupportsIPv6 ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback } : new[] { IPAddress.Loopback };
+        var loopbacks = Socket.OSSupportsIPv6 && !withoutIPv6 ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback } : new[] { IPAddress.Loopback };
         foreach (var loopback in loopbacks)
         {
-            using var sender = new UdpSocketDriver(0, loopback);
-            using var receiver = new UdpSocketDriver(0, loopback);
+            using var sender = new UdpSocketDriver(0, loopback, withoutIPv6);
+            using var receiver = new UdpSocketDriver(0, loopback, withoutIPv6);
+            That(sender.IPv4Only == (withoutIPv6 || !Socket.OSSupportsIPv6), "the socket is IPv4 only exactly where IPv6 is missing" + socket);
             sender.Send(UdpPaths.For(new IPEndPoint(loopback, receiver.LocalPort)), new byte[] { 1, 2, 3 }, 0, 3);
-            That(Receive(receiver, buffer, out var count, out var path) && count == 3 && buffer[0] == 1, "a datagram crosses " + loopback.AddressFamily);
+            That(Receive(receiver, buffer, out var count, out var path) && count == 3 && buffer[0] == 1, "a datagram crosses " + loopback.AddressFamily + socket);
             That(UdpPaths.TryGetEndPoint(path!, out var from) && from.Port == sender.LocalPort && path!.Kind == TransportPathKind.Lan,
-                "and arrives on a LAN path back to the sender");
+                "and arrives on a LAN path back to the sender" + socket);
             receiver.Send(path!, new byte[] { 9 }, 0, 1);
-            That(Receive(sender, buffer, out count, out _) && count == 1 && buffer[0] == 9, "a reply on that path reaches the sender");
+            That(Receive(sender, buffer, out count, out _) && count == 1 && buffer[0] == 9, "a reply on that path reaches the sender" + socket);
         }
 
-        using var first = new UdpSocketDriver(0, IPAddress.Loopback);
-        using var second = new UdpSocketDriver(0, IPAddress.Loopback);
+        using var first = new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6);
+        using var second = new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6);
 
         // A datagram larger than any transport datagram is read and dropped: the read that consumed it yields no path,
         // so the network thread counts it against its turn. The next one still arrives.
@@ -87,23 +150,31 @@ internal static class NetworkSocketTests
         }
 
         That(Read(second, buffer, out _, out var droppedPath) && droppedPath == null && second.Dropped == 1,
-            "an oversized datagram is consumed by one read that yields no path");
+            "an oversized datagram is consumed by one read that yields no path" + socket);
         That(Receive(second, buffer, out var afterCount, out _) && afterCount == 1 && buffer[0] == 5 && second.Dropped == 1,
-            "and the next one arrives");
+            "and the next one arrives" + socket);
 
         // A datagram to a closed port draws an ICMP unreachable; it must not break the next receive.
         int closedPort;
-        using (var probe = new UdpSocketDriver(0, IPAddress.Loopback)) closedPort = probe.LocalPort;
+        using (var probe = new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6)) closedPort = probe.LocalPort;
         first.Send(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, closedPort)), new byte[] { 1 }, 0, 1);
         Thread.Sleep(50);
         second.Send(UdpPaths.For(new IPEndPoint(IPAddress.Loopback, first.LocalPort)), new byte[] { 6 }, 0, 1);
-        That(Receive(first, buffer, out var count2, out _) && count2 == 1 && buffer[0] == 6, "an unreachable port never breaks receiving");
+        That(Receive(first, buffer, out var count2, out _) && count2 == 1 && buffer[0] == 6, "an unreachable port never breaks receiving" + socket);
         first.Send(new TransportPath(new byte[] { 2, 9 }, TransportPathKind.Relayed), new byte[] { 1 }, 0, 1);
-        That(first.Dropped >= 1, "a path the socket cannot reach is dropped, not thrown");
+        That(first.Dropped >= 1, "a path the socket cannot reach is dropped, not thrown" + socket);
     }
 
     internal static void EnginesJoinOverRealSocketsQuickly()
     {
+        // The transport finds every connection by its path, so the join runs over the IPv4 socket as well.
+        JoinOverRealSockets(withoutIPv6: false);
+        JoinOverRealSockets(withoutIPv6: true);
+    }
+
+    private static void JoinOverRealSockets(bool withoutIPv6)
+    {
+        var socket = withoutIPv6 ? " on the IPv4 socket" : " on the game's socket";
         var watch = Stopwatch.StartNew();
         var secret = new byte[32];
         new Random(120).NextBytes(secret);
@@ -112,8 +183,8 @@ internal static class NetworkSocketTests
             new TransportEndpoint(identity.CopyTransportPrivateKey(), new TransportOptions(), Clock()),
             key => new MultiplayerPlayerKey(identity.PlayerKeyFor(key)));
         var clientStack = new NetworkStack(new TransportEndpoint(TransportPair.Key(120, 2), new TransportOptions(), Clock()));
-        using var hostThread = new NetworkThread("TopiaForge test host", new UdpSocketDriver(0, IPAddress.Loopback), hostStack, Clock);
-        using var clientThread = new NetworkThread("TopiaForge test client", new UdpSocketDriver(0, IPAddress.Loopback), clientStack, Clock);
+        using var hostThread = new NetworkThread("TopiaForge test host", new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6), hostStack, Clock);
+        using var clientThread = new NetworkThread("TopiaForge test client", new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6), clientStack, Clock);
         hostThread.Start();
         clientThread.Start();
 
@@ -147,7 +218,7 @@ internal static class NetworkSocketTests
             }
 
             return client.Snapshot.State == MultiplayerSessionState.Ready;
-        }, 3_000), "the client joins over real sockets");
+        }, 3_000), "the client joins over real sockets" + socket);
         That(accepted!.PlayerKey.Value == identity.PlayerKeyFor(clientStack.Endpoint.StaticPublicKey), "the host's link carries the player key it derived");
 
         var submission = clientSession.SubmitAsync(AddCommandType, new AddRequest(4));
@@ -160,7 +231,7 @@ internal static class NetworkSocketTests
         clientThread.Stop(100_000);
         hostThread.Stop(100_000);
         That(hostThread.HasStopped && clientThread.HasStopped, "both threads stop");
-        That(watch.ElapsedMilliseconds < 5_000, "the whole exchange takes under five seconds (" + watch.ElapsedMilliseconds + " ms)");
+        That(watch.ElapsedMilliseconds < 5_000, "the whole exchange takes under five seconds" + socket + " (" + watch.ElapsedMilliseconds + " ms)");
     }
 
     private static long Clock() => provider::TopiaForge.Multiplayer.MultiplayerProvider.MonotonicMicros();

@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Diagnostics;
 using TopiaForge.ModManager;
 using TopiaForge.ModManager.Core;
 using TopiaForge.Mods.Internal;
@@ -342,24 +343,60 @@ internal sealed class ControlRig : IDisposable
 
     /// <summary>
     /// Runs the network and every peer's frame until <paramref name="condition"/> holds or virtual time runs out, a frame
-    /// every <paramref name="frameMicros"/>; minutes of virtual time run at a coarser frame.
+    /// every <paramref name="frameMicros"/>; minutes of virtual time run at a coarser frame. Identity loads, password keys
+    /// and saves finish on other threads: before virtual time moves on, the run waits for them in real time, so they land
+    /// at the next frame however slow the machine is.
     /// </summary>
     internal bool Run(Func<bool> condition, long maximumMicros = 10_000_000, long frameMicros = 5_000)
     {
         var deadline = Network.Now + maximumMicros;
+        var waiting = new Stopwatch();
         var spins = 0;
         while (Network.Now < deadline)
         {
             Host.Frame();
             foreach (var peer in Peers) peer.Frame();
             if (condition()) return true;
+            AwaitBackgroundWork(waiting);
 
-            // Identity loading and password keys finish on background threads; give them a moment of real time.
+            // Anything else a frame starts on another thread still gets a moment of real time, as it always has.
             if (++spins % 20 == 0) Thread.Sleep(1);
             Network.RunFor(frameMicros);
         }
 
         return condition();
+    }
+
+    /// <summary>
+    /// Waits in real time, without moving virtual time, until no peer has work running on other threads, as the live rig
+    /// does. A save that a test's gate holds is left alone, since only the test can release it.
+    /// </summary>
+    private void AwaitBackgroundWork(Stopwatch waiting)
+    {
+        waiting.Start();
+        try
+        {
+            while (true)
+            {
+                var pending = new List<Task>();
+                foreach (var peer in Peers.Prepend(Host))
+                {
+                    if (peer.Provider.Live is { } live) pending.AddRange(live.PendingBackgroundWork(saves: peer.Files.HeldWrites == 0));
+                }
+
+                if (pending.Count == 0) return;
+                if (waiting.Elapsed > LiveRig.BackgroundWorkBound)
+                {
+                    throw new InvalidOperationException("Assertion failed: work on other threads finishes within " + LiveRig.BackgroundWorkBound.TotalSeconds + " s of real time");
+                }
+
+                Task.WaitAny(pending.ToArray(), 10);
+            }
+        }
+        finally
+        {
+            waiting.Stop();
+        }
     }
 
     /// <summary>Opens the host's session through the SPI and waits until it serves.</summary>
