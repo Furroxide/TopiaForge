@@ -18,21 +18,22 @@ namespace TopiaForge.ModManager.Tests
             var window = File.ReadAllText(Path.Combine(widgets, "TopiaForgeWindow.cs"));
             var runtime = File.ReadAllText(Path.Combine(widgets, "TopiaForgeWindowRuntime.cs"));
 
-            RequireMatch(
+            RequireSequence(
                 window,
-                @"Go\.SetActive\(true\);(?:\s|//[^\n]*)*deferredClamp\.enabled = !TryClampToScreen\(\);",
+                "Go.SetActive(true);",
+                "deferredClamp.enabled = !TryClampToScreen();",
                 "TopiaForgeWindow.Show must clamp at once, and arm the deferred clamp when the canvas has no size yet.");
-            RequireMatch(
+            RequireShape(
                 window,
-                @"return tornDown \|\| !open \|\| closing \|\| TryClampToScreen\(\);",
+                "return tornDown || !open || closing || TryClampToScreen();",
                 "FinishDeferredClamp must stop once the window closes or is torn down, and retry until the clamp lands.");
-            RequireMatch(
+            RequireShape(
                 window,
-                @"if \(!TopiaForgeWindowMath\.TryPlace\(",
+                "if (!TopiaForgeWindowMath.TryPlace(",
                 "TryClampToScreen must place through TopiaForgeWindowMath.TryPlace, which refuses an unmeasured canvas.");
-            RequireMatch(
+            RequireShape(
                 runtime,
-                @"if \(Window == null \|\| Window\.FinishDeferredClamp\(\)\)\s*\{\s*enabled = false;",
+                "if (Window == null || Window.FinishDeferredClamp()) { enabled = false;",
                 "TopiaForgeWindowDeferredClamp must retry the pending clamp each frame and turn itself off once it lands.");
 
             RequireShape(
@@ -68,13 +69,44 @@ namespace TopiaForge.ModManager.Tests
                 "RestoreRect must restore only a finite position, so a corrupt state entry cannot lose the window.");
         }
 
-        private static void RequireMatch(string source, string pattern, string message)
+        // Requires that the second statement follows some occurrence of the first with nothing but whitespace and line
+        // comments between them. One pass over the source, so the check takes time in proportion to the file: the regex
+        // it replaced could match a run of blanks inside a comment in two ways at once, and backtracked through every
+        // combination on a source it did not match.
+        private static void RequireSequence(string source, string first, string second, string message)
         {
-            // A timeout bounds the match: a pattern that backtracks badly fails this test instead of hanging the run.
-            if (!Regex.IsMatch(source, pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(10)))
+            for (var at = source.IndexOf(first, StringComparison.Ordinal); at >= 0; at = source.IndexOf(first, at + 1, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException(message);
+                var next = SkipWhitespaceAndLineComments(source, at + first.Length);
+                if (source.AsSpan(next).StartsWith(second.AsSpan(), StringComparison.Ordinal))
+                {
+                    return;
+                }
             }
+
+            throw new InvalidOperationException(message);
+        }
+
+        private static int SkipWhitespaceAndLineComments(string source, int index)
+        {
+            while (index < source.Length)
+            {
+                if (char.IsWhiteSpace(source[index]))
+                {
+                    index++;
+                }
+                else if (source.AsSpan(index).StartsWith("//".AsSpan(), StringComparison.Ordinal))
+                {
+                    var lineEnd = source.IndexOf('\n', index);
+                    index = lineEnd < 0 ? source.Length : lineEnd;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return index;
         }
 
         // Compares code with every run of whitespace collapsed to one space, so a pinned shape survives

@@ -183,7 +183,7 @@ namespace TopiaForge.Mods
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="anchor"/> is not a defined anchor.</exception>
         public UiSurfaceRequest WithHudAnchor(UiHudAnchor anchor)
         {
-            RequireHud(nameof(WithHudAnchor));
+            RequireHud(nameof(WithHudAnchor), "to dock it");
             if (!Enum.IsDefined(typeof(UiHudAnchor), anchor))
             {
                 throw new ArgumentOutOfRangeException(nameof(anchor));
@@ -200,7 +200,7 @@ namespace TopiaForge.Mods
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="visibility"/> is not a defined value.</exception>
         public UiSurfaceRequest WithHudVisibility(UiHudVisibility visibility)
         {
-            RequireHud(nameof(WithHudVisibility));
+            RequireHud(nameof(WithHudVisibility), "to choose when it shows");
             if (!Enum.IsDefined(typeof(UiHudVisibility), visibility))
             {
                 throw new ArgumentOutOfRangeException(nameof(visibility));
@@ -209,14 +209,14 @@ namespace TopiaForge.Mods
             return new UiSurfaceRequest(this, HudAnchor, visibility);
         }
 
-        private void RequireHud(string method)
+        private void RequireHud(string method, string purpose)
         {
             if (Kind != UiSurfaceKind.Hud)
             {
                 throw new InvalidOperationException(
                     method + " applies to HUD surfaces only. A window opens centred and keeps where the player moves it, "
                     + "and a window or fullscreen tool shows exactly while the mod shows it; create the surface with "
-                    + "UiSurfaceKind.Hud to dock it.");
+                    + "UiSurfaceKind.Hud " + purpose + ".");
             }
         }
     }

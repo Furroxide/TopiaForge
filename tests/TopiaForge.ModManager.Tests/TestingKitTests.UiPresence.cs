@@ -73,15 +73,24 @@ namespace TopiaForge.ModManager.Tests
                 "a window shows exactly while the mod shows it");
             AssertThrows<ArgumentOutOfRangeException>(() => request.WithHudAnchor((UiHudAnchor)99), "an undefined anchor");
             AssertThrows<ArgumentOutOfRangeException>(() => request.WithHudVisibility((UiHudVisibility)7), "an undefined visibility");
+            Assert(Refusal(() => window.WithHudAnchor(UiHudAnchor.Left)).Contains("UiSurfaceKind.Hud to dock it", StringComparison.Ordinal),
+                "the refusal says how to make a surface that docks");
+            Assert(Refusal(() => window.WithHudVisibility(UiHudVisibility.Always)).Contains("UiSurfaceKind.Hud to choose when it shows", StringComparison.Ordinal),
+                "the refusal says how to make a surface whose visibility the mod chooses, not how to dock one");
+        }
+
+        private static string Refusal(Action action)
+        {
             try
             {
-                window.WithHudAnchor(UiHudAnchor.Left);
+                action();
             }
             catch (InvalidOperationException exception)
             {
-                Assert(exception.Message.Contains("UiSurfaceKind.Hud", StringComparison.Ordinal),
-                    "the refusal says how to make a surface that docks");
+                return exception.Message;
             }
+
+            return string.Empty;
         }
 
         private static FakeUiSurface Created(FakeModContext context, UiSurfaceRequest request)

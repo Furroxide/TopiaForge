@@ -234,6 +234,20 @@ namespace TopiaForge.ModManager.Tests
                 _ = hud.IsVisible;
             });
             Assert(allocated == 0, "a settled frame with the HUD shown allocates nothing (" + allocated + " bytes)");
+
+            // A load begins and the next world arrives: the gate tells its listener, the presence hides and shows the HUD,
+            // and the dock gives the HUD's space up and back. None of that allocates either, so a scene change costs the
+            // gate, the presence and the dock nothing.
+            var transitions = Seam.Allocated(() =>
+            {
+                gate.Observe(true, true, 2, 1);
+                dock.SetShown(handle, hud.IsVisible);
+                gate.Observe(true, true, 1, 1);
+                dock.SetShown(handle, hud.IsVisible);
+            });
+            Assert(hud.IsVisible && native.OnScreen && native.Dismissals == 0 && dock.TryGetPosition(handle, out _, out _),
+                "after the transitions the HUD is back on screen and in its stack, never dismissed");
+            Assert(transitions == 0, "the gate's transitions allocate nothing in the gate, the presence or the dock (" + transitions + " bytes)");
         }
 
         private static void Assert(bool condition, string message)
