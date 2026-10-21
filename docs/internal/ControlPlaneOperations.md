@@ -161,7 +161,11 @@ they are set by hand and never sit in the repository; they are not sensitive in 
    and a hole-punched join.
 6. Register both GitHub environments in governance (section 2.2).
 7. For production, repeat steps 2 to 4 with `control-plane-production` on `main` after the release merge, and give
-   the release builds the production origin (`--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=…`).
+   the release builds the production origin (`--dart-define=TOPIAFORGE_CONTROL_PLANE_ORIGIN=…`). The launcher reads
+   the define by the launch request's rule (`MultiplayerLaunchContract.md`, section 2): `https://`, a DNS name and an
+   optional port, in any letter case, with or without a trailing `/` or an explicit `:443`, which it drops. An address
+   in any spelling, an IP literal or a name whose last label is a number such as `0x7f000001` or `example.123`, and
+   anything more than an origin, make the build report the multiplayer service as not valid, and it contacts nothing.
 
 ## 4. Updates
 

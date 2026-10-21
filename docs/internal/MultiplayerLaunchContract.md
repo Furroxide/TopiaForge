@@ -69,8 +69,8 @@ game for a launch V5 cannot carry.
 - **The service origin** is written one way: `https://`, a lowercase DNS name, and a port of 1 to 65535 in plain
   decimal, never the default 443. An address is refused, so none can pass as the service: an IP literal, and a name
   whose last label is a number, decimal or `0x` hexadecimal, which the URL Standard and the system resolver read as an
-  IPv4 address (`0x7f000001` is 127.0.0.1). `LaunchSessionRequest.isServiceOrigin` applies the same rule, for the
-  service configuration to share.
+  IPv4 address (`0x7f000001` is 127.0.0.1). The launcher's service configuration reads its origin through
+  `LaunchSessionRequest.isServiceOrigin`, so one rule decides both: a build can name only an origin a launch carries.
 - **Consent to direct play.** `privacy: direct` must carry `directConsent`: the `intentId` it was given for, which must
   be this session's, and the address disclosure version the player acknowledged, 1 or later. Relay-only never carries
   one. The launcher can only build a direct transport from `MultiplayerSettings.privacyForSession(allowDirect: true)`,
