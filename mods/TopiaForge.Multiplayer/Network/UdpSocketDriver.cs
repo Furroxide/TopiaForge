@@ -154,7 +154,7 @@ namespace TopiaForge.Multiplayer.Network
 
         public void Send(TransportPath path, byte[] buffer, int offset, int count)
         {
-            if (disposed || !UdpPaths.TryGetEndPoint(path, out var endpoint) || !IPSockets.TryReach(socket, endpoint, out var destination))
+            if (disposed || !TryGetDestination(path, out var destination))
             {
                 Dropped++;
                 return;
@@ -170,6 +170,14 @@ namespace TopiaForge.Multiplayer.Network
                 Dropped++;
             }
         }
+
+        /// <summary>
+        /// Gets where a path sends. The dual-mode socket takes the path's endpoint in the stack's form, IPv4 mapped into
+        /// IPv6. The IPv4 socket takes the plain IPv4 endpoint read straight from the path, so a send there costs no more,
+        /// and has none for a path to an IPv6 address, which it cannot reach.
+        /// </summary>
+        private bool TryGetDestination(TransportPath path, out IPEndPoint destination) =>
+            IPv4Only ? UdpPaths.TryGetIPv4EndPoint(path, out destination) : UdpPaths.TryGetEndPoint(path, out destination);
 
         public void Dispose()
         {
@@ -197,14 +205,23 @@ namespace TopiaForge.Multiplayer.Network
         /// socket fails with <see cref="SocketError.AddressFamilyNotSupported"/>.
         /// </summary>
         /// <param name="withoutIPv6">Takes the IPv4 branch as a system without IPv6 does, on any system; tests use it.</param>
-        internal static Socket Open(SocketType type, ProtocolType protocol, bool withoutIPv6 = false)
+        internal static Socket Open(SocketType type, ProtocolType protocol, bool withoutIPv6 = false) =>
+            Open(type, protocol, withoutIPv6 ? SocketError.AddressFamilyNotSupported : SocketError.Success);
+
+        /// <summary>
+        /// Opens a socket by the same rule, with the IPv6 socket refused with <paramref name="refusal"/> on any system unless
+        /// it is <see cref="SocketError.Success"/>; tests use it. Only the refusal a system without IPv6 gives opens the
+        /// IPv4 socket. Any other reaches the caller as it is, so a passing failure never moves a player who has IPv6 off
+        /// the dual-mode socket.
+        /// </summary>
+        internal static Socket Open(SocketType type, ProtocolType protocol, SocketError refusal)
         {
             Socket socket;
             try
             {
-                // A system without IPv6 refuses the IPv6 socket with this error, and the seam refuses it the same way, so
-                // tests take the very branch such a system takes.
-                if (withoutIPv6) throw new SocketException((int)SocketError.AddressFamilyNotSupported);
+                // A system without IPv6 refuses the IPv6 socket with AddressFamilyNotSupported, and the seam refuses it the
+                // same way, so tests take the very branch such a system takes.
+                if (refusal != SocketError.Success) throw new SocketException((int)refusal);
                 socket = new Socket(AddressFamily.InterNetworkV6, type, protocol);
             }
             catch (SocketException exception) when (exception.SocketErrorCode == SocketError.AddressFamilyNotSupported)

@@ -247,7 +247,8 @@ through its firewall; the socket classes take an optional bind address for this,
 They also take a switch that opens the IPv4 socket a system without IPv6 gets (section 13), so the driver's checks,
 the engines' join, LAN browsing, the descriptor endpoint and its client, and the NAT layer's relay over real sockets
 (`NatSocketTests`) run over both sockets on any machine, and the IPv4 one keeps every path in the form the dual-mode one
-gives.
+gives. Only the error a system without IPv6 gives opens the IPv4 socket, and `NetworkSocketCostTests` holds a datagram
+to no more allocation on the IPv4 socket than on the dual-mode one, sent or received.
 
 `LiveSessionTests` runs whole providers on the virtual network, with real cryptography, transport, engine and flows:
 joining and leaving, passwords (proved, never sent, and limited), kicking, banning and stopping, every check before
@@ -361,13 +362,16 @@ loopback for a test that names the loopback in either form.
 
 - **One form for every peer.** The stack still names an IPv4 peer by its IPv4-mapped IPv6 form, as a dual-mode socket
   reports it: a path keys the plain IPv4 source the socket reports by that form, and the socket turns a path back into
-  plain IPv4 to send. Paths, sources, password limits, LAN entries and the NAT layer compare exactly as before.
+  plain IPv4 to send. Paths, sources, password limits, LAN entries and the NAT layer compare exactly as before. Neither
+  direction costs more than on the dual-mode socket: a plain source is keyed from its own four bytes, and a send reads
+  the plain address straight from the path.
 - **What it cannot reach.** A path to an IPv6 address is dropped, as any path the socket cannot reach is. An IPv6-only
   bind address, such as the IPv6 loopback, is refused for its family rather than replaced by another.
 - **The signal.** The fallback follows that one error, the operating system's own answer to the very call the
   dual-mode socket needs, which Windows, Linux and Wine give alike. `Socket.OSSupportsIPv6` is not asked: the game's
   Mono derives it from the IPv6 interface index each network adapter reports, and upstream Wine reports none, so under
-  Wine it would read false even where IPv6 works.
+  Wine it would read false even where IPv6 works. No other error moves the game to IPv4: any other failure to create the
+  IPv6 socket, such as running out of sockets, reaches the caller as it is.
 - **Errors** still carry only their socket error code. The descriptor endpoint and its client (section 15) open their
   TCP sockets by the same rule, through `IPSockets`.
 

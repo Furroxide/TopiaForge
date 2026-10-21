@@ -217,6 +217,7 @@ internal static class Program
             NetworkSocketTests.UdpPathsKeepAddressesInsideTheNetworkLayer();
             NetworkSocketTests.TheUdpDriverCarriesDatagramsAndShrugsOffNoise();
             NetworkSocketTests.WithoutIPv6TheDriverFallsBackToIPv4();
+            NetworkSocketCostTests.TheIPv4SocketCostsNoMorePerDatagram();
             NetworkSocketTests.EnginesJoinOverRealSocketsQuickly();
             NetworkSocketTests.StoppingHonoursItsGracePeriod();
             NetworkServiceTests.TheDescriptorEndpointServesOnlyWhatItShould();

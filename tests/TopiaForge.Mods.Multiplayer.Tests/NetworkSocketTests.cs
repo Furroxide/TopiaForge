@@ -34,6 +34,21 @@ internal static class NetworkSocketTests
              back.Address.IsIPv4MappedToIPv6 && back.Address.MapToIPv4().Equals(IPAddress.Parse("192.168.1.20")),
             "an IPv4 endpoint maps to a LAN path and back to its mapped IPv6 form");
         That(UdpPaths.For(new IPEndPoint(IPAddress.Parse("192.168.1.20").MapToIPv6(), 27250)).Equals(v4), "an address and its mapped form are one path");
+
+        // An IPv4 socket reads a path's plain IPv4 endpoint straight from it, and finds none in a path to an IPv6 address.
+        foreach (var text in new[] { "192.168.1.20", "127.0.0.1", "10.1.2.3", "8.8.4.4", "255.254.253.252", "1.0.0.0" })
+        {
+            var plain = new IPEndPoint(IPAddress.Parse(text), 51_234);
+            That(UdpPaths.TryGetIPv4EndPoint(UdpPaths.For(plain), out var read) && read.Equals(plain) &&
+                 read.Address.AddressFamily == AddressFamily.InterNetwork && UdpPaths.For(read).Equals(UdpPaths.For(plain)),
+                "a path to " + text + " reads back as that plain IPv4 endpoint");
+        }
+
+        That(!UdpPaths.TryGetIPv4EndPoint(UdpPaths.For(new IPEndPoint(IPAddress.IPv6Loopback, 1)), out _) &&
+             !UdpPaths.TryGetIPv4EndPoint(UdpPaths.For(new IPEndPoint(IPAddress.Parse("::127.0.0.1"), 1)), out _) &&
+             !UdpPaths.TryGetIPv4EndPoint(UdpPaths.For(new IPEndPoint(IPAddress.Parse("64:ff9b::7f00:1"), 1)), out _) &&
+             !UdpPaths.TryGetIPv4EndPoint(new TransportPath(new byte[] { 2, 1, 2, 3 }, TransportPathKind.Relayed), out _),
+            "and a path to an IPv6 address, an IPv4-compatible or translated one included, or a relay path has none");
         foreach (var (address, kind) in new[]
                  {
                      ("10.1.2.3", TransportPathKind.Lan), ("172.16.0.1", TransportPathKind.Lan), ("172.31.255.255", TransportPathKind.Lan),
@@ -69,10 +84,35 @@ internal static class NetworkSocketTests
     /// Without IPv6 the driver falls back to one IPv4 socket, and the stack cannot tell: an IPv4 peer keeps the path a
     /// dual-mode socket gives it, IPv4 mapped into IPv6, with the same source, network and family, both ways between the
     /// two kinds of socket. A path the IPv4 socket cannot reach is dropped, and an IPv6-only bind address is refused for
-    /// its family, with an error that names no address, rather than replaced by another.
+    /// its family, with an error that names no address, rather than replaced by another. Only the refusal a system
+    /// without IPv6 gives opens the IPv4 socket; any other failure to open the IPv6 socket reaches the caller as it is.
     /// </summary>
     internal static void WithoutIPv6TheDriverFallsBackToIPv4()
     {
+        // The rule every socket of the network layer opens by: that one refusal moves to IPv4, and nothing else does, so a
+        // passing failure, such as running out of sockets, never moves a player who has IPv6 off the dual-mode socket.
+        using (var fallback = IPSockets.Open(SocketType.Dgram, ProtocolType.Udp, SocketError.AddressFamilyNotSupported))
+        {
+            That(fallback.AddressFamily == AddressFamily.InterNetwork, "the refusal a system without IPv6 gives opens the IPv4 socket");
+        }
+
+        foreach (var refusal in new[]
+                 {
+                     SocketError.TooManyOpenSockets, SocketError.NoBufferSpaceAvailable, SocketError.AccessDenied,
+                     SocketError.ProtocolNotSupported, SocketError.SocketNotSupported, SocketError.NetworkDown,
+                 })
+        {
+            try
+            {
+                using var opened = IPSockets.Open(SocketType.Dgram, ProtocolType.Udp, refusal);
+                That(false, "an IPv6 socket refused with " + refusal + " is not replaced by another (" + opened.AddressFamily + " opened)");
+            }
+            catch (SocketException exception)
+            {
+                That(exception.SocketErrorCode == refusal, "an IPv6 socket refused with " + refusal + " fails as refused (" + exception.SocketErrorCode + ")");
+            }
+        }
+
         var buffer = new byte[TransportOptions.MaximumDatagramBytes];
         using var system = new UdpSocketDriver(0, IPAddress.Loopback);
         That(system.IPv4Only == !Socket.OSSupportsIPv6,

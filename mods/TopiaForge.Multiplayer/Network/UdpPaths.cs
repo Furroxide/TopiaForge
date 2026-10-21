@@ -20,14 +20,31 @@ namespace TopiaForge.Multiplayer.Network
         internal static TransportPath For(IPEndPoint endpoint)
         {
             if (endpoint == null) throw new ArgumentNullException(nameof(endpoint));
-            var address = endpoint.Address.AddressFamily == AddressFamily.InterNetwork ? endpoint.Address.MapToIPv6() : endpoint.Address;
-            if (address.AddressFamily != AddressFamily.InterNetworkV6) throw new ArgumentException("Only IP endpoints have UDP paths.", nameof(endpoint));
+            var address = endpoint.Address;
+            var ipv4 = address.AddressFamily == AddressFamily.InterNetwork;
+            if (!ipv4 && address.AddressFamily != AddressFamily.InterNetworkV6)
+            {
+                throw new ArgumentException("Only IP endpoints have UDP paths.", nameof(endpoint));
+            }
+
             var key = new byte[KeySize];
             key[0] = UdpKeyType;
-            Buffer.BlockCopy(address.GetAddressBytes(), 0, key, 1, 16);
+            if (ipv4)
+            {
+                // An IPv4 address is keyed by its mapped form, ::ffff:a.b.c.d, written from its own four bytes: the plain source
+                // an IPv4 socket hears and the mapped one a dual-mode socket hears make one key, the plain one at no extra cost.
+                key[11] = 0xFF;
+                key[12] = 0xFF;
+                Buffer.BlockCopy(address.GetAddressBytes(), 0, key, 13, 4);
+            }
+            else
+            {
+                Buffer.BlockCopy(address.GetAddressBytes(), 0, key, 1, 16);
+            }
+
             key[17] = (byte)(endpoint.Port >> 8);
             key[18] = (byte)endpoint.Port;
-            var scope = (uint)address.ScopeId;
+            var scope = ipv4 ? 0u : (uint)address.ScopeId;
             key[19] = (byte)(scope >> 24);
             key[20] = (byte)(scope >> 16);
             key[21] = (byte)(scope >> 8);
@@ -46,6 +63,28 @@ namespace TopiaForge.Multiplayer.Network
             Buffer.BlockCopy(key, 1, address, 0, 16);
             var scope = ((uint)key[19] << 24) | ((uint)key[20] << 16) | ((uint)key[21] << 8) | key[22];
             endpoint = new IPEndPoint(new IPAddress(address, scope), (key[17] << 8) | key[18]);
+            return true;
+        }
+
+        /// <summary>
+        /// Recovers the plain IPv4 endpoint a path to an IPv4 address names, as an IPv4 socket sends to it. It is read
+        /// straight from the key, never through the mapped form, so it costs no more than <see cref="TryGetEndPoint"/>.
+        /// False for a path to an IPv6 address, which an IPv4 socket cannot reach, and for any other kind of path.
+        /// </summary>
+        internal static bool TryGetIPv4EndPoint(TransportPath path, out IPEndPoint endpoint)
+        {
+            endpoint = null!;
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var key = path.KeyBytes;
+            if (key.Length != KeySize || key[0] != UdpKeyType || key[11] != 0xFF || key[12] != 0xFF) return false;
+            for (var index = 1; index <= 10; index++)
+            {
+                if (key[index] != 0) return false;
+            }
+
+            // An IPv4 address as a number holds its first byte lowest.
+            var address = key[13] | ((uint)key[14] << 8) | ((uint)key[15] << 16) | ((uint)key[16] << 24);
+            endpoint = new IPEndPoint(new IPAddress(address), (key[17] << 8) | key[18]);
             return true;
         }
 
