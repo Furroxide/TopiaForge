@@ -37,6 +37,53 @@ extension _LaunchAdmission on LocalLauncherRepository {
     ].join(' '),
   );
 
+  /// [LocalLauncherRepository.launchSession]: refuses before anything
+  /// happens what launch request V5 cannot carry, and starts a join at the
+  /// main menu.
+  Future<LaunchResult> _launchSession(
+    GameInstall install,
+    LauncherProfile profile,
+    LaunchSessionRequest session, {
+    required LaunchSelection? selectionOverride,
+    required bool restart,
+  }) {
+    if (session.role == LaunchSessionRole.join &&
+        selectionOverride != null &&
+        selectionOverride.kind != LaunchSelectionKind.mainMenu) {
+      throw ArgumentError(
+        'A join starts at the main menu.',
+        'selectionOverride',
+      );
+    }
+    final refusal = _acceptanceIsolation != null
+        ? 'Acceptance runs never host or join a session.'
+        : profile.launchSettings.safeMode
+        ? 'Safe Mode never hosts or joins a session. Turn Safe Mode off for '
+              'this profile, then try again.'
+        : session.role == LaunchSessionRole.join &&
+              profile.inheritManagerModState
+        ? "A join runs exactly the packages it planned, so its profile cannot "
+              "inherit the manager's mod state."
+        : null;
+    if (refusal != null) {
+      return Future.value(
+        LaunchResult(
+          started: false,
+          message: '$refusal No process was stopped.',
+        ),
+      );
+    }
+    return _launchProfile(
+      install,
+      profile,
+      selectionOverride: session.role == LaunchSessionRole.join
+          ? const LaunchSelection.mainMenu()
+          : selectionOverride,
+      restart: restart,
+      session: session,
+    );
+  }
+
   Future<LaunchResult> _launchProfile(
     GameInstall install,
     LauncherProfile source, {
@@ -148,9 +195,11 @@ extension _LaunchAdmission on LocalLauncherRepository {
                 'asked to quit. No process was stopped.',
           );
         }
-        _ownedLaunchRequests.remove(process);
       }
-      _ownedLaunchProcesses.remove(identity);
+      // The game may have exited on its own since it was started, so its
+      // receipt and the request it was started with go together.
+      final dropped = _ownedLaunchProcesses.remove(identity);
+      if (dropped != null) _ownedLaunchRequests.remove(dropped);
       final retired = _launchMonitors.entries
           .where((entry) => entry.value.current.installIdentity == identity)
           .toList();

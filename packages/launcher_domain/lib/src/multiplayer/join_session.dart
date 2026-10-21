@@ -33,7 +33,11 @@ part of '../multiplayer.dart';
 ///   launcher started is closed only when the consent covered it
 ///   ([JoinConsentGiven.closeOwnedGameAcknowledged]), and only once
 ///   everything is staged, so a join that is refused or cancelled leaves it
-///   running. Otherwise it, and any game the launcher did not start, ends
+///   running. It is asked to quit, as its Quit button would, and stopped
+///   only if it does not; when what it left opens its next start in safe
+///   mode, where a session is refused, the install ends as
+///   [JoinFailureCode.installFailed] with nothing installed, and says what
+///   to do. Otherwise it, and any game the launcher did not start, ends
 ///   the install as [JoinFailureCode.gameRunning], as it ends a launch.
 /// - Packages only the host serves are not downloaded by this launcher: a
 ///   plan that needs one ends while downloading as

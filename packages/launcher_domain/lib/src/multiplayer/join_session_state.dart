@@ -71,9 +71,10 @@ final class JoinSessionState {
   /// Whether the player's consent covered closing a game this launcher
   /// started ([JoinConsentGiven.closeOwnedGameAcknowledged]). Only then does
   /// an install close one, after everything is staged and nothing can be
-  /// cancelled any more; the launcher stops it outright, so the consent must
-  /// say that progress not saved there is lost, and until the launcher can
-  /// ask the game to quit, the session that follows is refused.
+  /// cancelled any more: it asks the game to quit, as its Quit button would,
+  /// and goes on only when the game's next start loads its mods, since a
+  /// game that recorded no clean exit opens in safe mode, where a session is
+  /// refused; such a join ends with nothing installed and says what to do.
   final bool closeOwnedGameAcknowledged;
 
   /// Download progress while downloading.

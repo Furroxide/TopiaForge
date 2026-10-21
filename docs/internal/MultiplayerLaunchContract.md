@@ -140,7 +140,7 @@ Outcome V2 keeps version 1's two records, `launch-outcome-` and `session-outcome
 | --- | --- | --- |
 | `session-handoff-<request key>.json` | Game to launcher | A join the game cannot make as it is: `requestId` (the process's launch request), `handoffId`, and a `target` that is an invite, a listing, or `current` (this process's own join, planned once more) |
 | `session-join-<request key>.json` | Launcher to game | A live join for a game whose packages already match: `requestId`, its own `joinId`, the running `packageSetDigest`, and a join `session` |
-| `launcher-quit-<request key>.json` | Launcher to game | A request to quit, before an owned restart: `requestId` (the process's launch request) and its own `quitId` |
+| `launcher-quit-<request key>.json` | Launcher to game | A request to quit, before an owned restart or a join's install: `requestId` (the process's launch request) and its own `quitId` |
 
 - **The handoff never carries an address.** A server typed by address in game goes to the launcher as a
   `topiaforge://join/…` link. The launcher takes a handoff once and restarts into the server's profile through its
@@ -370,13 +370,18 @@ launcher log, and neither ever names a URL or an address.
   this launcher started ends the join as `gameRunning`, owned, asking the player to save and quit; a game it did not
   start, or one that will not close, ends it as `gameRunning` with its ownership. Downloads and the server profile do
   not touch the game, so they go ahead while it runs.
-  - **Until the launcher can ask the game to quit.** The launcher stops its game outright, as an owned restart at
-    launch does, so progress not saved there is lost, and the game records no clean exit: its next start is the
-    one-shot safe mode, in which a session launch is refused (section 8). So a join that has to close the player's
-    game cannot start its session until the launcher asks the game to quit and waits, which the launcher hardening work
-    plans. Until then the consent sheet leaves `closeOwnedGameAcknowledged` false: the install then ends as
-    `gameRunning`, owned, asking the player to save and quit, and the join that follows keeps what was downloaded and
-    starts its session. Once the launcher can ask, the consent sheet acknowledges closing after saying what it costs.
+  - **How the game is closed, and what the join does with how it ended.** The install asks the game to quit through
+    the quit request (section 6), as an owned restart does, and stops it only when the request is not taken within 10
+    seconds or the game has not exited within 30. Whether the join goes on is read from the startup journal the game
+    left, as the manager's next start reads it, never inferred from how the game ended: a game that recorded no clean
+    exit, because it was stopped, or quit before its mods finished unloading, or had crashed, opens its next start in
+    the one-shot safe mode, in which a session launch is refused (section 8). Such a join ends before anything is
+    installed, as `installFailed` with its rollback complete, and its detail says how the game ended, that a game in
+    safe mode cannot join a session, and what to do: start the game from the launcher once and quit it normally, then
+    join again; what was downloaded is kept. A game whose process cannot be verified is never asked, and one that
+    neither quits nor can be stopped ends the join as `gameRunning`, owned. A launcher that closes while it waits
+    withdraws an untaken request, stops nothing and installs nothing. The consent sheet can therefore acknowledge
+    closing after saying that joining quits the game as its **QUIT** button does.
 - **The staging lease.** Installs and cleanups take `acquireLaunchLease`, so no launch stages while they change the
   game's files. A lease another launch or install holds ends the install at once with a plain "try again".
 - **The server profile.** `mp-<sha16(serverId)>`, named `Server · <name>`, with `inheritManagerModState: false` and

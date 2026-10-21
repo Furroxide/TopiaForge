@@ -430,43 +430,13 @@ class LocalLauncherRepository
     LaunchSessionRequest session, {
     LaunchSelection? selectionOverride,
     bool restart = false,
-  }) {
-    if (session.role == LaunchSessionRole.join &&
-        selectionOverride != null &&
-        selectionOverride.kind != LaunchSelectionKind.mainMenu) {
-      throw ArgumentError(
-        'A join starts at the main menu.',
-        'selectionOverride',
-      );
-    }
-    final refusal = _acceptanceIsolation != null
-        ? 'Acceptance runs never host or join a session.'
-        : profile.launchSettings.safeMode
-        ? 'Safe Mode never hosts or joins a session. Turn Safe Mode off for '
-              'this profile, then try again.'
-        : session.role == LaunchSessionRole.join &&
-              profile.inheritManagerModState
-        ? "A join runs exactly the packages it planned, so its profile cannot "
-              "inherit the manager's mod state."
-        : null;
-    if (refusal != null) {
-      return Future.value(
-        LaunchResult(
-          started: false,
-          message: '$refusal No process was stopped.',
-        ),
-      );
-    }
-    return _launchProfile(
-      install,
-      profile,
-      selectionOverride: session.role == LaunchSessionRole.join
-          ? const LaunchSelection.mainMenu()
-          : selectionOverride,
-      restart: restart,
-      session: session,
-    );
-  }
+  }) => _launchSession(
+    install,
+    profile,
+    session,
+    selectionOverride: selectionOverride,
+    restart: restart,
+  );
 
   /// The exact archives installed in [install] and offered by the player's
   /// package sources, history included, for planning a join

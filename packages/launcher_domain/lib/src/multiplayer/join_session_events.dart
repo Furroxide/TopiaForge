@@ -45,17 +45,12 @@ final class JoinConsentGiven extends JoinEvent {
   final bool hostServedAcknowledged;
 
   /// Whether the consent told the player that joining closes a game this
-  /// launcher started, and that progress not saved there is lost, as the
-  /// launcher stops it today. Without it, an install that finds such a game
+  /// launcher started: the launcher asks it to quit, as its own Quit button
+  /// would, so what the game saves on quitting is saved, and stops it only
+  /// if it does not quit. Without it, an install that finds such a game
   /// running ends the join as [JoinFailureCode.gameRunning], owned, and the
   /// player closes the game themselves. See
   /// [JoinSessionState.closeOwnedGameAcknowledged].
-  ///
-  /// Leave it false until the launcher can ask the game to quit. A game it
-  /// stops outright records no clean exit, so its next start is the one-shot
-  /// safe mode, which refuses a session launch: a join that closed it would
-  /// fail at its session after the player lost that progress, where saving
-  /// and quitting, then joining again, works.
   final bool closeOwnedGameAcknowledged;
 }
 
