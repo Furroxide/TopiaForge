@@ -43,24 +43,33 @@ namespace TopiaForge.Multiplayer.Network
     /// <summary>
     /// Fetches a host's signed descriptor from its descriptor endpoint and verifies it before anything trusts it: the
     /// response is bounded to 256 KiB, the descriptor must verify, and when the caller expects a server, it must be that
-    /// one. Runs off the main thread.
+    /// one. Runs off the main thread. Its socket follows the game socket's rule (<see cref="UdpSocketDriver"/>):
+    /// dual-mode IPv6, or IPv4 alone where the operating system has no IPv6, and there an IPv6 host is unreachable, so it
+    /// is reported as such without being contacted.
     /// </summary>
     internal static class DescriptorClient
     {
         private const int MaximumHeaderBytes = 64;
 
-        internal static async Task<DescriptorFetch> FetchAsync(IPEndPoint host, string? expectedServerId, TimeSpan timeout, CancellationToken cancellationToken)
+        /// <param name="withoutIPv6">Connects as a system without IPv6 does, over IPv4 alone, on any system; tests use it.</param>
+        internal static async Task<DescriptorFetch> FetchAsync(
+            IPEndPoint host,
+            string? expectedServerId,
+            TimeSpan timeout,
+            CancellationToken cancellationToken,
+            bool withoutIPv6 = false)
         {
             if (host == null) throw new ArgumentNullException(nameof(host));
-            using (var socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp) { DualMode = true, NoDelay = true })
+            using (var socket = IPSockets.Open(SocketType.Stream, ProtocolType.Tcp, withoutIPv6))
             using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
+                socket.NoDelay = true;
+                if (!IPSockets.TryReach(socket, host, out var target)) return Unreachable();
                 deadline.CancelAfter(timeout);
                 using (deadline.Token.Register(socket.Dispose))
                 {
                     try
                     {
-                        var target = host.Address.AddressFamily == AddressFamily.InterNetwork ? new IPEndPoint(host.Address.MapToIPv6(), host.Port) : host;
                         await socket.ConnectAsync(target).ConfigureAwait(false);
                         var request = Encoding.ASCII.GetBytes("TFD1 descriptor\n");
                         await socket.SendAsync(new ArraySegment<byte>(request), SocketFlags.None).ConfigureAwait(false);
@@ -71,11 +80,13 @@ namespace TopiaForge.Multiplayer.Network
                         cancellationToken.ThrowIfCancellationRequested();
                         return deadline.IsCancellationRequested
                             ? new DescriptorFetch(DescriptorFetchOutcome.TimedOut, null, "The host did not answer in time.")
-                            : new DescriptorFetch(DescriptorFetchOutcome.Unreachable, null, "The host could not be reached.");
+                            : Unreachable();
                     }
                 }
             }
         }
+
+        private static DescriptorFetch Unreachable() => new DescriptorFetch(DescriptorFetchOutcome.Unreachable, null, "The host could not be reached.");
 
         private static async Task<DescriptorFetch> ReadResponseAsync(Socket socket, string? expectedServerId)
         {

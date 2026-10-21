@@ -64,6 +64,12 @@ socket, and attach a `NatNetworkService`:
   zero bytes for 20,000 turns with nothing due, and for each route tick that sends nothing. The status object is
   replaced only when a field changes.
 
+**Without IPv6.** On a system without IPv6 the game socket is one IPv4 socket (`MultiplayerLiveSessions.md`, section
+13). Every path keeps the form the dual-mode socket gives it, so servers, candidates, checks and answers match as they
+always have, and a relay tries IPv4 server addresses first, as it does anyway. A send to an IPv6 address is dropped at
+the socket, so a pair with a remote's IPv6 candidate goes unanswered while IPv4 and relayed pairs carry the session.
+`NatSocketTests` joins through the relay over both sockets.
+
 **Relayed paths.** A peer reached through this side's own allocation is a `TransportPathKind.Relayed` path, which
 relay-only allows. Its 23-byte key is a type byte (2), the allocation's number (4 bytes), the peer's address as the
 relay sees it, in IPv6 form (16), and its port (2). UDP paths use type 1, so the two never collide. The allocation
@@ -541,7 +547,7 @@ What the flows still own:
 | `NatPortMappingTests` | NAT-PMP frames, mapping, renewal and deletion, a forged answer from another port, unusable gateways, UPnP validation and leases |
 | `NatPortMappingLifecycleTests` | Mapping only once hosting runs, never for a relay-only agent or stack, a network that never started or a start that threw, deletion when the network stops; a join on a relay-only stack; UPnP descriptions in every order, pretty-printed and minified |
 | `NatSessionTests` | Reconnecting after a socket's lifetime, a joiner closing its socket once connected and reopening only around a rotation or a stall, a host's rotations reaching a joiner whose socket is closed on relays that share no address, a joiner saying again what it gathered with its socket closed, a connected joiner coming back after a full room refused it, five joiners from one /24 within the room's limits for twenty minutes of rotations, each join failure, the service's notice and error frames, one host with three peers |
-| `NatSocketTests` | Two real network threads on the socket hook over the game's UDP driver bound to loopback, joining through a relay and releasing it |
+| `NatSocketTests` | Two real network threads on the socket hook over the game's UDP driver bound to loopback, joining through a relay and releasing it, over the dual-mode socket and the IPv4 one a system without IPv6 gets |
 | `NatRestartTests` | A host that stopped and hosts again on the same agent answering the next joiner, relay-only and direct, and a player joining again on the same agent |
 | `NatLongSessionTests` | On relays that give every allocation an address of its own: a joiner whose network drops for four seconds every 110 seconds for 35 minutes of rotations on one TURN port, and five joiners through half an hour of 150-second credentials, all staying connected |
 | `NatRelayTargetTests` | A relay leaving an address that went silent for the one that came back, an allocation a crashed run left on the 5-tuple sending the next to another port, and credentials refused right after a working allocation (minted again at once) or for an hour (within five a minute and twenty an hour) |

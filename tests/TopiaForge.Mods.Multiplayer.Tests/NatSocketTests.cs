@@ -15,18 +15,28 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// The production glue on real threads and real sockets, all on the loopback address: two network threads, each built on
 /// the NAT layer's socket hook with its service attached, join through a TURN relay, the joiner moves to the direct path
-/// their sockets share, and both release their allocations when they stop.
+/// their sockets share, and both release their allocations when they stop. It runs over the game's socket and over the
+/// IPv4 one a system without IPv6 gets.
 /// </summary>
 internal static class NatSocketTests
 {
     internal static void NetworkThreadsJoinThroughARelayOverLoopback()
     {
+        // The NAT layer takes an answer only from the path its request went to, so the relay works over the IPv4 socket
+        // only if that socket names the relay as the dual-mode one does.
+        JoinThroughARelay(withoutIPv6: false);
+        JoinThroughARelay(withoutIPv6: true);
+    }
+
+    private static void JoinThroughARelay(bool withoutIPv6)
+    {
+        var socket = withoutIPv6 ? " over the IPv4 socket" : " over the game's socket";
         var watch = Stopwatch.StartNew();
         using var relay = new LoopbackTurnRelay(900);
         relay.Server.Users["player"] = ("relay-secret", long.MaxValue);
         var signaling = new FakeSignalingService(1_000);
-        var host = Build("host", 1);
-        var joiner = Build("joiner", 2);
+        var host = Build("host", 1, withoutIPv6);
+        var joiner = Build("joiner", 2, withoutIPv6);
         try
         {
             using var hosting = NatHost.Start(host.Thread, host.Nat, Plan(relay, host.Thread.LocalPort, () => signaling.ConnectHost(false)), false);
@@ -41,8 +51,8 @@ internal static class NatSocketTests
                 }
 
                 return accepted != null && join.Attempt.State == ConnectAttemptState.Established;
-            }), "the join connects across two network threads (" + join.Attempt.State + ", " + join.Status + ")");
-            That(relay.Allocations == 2, "each side allocated on the relay (" + relay.Allocations + ")");
+            }), "the join connects across two network threads" + socket + " (" + join.Attempt.State + ", " + join.Status + ")");
+            That(relay.Allocations == 2, "each side allocated on the relay" + socket + " (" + relay.Allocations + ")");
 
             var link = join.Attempt.Link!;
             link.Send(ProviderChannel.Session, new ArraySegment<byte>(new byte[] { 1, 2, 3 }));
@@ -54,11 +64,11 @@ internal static class NatSocketTests
                 while (accepted.TryReceive(out _, out var frame)) atHost |= frame.Length == 3;
                 while (link.TryReceive(out _, out var frame)) atJoiner |= frame.Length == 2;
                 return atHost && atJoiner;
-            }), "frames cross both ways");
+            }), "frames cross both ways" + socket);
             // The joiner, which controls the checks, moves to the direct path the two sockets share; the host follows on
             // its own schedule, which the deterministic tests pin down, so here it only has to keep its one session.
             That(Pump(signaling, () => join.Status.Route == NatRoute.Direct && hosting.Status.Sessions == 1),
-                "the joiner upgrades to the direct path the two sockets share (" + join.Status + "; " + hosting.Status + ")");
+                "the joiner upgrades to the direct path the two sockets share" + socket + " (" + join.Status + "; " + hosting.Status + ")");
         }
         finally
         {
@@ -66,15 +76,18 @@ internal static class NatSocketTests
             host.Thread.Stop(300_000);
         }
 
-        That(host.Thread.HasStopped && joiner.Thread.HasStopped, "both threads stop");
-        That(Pump(signaling, () => relay.Allocations == 0), "and stopping released both allocations on the relay");
-        That(watch.ElapsedMilliseconds < 5_000, "all of it within five seconds (" + watch.ElapsedMilliseconds + " ms)");
+        That(host.Thread.HasStopped && joiner.Thread.HasStopped, "both threads stop" + socket);
+        That(Pump(signaling, () => relay.Allocations == 0), "and stopping released both allocations on the relay" + socket);
+        That(watch.ElapsedMilliseconds < 5_000, "all of it within five seconds" + socket + " (" + watch.ElapsedMilliseconds + " ms)");
     }
 
-    private static (NetworkThread Thread, NatPlumbing Nat) Build(string name, int role)
+    private static (NetworkThread Thread, NatPlumbing Nat) Build(string name, int role, bool withoutIPv6)
     {
         // Both players allowed direct play, so the joiner can move to the direct path the two sockets share.
-        var nat = NatPlumbing.Wrap(new UdpSocketDriver(0, IPAddress.Loopback), new NatAgentOptions { AcceptLoopback = true, RelayOnly = false, Random = new SeededTransportRandom(900 + role) }, Clock);
+        var nat = NatPlumbing.Wrap(
+            new UdpSocketDriver(0, IPAddress.Loopback, withoutIPv6),
+            new NatAgentOptions { AcceptLoopback = true, RelayOnly = false, Random = new SeededTransportRandom(900 + role) },
+            Clock);
         var stack = new NetworkStack(new TransportEndpoint(TransportPair.Key(900, role), new TransportOptions { RelayOnly = false }, Clock()));
         var thread = new NetworkThread("TopiaForge test NAT " + name, nat.Socket, stack, Clock);
         thread.Attach(nat.Service);
