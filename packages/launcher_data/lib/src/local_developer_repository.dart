@@ -29,6 +29,7 @@ part 'local_developer_repository/data_root_repository.dart';
 part 'local_developer_repository/pack_helpers.dart';
 part 'local_developer_repository/multiplayer_contract_lock.dart';
 part 'local_developer_repository/mod_scaffolding.dart';
+part 'local_developer_repository/mod_scaffold_plan.dart';
 part 'local_developer_repository/license_scaffolding.dart';
 part 'local_developer_repository/environment_helpers.dart';
 part 'local_developer_repository/project_registry.dart';
@@ -121,51 +122,30 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     bool includeUnityCompanion = false,
     ModScaffoldOptions options = const ModScaffoldOptions(),
   }) async {
-    final safeName = _safeName(id);
-    final root = Directory(p.join(parentDirectory, safeName));
-    if (root.existsSync()) {
-      throw StateError('Project already exists: ${root.path}');
-    }
-    // The explicit flag, the scaffold option, or the template can each ask for the companion.
-    final templates = await _listModTemplates();
-    final templateInfo = templates.firstWhere(
-      (template) => template.id == options.template,
-      orElse: () => ModTemplateInfo(id: options.template),
-    );
-    options.validateForScaffolding(templateInfo.manifestDefaults);
-    final withCompanion =
-        includeUnityCompanion ||
-        options.includeUnityCompanion ||
-        templateInfo.includeUnityCompanion;
-    root.createSync(recursive: true);
-
-    var project = DeveloperProject(
-      schemaVersion: 2,
+    // Every argument is checked and the template read before anything
+    // exists, and a failure while writing removes only what this run
+    // created, so a retry never meets a half-made project.
+    final plan = await _planModScaffold(
+      parentDirectory: parentDirectory,
       id: id,
       name: name,
-      unityCompanion: withCompanion
-          ? UnityCompanionSettings(
-              enabled: true,
-              projectPath: p.join(root.path, 'unity-companion'),
-              assetBundleOutputPath: 'assets/AssetBundles',
-            )
-          : const UnityCompanionSettings(),
+      includeUnityCompanion: includeUnityCompanion,
+      options: options,
     );
-    await _writeProject(root.path, project);
-    await _scaffoldModFromTemplate(root.path, id, name, options, withCompanion);
-    final sdk = await _initializeSdkProject(root.path);
-    if (sdk != null) {
-      await _ensureSdkPackageReferences(root.path, sdk);
-      await _writeDevProps(root.path, null, sdk: sdk);
+    final created = _createProjectFolders(plan.root);
+    try {
+      await _applyModScaffold(plan);
+    } on Object {
+      _removeCreated(created, plan.root);
+      rethrow;
     }
-    await _ensureProjectGitignore(root.path);
     // Registry writes are best-effort; project files stay valid if this fails.
     try {
-      await _registerProject(root.path);
+      await _registerProject(plan.root.path);
     } on Object {
       // ignore: registration is non-essential.
     }
-    return loadDeveloperWorkspace(projectPath: root.path);
+    return loadDeveloperWorkspace(projectPath: plan.root.path);
   }
 
   @override

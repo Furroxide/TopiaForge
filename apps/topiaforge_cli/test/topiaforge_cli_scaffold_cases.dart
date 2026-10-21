@@ -127,4 +127,37 @@ void _scaffoldCliTests(_CliTestHarness Function() currentHarness) {
     );
     expect(diagnostics, isNot(contains('Bad state:')));
   });
+
+  test('new mod with an unknown template leaves nothing behind, so a retry '
+      'works', () async {
+    final parent = currentHarness().temp.path;
+    final refused = await currentHarness().runCli([
+      'new',
+      'mod',
+      't.cleanup',
+      '--template',
+      'nope',
+      '--dir',
+      parent,
+    ]);
+    expect(refused.exitCode, 1, reason: '${refused.stdout}\n${refused.stderr}');
+    expect(
+      refused.stderr.toString(),
+      contains('Unknown mod template "nope" (available: '),
+    );
+    expect(Directory(p.join(parent, 't.cleanup')).existsSync(), isFalse);
+
+    final created = await currentHarness().runCli([
+      'new',
+      'mod',
+      't.cleanup',
+      '--dir',
+      parent,
+    ]);
+    expect(created.exitCode, 0, reason: '${created.stdout}\n${created.stderr}');
+    expect(
+      File(p.join(parent, 't.cleanup', 'topiaforge.mod.json')).existsSync(),
+      isTrue,
+    );
+  });
 }

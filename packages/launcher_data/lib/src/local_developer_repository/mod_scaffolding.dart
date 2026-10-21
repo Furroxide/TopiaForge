@@ -72,88 +72,6 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     return templates;
   }
 
-  /// Scaffolds the mod source files + `topiaforge.mod.json` into [root]. Falls back to the built-in minimal
-  /// generator when the requested template directory is absent (synthetic test environments).
-  Future<void> _scaffoldModFromTemplate(
-    String root,
-    String id,
-    String name,
-    ModScaffoldOptions options,
-    bool includeUnityCompanion,
-  ) async {
-    final templateDir = Directory(
-      p.join(_modTemplatesRoot.path, options.template),
-    );
-    final hasTemplateDir =
-        templateDir.existsSync() &&
-        File(p.join(templateDir.path, 'template.json')).existsSync();
-    if (!hasTemplateDir && options.template != 'minimal') {
-      final available = (await _listModTemplates())
-          .map((template) => template.id)
-          .join(', ');
-      throw StateError(
-        'Unknown mod template "${options.template}" (available: $available).',
-      );
-    }
-
-    final tokens = _modTemplateTokens(id, name);
-    ModTemplateInfo? info;
-    if (hasTemplateDir) {
-      info = await _instantiateModTemplate(templateDir, root, tokens);
-    } else {
-      await _writeStarterModSources(root, id, name);
-    }
-
-    // Base manifest ← template defaults ← author's explicit overrides,
-    // followed by a ModManifest round-trip for canonical field names/ordering.
-    // Identity stays non-publishable until the author supplies it; the license
-    // defaults to the project's terms and the author may replace it.
-    var manifestMap = <String, Object?>{
-      r'$schema': ModManifest.canonicalSchemaUrl,
-      'schemaVersion': ModManifest.currentSchemaVersion,
-      'name': id,
-      'displayName': name,
-      'version': '0.1.0',
-      'author': {'name': TopiaForgeScaffoldDefaults.authorName},
-      'description': '',
-      'entryAssembly': '${tokens['ASSEMBLY_NAME']}.dll',
-      'entryType': '${tokens['ASSEMBLY_NAME']}.${tokens['TYPE_NAME']}Mod',
-      'dependencies': <String, Object?>{},
-      'optionalDependencies': <String, Object?>{},
-      'supportedGameVersionRange': '>=0.0.2545 <0.0.2600',
-      'supportedLoaderVersionRange': _compatibleMinorRange(
-        TopiaForgeRuntimeVersions.loaderVersion,
-      ),
-      'supportedSdkVersionRange': _compatibleMinorRange(
-        TopiaForgeRuntimeVersions.sdkVersion,
-      ),
-      'apiAssemblies': <Object?>[],
-      'license': TopiaForgeScaffoldDefaults.license,
-    };
-    if (info != null && info.manifestDefaults.isNotEmpty) {
-      manifestMap = {...manifestMap, ...info.manifestDefaults};
-    }
-    if (options.authorName == null &&
-        options.authorEmail == null &&
-        options.authorUrl == null) {
-      manifestMap['author'] = {'name': TopiaForgeScaffoldDefaults.authorName};
-    }
-    if (options.license == null) {
-      manifestMap['license'] = TopiaForgeScaffoldDefaults.license;
-    }
-    manifestMap = options.applyTo(manifestMap);
-    final manifest = ModManifest.fromJson(manifestMap);
-    _writeDeveloperTextAtomic(
-      File(p.join(root, 'topiaforge.mod.json')),
-      _prettyJson(manifest.toJson()),
-    );
-    _writeScaffoldLicense(root, manifest, options.licenseText);
-
-    if (includeUnityCompanion) {
-      await _writeUnityCompanionScaffold(root, name);
-    }
-  }
-
   Future<void> _ensureSdkPackageReferences(
     String root,
     SdkReferencePack sdk,
@@ -243,29 +161,50 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     };
   }
 
+  /// [templateDir]'s `template.json`, with `{{TOKEN}}` markers substituted
+  /// in its manifest defaults.
+  Future<ModTemplateInfo> _readModTemplateInfo(
+    Directory templateDir,
+    Map<String, String> tokens,
+  ) async {
+    final metaRaw = utf8.decode(
+      await _readDeveloperFileBounded(
+        File(p.join(templateDir.path, 'template.json')),
+        maxBytes: _maxDeveloperManifestBytes,
+        label: 'Mod template metadata',
+      ),
+    );
+    return ModTemplateInfo.fromJson(
+      jsonDecode(_substituteModTemplateTokens(metaRaw, tokens))
+          as Map<String, Object?>,
+    );
+  }
+
   /// Copies [templateDir] into [root], substituting `{{TOKEN}}` markers in both file paths and text-file
   /// contents. `template.json` (metadata) and any `topiaforge.mod.json` (generated separately) are skipped.
-  /// Returns the parsed template metadata with tokens substituted in its manifest defaults.
-  Future<ModTemplateInfo> _instantiateModTemplate(
+  /// A path that leaves [root] once its tokens are substituted is refused: a token such as the display name is
+  /// the author's own text.
+  Future<void> _instantiateModTemplate(
     Directory templateDir,
     String root,
     Map<String, String> tokens,
   ) async {
-    String substitute(String value) {
-      var result = value;
-      tokens.forEach((key, replacement) {
-        result = result.replaceAll('{{$key}}', replacement);
-      });
-      return result;
-    }
-
+    final base = p.normalize(p.absolute(root));
     for (final entity in templateDir.listSync(recursive: true)) {
       final relative = p.relative(entity.path, from: templateDir.path);
-      final base = p.basename(relative);
-      if (base == 'template.json' || base == 'topiaforge.mod.json') {
+      final name = p.basename(relative);
+      if (name == 'template.json' || name == 'topiaforge.mod.json') {
         continue;
       }
-      final target = p.join(root, substitute(relative));
+      final substituted = _substituteModTemplateTokens(relative, tokens);
+      final target = p.normalize(p.join(base, substituted));
+      if (!p.isWithin(base, target)) {
+        throw StateError(
+          'The mod template path "$relative" leaves the project folder once '
+          'its tokens are substituted: "$substituted". Choose a mod name '
+          'without ".." or a leading path separator.',
+        );
+      }
       if (entity is Directory) {
         Directory(target).createSync(recursive: true);
       } else if (entity is File) {
@@ -280,23 +219,14 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
               label: 'Mod template text file',
             ),
           );
-          await File(target).writeAsString(substitute(content));
+          await File(
+            target,
+          ).writeAsString(_substituteModTemplateTokens(content, tokens));
         } else {
           entity.copySync(target);
         }
       }
     }
-
-    final metaRaw = utf8.decode(
-      await _readDeveloperFileBounded(
-        File(p.join(templateDir.path, 'template.json')),
-        maxBytes: _maxDeveloperManifestBytes,
-        label: 'Mod template metadata',
-      ),
-    );
-    return ModTemplateInfo.fromJson(
-      jsonDecode(substitute(metaRaw)) as Map<String, Object?>,
-    );
   }
 
   Future<ModManifest> _readModManifest(String projectPath) async {
@@ -333,6 +263,15 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     );
     return manifest.validate();
   }
+}
+
+/// [value] with every `{{KEY}}` of [tokens] replaced by its value.
+String _substituteModTemplateTokens(String value, Map<String, String> tokens) {
+  var result = value;
+  tokens.forEach((key, replacement) {
+    result = result.replaceAll('{{$key}}', replacement);
+  });
+  return result;
 }
 
 String _withExactSdkPackageReferences(
