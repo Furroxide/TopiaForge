@@ -101,6 +101,8 @@ internal static class Program
             ScopedFacadeRetirementTests.AScopeThatStopsLeavesTheModsDrone();
             ScopedFacadeRetirementTests.ClosingAFacadeDespawnsOnlyWhatItSpawned();
             ScopedFacadeRetirementTests.ClosingAFacadeCancelsOnlyItsOwnSubmissions();
+            ScopedFacadeRetirementTests.ClosesAreDecidedWhereTheySettle();
+            ScopedFacadeRetirementTests.FacadesAtRestAllocateNothing();
             EngineRoleTests.ASoloSessionJoinsAnotherHostAndComesBack();
             EngineRoleTests.AnEndedClientSessionReturnsToSolo();
             EngineRoleTests.AHostClosesItsConnectionsAndPlaysOn();

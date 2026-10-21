@@ -24,8 +24,10 @@ namespace TopiaForge.ModManager
 
         /// <param name="executionContext">
         /// Where the scope's code runs: a session gives its gamemode's package <see cref="ModExecutionContext.GamemodeServer"/>
-        /// and its other packages <see cref="ModExecutionContext.WorldOwner"/>. Without one, the scope runs where this context
-        /// does, as a content or discovery scope works for its caller. The scope keeps its mod's network class.
+        /// where its server runs and <see cref="ModExecutionContext.WorldOwner"/> on a joined player, its other packages
+        /// <see cref="ModExecutionContext.WorldOwner"/>, and the local player's participant controller a scope of its own with
+        /// <see cref="ModExecutionContext.Participant"/>. Without one, the scope runs where this context does, as a content or
+        /// discovery scope works for its caller. The scope keeps its mod's network class.
         /// </param>
         internal async Task<ModContextScope> CreateChildScopeAsync(string sessionId, CancellationToken sessionStoppingToken,
             Action requestSessionStop, NativeTransitionAccessSlot transitionAccess, IHostDispatcher dispatcher,

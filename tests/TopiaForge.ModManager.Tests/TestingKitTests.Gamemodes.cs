@@ -90,6 +90,17 @@ namespace TopiaForge.ModManager.Tests
                 "and the server controller that started is disposed with both contexts (" + string.Join(", ", failing.Calls) + ")");
             AssertThrows<InvalidOperationException>(runner.Stop, "a session that never ran cannot be stopped");
 
+            var verbose = new ProbeGamemode
+            {
+                ParticipantFailure = OperationResult<IGamemodeParticipantController>.Failure(ModErrorCode.Unavailable, new string('x', 9000))
+            };
+            var bounded = new GamemodeSessionRunner(verbose).StartAsync().Result;
+            Assert(bounded.ErrorCode == ModErrorCode.Unavailable && bounded.ErrorMessage.Length == 4096
+                   && bounded.ErrorMessage.StartsWith("The gamemode's participant controller failed to start: xxx", StringComparison.Ordinal)
+                   && bounded.ErrorMessage.EndsWith("x\u2026", StringComparison.Ordinal),
+                "a reason longer than the game shows is cut as the game cuts it: 4,096 characters, the last an ellipsis ("
+                + bounded.ErrorMessage.Length + ")");
+
             var throwing = new ProbeGamemode { ParticipantThrows = true };
             var thrown = new GamemodeSessionRunner(throwing).StartAsync().Result;
             Assert(thrown.ErrorCode == ModErrorCode.External && thrown.ErrorMessage.EndsWith("The tool bar exploded.", StringComparison.Ordinal),

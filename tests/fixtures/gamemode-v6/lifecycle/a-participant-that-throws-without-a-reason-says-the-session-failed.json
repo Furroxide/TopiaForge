@@ -1,0 +1,32 @@
+{
+  "id": "a-participant-that-throws-without-a-reason-says-the-session-failed",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A participant that throws without a reason ends the session as an external failure in the game's own words.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "throws-without-reason",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "external",
+          "message": "The gamemode's participant controller failed to start: The session operation failed."
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "server.stop"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

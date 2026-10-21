@@ -199,6 +199,8 @@
           "enum": [
             "succeeds",
             "fails",
+            "fails-without-reason",
+            "fails-with-an-unknown-code",
             "throws"
           ]
         },
@@ -206,7 +208,10 @@
           "enum": [
             "succeeds",
             "fails",
+            "fails-without-reason",
+            "fails-with-an-unknown-code",
             "throws",
+            "throws-without-reason",
             "cancelled-while-pending"
           ]
         },

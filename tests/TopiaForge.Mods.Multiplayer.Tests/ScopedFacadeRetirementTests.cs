@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Runtime.CompilerServices;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.Multiplayer.DroneSample;
@@ -136,6 +137,90 @@ internal static class ScopedFacadeRetirementTests
         That(Cancelled(late) && Cancelled(lateInput), "the player's last facade of the mod cancels everything of the mod, its inputs included");
         harness.Flush();
         That(executed.SequenceEqual(new[] { 1 }) && box.State.Value == 5, "and the host runs none of it");
+    }
+
+    /// <summary>
+    /// The engine decides at the settle point that handles a close, on the thread that owns it, whether the facade was its
+    /// mod's last. A facade the mod opens after its last one closed on another thread, but before that close settles, keeps
+    /// the mod in the session: the closed facade's drone goes, and the box the new facade spawned stays. Two facades closed
+    /// on another thread before one settle point retire only what each made, and a facade disposed twice closes once.
+    /// </summary>
+    internal static void ClosesAreDecidedWhereTheySettle()
+    {
+        using var harness = new EngineHarness(MultiplayerProcessKind.Interactive);
+        var mod = harness.Host.CreateFacade(ModId);
+        Require(mod.RegisterObjectType(BoxDefinition()), "the mod registers its boxes");
+        var drone = Require(mod.SpawnObject(BoxType, new CounterValue(1)), "the mod spawns its drone");
+
+        Task.Run(mod.Dispose).GetAwaiter().GetResult();
+        var successor = harness.Host.CreateFacade(ModId);
+        var kept = Require(successor.SpawnObject(BoxType, new CounterValue(2)), "a facade opened before the close settles spawns a box");
+        That(!drone.IsSpawned && kept.IsSpawned && harness.Host.OpenFacadeCount(ModId) == 1,
+            "the closed facade's drone goes, and a facade opened before that close settled keeps the mod in the session, its box with it");
+
+        Require(successor.RegisterObjectType(BoxDefinition()), "the mod registers its boxes again through the facade it kept");
+        var round = harness.Host.CreateFacade(ModId);
+        var toolbar = harness.Host.CreateFacade(ModId);
+        var roundBox = Require(round.SpawnObject(BoxType, new CounterValue(3)), "the round spawns a box");
+        var toolbarBox = Require(toolbar.SpawnObject(BoxType, new CounterValue(4)), "the tool bar spawns a box");
+        Task.Run(() =>
+        {
+            round.Dispose();
+            toolbar.Dispose();
+            round.Dispose();
+        }).GetAwaiter().GetResult();
+        That(roundBox.IsSpawned && toolbarBox.IsSpawned, "closes from another thread wait for the owning thread's next settle point");
+        harness.Host.Pump(harness.NowMicros);
+        That(!roundBox.IsSpawned && !toolbarBox.IsSpawned && kept.IsSpawned && harness.Host.OpenFacadeCount(ModId) == 1,
+            "two closes settled together retire what each made, a second dispose closes nothing more, and the mod's box stays");
+
+        successor.Dispose();
+        That(!kept.IsSpawned && harness.Host.OpenFacadeCount(ModId) == 0, "and the mod's last facade retires the rest");
+    }
+
+    /// <summary>
+    /// Facades at rest cost a frame nothing. The open counts and each object's spawner change only when a facade opens or
+    /// closes, so with the mod's own facade and a scope's each holding a box, and another scope's facade closed, a warm solo
+    /// pump allocates nothing.
+    /// </summary>
+    internal static void FacadesAtRestAllocateNothing()
+    {
+        long now = 0;
+        using var solo = new Provider("io.github.furroxide.topiaforge.multiplayer", clockMicros: () => now);
+        var modLifetime = new FakeModLifetime();
+        var scopeLifetime = new FakeModLifetime();
+        var closedLifetime = new FakeModLifetime();
+        var mod = (IMultiplayerSession)solo.CreateOwnerFacade(typeof(IMultiplayerSession), ModId, modLifetime);
+        Require(mod.RegisterObjectType(BoxDefinition()), "the mod registers its boxes");
+        Require(mod.SpawnObject(BoxType, new CounterValue(1)), "the mod spawns a box");
+        var scope = (IMultiplayerSession)solo.CreateOwnerFacade(typeof(IMultiplayerSession), ModId, scopeLifetime);
+        Require(scope.SpawnObject(BoxType, new CounterValue(2)), "a running scope spawns a box");
+        var closed = (IMultiplayerSession)solo.CreateOwnerFacade(typeof(IMultiplayerSession), ModId, closedLifetime);
+        Require(closed.SpawnObject(BoxType, new CounterValue(3)), "a scope that stops spawns a box");
+        closedLifetime.Dispose();
+        That(solo.Engine.OpenFacadeCount(ModId) == 2 && mod.GetObjects(BoxType).Count == 2,
+            "two facades of the mod stay open, each with its box, after the third closed");
+
+        var allocated = AllocationPasses.Fewest(() => PumpFrames(solo, ref now, 2_000));
+        That(allocated == 0, "a warm solo pump with the mod's facades at rest allocates nothing (allocated " + allocated + " bytes)");
+        scopeLifetime.Dispose();
+        modLifetime.Dispose();
+        That(solo.Engine.OpenFacadeCount(ModId) == 0 && solo.Engine.Snapshot.State == MultiplayerSessionState.Ready,
+            "and every facade of the mod closes with its lifetime");
+    }
+
+    /// <summary>Pumps <paramref name="frames"/> game frames of 16.667 ms and returns what this thread allocated meanwhile.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long PumpFrames(Provider solo, ref long now, int frames)
+    {
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var frame = 0; frame < frames; frame++)
+        {
+            now += 16_667;
+            solo.Pump();
+        }
+
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private static ReplicatedStateDefinition<CounterValue> Score() => new("score", new CounterValue(0), CounterCodec);

@@ -19,6 +19,9 @@ namespace TopiaForge.ModManager.Tests
     /// </summary>
     internal static class ParticipantLifecycleFixtureRunner
     {
+        // A code the SDK does not define, as an author's cast can make one; the game reports it as External.
+        private const ModErrorCode UnknownCode = (ModErrorCode)99;
+
         private static readonly HashSet<string> ScenarioFields = new HashSet<string>(StringComparer.Ordinal)
         {
             "role", "factory", "serverStart", "participantStart", "participantStop", "serverStop"
@@ -153,8 +156,9 @@ namespace TopiaForge.ModManager.Tests
                 Role = role == "client" ? GamemodeSessionRole.Client : role == "host" ? GamemodeSessionRole.Host : GamemodeSessionRole.SinglePlayer;
                 Realm = role == "client" ? NetRealm.Client : role == "host" ? NetRealm.ListenHost : NetRealm.Offline;
                 Participants = Read(raw, "factory", path, "participant", "server-only") == "participant";
-                ServerStart = Read(raw, "serverStart", path, "succeeds", "fails", "throws");
-                ParticipantStart = Read(raw, "participantStart", path, "succeeds", "fails", "throws", "cancelled-while-pending");
+                ServerStart = Read(raw, "serverStart", path, "succeeds", "fails", "fails-without-reason", "fails-with-an-unknown-code", "throws");
+                ParticipantStart = Read(raw, "participantStart", path, "succeeds", "fails", "fails-without-reason",
+                    "fails-with-an-unknown-code", "throws", "throws-without-reason", "cancelled-while-pending");
                 ParticipantStopThrows = Read(raw, "participantStop", path, "succeeds", "throws") == "throws";
                 ServerStopThrows = Read(raw, "serverStop", path, "succeeds", "throws") == "throws";
             }
@@ -171,10 +175,19 @@ namespace TopiaForge.ModManager.Tests
             internal Task<OperationResult<IGamemodeController>> StartServer(List<string> calls)
             {
                 calls.Add("server.start");
-                if (ServerStart == "throws") throw new InvalidOperationException("The arena is missing.");
-                return Task.FromResult(ServerStart == "fails"
-                    ? OperationResult<IGamemodeController>.Failure(ModErrorCode.InvalidState, "The arena has no spawn.")
-                    : OperationResult<IGamemodeController>.Success(new ScenarioController(calls, "server.stop", ServerStopThrows ? "The round would not end." : null)));
+                switch (ServerStart)
+                {
+                    case "throws": throw new InvalidOperationException("The arena is missing.");
+                    case "fails":
+                        return Task.FromResult(OperationResult<IGamemodeController>.Failure(ModErrorCode.InvalidState, "The arena has no spawn."));
+                    case "fails-without-reason":
+                        return Task.FromResult(OperationResult<IGamemodeController>.Failure(ModErrorCode.InvalidState, string.Empty));
+                    case "fails-with-an-unknown-code":
+                        return Task.FromResult(OperationResult<IGamemodeController>.Failure(UnknownCode, "The arena has no spawn."));
+                    default:
+                        return Task.FromResult(OperationResult<IGamemodeController>.Success(
+                            new ScenarioController(calls, "server.stop", ServerStopThrows ? "The round would not end." : null)));
+                }
             }
 
             internal Task<OperationResult<IGamemodeParticipantController>> StartParticipant(
@@ -184,8 +197,14 @@ namespace TopiaForge.ModManager.Tests
                 switch (ParticipantStart)
                 {
                     case "throws": throw new InvalidOperationException("The tool bar exploded.");
+                    case "throws-without-reason": throw new InvalidOperationException(string.Empty);
                     case "fails":
                         return Task.FromResult(OperationResult<IGamemodeParticipantController>.Failure(ModErrorCode.Unavailable,
+                            "The tool bar has no slot for this player."));
+                    case "fails-without-reason":
+                        return Task.FromResult(OperationResult<IGamemodeParticipantController>.Failure(ModErrorCode.Unavailable, string.Empty));
+                    case "fails-with-an-unknown-code":
+                        return Task.FromResult(OperationResult<IGamemodeParticipantController>.Failure(UnknownCode,
                             "The tool bar has no slot for this player."));
                     case "cancelled-while-pending": return pending.Task;
                     default: return Task.FromResult(OperationResult<IGamemodeParticipantController>.Success(Participant(calls)));

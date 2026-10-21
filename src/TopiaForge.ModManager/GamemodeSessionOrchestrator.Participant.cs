@@ -64,7 +64,7 @@ namespace TopiaForge.ModManager
             }
             catch (Exception error) when (!(error is OperationCanceledException))
             {
-                throw new StartupFailure(ModErrorCode.External, Message(ParticipantStartFailure + error.GetBaseException().Message));
+                throw new StartupFailure(ModErrorCode.External, Message(ParticipantStartFailure + Message(error.GetBaseException().Message)));
             }
             if (started.TryGetValue(out var controller)) record.ParticipantController = controller;
             ThrowIfStopping(record);

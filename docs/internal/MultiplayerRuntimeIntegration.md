@@ -1486,9 +1486,10 @@ The host never runs a participant for another player: each player's participant 
   `ImplementationType` says what the declared type implements before anything runs, so none of its code runs there.
 - **Failure.** A participant that returns a failure ends the session with its code and "The gamemode's participant
   controller failed to start: " followed by its message; a `Cancelled` result keeps its own message. One that throws
-  ends the session as `External` with the same sentence. Either way the session ends as a failed server start does: the
-  launch fails with that reason, the server controller is disposed at cleanup, and every scope closes. A controller a
-  participant returns after the session began stopping is kept, and disposed.
+  ends the session as `External` with the same sentence. A reason left empty reads "The session operation failed.", and
+  a code the SDK does not define fails as `External`, saying so, as every failed start does. Either way the session ends
+  as a failed server start does: the launch fails with that reason, the server controller is disposed at cleanup, and
+  every scope closes. A controller a participant returns after the session began stopping is kept, and disposed.
 - **Stop.** Cleanup disposes the participant controller before the server controller, attempting each whatever the
   other did, so a participant that throws never keeps the server controller from stopping; the failure is reported in
   the session's terminal outcome. Scopes close in reverse, the participant's before the server's.
@@ -1543,15 +1544,19 @@ player's game until the mod unloads.
   stops. `ModContextNetProfileTests`: the scope context by realm. `TestingKitTests`: the participant session fake and
   `GamemodeSessionRunner` in every role, with its failures.
 - **Conformance.** The gamemode-v6 fixtures gain a `lifecycle` channel that only C# runs, since only C# has the
-  orchestrator. Each of its 12 `participant-lifecycle` cases runs on the orchestrator, in its realm, and on the testing
-  kit's `GamemodeSessionRunner`, which must give the same result, so the kit cannot drift from the game.
+  orchestrator. Each of its 17 `participant-lifecycle` cases runs on the orchestrator, in its realm, and on the testing
+  kit's `GamemodeSessionRunner`, which must give the same result, its code and words included, so the kit cannot drift
+  from the game. Five of them state a failure the game words for itself: a reason left empty, or a code the SDK does not
+  define, from the server and from the participant, and a participant that throws without a reason.
 - **ModRuntime harness.** The production-binding case `participant`: a real installed package whose declared gamemode
   type implements the factory is bound and launched by production code; the participant starts after the server, its
   services report `Participant`, and it is disposed before the server controller.
 - **Multiplayer harness.** `ScopedFacadeRetirementTests`: the audit's reproduction through the real provider and the
   drone sample; a host's scope facade despawning only its own objects, seen by a joined player; a client's scope facade
-  cancelling only its own commands, while the mod's command and its object's input go through; and each side's last
-  facade retiring the mod.
+  cancelling only its own commands, while the mod's command and its object's input go through; each side's last facade
+  retiring the mod; a close decided at the settle point that handles it, so a facade the mod opens before that point
+  keeps the mod in the session, closes from another thread settle on the owning thread, two of them in one settle point
+  retire only what each made, and a second dispose closes nothing more; and a mod's facades at rest allocating nothing.
 
 ### Choices
 

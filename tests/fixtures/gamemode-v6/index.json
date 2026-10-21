@@ -52,6 +52,18 @@
       "path": "lifecycle/a-participant-that-fails-ends-the-session.json"
     },
     {
+      "id": "a-participant-that-fails-with-an-unknown-code-fails-as-external",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-participant-that-fails-with-an-unknown-code-fails-as-external.json"
+    },
+    {
+      "id": "a-participant-that-fails-without-a-reason-says-the-session-failed",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-participant-that-fails-without-a-reason-says-the-session-failed.json"
+    },
+    {
       "id": "a-participant-that-throws-ends-the-session",
       "channel": "lifecycle",
       "kind": "participant-lifecycle",
@@ -64,10 +76,28 @@
       "path": "lifecycle/a-participant-that-throws-while-stopping-never-keeps-the-server-running.json"
     },
     {
+      "id": "a-participant-that-throws-without-a-reason-says-the-session-failed",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-participant-that-throws-without-a-reason-says-the-session-failed.json"
+    },
+    {
       "id": "a-server-that-fails-never-starts-the-participant",
       "channel": "lifecycle",
       "kind": "participant-lifecycle",
       "path": "lifecycle/a-server-that-fails-never-starts-the-participant.json"
+    },
+    {
+      "id": "a-server-that-fails-with-an-unknown-code-fails-as-external",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-server-that-fails-with-an-unknown-code-fails-as-external.json"
+    },
+    {
+      "id": "a-server-that-fails-without-a-reason-says-the-session-failed",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-server-that-fails-without-a-reason-says-the-session-failed.json"
     },
     {
       "id": "cancelling-while-the-participant-starts-disposes-it-late",

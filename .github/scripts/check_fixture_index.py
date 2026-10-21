@@ -71,8 +71,16 @@ FLAT_CHANNELS = {"resolution", "lifecycle"}
 LIFECYCLE_SCENARIO = {
     "role": {"single-player", "host", "client"},
     "factory": {"participant", "server-only"},
-    "serverStart": {"succeeds", "fails", "throws"},
-    "participantStart": {"succeeds", "fails", "throws", "cancelled-while-pending"},
+    "serverStart": {"succeeds", "fails", "fails-without-reason", "fails-with-an-unknown-code", "throws"},
+    "participantStart": {
+        "succeeds",
+        "fails",
+        "fails-without-reason",
+        "fails-with-an-unknown-code",
+        "throws",
+        "throws-without-reason",
+        "cancelled-while-pending",
+    },
     "participantStop": {"succeeds", "throws"},
     "serverStop": {"succeeds", "throws"},
 }

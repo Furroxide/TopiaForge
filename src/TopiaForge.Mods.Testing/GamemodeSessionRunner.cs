@@ -23,9 +23,10 @@ namespace TopiaForge.Mods.Testing
     /// server, in single player and on the host, <see cref="IGamemodeFactory.StartAsync"/> starts the server controller
     /// first; then a factory that implements <see cref="IGamemodeParticipantFactory"/> starts the player's participant
     /// controller, which is all a joined player's game starts. A failure or cancellation of either start ends the session
-    /// and disposes what started; a participant's failure says it was the participant's. Stopping cancels the session's
-    /// token, then disposes the participant controller, the server controller, the factory when it is disposable, and
-    /// both contexts, attempting each whatever the one before it did.
+    /// and disposes what started; a participant's failure says it was the participant's, and every failure carries the code
+    /// and the words a launch in the game reports. Stopping cancels the session's token, then disposes the participant
+    /// controller, the server controller, the factory when it is disposable, and both contexts, attempting each whatever
+    /// the one before it did.
     /// </summary>
     /// <remarks>
     /// The server and the participant run in contexts of their own, as their scopes do in the game, so register the fakes
@@ -35,6 +36,8 @@ namespace TopiaForge.Mods.Testing
     {
         private const string ParticipantStartFailure = "The gamemode's participant controller failed to start: ";
         private const string StartupCancelled = "Session startup was cancelled.";
+        private const string NoReason = "The session operation failed.";
+        private const int MaximumReasonScalars = 4096;
 
         private readonly CancellationTokenSource session = new CancellationTokenSource();
         private readonly List<Exception> cleanupFailures = new List<Exception>();
@@ -160,7 +163,7 @@ namespace TopiaForge.Mods.Testing
 
                 if (server.TryGetValue(out var controller)) Controller = controller;
                 if (token.IsCancellationRequested) return OperationResult<bool>.Failure(ModErrorCode.Cancelled, StartupCancelled);
-                if (!server.Succeeded) return OperationResult<bool>.Failure(server.ErrorCode, server.ErrorMessage);
+                if (!server.Succeeded) return Failed(server.ErrorCode, Reason(server.ErrorMessage));
             }
 
             if (!(Factory is IGamemodeParticipantFactory participants)) return null;
@@ -178,17 +181,48 @@ namespace TopiaForge.Mods.Testing
             if (participant.TryGetValue(out var participantController)) ParticipantController = participantController;
             if (token.IsCancellationRequested) return OperationResult<bool>.Failure(ModErrorCode.Cancelled, StartupCancelled);
             if (participant.Succeeded) return null;
-            return OperationResult<bool>.Failure(participant.ErrorCode, participant.ErrorCode == ModErrorCode.Cancelled
-                ? participant.ErrorMessage : ParticipantStartFailure + participant.ErrorMessage);
+            var failure = Failed(participant.ErrorCode, participant.ErrorMessage);
+            return failure.ErrorCode == ModErrorCode.Cancelled
+                ? failure
+                : OperationResult<bool>.Failure(failure.ErrorCode, Reason(ParticipantStartFailure + failure.ErrorMessage));
         }
 
         private OperationResult<bool> Thrown(Exception exception, string prefix)
         {
             if (session.IsCancellationRequested) return OperationResult<bool>.Failure(ModErrorCode.Cancelled, StartupCancelled);
-            var message = exception.GetBaseException().Message;
+            var reason = Reason(exception.GetBaseException().Message);
             return exception is OperationCanceledException
-                ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, message)
-                : OperationResult<bool>.Failure(ModErrorCode.External, prefix + message);
+                ? OperationResult<bool>.Failure(ModErrorCode.Cancelled, reason)
+                : OperationResult<bool>.Failure(ModErrorCode.External, Reason(prefix + reason));
+        }
+
+        /// <summary>
+        /// A failed start as the game reports it: a code the SDK does not define fails as <see cref="ModErrorCode.External"/>,
+        /// saying so, and the reason is worded as the game words it (see <see cref="Reason"/>).
+        /// </summary>
+        private static OperationResult<bool> Failed(ModErrorCode code, string? reason) =>
+            code == ModErrorCode.None || !Enum.IsDefined(typeof(ModErrorCode), code)
+                ? OperationResult<bool>.Failure(ModErrorCode.External,
+                    Reason("An implementation returned an unsupported operation error code (" + (int)code + "). " + reason))
+                : OperationResult<bool>.Failure(code, Reason(reason));
+
+        /// <summary>
+        /// A failure's reason as the game words it: "The session operation failed." when there is none, and at most 4,096
+        /// Unicode characters, the last of them an ellipsis when the reason had to be cut.
+        /// </summary>
+        private static string Reason(string? text)
+        {
+            if (text == null || string.IsNullOrWhiteSpace(text)) return NoReason;
+            var scalars = 0;
+            var cut = 0;
+            for (var offset = 0; offset < text.Length; offset++)
+            {
+                if (scalars == MaximumReasonScalars - 1) cut = offset;
+                if (++scalars > MaximumReasonScalars) return text.Substring(0, cut) + "\u2026";
+                if (char.IsHighSurrogate(text[offset]) && offset + 1 < text.Length && char.IsLowSurrogate(text[offset + 1])) offset++;
+            }
+
+            return text;
         }
 
         private void CancelSession()
