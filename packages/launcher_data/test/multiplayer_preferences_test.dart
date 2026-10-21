@@ -374,6 +374,30 @@ void main() {
   });
 
   group('changes', () {
+    test('LAN discovery turned off in game stops browsing once a round takes '
+        'it in', () async {
+      final lan = LanDiscoveryClient(
+        listenAddress: loopback,
+        port: 0,
+        queryAddress: loopback,
+      );
+      final repo = repository(lan: lan);
+      await repo.syncWithGame(install);
+      expect(
+        (await repo.startLanBrowsing()).status,
+        LanDiscoveryStatus.listening,
+      );
+      journal([NetworkChange(sequence: 1, lanDiscovery: false, upnp: false)]);
+      // Settings that cannot be read stand in as off, and change nothing.
+      await whileSettingsUnreadable(() => repo.syncWithGame(install));
+      expect(lan.isListening, isTrue);
+
+      final round = await repo.syncWithGame(install);
+      expect(round.preferences.settings.lanDiscoveryEnabled, isFalse);
+      expect(lan.isListening, isFalse);
+      expect(repo.lanSnapshot.status, LanDiscoveryStatus.disabled);
+    });
+
     test('turning LAN discovery off stops browsing before the save', () async {
       final lan = LanDiscoveryClient(
         listenAddress: loopback,

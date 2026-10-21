@@ -183,13 +183,13 @@ final class MultiplayerStore {
     return next;
   });
 
-  /// Runs [body] with the stored settings and a [write] that replaces them
+  /// Runs [body] with the stored settings and a `write` that replaces them
   /// and what the file keeps beside them, with no other read or write of the
   /// settings in between, as a preferences round needs: it reads the game's
   /// journal, saves, and writes the game's copy before anything else changes
-  /// the settings. [write] may be called only while [body] runs. Throws
+  /// the settings. `write` may be called only while [body] runs. Throws
   /// [MultiplayerStoreException] before [body] runs while the settings
-  /// cannot be read, and from [write] when they cannot be written.
+  /// cannot be read, and from `write` when they cannot be written.
   Future<T> withSettings<T>(
     Future<T> Function(
       MultiplayerSettingsLoad current,

@@ -44,6 +44,7 @@ part 'widget_multiplayer_settings_test_cases.dart';
 part 'widget_multiplayer_network_test_cases.dart';
 part 'widget_multiplayer_layout_test_cases.dart';
 part 'widget_multiplayer_privacy_test_cases.dart';
+part 'widget_multiplayer_race_test_cases.dart';
 part 'widget_multiplayer_golden_test_cases.dart';
 
 Finder _devScrollable() => find
@@ -68,6 +69,7 @@ void main() {
   registerMultiplayerNetworkWidgetTests();
   registerMultiplayerLayoutTests();
   registerMultiplayerPrivacyTests();
+  registerMultiplayerRaceTests();
   registerMultiplayerGoldenRenders();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would

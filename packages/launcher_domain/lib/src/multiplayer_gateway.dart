@@ -267,7 +267,8 @@ abstract interface class MultiplayerGateway {
   /// the game reads up to date, with no change to the preferences in
   /// between. Run it only while that game is not running. It changes nothing
   /// while the preferences cannot be read, and writes nothing once
-  /// [cancellation] is cancelled. Never throws.
+  /// [cancellation] is cancelled. LAN discovery turned off in game stops LAN
+  /// browsing once it is taken in. Never throws.
   Future<MultiplayerPreferencesRound> syncWithGame(
     GameInstall install, {
     CancellationToken? cancellation,

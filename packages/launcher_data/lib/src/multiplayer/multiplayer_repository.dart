@@ -280,7 +280,17 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   Future<MultiplayerPreferencesRound> syncWithGame(
     GameInstall install, {
     CancellationToken? cancellation,
-  }) => _preferences.sync(install, cancellation: cancellation);
+  }) async {
+    final round = await _preferences.sync(install, cancellation: cancellation);
+    final preferences = round.preferences;
+    // A round can take in LAN discovery turned off in game. Once it is in the
+    // settings, browsing stops, as it does when the player turns it off here.
+    if (preferences.readable && !preferences.settings.lanDiscoveryEnabled) {
+      _lanDecisions++;
+      await _lan.stop(disabled: true);
+    }
+    return round;
+  }
 
   @override
   Future<GameRunState> gameRunState(GameInstall install) =>
