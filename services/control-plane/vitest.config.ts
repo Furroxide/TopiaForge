@@ -26,5 +26,8 @@ export default defineConfig({
   ],
   test: {
     include: ["test/**/*.test.ts"],
+    // Above the 5-second event timers in test/support/sockets.ts, so a frame or a close that never arrives
+    // fails saying which, instead of as a bare test timeout, and a slow runner does not fail a correct test.
+    testTimeout: 20_000,
   },
 });

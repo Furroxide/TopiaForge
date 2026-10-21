@@ -1,6 +1,8 @@
-import { runDurableObjectAlarm } from "cloudflare:test";
+import { runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { LISTING_TTL_SECONDS } from "../src/objects/host-session";
+import { PEER_SOCKET_SECONDS, openSockets } from "../src/objects/host-signaling";
 import type { JsonObject } from "../src/shared/canonical-json";
 import { call, identity, register } from "./support/api";
 import { endScenario, startScenario, type Scenario } from "./support/scenario";
@@ -235,13 +237,33 @@ describe("the signaling room", () => {
   });
 
   it("closes a peer's socket when its lifetime ends", async () => {
+    const admitted = Math.floor(scenario.clock.now() / 1000);
     const { serverId, hostToken, peer } = await room();
-    for (let beat = 0; beat < 31; beat++) {
-      scenario.clock.advance(30);
-      await call("POST", `/v1/hosts/${serverId}/heartbeat`, { ip: scenario.ip, token: hostToken, body: { players: 1 } });
+    const session = env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(serverId));
+    const heartbeat = async (): Promise<number> =>
+      (await call("POST", `/v1/hosts/${serverId}/heartbeat`, { ip: scenario.ip, token: hostToken, body: { players: 1 } })).status;
+    const alarmAt = () => runInDurableObject(session, (_, state) => state.storage.getAlarm());
+    const openPeers = () => runInDurableObject(session, (_, state) => openSockets(state, "peer").length);
+    // Heartbeats just inside the listing TTL keep the session live past the socket's lifetime in the fewest round trips,
+    // and none falls at or after the lifetime's end, so only the alarm's sweep can close the socket.
+    const gap = LISTING_TTL_SECONDS - 5;
+    let elapsed = 0;
+    while (elapsed + gap < PEER_SOCKET_SECONDS) {
+      scenario.clock.advance(gap);
+      elapsed += gap;
+      expect(await heartbeat()).toBe(200);
     }
-    await runDurableObjectAlarm(env.HOST_SESSIONS.get(env.HOST_SESSIONS.idFromName(serverId)));
+    // One housekeeping run first: until it purges the registration challenge's expired row, every heartbeat re-arms the
+    // alarm for the present. It then arms the alarm for the second the socket's lifetime ends.
+    expect(await runDurableObjectAlarm(session)).toBe(true);
+    expect(await alarmAt()).toBe((admitted + PEER_SOCKET_SECONDS) * 1000);
+    expect(await openPeers()).toBe(1);
+    scenario.clock.advance(PEER_SOCKET_SECONDS - elapsed);
+    expect(await runDurableObjectAlarm(session)).toBe(true);
+    expect(await openPeers()).toBe(0);
     expect((await peer.closed()).code).toBe(4411);
+    // Only the socket's lifetime ended, not the session.
+    expect(await heartbeat()).toBe(200);
   });
 
   it("closes an expired peer's socket on its next frame", async () => {
