@@ -16,13 +16,14 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
   /// One blocking issue for each SDK package that a restore of one of
   /// [projects] resolved at another version than [sdk]'s, or did not resolve
   /// though the project is pinned to it (TF1102), and one for each project
-  /// whose lock file is missing, cannot be read, or was not written by the
-  /// restore that started at its time in [restoreStarted] (TF1103).
+  /// whose lock file is missing, cannot be read, or was not written by its
+  /// restore, as the snapshot in [snapshots] taken just before it tells
+  /// (TF1103).
   Future<List<LauncherIssue>> _checkRestoredSdkPackages(
     String root,
     SdkReferencePack sdk,
     List<File> projects,
-    Map<String, DateTime> restoreStarted,
+    Map<String, NuGetLockFileSnapshot> snapshots,
   ) async {
     final modulePackages = await _sdkModulePackages(root, sdk);
     final sdkPackages = sdk.packages.map((package) => package.id).toSet();
@@ -69,7 +70,7 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
       }
       // A lock file this restore did not write says nothing about what it
       // resolved, however well it matches the pin.
-      if (!nuGetLockFileWrittenSince(lockFile, restoreStarted[project.path]!)) {
+      if (!snapshots[project.path]!.wrote(lockFile)) {
         final cause = switch (location.source) {
           NuGetLockFileSource.recorded =>
             'the obj/project.assets.json beside $name that names it is left '

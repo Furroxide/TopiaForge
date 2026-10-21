@@ -63,9 +63,9 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       );
     }
     final dotnet = await _dotnetSdkResolver(Directory(root));
-    final restoreStarted = <String, DateTime>{};
+    final snapshots = <String, NuGetLockFileSnapshot>{};
     for (final project in projects) {
-      restoreStarted[project.path] = DateTime.now();
+      snapshots[project.path] = NuGetLockFileSnapshot.of(project);
       final restore = await runBoundedProcess(
         dotnet.executable,
         [
@@ -89,7 +89,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
         );
       }
     }
-    return _checkRestoredSdkPackages(root, sdk, projects, restoreStarted);
+    return _checkRestoredSdkPackages(root, sdk, projects, snapshots);
   }
 
   SdkReferencePack? _loadCachedSdkPack(_DeveloperSdkLock lock) {

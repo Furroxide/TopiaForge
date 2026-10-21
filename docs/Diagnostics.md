@@ -210,8 +210,8 @@ the versions agree.
 project file itself declares `NuGetLockFilePath` in a plain `<PropertyGroup>`, as a literal path;
 otherwise `packages.<project name>.lock.json` when there is one; otherwise `packages.lock.json` beside the
 project. When none is there, it cannot be read, or the restore did not write it, which SDK versions NuGet
-resolved is unknown, so the restore fails. NuGet rewrites the lock file it uses on every restore, so one
-older than the restore is left from an earlier one, from before `NuGetLockFilePath` or `obj` moved, and it
+resolved is unknown, so the restore fails. NuGet rewrites the lock file it uses on every restore, so one the
+restore left as it was is left from an earlier one, from before `NuGetLockFilePath` or `obj` moved, and it
 is never checked in place of the lock file NuGet wrote. The message names the files it looked for, or the
 one it found and why it is left over.
 

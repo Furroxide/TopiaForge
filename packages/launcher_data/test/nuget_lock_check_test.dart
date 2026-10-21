@@ -314,24 +314,57 @@ void main() {
     });
   });
 
-  test('nuGetLockFileWrittenSince takes only a lock file written since the '
-      'restore started, give or take the file time tolerance', () {
+  test('a snapshot tells a lock file its restore wrote from one it left as '
+      'it was', () {
     final root = Directory.systemTemp.createTempSync('tf-nuget-lock-time-');
     addTearDown(() => root.deleteSync(recursive: true));
-    final lock = File(p.join(root.path, 'packages.lock.json'))
-      ..writeAsStringSync('{}');
-    final started = DateTime(2026, 10, 21, 12);
-    bool writtenAt(DateTime time) {
-      lock.setLastModifiedSync(time);
-      return nuGetLockFileWrittenSince(lock, started);
-    }
+    final project = File(p.join(root.path, 'Sam Mod.csproj'))
+      ..writeAsStringSync(
+        '<Project><PropertyGroup><NuGetLockFilePath>locks/declared.json'
+        '</NuGetLockFilePath></PropertyGroup></Project>',
+      );
+    final hourAgo = DateTime.now().subtract(const Duration(hours: 1));
+    File place(String name, DateTime time) => File(p.join(root.path, name))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('{}')
+      ..setLastModifiedSync(time);
+    final beside = place('packages.lock.json', hourAgo);
+    final named = place('packages.Sam_Mod.lock.json', hourAgo);
+    final declared = place(p.join('locks', 'declared.json'), hourAgo);
 
-    expect(writtenAt(started.add(const Duration(seconds: 5))), isTrue);
-    expect(writtenAt(started.subtract(const Duration(seconds: 1))), isTrue);
-    expect(writtenAt(started.subtract(const Duration(seconds: 3))), isFalse);
-    expect(writtenAt(started.subtract(const Duration(days: 1))), isFalse);
-    lock.deleteSync();
-    expect(nuGetLockFileWrittenSince(lock, started), isFalse);
+    final snapshot = NuGetLockFileSnapshot.of(project);
+
+    expect(
+      snapshot.paths.toSet(),
+      {beside.path, named.path, declared.path}.map(p.normalize).toSet(),
+    );
+    // Left as they were an hour ago: none is the lock file the restore used.
+    for (final lock in [beside, named, declared]) {
+      expect(snapshot.wrote(lock), isFalse, reason: lock.path);
+    }
+    // Rewritten, even with an earlier time, as a share whose clock runs
+    // behind would give it.
+    named.setLastModifiedSync(hourAgo.add(const Duration(seconds: 1)));
+    declared.setLastModifiedSync(hourAgo.subtract(const Duration(hours: 1)));
+    expect(snapshot.wrote(named), isTrue);
+    expect(snapshot.wrote(declared), isTrue);
+    // Not there before.
+    expect(snapshot.wrote(place('created.json', hourAgo)), isTrue);
+    // Gone since.
+    beside.deleteSync();
+    expect(snapshot.wrote(beside), isFalse);
+
+    // Rewritten in the time step it had, as a quick restore can be on a file
+    // system that keeps whole or two-second steps: its time is no earlier
+    // than the snapshot.
+    final other = File(p.join(root.path, 'other', 'Other.csproj'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('<Project />');
+    final otherLock = place(
+      p.join('other', 'packages.lock.json'),
+      DateTime.now(),
+    );
+    expect(NuGetLockFileSnapshot.of(other).wrote(otherLock), isTrue);
   });
 
   group('declaredNuGetLockFilePath', () {

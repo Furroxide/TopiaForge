@@ -223,26 +223,77 @@ String? _recordedLockFilePath(File assets) {
   }
 }
 
-/// Whether [lockFile] was written by the restore of its project that
-/// started at [restoreStarted]. NuGet rewrites the lock file it uses on every
-/// restore that `--force-evaluate` makes evaluate the project, in locked mode
-/// too, so an older one is not the lock file that restore used: it is left
-/// from an earlier restore, from before `NuGetLockFilePath`, or the `obj`
-/// folder where a restore records it, moved. A file's time may read up to
-/// [nuGetLockFileTimeTolerance] early, as FAT keeps times in two-second steps.
-bool nuGetLockFileWrittenSince(File lockFile, DateTime restoreStarted) {
-  try {
-    return !lockFile.lastModifiedSync().isBefore(
-      restoreStarted.subtract(nuGetLockFileTimeTolerance),
-    );
-  } on FileSystemException {
-    return false;
+/// The files that could be a project's lock file after its next restore,
+/// as they stood just before it: the one [nuGetLockFileOf] finds then, the
+/// one the project file declares, and the two beside the project. It tells
+/// the lock file that restore wrote from one it left as it was ([wrote]).
+final class NuGetLockFileSnapshot {
+  /// Takes [project]'s snapshot now, just before its restore starts.
+  factory NuGetLockFileSnapshot.of(File project) {
+    final taken = DateTime.now();
+    final folder = project.parent.path;
+    final text = _readSmallFile(project);
+    final declared = declaredNuGetLockFilePath(text);
+    final paths = {
+      nuGetLockFileOf(project, projectText: text).file.path,
+      if (declared != null) p.join(folder, declared.replaceAll(r'\', '/')),
+      p.join(folder, projectNamedNuGetLockFileName(project)),
+      p.join(folder, 'packages.lock.json'),
+    };
+    return NuGetLockFileSnapshot._(taken, {
+      for (final path in paths) p.normalize(path): ?_modifiedAt(path),
+    });
+  }
+
+  const NuGetLockFileSnapshot._(this.taken, this._times);
+
+  /// When the snapshot was taken.
+  final DateTime taken;
+
+  /// The modification time of each file that was there, by normalized path.
+  final Map<String, DateTime> _times;
+
+  /// The normalized paths of the files that were there.
+  Iterable<String> get paths => _times.keys;
+
+  /// Whether the restore that started after this snapshot wrote [lockFile].
+  /// NuGet rewrites the lock file it uses on every restore that
+  /// `--force-evaluate` makes evaluate the project, in locked mode too, so a
+  /// lock file it left as it was is not the one it used: it is left from an
+  /// earlier restore, from before `NuGetLockFilePath`, or the `obj` folder
+  /// where a restore records it, moved. A lock file counts as rewritten when
+  /// it was not there before, when its time changed, which needs no clock,
+  /// so a share or a virtual machine whose clock runs apart from the file
+  /// system's changes nothing, or when its time is no earlier than the
+  /// snapshot, give or take [nuGetLockFileTimeTolerance], since a file system
+  /// that keeps times in whole or two-second steps can give a rewrite the
+  /// time the file had.
+  bool wrote(File lockFile) {
+    final now = _modifiedAt(lockFile.path);
+    if (now == null) return false;
+    // A file that was not there before has no time to match.
+    final before = _times[p.normalize(lockFile.path)];
+    return now != before ||
+        !now.isBefore(taken.subtract(nuGetLockFileTimeTolerance));
   }
 }
 
 /// How much earlier than the restore that wrote it a lock file's time may
-/// read.
+/// read: FAT keeps times in two-second steps.
 const nuGetLockFileTimeTolerance = Duration(seconds: 2);
+
+/// When the file at [path] was last modified, or null when it is not there
+/// or cannot be read.
+DateTime? _modifiedAt(String path) {
+  try {
+    if (FileSystemEntity.typeSync(path) == FileSystemEntityType.notFound) {
+      return null;
+    }
+    return File(path).lastModifiedSync();
+  } on FileSystemException {
+    return null;
+  }
+}
 
 /// Far more than any mod project's assets file holds.
 const _maximumAssetsBytes = 64 * 1024 * 1024;
