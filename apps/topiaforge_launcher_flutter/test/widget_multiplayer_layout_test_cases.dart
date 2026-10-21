@@ -264,5 +264,54 @@ void registerMultiplayerLayoutTests() {
       await tester.pumpAndSettle();
       expect(gateway.calls, contains('change disclosure'));
     });
+
+    testWidgets('Diagnostics → Network, by keyboard: every button in reading '
+        'order, and the explanation never runs a check on Enter', (
+      tester,
+    ) async {
+      final gateway = _FakeMultiplayerGateway();
+      await _openNetwork(tester, gateway);
+      const order = [
+        Key('network-refresh'),
+        Key('network-listen'),
+        Key('network-check-ports'),
+        Key('network-notice-again'),
+      ];
+      // Focuses a button without pressing it.
+      Future<void> focus(Key button) async {
+        Focus.of(
+          tester.element(
+            find.descendant(
+              of: find.byKey(button),
+              matching: find.byType(Text),
+            ),
+          ),
+        ).requestFocus();
+        await tester.pump();
+      }
+
+      await focus(order.first);
+      final seen = <Key>[];
+      for (var press = 0; press < 12 && seen.length < order.length; press++) {
+        final focused = _focusedAmong(order);
+        if (focused != null && (seen.isEmpty || seen.last != focused)) {
+          seen.add(focused);
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(seen, order);
+
+      // On Check ports, Enter asks first, and Enter again cancels.
+      await focus(order[2]);
+      expect(_focusedAmong(order), order[2]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text(NetworkCheckNotice.title), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text(NetworkCheckNotice.title), findsNothing);
+      expect(gateway.calls, isNot(contains('check ports')));
+    });
   });
 }
