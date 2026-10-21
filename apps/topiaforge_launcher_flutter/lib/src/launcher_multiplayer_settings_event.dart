@@ -73,17 +73,21 @@ final class MultiplayerChangeFailed extends MultiplayerChangeOutcome {
   final bool unreadable;
 }
 
-/// A change finished.
+/// A change finished. [gameCheck] is the newest check of whether the game
+/// runs when the change asked: its own, for a change the game could also
+/// make.
 final class MultiplayerPreferencesChanged extends MultiplayerSettingsEvent {
   const MultiplayerPreferencesChanged(
     this.generation,
     this.change,
-    this.outcome,
-  );
+    this.outcome, {
+    this.gameCheck = 0,
+  });
 
   final int generation;
   final MultiplayerPreferencesChange change;
   final MultiplayerChangeOutcome outcome;
+  final int gameCheck;
 }
 
 /// A check of whether the game runs from [installPath] finished.

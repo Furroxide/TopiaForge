@@ -1,35 +1,5 @@
 part of 'launcher_bloc.dart';
 
-/// The bloc's bookkeeping for multiplayer work that runs beside its event
-/// lane. Each kind of work counts its generations: an answer that is not
-/// from the newest one of its kind is stale and dropped, and a cancelled
-/// token stops work that has not written anything yet.
-final class _MultiplayerWork {
-  /// The newest read, change or round of the preferences.
-  int preferences = 0;
-
-  /// The newest check of whether the game runs.
-  int game = 0;
-
-  /// The newest network check, or the latest time Diagnostics was left.
-  int network = 0;
-
-  /// The round with the game that runs now, if any.
-  CancellationToken? round;
-
-  /// The network check that runs now, if any.
-  CancellationToken? check;
-
-  /// Whether the next check that finds the game closed runs a round: at
-  /// start, after the install changed and after the game ran.
-  bool roundDue = true;
-
-  void cancelAll() {
-    round?.cancel();
-    check?.cancel();
-  }
-}
-
 /// Settings → Multiplayer: the player's preferences, the rule that the ones
 /// the game can change are read-only while it runs, and the rounds that take
 /// in what changed in game and bring the game's copy up to date.
@@ -121,13 +91,16 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
     Emitter<LauncherState> emit,
   ) async {
     if (event.generation != _multiplayerWork.preferences) return;
-    _showPreferences(emit, event.preferences);
+    _showPreferences(emit, event.preferences, generation: event.generation);
   }
 
-  /// Shows [preferences], or says they could not be read.
+  /// Shows [preferences], read by the work of [generation], or says they
+  /// could not be read. Work that may have read the store before the last
+  /// link choice was written shows that choice instead of the one it read.
   void _showPreferences(
     Emitter<LauncherState> emit,
     MultiplayerPreferences preferences, {
+    required int generation,
     String? status,
     IssueSeverity? severity,
   }) {
@@ -143,11 +116,15 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
       );
       return;
     }
+    final choice = _multiplayerWork.linkChoice;
     _showSettings(
       emit,
       _settingsView.copyWith(
         phase: MultiplayerPreferencesPhase.ready,
-        preferences: preferences,
+        preferences:
+            choice != null && generation <= _multiplayerWork.linkChosenAt
+            ? _withLinkHandling(preferences, choice)
+            : preferences,
       ),
       status: status,
       severity: severity,
@@ -183,12 +160,16 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
       return;
     }
     final generation = ++_multiplayerWork.preferences;
-    final install = state.gameInstall;
-    _showSettings(emit, view.copyWith(saving: true, clearProblem: true));
     // The game may have started since the last check, so a change it could
-    // also make asks again first.
+    // also make asks again first. That check is then the newest, and the
+    // answer to any check asked before it is stale.
+    final install = change.sharedWithGame ? state.gameInstall : null;
+    final gameCheck = install == null
+        ? _multiplayerWork.game
+        : ++_multiplayerWork.game;
+    _showSettings(emit, view.copyWith(saving: true, clearProblem: true));
     Future<MultiplayerChangeOutcome> save() async {
-      if (change.sharedWithGame && install != null) {
+      if (install != null) {
         final running = await gateway.gameRunState(install);
         if (running != GameRunState.notRunning) {
           return MultiplayerChangeLocked(running);
@@ -206,11 +187,17 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
 
     _beside(
       save(),
-      (outcome) => MultiplayerPreferencesChanged(generation, change, outcome),
+      (outcome) => MultiplayerPreferencesChanged(
+        generation,
+        change,
+        outcome,
+        gameCheck: gameCheck,
+      ),
       () => MultiplayerPreferencesChanged(
         generation,
         change,
         const MultiplayerChangeFailed(_notSaved),
+        gameCheck: gameCheck,
       ),
     );
   }
@@ -223,14 +210,32 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
     final view = _settingsView.copyWith(saving: false);
     switch (event.outcome) {
       case MultiplayerChangeSaved(:final preferences):
+        final shared = event.change.sharedWithGame;
+        // The game reads its copy when it starts, so the change is due to
+        // reach it with a round.
+        if (shared) _multiplayerWork.roundDue = true;
         if (!current) {
           // A newer read or round brings the preferences after this change.
           _showSettings(emit, view, status: 'Multiplayer settings saved.');
+          if (shared) add(const MultiplayerGameCheckRequested());
           return;
         }
         _showSettings(emit, view);
-        _showPreferences(emit, preferences, status: _savedStatus(event));
-        if (event.change.sharedWithGame) _startRound(emit);
+        _showPreferences(
+          emit,
+          preferences,
+          generation: event.generation,
+          status: _savedStatus(event),
+        );
+        if (!shared) return;
+        // The change's own check is still the newest word on the game, so the
+        // round runs now. A check asked since may say the game runs: a fresh
+        // one decides, and runs the round once the game is closed.
+        if (event.gameCheck == _multiplayerWork.game) {
+          _startRound(emit);
+        } else {
+          add(const MultiplayerGameCheckRequested());
+        }
       case MultiplayerChangeLocked(:final state):
         _multiplayerWork.roundDue = true;
         final lock = _lockFor(state);
@@ -270,17 +275,15 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
   /// Saved by link handling: the switch shows the stored choice at once, and
   /// the registration's own status follows it.
   void _linkHandlingSaved(bool enabled, Emitter<LauncherState> emit) {
+    _multiplayerWork
+      ..linkChoice = enabled
+      ..linkChosenAt = _multiplayerWork.preferences;
     final preferences = _settingsView.preferences;
     if (preferences == null) return;
     _showSettings(
       emit,
       _settingsView.copyWith(
-        preferences: MultiplayerPreferences(
-          settings: preferences.settings.withLinkHandling(enabled),
-          hosting: preferences.hosting,
-          networkNotice: preferences.networkNotice,
-          health: preferences.health,
-        ),
+        preferences: _withLinkHandling(preferences, enabled),
       ),
     );
   }
@@ -380,12 +383,13 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
         _showPreferences(
           emit,
           preferences,
+          generation: event.generation,
           status: changedInGame
               ? 'Took in the multiplayer settings you changed in Robotopia.'
               : null,
         );
       case MultiplayerPreferencesRoundSkipped(:final preferences):
-        _showPreferences(emit, preferences);
+        _showPreferences(emit, preferences, generation: event.generation);
       case MultiplayerPreferencesRoundFailed(:final problem):
         final message = switch (problem) {
           MultiplayerRoundProblem.preferencesNotSaved => _notSaved,
@@ -427,37 +431,3 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
     if (check) add(const MultiplayerGameCheckRequested());
   }
 }
-
-MultiplayerPreferencesLock _lockFor(GameRunState state) => switch (state) {
-  GameRunState.notRunning => MultiplayerPreferencesLock.none,
-  GameRunState.running => MultiplayerPreferencesLock.gameRunning,
-  GameRunState.unknown => MultiplayerPreferencesLock.gameMaybeRunning,
-};
-
-String _lockedStatus(MultiplayerPreferencesLock lock) => switch (lock) {
-  MultiplayerPreferencesLock.gameMaybeRunning =>
-    'TopiaForge could not tell whether Robotopia is running, so nothing was '
-        'changed. Close the game, then try again.',
-  MultiplayerPreferencesLock.checking =>
-    'TopiaForge is still checking whether Robotopia is running, so nothing '
-        'was changed. Try again in a moment.',
-  _ =>
-    'Robotopia is running, so nothing was changed. These settings can be '
-        'changed once the game is closed.',
-};
-
-MultiplayerPreferences _unreadablePreferences() => MultiplayerPreferences(
-  settings: MultiplayerSettings(),
-  health: MultiplayerPreferencesHealth.unreadable,
-);
-
-const _unreadableStatus =
-    'Your multiplayer settings could not be read just now, so nothing was '
-    'changed.';
-const _notSaved =
-    'Your multiplayer settings could not be saved. Check that TopiaForge can '
-    'write its data folder, then try again.';
-const _gameCopy =
-    "Robotopia's copy of your multiplayer settings could not be updated, so "
-    "the game still has the earlier ones. Check that TopiaForge can write to "
-    "the game's folder; it tries again the next time it checks.";

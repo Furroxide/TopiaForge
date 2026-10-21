@@ -25,6 +25,7 @@ part 'launcher_bloc_helpers.dart';
 part 'launcher_session_link_actions.dart';
 part 'launcher_multiplayer_settings_actions.dart';
 part 'launcher_multiplayer_network_actions.dart';
+part 'launcher_multiplayer_work.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
