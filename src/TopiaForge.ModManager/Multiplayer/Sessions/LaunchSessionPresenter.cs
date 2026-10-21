@@ -22,7 +22,7 @@ namespace TopiaForge.ModManager.Sessions
         internal const string PasswordTitle = "Password for this session";
         internal const string PasswordBody = "The TopiaForge launcher asked this game to host a session that needs a password. Type the password players will join with. It is used for this session only and never kept.";
         internal const string PasswordConfirm = "HOST";
-        internal const string NoPassword = "The session needs a password, and none was typed, so it did not open.";
+        internal const string NothingTyped = "The session needs a password, and none was typed, so it did not open.";
         internal const string NotHeard = "The session was not heard on your local network.";
         internal const string GameStopped = "The launched game stopped before it could be opened to other players.";
         internal const string Opened = "Your session is open to other players.";
@@ -203,7 +203,7 @@ namespace TopiaForge.ModManager.Sessions
                 if (!ReferenceEquals(current, launch) || stage != Stage.Password) return;
                 if (!entered)
                 {
-                    launch.Refuse(ModErrorCode.Cancelled, NoPassword);
+                    launch.Refuse(ModErrorCode.Cancelled, NothingTyped);
                     return;
                 }
 

@@ -37,7 +37,6 @@ namespace TopiaForge.ModManager
     {
         internal const string AdmissionChangedDetail = "The server changed after you planned the join.";
         internal const string PackagesChangedDetail = "The server's packages changed after you planned the join.";
-        internal const string PasswordWrongDetail = "The password was wrong.";
 
         /// <summary>
         /// The session block for this status. <paramref name="started"/> says whether the in-game flows began the session yet,
@@ -321,7 +320,7 @@ namespace TopiaForge.ModManager
                     break;
                 case InternalAdmissionCode.PasswordWrong:
                     failure = "password-rejected";
-                    detail = PasswordWrongDetail;
+                    detail = "The password was wrong.";
                     break;
                 case InternalAdmissionCode.TooManyAttempts:
                     failure = "password-rejected";
