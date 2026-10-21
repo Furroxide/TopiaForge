@@ -33,9 +33,9 @@ import 'multiplayer/multiplayer_repository.dart'
     show LocalMultiplayerRepository;
 import 'multiplayer/multiplayer_store.dart'
     show ServerContentLoad, ServerContentStore;
-import 'windows_file_move.dart';
+import 'atomic_file_writes.dart';
+import 'atomic_files.dart';
 
-part 'local_launcher_repository/atomic_backup_recovery.dart';
 part 'local_launcher_repository/game_layout.dart';
 part 'local_launcher_repository/game_install_discovery_helpers.dart';
 part 'local_launcher_repository/game_architecture.dart';
@@ -175,6 +175,7 @@ class LocalLauncherRepository
   final Map<String, LaunchActivityMonitor> _launchMonitors = {};
   Future<void> _settingsMutationTail = Future<void>.value();
   Future<void> _launcherLogMutationTail = Future<void>.value();
+  bool _launcherLogSwept = false;
   bool _disposed = false;
   final _launchActivities = StreamController<LaunchActivity>.broadcast();
   @override

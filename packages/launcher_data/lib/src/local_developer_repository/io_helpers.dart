@@ -12,7 +12,13 @@ extension LocalDeveloperIoHelpers on LocalDeveloperRepository {
         : File(startPath).absolute.parent;
     while (true) {
       final projectFile = File(p.join(current.path, 'topiaforge.project.json'));
-      _recoverDeveloperAtomicBackupIfMissing(projectFile);
+      try {
+        _recoverDeveloperAtomicBackupIfMissing(projectFile);
+      } on LauncherFileUnreadable catch (error) {
+        // A folder above the project that cannot be listed holds no project
+        // the tools can use; a held backup of one is reported.
+        if (!error.closedFolder) rethrow;
+      }
       if (projectFile.existsSync()) {
         return current;
       }

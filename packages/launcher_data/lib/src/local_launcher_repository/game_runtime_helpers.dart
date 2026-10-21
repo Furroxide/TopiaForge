@@ -186,6 +186,18 @@ extension _GameRuntimeHelpers on LocalLauncherRepository {
     final cacheFile = File(
       p.join(gameDir.path, 'BepInEx', 'TopiaForge', 'compat-status.json'),
     );
+    // The cache holds no player state, and a verdict for another game build
+    // is recomputed below. So what a save stopped part way moved aside is put
+    // back when it can be, and old leftovers beside the cache are swept.
+    try {
+      recoverAtomicBackupIfMissingSync(
+        cacheFile,
+        label: 'Game compatibility cache',
+      );
+    } on FileSystemException {
+      // Recomputed below.
+    }
+    sweepAtomicLeftovers(cacheFile, backups: true);
 
     if (!force && cacheFile.existsSync()) {
       try {

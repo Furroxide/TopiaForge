@@ -175,6 +175,20 @@ again in the manager; `manager.log` names it on a line that begins `Automaticall
 
 `manager.log` carries each mod's load lines and staged-action results; attach both files to bug reports.
 
+## Files beside a saved file
+
+The launcher and the CLI save their own files, and the mod-project files they edit, by writing
+`<file>.<process>-<time>.tmp` and moving it over the file. Where the file cannot be replaced in one move,
+as on Windows while another program reads it, the old file is moved aside as `<file>.<process>-<time>.bak`
+until the new one is in. A save that is stopped part way can leave either behind:
+
+- A `.bak` whose file is missing is put back the next time the file is read.
+- A `.tmp`, and a `.bak` beside the launcher log or the game-compatibility cache, is deleted later, once
+  it is an hour old.
+
+A copy you keep under another name, such as `<file>.bak`, is never deleted. It is put back only when its
+file is missing and the `.tmp` of a save that an older CLI could not finish lies beside it.
+
 ## CLI exit codes
 
 For `launch`, `restart`, `world play`, and the `dev` launch stage:

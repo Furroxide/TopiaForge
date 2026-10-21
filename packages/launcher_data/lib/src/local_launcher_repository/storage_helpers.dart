@@ -16,11 +16,11 @@ extension _StorageHelpers on LocalLauncherRepository {
   Future<List<LauncherProfile>> _loadProfiles() => _loadVersionedProfiles();
 
   Future<List<PackageSource>> _loadPackageSources() async {
-    if (await _recoverAtomicBackupIfMissing(
+    if (await recoverAtomicBackupIfMissing(
           _sourcesFile,
           label: 'Package sources',
         ) ==
-        _AtomicFileState.missing) {
+        AtomicFileState.missing) {
       return _defaultPackageSources();
     }
 
@@ -89,11 +89,11 @@ extension _StorageHelpers on LocalLauncherRepository {
   }
 
   Future<Map<String, Object?>> _loadSettings() async {
-    if (await _recoverAtomicBackupIfMissing(
+    if (await recoverAtomicBackupIfMissing(
           _settingsFile,
           label: 'Launcher settings',
         ) ==
-        _AtomicFileState.missing) {
+        AtomicFileState.missing) {
       return <String, Object?>{};
     }
 
@@ -130,7 +130,24 @@ extension _StorageHelpers on LocalLauncherRepository {
     );
   }
 
+  /// Puts back the launcher log that a rotation stopped part way moved
+  /// aside, and once per repository sweeps what stopped rotations left beside
+  /// a log that is there. The log holds no player state, so a backup that
+  /// cannot be moved just now never stops logging: it waits for a later look,
+  /// or for the sweep once it is old.
+  void _tidyLauncherLog() {
+    try {
+      recoverAtomicBackupIfMissingSync(_launcherLogFile, label: 'Launcher log');
+    } on FileSystemException {
+      // Logging goes on in a new log.
+    }
+    if (_launcherLogSwept) return;
+    _launcherLogSwept = true;
+    sweepAtomicLeftovers(_launcherLogFile, backups: true);
+  }
+
   Future<String> _readLauncherLog({int maxLines = 200}) async {
+    _tidyLauncherLog();
     final type = FileSystemEntity.typeSync(
       _launcherLogFile.path,
       followLinks: false,
@@ -156,6 +173,7 @@ extension _StorageHelpers on LocalLauncherRepository {
     await previous;
     try {
       await _launcherLogFile.parent.create(recursive: true);
+      _tidyLauncherLog();
       final type = FileSystemEntity.typeSync(
         _launcherLogFile.path,
         followLinks: false,
@@ -280,53 +298,10 @@ Future<void> _writeJsonFileAtomic(
   await _writeFileBytesAtomic(file, bytes);
 }
 
-Future<void> _writeFileBytesAtomic(File file, List<int> contents) async {
-  await file.parent.create(recursive: true);
-  final targetType = FileSystemEntity.typeSync(file.path, followLinks: false);
-  if (targetType == FileSystemEntityType.link) {
-    throw StateError('Refusing to replace symbolic link: ${file.path}');
-  }
-  if (targetType != FileSystemEntityType.notFound &&
-      targetType != FileSystemEntityType.file) {
-    throw StateError('Expected a regular file: ${file.path}');
-  }
-  final token = '$pid-${DateTime.now().microsecondsSinceEpoch}';
-  final temp = File('${file.path}.$token.tmp');
-  final backup = File('${file.path}.$token.bak');
-  var committed = false;
-  try {
-    await temp.writeAsBytes(contents, flush: true);
-    try {
-      await temp.rename(file.path);
-      committed = true;
-      return;
-    } on FileSystemException {
-      if (!await file.exists()) {
-        rethrow;
-      }
-    }
-
-    await file.rename(backup.path);
-    try {
-      await temp.rename(file.path);
-      committed = true;
-    } on Object {
-      if (!await file.exists() && await backup.exists()) {
-        await backup.rename(file.path);
-      }
-      rethrow;
-    }
-  } finally {
-    // Once the live file has been replaced, cleanup must not make callers
-    // treat the committed write as a failure. In particular, Windows uses the
-    // backup-swap branch and antivirus/file indexing can briefly retain the
-    // old file.
-    await _deleteFileBestEffort(temp);
-    if (committed) {
-      await _deleteFileBestEffort(backup);
-    }
-  }
-}
+/// Saves [contents] to [file] through the shared atomic writer, whose
+/// leftovers [recoverAtomicBackupIfMissing] puts back.
+Future<void> _writeFileBytesAtomic(File file, List<int> contents) =>
+    writeFileBytesAtomic(file, contents);
 
 Future<void> _deleteFileBestEffort(File file) async {
   try {
