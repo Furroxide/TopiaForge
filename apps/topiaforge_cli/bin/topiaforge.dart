@@ -234,9 +234,12 @@ class _TopiaForgeCli {
       restore: restore,
       includePrerelease: args.contains('--prerelease'),
     );
+    // Only a restore that reported nothing blocking has current SDK packages:
+    // one whose lock files disagree with the pin reports why instead.
+    final current = restore && !workspace.hasBlockingIssues;
     stdout.writeln(
       '${restore ? 'Restored' : 'Resolved'} ${workspace.lock?.packages.length ?? 0} mod package(s).'
-      '${restore ? ' SDK NuGet packages and lock files are current.' : ''}',
+      '${current ? ' SDK NuGet packages and lock files are current.' : ''}',
     );
     _printIssues(workspace.issues);
     return workspace.hasBlockingIssues ? 1 : 0;

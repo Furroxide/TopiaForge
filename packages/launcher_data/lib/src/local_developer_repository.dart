@@ -15,6 +15,7 @@ import 'bounded_process.dart';
 import 'data_root.dart';
 import 'dotnet_sdk.dart';
 import 'linear_text_scan.dart';
+import 'nuget_lock_check.dart';
 import 'package_contract.dart';
 import 'public_url.dart';
 import 'safe_zip_archive.dart';
@@ -38,6 +39,7 @@ part 'local_developer_repository/source_models.dart';
 part 'local_developer_repository/package_restore.dart';
 part 'local_developer_repository/sdk_restore.dart';
 part 'local_developer_repository/sdk_restore_models.dart';
+part 'local_developer_repository/restored_sdk_check.dart';
 part 'local_developer_repository/unity_vpm.dart';
 part 'local_developer_repository/unity_package_scaffolding.dart';
 part 'local_developer_repository/unity_vpm_network.dart';
@@ -169,13 +171,14 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       includePrerelease: includePrerelease,
     );
     var lock = resolution.lock;
+    final restored = <LauncherIssue>[];
     if (restore && !resolution.hasBlockingIssues) {
       final sdk = await _restoreProjectSdk(root.path);
       lock = await _restoreLockedPackages(root.path, lock);
       await _writeDevProps(root.path, lock, sdk: sdk);
       if (sdk != null) {
         await _ensureSdkPackageReferences(root.path, sdk);
-        await _restoreNuGetPackages(root.path, sdk);
+        restored.addAll(await _restoreNuGetPackages(root.path, sdk));
       }
       await _ensureProjectGitignore(root.path);
     }
@@ -185,7 +188,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
       project: project,
       lock: lock,
       generatedPropsPath: p.join(root.path, 'topiaforge.dev.props'),
-      issues: [...loaded.issues, ...resolution.issues],
+      issues: [...loaded.issues, ...resolution.issues, ...restored],
     );
   }
 
@@ -307,7 +310,12 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     await _writeDevProps(root.path, await _readLock(root.path), sdk: sdk);
     if (sdk != null) {
       await _ensureSdkPackageReferences(root.path, sdk);
-      await _restoreNuGetPackages(root.path, sdk);
+      // A package built against another SDK version than the pin is never
+      // packed.
+      final restored = await _restoreNuGetPackages(root.path, sdk);
+      if (restored.isNotEmpty) {
+        throw StateError(restored.map((issue) => issue.message).join('\n'));
+      }
     }
     return _packModProject(
       root,

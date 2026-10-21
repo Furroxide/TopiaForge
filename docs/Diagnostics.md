@@ -180,6 +180,50 @@ TF1008, and exempts test projects.
 The explicitly unstable interop package requires Robotopia managed reference assemblies. Install
 Robotopia and run `topiaforge restore`, or remove the package and use the safe SDK.
 
+### TF1102
+
+**NuGet resolved another SDK version than the pin.**
+
+`topiaforge restore` and `topiaforge pack` pin each SDK `PackageReference` in a mod project to the SDK's
+version, then read the lock file that NuGet wrote. The lock file says which version NuGet resolved, or
+that it resolved none. When that differs from the pin, something outside the project's own item changed
+it, such as:
+
+- an `Update` or `Remove` item in a `Directory.Build.props` or `Directory.Build.targets` above the
+  project, which MSBuild imports by name alone;
+- a `PackageVersion` in a `Directory.Packages.props` above the project;
+- a property or item expression in the project, such as `Include="$(SdkId)"`;
+- another imported `.props` or `.targets` file, or a target that edits `PackageReference` items before
+  restore.
+
+The message names the package, both versions, and any of those three files above the project that names
+the package in plain text; otherwise it lists the causes above, those files first. Make that use the
+SDK's version, or remove it, then run `topiaforge restore` again. `topiaforge pack` packs nothing until
+the versions agree.
+
+### TF1103
+
+**No lock file to check.**
+
+`topiaforge restore` runs NuGet with lock files on. It reads the lock file where NuGet puts it: where
+`NuGetLockFilePath` says, as the restore records in `obj/project.assets.json`; otherwise where the
+project file itself declares `NuGetLockFilePath` in a plain `<PropertyGroup>`, as a literal path;
+otherwise `packages.<project name>.lock.json` when there is one; otherwise `packages.lock.json` beside the
+project. When none is there, it cannot be read, or the restore did not write it, which SDK versions NuGet
+resolved is unknown, so the restore fails. NuGet rewrites the lock file it uses on every restore, so one the
+restore left as it was is left from an earlier one, from before `NuGetLockFilePath` or `obj` moved, and it
+is never checked in place of the lock file NuGet wrote. The message names the files it looked for, or the
+one it found and why it is left over.
+
+Keep `RestorePackagesWithLockFile` on, as the templates set it, and run `topiaforge restore` again. If
+`NuGetLockFilePath` moves the lock file, keep the project's `obj` folder beside it, where the restore
+records that path, or declare `NuGetLockFilePath` in the project file itself as a literal path: the check
+does not evaluate MSBuild, so a path set in an imported file with `obj` moved elsewhere, or set through a
+property expression, cannot be followed. If an `obj` folder left beside the project from before it moved
+names an old path, delete that folder. If the project file declares `NuGetLockFilePath` but NuGet put the
+lock file elsewhere, a later setting, a condition or an import sets another path, or none: make the project
+file's declaration the one that applies.
+
 ## Multiplayer contract diagnostics
 
 The multiplayer generator reports these while it builds a `[MultiplayerContract]`. Errors stop the build;
