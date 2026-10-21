@@ -90,7 +90,13 @@ extension _OwnedGameQuit on LocalLauncherRepository {
     // A launcher that closed while it waited stops nothing, even when it
     // closed during the last look, as the bound passed.
     if (_disposed) return null;
-    await _gameProcessStopper(process);
+    if (!await _gameProcessStopper(process)) {
+      // It exited on its own between the last look and the stop.
+      await _appendLauncherLogBestEffort(
+        'The running game exited on its own before it was stopped.',
+      );
+      return _replacedGame(install, ReplacedGameExit.exited);
+    }
     await _appendLauncherLogBestEffort(reason);
     return _replacedGame(install, ReplacedGameExit.stopped);
   }

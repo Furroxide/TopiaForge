@@ -8,7 +8,8 @@ enum ReplacedGameExit {
   /// It did not quit when asked, so the launcher stopped it.
   stopped,
 
-  /// It had already exited when the launcher came to close it.
+  /// It had already exited when the launcher came to ask it to quit, or to
+  /// stop it.
   exited,
 }
 

@@ -375,13 +375,16 @@ launcher log, and neither ever names a URL or an address.
     seconds or the game has not exited within 30. Whether the join goes on is read from the startup journal the game
     left, as the manager's next start reads it, never inferred from how the game ended: a game that recorded no clean
     exit, because it was stopped, or quit before its mods finished unloading, or had crashed, opens its next start in
-    the one-shot safe mode, in which a session launch is refused (section 8). Such a join ends before anything is
-    installed, as `installFailed` with its rollback complete, and its detail says how the game ended, that a game in
-    safe mode cannot join a session, and what to do: start the game from the launcher once and quit it normally, then
-    join again; what was downloaded is kept. A game whose process cannot be verified is never asked, and one that
-    neither quits nor can be stopped ends the join as `gameRunning`, owned. A launcher that closes while it waits
-    withdraws an untaken request, stops nothing and installs nothing. The consent sheet can therefore acknowledge
-    closing after saying that joining quits the game as its **QUIT** button does.
+    the one-shot safe mode, in which a session launch is refused (section 8). A game this launcher started that ended
+    on its own before the install came to close it, while the join downloaded or staged, is read the same way. Such a
+    join ends before anything is installed, as `installFailed` with its rollback complete, and its detail says how the
+    game ended, that a game in safe mode cannot join a session, and what to do: start the game from the launcher once
+    and quit it normally, then join again; what was downloaded is kept. A game whose process cannot be verified is
+    never asked, and one that neither quits nor can be stopped ends the join as `gameRunning`, owned; a game found
+    running once the launcher's own has ended is another copy, and ends it as `gameRunning`, foreign. A launcher that
+    closes while it waits withdraws an untaken request, stops nothing and installs nothing. When this launcher started
+    no game, the install reads no journal; the join's launch, once it is built, has to. The consent sheet can
+    therefore acknowledge closing after saying that joining quits the game as its **QUIT** button does.
 - **The staging lease.** Installs and cleanups take `acquireLaunchLease`, so no launch stages while they change the
   game's files. A lease another launch or install holds ends the install at once with a plain "try again".
 - **The server profile.** `mp-<sha16(serverId)>`, named `Server · <name>`, with `inheritManagerModState: false` and

@@ -1,8 +1,10 @@
 /// A game this launcher started, as a join's install comes to close it. Its
 /// manager takes the launcher's quit request for the launch the game was
-/// started with and quits, or never takes it, or the game has already ended;
-/// stopping it works or fails. Like the manager, it keeps a startup journal:
-/// startup complete while it runs, and a clean exit when it quits cleanly.
+/// started with and quits, or never takes it, or the game has already ended,
+/// or ends just before it is stopped; stopping it works or fails, and
+/// another copy of the game may run once it has ended. Like the manager, it
+/// keeps a startup journal: startup complete while it runs, and a clean exit
+/// when it quits cleanly.
 library;
 
 import 'dart:convert';
@@ -26,7 +28,9 @@ final class OwnedGame {
     required this.quits,
     required this.recordsCleanExit,
     required this.exitsBeforeAsked,
+    required this.exitsBeforeStopped,
     required this.stops,
+    required this.anotherCopyRuns,
     this.onClose,
   });
 
@@ -51,8 +55,16 @@ final class OwnedGame {
   /// the install's look once everything is staged, before it is asked.
   final bool exitsBeforeAsked;
 
+  /// Whether it ends on its own just before the launcher stops it, so the
+  /// stop finds it gone.
+  final bool exitsBeforeStopped;
+
   /// Whether stopping it works.
   final bool stops;
+
+  /// Whether another copy of the game, one this launcher did not start, runs
+  /// once this one has ended.
+  final bool anotherCopyRuns;
 
   /// Runs as the game quits or exits, as its quit writes the manager state.
   final void Function()? onClose;
@@ -67,6 +79,7 @@ final class OwnedGame {
   var stopped = 0;
   var _quitting = false;
   var _closing = false;
+  var _ended = false;
 
   /// Starts the game through the repository, with the player of
   /// [StandardJoin] prepared. [pause] is the quit policy's wait between
@@ -76,7 +89,9 @@ final class OwnedGame {
     bool quits = true,
     bool recordsCleanExit = true,
     bool exitsBeforeAsked = false,
+    bool exitsBeforeStopped = false,
     bool stops = true,
+    bool anotherCopyRuns = false,
     void Function(String step)? onStep,
     void Function()? onClose,
     Future<void> Function(Duration delay)? pause,
@@ -86,7 +101,9 @@ final class OwnedGame {
       quits: quits,
       recordsCleanExit: recordsCleanExit,
       exitsBeforeAsked: exitsBeforeAsked,
+      exitsBeforeStopped: exitsBeforeStopped,
       stops: stops,
+      anotherCopyRuns: anotherCopyRuns,
       onClose: onClose,
     );
     game.rig = await JoinRig.create(
@@ -98,7 +115,7 @@ final class OwnedGame {
       probe: (_) async {
         // The install's look at the game once everything is staged.
         if (game.steps.contains('staged')) game._closing = true;
-        return game.running;
+        return game.running || (game.anotherCopyRuns && game._ended);
       },
       creator: (_) async {
         game.running = true;
@@ -181,8 +198,13 @@ final class OwnedGame {
     return running;
   }
 
+  /// Ends the game on its own, as a crash or a quit from its own menu
+  /// would, before the install comes to close it.
+  void exitOnItsOwn() => _end('exited');
+
   void _end(String step) {
     running = false;
+    _ended = true;
     if (recordsCleanExit) record('clean-exit');
     onClose?.call();
     steps.add(step);
@@ -190,8 +212,14 @@ final class OwnedGame {
 
   Future<bool> _stop() async {
     if (!stops) throw StateError('The process could not be stopped.');
+    if (exitsBeforeStopped) {
+      // It ended on its own a moment before: the stop finds it gone.
+      _end('exited');
+      return false;
+    }
     stopped++;
     running = false;
+    _ended = true;
     steps.add('stopped');
     return true;
   }

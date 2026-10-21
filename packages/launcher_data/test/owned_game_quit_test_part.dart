@@ -113,10 +113,16 @@ final class _FakeOwnedGame {
     return ++starts + 600;
   }
 
+  /// Set to have the game exit on its own just before it is stopped, so the
+  /// stop finds it gone.
+  var exitsBeforeStop = false;
+
   Future<bool> stop(LaunchProcessIdentity _) async {
     stops++;
     running = false;
-    return true;
+    if (!exitsBeforeStop) return true;
+    if (recordsCleanExit) record('clean-exit');
+    return false;
   }
 }
 
@@ -314,6 +320,23 @@ void _registerOwnedGameQuitTests({
         expect(game.stops, 0);
       },
     );
+
+    test('a game that exits on its own just before it is stopped is reported '
+        'as exited, not stopped', () async {
+      final game = _FakeOwnedGame(gameRoot(), takes: false)
+        ..exitsBeforeStop = true;
+      final (repo, install, _) = await launched(game);
+
+      final restarted = await repo.restart(install, profile);
+      expect(restarted.processStarted, isTrue, reason: restarted.message);
+      expect(restarted.replacedGame?.exit, ReplacedGameExit.exited);
+      expect(restarted.replacedGame?.safeMode, isFalse);
+      expect(
+        restarted.message,
+        startsWith('The running game had already exited. Started replacement'),
+      );
+      expect(game.stops, 1, reason: 'The stop found it gone.');
+    });
 
     test('a request that cannot be written leaves stopping the game', () async {
       final game = _FakeOwnedGame(gameRoot());

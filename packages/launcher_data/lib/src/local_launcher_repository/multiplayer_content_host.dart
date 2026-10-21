@@ -88,12 +88,14 @@ extension _JoinGameClosing on LocalLauncherRepository {
           );
   }
 
-  /// Makes sure no game runs before an install changes anything, and that
-  /// the game's next start, which the join makes, loads its mods. Null once
-  /// both hold.
+  /// Makes sure no game runs before an install changes anything, and that a
+  /// game this launcher started leaves its next start, which the join makes,
+  /// loading its mods. Null once both hold.
   ///
-  /// A game this launcher started is asked to quit, as its own Quit button
-  /// would, and stopped only if it does not ([_closeOwnedGame]). What its
+  /// A game this launcher started that still runs is asked to quit, as its
+  /// own Quit button would, and stopped only if it does not
+  /// ([_closeOwnedGame]); one that has ended on its own since it was
+  /// started, while the join downloaded or staged, is already gone. What its
   /// next start does is read from the startup journal it left, never
   /// inferred from how it ended ([ReplacedGame.safeMode]): a game that
   /// recorded no clean exit, because it was stopped, or quit before its mods
@@ -103,16 +105,18 @@ extension _JoinGameClosing on LocalLauncherRepository {
   /// game this launcher did not start, one whose process cannot be verified,
   /// and one that could not be stopped end the join as
   /// [JoinFailureCode.gameRunning]. A launcher that closes while it waits
-  /// stops nothing and installs nothing.
+  /// stops nothing and installs nothing. When this launcher started no game
+  /// here, no journal is read: that is for the join's launch.
   Future<JoinFailed?> _closeOwnedGameForInstall(GameInstall install) async {
-    if (!await _runningForLaunch(install)) return null;
     final identity = _launchInstallIdentity(install);
     final process = _ownedLaunchProcesses[identity];
-    if (process == null) return _foreignGameRunning;
+    final running = await _runningForLaunch(install);
+    if (process == null) return running ? _foreignGameRunning : null;
     bool? alive;
     ReplacedGame? closed;
     try {
-      alive = await _gameProcessLiveness(process);
+      // Nothing runs, so the game ended on its own since it was started.
+      alive = running ? await _gameProcessLiveness(process) : false;
       if (alive == true) {
         closed = await _closeOwnedGame(install, process);
         if (closed == null) {
@@ -124,7 +128,7 @@ extension _JoinGameClosing on LocalLauncherRepository {
           );
         }
       } else if (alive == false) {
-        // It ended on its own since the install last looked.
+        // It ended on its own before the install came to close it.
         closed = await _replacedGame(install, ReplacedGameExit.exited);
       }
     } on Object catch (error) {
@@ -144,9 +148,9 @@ extension _JoinGameClosing on LocalLauncherRepository {
       await entry.value.dispose();
       _launchMonitors.remove(entry.key);
     }
-    if (await _runningForLaunch(install)) {
-      return alive ? _ownedGameNotClosed : _foreignGameRunning;
-    }
+    // The game this launcher started has ended, so one that runs now is
+    // another copy.
+    if (await _runningForLaunch(install)) return _foreignGameRunning;
     if (closed.safeMode) {
       await _appendLauncherLogBestEffort(
         'The game this launcher started was closed for a join install, but '
@@ -159,7 +163,10 @@ extension _JoinGameClosing on LocalLauncherRepository {
       );
     }
     await _appendLauncherLogBestEffort(
-      'Closed the game this launcher started, to install a join.',
+      closed.exit == ReplacedGameExit.exited
+          ? 'The game this launcher started had already exited when a join '
+                'came to install.'
+          : 'Closed the game this launcher started, to install a join.',
     );
     return null;
   }

@@ -183,5 +183,84 @@ void main() {
       expect(await game.rig.everything(StandardJoin.downloads), before);
       expect(joinFolders(game.rig.game), isEmpty);
     });
+
+    for (final (moment, whileStaging) in [
+      ('while the join downloaded', false),
+      ('while the install staged', true),
+    ]) {
+      test('ends with nothing installed when the game had crashed $moment, '
+          'since its next start opens in safe mode', () async {
+        late OwnedGame game;
+        game = await OwnedGame.start(
+          recordsCleanExit: false,
+          onStep: (step) {
+            if (whileStaging && step == 'staged') game.exitOnItsOwn();
+          },
+        );
+        final (installing, before) = await prepared(game);
+        if (!whileStaging) game.exitOnItsOwn();
+        final failure = await install(game, installing) as JoinFailed;
+        expect(
+          failure.detail,
+          'The running game had already exited without closing cleanly. Its '
+          'next start opens in safe mode, with every mod off. $whatToDo',
+        );
+        expect(game.taken, isEmpty, reason: 'nothing to ask');
+        expect(game.stopped, 0);
+        await expectNothingInstalled(game, installing, failure, before);
+      });
+    }
+
+    test('goes on when the game had quit on its own, cleanly, while the join '
+        'downloaded', () async {
+      final game = await OwnedGame.start();
+      final (installing, _) = await prepared(game);
+      game.exitOnItsOwn();
+      expect(await install(game, installing), isA<JoinInstallCompleted>());
+      expect(game.taken, isEmpty, reason: 'nothing to ask');
+      expect(game.stopped, 0);
+      expect(game.steps, containsAllInOrder(['exited', 'staged', 'state']));
+    });
+
+    test('says a game that ended on its own just before it was stopped had '
+        'exited, not that it was stopped', () async {
+      final game = await OwnedGame.start(
+        quits: false,
+        recordsCleanExit: false,
+        exitsBeforeStopped: true,
+      );
+      final (installing, before) = await prepared(game);
+      final failure = await install(game, installing) as JoinFailed;
+      expect(
+        failure.detail,
+        'The running game had already exited without closing cleanly. Its '
+        'next start opens in safe mode, with every mod off. $whatToDo',
+      );
+      expect(game.stopped, 0);
+      expect(game.steps, containsAllInOrder(['staged', 'exited']));
+      await expectNothingInstalled(game, installing, failure, before);
+    });
+
+    test('ends the join as foreign when another copy of the game runs once '
+        'this one has quit', () async {
+      final game = await OwnedGame.start(anotherCopyRuns: true);
+      final (installing, before) = await prepared(game);
+      // The launcher no longer owns a game here, so a second join says the
+      // same as the first.
+      for (final attempt in ['first', 'second']) {
+        final failure = await install(game, installing) as JoinFailed;
+        expect(failure.code, JoinFailureCode.gameRunning, reason: attempt);
+        expect(
+          failure.gameOwnership,
+          JoinGameOwnership.foreign,
+          reason: attempt,
+        );
+        expect(failure.detail, contains('this launcher did not start it'));
+      }
+      expect(game.steps, contains('quit'));
+      expect(game.stopped, 0);
+      expect(await game.rig.everything(StandardJoin.downloads), before);
+      expect(joinFolders(game.rig.game), isEmpty);
+    });
   });
 }
