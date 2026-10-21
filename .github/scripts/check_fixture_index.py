@@ -37,11 +37,15 @@ INDEX_VERSION = 1
 #
 # `schema` is Dart-only because it validates a document against the JSON Schema,
 # and C# has no JSON Schema validator: `grep -rn "topiaforge.mod.schema.json"
-# --include=*.cs` returns nothing. Every other channel is both.
+# --include=*.cs` returns nothing. `lifecycle` is C#-only because it runs a
+# gamemode through the runtime's session orchestrator, which only C# has; its
+# runner also runs each case on the testing kit's GamemodeSessionRunner and
+# requires the same result. Every other channel is both.
 CHANNEL_RUNNERS = {
     "serialization": ["csharp", "dart"],
     "schema": ["dart"],
     "resolution": ["csharp", "dart"],
+    "lifecycle": ["csharp"],
 }
 
 # Kinds both runners dispatch on. Each runner switches exhaustively with a
@@ -56,7 +60,24 @@ KNOWN_KINDS = {
     },
     "schema": set(),
     "resolution": {"launch-resolution"},
+    "lifecycle": {"participant-lifecycle"},
 }
+
+# Channels whose cases sit directly in the channel's directory, with no manifest
+# or transport subdirectory.
+FLAT_CHANNELS = {"resolution", "lifecycle"}
+
+# A participant-lifecycle case's scenario: what each controller of its gamemode does.
+LIFECYCLE_SCENARIO = {
+    "role": {"single-player", "host", "client"},
+    "factory": {"participant", "server-only"},
+    "serverStart": {"succeeds", "fails", "throws"},
+    "participantStart": {"succeeds", "fails", "throws", "cancelled-while-pending"},
+    "participantStop": {"succeeds", "throws"},
+    "serverStop": {"succeeds", "throws"},
+}
+LIFECYCLE_CALLS = {"server.start", "server.stop", "participant.start", "participant.stop"}
+LIFECYCLE_STOPS = {"succeeded", "failed", "not-running"}
 
 
 class FixtureIndexError(RuntimeError):
@@ -139,8 +160,10 @@ def _load_case(path: Path) -> dict:
         elif "errorCodes" in expectation:
             raise FixtureIndexError(f"{relative} cannot accept with errorCodes for {runner}.")
     directory = "manifest" if case["kind"].startswith("manifest-") else "transport"
-    if channel == "resolution": directory = ""
-    if not relative.startswith(f"{channel}/" + (f"{directory}/" if directory else "")):
+    if channel in FLAT_CHANNELS: directory = ""
+    if not relative.startswith(f"{channel}/" + (f"{directory}/" if directory else "")) or (
+        channel in FLAT_CHANNELS and relative.count("/") != 1
+    ):
         raise FixtureIndexError(f"{relative} is misplaced; its kind belongs under {channel}/{directory}/.")
 
     mutation = case.get("modelMutation")
@@ -175,6 +198,8 @@ def _load_case(path: Path) -> dict:
             raise FixtureIndexError(f"{relative} requires a known transport and payload.")
         if "operations" in case or "divergenceReason" in case:
             raise FixtureIndexError(f"{relative} cannot exempt transport codec parity.")
+    if channel == "lifecycle":
+        _check_lifecycle(case, relative)
     if channel == "resolution":
         profile = case.get("profile")
         if not isinstance(profile, dict) or not isinstance(case.get("request"), dict):
@@ -195,6 +220,42 @@ def _load_case(path: Path) -> dict:
                 if case["expect"]["csharp"]["outcome"] == "accept" and (package["schemaOutcome"] != "accept" or validity["outcome"] != "accept"):
                     raise FixtureIndexError(f"{relative} cannot accept an operational resolution with invalid input manifests.")
     return case
+
+
+def _check_lifecycle(case: dict, relative: str) -> None:
+    """A lifecycle case runs to its end, so what happened is its normalized result."""
+    for field in ("manifest", "schemaOutcome", "profile", "request", "observation", "bindings", "transport", "payload", "wireJson"):
+        if field in case:
+            raise FixtureIndexError(f"{relative} cannot carry '{field}'; a lifecycle case states only its scenario.")
+    scenario = case.get("scenario")
+    if not isinstance(scenario, dict) or set(scenario) != set(LIFECYCLE_SCENARIO):
+        raise FixtureIndexError(f"{relative} requires a scenario naming exactly {sorted(LIFECYCLE_SCENARIO)}.")
+    for field, allowed in LIFECYCLE_SCENARIO.items():
+        if scenario[field] not in allowed:
+            raise FixtureIndexError(f"{relative} requires scenario.{field} to be one of {sorted(allowed)}.")
+    expectation = case["expect"]["csharp"]
+    if expectation["outcome"] != "accept":
+        raise FixtureIndexError(
+            f"{relative} always runs to its end, so its outcome is accept; a failed launch belongs in its normalized result."
+        )
+    normalized = expectation.get("normalized")
+    if not isinstance(normalized, dict) or set(normalized) != {"launch", "calls", "stop"}:
+        raise FixtureIndexError(f"{relative} requires a normalized launch, calls and stop.")
+    launch = normalized["launch"]
+    if (
+        not isinstance(launch, dict)
+        or set(launch) != {"outcome", "code", "message"}
+        or any(not isinstance(launch[key], str) for key in launch)
+        or launch["outcome"] not in ("succeeded", "failed")
+        or (launch["outcome"] == "succeeded") != (launch["code"] == "none")
+        or (launch["outcome"] == "succeeded") != (launch["message"] == "")
+    ):
+        raise FixtureIndexError(f"{relative} requires a launch with an outcome, its error code or none, and its message or none.")
+    calls = normalized["calls"]
+    if not isinstance(calls, list) or any(call not in LIFECYCLE_CALLS for call in calls):
+        raise FixtureIndexError(f"{relative} requires calls named from {sorted(LIFECYCLE_CALLS)}.")
+    if normalized["stop"] not in LIFECYCLE_STOPS or (normalized["stop"] == "not-running") != (launch["outcome"] == "failed"):
+        raise FixtureIndexError(f"{relative} requires a stop that ran exactly when the launch succeeded.")
 
 
 def build_index() -> dict:

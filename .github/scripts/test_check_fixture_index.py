@@ -237,6 +237,68 @@ class FixtureIndexAuditTests(unittest.TestCase):
         self._resolution(divergenceReason="Intentionally different language rules")
         self._expect_failure("same-operation parity")
 
+    def _lifecycle(self, directory: str = "lifecycle", **overrides) -> dict:
+        normalized = {
+            "launch": {"outcome": "succeeded", "code": "none", "message": ""},
+            "calls": ["server.start", "participant.start", "participant.stop", "server.stop"],
+            "stop": "succeeded",
+        }
+        case = {"id": "a-case", "channel": "lifecycle", "kind": "participant-lifecycle",
+            "summary": "A host starts its server and then its own participant.",
+            "scenario": {"role": "host", "factory": "participant", "serverStart": "succeeds",
+                "participantStart": "succeeds", "participantStop": "succeeds", "serverStop": "succeeds"},
+            "expect": {"csharp": {"outcome": "accept", "normalized": normalized}}}
+        case.update(overrides)
+        path = self.fixtures / directory
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "a-case.json").write_text(json.dumps(case), encoding="utf-8")
+        return case
+
+    def test_lifecycle_cases_are_csharp_only_and_flat(self) -> None:
+        self._lifecycle()
+        index = AUDIT_MODULE.build_index()
+        self.assertEqual(index["channelRunners"], {"lifecycle": ["csharp"]})
+        self.assertEqual(index["cases"][0]["path"], "lifecycle/a-case.json")
+
+    def test_lifecycle_case_in_a_subdirectory_is_misplaced(self) -> None:
+        self._lifecycle(directory="lifecycle/transport")
+        self._expect_failure("misplaced")
+
+    def test_lifecycle_case_cannot_add_a_dart_expectation(self) -> None:
+        case = self._lifecycle()
+        case["expect"]["dart"] = case["expect"]["csharp"]
+        (self.fixtures / "lifecycle" / "a-case.json").write_text(json.dumps(case), encoding="utf-8")
+        self._expect_failure("obliges")
+
+    def test_lifecycle_requires_a_known_scenario(self) -> None:
+        self._lifecycle(scenario={"role": "spectator", "factory": "participant", "serverStart": "succeeds",
+            "participantStart": "succeeds", "participantStop": "succeeds", "serverStop": "succeeds"})
+        self._expect_failure("scenario.role")
+
+    def test_lifecycle_requires_every_scenario_field(self) -> None:
+        self._lifecycle(scenario={"role": "host"})
+        self._expect_failure("requires a scenario naming exactly")
+
+    def test_lifecycle_outcome_is_accept(self) -> None:
+        self._lifecycle(expect={"csharp": {"outcome": "reject", "errorCodes": ["external"]}})
+        self._expect_failure("its outcome is accept")
+
+    def test_lifecycle_failed_launch_cannot_stop(self) -> None:
+        self._lifecycle(expect={"csharp": {"outcome": "accept", "normalized": {
+            "launch": {"outcome": "failed", "code": "unavailable", "message": "No slot."},
+            "calls": ["participant.start"], "stop": "succeeded"}}})
+        self._expect_failure("ran exactly when the launch succeeded")
+
+    def test_lifecycle_calls_use_the_known_vocabulary(self) -> None:
+        self._lifecycle(expect={"csharp": {"outcome": "accept", "normalized": {
+            "launch": {"outcome": "succeeded", "code": "none", "message": ""},
+            "calls": ["server.start", "hud.start"], "stop": "succeeded"}}})
+        self._expect_failure("calls named from")
+
+    def test_lifecycle_cannot_carry_a_manifest(self) -> None:
+        self._lifecycle(manifest={})
+        self._expect_failure("states only its scenario")
+
     def test_malformed_json_names_the_file(self) -> None:
         (self.cases / "a-case.json").write_text("{not json", encoding="utf-8")
         self._expect_failure("a-case.json is not valid JSON")

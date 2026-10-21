@@ -16,6 +16,11 @@ import 'gamemode_contract_transport_invariants.dart';
 
 const _runnerName = 'dart';
 
+// Channels whose cases sit directly in the channel's directory. `lifecycle` is
+// C#-only (it runs the runtime's session orchestrator), so this runner checks
+// its cases' shape and placement and executes none of them.
+const _flatChannels = {'resolution', 'lifecycle'};
+
 void main() {
   final fixtureRoot = _join(_repoRoot().path, [
     'tests',
@@ -104,8 +109,8 @@ void main() {
           : 'transport';
       expect(
         path.startsWith(
-          body['channel'] == 'resolution'
-              ? 'resolution/'
+          _flatChannels.contains(body['channel'])
+              ? '${body['channel']}/'
               : '${body['channel']}/$directory/',
         ),
         isTrue,

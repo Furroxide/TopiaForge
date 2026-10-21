@@ -19,8 +19,11 @@ namespace TopiaForge.ModManager.Tests
         private static readonly HashSet<string> CaseFields = new HashSet<string>(StringComparer.Ordinal)
         {
             "id", "channel", "kind", "summary", "manifest", "expect",
-            "schemaOutcome", "modelMutation", "profile", "request", "observation", "verifyImmutability", "transport", "payload", "wireJson", "bindings"
+            "schemaOutcome", "modelMutation", "profile", "request", "observation", "verifyImmutability", "transport", "payload", "wireJson", "bindings",
+            "scenario"
         };
+        // Channels whose cases sit directly in the channel's directory, with no manifest or transport subdirectory.
+        private static readonly HashSet<string> FlatChannels = new HashSet<string>(StringComparer.Ordinal) { "resolution", "lifecycle" };
         private static readonly HashSet<string> OutcomeFields = new HashSet<string>(StringComparer.Ordinal)
         {
             "outcome", "errorCodes", "normalized", "blocks"
@@ -148,7 +151,7 @@ namespace TopiaForge.ModManager.Tests
             Assert(body.GetProperty("channel").GetString() == indexed.Channel,
                 indexed.Path + " declares a channel the index disagrees with.");
             var directory = indexed.Kind.StartsWith("manifest-", StringComparison.Ordinal) ? "manifest" : "transport";
-            Assert(indexed.Path.StartsWith(indexed.Channel == "resolution" ? "resolution/" : indexed.Channel + "/" + directory + "/", StringComparison.Ordinal),
+            Assert(indexed.Path.StartsWith(FlatChannels.Contains(indexed.Channel) ? indexed.Channel + "/" : indexed.Channel + "/" + directory + "/", StringComparison.Ordinal),
                 indexed.Path + " is misplaced for its kind.");
             AssertEquivalentOperations(indexed, body, obligedRunners);
 
@@ -166,6 +169,11 @@ namespace TopiaForge.ModManager.Tests
                     var snapshot = ResolutionFixtureRunner.Snapshot(body);
                     Assert(DeclarationDigest.Equal(snapshot, body.GetProperty("expect").GetProperty(RunnerName)),
                         indexed.Path + ": resolution differs: " + snapshot.GetRawText());
+                    break;
+                case "participant-lifecycle":
+                    var lifecycle = ParticipantLifecycleFixtureRunner.Snapshot(body, indexed.Path);
+                    Assert(DeclarationDigest.Equal(lifecycle, body.GetProperty("expect").GetProperty(RunnerName)),
+                        indexed.Path + ": the participant lifecycle differs: " + lifecycle.GetRawText());
                     break;
                 case "manifest-accepts":
                 case "manifest-rejects":

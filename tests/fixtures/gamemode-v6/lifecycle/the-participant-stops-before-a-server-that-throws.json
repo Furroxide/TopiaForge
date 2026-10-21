@@ -1,0 +1,33 @@
+{
+  "id": "the-participant-stops-before-a-server-that-throws",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "The participant is disposed before the server controller, even when the server controller's disposal throws.",
+  "scenario": {
+    "role": "single-player",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "throws"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "participant.stop",
+          "server.stop"
+        ],
+        "stop": "failed"
+      }
+    }
+  }
+}

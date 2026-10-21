@@ -39,7 +39,7 @@ namespace TopiaForge.ModManager
                     record.Slots.Add(package.Id, slot);
                     var scope = await record.Snapshot.Contexts[package.Id].CreateChildScopeAsync(record.Identity.SessionId,
                         record.Cancellation.Token, () => RequestBoundStop(record.Identity.SessionId), slot, dispatcher,
-                        ScopeContextFor(package.Id, record.Mode.Package.Id));
+                        ScopeContextFor(package.Id, record.Mode.Package.Id, record.Realm));
                     record.Scopes.Add(package.Id, scope);
                 }
                 record.CallerCancellation = callerToken.Register(() => dispatcher.Post(() => RequestBoundStop(record.Identity.SessionId)));
@@ -60,14 +60,7 @@ namespace TopiaForge.ModManager
                 record.Readiness = ready;
                 Commit(record, SessionPhase.StartingMode);
                 ThrowIfStopping(record);
-                record.Factory = await dispatcher.InvokeAsync(record.Mode.Create);
-                ThrowIfStopping(record);
-                var session = new GamemodeSessionView(this, record.Identity, record.Scopes[record.Mode.Package.Id].Context,
-                    record.Cancellation.Token, ready);
-                var started = await dispatcher.InvokeCallbackAsync(() => record.Factory.StartAsync(session, record.Cancellation.Token));
-                if (started.TryGetValue(out var controller)) record.Controller = controller;
-                ThrowIfStopping(record);
-                if (!started.Succeeded) throw new StartupFailure(started.ErrorCode, Message(started.ErrorMessage));
+                await StartGamemodeAsync(record, ready);
                 await record.Reservation!.CloseAsync();
                 record.Reservation = null;
                 ThrowIfStopping(record);
@@ -106,12 +99,14 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
-        /// Where a session scope's code runs. The gamemode's package runs the factory's server controller, on the host only,
-        /// even when it also provides the world. Every other package the session selects, the world's and a launch target's
-        /// owner, runs on every peer as a world owner. A joined player's follower (WS3.8) makes its own world-owner scopes.
+        /// Where a session scope's code runs. The gamemode's package runs the factory's server controller where the session's
+        /// server runs, in single player and on the host, even when it also provides the world. Every other package the
+        /// session selects, the world's and a launch target's owner, runs on every peer as a world owner, and so does the
+        /// gamemode's package on a joined player, where no server controller runs. The player's own participant controller
+        /// gets a scope of its own (<see cref="ParticipantScopeId"/>).
         /// </summary>
-        internal static ModExecutionContext ScopeContextFor(string packageId, string gamemodePackageId) =>
-            Same(packageId, gamemodePackageId) ? ModExecutionContext.GamemodeServer : ModExecutionContext.WorldOwner;
+        internal static ModExecutionContext ScopeContextFor(string packageId, string gamemodePackageId, NetRealm realm) =>
+            Same(packageId, gamemodePackageId) && RunsServerController(realm) ? ModExecutionContext.GamemodeServer : ModExecutionContext.WorldOwner;
 
         private void ThrowIfStopping(SessionRecord record)
         {

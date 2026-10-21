@@ -1,0 +1,33 @@
+{
+  "id": "a-host-starts-the-server-then-its-own-participant",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A host runs both: the server controller, then the participant controller of the host's own player, stopped in reverse.",
+  "scenario": {
+    "role": "host",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "participant.stop",
+          "server.stop"
+        ],
+        "stop": "succeeded"
+      }
+    }
+  }
+}

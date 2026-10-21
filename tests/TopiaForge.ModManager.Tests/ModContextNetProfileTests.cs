@@ -106,14 +106,24 @@ namespace TopiaForge.ModManager.Tests
 
         private static void SessionScopesRunWhereTheSessionSays(string root)
         {
-            That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.zombies", "io.example.zombies") == ModExecutionContext.GamemodeServer,
-                "the gamemode's package runs the factory's server");
-            That(GamemodeSessionOrchestrator.ScopeContextFor("IO.Example.Sandbox", "io.example.sandbox") == ModExecutionContext.GamemodeServer,
-                "whatever the case of its id");
-            That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.arena", "io.example.zombies") == ModExecutionContext.WorldOwner,
-                "a world from another package is its world owner");
-            That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.pack", "io.example.zombies") == ModExecutionContext.WorldOwner,
-                "and so is a launch target's owner");
+            foreach (var realm in new[] { NetRealm.Offline, NetRealm.ListenHost })
+            {
+                That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.zombies", "io.example.zombies", realm) == ModExecutionContext.GamemodeServer,
+                    "the gamemode's package runs the factory's server (" + realm + ")");
+                That(GamemodeSessionOrchestrator.ScopeContextFor("IO.Example.Sandbox", "io.example.sandbox", realm) == ModExecutionContext.GamemodeServer,
+                    "whatever the case of its id");
+            }
+
+            foreach (var realm in Realms)
+            {
+                That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.arena", "io.example.zombies", realm) == ModExecutionContext.WorldOwner,
+                    "a world from another package is its world owner (" + realm + ")");
+                That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.pack", "io.example.zombies", realm) == ModExecutionContext.WorldOwner,
+                    "and so is a launch target's owner");
+            }
+
+            That(GamemodeSessionOrchestrator.ScopeContextFor("io.example.zombies", "io.example.zombies", NetRealm.Client) == ModExecutionContext.WorldOwner,
+                "on a joined player no server controller runs, so the gamemode's package is a world owner too");
 
             // A real launch: the fixture's one package provides the world and the gamemode, so its scope is the gamemode server.
             using var fixture = new SessionFixture(root);

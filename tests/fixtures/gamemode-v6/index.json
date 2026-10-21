@@ -2,6 +2,9 @@
   "schemaVersion": 1,
   "generatedBy": ".github/scripts/check_fixture_index.py",
   "channelRunners": {
+    "lifecycle": [
+      "csharp"
+    ],
     "resolution": [
       "csharp",
       "dart"
@@ -12,6 +15,78 @@
     ]
   },
   "cases": [
+    {
+      "id": "a-gamemode-without-participants-is-unchanged",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-gamemode-without-participants-is-unchanged.json"
+    },
+    {
+      "id": "a-host-starts-the-server-then-its-own-participant",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-host-starts-the-server-then-its-own-participant.json"
+    },
+    {
+      "id": "a-joined-player-runs-nothing-of-a-server-only-gamemode",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-joined-player-runs-nothing-of-a-server-only-gamemode.json"
+    },
+    {
+      "id": "a-joined-player-starts-only-its-participant",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-joined-player-starts-only-its-participant.json"
+    },
+    {
+      "id": "a-joined-players-participant-that-fails-ends-its-session",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-joined-players-participant-that-fails-ends-its-session.json"
+    },
+    {
+      "id": "a-participant-that-fails-ends-the-session",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-participant-that-fails-ends-the-session.json"
+    },
+    {
+      "id": "a-participant-that-throws-ends-the-session",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-participant-that-throws-ends-the-session.json"
+    },
+    {
+      "id": "a-participant-that-throws-while-stopping-never-keeps-the-server-running",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-participant-that-throws-while-stopping-never-keeps-the-server-running.json"
+    },
+    {
+      "id": "a-server-that-fails-never-starts-the-participant",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/a-server-that-fails-never-starts-the-participant.json"
+    },
+    {
+      "id": "cancelling-while-the-participant-starts-disposes-it-late",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/cancelling-while-the-participant-starts-disposes-it-late.json"
+    },
+    {
+      "id": "single-player-starts-the-server-then-the-participant",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/single-player-starts-the-server-then-the-participant.json"
+    },
+    {
+      "id": "the-participant-stops-before-a-server-that-throws",
+      "channel": "lifecycle",
+      "kind": "participant-lifecycle",
+      "path": "lifecycle/the-participant-stops-before-a-server-that-throws.json"
+    },
     {
       "id": "a-policy-cannot-name-a-discovered-family",
       "channel": "resolution",

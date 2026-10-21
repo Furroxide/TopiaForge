@@ -125,6 +125,7 @@
         "TopiaForge.Mods.SceneLoadEvent, TopiaForge.Mods.Abstractions",
         "TopiaForge.Mods.IWorldSessionService, TopiaForge.Mods.Worlds",
         "TopiaForge.Mods.IGamemodeFactory, TopiaForge.Mods.Worlds",
+        "TopiaForge.Mods.IGamemodeParticipantFactory, TopiaForge.Mods.Worlds",
         "TopiaForge.Mods.IWorldContentProvider, TopiaForge.Mods.Worlds",
         "TopiaForge.Mods.ILocalWorldService, TopiaForge.Mods.Worlds"
       ],
@@ -137,6 +138,8 @@
         "TopiaForge.Mods.Testing.FakeModEvents, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeSceneService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeGamemodeSession, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.FakeGamemodeParticipantSession, TopiaForge.Mods.Testing",
+        "TopiaForge.Mods.Testing.GamemodeSessionRunner, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeWorldSessionService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeLocalWorldService, TopiaForge.Mods.Testing",
         "TopiaForge.Mods.Testing.FakeWorldPauseMenuService, TopiaForge.Mods.Testing"

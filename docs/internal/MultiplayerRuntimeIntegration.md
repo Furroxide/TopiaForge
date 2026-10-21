@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.4 and WS3.6 of the live-multiplayer plan) · Date: 2026-10-18 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4, WS3.6 and WS3.9 of the live-multiplayer plan) · Date: 2026-10-18 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -15,9 +15,9 @@ The work lands in three steps:
 3. **The network world** (WS3.6, section 13): scene objects, spawns and world content that exist, move and baseline on
    every player.
 
-All three have landed, and so have the voice service behind the SPI (section 2, "Voice") and intent tracking (WS3.4,
-section 14). Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where authority
-routing (WS3.7) and session follow (WS3.8) attach to the network world.
+All three have landed, and so have the voice service behind the SPI (section 2, "Voice"), intent tracking (WS3.4,
+section 14) and the participant realm (WS3.9, section 15). Section 8 says what each later WS3 slice plugs in where, and
+section 13 says exactly where authority routing (WS3.7) and session follow (WS3.8) attach to the network world.
 
 ## 1. Shape
 
@@ -510,7 +510,7 @@ plug in here:
 | WS3.6 network world | Landed (section 13): `PromotionCensus`, `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`, an observer of the realm, the spawn ledger's observer, the `WorldReplication` channel, `SetEntityIdentitySource`, `MultiplayerReplication.References` and `LocalContent`, and replicas through `TryGetReplicaFactory` |
 | WS3.7 authority routing | The `Net*Service` decorators and the SPI's spawn and command stubs, each call routed by `ExecutionRouting.Route(realm, profile, intent)`: spawn adoption, and shadows bound by `NetSpawnOrigin`; `NetEntityMotion` behind `AcquireMotion`; `HeldItemOwnershipTracker` behind `NetItemService`; forwarded commands naming their sender in `InternalCommand.Sender`. Its traffic is message types 64 to 127 on the network world's channel, and its hooks into the network world are listed in section 13 |
 | WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu. The network world's scene hooks, hold and progress it works beside are listed in section 13 |
-| WS3.9 participant realm | Participant scopes through `CreateChildScopeAsync(..., ModExecutionContext.Participant)` |
+| WS3.9 participant realm | Landed (section 15): `IGamemodeParticipantFactory`, the participant's scope through `CreateChildScopeAsync(..., ModExecutionContext.Participant)`, and the orchestrator's start by realm, which session follow (WS3.8) calls on a joined player |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
 | WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references |
 | WS3.12 presentation routing | `NetUiService`, routing each call by `PresentationRoutingPolicy.Route(realm, profile, kind)` |
@@ -722,10 +722,10 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | Context | Execution context |
   | --- | --- |
   | A package context, made by `ModRuntime.Load` | `Process` |
-  | A session's scope for its gamemode's package, also when that package provides the world | `GamemodeServer` |
-  | A session's scope for any other package it selects: the world's, and a launch target's owner | `WorldOwner` |
+  | A session's scope for its gamemode's package, also when that package provides the world, where the server runs | `GamemodeServer` |
+  | A session's scope for any other package it selects (the world's, and a launch target's owner), and for the gamemode's package on a joined player | `WorldOwner` |
   | A content or discovery scope | Its caller's |
-  | A participant scope (WS3.9) | `Participant` |
+  | A participant scope (WS3.9, section 15) | `Participant` |
 
   A scope keeps its mod's network class. `CreateChildScopeAsync` takes the execution context, refuses an undefined one,
   and without one inherits its parent's.
@@ -1454,3 +1454,113 @@ active, scripted work in them included, so scripted spawning belongs in a timer 
   It is bound by name, so a corlib without it, as .NET is, simply never uses it.
 - **Coarse stays coarse.** An input-active frame cannot tell the player's input handling from scripted work in the same
   Update, so what it starts never passes for a direct action: WS3.7 sees which is which instead of a guess.
+
+## 15. The participant realm
+
+WS3.9 gives every player a controller of their own. Worlds gains `IGamemodeParticipantFactory`, an additive public
+interface that extends `IGamemodeFactory` with `StartParticipantAsync`; the gamemode's declared type implements it. By
+the realm a session starts in, the orchestrator decides what of the gamemode runs in this process
+(`GamemodeSessionOrchestrator.Participant.cs`):
+
+| Realm the session starts in | The gamemode package's session scope | Server controller | Participant controller |
+| --- | --- | --- | --- |
+| `Offline` (single player) | `GamemodeServer` | Starts first | Starts second, in a scope of its own |
+| `ListenHost` | `GamemodeServer` | Starts first | Starts second, for the host's own player |
+| `Client` | `WorldOwner` | Never | Starts alone |
+
+The host never runs a participant for another player: each player's participant runs in that player's own game.
+
+- **The realm.** The realm of the gamemode package's context, from its replication services, read once when the session
+  is admitted (`SessionRecord.Realm`). The realm rules keep it from changing while a session starts: a join needs Idle,
+  and every request is `Busy` from Preparing to StartingMode. A promotion in place, from `Offline` to `ListenHost`, needs
+  nothing: the server controller and the host's participant already run.
+- **The participant's scope.** A child of the gamemode package's own context, `{session id}:participant`, made with
+  `ModExecutionContext.Participant` right before `StartParticipantAsync`, and only for a factory that implements the
+  interface, so a gamemode without it keeps exactly the scopes and phases it had. It keeps the package's identity,
+  capabilities and dependency visibility, and has a lifetime of its own. It borrows no native transition: its slot never
+  holds a grant, since scene changes belong to the session's world owner. Its replication seam reports `Participant`:
+  canonical in single player and on the host, forwarded on a joined player, and never in control of time online.
+- **Start.** In StartingMode: the factory is made, the server controller starts where the server runs, then the
+  participant's scope is made and `StartParticipantAsync` runs; the startup reservation closes and the session commits
+  Running only after that. A joined player never constructs a gamemode without a participant factory: the binding's
+  `ImplementationType` says what the declared type implements before anything runs, so none of its code runs there.
+- **Failure.** A participant that returns a failure ends the session with its code and "The gamemode's participant
+  controller failed to start: " followed by its message; a `Cancelled` result keeps its own message. One that throws
+  ends the session as `External` with the same sentence. Either way the session ends as a failed server start does: the
+  launch fails with that reason, the server controller is disposed at cleanup, and every scope closes. A controller a
+  participant returns after the session began stopping is kept, and disposed.
+- **Stop.** Cleanup disposes the participant controller before the server controller, attempting each whatever the
+  other did, so a participant that throws never keeps the server controller from stopping; the failure is reported in
+  the session's terminal outcome. Scopes close in reverse, the participant's before the server's.
+- **UI surfaces.** What a participant makes through `participant.Context.Ui` is tracked on its scope's lifetime, so it
+  ends with the session at the latest. Until the UI surface lifetimes slice (#252) merges, an SDK HUD draws on the
+  scene's canvas, so a native scene change that keeps the session's controllers can end a participant's HUD while the
+  controller runs; with #252, a scope's surfaces outlive scenes and end with the scope.
+
+### What session follow (WS3.8) calls
+
+On a joined player the follower builds the session's record with the host's session id and the realm `Client`, makes
+its scopes through `ScopeContextFor(package, gamemodePackage, NetRealm.Client)`, which gives every package, the
+gamemode's included, `WorldOwner`, loads the host's world through the same provider, synchronizes its baseline, and then
+calls `StartGamemodeAsync(record, readiness)`. On a client, that call makes the participant's scope and starts only the
+participant controller in it, so follow makes no participant scope in Preparing. The call commits no phase of its own:
+follow commits its Participant state before it and Running once it returns. Cleanup is the same as a host's,
+participant first.
+
+Follow also decides what this slice leaves alone on a joined player: a local launch there still runs the host's startup
+steps in the `Client` realm (the scene authority policy refuses its native world changes), and the session's bound
+`StopAsync` and `RestartAsync` act locally until follow answers `NotAuthoritative`.
+
+### Scopes that resolve the session (DevEx audit B1)
+
+A scope's context builds its own extension service, so code in a gamemode's or a participant's scope that resolves the
+multiplayer session gets a second facade of the same mod, bound to the scope's lifetime. Closing a facade used to retire
+the whole mod (`SessionEngine.RetireOwner`): a scope that stopped despawned the mod's own drone, one object before and
+none after, and cancelled the mod's own pending submissions on a client. Now:
+
+- **Each facade retires what it made** (`SessionEngine.CloseFacade`): on a host, the objects it spawned leave
+  canonically, so every player sees them go; on a client, the commands it submitted that still wait complete as
+  cancelled, with "The part of the mod that submitted this stopped.". Objects record the facade that spawned them, and
+  commands the facade that submitted them.
+- **The mod's last facade retires the mod**, as before: a host's remaining objects of the mod, a client's copies of
+  them, and the mod's replicated-object inputs, which go through the object rather than a facade. The engine counts
+  each mod's open facades, and decides at the settle point the close is handled at.
+
+Retiring per facade is the meaning a scope's lifetime has everywhere else in the SDK: what a scope made ends with the
+scope. Counting facades alone, the audit's other fix, would have kept a stopped gamemode's round objects in every
+player's game until the mod unloads.
+
+### Tests
+
+- **ModManager harness.** `GamemodeParticipantRealmTests`: in every realm, the order of the start and stop calls, the
+  scopes' execution contexts, and their closing order; a gamemode without the factory unchanged in every realm; a
+  participant that fails or throws ending the session, on a host, in single player and on a joined player, with its
+  reason, the server controller disposed and every scope released; a failed server start that never starts the
+  participant; a participant that throws while stopping, followed by the server controller's stop; cancellation while
+  the participant starts, with the late controller disposed once, first, and a clean successor; the participant's own
+  scope, identity, route and time authority; and B1 at the runtime, through real contexts and scopes over the test rig:
+  the session's end retires the server's and the participant's objects while the mod's drone stays, until the mod
+  stops. `ModContextNetProfileTests`: the scope context by realm. `TestingKitTests`: the participant session fake and
+  `GamemodeSessionRunner` in every role, with its failures.
+- **Conformance.** The gamemode-v6 fixtures gain a `lifecycle` channel that only C# runs, since only C# has the
+  orchestrator. Each of its 12 `participant-lifecycle` cases runs on the orchestrator, in its realm, and on the testing
+  kit's `GamemodeSessionRunner`, which must give the same result, so the kit cannot drift from the game.
+- **ModRuntime harness.** The production-binding case `participant`: a real installed package whose declared gamemode
+  type implements the factory is bound and launched by production code; the participant starts after the server, its
+  services report `Participant`, and it is disposed before the server controller.
+- **Multiplayer harness.** `ScopedFacadeRetirementTests`: the audit's reproduction through the real provider and the
+  drone sample; a host's scope facade despawning only its own objects, seen by a joined player; a client's scope facade
+  cancelling only its own commands, while the mod's command and its object's input go through; and each side's last
+  facade retiring the mod.
+
+### Choices
+
+- **The participant factory extends `IGamemodeFactory`.** A type that implements it is always a bindable gamemode, so
+  the participant can never sit on a type the runtime does not bind, and one declaration covers both controllers.
+- **Its own session and controller types.** `IGamemodeParticipantSession` and `IGamemodeParticipantController` carry the
+  same members as the server's, but a participant can never be handed the server's scope, or the reverse.
+- **The participant's scope is made only when it starts**, so a gamemode without one gains no scope, no allocation and
+  no new phase.
+- **The realm comes from the contexts' replication services**, the same composition root every scope's seam reports,
+  so the orchestrator and the participant's services can never disagree about where the session runs.
+- **Retire per facade, with the mod's last facade retiring the mod**, for the reason above.

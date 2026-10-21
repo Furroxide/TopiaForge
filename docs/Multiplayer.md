@@ -297,6 +297,20 @@ player's click. Call your handler directly instead.
 A frame with active input counts as the player's for your whole Update and LateUpdate, so keep scripted work, such as a
 timed spawn, in a timer rather than in your input handling.
 
+## Gamemodes in a session
+
+A gamemode's server controller (`IGamemodeFactory.StartAsync`) runs where the session's server runs: in single
+player and on the host, never on a joined player. A gamemode that implements `IGamemodeParticipantFactory` also gets
+a participant controller in every player's own game, for that player's tools and HUD; on a joined player it is the
+only part of the gamemode that runs. [Custom worlds](CustomWorlds.md#give-every-player-a-controller-of-their-own)
+describes both.
+
+A controller may resolve the session from its own context, as in `participant.Context.RequireMultiplayer()`. Each
+context of a mod gets its own `IMultiplayerSession` over the mod's one set of registrations, and when a controller's
+scope ends, only what its session made ends with it: the objects it spawned leave every player's game, and its
+commands still waiting for the host complete as cancelled. The mod's own session, and everything it made, stay until
+the mod itself stops.
+
 ## What solo cannot tell you
 
 Solo play runs everything once, inline, in one process, with one player and no network. A mod can pass every solo test

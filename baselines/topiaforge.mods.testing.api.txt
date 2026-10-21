@@ -211,6 +211,27 @@ type public sealed class TopiaForge.Mods.Testing.FakeExtensionService : System.O
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<TopiaForge.Mods.IExtensionRegistration> Register<T>(T provider, TopiaForge.Mods.ExtensionCardinality cardinality = 0 (Singleton)) where T : class
   property System.Int32 ActiveProviderCount { get; }
 
+type public sealed class TopiaForge.Mods.Testing.FakeGamemodeParticipantSession : System.Object, TopiaForge.Mods.IGamemodeParticipantSession, TopiaForge.Mods.IWorldSession
+  constructor .ctor(TopiaForge.Mods.IModContext context, TopiaForge.Mods.WorldReadiness world, System.String sessionId = "test.session", System.String targetId = "test.target", System.String gamemodeId = "test.mode", System.String worldId = "test.world", System.String? worldFamilyId = null, System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> RestartAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> ReturnToMainMenuAsync(System.Threading.CancellationToken cancellationToken = null)
+  method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> StopAsync(System.Threading.CancellationToken cancellationToken = null)
+  property System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>>>? OnRestart { get; set; }
+  property System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>>>? OnReturnToMainMenu { get; set; }
+  property System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>>>? OnStop { get; set; }
+  property System.Int32 MainMenuRequests { get; }
+  property System.Int32 RestartRequests { get; }
+  property System.Int32 StopRequests { get; }
+  property System.String GamemodeId { get [virtual,final,newslot]; }
+  property System.String SessionId { get [virtual,final,newslot]; }
+  property System.String TargetId { get [virtual,final,newslot]; }
+  property System.String WorldId { get [virtual,final,newslot]; }
+  property System.String? WorldFamilyId { get [virtual,final,newslot]; }
+  property System.Threading.CancellationToken CancellationToken { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.IModContext Context { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.IModLifetime Lifetime { get [virtual,final,newslot]; }
+  property TopiaForge.Mods.WorldReadiness World { get [virtual,final,newslot]; }
+
 type public sealed class TopiaForge.Mods.Testing.FakeGamemodeSession : System.Object, TopiaForge.Mods.IGamemodeSession, TopiaForge.Mods.IWorldSession
   constructor .ctor(TopiaForge.Mods.IModContext context, TopiaForge.Mods.WorldReadiness world, System.String sessionId = "test.session", System.String targetId = "test.target", System.String gamemodeId = "test.mode", System.String worldId = "test.world", System.String? worldFamilyId = null, System.Threading.CancellationToken cancellationToken = null)
   method [virtual,final,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> RestartAsync(System.Threading.CancellationToken cancellationToken = null)
@@ -650,6 +671,29 @@ type public sealed class TopiaForge.Mods.Testing.FakeWorldSessionService : Syste
   event System.Action<TopiaForge.Mods.WorldSessionSnapshot> StateChanged { add [virtual,final,newslot]; remove [virtual,final,newslot]; }
   method System.Void Publish(TopiaForge.Mods.WorldSessionPhase phase, TopiaForge.Mods.IWorldSession? session = null, TopiaForge.Mods.WorldReadiness? world = null)
   property TopiaForge.Mods.WorldSessionSnapshot Current { get [virtual,final,newslot]; }
+
+type public enum TopiaForge.Mods.Testing.GamemodeSessionRole : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.Testing.GamemodeSessionRole Client = 2 (Client)
+  field const TopiaForge.Mods.Testing.GamemodeSessionRole Host = 1 (Host)
+  field const TopiaForge.Mods.Testing.GamemodeSessionRole SinglePlayer = 0 (SinglePlayer)
+
+type public sealed class TopiaForge.Mods.Testing.GamemodeSessionRunner : System.Object, System.IDisposable
+  constructor .ctor(TopiaForge.Mods.IGamemodeFactory factory, TopiaForge.Mods.Testing.GamemodeSessionRole role = 0 (SinglePlayer), TopiaForge.Mods.Testing.FakeModContext? serverContext = null, TopiaForge.Mods.Testing.FakeModContext? participantContext = null, TopiaForge.Mods.WorldReadiness? world = null)
+  method System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<System.Boolean>> StartAsync(System.Threading.CancellationToken cancellationToken = null)
+  method System.Void Stop()
+  method [virtual,final,newslot] System.Void Dispose()
+  property System.Boolean IsRunning { get; }
+  property System.Collections.Generic.IReadOnlyList<System.Exception> CleanupFailures { get; }
+  property TopiaForge.Mods.IGamemodeController? Controller { get; }
+  property TopiaForge.Mods.IGamemodeFactory Factory { get; }
+  property TopiaForge.Mods.IGamemodeParticipantController? ParticipantController { get; }
+  property TopiaForge.Mods.Testing.FakeGamemodeParticipantSession? Participant { get; }
+  property TopiaForge.Mods.Testing.FakeGamemodeSession? Session { get; }
+  property TopiaForge.Mods.Testing.FakeModContext ParticipantContext { get; }
+  property TopiaForge.Mods.Testing.FakeModContext ServerContext { get; }
+  property TopiaForge.Mods.Testing.GamemodeSessionRole Role { get; }
+  property TopiaForge.Mods.WorldReadiness World { get; }
 
 type public sealed class TopiaForge.Mods.Testing.InMemoryLocalModStorageService : System.Object, TopiaForge.Mods.ILocalModStorageService
   constructor .ctor()

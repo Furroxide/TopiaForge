@@ -187,6 +187,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Cleanup.cs" Link="Runtime/GamemodeSessionOrchestrator.Cleanup.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Operations.cs" Link="Runtime/GamemodeSessionOrchestrator.Operations.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.MainMenu.cs" Link="Runtime/GamemodeSessionOrchestrator.MainMenu.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Participant.cs" Link="Runtime/GamemodeSessionOrchestrator.Participant.cs" />
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeKey.cs" Link="Runtime/TopiaForgeKey.cs" />
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/HotkeyRegistrationStore.cs" Link="Runtime/HotkeyRegistrationStore.cs" />
     <Compile Include="..\..\src\TopiaForge.ModManager\NativeTransitionContracts.cs" />

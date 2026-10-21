@@ -174,6 +174,94 @@ the original selection. A native scene change follows `sceneChangePolicy`: `end-
 the session; `keep-controller` preserves its controller and is the default when absent.
 Scene notifications never create a replacement controller.
 
+## Give every player a controller of their own
+
+The server controller runs once, where the session's server runs: in single player, and on the
+host of a multiplayer session. To give every player their own tools and HUD, implement
+`IGamemodeParticipantFactory` on the declared gamemode type instead of `IGamemodeFactory`. It adds
+`StartParticipantAsync`, which starts a controller for the player whose game is running:
+
+| Where the game runs | What starts, in order |
+| --- | --- |
+| Single player | The server controller, then the player's participant controller |
+| The host of a session | The server controller, then the host's own participant controller |
+| A joined player | Only that player's participant controller; the host runs the server controller |
+
+```csharp
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using TopiaForge.Mods;
+
+namespace Example.World
+{
+    public sealed class ArenaGamemode : IGamemodeParticipantFactory
+    {
+        public Task<OperationResult<IGamemodeController>> StartAsync(
+            IGamemodeSession session, CancellationToken cancellationToken) =>
+            Task.FromResult(OperationResult<IGamemodeController>.Success(new Round()));
+
+        public Task<OperationResult<IGamemodeParticipantController>> StartParticipantAsync(
+            IGamemodeParticipantSession participant, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(
+                OperationResult<IGamemodeParticipantController>.Success(new Toolbar(participant)));
+        }
+
+        private sealed class Round : IGamemodeController
+        {
+            public void Dispose() { }
+        }
+
+        private sealed class Toolbar : IGamemodeParticipantController
+        {
+            private IDisposable? update;
+
+            public Toolbar(IGamemodeParticipantSession participant)
+            {
+                update = participant.Context.Events.SubscribeUpdate(deltaTime =>
+                {
+                    if (participant.CancellationToken.IsCancellationRequested) return;
+                    // Read this player's input and refresh this player's HUD.
+                });
+            }
+
+            public void Dispose()
+            {
+                var previous = update;
+                update = null;
+                previous?.Dispose();
+            }
+        }
+    }
+}
+```
+
+- **Start.** `StartParticipantAsync` runs while the session is starting its gamemode, after the server
+  controller started where one runs. The session reaches `Running`, and a launch succeeds, only once it has
+  returned exactly one controller. Release what you made if your own start fails.
+- **Its own scope.** `participant.Context` is a scope of your package for this player, apart from the
+  server controller's: its lifetime, and what you track on it, such as HUD surfaces made through
+  `participant.Context.Ui`, end with the session.
+- **What it may touch.** Its own context: this player's input, HUD, tools, local player and audio. Never
+  the server controller or its fields: on a joined player the server controller runs in the host's game,
+  not this one. Reach the server through your mod's multiplayer contract instead. Freezing or slowing time
+  online is the server controller's alone.
+- **Stop.** Whatever ends the session cancels its token and stops both scopes. The participant controller
+  is disposed first, then the server controller, and a participant that throws while it is disposed never
+  keeps the server controller from stopping.
+- **Failure.** A participant that returns a failure or throws ends the session as a failed server start
+  does. The launch fails with "The gamemode's participant controller failed to start:" and your reason, and
+  the server controller is disposed.
+- **Bound operations.** `participant.StopAsync`, `RestartAsync` and `ReturnToMainMenuAsync` act on the
+  session, as the server session's do.
+
+A gamemode that implements only `IGamemodeFactory` runs exactly as before, and a joined player's game
+never constructs it. When a participant resolves the multiplayer session from its own context, what it spawns and
+submits through it ends with its scope, and the mod's own objects stay. Test both controllers in every
+role, without the game, with `GamemodeSessionRunner` ([Test a mod](TestingMods.md)).
+
 ## Provide content and discovery
 
 Bundle declarations use the manager's built-in provider. Scoped asset services load the prefab,

@@ -1,0 +1,28 @@
+{
+  "id": "a-joined-player-runs-nothing-of-a-server-only-gamemode",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A joined player runs no controller of a gamemode without participants; its session still runs the host's world.",
+  "scenario": {
+    "role": "client",
+    "factory": "server-only",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [],
+        "stop": "succeeded"
+      }
+    }
+  }
+}

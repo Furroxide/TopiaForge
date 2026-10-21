@@ -46,9 +46,15 @@ dotnet test --configuration Release
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover authenticated catalog
   registrations, owned spawns, exclusive temporary edits, fail-closed persistence isolation, and
   local event-project validation/storage.
-- `FakeGamemodeSession` supplies prepared world identity and bound operations to a real factory.
+- `FakeGamemodeSession` supplies prepared world identity and bound operations to a real factory, and
+  `FakeGamemodeParticipantSession` does the same for a participant controller.
   `FakeWorldSessionService` publishes explicit phase snapshots; notifications do not start a mode.
   `FakeLocalWorldService` models session-bound import and owned prefab overrides.
+- `GamemodeSessionRunner` starts and stops a real gamemode factory by the runtime's own rules, as
+  `GamemodeSessionRole.SinglePlayer`, `Host` or `Client`: the server controller first where the server runs,
+  then the player's participant controller, which is all a joined player starts. Failures end the session
+  as they do in the game, and stopping disposes the participant before the server. The server and the
+  participant each get a `FakeModContext` of their own, as their scopes do in the game.
 - `FakeTimeControlService` and `FakePromptOverrideRegistry` provide deterministic specialist-module
   behavior and leak-observable handles.
 - `ControlledOperation<T>` lets a test choose when asynchronous work completes, fails, or cancels.
