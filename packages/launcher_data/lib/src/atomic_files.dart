@@ -50,8 +50,18 @@ final class LauncherFileUnreadable extends FileSystemException {
         'that folder, then try again.',
       );
 
-  /// Whether the folder could not be listed or searched, rather than a
-  /// backup in it held.
+  /// The file is there but cannot be read, as while another program holds
+  /// it open without sharing it for reading.
+  LauncherFileUnreadable.heldFile(String label)
+    : closedFolder = false,
+      super(
+        '$label could not be read just now, so nothing was changed. Another '
+        'program may be using it, or access to it may be denied. Close that '
+        'program or restore access, then try again.',
+      );
+
+  /// Whether the folder could not be listed or searched, rather than the
+  /// file or a backup of it held.
   final bool closedFolder;
 
   @override

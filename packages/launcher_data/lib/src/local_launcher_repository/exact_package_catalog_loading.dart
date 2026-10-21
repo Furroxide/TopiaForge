@@ -19,7 +19,9 @@ extension _ExactPackageCatalogLoading on LocalLauncherRepository {
     final record = (await _serverContentStore(install).load()).record;
     // What a join that failed or stopped part way left in place goes at the
     // next sweep, so no plan counts it as installed: the join downloads it
-    // instead, and its install waits until that sweep can take it out.
+    // instead, and its install waits until that sweep can take it out. While
+    // such a join's journal cannot be read, what it left is unknown, so no
+    // plan is made: this throws, as for package sources that cannot be read.
     final unsettled = {
       for (final journal in await _unsettledJoinJournals(install))
         for (final package in journal.packages)

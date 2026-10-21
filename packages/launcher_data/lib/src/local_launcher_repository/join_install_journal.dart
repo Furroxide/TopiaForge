@@ -40,6 +40,11 @@ final class _JoinJournal {
   static const fileName = 'journal.json';
   static const maximumBytes = 1024 * 1024;
 
+  /// What the launcher calls a journal it cannot read just now: where to
+  /// look for the program holding it, with no path.
+  static const unreadableLabel =
+      'The journal an earlier join left in the game folder';
+
   final _JoinJournalPhase phase;
   final List<_JoinJournalPackage> packages;
 
@@ -142,7 +147,8 @@ extension _JoinInstallJournal on LocalLauncherRepository {
 
   /// Under the staging lease: settles each join folder an install or a
   /// cleanup that stopped part way left, and deletes it. A folder that
-  /// cannot be settled yet stays for the next start.
+  /// cannot be settled yet stays for the next start, which the log says,
+  /// as while its journal cannot be read just now ([_readJoinJournal]).
   ///
   /// - No journal, or every package only staged: nothing the game reads
   ///   changed, so the folder just goes.
@@ -176,6 +182,9 @@ extension _JoinInstallJournal on LocalLauncherRepository {
     }
   }
 
+  /// Settles the join folder [root]: true once it can go, false while it
+  /// must stay. Throws while its journal cannot be read just now, so the
+  /// folder stays, and nothing is undone or kept on a guess.
   Future<bool> _settleJoinFolder(GameInstall install, Directory root) async {
     if (p.basename(root.path).startsWith('launcher-trash-')) return true;
     final journal = await _readJoinJournal(root);
@@ -232,13 +241,19 @@ extension _JoinInstallJournal on LocalLauncherRepository {
   /// Whether a join's install that failed or stopped part way is still
   /// unsettled after a sweep, as while another program holds a file in one
   /// of its folders. Those folders keep their record entries until a later
-  /// sweep takes them out, so nothing may build on them meanwhile.
+  /// sweep takes them out, so nothing may build on them meanwhile. Throws as
+  /// [_unsettledJoinJournals] does.
   Future<bool> _hasUnsettledJoinInstall(GameInstall install) async =>
       (await _unsettledJoinJournals(install)).isNotEmpty;
 
   /// The journals of the joins in manager staging whose install failed or
   /// stopped part way. What each names that is still in place goes at the
   /// next sweep that can finish, so no plan may count it as installed.
+  ///
+  /// Throws [LauncherFileUnreadable] while a join's journal cannot be read
+  /// just now ([_readJoinJournal]): that join is unsettled too, and what it
+  /// left in place is unknown, so nothing may be planned or installed
+  /// until it can be read.
   Future<List<_JoinJournal>> _unsettledJoinJournals(GameInstall install) async {
     final staging = _managerStaging(install);
     if (!staging.existsSync()) return const [];
@@ -297,23 +312,45 @@ extension _JoinInstallJournal on LocalLauncherRepository {
     }
   }
 
+  /// Reads the journal in the join folder [root]: null when there is none,
+  /// or when what is there is not a journal as written, since a journal is
+  /// only acted on whole.
+  ///
+  /// A save of it that stopped between its two moves left it aside as a
+  /// backup, which is put back first ([recoverAtomicBackupIfMissing]), as
+  /// every reader of a file the shared writer saves does. Throws
+  /// [LauncherFileUnreadable] while it cannot be read just now: that backup
+  /// cannot be put back, as while another program holds it, the folder
+  /// cannot be listed or searched, or the journal itself cannot be read. Its
+  /// join is then not settled yet, never one with no journal, which would
+  /// keep what that join had put in place as the player's own.
   Future<_JoinJournal?> _readJoinJournal(Directory root) async {
     final file = File(p.join(root.path, _JoinJournal.fileName));
+    await recoverAtomicBackupIfMissing(
+      file,
+      label: _JoinJournal.unreadableLabel,
+    );
     if (FileSystemEntity.typeSync(file.path, followLinks: false) !=
         FileSystemEntityType.file) {
       return null;
     }
+    final Object? json;
     try {
-      return _JoinJournal.tryRead(
-        await _readJsonFileBounded(
-          file,
-          maxBytes: _JoinJournal.maximumBytes,
-          label: 'Join install journal',
+      json = jsonDecode(
+        utf8.decode(
+          await _readLauncherFileBounded(file, _JoinJournal.maximumBytes),
         ),
       );
+    } on PathNotFoundException {
+      // Gone meanwhile with its folder, as when its join finished.
+      return null;
+    } on FileSystemException {
+      throw LauncherFileUnreadable.heldFile(_JoinJournal.unreadableLabel);
     } on Object {
+      // Too large, or not JSON.
       return null;
     }
+    return _JoinJournal.tryRead(json);
   }
 }
 
