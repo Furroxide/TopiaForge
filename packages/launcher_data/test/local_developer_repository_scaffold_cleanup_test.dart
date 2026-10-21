@@ -144,6 +144,27 @@ void main() {
     );
   });
 
+  test('a parent path with .. after a folder that does not exist yet is made '
+      'where it leads, and nothing else is', () async {
+    final repo = fakeRepository('unused', const {});
+    final work = Directory(p.join(root.path, 'work'))..createSync();
+
+    final workspace = await repositoryAt(repo.path).createModProject(
+      parentDirectory: p.join(work.path, 'missing', '..', 'mods'),
+      id: 'test.dots',
+      name: 'Dots',
+    );
+
+    expect(workspace.projectRoot, p.join(work.path, 'mods', 'test.dots'));
+    expect(namesIn(work), ['mods']);
+    expect(
+      File(
+        p.join(work.path, 'mods', 'test.dots', 'topiaforge.mod.json'),
+      ).existsSync(),
+      isTrue,
+    );
+  });
+
   test('a pre-existing project folder is refused and left as it was', () async {
     final existing = Directory(p.join(root.path, 'test.exists'))..createSync();
     File(p.join(existing.path, 'keep.txt')).writeAsStringSync('keep');

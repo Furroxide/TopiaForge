@@ -64,7 +64,10 @@ extension LocalDeveloperModScaffoldPlan on LocalDeveloperRepository {
         'Unicode characters.',
       );
     }
-    final root = Directory(p.join(parentDirectory, _safeName(id)));
+    // A `..` is resolved by the text, as Windows resolves it: once this run
+    // creates the folder before it, `new/..` would name a folder that is
+    // already there, which the creation refuses.
+    final root = Directory(p.normalize(p.join(parentDirectory, _safeName(id))));
     if (FileSystemEntity.typeSync(root.path, followLinks: false) !=
         FileSystemEntityType.notFound) {
       throw StateError('Project already exists: ${root.path}');
