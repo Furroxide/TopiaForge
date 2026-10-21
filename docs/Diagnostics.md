@@ -209,14 +209,18 @@ the versions agree.
 `NuGetLockFilePath` says, as the restore records in `obj/project.assets.json`; otherwise where the
 project file itself declares `NuGetLockFilePath` in a plain `<PropertyGroup>`, as a literal path;
 otherwise `packages.<project name>.lock.json` when there is one; otherwise `packages.lock.json` beside the
-project. When none is there, or it cannot be read, which SDK versions NuGet resolved is unknown, so the
-restore fails. The message names the files it looked for.
+project. When none is there, it cannot be read, or the restore did not write it, which SDK versions NuGet
+resolved is unknown, so the restore fails. NuGet rewrites the lock file it uses on every restore, so one
+older than the restore is left from an earlier one, from before `NuGetLockFilePath` or `obj` moved, and it
+is never checked in place of the lock file NuGet wrote. The message names the files it looked for, or the
+one it found and why it is left over.
 
 Keep `RestorePackagesWithLockFile` on, as the templates set it, and run `topiaforge restore` again. If
 `NuGetLockFilePath` moves the lock file, keep the project's `obj` folder beside it, where the restore
 records that path, or declare `NuGetLockFilePath` in the project file itself as a literal path: the check
 does not evaluate MSBuild, so a path set in an imported file with `obj` moved elsewhere, or set through a
-property expression, cannot be followed.
+property expression, cannot be followed. If an `obj` folder left beside the project from before it moved
+names an old path, delete that folder.
 
 ## Multiplayer contract diagnostics
 

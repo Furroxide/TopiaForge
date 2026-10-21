@@ -223,6 +223,27 @@ String? _recordedLockFilePath(File assets) {
   }
 }
 
+/// Whether [lockFile] was written by the restore of its project that
+/// started at [restoreStarted]. NuGet rewrites the lock file it uses on every
+/// restore that `--force-evaluate` makes evaluate the project, in locked mode
+/// too, so an older one is not the lock file that restore used: it is left
+/// from an earlier restore, from before `NuGetLockFilePath`, or the `obj`
+/// folder where a restore records it, moved. A file's time may read up to
+/// [nuGetLockFileTimeTolerance] early, as FAT keeps times in two-second steps.
+bool nuGetLockFileWrittenSince(File lockFile, DateTime restoreStarted) {
+  try {
+    return !lockFile.lastModifiedSync().isBefore(
+      restoreStarted.subtract(nuGetLockFileTimeTolerance),
+    );
+  } on FileSystemException {
+    return false;
+  }
+}
+
+/// How much earlier than the restore that wrote it a lock file's time may
+/// read.
+const nuGetLockFileTimeTolerance = Duration(seconds: 2);
+
 /// Far more than any mod project's assets file holds.
 const _maximumAssetsBytes = 64 * 1024 * 1024;
 
@@ -244,11 +265,14 @@ final class SdkPinMismatch {
 }
 
 /// The SDK packages [lock], a decoded NuGet lock file, resolved at another
-/// version than [version], or did not resolve. Each target in the lock file
-/// (a target framework, and a runtime when there is one) must resolve every
-/// package in [pinned] at [version]. Any other package in [sdkPackages] that
-/// it resolves must be at [version] too, since the SDK feed holds only that
-/// one. Ids compare without regard to case, as NuGet compares them.
+/// version than [version], or did not resolve. Each target framework's
+/// target in the lock file must resolve every package in [pinned] at
+/// [version]. A runtime's target, such as `net10.0/win-x64`, lists only the
+/// packages whose assets differ for that runtime, so it must resolve at
+/// [version] only the pinned packages it lists. Any other package in
+/// [sdkPackages] that a target resolves must be at [version] too, since the
+/// SDK feed holds only that one. Ids compare without regard to case, as
+/// NuGet compares them.
 ///
 /// Throws [FormatException] when [lock] is not a NuGet lock file.
 List<SdkPinMismatch> sdkPinMismatches(
@@ -272,7 +296,8 @@ List<SdkPinMismatch> sdkPinMismatches(
     if (!versions.contains(resolved)) versions.add(resolved);
   }
 
-  for (final target in dependencies.values) {
+  var frameworkTargets = 0;
+  for (final MapEntry(key: name, value: target) in dependencies.entries) {
     if (target is! Map) {
       throw const FormatException('A target in it is not a list of packages.');
     }
@@ -295,11 +320,15 @@ List<SdkPinMismatch> sdkPinMismatches(
         throw const FormatException('A package in it has no resolved version.');
       }
     }
+    // A runtime's target leaves out what resolves as it does for the target
+    // framework alone, the SDK packages among it.
+    if ('$name'.contains('/')) continue;
+    frameworkTargets++;
     for (final id in pinned) {
       if (!seen.contains(id.toLowerCase())) missing.add(id.toLowerCase());
     }
   }
-  if (dependencies.isEmpty) {
+  if (frameworkTargets == 0) {
     missing.addAll(pinned.map((id) => id.toLowerCase()));
   }
   final ids = {...missing, ...found.keys}.toList()..sort();

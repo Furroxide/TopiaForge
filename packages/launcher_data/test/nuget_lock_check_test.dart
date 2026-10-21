@@ -131,6 +131,30 @@ void main() {
       expect(_mismatches(_lock({})), ['$_abstractions=', '$_analyzers=']);
     });
 
+    test('a runtime\'s target, which lists only what differs for it, need '
+        'not list a pinned package, but what it lists is checked', () {
+      final pinnedHere = {_abstractions: _version, _analyzers: _version};
+      // As NuGet writes it for a project with a RuntimeIdentifier.
+      expect(
+        _mismatches(_lock({target: pinnedHere, '$target/win-x64': {}})),
+        isEmpty,
+      );
+      expect(
+        _mismatches(
+          _lock({
+            target: pinnedHere,
+            '$target/win-x64': {_abstractions: '0.0.1'},
+          }),
+        ),
+        ['$_abstractions=0.0.1'],
+      );
+      // Without a target framework's own target, nothing pinned resolved.
+      expect(_mismatches(_lock({'$target/win-x64': {}})), [
+        '$_abstractions=',
+        '$_analyzers=',
+      ]);
+    });
+
     test('refuses what is not a NuGet lock file', () {
       for (final lock in <Object?>[
         null,
@@ -288,6 +312,26 @@ void main() {
         p.join(root.path, 'packages.lock.json'),
       );
     });
+  });
+
+  test('nuGetLockFileWrittenSince takes only a lock file written since the '
+      'restore started, give or take the file time tolerance', () {
+    final root = Directory.systemTemp.createTempSync('tf-nuget-lock-time-');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final lock = File(p.join(root.path, 'packages.lock.json'))
+      ..writeAsStringSync('{}');
+    final started = DateTime(2026, 10, 21, 12);
+    bool writtenAt(DateTime time) {
+      lock.setLastModifiedSync(time);
+      return nuGetLockFileWrittenSince(lock, started);
+    }
+
+    expect(writtenAt(started.add(const Duration(seconds: 5))), isTrue);
+    expect(writtenAt(started.subtract(const Duration(seconds: 1))), isTrue);
+    expect(writtenAt(started.subtract(const Duration(seconds: 3))), isFalse);
+    expect(writtenAt(started.subtract(const Duration(days: 1))), isFalse);
+    lock.deleteSync();
+    expect(nuGetLockFileWrittenSince(lock, started), isFalse);
   });
 
   group('declaredNuGetLockFilePath', () {

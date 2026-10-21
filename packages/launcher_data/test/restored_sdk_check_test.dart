@@ -237,6 +237,89 @@ void main() {
     timeout: restoreTimeout,
   );
 
+  test('a RuntimeIdentifier, whose target lists only what differs for that '
+      'runtime, passes', () async {
+    final project = File(p.join(projectRoot, '$projectName.csproj'));
+    project.writeAsStringSync(
+      project.readAsStringSync().replaceFirst(
+        '<PropertyGroup>',
+        '<PropertyGroup>\n    <RuntimeIdentifier>win-x64</RuntimeIdentifier>',
+      ),
+    );
+
+    final workspace = await repository.resolveDeveloperProject(projectRoot);
+
+    expect(blocking(workspace), isEmpty);
+    // The runtime's target leaves out the SDK packages, which resolve as
+    // they do for the target framework alone.
+    expect(
+      File(p.join(projectRoot, 'packages.lock.json')).readAsStringSync(),
+      contains('/win-x64": {}'),
+    );
+  }, timeout: restoreTimeout);
+
+  test('a lock file left from an earlier restore is reported, never taken as '
+      'a pass', () async {
+    // A lock file left over is hours or days old, not the seconds this test
+    // takes, so date the lock files back.
+    void ageLockFiles() {
+      final hourAgo = DateTime.now().subtract(const Duration(hours: 1));
+      for (final file in Directory(projectRoot).listSync(recursive: true)) {
+        if (file is File && p.basename(file.path) == 'packages.lock.json') {
+          file.setLastModifiedSync(hourAgo);
+        }
+      }
+    }
+
+    expect(
+      blocking(await repository.resolveDeveloperProject(projectRoot)),
+      isEmpty,
+    );
+    // Restored again unchanged, NuGet rewrites the lock files it uses.
+    ageLockFiles();
+    expect(
+      blocking(await repository.resolveDeveloperProject(projectRoot)),
+      isEmpty,
+    );
+    // Then obj and the lock file move, set from where the check cannot
+    // follow them, and another version is set: NuGet writes it to the new
+    // lock file, and the old ones stay beside each project.
+    ageLockFiles();
+    _directoryBuildProps(projectRoot, [
+      r'<BaseIntermediateOutputPath>$(MSBuildProjectDirectory)/elsewhere/'
+          '</BaseIntermediateOutputPath>',
+      '<NuGetLockFilePath>locks/project.lock.json</NuGetLockFilePath>',
+    ]);
+    _localFeed(root, projectRoot, 'TopiaForge.Mods.Abstractions', '0.0.1');
+    overrideAbstractions(
+      'Update="TopiaForge.Mods.Abstractions" Version="0.0.1"',
+    );
+
+    final workspace = await repository.resolveDeveloperProject(projectRoot);
+
+    expect(
+      File(
+        p.join(projectRoot, 'locks', 'project.lock.json'),
+      ).readAsStringSync(),
+      contains('"resolved": "0.0.1"'),
+    );
+    expect(blocking(workspace), [
+      for (final project in [projectName, '$projectName.Tests'])
+        allOf(
+          startsWith(
+            'TF1103: packages.lock.json, the NuGet lock file found for '
+            '$project.csproj, was not written by its restore',
+          ),
+          contains('something outside $project.csproj sets NuGetLockFilePath'),
+          contains(
+            'declare NuGetLockFilePath in $project.csproj itself as a literal '
+            'path',
+          ),
+          endsWith('See https://docs.topiaforge.dev/diagnostics/TF1103'),
+        ),
+    ]);
+  }, timeout: restoreTimeout);
+
   test(
     'pack refuses a project that restores another SDK version',
     () async {

@@ -63,7 +63,9 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
       );
     }
     final dotnet = await _dotnetSdkResolver(Directory(root));
+    final restoreStarted = <String, DateTime>{};
     for (final project in projects) {
+      restoreStarted[project.path] = DateTime.now();
       final restore = await runBoundedProcess(
         dotnet.executable,
         [
@@ -87,7 +89,7 @@ extension LocalDeveloperSdkRestore on LocalDeveloperRepository {
         );
       }
     }
-    return _checkRestoredSdkPackages(root, sdk, projects);
+    return _checkRestoredSdkPackages(root, sdk, projects, restoreStarted);
   }
 
   SdkReferencePack? _loadCachedSdkPack(_DeveloperSdkLock lock) {

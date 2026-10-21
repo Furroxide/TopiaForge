@@ -16,11 +16,13 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
   /// One blocking issue for each SDK package that a restore of one of
   /// [projects] resolved at another version than [sdk]'s, or did not resolve
   /// though the project is pinned to it (TF1102), and one for each project
-  /// whose lock file is missing or cannot be read (TF1103).
+  /// whose lock file is missing, cannot be read, or was not written by the
+  /// restore that started at its time in [restoreStarted] (TF1103).
   Future<List<LauncherIssue>> _checkRestoredSdkPackages(
     String root,
     SdkReferencePack sdk,
     List<File> projects,
+    Map<String, DateTime> restoreStarted,
   ) async {
     final modulePackages = await _sdkModulePackages(root, sdk);
     final sdkPackages = sdk.packages.map((package) => package.id).toSet();
@@ -60,6 +62,33 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
                 'the lock file, keep obj beside $name, where the restore '
                 'records that path, or declare NuGetLockFilePath in $name '
                 'itself as a literal path.',
+            'TF1103',
+          ),
+        );
+        continue;
+      }
+      // A lock file this restore did not write says nothing about what it
+      // resolved, however well it matches the pin.
+      if (!nuGetLockFileWrittenSince(lockFile, restoreStarted[project.path]!)) {
+        final cause = switch (location.source) {
+          NuGetLockFileSource.recorded =>
+            'the obj/project.assets.json beside $name that names it is left '
+                'from an earlier restore, so delete that obj folder',
+          NuGetLockFileSource.declared =>
+            '$name declares that NuGetLockFilePath puts it there, but an '
+                'import or a condition sets another path',
+          NuGetLockFileSource.projectNamed || NuGetLockFileSource.beside =>
+            'something outside $name sets NuGetLockFilePath, and obj is not '
+                'beside $name to record where',
+        };
+        issues.add(
+          _restoreIssue(
+            'TF1103: $lockName, the NuGet lock file found for $name, was not '
+                'written by its restore, so it does not say which SDK '
+                'versions NuGet resolved: $cause. Keep obj beside $name, '
+                'where the restore records where NuGetLockFilePath puts the '
+                'lock file, or declare NuGetLockFilePath in $name itself as a '
+                'literal path, then run `topiaforge restore` again.',
             'TF1103',
           ),
         );
