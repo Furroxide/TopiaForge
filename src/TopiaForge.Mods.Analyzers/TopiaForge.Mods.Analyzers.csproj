@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <!-- Roslyn supplies these assemblies at analyzer load time. Keep them compile-only. -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0"
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0"
                       PrivateAssets="all" />
   </ItemGroup>
 
