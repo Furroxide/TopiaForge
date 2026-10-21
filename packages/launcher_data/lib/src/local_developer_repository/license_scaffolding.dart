@@ -1,16 +1,13 @@
 part of '../local_developer_repository.dart';
 
 extension _LicenseScaffolding on LocalDeveloperRepository {
-  void _writeScaffoldLicense(
-    String projectRoot,
-    ModManifest manifest,
-    String? suppliedText,
-  ) {
-    final text = suppliedText == null
-        ? _builtInScaffoldLicense(manifest)
-        : _validateSuppliedLicense(manifest, suppliedText);
-    _writeDeveloperTextAtomic(File(p.join(projectRoot, 'LICENSE.md')), text);
-  }
+  /// The `LICENSE.md` text of a new project: [suppliedText] when the author
+  /// gave one, checked against [manifest]'s license, or the built-in text of
+  /// that license.
+  String _scaffoldLicenseText(ModManifest manifest, String? suppliedText) =>
+      suppliedText == null
+      ? _builtInScaffoldLicense(manifest)
+      : _validateSuppliedLicense(manifest, suppliedText);
 
   String _validateSuppliedLicense(ModManifest manifest, String text) {
     if (manifest.license == TopiaForgeScaffoldDefaults.unresolvedLicense) {

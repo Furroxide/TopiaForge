@@ -266,7 +266,7 @@ const List<String> gameBuildBumpTargets = <String>[
   'tools/release/test-verify-robotopia-install.ps1',
   'packages/launcher_domain/lib/src/models/runtime_dependency_models.dart',
   'packages/launcher_domain/test/runtime_versions_test.dart',
-  'packages/launcher_data/lib/src/local_developer_repository/mod_scaffolding.dart',
+  'packages/launcher_data/lib/src/local_developer_repository/mod_scaffold_plan.dart',
   'packages/launcher_data/test/sdk_reference_pack_test.dart',
   'apps/topiaforge_cli/test/release_game_build_policy_test.dart',
   'apps/topiaforge_cli/test/topiaforge_cli_dev_cases.dart',
