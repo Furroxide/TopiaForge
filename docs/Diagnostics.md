@@ -220,7 +220,9 @@ Keep `RestorePackagesWithLockFile` on, as the templates set it, and run `topiafo
 records that path, or declare `NuGetLockFilePath` in the project file itself as a literal path: the check
 does not evaluate MSBuild, so a path set in an imported file with `obj` moved elsewhere, or set through a
 property expression, cannot be followed. If an `obj` folder left beside the project from before it moved
-names an old path, delete that folder.
+names an old path, delete that folder. If the project file declares `NuGetLockFilePath` but NuGet put the
+lock file elsewhere, a later setting, a condition or an import sets another path, or none: make the project
+file's declaration the one that applies.
 
 ## Multiplayer contract diagnostics
 

@@ -53,16 +53,23 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
             '${projectNamedNuGetLockFileName(project)} and $lockName beside '
                 '$name, and obj/project.assets.json recorded no other path',
         };
+        // NuGet writes the lock file where NuGetLockFilePath says, so a path
+        // the project declares where NuGet wrote nothing is not the one that
+        // applies.
+        final next = location.source == NuGetLockFileSource.declared
+            ? 'NuGet did not write it there, so a later setting, a condition '
+                  'or an import sets NuGetLockFilePath to another path, or to '
+                  'none. ${_applyDeclaredLockFilePath(name)}'
+            : 'Keep RestorePackagesWithLockFile on, as the template sets it, '
+                  'and run `topiaforge restore` again. If NuGetLockFilePath '
+                  'moves the lock file, keep obj beside $name, where the '
+                  'restore records that path, or declare NuGetLockFilePath in '
+                  '$name itself as a literal path.';
         issues.add(
           _restoreIssue(
             'TF1103: No NuGet lock file was found for $name after its '
                 'restore: restore looked for $lookedFor. So the SDK versions '
-                'NuGet resolved cannot be checked. Keep '
-                'RestorePackagesWithLockFile on, as the template sets it, and '
-                'run `topiaforge restore` again. If NuGetLockFilePath moves '
-                'the lock file, keep obj beside $name, where the restore '
-                'records that path, or declare NuGetLockFilePath in $name '
-                'itself as a literal path.',
+                'NuGet resolved cannot be checked. $next',
             'TF1103',
           ),
         );
@@ -76,20 +83,23 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
             'the obj/project.assets.json beside $name that names it is left '
                 'from an earlier restore, so delete that obj folder',
           NuGetLockFileSource.declared =>
-            '$name declares that NuGetLockFilePath puts it there, but an '
-                'import or a condition sets another path',
+            '$name declares that NuGetLockFilePath puts it there, but a later '
+                'setting, a condition or an import sets another path, or none',
           NuGetLockFileSource.projectNamed || NuGetLockFileSource.beside =>
             'something outside $name sets NuGetLockFilePath, and obj is not '
                 'beside $name to record where',
         };
+        final next = location.source == NuGetLockFileSource.declared
+            ? _applyDeclaredLockFilePath(name)
+            : 'Keep obj beside $name, where the restore records where '
+                  'NuGetLockFilePath puts the lock file, or declare '
+                  'NuGetLockFilePath in $name itself as a literal path, then '
+                  'run `topiaforge restore` again.';
         issues.add(
           _restoreIssue(
             'TF1103: $lockName, the NuGet lock file found for $name, was not '
                 'written by its restore, so it does not say which SDK '
-                'versions NuGet resolved: $cause. Keep obj beside $name, '
-                'where the restore records where NuGetLockFilePath puts the '
-                'lock file, or declare NuGetLockFilePath in $name itself as a '
-                'literal path, then run `topiaforge restore` again.',
+                'versions NuGet resolved: $cause. $next',
             'TF1103',
           ),
         );
@@ -168,6 +178,15 @@ extension LocalDeveloperRestoredSdkCheck on LocalDeveloperRepository {
         message: '$message See $_docs/$code',
         subjectId: subject,
       );
+
+  /// The way past TF1103 when NuGet did not follow the NuGetLockFilePath
+  /// that [name], a project file, declares: a later setting, a condition or
+  /// an import sets another path, or none, so declaring it again changes
+  /// nothing.
+  String _applyDeclaredLockFilePath(String name) =>
+      'Make the NuGetLockFilePath that $name declares the one that applies, '
+      'or keep obj beside $name, where the restore records the path NuGet '
+      'used, then run `topiaforge restore` again.';
 
   /// The implicitly imported files from [project]'s folder up that name
   /// [packageId], relative to the mod [root] when they are inside it.
