@@ -426,6 +426,8 @@ internal static class Program
             NatSignalingTests.TheWebSocketClientRefusesAbuseAndNamesFailures();
             SignalingUpgradeTests.RedirectsToTheUpgradeAreNeverFollowed();
             SignalingUpgradeTests.UpgradesOfTheWrongShapeAreRefused();
+            SignalingUpgradeTests.UpgradesSpelledAnyWayTheRfcAllowsOpen();
+            SignalingUpgradeTests.ARefusedUpgradeClosesItsConnection();
             SignalingUpgradeTests.TheUpgradeKeepsTheClientsDeadlinesAndShape();
             SignalingUpgradeTests.TheUpgradeKeepsTheClientsCertificateCheck();
             NatPortMappingTests.NatPmpFramesFollowRfc6886();

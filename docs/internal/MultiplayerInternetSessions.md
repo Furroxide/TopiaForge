@@ -94,11 +94,13 @@ runtime's. The small client keeps every rule in this code, and runs the same on 
   `Connection: Upgrade`, a fresh 16-byte `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13` and the credential's
   `Authorization: Bearer`, then reads the answer's head by the rules above, skipping no interim answer. Only an
   HTTP/1.1 `101` with one `Upgrade: websocket`, a `Connection` that names the upgrade and one `Sec-WebSocket-Accept`
-  made from the key opens it. Any other status, a redirect included, is a refusal and is never followed, and so is
-  an extension or subprotocol never offered, or a body's framing. The connection, with any bytes that came behind
-  the head, then goes to `WebSocket.CreateFromStream`, so no runtime's own WebSocket client, with its own proxy and
-  redirect rules, is involved. Opening ends as unreachable when the connection fails, times out or ends before the
-  head does, and as refused for every answer that does not upgrade.
+  made from the key opens it. Header names and the `websocket` and `upgrade` tokens are read in any case, and
+  `Connection` may list other tokens, as RFC 7230 allows. Any other status, a redirect included, is a refusal and is
+  never followed, and so is an extension or subprotocol never offered, or a body's framing. The connection, with any
+  bytes that came behind the head, then goes to `WebSocket.CreateFromStream`, so no runtime's own WebSocket client,
+  with its own proxy and redirect rules, is involved. Opening ends as unreachable when the connection fails, times
+  out or ends before the head does, and as refused for every answer that does not upgrade; either way the connection
+  is closed at once.
 
 ## 4. Reading the service's answers
 
@@ -302,8 +304,8 @@ network.
 | Class | Covers |
 | --- | --- |
 | `ControlPlaneClientTests` | Requests and answers byte for byte against the shared recordings in `tests/fixtures/multiplayer/control-plane/`; the wire form; errors read by code and status; strict readers |
-| `ControlPlaneHttpTests` | Oversized, malformed, slow and silent answers; redirects; certificate names; no proxy; a fuzz of hostile answers that must never throw |
-| `SignalingUpgradeTests` | The signaling socket's upgrade: 301, 302, 307 and 308 never followed; answers of the wrong shape refused; the HTTPS client's deadlines and certificate check; exactly the headers it needs |
+| `ControlPlaneHttpTests` | Oversized, malformed, slow and silent answers; a TLS handshake that never finishes; redirects; certificate names; no proxy; a fuzz of hostile answers that must never throw |
+| `SignalingUpgradeTests` | The signaling socket's upgrade: 301, 302, 307 and 308 never followed; answers of the wrong shape refused, and their connection closed at once; answers spelled any way the RFCs allow opened; the HTTPS client's deadlines, a TLS handshake that never finishes included, and its certificate check; exactly the headers it needs |
 | `ControlPlaneFakeTests` | The fake service answers as the recordings do |
 | `InternetConfigurationTests` | A LAN host contacts nothing; a launch's origin comes first; invite and listing launches go through the service; the signaling socket asks no proxy the system or the environment names |
 | `InternetHostingTests` | Heartbeats, expiry and re-registration; 429 and 503 with backoff and `Retry-After`; the kill switch and degraded status; hostile answers; invites through the SPI; descriptor updates |

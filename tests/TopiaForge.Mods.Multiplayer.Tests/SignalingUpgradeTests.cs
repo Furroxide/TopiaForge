@@ -83,6 +83,62 @@ internal static class SignalingUpgradeTests
             "an upgrade of the right shape opens, and a frame that came with it arrives (" + opened.State + ", " + opened.CloseReason + ")");
     }
 
+    internal static void UpgradesSpelledAnyWayTheRfcAllowsOpen()
+    {
+        // Header names and the upgrade's tokens are read without regard to case, and Connection is a list (RFC 7230,
+        // RFC 6455): an edge that writes them in lower case, or adds headers of its own, is never refused.
+        var spellings = new (string Name, Func<string, string> Answer)[]
+        {
+            ("lower-case names and tokens", key => "HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: upgrade\r\nsec-websocket-accept: " + SignalingUpgrade.Accept(key) + "\r\n\r\n"),
+            ("an edge's own headers and a mixed-case protocol", key => "HTTP/1.1 101 Switching Protocols\r\nDate: Thu, 22 Oct 2026 10:00:00 GMT\r\nConnection: upgrade\r\nUpgrade: WebSocket\r\n" +
+                                                                       "Sec-WebSocket-Accept: " + SignalingUpgrade.Accept(key) + "\r\nServer: edge\r\n\r\n"),
+            ("a Connection that lists other tokens as well", key => Upgrade(key).Replace("Connection: Upgrade", "Connection: keep-alive, Upgrade", StringComparison.Ordinal))
+        };
+        foreach (var (name, answer) in spellings)
+        {
+            using var server = Answering(answer);
+            using var client = Open(server.Port);
+            That(Wait(() => client.State == SignalingState.Open), "an upgrade with " + name + " opens the socket (" + client.State + ", " + client.CloseReason + ")");
+        }
+    }
+
+    internal static void ARefusedUpgradeClosesItsConnection()
+    {
+        // The connection, TLS and socket both, goes as soon as the answer is refused, rather than whenever it is collected.
+        var refusals = new[]
+        {
+            LoopbackHttpServer.Answer(401, """{"error":{"code":"unauthorized","message":"Sign in."}}"""),
+            "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:9/\r\nContent-Length: 0\r\n\r\n"
+        };
+        foreach (var refusal in refusals)
+        {
+            var closed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var server = new LoopbackHttpServer(async (_, stream, token) =>
+            {
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(refusal), token);
+                await stream.FlushAsync(token);
+                using var holding = CancellationTokenSource.CreateLinkedTokenSource(token);
+                holding.CancelAfter(3_000);
+                try
+                {
+                    closed.TrySetResult(await stream.ReadAsync(new byte[16], holding.Token) == 0);
+                }
+                catch (OperationCanceledException)
+                {
+                    closed.TrySetResult(false);
+                }
+                catch (IOException)
+                {
+                    // Reset rather than closed: gone all the same.
+                    closed.TrySetResult(true);
+                }
+            });
+            using var client = Open(server.Port);
+            That(closed.Task.Wait(6_000) && closed.Task.Result && Wait(() => client.CloseReason == SignalingCloseReason.Refused),
+                "a refused upgrade closes its connection at once (" + refusal.Substring(9, 3) + ": " + client.State + ", " + client.CloseReason + ")");
+        }
+    }
+
     internal static void TheUpgradeKeepsTheClientsDeadlinesAndShape()
     {
         using (var silent = new LoopbackHttpServer((_, _, token) => Task.Delay(Timeout.Infinite, token)))
@@ -114,6 +170,23 @@ internal static class SignalingUpgradeTests
             using var client = Open(trickle.Port, TimeSpan.FromSeconds(1));
             That(Wait(() => client.State == SignalingState.Closed, 6_000) && client.CloseReason == SignalingCloseReason.Unreachable && clock.Elapsed < TimeSpan.FromSeconds(4),
                 "an answer sent a byte at a time ends at the deadline (" + client.CloseReason + ", " + clock.ElapsedMilliseconds + " ms)");
+        }
+
+        // A service that takes the connection but never finishes TLS: the deadline closes the connection under the handshake.
+        var mute = new TcpListener(IPAddress.Loopback, 0);
+        mute.Start();
+        try
+        {
+            That(ControlPlaneOrigin.TryParse("https://localhost:" + ((IPEndPoint)mute.LocalEndpoint).Port, out var origin), "a service origin with a port parses");
+            var transport = new HttpsControlPlaneTransport(origin, _ => Task.FromResult(new[] { IPAddress.Loopback })) { TotalTimeout = TimeSpan.FromSeconds(1) };
+            var clock = Stopwatch.StartNew();
+            using var client = SignalingUpgrade.Open(transport, ServerId, "tfj1_ticket", TimeSpan.FromSeconds(30));
+            That(Wait(() => client.State == SignalingState.Closed, 6_000) && client.CloseReason == SignalingCloseReason.Unreachable && clock.Elapsed < TimeSpan.FromSeconds(4),
+                "a service that never finishes TLS is given up on at the deadline (" + client.CloseReason + ", " + clock.ElapsedMilliseconds + " ms)");
+        }
+        finally
+        {
+            mute.Stop();
         }
 
         var closed = new TcpListener(IPAddress.Loopback, 0);
