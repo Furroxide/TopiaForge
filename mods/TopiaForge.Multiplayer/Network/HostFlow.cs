@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Sockets;
 using TopiaForge.Mods;
 using TopiaForge.Multiplayer.ControlPlane;
@@ -53,28 +54,45 @@ namespace TopiaForge.Multiplayer.Network
         /// IPv6 /64, never the port. Null where it cannot be told, as through a relay. Only the network layer reads it.
         /// </summary>
         byte[]? NetworkOf(TransportPath path);
+
+        /// <summary>
+        /// Gets whether a game socket this factory opened runs over IPv4 alone, because the system has no IPv6: the fallback
+        /// <see cref="UdpSocketDriver.IPv4Only"/> records. Once true it stays true. It names no address.
+        /// </summary>
+        bool OpenedIPv4Only { get; }
     }
 
     /// <summary>The game's networks: a <see cref="NetworkThread"/> over a <see cref="UdpSocketDriver"/>, with TCP and LAN services.</summary>
     internal sealed class SocketNetworkFactory : INetworkFactory
     {
         private readonly Func<long> clock;
+        private readonly IPAddress? bindAddress;
+        private readonly bool withoutIPv6;
 
-        internal SocketNetworkFactory(Func<long> clock)
+        /// <param name="bindAddress">
+        /// The address the game socket binds, every local address by default. Tests bind a loopback address, as every test
+        /// socket does.
+        /// </param>
+        /// <param name="withoutIPv6">Opens the game socket a system without IPv6 gets, on any system; tests use it.</param>
+        internal SocketNetworkFactory(Func<long> clock, IPAddress? bindAddress = null, bool withoutIPv6 = false)
         {
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            this.bindAddress = bindAddress;
+            this.withoutIPv6 = withoutIPv6;
         }
+
+        public bool OpenedIPv4Only { get; private set; }
 
         public INetworkControl Start(int port, NetworkStack stack)
         {
-            var thread = new NetworkThread("TopiaForge multiplayer network", new UdpSocketDriver(port), stack, clock);
+            var thread = new NetworkThread("TopiaForge multiplayer network", OpenGameSocket(port), stack, clock);
             thread.Start();
             return thread;
         }
 
         public TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options)
         {
-            var nat = NatPlumbing.Wrap(new UdpSocketDriver(port), options, clock);
+            var nat = NatPlumbing.Wrap(OpenGameSocket(port), options, clock);
             var thread = new NetworkThread("TopiaForge multiplayer network", nat.Socket, stack, clock);
             thread.Attach(nat.Service);
             thread.Start();
@@ -90,6 +108,14 @@ namespace TopiaForge.Multiplayer.Network
         public string? SourceOf(TransportPath path) => UdpPaths.SourceOf(path);
 
         public byte[]? NetworkOf(TransportPath path) => UdpPaths.NetworkOf(path);
+
+        /// <summary>Opens a game socket, and notes when it is the IPv4 socket a system without IPv6 gets.</summary>
+        private UdpSocketDriver OpenGameSocket(int port)
+        {
+            var socket = new UdpSocketDriver(port, bindAddress, withoutIPv6);
+            if (socket.IPv4Only) OpenedIPv4Only = true;
+            return socket;
+        }
     }
 
     /// <summary>

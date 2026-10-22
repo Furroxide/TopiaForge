@@ -200,6 +200,43 @@ namespace TopiaForge.ModManager.Tests
             That(joined.Control.LastJoin!.TrustedServerId == new string('7', 64), "and trusting joins that one server only");
         }
 
+        /// <summary>
+        /// A host only IPv6 reaches, from a computer without IPv6, is told as this computer's own limit, with what to ask the
+        /// host for: CONNECT's check says so and asks nothing, and a join that ends that way offers neither retry, since the
+        /// same address cannot work, nor trust. Nothing names the address.
+        /// </summary>
+        private static void AJoinThatNeedsIPv6SaysThisComputerHasNone()
+        {
+            var words = LiveFailureMessages.ForJoin(InternalLiveFailure.NoIPv6, InternalAdmissionCode.Other);
+            That(words.Title == "No IPv6 on this computer" && words.Message == LiveFailureMessages.WithoutIPv6 && words.Step == ConnectingStep.Resolving &&
+                 !words.Retryable && !words.CanTrust && !words.LauncherHelps &&
+                 words.Message != LiveFailureMessages.ForJoin(InternalLiveFailure.Unreachable, InternalAdmissionCode.Other).Message,
+                "a join that needs IPv6 is worded on its own, not as an unreachable host (" + words.Title + ")");
+
+            var rig = new SessionsRig();
+            rig.Presenter.Connect.SetAddress("[2001:db8::5]:27250");
+            rig.Presenter.Connect.JoinAddress();
+            rig.Frame();
+            rig.Control.Queries[0].Complete(InternalLiveFailure.NoIPv6);
+            rig.Frame();
+            var result = rig.Presenter.Connect.ResultText;
+            That(result == "No IPv6 on this computer. " + LiveFailureMessages.WithoutIPv6 && rig.Prompt == null && !Shows(result) &&
+                 !rig.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)),
+                "CONNECT's check says this computer has no IPv6 and what to ask the host for, asks nothing and joins nothing (" + result + ")");
+
+            var joined = new SessionsRig();
+            joined.Presenter.Connect.SetAddress("[2001:db8::5]:27250");
+            joined.Presenter.Connect.JoinAddress();
+            joined.Frame();
+            joined.Control.Queries[0].Complete(InternalLiveFailure.None, Server('3', "Typed"));
+            joined.Frame();
+            joined.Status(InternalSessionRole.Solo, InternalJoinPhase.Ended, InternalLiveFailure.NoIPv6);
+            joined.Frame();
+            var overlay = joined.Presenter.Connecting;
+            That(overlay.HasFailed && overlay.FailureTitle == "No IPv6 on this computer" && !overlay.CanRetry && !overlay.CanTrust && !overlay.FailureLines.Any(Shows),
+                "a join that ends that way says the same, and offers neither retry nor trust (" + overlay.FailureTitle + ")");
+        }
+
         private static void CopiedDetailsNeverHoldAnAddress()
         {
             var rig = new SessionsRig();

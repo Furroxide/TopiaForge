@@ -235,4 +235,7 @@ internal sealed class TraversalNetworkFactory : INetworkFactory
     public string? SourceOf(TransportPath path) => UdpPaths.SourceOf(path);
 
     public byte[]? NetworkOf(TransportPath path) => UdpPaths.NetworkOf(path);
+
+    /// <summary>Gets whether a game socket this factory opened runs over IPv4 alone; the simulated sites never fall back.</summary>
+    public bool OpenedIPv4Only => false;
 }

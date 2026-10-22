@@ -37,6 +37,7 @@ namespace TopiaForge.Multiplayer
         private JoinPhase observedJoinPhase;
         private string? appliedName;
         private bool displayNameFailed;
+        private bool reportedIPv4Only;
         private bool disposed;
 
         internal InternalControl(MultiplayerProvider provider, RuntimeContent content, RoutedDiagnostics diagnostics, DeveloperSessions? developer = null)
@@ -409,7 +410,23 @@ namespace TopiaForge.Multiplayer
                 ApplyDisplayName();
             }
 
-            if (live != null) ObserveFailures(live);
+            if (live != null)
+            {
+                ObserveFailures(live);
+                ObserveNetwork(live);
+            }
+        }
+
+        /// <summary>
+        /// Says once, for the diagnostics bundle, that the multiplayer network runs over IPv4 alone, the first time a game
+        /// socket opens that way. Where IPv6 exists it says nothing. It names no address.
+        /// </summary>
+        private void ObserveNetwork(LiveSessions sessions)
+        {
+            if (reportedIPv4Only || !sessions.NetworkRunsIPv4Only) return;
+            reportedIPv4Only = true;
+            diagnostics.Report(new InternalMultiplayerDiagnostic(InternalDiagnosticSeverity.Info, "live.network-ipv4-only",
+                "The multiplayer network runs over IPv4 only, because this computer has no IPv6."));
         }
 
         private bool NameChanged()

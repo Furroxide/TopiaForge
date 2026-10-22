@@ -236,6 +236,11 @@ internal static class Program
             NetworkSocketTests.StoppingHonoursItsGracePeriod();
             NetworkServiceTests.TheDescriptorEndpointServesOnlyWhatItShould();
             NetworkServiceTests.WithoutIPv6TheDescriptorEndpointAndClientUseIPv4();
+            NoIPv6JoinTests.AJoinThatNeedsIPv6EndsBeforeAnyPacket();
+            NoIPv6JoinTests.WithoutIPv6AnIPv6AddressFailsAtOnce();
+            NoIPv6JoinTests.WhereIPv6ExistsNothingChanges();
+            NoIPv6JoinTests.InvitesAndListedServersJoinAsBefore();
+            NoIPv6JoinTests.TheDiagnosticsSayWhenTheNetworkRunsIPv4Only();
             NetworkServiceTests.LanBrowsersFindAnnouncedHosts();
             NetworkServiceTests.AMovedServerIsHeardAfresh();
             LanBrowserShareTests.ALanSenderHoldsAtMostItsShareOfTheList();

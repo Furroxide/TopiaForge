@@ -358,7 +358,8 @@ whose last part mixes cases, such as `System.Net.Sockets.SocketException`, stay;
 hyphenated part (`content.admission-failed`). A failure's exception keeps its type; its message and, for errors, its
 stack trace are redacted too, and an inner failure is never written. The newest 64 redacted lines stay for the
 diagnostics bundle. A live join that ends is reported by its failure's name only, since a kick's message is the host's
-own text.
+own text. The first time a game socket opens over IPv4 alone, because the system has no IPv6, the provider says so once,
+as the information `live.network-ipv4-only`, without an address (`MultiplayerLiveSessions.md`, section 13).
 
 The provider's own log takes a diagnostic when no runtime is attached, before ModRuntime attaches or after it detaches,
 and when the attached runtime throws instead of taking one. It gets the line the runtime would have written: the
