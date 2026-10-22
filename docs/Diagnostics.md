@@ -77,13 +77,31 @@ the loader-owned renderer.
 **Blocking wait on an SDK task.**
 
 The code calls `.Result`, `.Wait()`, or `.GetAwaiter().GetResult()` on a task. Asynchronous SDK work —
-asset bundles, prefabs, custom-world content, scene loads — is driven by the game's own loader and
-completes on the main thread. Blocking that thread stops the frame loop that would have completed the
-task, so the task never finishes and the game hangs with no recovery but ending the process.
+asset bundles, prefabs, custom-world content, scene loads, multiplayer commands — is driven by the
+game's own frame loop and completes on the main thread. Blocking that thread stops the frame loop that
+would have completed the task, so the task never finishes and the game hangs with no recovery but
+ending the process.
 
-Use `PendingOperation<T>` — the SDK primitive for exactly this. It starts the work, polls it, and never
-waits. It also surfaces a result that arrives *after* you cancelled or timed out, so game objects the
-SDK still handed back are released on the main thread instead of leaking:
+For a multiplayer command, call the generated `Submit...` method instead of waiting on
+`Submit...Async`. It hands the host's answer to a callback on the main thread, never once the mod has
+stopped, and for the player whose action submitted the command, as the code after an `await` acts:
+
+```csharp
+SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
+{
+    if (!answer.Result.Succeeded) ShowRefusal(answer.Result.ErrorMessage);
+});
+```
+
+The message names the method to call, and the IDE's quick fix rewrites the wait for you: the
+statements that read the confirmation move into the callback. It offers no fix where moving them would
+change what they do, such as a `return` or an `await` after the wait, or a local they assign that code
+after them reads. See
+[Multiplayer](Multiplayer.md#submit-a-command-and-read-its-answer) for the answer's rules.
+
+For other SDK work, use `PendingOperation<T>` — the SDK primitive for exactly this. It starts the work,
+polls it, and never waits. It also surfaces a result that arrives *after* you cancelled or timed out, so
+game objects the SDK still handed back are released on the main thread instead of leaking:
 
 ```csharp
 private readonly PendingOperation<IAssetBundle> load = new PendingOperation<IAssetBundle>();
@@ -299,7 +317,7 @@ Replicated state and presentation-event codecs must stay within the 1 MiB transp
 
 **Generated multiplayer member name collision.**
 
-A declaration would generate a member, such as `Submit...Async` or `Emit...To`, that already exists. Rename the handler or the conflicting member.
+A declaration would generate a member, such as `Submit...`, `Submit...Async` or `Emit...To`, that already exists. Rename the handler or the conflicting member.
 
 ### TFMP013
 

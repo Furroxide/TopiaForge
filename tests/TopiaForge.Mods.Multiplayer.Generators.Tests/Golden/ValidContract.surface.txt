@@ -1,5 +1,5 @@
 hint=Sample_GameContract.Multiplayer.g.cs
-sourceSha256=12da60d53130a72f29e471746ae793a9d63281627e73e46ee06880f8ad2ead32
+sourceSha256=3cea89e5addf0895e512c870f590957d0dbbfe5dce35d68bac51e37f0abdfff2
 public global::TopiaForge.Mods.MultiplayerContractDescriptor MultiplayerContractDescriptor { get; } =
 new global::TopiaForge.Mods.MultiplayerContractDescriptor("sample.contract", 1, "0fd3f5bfa617d6ea847658d520fc76a75b5ff6ca727823d3bacdb9a7ffd35572",
 new string[] { "sample.contract/score" },
@@ -12,6 +12,8 @@ var state_score = this.score.Bind(session, "sample.contract/score", __TopiaForge
 var command_Increment_0 = session.RegisterCommand(new global::TopiaForge.Mods.MultiplayerCommandDefinition<global::Sample.IncrementRequest, global::Sample.IncrementResponse>(__topiaforgeCommandType_Increment, __TopiaForgeCodec_Sample_IncrementRequest_ae2d5dcd.Instance, __TopiaForgeCodec_Sample_IncrementResponse_acefcde1.Instance, this.Increment, (global::TopiaForge.Mods.PredictionMode)1, 20, 512));
 var objectType_Robot_0 = session.RegisterObjectType(new global::TopiaForge.Mods.ReplicatedObjectTypeDefinition<global::Sample.ObjectState, global::Sample.ObjectInput>(__topiaforgeObjectType_Robot, __TopiaForgeCodec_Sample_ObjectState_3dfb9684.Instance, __TopiaForgeCodec_Sample_ObjectInput_21c6a6b2.Instance, ApplyObjectInput, (global::TopiaForge.Mods.PredictionMode)1, 12, 256));
 var presentation_Spark_0 = session.RegisterPresentation(new global::TopiaForge.Mods.PresentationEventDefinition<global::Sample.SparkEvent>(__topiaforgeEventType_Spark, session.Snapshot.ProcessKind == global::TopiaForge.Mods.MultiplayerProcessKind.Interactive ? (global::System.Action<global::Sample.SparkEvent>)this.OnSpark : null));
+public void SubmitIncrement(global::Sample.IncrementRequest request, global::System.Action<global::TopiaForge.Mods.MultiplayerCommandConfirmation<global::Sample.IncrementResponse>>? answered = null, global::System.Threading.CancellationToken cancellationToken = default)
+global::TopiaForge.Mods.MultiplayerAnswers.Submit<global::Sample.IncrementRequest, global::Sample.IncrementResponse>(session, __topiaforgeCommandType_Increment, request, answered, binding.Stopping, cancellationToken);
 public global::System.Threading.Tasks.Task<global::TopiaForge.Mods.MultiplayerCommandConfirmation<global::Sample.IncrementResponse>> SubmitIncrementAsync(global::Sample.IncrementRequest request, global::System.Threading.CancellationToken cancellationToken = default)
 public global::TopiaForge.Mods.OperationResult<global::TopiaForge.Mods.IReplicatedObject<global::Sample.ObjectState, global::Sample.ObjectInput>> SpawnRobotObject(global::Sample.ObjectState initialState, global::TopiaForge.Mods.ParticipantId? ownerId = null)
 public global::System.IDisposable SubscribeRobotObjects(global::System.Action<global::TopiaForge.Mods.ReplicatedObjectChange<global::Sample.ObjectState, global::Sample.ObjectInput>> handler)

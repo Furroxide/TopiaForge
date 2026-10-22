@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace {{ASSEMBLY_NAME}}
@@ -36,11 +34,6 @@ namespace {{ASSEMBLY_NAME}}
 
         // TopiaForge reserves F5, F8 and F10, so a mod's default binding must avoid them.
         private const string DefaultPressKey = "K";
-
-        // Presses the host has not answered yet. A client's presses are answered a round trip later; the host's own
-        // presses, solo play included, are answered before SubmitIncrementAsync returns.
-        private readonly List<Task<MultiplayerCommandConfirmation<CounterState>>> unansweredPresses =
-            new List<Task<MultiplayerCommandConfirmation<CounterState>>>();
 
         /// <summary>
         /// The shared count. The host's copy is canonical: a joining player receives it in their first snapshot, and
@@ -80,13 +73,14 @@ namespace {{ASSEMBLY_NAME}}
             Context.Events.SubscribeSceneLoaded(ShowHudForWorld);
             Context.Events.SubscribeUpdate(_ =>
             {
-                // A press counts only where the player can see its result: in a world, with the HUD up.
+                // A press counts only where the player can see its result: in a world, with the HUD up. The host's
+                // answer comes back to ShowRefusal on this thread: at once for the host's own player, solo play
+                // included, and a round trip later for anyone else. Nothing waits for it, so the frame never stalls
+                // (TF1008), and it never runs once this mod has stopped.
                 if (hud != null && pressAction.WasPressed)
                 {
-                    Press();
+                    SubmitIncrement(new IncrementRequest(), ShowRefusal);
                 }
-
-                ReadAnsweredPresses();
             });
 
             Context.Logger.Info(
@@ -165,42 +159,14 @@ namespace {{ASSEMBLY_NAME}}
                     "The shared count is already at its maximum.")
                 : OperationResult<CounterState>.Success(new CounterState { Count = current.Count + 1 }));
 
-        private void Press()
+        /// <summary>Tells the presser why the host refused a press. An accepted press needs no word: the HUD shows it.</summary>
+        private void ShowRefusal(MultiplayerCommandConfirmation<CounterState> answer)
         {
-            // Submit and keep the task; never wait on it. The answer completes the task on this thread, and waiting
-            // here would stop the very frame loop that delivers it (TF1008).
-            unansweredPresses.Add(SubmitIncrementAsync(new IncrementRequest(), Context.Lifetime.StoppingToken));
-        }
-
-        private void ReadAnsweredPresses()
-        {
-            var index = 0;
-            while (index < unansweredPresses.Count)
+            var code = answer.Result.ErrorCode;
+            if (answer.Result.Succeeded || code == ModErrorCode.Cancelled)
             {
-                var press = unansweredPresses[index];
-                if (!press.IsCompleted)
-                {
-                    index++;
-                    continue;
-                }
-
-                unansweredPresses.RemoveAt(index);
-
-                // The task has completed, so reading it returns at once instead of blocking the frame.
-                var confirmation = press.GetAwaiter().GetResult();
-                if (!confirmation.Result.Succeeded)
-                {
-                    ReportRefusal(confirmation.Result.ErrorCode, confirmation.Result.ErrorMessage);
-                }
-            }
-        }
-
-        private void ReportRefusal(ModErrorCode code, string message)
-        {
-            if (code == ModErrorCode.Cancelled)
-            {
-                // Withdrawn before the host answered: the connection or the session went away, or this mod is
-                // stopping. The HUD already shows whatever the host counted, so there is nothing to add.
+                // Cancelled means withdrawn before the host answered: the connection or the session went away. The
+                // HUD already shows whatever the host counted, so there is nothing to add.
                 return;
             }
 
@@ -224,7 +190,7 @@ namespace {{ASSEMBLY_NAME}}
                     Context.Ui.ShowToast("The session is not ready yet; press again in a moment.", UiTone.Warning);
                     return;
                 default:
-                    Context.Ui.ShowToast("The host refused the press: " + message, UiTone.Warning);
+                    Context.Ui.ShowToast("The host refused the press: " + answer.Result.ErrorMessage, UiTone.Warning);
                     return;
             }
         }

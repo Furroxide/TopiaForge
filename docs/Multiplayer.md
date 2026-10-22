@@ -143,6 +143,37 @@ The command builds the mod, reads generator-owned metadata, and atomically write
 hashes. `topiaforge pack` independently rebuilds and refuses a missing, stale, or edited lock, so protocol changes are
 reviewable without making authors maintain hashes by hand.
 
+## Submit a command and read its answer
+
+Each command gets a `Submit...` method, named after its handler. It submits one command and hands the host's answer
+to a callback:
+
+```csharp
+private void AddFive() =>
+    SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
+    {
+        if (!answer.Result.Succeeded && answer.Result.ErrorCode != ModErrorCode.Cancelled)
+            Context.Ui.ShowToast("The host refused: " + answer.Result.ErrorMessage, UiTone.Warning);
+    });
+```
+
+The answer, a `MultiplayerCommandConfirmation<T>`, follows these rules:
+
+- It runs once, on the main thread. Where this process holds world authority, solo play included, the host answers
+  its own player before `Submit...` returns. A client's answer runs in the frame that brings the host's result, a
+  round trip later.
+- It acts for whoever's action submitted the command: the answer to a player's press counts as that player's own
+  action, as the code after an `await` does (see [The player's own actions](#the-players-own-actions)).
+- It never runs once the mod stops. To tie it to a shorter scope, pass that scope's token, such as a gamemode
+  session's `Context.Lifetime.StoppingToken`. Cancelling the token also withdraws the submission.
+- A session that ends or is replaced, or a connection that drops, answers a waiting submission with `Cancelled`.
+- A callback that throws is logged, and the session carries on.
+- Nothing polls, so a mod with nothing in flight pays nothing per frame. Pass no callback when the answer adds
+  nothing, for example when replicated state already shows the result.
+
+`Submit...Async` returns the same confirmation as a task, for tests. Game code uses `Submit...` instead: waiting on
+the task blocks the very frame its answer needs (TF1008), and an awaited continuation can run after the mod stops.
+
 ## Bandwidth budget
 
 A contract's declared client-to-server ceiling is the sum of `MaximumPerSecond` x `MaximumPayloadBytes` across its
@@ -296,8 +327,9 @@ always has.
 - **What counts as the player's action:** your mod's Update and LateUpdate in a frame where one of its `Context.Input`
   actions is pressed, released or held; a `Context.Ui` callback that the player's click, choice, typing or
   confirmation raises; a command the player runs, or that such code runs; and a `Context.Interactions` handler.
-- **What keeps it:** everything that code awaits, and everything it schedules through `Context.Scheduler` (`NextFrame`,
-  `After`, and each run of `Every`), including what a background task it started hands back through `Context.Scheduler`.
+- **What keeps it:** everything that code awaits, the answer to a command it submits through a generated `Submit...`
+  method, and everything it schedules through `Context.Scheduler` (`NextFrame`, `After`, and each run of `Every`),
+  including what a background task it started hands back through `Context.Scheduler`.
 - **What never has it:** a timer your mod's scripted code scheduled, such as one scheduled at load; FixedUpdate; later
   frames; other mods' code; and anything after the game starts or stops hosting, or joins or leaves a session.
 
@@ -306,7 +338,7 @@ Code that looks like the player's action but counts as a script, with its fix:
 | If your code | It counts as a script because | Do this instead |
 | --- | --- | --- |
 | Reads input in FixedUpdate, or in a timer scheduled at load | Only Update and LateUpdate carry the frame's input | Read input in Update or LateUpdate; the build warns about a press read in FixedUpdate ([TF1009](Diagnostics.md#tf1009)) |
-| Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling |
+| Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling; for a multiplayer command, hand the answer to its `Submit...` method |
 | Calls a service another mod published | The player's action belongs to your mod, so the other mod's code sees none | Run the other mod's command with `Context.Commands.TryExecute` |
 | Subscribes to Update from a click, to act for the player every frame | Frame subscribers are scripts | Schedule the work with `Context.Scheduler.Every` or `NextFrame` from the click |
 | Reads Unity's input or runs a Unity coroutine directly, as an `unsafe-native` mod can | The runtime sees neither | Use `Context.Input`, `Context.Scheduler` and `await` |

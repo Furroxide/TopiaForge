@@ -72,6 +72,7 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 AllowsAuthorsOwnMemberNamedLikeARetiredApi();
                 RunFixedUpdateInputTests();
                 EveryRuleLinksToItsEntry();
+                RunBlockingWaitFixTests();
                 Console.WriteLine("All TopiaForge analyzer tests passed.");
                 return 0;
             }

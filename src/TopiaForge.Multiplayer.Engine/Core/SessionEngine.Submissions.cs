@@ -7,12 +7,18 @@ namespace TopiaForge.Multiplayer.Engine
 {
     internal sealed partial class SessionEngine
     {
+        /// <summary>
+        /// Submits a command. Closing the <paramref name="submitter"/> facade, when given, cancels the command while it
+        /// still waits for the host. An <paramref name="answer"/>, when given, receives the same confirmation as the task: at
+        /// once for a refusal or a host's own command, otherwise at the settle point that completes the submission.
+        /// </summary>
         internal Task<MultiplayerCommandConfirmation<TResponse>> SubmitCommand<TRequest, TResponse>(
             string owner,
             MultiplayerCommandType<TRequest, TResponse> commandType,
             TRequest request,
             CancellationToken cancellationToken,
-            object? submitter = null)
+            object? submitter = null,
+            ICommandAnswer<TResponse>? answer = null)
             where TRequest : class
             where TResponse : class
         {
@@ -22,17 +28,19 @@ namespace TopiaForge.Multiplayer.Engine
             RequireOwnerThread();
             if (ended) throw new ObjectDisposedException(nameof(IMultiplayerSession));
             var refusal = SubmissionRefusal<TResponse>("Commands");
-            if (refusal != null) return Task.FromResult(refusal);
+            if (refusal != null) return Answered(refusal, answer);
             if (!commands.TryGetValue(new WireKey(owner, commandType.Id), out var found) ||
                 found is not CommandBinding<TRequest, TResponse> binding || !binding.IsActive)
             {
-                return Task.FromResult(Refused<TResponse>(
-                    ModErrorCode.NotFound,
-                    "Command '" + commandType.Id + "' is not registered with the requested generated types."));
+                return Answered(
+                    Refused<TResponse>(
+                        ModErrorCode.NotFound,
+                        "Command '" + commandType.Id + "' is not registered with the requested generated types."),
+                    answer);
             }
 
             var encoded = EngineCodec.Encode(binding.Definition.RequestCodec, request);
-            if (!encoded.TryGetValue(out var bytes)) return Task.FromResult(Refused<TResponse>(encoded.ErrorCode, encoded.ErrorMessage));
+            if (!encoded.TryGetValue(out var bytes)) return Answered(Refused<TResponse>(encoded.ErrorCode, encoded.ErrorMessage), answer);
             var sender = localParticipantId!.Value;
             if (Role == EngineRole.Host)
             {
@@ -43,7 +51,10 @@ namespace TopiaForge.Multiplayer.Engine
                     false,
                     binding.DecodeResponse(outcome));
                 EndOperation();
-                return Task.FromResult(confirmation);
+
+                // The settle point above presented the command's events, so the host's own player sees them before the
+                // answer, as a remote player does.
+                return Answered(confirmation, answer);
             }
 
             var pending = new PendingCommand<TRequest, TResponse>(
@@ -53,11 +64,21 @@ namespace TopiaForge.Multiplayer.Engine
                 epoch,
                 bytes,
                 CurrentTick,
-                binding.Prediction == PredictionMode.Owner)
+                binding.Prediction == PredictionMode.Owner,
+                answer)
             {
                 Submitter = submitter
             };
             return SubmitPending(pending, pending.Task, cancellationToken);
+        }
+
+        private static Task<MultiplayerCommandConfirmation<T>> Answered<T>(
+            MultiplayerCommandConfirmation<T> confirmation,
+            ICommandAnswer<T>? answer)
+            where T : class
+        {
+            answer?.Deliver(confirmation);
+            return Task.FromResult(confirmation);
         }
 
         internal Task<MultiplayerCommandConfirmation<TState>> SubmitObjectInput<TState, TInput>(

@@ -31,9 +31,10 @@ at exactly this SDK's version; it ships with TopiaForge and must be installed be
 - Each gameplay world gets a HUD of its own when it loads, and the main menu gets none; a press counts only while the
   HUD is up. Mods load before the game's first scene, and a scene that replaces another takes what was shown in it
   along, so the HUD is made for each world rather than in `OnLoad`.
-- The HUD follows the value its own process holds. Presses are submitted without waiting, and their answers are read
-  on a later frame, because waiting would stall the game (TF1008). A refused press shows a warning toast, at most one
-  a second, because every mod shares one toast queue.
+- The HUD follows the value its own process holds. A press calls `SubmitIncrement`, and the host's answer comes back
+  to a callback on the main thread: at once for the host's own player, a round trip later for anyone else, and never
+  once the mod has stopped. Nothing waits for the answer, so the game never stalls (TF1008). A refused press shows a
+  warning toast, at most one a second, because every mod shares one toast queue.
 
 ## Limits, and why
 
@@ -63,6 +64,6 @@ key binding.
   and check every one in `Increment`, because a client can send any value the codec accepts.
 - `tests/`: NUnit tests on the multiplayer test rig, covering the HUD in each world and none at the main menu, two
   players agreeing, a late joiner, a press past the rate limit being refused and rolled back, one warning for a burst
-  of refusals, a new session, and solo play.
+  of refusals, no answer once the mod has stopped, a new session, and solo play.
 
 See `docs/Multiplayer.md` and `docs/Diagnostics.md` (the TFMP codes) in the TopiaForge repository.
