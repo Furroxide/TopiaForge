@@ -247,11 +247,19 @@ namespace TopiaForge.Multiplayer.Network
         /// system refuses for any other reason says nothing about IPv6, so it reads as false and refuses nothing.
         /// </summary>
         /// <param name="withoutIPv6">Takes the IPv4 branch as a system without IPv6 does, on any system; tests use it.</param>
-        internal static bool RunsIPv4Only(bool withoutIPv6 = false)
+        internal static bool RunsIPv4Only(bool withoutIPv6 = false) =>
+            RunsIPv4Only(withoutIPv6 ? SocketError.AddressFamilyNotSupported : SocketError.Success);
+
+        /// <summary>
+        /// Gets the same answer with the probe's IPv6 socket refused with <paramref name="refusal"/> on any system unless it is
+        /// <see cref="SocketError.Success"/>, as <see cref="Open(SocketType, ProtocolType, SocketError)"/> refuses it; tests
+        /// use it. Only the refusal a system without IPv6 gives reads as IPv4 only.
+        /// </summary>
+        internal static bool RunsIPv4Only(SocketError refusal)
         {
             try
             {
-                using (var socket = Open(SocketType.Dgram, ProtocolType.Udp, withoutIPv6)) return socket.AddressFamily == AddressFamily.InterNetwork;
+                using (var socket = Open(SocketType.Dgram, ProtocolType.Udp, refusal)) return socket.AddressFamily == AddressFamily.InterNetwork;
             }
             catch (SocketException)
             {

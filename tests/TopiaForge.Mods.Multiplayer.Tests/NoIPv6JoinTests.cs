@@ -24,8 +24,9 @@ internal static class NoIPv6JoinTests
 
     /// <summary>
     /// Under the seam, an IPv6 address, typed or in a direct link, and a name that resolves to IPv6 alone fail as NoIPv6
-    /// before anything is fetched, relay-only included. An IPv4 address, a name with one, a name with none and a LAN
-    /// session resolve exactly as before, and none of them even asks whether the system has IPv6.
+    /// before anything is fetched, relay-only included. An IPv4 address, a name with one, plain or mapped into IPv6, a name
+    /// with none and a LAN session resolve exactly as before, and none of them even asks whether the system has IPv6. Only
+    /// the refusal a system without IPv6 gives makes the system's answer IPv4 only.
     /// </summary>
     internal static void WithoutIPv6AnIPv6AddressFailsAtOnce()
     {
@@ -40,6 +41,18 @@ internal static class NoIPv6JoinTests
             "the failure is 41, and the internal control reports it under the same code");
         That(IPSockets.RunsIPv4Only(withoutIPv6: true) && IPSockets.RunsIPv4Only() == !Socket.OSSupportsIPv6,
             "the seam runs the sockets over IPv4 alone, and without it they do so exactly where the system has no IPv6");
+
+        // A probe refused for any other reason, such as running out of sockets, says nothing about IPv6, so a passing failure
+        // never ends a join as NoIPv6.
+        That(IPSockets.RunsIPv4Only(SocketError.AddressFamilyNotSupported), "the refusal a system without IPv6 gives reads as IPv4 only");
+        foreach (var refusal in new[]
+                 {
+                     SocketError.TooManyOpenSockets, SocketError.NoBufferSpaceAvailable, SocketError.AccessDenied,
+                     SocketError.ProtocolNotSupported, SocketError.SocketNotSupported, SocketError.NetworkDown,
+                 })
+        {
+            That(!IPSockets.RunsIPv4Only(refusal), "a probe refused with " + refusal + " says nothing about IPv6, so it does not read as IPv4 only");
+        }
 
         // Global, loopback, link-local, unique-local and translated addresses alike: none is reachable over IPv4.
         foreach (var host in new[] { "2001:db8::7", "::1", "fe80::1", "fd00::5", "64:ff9b::cb00:7105" })
@@ -70,19 +83,22 @@ internal static class NoIPv6JoinTests
         var both = Resolve(resolver, JoinTarget.Direct("both.example", 27250), allowDirect: true);
         That(both.Failure == LiveFailure.None && contacted.Count == 1 && contacted[0].Equals(new IPEndPoint(IPAddress.Parse("203.0.113.5"), 27250)),
             "a name with an IPv4 address is fetched there first, as before (" + both.Failure + ")");
+        var mapped = Resolve(resolver, JoinTarget.Direct("mapped.example", 27250), allowDirect: true);
+        That(mapped.Failure == LiveFailure.None && contacted.Count == 2 && contacted[1].Address.Equals(IPAddress.Parse("::ffff:203.0.113.6")),
+            "and so is a name whose one address is an IPv4 address in its IPv6-mapped form, which an IPv4 socket reaches (" + mapped.Failure + ")");
         var typed = Resolve(resolver, JoinTarget.Direct("198.51.100.9", 27250), allowDirect: true);
-        That(typed.Failure == LiveFailure.None && typed.Path!.Kind == TransportPathKind.Direct && contacted.Count == 2 &&
-             contacted[1].Equals(new IPEndPoint(IPAddress.Parse("198.51.100.9"), 27250)),
+        That(typed.Failure == LiveFailure.None && typed.Path!.Kind == TransportPathKind.Direct && contacted.Count == 3 &&
+             contacted[2].Equals(new IPEndPoint(IPAddress.Parse("198.51.100.9"), 27250)),
             "an IPv4 address is fetched at that address and joined directly, as before (" + typed.Failure + ")");
         var lan = Resolve(resolver, JoinTarget.Direct("192.168.1.20", 27250), allowDirect: false);
-        That(lan.Failure == LiveFailure.None && lan.Path!.Kind == TransportPathKind.Lan && contacted.Count == 3, "a LAN address joins under relay-only, as before");
+        That(lan.Failure == LiveFailure.None && lan.Path!.Kind == TransportPathKind.Lan && contacted.Count == 4, "a LAN address joins under relay-only, as before");
         var nothing = Resolve(resolver, JoinTarget.Direct("nothing.example", 27250), allowDirect: true);
         That(nothing.Failure == LiveFailure.Unreachable && nothing.Detail == "The host name has no usable address.",
             "a name that resolves to nothing proves nothing about IPv6 and ends as before (" + nothing.Failure + ": " + nothing.Detail + ")");
         var heard = Resolve(resolver, JoinTarget.Lan(ServerId), allowDirect: false);
         That(heard.Failure == LiveFailure.NotFound && heard.Detail == "The session is no longer on the local network.",
             "a LAN session is looked for in the LAN list, as before (" + heard.Failure + ")");
-        That(probes == asked && contacted.Count == 3, "none of these asks whether the system has IPv6");
+        That(probes == asked && contacted.Count == 4, "none of these asks whether the system has IPv6");
     }
 
     /// <summary>
@@ -203,9 +219,10 @@ internal static class NoIPv6JoinTests
     }
 
     /// <summary>
-    /// The game's network factory notes the fallback from the socket it opens: always under the seam, and without it exactly
-    /// where the system has no IPv6. The diagnostics then say once, as information and without an address, that the network
-    /// runs over IPv4 only; where IPv6 exists, as on the virtual network, which never falls back, they say nothing new.
+    /// The game's network factory notes the fallback from every game socket it opens, a session's through the TopiaForge
+    /// service under the NAT layer included: always under the seam, and without it exactly where the system has no IPv6.
+    /// The diagnostics then say once, as information and without an address, that the network runs over IPv4 only; where
+    /// IPv6 exists, as on the virtual network, which never falls back, they say nothing new.
     /// </summary>
     internal static void TheDiagnosticsSayWhenTheNetworkRunsIPv4Only()
     {
@@ -219,6 +236,18 @@ internal static class NoIPv6JoinTests
                 That(factory.OpenedIPv4Only == (withoutIPv6 || !Socket.OSSupportsIPv6),
                     "a game socket opened " + (withoutIPv6 ? "under the seam" : "as the system allows") + " is noted as IPv4 only exactly when it is (" +
                     factory.OpenedIPv4Only + ")");
+            }
+
+            // A session through the TopiaForge service opens its game socket under the NAT layer, which contacts nothing
+            // until a session starts on it.
+            var traversing = new SocketNetworkFactory(Clock, IPAddress.Loopback, withoutIPv6);
+            var traversal = traversing.StartTraversal(0,
+                new NetworkStack(new TransportEndpoint(TransportPair.Key(187, withoutIPv6 ? 3 : 4), new TransportOptions(), Clock())),
+                new provider::TopiaForge.Multiplayer.NatTraversal.NatAgentOptions());
+            using (traversal.Network)
+            {
+                That(traversing.OpenedIPv4Only == (withoutIPv6 || !Socket.OSSupportsIPv6),
+                    "and so is one under the NAT layer, for a session through the TopiaForge service (" + traversing.OpenedIPv4Only + ")");
             }
         }
 
@@ -262,11 +291,15 @@ internal static class NoIPv6JoinTests
         });
     }
 
-    /// <summary>What the test's host names resolve to: IPv6 alone, both families, a local name with IPv6 alone, or nothing.</summary>
+    /// <summary>
+    /// What the test's host names resolve to: IPv6 alone, both families, IPv4 in its mapped form alone, a local name with IPv6
+    /// alone, or nothing.
+    /// </summary>
     private static Task<IPAddress[]> Names(string host) => Task.FromResult(host switch
     {
         "v6only.example" => new[] { IPAddress.Parse("2001:db8::7"), IPAddress.Parse("2001:db8::8") },
         "both.example" => new[] { IPAddress.Parse("2001:db8::7"), IPAddress.Parse("203.0.113.5") },
+        "mapped.example" => new[] { IPAddress.Parse("::ffff:203.0.113.6") },
         "printer.local" => new[] { IPAddress.Parse("fe80::5") },
         _ => Array.Empty<IPAddress>()
     });
