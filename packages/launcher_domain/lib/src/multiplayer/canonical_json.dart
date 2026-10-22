@@ -62,7 +62,29 @@ abstract final class CanonicalJson {
   /// unsorted or repeated keys, fractions, out-of-range integers, needless
   /// escapes, unpaired surrogates, nesting past [maximumDepth], trailing
   /// content, or a value in [bytes] that is not a byte.
-  static Object? decode(List<int> bytes, {required int maximumBytes}) {
+  static Object? decode(List<int> bytes, {required int maximumBytes}) =>
+      _read(bytes, maximumBytes, anyLayout: false);
+
+  /// Reads [bytes] as [decode] does, but in any layout another program may
+  /// leave a record of the launcher's own in: a UTF-8 byte-order mark, white
+  /// space between values, and members in any order. It does not insist on
+  /// canonical bytes, so a needless escape reads as its character, but it
+  /// refuses what [decode] refuses before that comparison: malformed UTF-8, a
+  /// repeated key, fractions, out-of-range integers, unpaired surrogates,
+  /// nesting past [maximumDepth], trailing content, and more than
+  /// [maximumBytes]. Only [KnownHosts.decode] salvages a record this way;
+  /// every signed or hashed document goes through [decode], which accepts
+  /// canonical bytes alone.
+  static Object? _decodeAnyLayout(
+    List<int> bytes, {
+    required int maximumBytes,
+  }) => _read(bytes, maximumBytes, anyLayout: true);
+
+  static Object? _read(
+    List<int> bytes,
+    int maximumBytes, {
+    required bool anyLayout,
+  }) {
     if (bytes.isEmpty || bytes.length > maximumBytes) {
       throw CanonicalJsonException(
         'The document is empty or larger than $maximumBytes bytes.',
@@ -71,7 +93,10 @@ abstract final class CanonicalJson {
     if (bytes.any((value) => value < 0 || value > 0xFF)) {
       throw const CanonicalJsonException('The document is not bytes.');
     }
-    if (bytes.length >= 3 &&
+    // The UTF-8 decoder drops a leading byte-order mark, so a canonical read
+    // refuses one here; a document of any layout may carry one.
+    if (!anyLayout &&
+        bytes.length >= 3 &&
         bytes[0] == 0xEF &&
         bytes[1] == 0xBB &&
         bytes[2] == 0xBF) {
@@ -85,14 +110,14 @@ abstract final class CanonicalJson {
     } on FormatException {
       throw const CanonicalJsonException('The document is not valid UTF-8.');
     }
-    final reader = _CanonicalJsonReader(text);
+    final reader = _CanonicalJsonReader(text, anyLayout: anyLayout);
     final value = reader.readValue(0);
-    if (!reader.atEnd) {
+    if (!reader.atDocumentEnd()) {
       throw const CanonicalJsonException(
         'Unexpected content after the document.',
       );
     }
-    if (!_sameBytes(encode(value), bytes)) {
+    if (!anyLayout && !_sameBytes(encode(value), bytes)) {
       throw const CanonicalJsonException(
         'The document is not in canonical form.',
       );

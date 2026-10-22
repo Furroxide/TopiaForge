@@ -49,8 +49,9 @@ produce byte for byte. Each runtime also has an ordinary JSON writer that produc
 - **Parsing.** A reader accepts a document only if writing what it parsed gives back the same bytes. A signature
   therefore never covers an ambiguous document. Depth is limited to 16, and every document type has a size bound.
 - **One exception.** Salvaging the known-hosts record (section 21) reads it in any layout: white space, a UTF-8
-  byte-order mark and members in any order. It is this game's own record, never signed or shared, and it still counts
-  as damaged until it is rewritten in canonical form. Every other document is read in canonical form only.
+  byte-order mark and members in any order. The game and the launcher each read their own record this way; it is never
+  signed or shared, and it still counts as damaged until it is rewritten in canonical form. Every other document is
+  read in canonical form only.
 - **Binary values.** Keys and signatures are unpadded base64url. The unused low bits of the last character must be
   zero, so every value has one spelling. Hashes and ids are lowercase hexadecimal.
 - **Display text.** Names are 1 to N UTF-16 code units, with no surrounding whitespace, control characters or

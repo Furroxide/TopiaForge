@@ -2,19 +2,32 @@ part of '../multiplayer.dart';
 
 /// Reads one JSON value strictly enough that [CanonicalJson.decode] can then
 /// insist on canonical bytes. It refuses repeated keys itself, because a map
-/// cannot hold both and re-writing would hide the repeat.
+/// cannot hold both and re-writing would hide the repeat. Reading a document
+/// of any layout, it also steps over white space between values.
 final class _CanonicalJsonReader {
-  _CanonicalJsonReader(this._text);
+  _CanonicalJsonReader(this._text, {required bool anyLayout})
+    : _anyLayout = anyLayout;
 
   final String _text;
+
+  /// Whether white space may stand between values, as in a document of any
+  /// layout; canonical bytes have none.
+  final bool _anyLayout;
   var _position = 0;
 
   bool get atEnd => _position == _text.length;
+
+  /// Whether nothing but the white space the layout allows is left.
+  bool atDocumentEnd() {
+    _skipLayout();
+    return atEnd;
+  }
 
   Object? readValue(int depth) {
     if (depth > CanonicalJson.maximumDepth) {
       throw const CanonicalJsonException('The document nests too deeply.');
     }
+    _skipLayout();
     if (atEnd) throw const CanonicalJsonException('The document ended early.');
     switch (_text.codeUnitAt(_position)) {
       case 0x7B:
@@ -42,6 +55,7 @@ final class _CanonicalJsonReader {
     final result = <String, Object?>{};
     if (_tryConsume(0x7D)) return Map.unmodifiable(result);
     while (true) {
+      _skipLayout();
       if (atEnd || _text.codeUnitAt(_position) != 0x22) {
         throw const CanonicalJsonException('An object key must be a string.');
       }
@@ -203,9 +217,21 @@ final class _CanonicalJsonReader {
   }
 
   bool _tryConsume(int unit) {
+    _skipLayout();
     if (atEnd || _text.codeUnitAt(_position) != unit) return false;
     _position++;
     return true;
+  }
+
+  /// Steps over the white space JSON allows between values, in a document of
+  /// any layout only.
+  void _skipLayout() {
+    if (!_anyLayout) return;
+    while (!atEnd) {
+      final unit = _text.codeUnitAt(_position);
+      if (unit != 0x20 && unit != 0x09 && unit != 0x0A && unit != 0x0D) return;
+      _position++;
+    }
   }
 
   static bool _isDigit(int unit) => unit >= 0x30 && unit <= 0x39;
