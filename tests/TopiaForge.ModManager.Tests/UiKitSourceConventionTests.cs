@@ -10,13 +10,14 @@ namespace TopiaForge.ModManager.Tests
     /// Source-level conventions for the TopiaForgeUi kit that the type system can't express,
     /// enforced by scanning the kit's checked-in sources.
     /// </summary>
-    internal static class UiKitSourceConventionTests
+    internal static partial class UiKitSourceConventionTests
     {
         public static void Run()
         {
             AllTmpComponentsCreatedThroughTopiaForgeTmp();
             ComponentLookupHonorsUnityNullSemantics();
             CanvasSortingUsesAllocator();
+            WindowClampWaitsForAMeasuredCanvas();
             ProcessWideUiStateHasShutdownPath();
             UnityUiReferencesStayInternal();
             FirstPartyModsDoNotConstructRawUnityUi();

@@ -456,6 +456,7 @@ namespace TopiaForge.ModManager.Tests
                 GameCompatActivationTests.Run();
                 GameVersionLabelReaderTests.Run();
                 UiKitCoreTests.Run();
+                UiKitWindowMathTests.Run();
                 UiDiagnosticsContractTests.Run();
                 CreatorWorkbenchUndoControlTests.Run();
                 TopiaForgeStateFileTests.Run(root);
