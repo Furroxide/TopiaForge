@@ -235,17 +235,24 @@ namespace TopiaForge.Multiplayer.Engine
             inbox.Enqueue(action);
         }
 
+        /// <summary>Gets whether a callback that throws is reported while the session carries on, rather than rethrown.</summary>
+        internal bool ReportsCallbackFailures => options.CallbackFailures == EngineCallbackFailureMode.Report;
+
         internal void InvokeCallback<T>(Action<T> callback, T argument, string what)
         {
             try
             {
                 callback(argument);
             }
-            catch (Exception exception) when (options.CallbackFailures == EngineCallbackFailureMode.Report)
+            catch (Exception exception) when (ReportsCallbackFailures)
             {
-                Report(new EngineDiagnostic(EngineDiagnosticKind.CallbackFailed, "A " + what + " threw.", null, exception));
+                ReportCallbackFailure(what, exception);
             }
         }
+
+        /// <summary>Reports that the callback <paramref name="what"/> names threw <paramref name="exception"/>.</summary>
+        internal void ReportCallbackFailure(string what, Exception exception) =>
+            Report(new EngineDiagnostic(EngineDiagnosticKind.CallbackFailed, "A " + what + " threw.", null, exception));
 
         internal void ReportCodecFailure(string what, string message) =>
             Report(new EngineDiagnostic(EngineDiagnosticKind.CodecFailed, "Unable to decode " + what + ": " + message));

@@ -1,3 +1,4 @@
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using TopiaForge.Mods.Testing;
@@ -191,6 +192,115 @@ internal static class CommandAnswerTests
         That(answers.Count == 1, "an answer on its way when the mod stopped never runs: " + string.Join(", ", answers));
         hostLifetime.Dispose();
     }
+
+    /// <summary>
+    /// A joined player's answer arrives frames after the press that submitted it, yet it acts for the same player, as the
+    /// code after an await does: it runs in the execution context of the code that submitted it, so the player's own
+    /// action the runtime records for that code is the one the answer's work carries.
+    /// </summary>
+    internal static void AnAnswerActsForThePlayerWhoSubmitted()
+    {
+        using var rig = MultiplayerTestRig.CreateListenServer();
+        var host = new CounterSampleMod();
+        using var hostBinding = Require(host.BindMultiplayer(rig.Server.Session), "the host binds");
+        var guestNode = rig.AddRemoteClient("guest");
+        var guest = new CounterSampleMod();
+        using var guestBinding = Require(guest.BindMultiplayer(guestNode.Session), "the guest binds");
+        rig.Flush();
+
+        var intents = new IntentScope();
+        var press = new IntentRecord(IntentSource.InputActiveFrame, Owner, null, 1);
+        string answered = "unset", awaited = "unset";
+        intents.Run(press, state =>
+        {
+            guest.SubmitIncrement(new CounterRequest { Amount = 1 }, answer => answered = Flowing(intents));
+            _ = AwaitIncrement(guest, () => awaited = Flowing(intents));
+        }, null);
+        That(intents.Flowing == null, "the press's frame is over before the host answers");
+        rig.Flush();
+        That(answered == press.ToString() && awaited == answered,
+            "the answer acts for the player who pressed, as the code after an await does: " + answered + " / " + awaited);
+    }
+
+    /// <summary>
+    /// A callback costs one object, its guard: where the host answers its own player, a submit with an answer allocates
+    /// what one without it does, plus the guard, and nothing for the answer's name, which only a failure needs.
+    /// </summary>
+    internal static void AnAnswerAllocatesOnlyItsGuard()
+    {
+        using var rig = MultiplayerTestRig.CreateStandalone();
+        var mod = new CounterSampleMod();
+        using var binding = Require(mod.BindMultiplayer(rig.Server.Session), "the counter binds");
+        var request = new CounterRequest { Amount = 1 };
+        var answers = 0;
+        Action<MultiplayerCommandConfirmation<CounterResponse>> answered = _ => answers++;
+        for (var index = 0; index < 200; index++)
+        {
+            mod.SubmitIncrement(request, answered);
+            _ = mod.SubmitIncrementAsync(request);
+        }
+
+        const int Count = 2_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < Count; index++) _ = mod.SubmitIncrementAsync(request);
+        var withTask = (GC.GetAllocatedBytesForCurrentThread() - before) / Count;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < Count; index++) mod.SubmitIncrement(request, answered);
+        var withAnswer = (GC.GetAllocatedBytesForCurrentThread() - before) / Count;
+        That(answers == 200 + Count && withAnswer - withTask <= 96,
+            "an answered submit costs a task's submit plus its guard: " + withTask + " and " + withAnswer + " bytes a submit");
+    }
+
+    /// <summary>
+    /// A scope of a mod that resolves the session gets a facade of its own, and the answers to what it submitted end with
+    /// it: closing it withdraws its waiting command, which the host never runs and no answer reports, while the mod's own
+    /// answer still runs once, on the main thread, with the host's result.
+    /// </summary>
+    internal static void AScopesAnswersEndWithItsFacade()
+    {
+        const string ModId = "io.example.answers";
+        var commandType = new MultiplayerCommandType<AddRequest, CounterValue>("add");
+        using var harness = new EngineHarness(latencyTicks: 2);
+        var executed = new List<int>();
+        Require(harness.Host.CreateFacade(ModId).RegisterCommand(AddCommand(commandType, request => executed.Add(request.Amount))), "the host's command");
+        var client = harness.AddClient("pilot");
+        var mod = client.Engine.CreateFacade(ModId);
+        Require(mod.RegisterCommand(AddCommand(commandType, _ => { })), "the player's command");
+        var scope = client.Engine.CreateFacade(ModId);
+        harness.Flush();
+
+        var mainThread = Environment.CurrentManagedThreadId;
+        var answers = new List<string>();
+        MultiplayerAnswers.Submit(mod, commandType, new AddRequest(1), answer =>
+            answers.Add("mod " + answer.Result.Value!.Value + (Environment.CurrentManagedThreadId == mainThread ? " on the main thread" : " elsewhere")),
+            CancellationToken.None, CancellationToken.None);
+        MultiplayerAnswers.Submit(scope, commandType, new AddRequest(10), answer => answers.Add("scope " + answer.Result.ErrorCode),
+            CancellationToken.None, CancellationToken.None);
+        scope.Dispose();
+        That(answers.Count == 0, "closing the scope's facade withdraws its command, and nothing answers it: " + string.Join(", ", answers));
+        harness.Flush();
+        harness.Flush();
+        That(answers.SequenceEqual(new[] { "mod 1 on the main thread" }) && executed.SequenceEqual(new[] { 1 }),
+            "the mod's answer runs once with the host's result, and the host never runs the scope's command: " +
+            string.Join(", ", answers) + " / " + string.Join(", ", executed));
+    }
+
+    private static async Task AwaitIncrement(CounterSampleMod mod, Action continuation)
+    {
+        await mod.SubmitIncrementAsync(new CounterRequest { Amount = 1 });
+        continuation();
+    }
+
+    private static string Flowing(IntentScope intents) => intents.Flowing?.ToString() ?? "none";
+
+    private static MultiplayerCommandDefinition<AddRequest, CounterValue> AddCommand(
+        MultiplayerCommandType<AddRequest, CounterValue> commandType,
+        Action<AddRequest> ran) =>
+        new(commandType, new JsonTestCodec<AddRequest>(), new JsonTestCodec<CounterValue>(), (_, request) =>
+        {
+            ran(request);
+            return OperationResult<CounterValue>.Success(new CounterValue(request.Amount));
+        }, PredictionMode.None);
 
     private static IMultiplayerSession OwnerSession(ControlPeer peer, IModLifetime lifetime) =>
         (IMultiplayerSession)peer.Provider.CreateOwnerFacade(typeof(IMultiplayerSession), Owner, lifetime);

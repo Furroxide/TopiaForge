@@ -39,6 +39,7 @@ namespace TopiaForge.Mods.Analyzers
                 return;
             }
 
+            SemanticModel? model = null;
             foreach (var diagnostic in context.Diagnostics)
             {
                 if (!diagnostic.Properties.TryGetValue(TopiaForgeModAnalyzer.AnsweredSubmitProperty, out var answered)
@@ -49,7 +50,13 @@ namespace TopiaForge.Mods.Analyzers
 
                 var wait = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true)
                     .FirstAncestorOrSelf<MemberAccessExpressionSyntax>();
-                var rewrite = wait == null ? null : AnsweredSubmitRewrite.Plan(wait, answered!);
+                if (wait == null)
+                {
+                    continue;
+                }
+
+                model ??= await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
+                var rewrite = model == null ? null : AnsweredSubmitRewrite.Plan(wait, answered!, model);
                 if (rewrite == null)
                 {
                     continue;
@@ -84,7 +91,7 @@ namespace TopiaForge.Mods.Analyzers
             this.replacement = replacement;
         }
 
-        internal static AnsweredSubmitRewrite? Plan(MemberAccessExpressionSyntax wait, string answered)
+        internal static AnsweredSubmitRewrite? Plan(MemberAccessExpressionSyntax wait, string answered, SemanticModel model)
         {
             if (!(BlockingWaitRemedies.WaitedTask(wait) is InvocationExpressionSyntax submit))
             {
@@ -115,7 +122,7 @@ namespace TopiaForge.Mods.Analyzers
                 return new AnsweredSubmitRewrite(
                     statement,
                     new StatementSyntax[0],
-                    Call(callee, request!, null, token).WithTriviaFrom(statement));
+                    Call(callee, submit.ArgumentList, request!, null, token).WithTriviaFrom(statement));
             }
 
             // `var confirmation = Submit…Async(request).Result;` followed by the code that reads it.
@@ -133,7 +140,7 @@ namespace TopiaForge.Mods.Analyzers
             }
 
             var following = block.Statements.Skip(block.Statements.IndexOf(local) + 1).ToArray();
-            if (InStruct(local) || HoldsAScope(block, local) || !CanRunLater(following, local))
+            if (InStruct(local) || HoldsAScope(block, local) || !CanRunLater(following, local) || ChangesWhatFollows(following, model))
             {
                 return null;
             }
@@ -141,7 +148,7 @@ namespace TopiaForge.Mods.Analyzers
             var callback = SyntaxFactory.SimpleLambdaExpression(
                 SyntaxFactory.Parameter(declarator.Identifier.WithoutTrivia()),
                 SyntaxFactory.Block(following));
-            return new AnsweredSubmitRewrite(local, following, Call(callee, request!, callback, token).WithTriviaFrom(local));
+            return new AnsweredSubmitRewrite(local, following, Call(callee, submit.ArgumentList, request!, callback, token).WithTriviaFrom(local));
         }
 
         internal SyntaxNode Apply(SyntaxNode root)
@@ -155,16 +162,19 @@ namespace TopiaForge.Mods.Analyzers
             var block = (BlockSyntax)replaced.Parent!;
             var kept = block.Statements.TakeWhile(statement => statement != replaced).ToList();
             kept.Add(annotated);
-            return root.ReplaceNode(block, block.WithStatements(SyntaxFactory.List(kept)).WithAdditionalAnnotations(Formatter.Annotation));
+            // Only the new call is formatted; the author's other statements in the block keep their own layout.
+            return root.ReplaceNode(block, block.WithStatements(SyntaxFactory.List(kept)));
         }
 
         private static StatementSyntax Call(
             ExpressionSyntax callee,
+            ArgumentListSyntax original,
             ArgumentSyntax request,
             LambdaExpressionSyntax? callback,
             ArgumentSyntax? token)
         {
-            var arguments = new List<ArgumentSyntax> { request.WithNameColon(null).WithoutTrivia() };
+            // The arguments and the original parentheses keep their comments; the formatter settles their spacing.
+            var arguments = new List<ArgumentSyntax> { request.WithNameColon(null) };
             if (callback != null)
             {
                 arguments.Add(SyntaxFactory.Argument(callback));
@@ -172,12 +182,12 @@ namespace TopiaForge.Mods.Analyzers
 
             if (token != null)
             {
-                arguments.Add(SyntaxFactory.Argument(token.Expression.WithoutTrivia())
+                arguments.Add(SyntaxFactory.Argument(token.Expression)
                     .WithNameColon(SyntaxFactory.NameColon("cancellationToken")));
             }
 
             return SyntaxFactory.ExpressionStatement(
-                SyntaxFactory.InvocationExpression(callee, SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments))));
+                SyntaxFactory.InvocationExpression(callee, original.WithArguments(SyntaxFactory.SeparatedList(arguments))));
         }
 
         /// <summary>Gets the request and the optional cancellation token, positional or named; null for anything else.</summary>
@@ -226,7 +236,8 @@ namespace TopiaForge.Mods.Analyzers
 
         /// <summary>
         /// Whether statements that ran right after the wait can run later, inside a callback: none may leave the method
-        /// or an enclosing loop, await, declare a local function, or use a ref local or a by-reference parameter.
+        /// or an enclosing loop, await, declare a local function, hold a label that a jump before the wait could no longer
+        /// reach, or use a ref local or a by-reference parameter.
         /// </summary>
         private static bool CanRunLater(IReadOnlyList<StatementSyntax> following, LocalDeclarationStatementSyntax local)
         {
@@ -247,6 +258,7 @@ namespace TopiaForge.Mods.Analyzers
                         case GotoStatementSyntax _:
                         case AwaitExpressionSyntax _:
                         case LocalFunctionStatementSyntax _:
+                        case LabeledStatementSyntax _:
                             return false;
                         case BreakStatementSyntax _:
                         case ContinueStatementSyntax _:
@@ -263,6 +275,21 @@ namespace TopiaForge.Mods.Analyzers
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Whether code after the moved statements reads a local they write: once they run later, inside the callback, that
+        /// code would read the value from before the answer, or one never assigned, which does not compile.
+        /// </summary>
+        private static bool ChangesWhatFollows(IReadOnlyList<StatementSyntax> following, SemanticModel model)
+        {
+            if (following.Count == 0)
+            {
+                return false;
+            }
+
+            var flow = model.AnalyzeDataFlow(following[0], following[following.Count - 1]);
+            return flow == null || !flow.Succeeded || !flow.DataFlowsOut.IsEmpty;
         }
 
         private static bool IsNestedFunction(SyntaxNode node) =>

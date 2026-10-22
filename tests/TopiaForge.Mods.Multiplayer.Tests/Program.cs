@@ -617,6 +617,9 @@ internal static class Program
             CommandAnswerTests.NoAnswerOnceTheModStops();
             CommandAnswerTests.AFailingAnswerIsReportedNotThrownIntoTheEngine();
             CommandAnswerTests.AJoinedPlayersAnswerCrossesTheNetworkOnce();
+            CommandAnswerTests.AnAnswerActsForThePlayerWhoSubmitted();
+            CommandAnswerTests.AnAnswerAllocatesOnlyItsGuard();
+            CommandAnswerTests.AScopesAnswersEndWithItsFacade();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

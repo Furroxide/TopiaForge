@@ -14,8 +14,10 @@ namespace TopiaForge.Mods
     /// <para>
     /// With TopiaForge's session engine, which the game's provider and the test rig both run, the answer runs once, on
     /// the main thread. Where this process holds world authority, solo play included, the host answers its own player
-    /// before the call returns; elsewhere it runs in the frame that brings the host's result. A session that ends, is
-    /// replaced or loses its connection answers a waiting submission with <see cref="ModErrorCode.Cancelled"/>.
+    /// before the call returns; elsewhere it runs in the frame that brings the host's result, in the execution context
+    /// the submitting code had, so it acts for the same player's action as the code after an <c>await</c> would. A
+    /// session that ends, is replaced or loses its connection answers a waiting submission with
+    /// <see cref="ModErrorCode.Cancelled"/>.
     /// </para>
     /// <para>
     /// The answer never runs once the owning mod stops, once its generated binding is released, or after the caller's

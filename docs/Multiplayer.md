@@ -162,6 +162,8 @@ The answer, a `MultiplayerCommandConfirmation<T>`, follows these rules:
 - It runs once, on the main thread. Where this process holds world authority, solo play included, the host answers
   its own player before `Submit...` returns. A client's answer runs in the frame that brings the host's result, a
   round trip later.
+- It acts for whoever's action submitted the command: the answer to a player's press counts as that player's own
+  action, as the code after an `await` does (see [The player's own actions](#the-players-own-actions)).
 - It never runs once the mod stops. To tie it to a shorter scope, pass that scope's token, such as a gamemode
   session's `Context.Lifetime.StoppingToken`. Cancelling the token also withdraws the submission.
 - A session that ends or is replaced, or a connection that drops, answers a waiting submission with `Cancelled`.
@@ -325,8 +327,9 @@ always has.
 - **What counts as the player's action:** your mod's Update and LateUpdate in a frame where one of its `Context.Input`
   actions is pressed, released or held; a `Context.Ui` callback that the player's click, choice, typing or
   confirmation raises; a command the player runs, or that such code runs; and a `Context.Interactions` handler.
-- **What keeps it:** everything that code awaits, and everything it schedules through `Context.Scheduler` (`NextFrame`,
-  `After`, and each run of `Every`), including what a background task it started hands back through `Context.Scheduler`.
+- **What keeps it:** everything that code awaits, the answer to a command it submits through a generated `Submit...`
+  method, and everything it schedules through `Context.Scheduler` (`NextFrame`, `After`, and each run of `Every`),
+  including what a background task it started hands back through `Context.Scheduler`.
 - **What never has it:** a timer your mod's scripted code scheduled, such as one scheduled at load; FixedUpdate; later
   frames; other mods' code; and anything after the game starts or stops hosting, or joins or leaves a session.
 
@@ -335,7 +338,7 @@ Code that looks like the player's action but counts as a script, with its fix:
 | If your code | It counts as a script because | Do this instead |
 | --- | --- | --- |
 | Reads input in FixedUpdate, or in a timer scheduled at load | Only Update and LateUpdate carry the frame's input | Read input in Update or LateUpdate; the build warns about a press read in FixedUpdate ([TF1009](Diagnostics.md#tf1009)) |
-| Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling |
+| Polls a `PendingOperation<T>` in Update and acts when it completes | The frame it completes in usually has no input of yours | `await` the call in the code that started it, rather than polling; for a multiplayer command, hand the answer to its `Submit...` method |
 | Calls a service another mod published | The player's action belongs to your mod, so the other mod's code sees none | Run the other mod's command with `Context.Commands.TryExecute` |
 | Subscribes to Update from a click, to act for the player every frame | Frame subscribers are scripts | Schedule the work with `Context.Scheduler.Every` or `NextFrame` from the click |
 | Reads Unity's input or runs a Unity coroutine directly, as an `unsafe-native` mod can | The runtime sees neither | Use `Context.Input`, `Context.Scheduler` and `await` |

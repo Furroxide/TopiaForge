@@ -88,7 +88,7 @@ namespace TopiaForge.Mods.Analyzers
             Category,
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Mod code never waits on asynchronous SDK work: a multiplayer command's answer comes back to a callback, and other work is awaited, or polled from the per-frame update. In multiplayer, awaiting keeps a player's own action for the code after the await, while a result polled in a later frame counts as a script.",
+            description: "Mod code never waits on asynchronous SDK work: a multiplayer command's answer comes back to a callback, and other work is awaited, or polled from the per-frame update. In multiplayer, a command's answer and the code after an await keep a player's own action, while a result polled in a later frame counts as a script.",
             helpLinkUri: DocsRoot + "TF1008");
 
         private static readonly ImmutableDictionary<string, ModuleRequirement> ModuleAssemblies =

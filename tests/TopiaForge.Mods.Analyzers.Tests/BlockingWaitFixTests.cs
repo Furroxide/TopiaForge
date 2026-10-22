@@ -73,6 +73,9 @@ namespace TopiaForge.Mods.Analyzers.Tests
             NoFixInsideAStruct();
             NoFixWhereTheCallbackWouldOutliveAScope();
             NoFixForOtherTasks();
+            NoFixWhenLaterCodeReadsWhatTheMovedCodeWrites();
+            NoFixForALabelBeforeItsJump();
+            FixKeepsTheAuthorsLayoutAndComments();
         }
 
         private static void NamesTheAnsweredSubmitForAGeneratedCommand()
@@ -222,6 +225,59 @@ namespace TopiaForge.Mods.Analyzers.Tests
                 + "Task<int> Work() => Task.FromResult(1); "
                 + "public void Run() { var value = Work().Result; System.Console.WriteLine(value); } }",
                 "only generated commands have an answered twin to call");
+
+        private static void NoFixWhenLaterCodeReadsWhatTheMovedCodeWrites()
+        {
+            AssertNoFix(PingSource("""
+                string text;
+                var ready = Environment.ProcessorCount > 0;
+                if (ready)
+                {
+                    var answer = SubmitPingAsync(new PingRequest()).Result;
+                    text = answer.Succeeded ? "ok" : "no";
+                }
+                else
+                {
+                    text = "idle";
+                }
+
+                Log(text);
+                """), "a local the callback would assign is read after its block, where it would be unassigned");
+            AssertNoFix(PingSource("""
+                var total = 0;
+                for (var press = 0; press < 3; press++)
+                {
+                    var answer = SubmitPingAsync(new PingRequest()).Result;
+                    total++;
+                }
+
+                Log(total.ToString());
+                """), "a count the callback would raise is read after the loop, before any answer arrives");
+        }
+
+        private static void NoFixForALabelBeforeItsJump() =>
+            AssertNoFix(PingSource("""
+                if (Environment.ProcessorCount < 0) goto done;
+                var answer = SubmitPingAsync(new PingRequest()).Result;
+                Log("answered");
+                done:
+                Log("done");
+                """), "a label moved into the callback leaves the jump before the wait with nowhere to go");
+
+        private static void FixKeepsTheAuthorsLayoutAndComments()
+        {
+            var fixedSource = ApplyBlockingWaitFix(PingSource("""
+                Log(  "pressed"  );
+                var answer = SubmitPingAsync(/* the request */ new PingRequest()).Result;
+                // after the answer
+                Log("done");
+                """));
+            AssertFixed(fixedSource, "SubmitPing(/* the request */ new PingRequest(), answer =>",
+                "the wait becomes the answered call and keeps the comment in its argument");
+            Assert(fixedSource.Contains("Log(  \"pressed\"  );", StringComparison.Ordinal)
+                   && fixedSource.IndexOf("// after the answer", StringComparison.Ordinal) > fixedSource.IndexOf("answer =>", StringComparison.Ordinal),
+                "a statement the fix does not move keeps the author's layout, and a comment moves with its statement:\n" + fixedSource);
+        }
 
         private static string PingSource(string body) => GeneratedCommandStubs + """
 

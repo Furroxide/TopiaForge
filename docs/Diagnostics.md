@@ -83,8 +83,8 @@ would have completed the task, so the task never finishes and the game hangs wit
 ending the process.
 
 For a multiplayer command, call the generated `Submit...` method instead of waiting on
-`Submit...Async`. It hands the host's answer to a callback on the main thread, and never once the mod
-has stopped:
+`Submit...Async`. It hands the host's answer to a callback on the main thread, never once the mod has
+stopped, and for the player whose action submitted the command, as the code after an `await` acts:
 
 ```csharp
 SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
@@ -95,7 +95,8 @@ SubmitAddScore(new AddScoreRequest { Amount = 5 }, answer =>
 
 The message names the method to call, and the IDE's quick fix rewrites the wait for you: the
 statements that read the confirmation move into the callback. It offers no fix where moving them would
-change what they do, such as a `return` or an `await` after the wait. See
+change what they do, such as a `return` or an `await` after the wait, or a local they assign that code
+after them reads. See
 [Multiplayer](Multiplayer.md#submit-a-command-and-read-its-answer) for the answer's rules.
 
 For other SDK work, use `PendingOperation<T>` — the SDK primitive for exactly this. It starts the work,

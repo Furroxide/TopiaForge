@@ -101,6 +101,9 @@ namespace TopiaForge.Multiplayer.Engine
         {
             this.binding = binding;
             this.answer = answer;
+
+            // The answer comes at the settle point that completes this, not before the submit returns.
+            answer?.Defer();
         }
 
         internal Task<MultiplayerCommandConfirmation<TResponse>> Task => completion.Task;
