@@ -203,6 +203,7 @@ internal static class Program
             KnownHostsLayoutTests.ARecordInAnyLayoutKeepsItsPins();
             KnownHostsLayoutTests.ASecondDamageKeepsTheFirstCopy();
             KnownHostsLayoutTests.SignedAndSharedDocumentsStayCanonical();
+            KnownHostsLayoutTests.ASaveQueuedBehindAFailedCopyKeepsTheDamagedRecord();
             OpusVoiceCodecTests.RoundTripKeepsSyntheticSpeech();
             OpusVoiceCodecTests.PacketsStayWithinTheirBounds();
             OpusVoiceCodecTests.ForwardErrorCorrectionBeatsConcealment();

@@ -163,18 +163,15 @@ namespace TopiaForge.Multiplayer.Network
         internal Task SaveAfter(Task previous)
         {
             if (previous == null) throw new ArgumentNullException(nameof(previous));
-            byte[]? copy;
             lock (gate)
             {
                 if (!dirty || !read) return previous;
                 dirty = false;
-                copy = damaged;
-                damaged = null;
             }
 
             byte[] bytes;
             lock (Record) bytes = Record.Serialize();
-            return Queue(previous, copy, bytes);
+            return Queue(previous, bytes);
         }
 
         /// <summary>
@@ -182,8 +179,8 @@ namespace TopiaForge.Multiplayer.Network
         /// nothing to save allocates nothing: a lambda in <see cref="SaveAfter"/> would capture its locals on every call.
         /// Saves are never cancelled, even while closing: a cancelled write would lose the change, and each is small.
         /// </summary>
-        private Task Queue(Task previous, byte[]? copy, byte[] bytes) =>
-            previous.ContinueWith(_ => WriteAsync(copy, bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        private Task Queue(Task previous, byte[] bytes) =>
+            previous.ContinueWith(_ => WriteAsync(bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
 
         private async Task<bool> ReadAsync()
         {
@@ -210,19 +207,22 @@ namespace TopiaForge.Multiplayer.Network
             return true;
         }
 
-        private async Task WriteAsync(byte[]? copy, byte[] bytes)
+        /// <summary>
+        /// Writes the record, after the damaged file's copy while one is still due. The damaged bytes are taken when the write
+        /// runs, not when it was queued, and let go only once their copy landed: a save queued behind one whose copy failed
+        /// tries the copy again first, so the canonical rewrite never replaces the damaged file without it.
+        /// </summary>
+        private async Task WriteAsync(byte[] bytes)
         {
+            byte[]? copy;
+            lock (gate) copy = damaged;
             if (copy != null)
             {
-                try
+                // A copy that cannot be written throws here, before the record: the damaged file stays where it is.
+                await KeepCopyAsync(copy).ConfigureAwait(false);
+                lock (gate)
                 {
-                    await KeepCopyAsync(copy).ConfigureAwait(false);
-                }
-                catch (Exception)
-                {
-                    // Without its copy, the damaged file stays where it is; the next save tries the copy again first.
-                    lock (gate) damaged ??= copy;
-                    throw;
+                    if (ReferenceEquals(damaged, copy)) damaged = null;
                 }
             }
 

@@ -1,6 +1,7 @@
 extern alias provider;
 
 using System.Text;
+using System.Text.RegularExpressions;
 using provider::TopiaForge.Multiplayer.Network;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
 
@@ -164,6 +165,51 @@ internal static class KnownHostsLayoutTests
         read!.Dispose();
         That(!LocalIdentity.TryParse(Spaced(identity), out _, out _) && !LocalIdentity.TryParse(Bom(identity), out _, out _),
             "an identity in another layout is refused");
+
+        // By construction: in the provider only the known-hosts record's reader, which the tests above show reading any
+        // layout, calls the any-layout reader. Every other document, the ban list included, keeps the canonical one.
+        var provider = Path.Combine(NetworkFixtures.RepositoryRoot(), "mods", "TopiaForge.Multiplayer");
+        var callers = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(provider, "*.cs", SearchOption.AllDirectories))
+        {
+            var top = Path.GetRelativePath(provider, file).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+            if (top == "bin" || top == "obj" || Path.GetFileName(file) == "CanonicalJson.cs") continue;
+            var calls = Regex.Matches(File.ReadAllText(file), @"\bTryParseAnyLayout\s*\(").Count;
+            for (var call = 0; call < calls; call++) callers.Add(Path.GetFileName(file));
+        }
+
+        That(callers.SequenceEqual(new[] { "IdentityStore.cs" }),
+            "the known-hosts record is the one document the provider reads in any layout (" + string.Join(", ", callers) + ")");
+    }
+
+    internal static void ASaveQueuedBehindAFailedCopyKeepsTheDamagedRecord()
+    {
+        // The copy of a damaged record fails while another save is already queued behind it. That save tries the copy again
+        // first, so the canonical rewrite never replaces the damaged file before its bytes are kept aside.
+        var (first, second) = Servers();
+        var files = new MemoryDataFiles();
+        var damaged = Laid(new[] { (Pinned, first.Descriptor.ServerId) }, "  ", "\n", reversed: false);
+        files.Contents[KnownHosts.FilePath] = damaged;
+        var store = new KnownHostsStore(files);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        files.BeforeWrite = path => path == KnownHostsStore.DamagedPath ? held.Task : Task.CompletedTask;
+        files.FailWritesOf.Add(KnownHostsStore.DamagedPath);
+        That(Resolve(Resolver(store, () => first), Other).Failure == LiveFailure.None, "a new address is recorded");
+        var save = store.SaveAfter(Task.CompletedTask);
+        That(SpinWait.SpinUntil(() => files.HeldWrites == 1, 5_000), "the copy is being written");
+        That(Resolve(Resolver(store, () => second), Fresh).Failure == LiveFailure.None, "and another while it is");
+        var next = store.SaveAfter(save);
+        held.SetResult();
+        That(Faults(save) && Faults(next) && Holds(files, KnownHosts.FilePath, damaged) && !KnownHostsStore.DamagedPaths.Any(files.Contents.ContainsKey),
+            "while the copy cannot be written, no save rewrites the damaged record, a save queued meanwhile included");
+
+        // Once the copy can be written, the next save keeps the damage aside first, then writes every pin.
+        files.FailWritesOf.Clear();
+        files.BeforeWrite = null;
+        store.MarkChanged();
+        store.SaveAfter(next).GetAwaiter().GetResult();
+        That(Holds(files, KnownHostsStore.DamagedPath, damaged) && KnownHosts.Parse(files.Contents[KnownHosts.FilePath]).Count == 3,
+            "then the damaged record is copied aside, and rewritten with every pin");
     }
 
     /// <summary>The same record in each layout another program may leave it in, by name.</summary>
@@ -263,4 +309,17 @@ internal static class KnownHostsLayoutTests
 
     private static bool Holds(MemoryDataFiles files, string path, byte[] expected) =>
         files.Contents.TryGetValue(path, out var bytes) && bytes.SequenceEqual(expected);
+
+    private static bool Faults(Task task)
+    {
+        try
+        {
+            task.GetAwaiter().GetResult();
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+    }
 }
