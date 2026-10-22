@@ -15,6 +15,12 @@ namespace TopiaForge.ModManager.Tests
         {
             UnityMainThreadGuard.CaptureCurrentThread();
             if (args.Length == 1 && args[0] == "--provisioning-observation") { ProvisioningRuntimeObservationTests.Run(); return 0; }
+            if (args.Length == 1 && args[0] == "--provisioning-quit")
+            {
+                var owned = Directory.CreateTempSubdirectory("TopiaForgeProvisioningQuit-");
+                try { PluginProvisioningQuitTests.Run(owned.FullName); return 0; }
+                finally { owned.Delete(true); }
+            }
             if (args.Length == 1 && args[0] == "--harness-workspaces") { HarnessWorkspaceTests.Run(); return 0; }
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
@@ -462,6 +468,9 @@ namespace TopiaForge.ModManager.Tests
                 UnityToolingFileIoTests.Run(root);
                 UiKitSourceConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
+                PluginQuitCoordinatorTests.Run(root);
+                PluginQuitHandlerTests.Run(root);
+                PluginProvisioningQuitTests.Run(root);
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

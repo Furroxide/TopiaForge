@@ -55,7 +55,9 @@ namespace TopiaForge.ModManager
                 ? new StartupRecoveryDecision(true, startupRecovery.QuarantineModId, !CanSaveState ? StatePersistenceError : "Rejected launcher command: " + rejectionReason)
                 : startupRecovery;
             startupSelection = StartupRecoveryPolicy.Prepare(launchProfile, state, recovery, DateTime.UtcNow);
-            if (startupSelection.SafeMode) managerLogger.Warn("This process is running in safe mode; remembered autoload is suppressed.");
+            if (startupSelection.SafeMode)
+                managerLogger.Warn("This process is running in safe mode: every mod is off for this run and remembered autoload is suppressed."
+                    + (recovery.SafeMode && recovery.Reason.Length != 0 ? " " + recovery.Reason : string.Empty));
             if (startupSelection.QuarantinedPackageId.Length != 0)
                 managerLogger.Warn("Automatically quarantined " + startupSelection.QuarantinedPackageId + ": " + recovery.Reason);
         }

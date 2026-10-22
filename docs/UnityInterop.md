@@ -76,3 +76,16 @@ teardown completes, repeated disposal is a thread-safe no-op. Patch application 
 a patch cannot land after the teardown sweep. The runtime keeps the patch owner id private; all patches must
 go through the lease to retain that guarantee. Consumers do not need a compile-time patch-library reference;
 the game runtime supplies the implementation.
+
+### Patches when the player quits
+
+A patch on the game's own quit steps needs nothing extra. On the first quit request, TopiaForge moves its quit
+handler behind every `Application.wantsToQuit` handler subscribed until then, the game's own among them, and mods
+unload only once those handlers have let the quit go ahead. The game's own quit steps therefore run with every
+patch still in place. NoFeedbackUrl relies on this: the game opens its feedback page from its own quit handler, and
+the patch that suppresses the page is still there when it runs. A handler subscribed after that first request is
+asked only once mods have started to unload, so a mod that needs a quit handler of its own subscribes it in
+`OnLoad` and unsubscribes it in `OnUnload`. Unity's own quitting phase begins only after the teardown, so code that
+runs from `Application.quitting` or while objects are destroyed runs unpatched, unless the teardown missed its
+10-second deadline. Unity sends `OnApplicationQuit` for every quit request, including one that a handler refuses,
+so it does not mean the game is closing.

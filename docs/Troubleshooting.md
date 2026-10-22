@@ -147,6 +147,25 @@ followed by a warning. Press F10 to reach the manager while you investigate; the
 independent of the menu buttons. If mounting fails, TopiaForge opens the overlay for you rather than
 leaving you with no way in.
 
+## Every mod is off for one start (safe mode)
+
+When Robotopia quits through its own **QUIT** button or you close its window, the game first finishes
+its own quit steps. TopiaForge then unloads every mod and records a clean exit before the game closes.
+That takes a moment, and TopiaForge's part never takes more than 10 seconds.
+
+If the game stops any other way, for example a crash, ending it from Task Manager, or a power cut,
+nothing is recorded. The next start then opens in safe mode: every mod is off for that one run, so a
+mod that broke the game cannot break it again. `manager.log` says so near its top, and the line ends
+with the reason:
+
+```text
+This process is running in safe mode: every mod is off for this run and remembered autoload is suppressed.
+```
+
+Quit normally from that run, and the following start loads your mods again. If the game stopped while
+one mod was still loading, TopiaForge turns off just that mod and keeps it off until you turn it on
+again in the manager; `manager.log` names it on a line that begins `Automatically quarantined`.
+
 ## Logs
 
 | Log | Location |
