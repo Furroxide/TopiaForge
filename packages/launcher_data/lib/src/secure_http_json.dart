@@ -40,6 +40,7 @@ final class SecureHttpJsonResponse {
     required this.statusCode,
     required this.body,
     this.retryAfter,
+    this.bytes = const [],
   });
 
   final int statusCode;
@@ -47,6 +48,11 @@ final class SecureHttpJsonResponse {
   /// The decoded JSON body; null for an empty body, and for a non-JSON body
   /// of an unsuccessful response, whose status alone is the answer.
   final Object? body;
+
+  /// The body exactly as it arrived, within the response bound, for callers
+  /// that must read it more strictly than [body] does, such as canonical
+  /// JSON whose bytes are hashed.
+  final List<int> bytes;
 
   /// The `Retry-After` delay in whole seconds, when the service sent one
   /// such header, of at most a day.
@@ -221,18 +227,32 @@ Future<SecureHttpJsonResponse> _sendJson(
     '$label sent more than $maxResponseBytes bytes.',
   );
   if (response.contentLength > maxResponseBytes) throw tooLarge;
-  final bytes = await _readBodyBounded(
-    response,
-    maxBytes: maxResponseBytes,
-    timeout: responseTimeout,
-    onProgress: onProgress,
-    tooLarge: () => tooLarge,
-  );
+  Uint8List bytes;
+  try {
+    bytes = await _readBodyBounded(
+      response,
+      maxBytes: maxResponseBytes,
+      timeout: responseTimeout,
+      onProgress: onProgress,
+      tooLarge: () => tooLarge,
+    );
+  } on FormatException {
+    // The body does not decode from the content coding it names. A refusal
+    // is read by its status alone, which still stands; a success is not.
+    if (status < 300) {
+      throw SecureHttpRequestException(
+        SecureHttpFailure.invalidResponse,
+        '$label sent an answer that could not be read.',
+      );
+    }
+    bytes = Uint8List(0);
+  }
   return SecureHttpJsonResponse(
     statusCode: status,
     body: _decodeJsonBody(response, bytes, label),
     // `value` throws on a repeated header, so the list is read instead.
     retryAfter: _retryAfter(response.headers['retry-after']),
+    bytes: bytes.asUnmodifiableView(),
   );
 }
 

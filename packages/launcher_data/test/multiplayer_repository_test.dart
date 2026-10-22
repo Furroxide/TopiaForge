@@ -9,6 +9,7 @@ import 'package:test/test.dart';
 
 import 'multiplayer_lan_rig.dart';
 import 'multiplayer_network_support.dart';
+import 'secure_http_loopback.dart';
 
 void main() {
   final loopback = InternetAddress.loopbackIPv4;
@@ -396,21 +397,14 @@ void main() {
       }
     });
 
-    test('an invalid or configured origin still contacts nothing in this '
-        'build', () async {
-      for (final (text, status, phrase) in [
-        ('http://play.example', MultiplayerServiceStatus.invalid, 'not valid'),
-        (
-          'https://play.example',
-          MultiplayerServiceStatus.configured,
-          'not available in this version',
-        ),
-      ]) {
-        final repo = repository(
-          service: MultiplayerServiceConfiguration.parse(text),
-        );
-        expect(repo.serviceStatus, status);
-        final event =
+    test('an invalid origin contacts nothing', () async {
+      final repo = repository(
+        service: MultiplayerServiceConfiguration.parse('http://play.example'),
+      );
+      expect(repo.serviceStatus, MultiplayerServiceStatus.invalid);
+      final http = CountingHttpOverrides();
+      await HttpOverrides.runWithHttpOverrides(() async {
+        final failed =
             await repo.answerJoin(
                   JoinSession.start(
                     JoinLinkTarget(SessionLink.invite('ABCDE12345')),
@@ -418,10 +412,21 @@ void main() {
                   ),
                 )
                 as JoinFailed;
-        expect(event.code, JoinFailureCode.serviceUnavailable);
-        expect(event.detail, contains(phrase));
-        expect((await repo.browseInternet()).unavailableMessage, event.detail);
-      }
+        expect(failed.code, JoinFailureCode.serviceUnavailable);
+        expect(failed.detail, contains('not valid'));
+        final filter = ServerBrowseFilter(gameBuild: '2545', protocolMajor: 1);
+        final browse = await repo.browseInternet(filter);
+        expect(browse.unavailableMessage, failed.detail);
+        expect(browse.problem, MultiplayerServiceProblem.notConfigured);
+        final status = await repo.readServiceStatus();
+        expect(status.isAvailable, isFalse);
+        expect(status.problem, MultiplayerServiceProblem.notConfigured);
+        expect(
+          (await repo.fetchInternetServer(hostAServerId)).message,
+          failed.detail,
+        );
+      }, http);
+      expect(http.clientsCreated, 0);
     });
 
     test('a cancelled request to the service gives no event', () async {

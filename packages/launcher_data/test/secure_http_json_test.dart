@@ -211,6 +211,36 @@ void main() {
     });
   });
 
+  test('an answer whose content coding does not decode is unreadable when '
+      'it succeeds, and a refusal keeps its status', () async {
+    final https = await serve((request) async {
+      final limited = request.uri.path.endsWith('/limited');
+      request.response
+        ..statusCode = limited ? 429 : 200
+        ..headers.contentType = ContentType.json
+        ..headers.set('content-encoding', 'gzip');
+      if (limited) request.response.headers.set('retry-after', '30');
+      // Not gzip, whatever the header says.
+      request.response.add([for (var index = 0; index < 64; index++) index]);
+      await request.response.close();
+    });
+    await https.run(() async {
+      await expectLater(
+        requestHttpsJson(base, label: label, maxResponseBytes: 4096),
+        fails(SecureHttpFailure.invalidResponse),
+      );
+      final limited = await requestHttpsJson(
+        base.replace(path: '/v1/limited'),
+        label: label,
+        maxResponseBytes: 4096,
+      );
+      expect(limited.statusCode, 429);
+      expect(limited.retryAfter, const Duration(seconds: 30));
+      expect(limited.body, isNull);
+      expect(limited.bytes, isEmpty);
+    });
+  });
+
   test('refuses a bad request before any client exists', () async {
     final overrides = CountingHttpOverrides();
     final cases = <String, Future<Object?> Function()>{

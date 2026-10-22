@@ -70,9 +70,30 @@ abstract interface class MultiplayerRepository {
 
   Future<LanBrowseSnapshot> stopLanBrowsing();
 
-  /// A page of the Internet server browser, or why it is unavailable.
-  Future<InternetBrowseResult> browseInternet({
+  /// What the multiplayer service offers right now, read afresh: which
+  /// features are on, whether the relay is available and why not, so the
+  /// launcher can degrade before the player hosts or joins. Throws
+  /// [OperationCancelledException] when [cancellation] stops it, and nothing
+  /// else.
+  Future<MultiplayerServiceCheck> readServiceStatus({
+    CancellationToken? cancellation,
+  });
+
+  /// A page of the Internet server browser for [filter], after the server id
+  /// a page named as its `next`, or why it is unavailable. Throws
+  /// [OperationCancelledException] when [cancellation] stops it, and nothing
+  /// else.
+  Future<InternetBrowseResult> browseInternet(
+    ServerBrowseFilter filter, {
     String? after,
+    CancellationToken? cancellation,
+  });
+
+  /// One public server with its descriptor verified, for a browser's detail
+  /// pane, or why there is none. Throws [OperationCancelledException] when
+  /// [cancellation] stops it, and nothing else.
+  Future<InternetServerLookup> fetchInternetServer(
+    String serverId, {
     CancellationToken? cancellation,
   });
 
@@ -121,8 +142,9 @@ abstract interface class MultiplayerRepository {
 /// [MultiplayerRepository] over the launcher's data folder and real sockets.
 ///
 /// The store lives in `<dataRoot>/multiplayer/`. The service is whatever
-/// this build was compiled with; a build without one contacts no service at
-/// all ([UnavailableControlPlane]). [content] answers the stages that need
+/// this build was compiled with: a build that names one talks to it over
+/// HTTPS ([openControlPlane]), and a build without one contacts no service
+/// at all ([UnavailableControlPlane]). [content] answers the stages that need
 /// the game's files; the launcher passes its own launcher repository, which
 /// is a [MultiplayerContentHost].
 final class LocalMultiplayerRepository implements MultiplayerRepository {
@@ -139,9 +161,8 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     MultiplayerContentHost? content,
   }) : this._(
          controlPlane ??
-             UnavailableControlPlane(
-               (service ?? MultiplayerServiceConfiguration.fromEnvironment())
-                   .status,
+             openControlPlane(
+               service ?? MultiplayerServiceConfiguration.fromEnvironment(),
              ),
          store ?? MultiplayerStore(p.join(dataRoot, folderName), clock: clock),
          descriptors ?? DescriptorClient(),
@@ -278,10 +299,22 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   }
 
   @override
-  Future<InternetBrowseResult> browseInternet({
+  Future<MultiplayerServiceCheck> readServiceStatus({
+    CancellationToken? cancellation,
+  }) => _controlPlane.readStatus(cancellation: cancellation);
+
+  @override
+  Future<InternetBrowseResult> browseInternet(
+    ServerBrowseFilter filter, {
     String? after,
     CancellationToken? cancellation,
-  }) => _controlPlane.browse(after: after, cancellation: cancellation);
+  }) => _controlPlane.browse(filter, after: after, cancellation: cancellation);
+
+  @override
+  Future<InternetServerLookup> fetchInternetServer(
+    String serverId, {
+    CancellationToken? cancellation,
+  }) => _controlPlane.fetchServer(serverId, cancellation: cancellation);
 
   @override
   Future<JoinEvent?> answerJoin(

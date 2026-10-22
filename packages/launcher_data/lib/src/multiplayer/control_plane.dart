@@ -2,13 +2,19 @@
 /// while it has none.
 ///
 /// The service's origin comes from the `TOPIAFORGE_CONTROL_PLANE_ORIGIN`
-/// dart-define. Builds without it, which is every build until the service
-/// ships, contact no service at all: Internet browsing, invites, server links
-/// and Internet listings report that the service is unavailable, while LAN
-/// and direct play work as before.
+/// dart-define. Builds without it contact no service at all: Internet
+/// browsing, invites, server links and Internet listings report that the
+/// service is unavailable, while LAN and direct play work as before. Builds
+/// that name one talk to it through the HTTPS client in
+/// `control_plane_client.dart`.
 library;
 
 import 'package:launcher_domain/launcher_domain.dart';
+
+import 'control_plane_results.dart';
+
+export 'control_plane_client.dart' show ControlPlaneLog, openControlPlane;
+export 'control_plane_results.dart';
 
 /// Whether this build names a multiplayer service.
 enum MultiplayerServiceStatus {
@@ -123,13 +129,20 @@ final class MultiplayerServiceConfiguration {
 final class InternetBrowseResult {
   InternetBrowseResult.page(List<ServerListing> listings, {this.next})
     : listings = List.unmodifiable(listings),
-      unavailableMessage = null;
+      unavailableMessage = null,
+      problem = null,
+      retryAfter = null;
 
-  const InternetBrowseResult.unavailable(String message)
-    : listings = const [],
-      next = null,
-      unavailableMessage = message;
+  const InternetBrowseResult.unavailable(
+    String message, {
+    this.problem = MultiplayerServiceProblem.notConfigured,
+    this.retryAfter,
+  }) : listings = const [],
+       next = null,
+       unavailableMessage = message;
 
+  /// The page's servers, in server id order. Each names its server by id;
+  /// nothing in one is trusted until that server's descriptor verifies.
   final List<ServerListing> listings;
 
   /// The cursor for the next page, when there is one.
@@ -138,23 +151,46 @@ final class InternetBrowseResult {
   /// A sentence for the player when the browser could not load.
   final String? unavailableMessage;
 
+  /// Why the browser could not load.
+  final MultiplayerServiceProblem? problem;
+
+  /// How long to wait before asking again, when that is known.
+  final Duration? retryAfter;
+
   bool get isAvailable => unavailableMessage == null;
 }
 
-/// What the launcher asks of the multiplayer service. The client that talks
-/// to a configured service arrives in a later slice; until then every build
-/// uses [UnavailableControlPlane].
+/// What the launcher asks of the multiplayer service. A build that names a
+/// service uses the HTTPS client (`openControlPlane`); any other build uses
+/// [UnavailableControlPlane], which contacts nothing.
 ///
-/// It answers the join stages that go through the service: resolving an
-/// invite, a server link or an Internet listing, and fetching such a
-/// target's descriptor, which comes from the service and never from the
-/// host. It never contacts a host.
+/// It reads the service's status, lists public servers, and answers the join
+/// stages that go through the service: resolving an invite, a server link or
+/// an Internet listing, and fetching such a target's descriptor, which comes
+/// from the service and never from the host. It never contacts a host.
 abstract interface class ControlPlaneClient {
   MultiplayerServiceStatus get status;
 
-  /// The first page of public servers, or the page after [after].
-  Future<InternetBrowseResult> browse({
+  /// What the service offers right now. Throws
+  /// [OperationCancelledException] when [cancellation] stops it, and nothing
+  /// else.
+  Future<MultiplayerServiceCheck> readStatus({CancellationToken? cancellation});
+
+  /// The first page of public servers [filter] selects, or the page after
+  /// [after], a server id a page named as its `next`. Throws
+  /// [OperationCancelledException] when [cancellation] stops it, and nothing
+  /// else.
+  Future<InternetBrowseResult> browse(
+    ServerBrowseFilter filter, {
     String? after,
+    CancellationToken? cancellation,
+  });
+
+  /// The public server [serverId], with its descriptor verified, for a
+  /// browser's detail pane. Throws [OperationCancelledException] when
+  /// [cancellation] stops it, and nothing else.
+  Future<InternetServerLookup> fetchServer(
+    String serverId, {
     CancellationToken? cancellation,
   });
 
@@ -197,10 +233,37 @@ final class UnavailableControlPlane implements ControlPlaneClient {
   };
 
   @override
-  Future<InternetBrowseResult> browse({
+  Future<MultiplayerServiceCheck> readStatus({
+    CancellationToken? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    return MultiplayerServiceCheck.unavailable(
+      MultiplayerServiceProblem.notConfigured,
+      message,
+    );
+  }
+
+  @override
+  Future<InternetBrowseResult> browse(
+    ServerBrowseFilter filter, {
     String? after,
     CancellationToken? cancellation,
-  }) async => InternetBrowseResult.unavailable(message);
+  }) async {
+    cancellation?.throwIfCancelled();
+    return InternetBrowseResult.unavailable(message);
+  }
+
+  @override
+  Future<InternetServerLookup> fetchServer(
+    String serverId, {
+    CancellationToken? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    return InternetServerLookup.failed(
+      MultiplayerServiceProblem.notConfigured,
+      message,
+    );
+  }
 
   @override
   Future<JoinEvent?> resolve(
