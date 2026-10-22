@@ -25,6 +25,7 @@ namespace TopiaForge.ModManager.Tests
             OnlyShadowedSpawnsAreNumbered();
             WhatTheHostMakesForAPlayerTakesNoNumber();
             TheNumberingStartsOverWhenThePlayerJoins();
+            AKeyGivenAgainReachesAPlayerThatMissedTheOldOnesEnd();
             AProvidersScriptedSpawnsShadowToo();
             ScriptedChangesLeaveTheHostsObjectsToTheHost();
         }
@@ -199,6 +200,44 @@ namespace TopiaForge.ModManager.Tests
             var next = hosts.Spawn(hosts.Load(), 5).Value!;
             That(host.Runtime.Spawns.Find(next)!.ShadowKey == 1, "a world session numbers from one");
             That(rig.Run(() => host.Counters().ShadowKeysReused == 1, 10), "and a number the old session's crate still holds is announced with none, so no shadow binds to the wrong one");
+        }
+
+        private static void AKeyGivenAgainReachesAPlayerThatMissedTheOldOnesEnd()
+        {
+            var rig = AuthorityRig.Create(players: 1);
+            var host = rig.Host;
+            var p1 = rig.Players[0];
+            var hosts = new AuthorityMod(host);
+            var prefab = hosts.Load();
+            var old = hosts.Spawn(prefab, 1).Value!;
+            That(rig.Run(() => AuthorityRig.Live(p1).Count == 1, 60), "the player mirrors the host's scripted crate");
+            var oldId = new NetworkEntityId(AuthorityRig.Object(old).Mark);
+
+            // The player's link stalls while the host's world session starts over: the crate ends, and the new session's first
+            // scripted crate takes its key, number one, again.
+            p1.Paused = true;
+            old.Dispose();
+            rig.Frames(10);
+            host.Runtime.Spawns.BeginWorldSession();
+            var renewed = hosts.Spawn(prefab, 2).Value!;
+            rig.Frames(10);
+            var renewedId = new NetworkEntityId(AuthorityRig.Object(renewed).Mark);
+            That(host.Runtime.Spawns.Find(renewed)!.ShadowKey == 1 && !host.Host.Knows(oldId), "the host gives the new crate the old one's key");
+
+            // The link comes back within its grace: the old crate's despawn went with the old stream, and the new baseline
+            // lists the new crate while the player still holds the old one under that key.
+            rig.Network.Rejoin(p1.Control);
+            p1.Paused = false;
+            That(rig.Run(() => p1.World.Progress.Phase == NetworkWorldPhase.Synchronized && p1.Client.Knows(renewedId), 300),
+                "the player mirrors the new crate (" + p1.World.Progress + ", " + p1.Counters().EntitiesRefused + " refused)");
+            That(!p1.Client.Knows(oldId) && AuthorityRig.Live(p1).Count == 1 && p1.Counters().EntitiesRefused == 0, "in place of the old one, which it no longer holds");
+
+            // Its own run of the new session's script binds to the new crate.
+            p1.Runtime.Spawns.BeginWorldSession();
+            var mine = new AuthorityMod(p1);
+            var shadow = mine.Spawn(mine.Load(), 2).Value!;
+            That(shadow.IsAlive && new NetworkEntityId(AuthorityRig.Object(shadow).Mark).Equals(renewedId) && AuthorityRig.Live(p1).Count == 1,
+                "and the player's own run of the new session's script stands for it");
         }
 
         private static void AProvidersScriptedSpawnsShadowToo()

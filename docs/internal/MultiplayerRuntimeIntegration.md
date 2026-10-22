@@ -1629,7 +1629,8 @@ held it.
    intent and whether an input frame made it, the scale and transform, and a description: an asset's bundle path and
    name, as world entries carry them, or the provider's payload. A prediction is refused here, before the spawn runs,
    when the player already has as many objects and waiting predictions as the host's quota (64), and an asset whose
-   prefab does not say which bundle it comes from is refused as unshareable.
+   prefab does not say which bundle it comes from, or names it by a path the host would refuse, such as one with a
+   `./` part, is refused as unshareable, with a message that says how to name the bundle.
 2. **The host validates.** Every request spends from the player's spawn bucket first (`PlayerRequestLimiter` over
    `PermissionPolicy.Default`: a burst of 8, then 4 a second), so a flood is throttled whatever it asks for; then the
    rules, then the quota of 64 live objects. Then what it asks for: an asset of a mod the host shares, named by a plain
@@ -1640,8 +1641,9 @@ held it.
 3. **The host makes it canonically,** as an object of the player's `ProxyParticipant` scope: an asset through the mod's
    own handles first, a prefab its code loaded, else a prefab loaded from a bundle it holds, waiting while its own load
    of the bundle runs, since the game refuses a second load of a bundle that is loaded already; only a bundle the mod
-   does not hold is loaded through its package, and let go of after 2 seconds unused, so the mod can load it itself. A
-   provider's kind is made by its handler inside the player's forwarded intent (`EnterForwarded`), so the provider reads
+   does not hold is loaded through its package, and let go of after 2 seconds unused, or at once when the mod starts its
+   own load of the same file, however a player spelled its path, so the mod's own load is never refused. A provider's
+   kind is made by its handler inside the player's forwarded intent (`EnterForwarded`), so the provider reads
    whose object it makes from `CurrentIntent`. A build that takes over 30 seconds is refused as unbuildable. The object
    is recorded like any other spawn, with the player's slot as its owner and no shadow key, and announced to everyone.
 4. **The verdict.** The host owes the player its verdict, sent as the player's window allows. Adopted, the instance
@@ -1673,7 +1675,9 @@ here, frozen, never sent and never recorded, waiting for the host's entity with 
 
 The numbering starts over on a host when its world session starts (the orchestrator's `Preparing`), and on a player when
 it joins and when its host's world is replaced. A number a live entity from an earlier session still holds is never
-announced twice: the newer spawn goes without one (`ShadowKeysReused`).
+announced twice: the newer spawn goes without one (`ShadowKeysReused`). A player may still hold an earlier session's
+entity under a number the host has given again, when that entity's despawn went with a restarted stream or a skipped
+broadcast; the baseline that follows ends it as it lists the new one, which takes the number.
 
 ### Requests
 
@@ -1684,8 +1688,9 @@ the host's spawns, scene objects and world content), or another player's. By def
 its own objects. A move of a spawn still being made changes where it is made; a destroy of one cancels it. A player the
 host made nothing for owns nothing, and gets no scope by asking. On a joined player, moves to one object coalesce, the
 newest winning, a destroy outdates the moves waiting before it, and each kind keeps to an honest pace
-(`ClientPace`): half the host's burst and its full rate, so requests that arrive bunched never meet the host's limit. A
-change before the verdict applies here at once and travels with, or after, the request; a destroy before it ends the
+(`ClientPace`): half the host's burst and its full rate, so requests that arrive bunched by up to about a second never
+meet the host's limit. A link that stalls for longer can deliver more at once than the host's burst; the host refuses
+the excess, a spawn among it with a toast. A change before the verdict applies here at once and travels with, or after, the request; a destroy before it ends the
 instance here at once, and one still queued behind the pace was never asked for at all. When the mod disposes an object
 of its own, the host is asked to destroy it.
 
@@ -1755,20 +1760,27 @@ copy of each message and the SDK's result for each call included.
   toast; a verdict lost with its stream asked for again and never made twice, and an entry before its verdict swapping
   the replica out; a verdict that never comes; a provider's kind made by its handler inside the player's intent; a
   joined player recording nothing; and a joined player's replicas built from its mod's own handles.
+- **Asset loads** (`AuthorityAssetLoadTests`): the host's own load of a bundle, kept alive by a player who spawns from it
+  every second, giving way to the host's mod's lazy load of it, and to a load of the same file a hostile player spelled
+  another way; a joined player's replica load giving way to its mod's lazy load, so the player's own drop is adopted,
+  also when another player spelled the file another way; and a replica built through a mod context's handles built
+  again when that context ends.
 - **Requests** (`SpawnChangeTests`): moving and destroying the player's own object through the host, by its action,
   by script and by disposing its handle; changes before the verdict; another player's, the host's and a scene object
   refused here with nothing sent, and left to the host's script when scripted; an entity outside the world passing
   through; and twenty spawns, a hundred moves of each and twenty destroys in one go never refused.
 - **Shadows** (`SpawnShadowTests`): binding when the host's spawn is here and when it comes later, ending for another
   asset either way, ending when it never comes and only while synchronized, the numbering skipping the host player's,
-  a gamemode's and a player's spawns, starting over on joining and at a world session, a provider's spawns and
-  registrations, and scripted changes left to the host.
+  a gamemode's and a player's spawns, starting over on joining and at a world session, a number given again reaching a
+  player that missed the old entity's despawn, a provider's spawns and registrations, and scripted changes left to the
+  host.
 - **Abuse** (`SpawnAbuseTests`): a raw flood throttled to the burst and the rate and bounded by the quota without
   touching another player; what a flood leaves bounded when the player stops reading; assets of an unshared mod, from
   outside the package or a rooted or drive path, undescribed assets, the runtime's kinds, unknown kinds and another
   mod's kind refused before anything loads or runs; a provisional id reused or another player's, origins appended and
-  messages in the host's voice; and every change of another player's, the host's, a scene object, a destroyed and an
-  unknown entity refused, by a player with a scope or without one.
+  messages in the host's voice; every change of another player's, the host's, a scene object, a destroyed and an
+  unknown entity refused, by a player with a scope or without one; and a player past the 255 slots told the host is
+  busy, then given a leaver's slot once its grace is over.
 - **The scope** (`ProxyParticipantTests`): a leaving player's objects ending after its grace and nothing else, a mod's
   spawn, record, lifetime and another player's object untouched; coming back within the grace, and a link that drops
   and returns keeping the handles bound; hosting stopping; and a slot given again starting with whole budgets.
@@ -1777,8 +1789,9 @@ copy of each message and the SDK's result for each call included.
 - **The real runtime** (the ModRuntime harness, `TestAuthorityRoutingAcrossRuntimes`): three runtimes over the loopback
   network load one mod; its scene script's crate is shadowed on both players, so each sees one; a player's dropped crate
   is adopted under the same handle, moved and removed for everyone by its commands; a crate from outside the package is
-  refused with the mod's own toast; a leaving player's crates end after its grace and nothing else; and frames allocate
-  nothing offline or online at rest.
+  refused on the player at once, with a message to the mod, and one from a bundle the host lacks with the mod's own
+  toast; a leaving player's crates end after its grace and nothing else; and frames allocate nothing offline or online
+  at rest.
 
 ### Limits, stated plainly
 
@@ -1800,9 +1813,13 @@ copy of each message and the SDK's result for each call included.
   joined player (section 15), so its world's scripted SDK spawns take no shadow key on the host: a joined player's own
   run of them ends after its wait, and the host's are built as replicas. World content registered by its key binds as
   before.
-- **A bundle the network world loaded for a player's replicas is held for the session**, and the game refuses the
-  player's mod a second load of it. Replicas and the host's builds use the mod's own handles when it holds the bundle
-  first; when the replicas load it first, the mod's own later load of it fails in the game until the player leaves.
+- **A load the network world made gives way to the mod's, but not while it is still loading.** Replicas and the host's
+  builds use the mod's own handles when it holds the bundle; a bundle the network world loaded first is let go of when
+  the mod starts its own load of the same file, and what was built from it stands on. A load the network world still
+  has under way then is cancelled, and the engine may refuse the mod's load for that moment.
+- **A replica built through a mod context's own handles ends with that context**, as everything spawned through it does,
+  and is built again on the next frame from whatever holds the bundle then. A shadow whose context ends takes its
+  instance with it, as the host's run of the same context would.
 - **Commands are not forwarded yet**: `SubmitCommand` still runs the mod's handler here in every realm.
 
 ### Choices
@@ -1817,4 +1834,5 @@ copy of each message and the SDK's result for each call included.
 - **A grace before cleanup**, matching the session engine's 30 seconds, so a reconnect does not cost a player its
   objects, and only a player gone for good does.
 - **The mod's own handles first**, on the host and for replicas: the game loads a bundle once per process, so sharing
-  the mod's handle is the only way both can use it.
+  the mod's handle is the only way both can use it. For the same reason a load of the network world's own yields to the
+  mod's: a mod that loads lazily, on its player's first action, never finds its bundle taken.

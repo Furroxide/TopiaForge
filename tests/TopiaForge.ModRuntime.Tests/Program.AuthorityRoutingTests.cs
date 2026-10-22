@@ -20,8 +20,9 @@ namespace TopiaForge.ModRuntime.Tests
         /// Authority routing in the real runtime (WS3.7): three games over the loopback network, each loading the same mod. A
         /// joined player's run of the mod's scene script shadows the host's crate, so each sees one; its player's dropped
         /// crate is adopted by the host as the player's own, under the same handle, and moves and goes for everyone at the
-        /// player's command; a crate the host refuses dies with a toast; a player who leaves takes its crates with it once
-        /// its grace is over, and nothing else; and the frames allocate nothing offline or online at rest.
+        /// player's command; a crate from outside the mod's package is refused on the player at once, and one the host
+        /// cannot make dies with a toast; a player who leaves takes its crates with it once its grace is over, and nothing
+        /// else; and the frames allocate nothing offline or online at rest.
         /// </summary>
         private static void TestAuthorityRoutingAcrossRuntimes(string root)
         {
@@ -76,13 +77,23 @@ namespace TopiaForge.ModRuntime.Tests
                 Assert(WorldRunUntil(games, clock, () => !handle.IsAlive && !host.World.Host.Knows(id) && !other.World.Client.Knows(id), 60),
                     "the host ends it for everyone, and the handle dies with it");
 
-                // A crate the host will not make, from a bundle outside the mod's package, dies with a toast.
-                var refused = Drop(player, "6", "../outside.bundle");
-                Assert(WorldRunUntil(games, clock, () => !refused.IsAlive, 60), "the host refuses a crate from outside the mod's package, and its handle dies");
+                // A crate from outside the mod's package, which the host never makes for a player, is refused on the player at
+                // once, with a message that says how to name the bundle: nothing is made or asked for, and no toast blames the host.
+                var sent = player.World.Counters.AuthorityRequestsSent;
+                Assert(player.Runtime.TryExecutePlayerCommand(AuthorityMod + ":drop", new[] { "6", "../outside.bundle" }, out var outside) && outside != null &&
+                       !outside.Succeeded && outside.ErrorMessage == RuntimeReplication.NotAPlainPath, "a crate from outside the mod's package is refused at once (" + outside?.ErrorMessage + ")");
+                Assert(player.World.Counters.AuthorityRequestsSent == sent && player.Game.Toasts.Count == 0 && Crates(host) == 1 && Crates(player) == 1,
+                    "nothing of it is made or asked for");
+
+                // A crate the host cannot make, from a bundle its package lacks, dies with a toast.
+                host.PackageAssets.MissingBundle = "assets/missing.bundle";
+                var refused = Drop(player, "6", "assets/missing.bundle");
+                Assert(WorldRunUntil(games, clock, () => !refused.IsAlive, 60), "the host cannot make a crate from a bundle it lacks, and its handle dies");
                 var toast = player.Game.Toasts.Single();
-                Assert(toast.Owner == AuthorityMod && toast.Tone == UiTone.Warning && toast.Message == SpawnAuthorityRules.RefusalText(SpawnRefusal.NotPermitted),
+                Assert(toast.Owner == AuthorityMod && toast.Tone == UiTone.Warning && toast.Message == SpawnAuthorityRules.RefusalText(SpawnRefusal.Unbuildable),
                     "the player is told why, once, through the mod's own toasts");
                 Assert(Crates(host) == 1 && Crates(other) == 1 && Crates(player) == 1, "nothing of it stands anywhere");
+                host.PackageAssets.MissingBundle = null;
 
                 // At rest, with the player holding adopted crates, nothing allocates.
                 Drop(player, "1");

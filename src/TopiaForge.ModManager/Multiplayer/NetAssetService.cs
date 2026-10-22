@@ -11,7 +11,8 @@ namespace TopiaForge.ModManager
     /// included, and each spawn that succeeds is recorded at spawn time, so that opening the session to other players later
     /// can baseline it. On a joined player a spawn is routed (WS3.7): on the player's intent it is a prediction the host is
     /// asked for, and scripted it is a shadow of the host's own; the mod holds the handle the gameplay host made either way.
-    /// Every load is listed by the mod, so a listen host makes a player's spawn from the mod's own handles. It keeps
+    /// Every load is listed by the mod, so a listen host makes a player's spawn from the mod's own handles, and a bundle load
+    /// the network world made itself gives way to the mod's own load of that bundle. It keeps
     /// <see cref="IParentAssetScope"/>: a session scope's service accepts its package's prefabs as it did before.
     /// </summary>
     internal sealed class NetAssetService : IAssetService, IParentAssetScope
@@ -43,6 +44,7 @@ namespace TopiaForge.ModManager
 
         public Task<OperationResult<IAssetBundle>> LoadBundleAsync(string relativePath, CancellationToken cancellationToken = default)
         {
+            Replication.YieldBundle(relativePath);
             var load = inner.LoadBundleAsync(relativePath, cancellationToken);
             if (load != null && relativePath != null) Replication.ListBundleLoad(inner, relativePath, load);
             return load!;

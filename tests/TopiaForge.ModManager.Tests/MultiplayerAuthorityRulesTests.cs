@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
             OnlyScriptedCodeEveryPeerRunsIsShadowed();
             AnHonestPlayerNeverMeetsTheHostsLimits();
             BundlePathsArePlainPathsInsideAPackage();
+            OneFileIsOneBundleHoweverItIsSpelled();
             RefusalsSayWhatHappenedAndWhatToDo();
             PredictionsFollowTheirStateMachine();
             ShadowsFollowTheirStateMachine();
@@ -133,6 +134,20 @@ namespace TopiaForge.ModManager.Tests
                          "..", ".", new string('a', 513) })
             {
                 That(!SpawnAuthorityRules.IsSafeBundlePath(bad), "'" + (bad ?? "null").Replace("\0", "\\0").Replace("\n", "\\n") + "' is refused before a file is touched");
+            }
+        }
+
+        private static void OneFileIsOneBundleHoweverItIsSpelled()
+        {
+            foreach (var (left, right) in new[] { ("assets/world.bundle", "assets/world.bundle"), ("assets/world.bundle", "Assets\\World.BUNDLE"), ("a\\b", "a/b") })
+            {
+                That(SpawnAuthorityRules.SameBundleFile(left, right) && SpawnAuthorityRules.SameBundleFile(right, left), "'" + left + "' and '" + right + "' name one file");
+            }
+
+            foreach (var (left, right) in new (string?, string?)[] { ("assets/world.bundle", "assets/world2.bundle"), ("assets/world.bundle", "assets/worle.bundle"),
+                         ("a/b", "a/b/"), ("assets/world.bundle", null), (null, null) })
+            {
+                That(!SpawnAuthorityRules.SameBundleFile(left, right), "'" + (left ?? "null") + "' and '" + (right ?? "null") + "' do not");
             }
         }
 

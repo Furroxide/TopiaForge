@@ -229,6 +229,24 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         }
 
         /// <summary>
+        /// Whether two bundle paths may name one file of a package on the game's platform, whose file names ignore case and
+        /// take either separator. A load the network world made gives way to a mod's own load of the same file however a
+        /// player spelled it, since the game refuses a second load of a bundle that is loaded already.
+        /// </summary>
+        internal static bool SameBundleFile(string? left, string? right)
+        {
+            if (left == null || right == null || left.Length != right.Length) return false;
+            for (var index = 0; index < left.Length; index++)
+            {
+                var one = left[index] == '\\' ? '/' : left[index];
+                var other = right[index] == '\\' ? '/' : right[index];
+                if (one != other && char.ToUpperInvariant(one) != char.ToUpperInvariant(other)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// What the player reads when a spawn of theirs ends unadopted: what happened, and what to do next. The toast names
         /// no mod, player or object, so it holds nothing another player wrote.
         /// </summary>

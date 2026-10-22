@@ -17,6 +17,7 @@ namespace TopiaForge.ModManager
     {
         internal const string OnlyTheHostMakes = "Only the host can make this kind of object here; its provider does not say how the host makes it for players.";
         internal const string NotShareable = "This object cannot be shared with the other players: its prefab does not say which bundle it comes from.";
+        internal const string NotAPlainPath = "This object cannot be shared with the other players: load its bundle by a plain path inside the mod's package, such as assets/world.bundle, without \"./\" or doubled slashes.";
         internal const string TooManyWaiting = "Too many objects are waiting for the host; wait a moment, then try again.";
         internal const string TooManyObjects = "This player already has as many objects as the host allows. Remove some, then try again.";
         internal const string HostNotReady = "The host is not ready for new objects yet; try again in a moment.";
@@ -65,6 +66,9 @@ namespace TopiaForge.ModManager
             {
                 var asset = MultiplayerAssetDescriptor.Of(request.Prefab);
                 if (!asset.IsPortable) return OperationResult<ISpawnedEntity>.Failure(ModErrorCode.Unavailable, NotShareable);
+
+                // The host makes a player's object only from a plain path inside the package; anything else it refuses for certain.
+                if (!SpawnAuthorityRules.IsSafeBundlePath(asset.BundlePath)) return OperationResult<ISpawnedEntity>.Failure(ModErrorCode.Unavailable, NotAPlainPath);
                 var refusal = authority.CheckPrediction();
                 if (refusal != SpawnRefusal.None) return OperationResult<ISpawnedEntity>.Failure(ModErrorCode.RateLimited, Refused(refusal));
                 var predicted = inner.Spawn(request);
@@ -151,6 +155,24 @@ namespace TopiaForge.ModManager
             }
 
             return OperationResult<bool>.Success(true);
+        }
+
+        /// <summary>
+        /// This context's mod starts loading <paramref name="bundlePath"/>: a load of it the network world made gives way first,
+        /// so the game does not refuse the mod's own load.
+        /// </summary>
+        internal void YieldBundle(string bundlePath)
+        {
+            // Off the game thread the asset service refuses the load anyway, and the network world is the game thread's alone.
+            if (bundlePath == null || !UnityMainThreadGuard.IsCurrent) return;
+            try
+            {
+                services.Authority?.YieldBundle(OwnerModId, bundlePath);
+            }
+            catch (Exception)
+            {
+                // The mod's load goes on whatever the network world does.
+            }
         }
 
         /// <summary>Lists a bundle load this context's mod started, so a listen host makes players' spawns from its handle first.</summary>

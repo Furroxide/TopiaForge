@@ -44,11 +44,15 @@ namespace TopiaForge.ModManager
             Add(modId, new Load(owner, assets, bundlePath, assetName, null, task));
         }
 
-        /// <summary>Finds a live prefab the mod loaded from <paramref name="bundlePath"/>, and the service that spawns it.</summary>
-        internal bool TryGetPrefab(string modId, string bundlePath, string assetName, out IAssetService assets, out IPrefabAsset prefab)
+        /// <summary>
+        /// Finds a live prefab the mod loaded from <paramref name="bundlePath"/>, the service that spawns it, and the context that
+        /// holds it, whose end takes the prefab and what was spawned through that service with it.
+        /// </summary>
+        internal bool TryGetPrefab(string modId, string bundlePath, string assetName, out IAssetService assets, out IPrefabAsset prefab, out object owner)
         {
             assets = null!;
             prefab = null!;
+            owner = null!;
             if (!byMod.TryGetValue(modId, out var loads)) return false;
             for (var index = loads.Count - 1; index >= 0; index--)
             {
@@ -62,17 +66,19 @@ namespace TopiaForge.ModManager
                 if (!TryResult(load.Prefab, out var found) || !Alive(found)) continue;
                 assets = load.Assets;
                 prefab = found;
+                owner = load.Owner;
                 return true;
             }
 
             return false;
         }
 
-        /// <summary>Finds a live bundle the mod loaded, and the service that loads prefabs from it.</summary>
-        internal bool TryGetBundle(string modId, string bundlePath, out IAssetService assets, out IAssetBundle bundle)
+        /// <summary>Finds a live bundle the mod loaded, the service that loads prefabs from it, and the context that holds it.</summary>
+        internal bool TryGetBundle(string modId, string bundlePath, out IAssetService assets, out IAssetBundle bundle, out object owner)
         {
             assets = null!;
             bundle = null!;
+            owner = null!;
             if (!byMod.TryGetValue(modId, out var loads)) return false;
             for (var index = loads.Count - 1; index >= 0; index--)
             {
@@ -81,6 +87,7 @@ namespace TopiaForge.ModManager
                 if (!TryResult(load.Bundle, out var found) || !Alive(found)) continue;
                 assets = load.Assets;
                 bundle = found;
+                owner = load.Owner;
                 return true;
             }
 

@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager.Tests
             MultiplayerAuthorityRulesTests.Run();
             AuthorityWireTests.Run();
             SpawnAdoptionTests.Run();
+            AuthorityAssetLoadTests.Run();
             SpawnChangeTests.Run();
             SpawnShadowTests.Run();
             SpawnAbuseTests.Run();

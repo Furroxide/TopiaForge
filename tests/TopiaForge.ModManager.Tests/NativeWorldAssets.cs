@@ -19,7 +19,8 @@ namespace TopiaForge.ModManager.Tests
         private readonly IModLifetime lifetime;
         private readonly int gameThread = Thread.CurrentThread.ManagedThreadId;
         private readonly List<IHeldLoad> waiting = new List<IHeldLoad>();
-        private readonly HashSet<string> loadedFiles = new HashSet<string>(StringComparer.Ordinal);
+        // The game's platform names a file ignoring case and with either separator, so one file loads once however it is spelled.
+        private readonly HashSet<string> loadedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private int offThreadReleases;
 
         internal NativeWorldAssets(FakeWorldScene scene, IModLifetime lifetime)
@@ -66,7 +67,7 @@ namespace TopiaForge.ModManager.Tests
             BundleLoads++;
             var load = new HeldLoad<IAssetBundle>(() =>
             {
-                if (!loadedFiles.Add(relativePath))
+                if (!loadedFiles.Add(FileOf(relativePath)))
                 {
                     RefusedLoads++;
                     return OperationResult<IAssetBundle>.Failure(ModErrorCode.External, "Another bundle of the same file is loaded.");
@@ -84,13 +85,15 @@ namespace TopiaForge.ModManager.Tests
             var load = new HeldLoad<IPrefabAsset>(() =>
             {
                 LivePrefabs++;
-                return OperationResult<IPrefabAsset>.Success(new Prefab(this, assetName));
+                return OperationResult<IPrefabAsset>.Success(new Prefab(this, bundle.RelativePath, assetName));
             });
             waiting.Add(load);
             return AssetNativeOperation<IPrefabAsset>.Start(lifetime, "Prefab '" + assetName + "'", () => load, cancellationToken);
         }
 
         public OperationResult<ISpawnedEntity> Spawn(AssetSpawnRequest request) => spawner.Spawn(request);
+
+        private static string FileOf(string relativePath) => relativePath.Replace('\\', '/');
 
         /// <summary>Lets a handle go as the engine does: on the game thread only, refused anywhere else.</summary>
         private void Release(Action release)
@@ -141,21 +144,27 @@ namespace TopiaForge.ModManager.Tests
             {
                 if (!IsAlive) return;
                 IsAlive = false;
-                owner.loadedFiles.Remove(RelativePath);
+                owner.loadedFiles.Remove(FileOf(RelativePath));
             });
         }
 
-        private sealed class Prefab : IPrefabAsset
+        /// <summary>A prefab that knows its bundle and its name, as the runtime's own does, so a joined player can share it.</summary>
+        private sealed class Prefab : IPrefabAsset, IPrefabAssetProvenance
         {
             private readonly NativeWorldAssets owner;
 
-            internal Prefab(NativeWorldAssets owner, string name)
+            internal Prefab(NativeWorldAssets owner, string bundlePath, string name)
             {
                 this.owner = owner;
+                BundlePath = bundlePath;
                 Name = name;
             }
 
             public string Name { get; }
+
+            public string BundlePath { get; }
+
+            public string AssetName => Name;
 
             public bool IsAlive { get; private set; } = true;
 

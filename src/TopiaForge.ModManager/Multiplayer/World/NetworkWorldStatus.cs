@@ -239,5 +239,13 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets the verdicts that named no prediction waiting for one, or an entity another copy stands for.</summary>
         internal long VerdictsIgnored { get; set; }
+
+        /// <summary>Gets the asset replicas built again because the mod context whose handles built them ended.</summary>
+        internal long ReplicasRebuilt { get; set; }
+
+        // Authority routing (WS3.7), on either side.
+
+        /// <summary>Gets the bundle loads the network world let go of because their mod started its own load of the bundle.</summary>
+        internal long AssetLoadsYielded { get; set; }
     }
 }

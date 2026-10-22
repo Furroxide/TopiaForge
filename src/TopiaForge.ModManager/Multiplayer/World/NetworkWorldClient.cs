@@ -68,6 +68,12 @@ namespace TopiaForge.ModManager
 
         internal ISpawnedEntity? AssetReplica { get; set; }
 
+        /// <summary>
+        /// Gets the mod context whose own handles built <see cref="AssetReplica"/>, which takes the replica with it when it
+        /// ends; null when the replica came from a load of the network world's own (WS3.7).
+        /// </summary>
+        internal object? ReplicaOwner { get; set; }
+
         internal IInternalReplicaFactory? Factory { get; set; }
 
         internal IEntity? FactoryReplica { get; set; }
@@ -398,6 +404,7 @@ namespace TopiaForge.ModManager
 
             channel.Receive();
             var now = clock();
+            if (rebuilds.Count > 0) RebuildReplicas();
             AdvanceBuilds(now);
             if (requestPending && now >= nextRequestMicros) SendRequest(now);
             if (progressPending && receiving >= 0) SendProgress();

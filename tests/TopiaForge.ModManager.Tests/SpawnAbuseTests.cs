@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             TheHostMakesOnlyWhatPlayersMayHave();
             ForgedIdentitiesReachNothing();
             NoPlayerChangesWhatIsNotItsOwn();
+            PlayersPastTheSlotsAreToldTheHostIsBusy();
         }
 
         private static void AFloodOfSpawnsIsThrottled()
@@ -247,9 +248,47 @@ namespace TopiaForge.ModManager.Tests
             That(host.Host.TryGetHosted(ownId, out var hosted) && Near(((FakeWorldObject)hosted.Object!).Position, new NetVector3(40, 1, 0)), "while its own moves");
         }
 
+        private static void PlayersPastTheSlotsAreToldTheHostIsBusy()
+        {
+            var rig = AuthorityRig.Create(players: 0);
+            var host = rig.Host;
+            var log = Log(rig);
+            var controls = new List<LoopbackControl>();
+            for (var index = 0; index <= WorldEntryCodec.MaximumOwnerSlot; index++)
+            {
+                var control = rig.Network.AddPlayer("x" + index);
+                rig.Network.Join(control);
+                controls.Add(control);
+            }
+
+            rig.Frames(2);
+            foreach (var control in controls) Inject(rig, control.Id, Spawn(1));
+            rig.Frames(3);
+            var adopted = controls.Take(WorldEntryCodec.MaximumOwnerSlot).Count(control => Verdicts(log, control.Id).SingleOrDefault().Id.IsValid);
+            That(host.World.Proxies.ProxyCount == WorldEntryCodec.MaximumOwnerSlot && adopted == WorldEntryCodec.MaximumOwnerSlot,
+                "slots one to 255 each hold a player's scope and its crate (" + host.World.Proxies.ProxyCount + " scopes, " + adopted + " adopted)");
+            var waiting = controls[WorldEntryCodec.MaximumOwnerSlot];
+            That(Verdicts(log, waiting.Id).SingleOrDefault().Reason == SpawnRefusal.HostBusy && !host.World.Proxies.TryGetProxy(waiting.Id, out _),
+                "a player past the slots is told the host is busy, and gets no scope");
+
+            // A player leaves; once its grace is over its slot is free, and the waiting player is given it.
+            That(host.World.Proxies.TryGetProxy(controls[0].Id, out var leaver), "the first player holds a slot");
+            var slot = leaver.Slot;
+            rig.Network.Leave(controls[0]);
+            rig.Frames(2);
+            rig.Clock.Advance(SpawnAuthorityRules.DepartureGraceMicros);
+            rig.Frames(2);
+            Inject(rig, waiting.Id, Spawn(2));
+            rig.Frames(3);
+            That(host.World.Proxies.TryGetProxy(waiting.Id, out var given) && given.Slot == slot && Verdicts(log, waiting.Id).Last().Id.IsValid,
+                "once the leaver's grace is over, the waiting player is given its slot, and its crate is made");
+        }
+
         internal static LoopbackChannel HostChannel(WorldRig rig) => rig.Host.Control.Channel(InternalSystemChannelKind.WorldReplication)!;
 
         internal static void Inject(WorldRig rig, WorldPeer from, byte[] message) => HostChannel(rig).Inject(from.Control.Id, message);
+
+        internal static void Inject(WorldRig rig, ParticipantId from, byte[] message) => HostChannel(rig).Inject(from, message);
 
         /// <summary>Starts copying every message the host sends, to read its verdicts.</summary>
         internal static List<(ParticipantId To, byte[] Payload)> Log(WorldRig rig)
@@ -260,13 +299,16 @@ namespace TopiaForge.ModManager.Tests
         }
 
         /// <summary>The verdicts the host sent <paramref name="player"/>, in order: an adoption's id, or a refusal's reason.</summary>
-        internal static List<(uint Provisional, NetworkEntityId Id, SpawnRefusal Reason)> Verdicts(List<(ParticipantId To, byte[] Payload)> log, WorldPeer player)
+        internal static List<(uint Provisional, NetworkEntityId Id, SpawnRefusal Reason)> Verdicts(List<(ParticipantId To, byte[] Payload)> log, WorldPeer player) =>
+            Verdicts(log, player.Control.Id);
+
+        internal static List<(uint Provisional, NetworkEntityId Id, SpawnRefusal Reason)> Verdicts(List<(ParticipantId To, byte[] Payload)> log, ParticipantId player)
         {
             var verdicts = new List<(uint, NetworkEntityId, SpawnRefusal)>();
             var reader = new WorldWireReader();
             foreach (var (to, payload) in log)
             {
-                if (!to.Equals(player.Control.Id)) continue;
+                if (!to.Equals(player)) continue;
                 reader.Reset(payload);
                 if (!reader.TryReadHeader(out var type)) continue;
                 if (type == AuthorityMessages.SpawnAdopted && AuthorityWire.TryReadAdopted(reader, out var adopted, out var id)) verdicts.Add((adopted, id, SpawnRefusal.None));

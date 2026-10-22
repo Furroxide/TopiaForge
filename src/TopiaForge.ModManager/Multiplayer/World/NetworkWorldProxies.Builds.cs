@@ -9,8 +9,9 @@ namespace TopiaForge.ModManager
     /// How a listen host makes a joined player's asset spawn (WS3.7). The mod's own handles come first, as its contexts'
     /// network decorators saw them load: the prefab it loaded, else a prefab loaded from the bundle it holds, waiting while
     /// its own load of that bundle runs. Only a bundle the mod does not hold is loaded by the host, through the mod's
-    /// package, and let go of once nothing has used it for <see cref="OwnLoadIdleMicros"/>, so the mod can load it again
-    /// itself. Loads are polled, never awaited, and a build that takes longer than
+    /// package, and let go of once nothing has used it for <see cref="OwnLoadIdleMicros"/>, or at once when the mod starts
+    /// its own load of it (<see cref="YieldBundle"/>), so however often players spawn from it the mod's load is never
+    /// refused. Loads are polled, never awaited, and a build that takes longer than
     /// <see cref="SpawnAuthorityRules.HostBuildTimeoutMicros"/> is refused as unbuildable.
     /// </summary>
     internal sealed partial class NetworkWorldProxies
@@ -27,6 +28,7 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<string, OwnLoad<IAssetBundle>> ownBundles = new Dictionary<string, OwnLoad<IAssetBundle>>(StringComparer.Ordinal);
         private readonly Dictionary<string, OwnLoad<IPrefabAsset>> ownPrefabs = new Dictionary<string, OwnLoad<IPrefabAsset>>(StringComparer.Ordinal);
         private readonly List<string> idleScratch = new List<string>();
+        private readonly List<string> yieldScratch = new List<string>();
 
         private enum BuildStep
         {
@@ -104,7 +106,7 @@ namespace TopiaForge.ModManager
             var bundlePath = spawn.BundlePath!;
             var assetName = spawn.AssetName!;
             var loads = replication.AssetLoads;
-            if (loads.TryGetPrefab(mod, bundlePath, assetName, out var modAssets, out var modPrefab))
+            if (loads.TryGetPrefab(mod, bundlePath, assetName, out var modAssets, out var modPrefab, out _))
             {
                 spawn.Assets = modAssets;
                 spawn.Prefab = modPrefab;
@@ -131,7 +133,7 @@ namespace TopiaForge.ModManager
             IAssetService bundleAssets;
             IAssetBundle? bundle;
             OwnLoad<IAssetBundle>? parent = null;
-            if (loads.TryGetBundle(mod, bundlePath, out var modBundleAssets, out var modBundle))
+            if (loads.TryGetBundle(mod, bundlePath, out var modBundleAssets, out var modBundle, out _))
             {
                 bundleAssets = modBundleAssets;
                 bundle = modBundle;
@@ -214,6 +216,39 @@ namespace TopiaForge.ModManager
             idleScratch.Clear();
         }
 
+        /// <summary>
+        /// The mod <paramref name="modId"/> starts loading <paramref name="bundlePath"/> itself: the host's own load of it gives
+        /// way first, with every prefab loaded from it, since the game refuses a second load of a bundle that is loaded already.
+        /// What was made from them stands on, and builds still under way wait for the mod's load and use its handles.
+        /// </summary>
+        internal void YieldBundle(string modId, string bundlePath)
+        {
+            if (!IsActive || ownBundles.Count == 0) return;
+            var prefix = BundleKey(modId, string.Empty);
+            yieldScratch.Clear();
+            foreach (var key in ownBundles.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.Ordinal) && SpawnAuthorityRules.SameBundleFile(key.Substring(prefix.Length), bundlePath)) yieldScratch.Add(key);
+            }
+
+            foreach (var key in yieldScratch)
+            {
+                var bundle = ownBundles[key];
+                idleScratch.Clear();
+                foreach (var pair in ownPrefabs)
+                {
+                    if (ReferenceEquals(pair.Value.Parent, bundle)) idleScratch.Add(pair.Key);
+                }
+
+                foreach (var prefabKey in idleScratch) ReleaseOwnPrefab(prefabKey);
+                idleScratch.Clear();
+                ReleaseOwnBundle(key);
+                counters.AssetLoadsYielded++;
+            }
+
+            yieldScratch.Clear();
+        }
+
         private void ReleaseOwnPrefab(string key)
         {
             if (!ownPrefabs.TryGetValue(key, out var load)) return;
@@ -244,7 +279,9 @@ namespace TopiaForge.ModManager
             if (load.Parent != null) load.Parent.LastUsedMicros = now;
         }
 
-        private static string BundleKey(ProxySpawn spawn) => spawn.ModId.ToLowerInvariant() + "\n" + spawn.BundlePath;
+        private static string BundleKey(ProxySpawn spawn) => BundleKey(spawn.ModId, spawn.BundlePath!);
+
+        private static string BundleKey(string modId, string bundlePath) => modId.ToLowerInvariant() + "\n" + bundlePath;
 
         private static string PrefabKey(ProxySpawn spawn) => BundleKey(spawn) + "\n" + spawn.AssetName;
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -34,7 +35,9 @@ namespace TopiaForge.ModManager
     /// A joined player's asset replicas: a spawn made through a mod's asset service is built here through the owning mod's
     /// own asset service, its bundle and prefab loaded once and shared by every replica of them. The mod's own handles come
     /// first (WS3.7): a prefab it loaded, or a bundle it holds, which the game would refuse to load a second time, as a
-    /// listen host's builds of its players' spawns do. Loads are polled each frame and never awaited, a load that takes
+    /// listen host's builds of its players' spawns do. A replica built through a mod context's handles ends with that
+    /// context, so it is built again once the context has gone; and a bundle loaded here gives way when the mod starts its
+    /// own load of it, so the mod's load is never refused. Loads are polled each frame and never awaited, a load that takes
     /// longer than <see cref="BuildTimeoutMicros"/> counts as unbuildable, and leaving lets go of every handle, including
     /// those still loading.
     /// </summary>
@@ -58,6 +61,10 @@ namespace TopiaForge.ModManager
         private readonly Dictionary<string, WorldAssetLoad<IAssetBundle>> bundles = new Dictionary<string, WorldAssetLoad<IAssetBundle>>(StringComparer.Ordinal);
         private readonly Dictionary<string, WorldAssetLoad<IPrefabAsset>> prefabs = new Dictionary<string, WorldAssetLoad<IPrefabAsset>>(StringComparer.Ordinal);
         private readonly Dictionary<string, IAssetService> prefabServices = new Dictionary<string, IAssetService>(StringComparer.Ordinal);
+        private readonly Dictionary<string, object> prefabOwners = new Dictionary<string, object>(StringComparer.Ordinal);
+        private readonly List<string> keyScratch = new List<string>();
+        private readonly List<string> yieldScratch = new List<string>();
+        private readonly List<ClientWorldEntity> rebuilds = new List<ClientWorldEntity>();
         private readonly List<ClientWorldEntity> building = new List<ClientWorldEntity>();
         private int pendingBuilds;
 
@@ -81,7 +88,7 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            var bundleKey = mirrored.OwnerModId + "\n" + descriptor.BundlePath;
+            var bundleKey = BundleKey(mirrored.OwnerModId, descriptor.BundlePath!);
             mirrored.Build = new AssetReplicaBuild(assets, bundleKey, bundleKey + "\n" + descriptor.AssetName, descriptor.BundlePath!, descriptor.AssetName!, clock());
             building.Add(mirrored);
             pendingBuilds++;
@@ -123,9 +130,9 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            if (modLoads.TryGetPrefab(mirrored.OwnerModId, build.BundlePath, build.AssetName, out var modAssets, out var modPrefab))
+            if (modLoads.TryGetPrefab(mirrored.OwnerModId, build.BundlePath, build.AssetName, out var modAssets, out var modPrefab, out var modOwner))
             {
-                SpawnReplica(mirrored, modAssets, modPrefab);
+                SpawnReplica(mirrored, modAssets, modPrefab, modOwner);
                 return;
             }
 
@@ -150,7 +157,8 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            SpawnReplica(mirrored, prefabServices[build.PrefabKey], prefab.Value!);
+            prefabOwners.TryGetValue(build.PrefabKey, out var owner);
+            SpawnReplica(mirrored, prefabServices[build.PrefabKey], prefab.Value!, owner);
         }
 
         /// <summary>Starts loading a replica's prefab: from the bundle the mod holds, waiting while its own load runs, else from one loaded here.</summary>
@@ -158,10 +166,12 @@ namespace TopiaForge.ModManager
         {
             IAssetService prefabAssets;
             IAssetBundle from;
-            if (!bundles.ContainsKey(build.BundleKey) && modLoads.TryGetBundle(mirrored.OwnerModId, build.BundlePath, out var bundleAssets, out var modBundle))
+            object? owner = null;
+            if (!bundles.ContainsKey(build.BundleKey) && modLoads.TryGetBundle(mirrored.OwnerModId, build.BundlePath, out var bundleAssets, out var modBundle, out var bundleOwner))
             {
                 prefabAssets = bundleAssets;
                 from = modBundle;
+                owner = bundleOwner;
             }
             else if (!bundles.ContainsKey(build.BundleKey) && modLoads.IsLoadingBundle(mirrored.OwnerModId, build.BundlePath))
             {
@@ -205,6 +215,7 @@ namespace TopiaForge.ModManager
 
             prefabs.Add(build.PrefabKey, WorldAssetLoad<IPrefabAsset>.Start(token => prefabAssets.LoadPrefabAsync(from, build.AssetName, token)));
             prefabServices.Add(build.PrefabKey, prefabAssets);
+            if (owner != null) prefabOwners.Add(build.PrefabKey, owner);
             return BuildStep.Ready;
         }
 
@@ -213,7 +224,89 @@ namespace TopiaForge.ModManager
             if (prefabs.TryGetValue(key, out var load)) load.Release();
             prefabs.Remove(key);
             prefabServices.Remove(key);
+            prefabOwners.Remove(key);
         }
+
+        /// <summary>
+        /// The mod <paramref name="modId"/> starts loading <paramref name="bundlePath"/> itself: a load of it made here for
+        /// replicas gives way first, with every prefab loaded through it, since the game refuses a second load of a bundle that
+        /// is loaded already. Replicas built from them stand on, and later builds use the mod's own handles.
+        /// </summary>
+        internal void YieldBundle(string modId, string bundlePath)
+        {
+            if (!IsActive || bundles.Count == 0) return;
+            var modPrefix = BundleKey(modId, string.Empty);
+            yieldScratch.Clear();
+            foreach (var key in bundles.Keys)
+            {
+                if (key.StartsWith(modPrefix, StringComparison.Ordinal) && SpawnAuthorityRules.SameBundleFile(key.Substring(modPrefix.Length), bundlePath)) yieldScratch.Add(key);
+            }
+
+            foreach (var bundleKey in yieldScratch)
+            {
+                var prefix = bundleKey + "\n";
+                keyScratch.Clear();
+                foreach (var key in prefabs.Keys)
+                {
+                    if (key.StartsWith(prefix, StringComparison.Ordinal)) keyScratch.Add(key);
+                }
+
+                foreach (var key in keyScratch) ForgetPrefab(key);
+                keyScratch.Clear();
+                bundles[bundleKey].Release();
+                bundles.Remove(bundleKey);
+                counters.AssetLoadsYielded++;
+            }
+
+            yieldScratch.Clear();
+        }
+
+        /// <summary>
+        /// A mod context ended: the asset replicas built through its handles ended with it. Each is built again on the next
+        /// frame, once the context has let go of its bundle, from whatever holds it then.
+        /// </summary>
+        private void QueueRebuilds(object owner)
+        {
+            foreach (var mirrored in entities.Values)
+            {
+                if (mirrored.Binding == ClientEntityBinding.Asset && ReferenceEquals(mirrored.ReplicaOwner, owner)) rebuilds.Add(mirrored);
+            }
+        }
+
+        private void RebuildReplicas()
+        {
+            for (var index = 0; index < rebuilds.Count; index++)
+            {
+                var mirrored = rebuilds[index];
+                if (!entities.TryGetValue(mirrored.Id.Value, out var current) || !ReferenceEquals(current, mirrored) ||
+                    mirrored.Binding != ClientEntityBinding.Asset || IsAlive(mirrored.AssetReplica))
+                {
+                    continue;
+                }
+
+                Release(mirrored);
+                mirrored.Unbuildable = false;
+                Build(mirrored);
+                counters.ReplicasRebuilt++;
+            }
+
+            rebuilds.Clear();
+        }
+
+        private static bool IsAlive(ISpawnedEntity? replica)
+        {
+            try
+            {
+                return replica != null && replica.IsAlive;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>A bundle's key: its mod, as the runtime compares mod ids, ignoring case, and its path in the mod's package.</summary>
+        private static string BundleKey(string modId, string bundlePath) => modId.ToLowerInvariant() + "\n" + bundlePath;
 
         private static bool IsAlive(IPrefabAsset prefab)
         {
@@ -227,8 +320,11 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>Spawns a replica from <paramref name="prefab"/> through <paramref name="assets"/>, the service that holds it.</summary>
-        private void SpawnReplica(ClientWorldEntity mirrored, IAssetService assets, IPrefabAsset prefab)
+        /// <summary>
+        /// Spawns a replica from <paramref name="prefab"/> through <paramref name="assets"/>, the service that holds it, which
+        /// belongs to <paramref name="owner"/>'s mod context when it is the mod's own, or to its package when it is null.
+        /// </summary>
+        private void SpawnReplica(ClientWorldEntity mirrored, IAssetService assets, IPrefabAsset prefab, object? owner)
         {
             OperationResult<ISpawnedEntity>? spawned;
             try
@@ -247,6 +343,7 @@ namespace TopiaForge.ModManager
             }
 
             mirrored.AssetReplica = replica;
+            mirrored.ReplicaOwner = owner;
             mirrored.Binding = ClientEntityBinding.Asset;
             FinishBuild(mirrored, true);
             var adopted = Adopt(replica);
@@ -276,7 +373,9 @@ namespace TopiaForge.ModManager
             foreach (var bundle in bundles.Values) bundle.Release();
             prefabs.Clear();
             prefabServices.Clear();
+            prefabOwners.Clear();
             bundles.Clear();
+            rebuilds.Clear();
         }
     }
 }

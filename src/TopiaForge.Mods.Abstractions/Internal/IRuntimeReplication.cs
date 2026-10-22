@@ -176,8 +176,10 @@ namespace TopiaForge.Mods.Internal
     {
         /// <summary>
         /// Makes the canonical entity <paramref name="descriptor"/> describes, for the player the calling context's
-        /// <see cref="IRuntimeReplication.CurrentIntent"/> names, or says why it cannot. The runtime records what it returns;
-        /// the handler must not register it itself.
+        /// <see cref="IRuntimeReplication.CurrentIntent"/> names, or says why it cannot. A participant context's own code
+        /// forwards no intent, so for its spawns <see cref="IRuntimeReplication.CurrentIntent"/> names no player; the runtime
+        /// records the entity as that player's all the same. The runtime records what it returns; the handler must not
+        /// register it itself.
         /// </summary>
         OperationResult<IEntity> Spawn(InternalSpawnDescriptor descriptor);
 

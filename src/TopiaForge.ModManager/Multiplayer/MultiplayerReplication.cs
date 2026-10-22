@@ -65,6 +65,12 @@ namespace TopiaForge.ModManager
 
         /// <summary>Routes a destroy; null when the entity is none of the network world's.</summary>
         OperationResult<bool>? RouteDestroy(IEntity entity, bool scripted);
+
+        /// <summary>
+        /// A mod starts loading one of its bundles itself: a load of it the network world made, for a joined player's spawn on
+        /// a listen host or for a joined player's replicas, gives way first, so the game does not refuse the mod's load.
+        /// </summary>
+        void YieldBundle(string modId, string bundlePath);
     }
 
     /// <summary>

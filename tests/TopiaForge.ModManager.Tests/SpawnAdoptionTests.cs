@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
@@ -28,6 +29,8 @@ namespace TopiaForge.ModManager.Tests
             APlayerRecordsNothingAsCanonical();
             APlayerBuildsReplicasFromItsModsOwnHandles();
             APlayerPastItsQuotaIsToldAtOnce();
+            ABundlePathTheHostWouldRefuseIsRefusedHereSayingWhy();
+            ACommandsAnswerActsOnThePlayersOwnAction();
             AParticipantsObjectsAreThePlayersAndEndWithIt();
         }
 
@@ -293,6 +296,45 @@ namespace TopiaForge.ModManager.Tests
             That(!past.Succeeded && past.ErrorCode == ModErrorCode.RateLimited && past.ErrorMessage == RuntimeReplication.TooManyObjects && p1.Assets.Spawned.Count == made,
                 "past the host's quota the spawn is refused before anything is made, saying what to do (" + past + ")");
             That(mine.Ui.Toasts.Count == 0 && p1.Client.PendingPredictions == SpawnAuthorityRules.MaximumPendingSpawns, "the mod hears it; nothing is shown, and nothing more waits");
+        }
+
+        private static void ABundlePathTheHostWouldRefuseIsRefusedHereSayingWhy()
+        {
+            var rig = AuthorityRig.Create(players: 1);
+            var p1 = rig.Players[0];
+            var mine = new AuthorityMod(p1);
+
+            // The asset service takes "./" in a package path, but the host makes players' objects only from plain paths.
+            var prefab = mine.Load(bundlePath: "./" + AuthorityMod.Bundle);
+            var made = p1.Assets.Spawned.Count;
+            var sent = p1.Counters().AuthorityRequestsSent;
+            var spawned = mine.SpawnAsPlayer(prefab, 1);
+            That(!spawned.Succeeded && spawned.ErrorCode == ModErrorCode.Unavailable && spawned.ErrorMessage == RuntimeReplication.NotAPlainPath,
+                "the player's spawn is refused before anything is made, saying how to name the bundle (" + spawned.ErrorMessage + ")");
+            rig.Frames(10);
+            That(p1.Assets.Spawned.Count == made && p1.Counters().AuthorityRequestsSent == sent && mine.Ui.Toasts.Count == 0 && AuthorityRig.Live(rig.Host).Count == 0,
+                "nothing was made or asked for, and no toast blames the host");
+        }
+
+        private static void ACommandsAnswerActsOnThePlayersOwnAction()
+        {
+            // A generated command's answer runs, frames later, in the execution context its submitting code had: the
+            // session captures it when the answer is deferred and runs the answer inside it when the answer arrives.
+            var rig = AuthorityRig.Create(players: 1);
+            var p1 = rig.Players[0];
+            var mine = new AuthorityMod(p1);
+            var prefab = mine.Load();
+            var submitted = mine.AsPlayer(() => ExecutionContext.Capture())!;
+            rig.Frames(3);
+            OperationResult<ISpawnedEntity>? answered = null;
+            ExecutionContext.Run(submitted, _ => answered = mine.Spawn(prefab, 4), null);
+            That(answered != null && answered.Succeeded && p1.Client.PendingPredictions == 1 && p1.Counters().ShadowsMade == 0,
+                "a spawn the answer makes is the player's own action: a prediction, never a shadow");
+            That(rig.Run(() => p1.Client.OwnedObjects == 1, 60) && answered!.Value!.IsAlive, "and the host adopts it under the same handle");
+
+            // The same call outside the answer is the script's: a shadow of the host's own run.
+            mine.Spawn(prefab, 5);
+            That(p1.Client.WaitingShadows == 1 && p1.Client.PendingPredictions == 0, "while the same call outside the answer is a shadow");
         }
 
         private static void AParticipantsObjectsAreThePlayersAndEndWithIt()

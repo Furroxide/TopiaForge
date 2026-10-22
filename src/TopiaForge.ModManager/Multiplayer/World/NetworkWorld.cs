@@ -281,6 +281,12 @@ namespace TopiaForge.ModManager
 
         public OperationResult<bool>? RouteDestroy(IEntity entity, bool scripted) => Client.RouteDestroy(entity, scripted);
 
+        public void YieldBundle(string modId, string bundlePath)
+        {
+            Proxies.YieldBundle(modId, bundlePath);
+            Client.YieldBundle(modId, bundlePath);
+        }
+
         private bool TryGetId(IEntity entity, out NetworkEntityId networkId)
         {
             networkId = NetworkEntityId.None;

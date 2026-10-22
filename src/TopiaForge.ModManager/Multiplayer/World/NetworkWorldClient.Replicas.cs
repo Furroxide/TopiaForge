@@ -34,6 +34,7 @@ namespace TopiaForge.ModManager
         public void ReleaseOwner(object owner)
         {
             if (owner == null) throw new ArgumentNullException(nameof(owner));
+            if (IsActive) QueueRebuilds(owner);
             List<string>? gone = null;
             foreach (var pair in localContent)
             {
@@ -106,6 +107,7 @@ namespace TopiaForge.ModManager
             NetOwner.TryFromSlot(update.OwnerSlot, out var owner);
             var kind = update.Source == WorldEntrySource.SceneObject ? MultiplayerSpawnKinds.SceneObject : update.Kind;
             var added = table.TryAdd(update.Id, kind, owner, origin);
+            if (added == NetworkEntityAddResult.DuplicateOrigin && EndStaleHolder(origin)) added = table.TryAdd(update.Id, kind, owner, origin);
             if (added != NetworkEntityAddResult.Added)
             {
                 if (added == NetworkEntityAddResult.Tombstoned) counters.StaleMessages++;
@@ -118,6 +120,19 @@ namespace TopiaForge.ModManager
             entities.Add(update.Id.Value, mirrored);
             driver.Track(mirrored);
             Build(mirrored);
+        }
+
+        /// <summary>
+        /// Ends the entity here that holds <paramref name="origin"/> when the baseline under way has not listed it. Shadow keys
+        /// start over with each of the host's world sessions (WS3.7), and an honest host never holds two live entities with one
+        /// key, so that entity is one the host ended while its despawn went with an earlier stream; keeping it would refuse
+        /// the entity that holds the key now.
+        /// </summary>
+        private bool EndStaleHolder(NetSpawnOrigin origin)
+        {
+            if (!table.TryFindByOrigin(origin, out var holder) || !entities.TryGetValue(holder.Value, out var stale) || !stale.Stale) return false;
+            Remove(stale, true);
+            return true;
         }
 
         private static void Describe(ClientWorldEntity mirrored, WorldEntry update, ulong hash)
@@ -299,6 +314,7 @@ namespace TopiaForge.ModManager
             mirrored.Object = null;
             mirrored.Slot = null;
             mirrored.AssetReplica = null;
+            mirrored.ReplicaOwner = null;
             mirrored.Factory = null;
             mirrored.FactoryReplica = null;
         }
