@@ -48,8 +48,8 @@ The after column builds every fix below together, against the SDK those changes 
 ## Friction log, by cost to authors
 
 Cost counts what the audit's mods paid, and who else pays it. Each friction names the slice that should own its
-automatic alternative and says whether the release should wait for it. B1 is a bug rather than a friction, and the one
-item here that should hold the release.
+automatic alternative and says whether the release should wait for it. Each owner is a slice of the roadmap. B1 is a
+bug rather than a friction, and the one item here that held the release, until #265 fixed it.
 
 | # | Friction | Cost | Owner | Blocks release |
 | --- | --- | --- | --- | --- |
@@ -65,17 +65,17 @@ item here that should hold the release.
 | F10 | The contract lock is synced by hand, and `dev` fails late at pack | 2 commands per contract change | WS6 6.9 | No |
 | F11 | The payload file lacked a `using`, and an unresolved bound raised TFMP004 too | 1 line and a misleading error | Fixed in #242 | No |
 | F12 | The mod finds its own session, and the presser's name, by hand | 4 to 6 lines and a field per mod | WS3 3.11, generator | No |
-| F13 | One invalid handler hides every generated member, so each call adds CS0103 | error noise around the real error | WS3, generator | No |
-| F14 | A contract on a class other than the mod's entry type is never bound and fails at its first submit | a runtime surprise | WS3, generator | No |
+| F13 | One invalid handler hides every generated member, so each call adds CS0103 | error noise around the real error | WS3 3.11, generator | No |
+| F14 | A contract on a class other than the mod's entry type is never bound and fails at its first submit | a runtime surprise | WS3 3.11, generator | No |
 | F15 | A client-local mod has no CLI path | a hand-edited manifest and V6 rules to know | CLI, WS6 6.8 | No |
 | F16 | The test rig never reports ping or connection quality | a ping column cannot be tested | Testing kit, WS3 3.11 | No |
-| F17 | A command with no input still needs an empty request class and `new Request()` at each call | 3 lines per command | Generator | No |
+| F17 | A command with no input still needs an empty request class and `new Request()` at each call | 3 lines per command | WS3 3.11, generator | No |
 | F18 | The docs contradicted themselves and left the thread and tick rules unsaid | reading time, and wrong code | Fixed in #244 | No |
-| F19 | A gameplay key needs its own "only in a world" check | 5 lines | SDK input | No |
+| F19 | A gameplay key needs its own "only in a world" check | 5 lines | WS5b chat, connection HUD and pause entries | No |
 | F20 | `dev` cannot stop before installing into the game | contributors with a real install avoid it | WS6 6.9 | No |
-| F21 | A snapshot-only mod still gets the generator and an empty contract lock | harmless clutter | CLI | No |
-| F22 | Running the CLI from source outside the checkout finds two templates and no package validator | contributors only | CLI | No |
-| B1 | Stopping a gamemode or participant scope retires the whole mod's multiplayer objects | a correctness bug | WS3 3.9 | Yes |
+| F21 | A snapshot-only mod still gets the generator and an empty contract lock | harmless clutter | CLI, WS6 6.8 | No |
+| F22 | Running the CLI from source outside the checkout finds two templates and no package validator | contributors only | CLI, WS6 6.8 | No |
+| B1 | Stopping a gamemode or participant scope retired the whole mod's multiplayer objects | a correctness bug | Fixed in #265 (WS3 3.9) | Was yes; fixed |
 
 ## The frictions in detail
 
@@ -90,7 +90,7 @@ version.
 - **Cost.** 29 lines in the player counts mod, 25 in the dice roll mod, and 27 in the template itself.
 - **What the docs said.** TF1008 recommended `PendingOperation<T>` polled from the frame update for every SDK task.
   The multiplayer page never showed how to read a command's answer.
-- **Automatic version, now shipped.** `Submit{Handler}(request, answer => ...)`. The answer runs once, on the main
+- **Automatic version, in #240.** `Submit{Handler}(request, answer => ...)`. The answer runs once, on the main
   thread, never after the mod or the caller's scope has stopped, and nothing is polled. TF1008 names the method, and
   its code fix rewrites the wait.
 
@@ -102,7 +102,7 @@ version.
   `Prediction = PredictionMode.None`, so the presser waited a round trip.
 - **What the analyzer said.** "Predicted handlers may only mutate generated replicated state and emit buffered
   presentation events", with no fix offered, while the docs said predicted handlers may "read their own data".
-- **Automatic version, now shipped.** The generator follows array elements, allows the pure array members, and checks
+- **Automatic version, in #241.** The generator follows array elements, allows the pure array members, and checks
   the mod's own non-virtual methods by the same rules instead of refusing them. TFMP006 now names both ways out.
 
 ### F3: the session's change notification runs at every tick
@@ -152,14 +152,14 @@ version.
   project. After `mod add multiplayer` and `restore`, the test project had the multiplayer contract but not the
   generator, so it failed with "CS0103: The name 'SubmitRollAsync' does not exist". Nothing said a package was missing,
   and copying both items from the mod project warned NU1504.
-- **Automatic version, now shipped.** `restore` gives such a test project the generator whenever the mod has it.
+- **Automatic version, in #243.** `restore` gives such a test project the generator whenever the mod has it.
 
 ### F8: tests repeated the runtime's binding (fixed in #246)
 
 - **What it took.** Every multiplayer mod's test harness bound the generated contract by hand, tracked the binding, and
   registered the session: 6 lines from the template, 11 in the dice roll and player counts mods. Bound that way, before
   the mod had a context, a session hook that reads `Context` threw in tests, which the game never does.
-- **Automatic version, now shipped.** `ModLifecycleRunner` binds the contract to the context's session as the runtime
+- **Automatic version, in #246.** `ModLifecycleRunner` binds the contract to the context's session as the runtime
   does. A test registers the session and writes no binding code.
 
 ### F9: refusals need a rate limit and a text for each code
@@ -186,7 +186,7 @@ version.
 - **What it took.** The template's payload file asks for `[NetworkBound]` on strings and arrays but had no
   `using TopiaForge.Mods;`. Following the comment gave CS0246 and also TFMP004, which claimed the member declared no
   bound at all.
-- **Automatic version, now shipped.** The template has the `using`, and an unresolved bound is the compiler's alone to
+- **Automatic version, in #242.** The template has the `using`, and an unresolved bound is the compiler's alone to
   report.
 
 ### F12: the mod finds its own session and the presser's name by hand
@@ -207,7 +207,7 @@ version.
   TFMP008, correctly, and a CS0103 for `SubmitIncrementAsync` beside it.
 - **Automatic version.** Emit the proxy surface of a failed contract too, with bodies that cannot run, so only the real
   errors show.
-- **Owner.** WS3, the generator.
+- **Owner.** WS3 3.11, the next slice that changes the generated contract, for the generator.
 
 ### F14: a contract on a class other than the mod's entry type is never bound
 
@@ -216,7 +216,7 @@ version.
   proxy is used" at the first submit. The docs say "Mark one top-level partial class", without saying why.
 - **Automatic version.** A generator diagnostic on a contract that is not a `TopiaForgeMod`, saying to move it onto the
   mod class or to bind it by hand, or a runtime that binds every contract its mod owns.
-- **Owner.** WS3, the generator.
+- **Owner.** WS3 3.11, the next slice that changes the generated contract, for the generator and the binder.
 
 ### F15: client-local has no CLI path
 
@@ -240,7 +240,7 @@ version.
 - **What it took.** An empty `IncrementRequest` class and `new IncrementRequest()` at every call.
 - **Cost.** 3 lines per command.
 - **Automatic version.** A request-less `Submit{Handler}(answer)` overload for a command whose request type is empty.
-- **Owner.** The generator.
+- **Owner.** WS3 3.11, the next slice that changes the generated contract, for the generator.
 
 ### F18: the docs contradicted themselves (fixed in #244)
 
@@ -257,21 +257,22 @@ version.
   `GameScenes.IsNonGameplayScene` before submitting.
 - **Cost.** 5 lines.
 - **Automatic version.** Input actions that are gameplay-only by default, with an opt-in for menus.
-- **Owner.** The SDK's input service.
+- **Owner.** The SDK's input service, with WS5b's chat, connection HUD and pause entries, which will suspend the game's
+  own input while a player types.
 
 ### F20 to F22: smaller CLI frictions
 
 - **F20.** `dev --no-launch` still installs into the game, so a contributor with a real install avoids `dev`. A
   `--no-install` mode would let `dev` stop after pack. Owner: WS6 6.9.
 - **F21.** A snapshot-only mod still gets the generator and an empty contract lock from `mod add multiplayer`. It is
-  harmless, and goes away with F15's mode flag. Owner: the CLI.
+  harmless, and goes away with F15's mode flag. Owner: the CLI, with WS6 6.8.
 - **F22.** Run from source outside the checkout, the CLI lists only two templates unless `TOPIAFORGE_REPOSITORY_ROOT`
   is set, and finds no package validator unless `TOPIAFORGE_PACKAGE_VALIDATOR_PATH` is set too. A release extraction is
-  fine; contributors trip on it. One repository-root setting could serve both. Owner: the CLI.
+  fine; contributors trip on it. One repository-root setting could serve both. Owner: the CLI, with WS6 6.8.
 
 ## A bug found on the way
 
-### B1: stopping a scope retires the whole mod's multiplayer objects
+### B1: stopping a scope retired the whole mod's multiplayer objects (fixed in #265)
 
 A scoped context, such as a gamemode session's or a participant's, builds its own extension service with the mod's
 own id (`ModContext.Scopes.cs`). When code in that scope resolves the multiplayer session, the provider creates a
@@ -288,8 +289,8 @@ submitted this stopped."
   first-party does yet, but 3.9's participant realm and WS4's Zombies and Sandbox will.
 - **Fix.** Retire per facade: each facade retires the objects it spawned and the submissions it made, or the engine
   counts the facades of an owner and retires the owner only when the last one closes.
-- **Owner and release.** WS3 3.9, before WS4 adopts multiplayer in a gamemode. It blocks the release once any
-  first-party gamemode resolves the session from its scope.
+- **Fixed.** WS3 3.9 (#265) does both: each facade retires only what it made, the engine counts a mod's open facades,
+  and the mod's last facade retires the rest. The release no longer waits on it.
 
 ## Not yet landed
 
@@ -299,9 +300,9 @@ had not landed during the audit. What a newcomer meets today, and what each slic
 - **3.7, spawns and motion.** The network world (3.6) already replicates what the host spawns through the SDK. A joined
   player's own `Assets.Spawn`, `SetTransform` and motion leases are not routed to the host yet (`RuntimeReplication`
   leaves a client's spawn to 3.7), so on a client they stay in that player's process. The multiplayer page's "What
-  replicates" still calls replicating spawned entities and scene props later work, which is no longer true of the
-  host's spawns. When 3.7 lands, a client's call should replicate with no change to the mod, and the page should list
-  what is routed.
+  replicates" called replicating spawned entities and scene props later work, which stopped being true of the host's
+  spawns with 3.6; #244 corrects it. When 3.7 lands, a client's call should replicate with no change to the mod, and
+  the page should list what is routed.
 - **3.8, session follow.** A client cannot follow the host's world yet. When it lands, `IWorldSessionService`
   consumers should keep working unchanged, and a client's `StopAsync` and `RestartAsync` should fail with a sentence
   that says only the host can do that.
@@ -316,18 +317,18 @@ had not landed during the audit. What a newcomer meets today, and what each slic
 
 ## What the remaining slices should take on
 
-- **3.9 participant realm:** fix B1 first, and test it with a scope that resolves the session and stops while the mod
-  runs.
 - **3.11 Players API:** a participants-changed notification and firing join and leave subscriptions (F3, F5); a
-  per-player replicated value or scoreboard columns (F4); the sender as an `IPlayer` on the command context (F12); and
-  the rig's ping (F16).
+  per-player replicated value or scoreboard columns (F4); the sender as an `IPlayer` on the command context (F12); the
+  rig's ping (F16); and, in the generator it changes anyway, the proxy surface of a failed contract (F13), a flag on a
+  contract that is not the mod's entry type (F14), a request-less overload (F17), and a generated session accessor
+  (F12).
 - **3.12 presentation routing:** toast coalescing and a standard refusal text (F9).
-- **WS5 scoreboard:** build the player list a mod would otherwise hand-roll (F4), and test its ping column on the rig.
+- **WS5b scoreboard:** build the player list a mod would otherwise hand-roll (F4), and test its ping column on the rig.
+- **WS5b chat, connection HUD and pause entries:** with its input suspension, gameplay-only input actions by default
+  (F19).
 - **WS6 6.8 and the CLI:** `mod add multiplayer --mode client-local` (F15, F21), and one repository-root setting for
   source runs (F22).
 - **WS6 6.9 `dev --peers`:** sync the contract lock in `new mod` and `dev` (F10), and a `--no-install` mode (F20).
-- **The generator, in any WS3 slice:** emit the proxy surface of a failed contract (F13), flag a contract that is not
-  the mod's entry type (F14), add a request-less overload (F17), and a generated session accessor (F12).
 - **Replicated-object input:** `IReplicatedObject.SubmitInputAsync` still returns a task to poll; give it the answered
   form #240 gave commands.
 - **Every slice:** a template or sample that needs a workaround is a defect in the SDK. Measure a HUD's or window's
