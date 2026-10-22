@@ -41,14 +41,16 @@ namespace TopiaForge.Multiplayer.Network
         private const int SaveFlushMilliseconds = 2_000;
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
         private readonly Func<ClientSessionEnd, SoloSessionStart?> endHook;
-        private Task<(LocalIdentity Identity, BanList Bans)>? loading;
+        private Task<LocalIdentity>? loading;
         private Task<byte[]?>? hostKey;
+
+        /// <summary>The read of the ban list a pending host waits for: nobody is admitted against a list that was never read.</summary>
+        private Task<bool>? bansRead;
         private HostSettings? pendingHost;
         private LocalIdentity? identity;
-        private BanList? bans;
         private INetworkControl? browserNetwork;
         private LanBrowser? browser;
-        private int bansDirty;
+        private readonly BanStore bans;
         private readonly KnownHostsStore knownHosts;
         private Task bansWrite = Task.CompletedTask;
         private Task knownHostsWrite = Task.CompletedTask;
@@ -77,6 +79,7 @@ namespace TopiaForge.Multiplayer.Network
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
             this.transportOptions = transportOptions ?? (() => new Transport.TransportOptions());
             this.natOptions = natOptions ?? (() => new NatAgentOptions());
+            bans = new BanStore(files);
             knownHosts = new KnownHostsStore(files);
 
             // Invites and listed servers go to the TopiaForge service, while one is configured; every other target to the network.
@@ -126,6 +129,10 @@ namespace TopiaForge.Multiplayer.Network
             HostFailure = LiveFailure.None;
             EnsureIdentity();
             hostKey = settings.Password == null ? Task.FromResult<byte[]?>(null) : DeriveHostKeyAsync(settings.Password);
+
+            // Hosting starts only once the ban list has been read, so nobody is admitted unchecked; a list the identity's
+            // load could not read is read again now.
+            bansRead = bans.EnsureReadAsync();
         }
 
         /// <summary>Stops hosting: every player's session ends, and this process plays on alone.</summary>
@@ -133,6 +140,7 @@ namespace TopiaForge.Multiplayer.Network
         {
             pendingHost = null;
             hostKey = null;
+            bansRead = null;
             var internet = Host?.Internet;
             Host?.Stop();
             Host = null;
@@ -179,15 +187,21 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Gets whether the LAN browser is listening.</summary>
         internal bool IsBrowsing => browserNetwork != null;
 
-        /// <summary>Gets this host's bans, oldest first; empty until the identity has loaded.</summary>
-        internal IReadOnlyList<BanRecord> Bans => bans?.Records() ?? Array.Empty<BanRecord>();
+        /// <summary>
+        /// Gets this host's bans, oldest first: once the list was read, the file's and every ban since; before that, only the
+        /// bans made meanwhile.
+        /// </summary>
+        internal IReadOnlyList<BanRecord> Bans => bans.Record.Records();
+
+        /// <summary>Gets the ban list's file: whether it was read, and what is saved when.</summary>
+        internal BanStore BansFile => bans;
 
         /// <summary>Lifts the ban on <paramref name="identity"/> and saves the list; false when it was not banned.</summary>
         internal bool Unban(string identity)
         {
             ThrowIfDisposed();
-            if (bans == null || !bans.Remove(identity)) return false;
-            Interlocked.Exchange(ref bansDirty, 1);
+            if (!bans.Record.Remove(identity)) return false;
+            bans.MarkChanged();
             Persist();
             return true;
         }
@@ -209,6 +223,7 @@ namespace TopiaForge.Multiplayer.Network
             var work = new List<Task>();
             if (identity == null && loading != null && !loading.IsCompleted) work.Add(loading);
             if (hostKey != null && !hostKey.IsCompleted) work.Add(hostKey);
+            if (bansRead != null && !bansRead.IsCompleted) work.Add(bansRead);
             Host?.Internet?.AddPendingBackgroundWork(work);
             Join?.AddPendingBackgroundWork(work);
             foreach (var ending in endings)
@@ -276,7 +291,7 @@ namespace TopiaForge.Multiplayer.Network
         {
             if (disposed) return;
             if (identity == null && loading != null && loading.IsCompleted) Loaded();
-            if (pendingHost != null && identity != null && hostKey != null && hostKey.IsCompleted) BeginHosting();
+            if (pendingHost != null && identity != null && Done(hostKey) && Done(bansRead)) BeginHosting();
             Host?.Pump();
             if (Host != null && Host.Failure != LiveFailure.None)
             {
@@ -319,7 +334,7 @@ namespace TopiaForge.Multiplayer.Network
             loading?.ContinueWith(
                 task =>
                 {
-                    if (task.Status == TaskStatus.RanToCompletion && !ReferenceEquals(task.Result.Identity, identity)) task.Result.Identity.Dispose();
+                    if (task.Status == TaskStatus.RanToCompletion && !ReferenceEquals(task.Result, identity)) task.Result.Dispose();
                 },
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously,
@@ -339,14 +354,13 @@ namespace TopiaForge.Multiplayer.Network
                 var handedOver = false;
                 try
                 {
-                    // The ban list is a side record: one that cannot be read is treated as empty, the way a damaged one
-                    // is, rather than keeping the player out of live play. Known hosts that cannot be read are never
-                    // taken for an empty record: they stay unread, so typed addresses are refused with the reason and
-                    // nothing is written over the file, until a later check reads it.
-                    var banned = BanList.Parse(await ReadSideFileAsync(BanList.FilePath, token).ConfigureAwait(false));
+                    // Neither side record is ever taken for an empty one when it cannot be read: each stays unread, so
+                    // nothing is written over its file, and is read again when it is next needed. Hosting does not start
+                    // while the bans are unread, and typed addresses are refused with the reason while the known hosts are.
+                    await bans.EnsureReadAsync().ConfigureAwait(false);
                     await knownHosts.EnsureReadAsync().ConfigureAwait(false);
                     handedOver = true;
-                    return (loaded, banned);
+                    return loaded;
                 }
                 finally
                 {
@@ -367,20 +381,7 @@ namespace TopiaForge.Multiplayer.Network
                 return;
             }
 
-            identity = task.Result.Identity;
-            bans = task.Result.Bans;
-        }
-
-        private async Task<byte[]?> ReadSideFileAsync(string relativePath, CancellationToken token)
-        {
-            try
-            {
-                return await files.ReadAsync(relativePath, token).ConfigureAwait(false);
-            }
-            catch (Exception exception) when (!(exception is OperationCanceledException))
-            {
-                return null;
-            }
+            identity = task.Result;
         }
 
         private Task<byte[]?> DeriveHostKeyAsync(string password)
@@ -391,7 +392,7 @@ namespace TopiaForge.Multiplayer.Network
             return Task.Run(async () =>
             {
                 var loaded = await identityTask.ConfigureAwait(false);
-                return (byte[]?)PasswordProof.DeriveKey(password, loaded.Identity.TransportPublicKey);
+                return (byte[]?)PasswordProof.DeriveKey(password, loaded.TransportPublicKey);
             });
         }
 
@@ -399,15 +400,26 @@ namespace TopiaForge.Multiplayer.Network
         {
             var settings = pendingHost!;
             var keyTask = hostKey!;
+            var listRead = bansRead!;
             pendingHost = null;
             hostKey = null;
+            bansRead = null;
             if (keyTask.IsFaulted || keyTask.IsCanceled)
             {
                 Fail(LiveFailure.Rejected);
                 return;
             }
 
-            var host = new LiveHost(engine, identity!, bans!, settings, content, clock, unixSeconds, keyTask.Result, transportOptions, Services, natOptions);
+            if (listRead.Status != TaskStatus.RanToCompletion || !listRead.Result)
+            {
+                // A host that could not read its bans would admit every player it banned, so it does not open; hosting again
+                // reads the list again. The derived key is wiped, as it is once a host has taken its copy.
+                if (keyTask.Result != null) Array.Clear(keyTask.Result, 0, keyTask.Result.Length);
+                Fail(LiveFailure.BansUnreadable);
+                return;
+            }
+
+            var host = new LiveHost(engine, identity!, bans.Record, settings, content, clock, unixSeconds, keyTask.Result, transportOptions, Services, natOptions);
 
             // The host's policy keeps its own copy of the key, so the derived one is wiped at once.
             if (keyTask.Result != null) Array.Clear(keyTask.Result, 0, keyTask.Result.Length);
@@ -428,7 +440,7 @@ namespace TopiaForge.Multiplayer.Network
             if (Host == null || !Host.Ban(participant, displayName)) return false;
 
             // The save starts now rather than at the next frame, so a ban survives the game closing right away.
-            Interlocked.Exchange(ref bansDirty, 1);
+            bans.MarkChanged();
             Persist();
             return true;
         }
@@ -438,26 +450,22 @@ namespace TopiaForge.Multiplayer.Network
         {
             pendingHost = null;
             hostKey = null;
+            bansRead = null;
             HostPhase = HostPhase.Failed;
             HostFailure = failure;
         }
 
         /// <summary>
         /// Saves what changed. Each file's writes run one after another, so a slow save can never land after, and
-        /// overwrite, the newer one behind it. Known hosts are saved only once their file was read.
+        /// overwrite, the newer one behind it. The bans and the known hosts are each saved only once their file was read.
         /// </summary>
         private void Persist()
         {
-            if (Interlocked.Exchange(ref bansDirty, 0) == 1 && bans != null) bansWrite = After(bansWrite, BanList.FilePath, bans.Serialize());
+            bansWrite = bans.SaveAfter(bansWrite);
             knownHostsWrite = knownHosts.SaveAfter(knownHostsWrite);
         }
 
-        /// <summary>
-        /// Queues a save behind the previous one. Saves are never cancelled, even while closing: a cancelled write would
-        /// lose the change, and each is small and bounded.
-        /// </summary>
-        private Task After(Task previous, string path, byte[] bytes) =>
-            previous.ContinueWith(_ => files.WriteAsync(path, bytes, CancellationToken.None), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        private static bool Done(Task? task) => task != null && task.IsCompleted;
 
         /// <summary>The browser accepts no peers and claims its own replies, so anything else it reports is let go.</summary>
         private void DrainBrowserEvents()

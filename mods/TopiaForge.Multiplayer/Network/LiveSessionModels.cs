@@ -283,7 +283,14 @@ namespace TopiaForge.Multiplayer.Network
         /// reads goes on, and so does trusting that one server for the join while the record still cannot be read; once it
         /// reads, an address that served another server is <see cref="HostIdentityChanged"/> again.
         /// </summary>
-        KnownHostsUnreadable = 38
+        KnownHostsUnreadable = 38,
+
+        /// <summary>
+        /// This host's list of the players it banned could not be read just now, as when another program holds it, so hosting
+        /// did not start: a host that took the list for an empty one would admit every player it banned. Nothing was written
+        /// over the list, and hosting again reads it again.
+        /// </summary>
+        BansUnreadable = 40
     }
 
     /// <summary>What a content check found missing or different before a join, for the player to see.</summary>

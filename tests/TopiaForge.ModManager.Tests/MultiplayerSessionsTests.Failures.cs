@@ -39,6 +39,9 @@ namespace TopiaForge.ModManager.Tests
             That(LiveFailureMessages.ForJoin(InternalLiveFailure.ContentUnreadable, InternalAdmissionCode.Other).Message == LiveFailureMessages.UnreadableContent &&
                  LiveFailureMessages.ForHost(InternalLiveFailure.ContentUnreadable).Message == LiveFailureMessages.UnreadableContent,
                 "unreadable mods are worded alike for hosting and joining");
+            var unreadBans = LiveFailureMessages.ForHost(InternalLiveFailure.BansUnreadable);
+            That(unreadBans.Message == LiveFailureMessages.UnreadBans && unreadBans.Retryable && !unreadBans.CanTrust,
+                "a host whose ban list could not be read is told why the session did not open, and may try again");
             That(LiveFailureMessages.ForJoin(InternalLiveFailure.ContentMismatch, InternalAdmissionCode.Other).LauncherHelps &&
                  LiveFailureMessages.ForJoin(InternalLiveFailure.Rejected, InternalAdmissionCode.Content).LauncherHelps &&
                  LiveFailureMessages.ForJoin(InternalLiveFailure.HostIdentityChanged, InternalAdmissionCode.Other).CanTrust,

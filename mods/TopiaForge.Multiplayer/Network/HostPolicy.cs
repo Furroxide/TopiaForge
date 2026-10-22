@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using TopiaForge.Mods;
 using TopiaForge.Multiplayer.Engine;
 
@@ -66,6 +64,29 @@ namespace TopiaForge.Multiplayer.Network
             lock (gate) return entries.RemoveAll(entry => entry.Identity == identity) > 0;
         }
 
+        /// <summary>
+        /// Adds the bans of <paramref name="other"/> this list lacks, as older than this list's own and in their own order, so
+        /// the cap drops the oldest first. Where both ban a key, this list's ban is kept.
+        /// </summary>
+        internal void MergeFrom(BanList other)
+        {
+            if (other == null) throw new ArgumentNullException(nameof(other));
+            if (ReferenceEquals(other, this)) return;
+            Entry[] older;
+            lock (other.gate) older = other.entries.ToArray();
+            lock (gate)
+            {
+                var position = 0;
+                foreach (var entry in older)
+                {
+                    if (Holds(entry.Identity)) continue;
+                    entries.Insert(position++, entry);
+                }
+
+                while (entries.Count > MaximumEntries) entries.RemoveAt(0);
+            }
+        }
+
         /// <summary>Gets a copy of the bans, oldest first.</summary>
         internal IReadOnlyList<BanRecord> Records()
         {
@@ -91,7 +112,11 @@ namespace TopiaForge.Multiplayer.Network
             return CanonicalJson.Serialize(new JsonObjectNode().Add("schema", Schema).Add("bans", new JsonArrayNode(items)));
         }
 
-        /// <summary>Reads the file. An unreadable file yields no bans rather than an error, and the next save replaces it.</summary>
+        /// <summary>
+        /// Reads the list's bytes: anything that does not read as the list yields an empty one, and a ban that does not read
+        /// is skipped. A file that could not be read at all never comes here; <see cref="BanStore"/> keeps the list unread
+        /// instead, and copies a damaged file aside before replacing it.
+        /// </summary>
         internal static BanList Parse(byte[]? bytes)
         {
             var result = new BanList();
@@ -115,8 +140,16 @@ namespace TopiaForge.Multiplayer.Network
             return result;
         }
 
-        internal static async Task<BanList> LoadAsync(INetworkDataFiles files, CancellationToken cancellationToken) =>
-            Parse(await files.ReadAsync(FilePath, cancellationToken).ConfigureAwait(false));
+        /// <summary>Whether <paramref name="identity"/> is banned; the caller holds the gate.</summary>
+        private bool Holds(string identity)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry.Identity == identity) return true;
+            }
+
+            return false;
+        }
 
         private readonly struct Entry
         {

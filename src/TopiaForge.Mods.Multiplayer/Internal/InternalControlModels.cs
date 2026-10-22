@@ -321,7 +321,14 @@ namespace TopiaForge.Mods.Internal
         /// (<see cref="InternalLiveStatus.ChangedServerId"/>) for the join while the record still cannot be read; once
         /// it reads, a typed host that served another server ends as <see cref="HostIdentityChanged"/> again.
         /// </summary>
-        KnownHostsUnreadable = 38
+        KnownHostsUnreadable = 38,
+
+        /// <summary>
+        /// This host's list of the players it banned could not be read just now, as when another program holds it, so hosting
+        /// did not start rather than admit players it banned; nothing was written over the list. Hosting again reads it
+        /// again.
+        /// </summary>
+        BansUnreadable = 40
     }
 
     /// <summary>The reason code of a host's admission report.</summary>
