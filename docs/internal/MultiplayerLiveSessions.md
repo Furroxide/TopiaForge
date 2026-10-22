@@ -120,7 +120,10 @@ A host describes its session in a descriptor and signs it. A joining player chec
 - **Case folding is ASCII only**, in invite codes and host names alike. Unicode folding would accept look-alikes: the
   long s (U+017F) uppercases to S, and the Kelvin sign (U+212A) lowercases to k. Both are refused.
 - **Privacy.** A direct link carries the host's address, so it exists only in the network layer and the launcher.
-  It never reaches mods, snapshots, logs or diagnostics. A link never joins on its own: it opens the consent flow.
+  It never reaches mods, snapshots, logs or diagnostics. An invite link carries a code that lets anyone who holds it
+  join. In the game, a link's `ToString()` therefore names its kind alone, in a join target's words (`invite`,
+  `listed server`, `direct session`), and only `Canonical` spells the link. A link never joins on its own: it opens the
+  consent flow.
 
 ## 5. LAN discovery
 

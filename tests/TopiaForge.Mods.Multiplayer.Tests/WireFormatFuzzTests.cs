@@ -91,12 +91,13 @@ internal static class WireFormatFuzzTests
             if (SessionLink.TryParse(text, out var link))
             {
                 links++;
-                var canonical = link!.ToString();
+                var canonical = link!.Canonical;
                 That(canonical.Length <= SessionLink.MaximumLength && canonical.All(character => character > ' ' && character <= '~'),
                     "a link's canonical form is printable ASCII within the bound: " + canonical);
-                That(SessionLink.TryParse(canonical, out var again) && again!.ToString() == canonical && again.Kind == link.Kind &&
+                That(SessionLink.TryParse(canonical, out var again) && again!.Canonical == canonical && again.Kind == link.Kind &&
                      again.InviteCode == link.InviteCode && again.ServerId == link.ServerId && again.Host == link.Host && again.Port == link.Port,
                     "and reads back as the same link: " + text);
+                That(link.ToString() == NetworkLinkTests.Printed(link.Kind), "and prints only its kind: " + text);
             }
 
             if (InviteCode.TryNormalize(text, out var code))
