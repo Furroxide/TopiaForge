@@ -239,6 +239,8 @@ internal static class Program
             NetworkServiceTests.AMovedServerIsHeardAfresh();
             LanBrowserShareTests.ALanSenderHoldsAtMostItsShareOfTheList();
             LanBrowserShareTests.TheLanListIsBoundedAndOnlySilenceMakesRoom();
+            LanBrowserShareTests.APortChangeFloodLeavesAnHonestHostItsInfo();
+            LanBrowserShareTests.TheLanBrowserAsksWithinTheLaunchersBudget();
             NetworkServiceTests.ServicesStopWithTheirThread();
             LiveSessionTests.APlayerJoinsAHostAndLeaves();
             LiveSessionTests.PasswordsAreProvedNeverSent();

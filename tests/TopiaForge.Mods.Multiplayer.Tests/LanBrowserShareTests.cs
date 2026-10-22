@@ -11,9 +11,10 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// The LAN browser's bounds, the launcher's rule: at most 64 sessions, at most 8 of them from one sender address on
 /// any port, and only silence makes room. Beacons come from the test's own sockets on loopback addresses, since the
-/// browser takes the sender from the datagram and the port from the beacon.
+/// browser takes the sender from the datagram and the port from the beacon. The budget its info queries keep is in
+/// LanBrowserShareTests.Queries.cs.
 /// </summary>
-internal static class LanBrowserShareTests
+internal static partial class LanBrowserShareTests
 {
     internal static void ALanSenderHoldsAtMostItsShareOfTheList()
     {
@@ -237,6 +238,9 @@ internal static class LanBrowserShareTests
             var beacon = new LanBeacon(serverId, gamePort).Encode();
             socket.SendTo(beacon, browser);
         }
+
+        /// <summary>Waits for a datagram to this sender's own port, as the browser's info query to a session there arrives.</summary>
+        internal bool Receives(int milliseconds) => socket.Poll(milliseconds * 1_000, SelectMode.SelectRead);
 
         public void Dispose() => socket.Dispose();
     }

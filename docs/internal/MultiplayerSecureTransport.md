@@ -278,7 +278,9 @@ Before joining, a browser asks a host about its session without a handshake.
   cannot join.
 - Queries share the handshake's budgets: 10 a second per source and 200 per endpoint.
 - The browser keeps at most 64 queries outstanding, for 5 s each, and accepts a reply only from the path the query
-  went to and with its id. Replies queue for `TryReceiveInfo` with the measured round trip.
+  went to and with its id. Replies queue for `TryReceiveInfo` with the measured round trip. The game's LAN browser
+  sends its queries within a budget of its own, so that one host cannot push another's out
+  (`MultiplayerLiveSessions.md`, section 16).
 - A query's expiry is one of the endpoint's timers, so a browser with no connections still wakes to forget it, and a
   reply is checked against the lifetime when it arrives, however rarely the endpoint is polled.
 
