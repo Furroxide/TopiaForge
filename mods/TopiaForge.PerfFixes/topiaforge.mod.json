@@ -31,5 +31,8 @@
     "unsafe-native",
     "harmony-patch",
     "physics-settings"
-  ]
+  ],
+  "multiplayer": {
+    "mode": "client-local"
+  }
 }

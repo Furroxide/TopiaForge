@@ -82,6 +82,13 @@ dotnet build mods/TopiaForge.Performance/TopiaForge.Performance.csproj -c Releas
 `package-inbox`; launch Robotopia once and install from the F10 overlay (or the main-menu Mod Manager
 button) to apply.
 
+## In multiplayer
+
+Performance is client-local: its manifest declares `"multiplayer": {"mode": "client-local"}`, so each player
+chooses it, and its preset, for their own game, and nobody else needs it to host or join. Its levers change only that
+player's game. The physics levers (`fixed_delta_time`, `solver_iterations`) do too, but a host's game runs the
+session's simulation, so on a host they set the fidelity every player sees.
+
 ## Caveats
 - **`balanced` enables vSync** (`vsync_count: 1`), which caps frame rate to your monitor's refresh rate.
   This reduces wasted GPU work, tearing, and heat — but if you want uncapped FPS, set `vsync_count: -1`
