@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TopiaForge.ModManager.Core;
 
 namespace TopiaForge.ModManager.Tests
@@ -9,7 +11,8 @@ namespace TopiaForge.ModManager.Tests
     /// The game runs its own quit steps, the shutdown feedback page among them, inside its own quit handler. Those
     /// steps must run while every mod, and every patch a mod placed on them, is still loaded. Mods unload only once
     /// every handler subscribed before the first quit request has let the quit go ahead, and the quit then waits for
-    /// the teardown that records the clean exit, so no patch outlives its mod.
+    /// the teardown that records the clean exit, so no patch outlives its mod. The plugin itself is a MonoBehaviour
+    /// this harness cannot run, so the wiring the model relies on is checked in the plugin's source, read as syntax.
     /// </summary>
     internal static class PluginQuitHandlerTests
     {
@@ -35,7 +38,12 @@ namespace TopiaForge.ModManager.Tests
                 (nameof(HandlerSubscribedAfterTheFirstRequestIsAskedOnceModsUnload), () => HandlerSubscribedAfterTheFirstRequestIsAskedOnceModsUnload(root)),
                 (nameof(StuckTeardownAfterTheGameStepsQuitsAtTheDeadline), () => StuckTeardownAfterTheGameStepsQuitsAtTheDeadline(root)),
             };
-            foreach (var (name, test) in cases)
+            var wiring = new (string Name, Action Test)[]
+            {
+                (nameof(UpdateAsksForTheHeldQuitAheadOfItsReadyGuard), UpdateAsksForTheHeldQuitAheadOfItsReadyGuard),
+                (nameof(OnDestroyTakesItsHandlerOffWantsToQuit), OnDestroyTakesItsHandlerOffWantsToQuit),
+            };
+            foreach (var (name, test) in cases.Concat(wiring))
             {
                 try { test(); }
                 catch (Exception error) { failures.Add(new InvalidOperationException(name, error)); }
@@ -43,6 +51,7 @@ namespace TopiaForge.ModManager.Tests
 
             if (failures.Count != 0) throw new AggregateException("Plugin quit ordering regressions failed.", failures);
             Console.WriteLine("Plugin quit ordering: " + cases.Length + " behavioral checks passed.");
+            Console.WriteLine("Plugin quit wiring: " + wiring.Length + " source checks passed.");
         }
 
         private static void FirstRequestMovesBehindOtherHandlersAndAsksAgainOnce()
@@ -179,6 +188,52 @@ namespace TopiaForge.ModManager.Tests
             Check(scenario.Game.PatchInPlaceDuringSteps, "The game's own quit steps must still run first.");
             Check(scenario.Plugin.Coordinator.DeadlinePassed, "A stuck teardown must let the quit go ahead at the deadline, and say so.");
             scenario.ExpectNextStart(safeMode: true, "Unfinished cleanup must still open the next start in safe mode.");
+        }
+
+        // The model's plugin asks for the held quit every frame. The real one asks in Update, and the teardown the quit
+        // starts clears ready, so Update must ask before anything reads ready: behind the ready guard the request never
+        // comes, and the game stays open with every mod unloaded. Nor may anything on the way to the request leave Update,
+        // whatever it reads, a helper or a flag of its own included, unless it asks Unity to quit itself, since that request
+        // starts the same held quit. The source is read as syntax, so a change of layout cannot fool the check, and a guard
+        // written another way still counts as one.
+        private static void UpdateAsksForTheHeldQuitAheadOfItsReadyGuard()
+        {
+            var plugin = PluginSourceSyntax.Read();
+            Check(plugin.Statements("BeginPluginTeardown").Any(statement => PluginSourceSyntax.AssignsFalse(statement, "ready")),
+                "The teardown clears ready, which is why Update asks for the held quit ahead of its ready guard; if that changes, revisit this check.");
+            var update = plugin.Statements("Update");
+            var requests = update.Where(statement => statement is IfStatementSyntax request
+                && PluginSourceSyntax.CallsOn(request.Condition, "quitHandler", "ShouldRequestQuit")).ToArray();
+            Check(requests.Length == 1 && PluginSourceSyntax.CallsApplicationQuit(((IfStatementSyntax)requests[0]).Statement),
+                "Update asks Unity to quit whenever the quit handler asks for the held quit again, in an if statement of its own.");
+            var at = update.IndexOf(requests[0]);
+            Check(!update.Take(at + 1).Any(statement => PluginSourceSyntax.Mentions(statement, "ready")),
+                "Update asks for the held quit before anything reads ready: the teardown clears ready, so a request behind the"
+                + " ready guard never comes and the game stays open with every mod unloaded.");
+            var request = ((IfStatementSyntax)requests[0]).Statement;
+            var body = request is BlockSyntax block ? block.Statements.ToArray() : new[] { request };
+            Check(update.Take(at).Concat(body.TakeWhile(statement => !PluginSourceSyntax.CallsApplicationQuit(statement)))
+                    .All(statement => !PluginSourceSyntax.CanLeave(statement) || plugin.AsksToQuit(statement)),
+                "Nothing on Update's way to its request for the held quit leaves Update unless it asks Unity to quit itself: after"
+                + " the teardown, an early return there keeps the request from coming, and the game stays open with every mod unloaded.");
+            Check(update.Skip(at + 1).Any(statement => statement is IfStatementSyntax guard
+                    && PluginSourceSyntax.Mentions(guard.Condition, "ready") && PluginSourceSyntax.CanLeave(guard.Statement)),
+                "Update keeps its ready guard after the request.");
+        }
+
+        // A plugin destroyed without a quit must take its handler off wantsToQuit: a stale handler would refuse the next
+        // quit once, and a destroyed plugin runs no Update to ask for that quit again.
+        private static void OnDestroyTakesItsHandlerOffWantsToQuit()
+        {
+            var destroy = PluginSourceSyntax.Read().Statements("OnDestroy");
+            var unsubscribes = destroy.Where(statement => PluginSourceSyntax.Unsubscribes(statement, "OnWantsToQuit")).ToArray();
+            var teardowns = destroy.Where(statement => PluginSourceSyntax.Calls(statement, "BeginPluginTeardown")).ToArray();
+            Check(unsubscribes.Length == 1 && teardowns.Length == 1,
+                "OnDestroy takes OnWantsToQuit off Application.wantsToQuit, and starts the teardown, each in a statement of its own.");
+            var at = destroy.IndexOf(unsubscribes[0]);
+            Check(at < destroy.IndexOf(teardowns[0]) && !destroy.Take(at).Any(PluginSourceSyntax.CanLeave),
+                "OnDestroy takes its handler off wantsToQuit before the teardown, and nothing ahead of that can leave OnDestroy,"
+                + " so the handler goes whenever the plugin is destroyed, even when the teardown fails.");
         }
 
         private static void Check(bool condition, string message)

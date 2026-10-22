@@ -32,6 +32,12 @@
     <Reference Include="UnityEngine.CoreModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.CoreModule.dll" Private="true" />
   </ItemGroup>
 
+  <!-- The plugin is a MonoBehaviour the harness cannot run, so its wiring is checked in its source, read as C# syntax
+       so that no change of layout can fool a check (PluginSourceSyntax). -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyMetadata Include="TopiaForge.RobotopiaManagedDir" Value="$(RobotopiaManagedDir)" />
   </ItemGroup>
