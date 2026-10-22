@@ -230,10 +230,12 @@ ready sends its first datagram just behind its acknowledgement, and the host oft
 version waited for the acknowledgement and dropped it (`NotReady`). A datagram on a link the host has not admitted is
 dropped.
 
-`VoiceRelayPolicy` judges each client datagram, in this order:
+The host judges each client datagram in this order. The first check is the session's own setting (section 2.12),
+which comes before everything, the admission included; the rest are `VoiceRelayPolicy`'s:
 
 | Check | Limit | Outcome |
 | --- | --- | --- |
+| The session offers no voice chat | None | `NotOffered`: dropped on arrival, with no strike and no rate spent |
 | Muted, by hand or automatically | None | Dropped on arrival, with no strike and no rate spent |
 | Datagram rate | 30 a second; the token bucket holds one second | `RateLimited`; a strike only past twice the limit, sustained |
 | Bitrate, counting whole datagrams | 40 kbit/s; the token bucket holds one second | `RateLimited`; a strike only past twice the limit, sustained |
@@ -364,7 +366,9 @@ its own thread and trades frames with the main thread through queues.
 
 | Member | What it does |
 | --- | --- |
-| `SubmitVoiceFrame(timestamp, flags, payload)` | Sends or holds one encoded frame of the local talker. It refuses invalid packets, unknown flags and timestamps that do not move forward; says when voice is off, the session is not ready or the host muted the player; and drops frames that would break the host's limits (`RateLimited`). |
+| `SubmitVoiceFrame(timestamp, flags, payload)` | Sends or holds one encoded frame of the local talker. It refuses invalid packets, unknown flags and timestamps that do not move forward; says when voice is off, the session is not ready, the session offers no voice chat (`NotOffered`) or the host muted the player; and drops frames that would break the host's limits (`RateLimited`). |
+| `OfferVoice(offered)` | Says whether the session this host opens offers voice chat. Fixed while anyone is connected; closing every connection returns it to offering voice (section 2.12). Host only. |
+| `IsVoiceOffered` | Whether the session offers voice as far as this engine knows: a host's own setting, or what a joined player's host said in `JoinAccepted` and what the join was shown before it began, the stricter of the two. |
 | `TryReceiveVoiceFrame(out frame)` | Dequeues the oldest received frame: speaker, stream generation, sequence, timestamp, flags, payload and arrival time. |
 | `SetServerMute(participant, muted)` | Mutes or unmutes a participant for everyone. Host only. |
 | `SetListenerMutes(participants, muteAll)` | Section 2.5. |
@@ -490,6 +494,14 @@ These run in the multiplayer test project, and every one is deterministic:
 - `VirtualVoiceChannelTests`: the rig's datagram channels, their own lane on a busy link, link time kept in fractions
   of a tick, the link's datagram-first, bounded reads, and datagrams shed when their lane is more than three ticks
   behind, or past their share while the session lane is.
+- `VoiceOfferTests`, over the rig: a session that offers no voice, where neither the host's player nor two joined
+  players send a datagram, the host relays nothing and nobody hears anything, while a server mute still reaches
+  everyone; a modified client's 4,800 datagrams over 20 s dropped on arrival without a strike, a mute or a kick, and a
+  burst of 1,000 bounded by the 128 the link holds; a hostile host that says it offers no voice and relays voice anyway,
+  none of it played and all of it counted; a join shown without voice staying without it on a host that offers voice,
+  across a reconnect, until a return to solo play; three hosting runs, voice off, on and off, each applying its own
+  setting, fixed while a player is connected; and `JoinAccepted`'s bytes, unchanged for a session that offers voice and
+  one byte longer for one that offers none.
 
 ### 2.10 The budget
 
@@ -530,6 +542,62 @@ second to two seconds of voice at the class rates (12 KiB/s down, 4 KiB/s up, de
 jitter buffer's 200 ms ceiling, so the frames that do arrive would be too late to play. Shedding queued voice by age, as
 the rig's bound does, would keep it fresh. The same overload comes from more than about four talkers at once (2.10),
 and selecting the loudest of them is later work too.
+
+### 2.12 A session that offers no voice chat
+
+A host chooses whether its session offers voice chat: the HOST sub-tab's "Offer voice chat", or the launcher's hosting
+defaults (a launch plan's `host.Voice`), both ending in `InternalHostSettings.Voice`. The host announces the setting in
+its signed descriptor and its LAN session info, and the engine enforces it.
+
+- **The host.** `LiveHost` gives the engine the setting as hosting starts (`OfferVoice`), before the first player can
+  join. A session that offers none carries no voice:
+  - every voice datagram from a player is dropped as it arrives, before the relay policy spends a token or a strike on
+    it, and counted as `NotOffered`. A player that has not heard the setting, such as one older than it, loses the
+    datagram and nothing more: no strike, no mute, no kick. A flood costs the host a counter for each datagram its link
+    holds, at most 128 at a time;
+  - nothing is relayed, and the host's own player sends nothing (`SubmitVoiceFrame` answers `NotOffered`), and plays
+    nothing, since nothing arrives;
+  - the voice service codes nothing, and its transmit state says `NotOffered` (section 3.3).
+- **Fixed for the hosting run.** The descriptor is signed with the setting once, and the engine refuses to change it
+  while any connection is open. `LiveHost` reads it from the settings once, so a later change to the settings object
+  reaches neither the engine nor the descriptor. Closing every connection, which stopping hosting does, ends the run and
+  returns the engine to offering voice, and so does a role change; hosting again applies the setting it is given then.
+- **The carrier is `JoinAccepted`.** The host's answer to every join and rejoin carries the setting, so a joined player
+  knows it before it is Ready, and so before it could send: on every path, LAN, direct, invite, listing and
+  launcher-planned, and on every reconnect, since each is a join to the engine. The voice roster would have arrived in
+  time only by the order of one flush: a host queues it in the flush that admits the player, ahead of the commit that
+  makes the player Ready, and only when the host has voice options at all. `JoinAccepted` is the answer that admits the
+  player, so the order is the protocol's own, and a host without voice options says there that it carries none.
+- **A joined player without voice** sends nothing: `SubmitVoiceFrame` refuses every frame as `NotOffered`, and the voice
+  service codes none, so no frame of the microphone leaves the machine. It plays nothing: whatever its host relays
+  anyway, as a hostile host might, is dropped as it arrives and counted as `NotOffered`.
+- **The stricter setting wins.** Every live join verifies the host's signed descriptor before it connects, and a join
+  from the LAN list also had the listing's session info. When either showed the session without voice, the join tells
+  the engine so with every link it opens (`Connect`'s `shownWithoutVoice`), and the session stays without voice for the
+  whole join, whatever the host says in `JoinAccepted`, as a host that restarted with the other setting would say to a
+  reconnect. A host that says in `JoinAccepted` that it offers no voice is believed whatever the descriptor said.
+- **What shows nothing before joining.** No live join path: LAN, direct, invite, listing and launcher-planned joins all
+  resolve the descriptor first. Only an engine handed a link directly, as the rig and the engine's tests do, has
+  nothing but `JoinAccepted` to go by. The rule holds to what the join itself saw, the descriptor it verified and the
+  LAN info as it resolved; a screen shown earlier is not tied to the join. A launcher-planned join carries the SHA-256
+  of the descriptor the launcher showed (`LaunchSessionPlan.ExpectedDescriptorSha256`), which the join does not
+  enforce yet.
+- **What the player sees.** `IInternalVoiceService.TransmitState` reads `NotOffered` while this game hosts, or has
+  joined, such a session, ahead of every state but `Failed`, for the transmit indicator. Until the voice slice fills
+  VOICE, its placeholder says "This session offers no voice chat." then.
+- **What stays as it was.** A session that offers voice behaves, counts and sends exactly as before, its `JoinAccepted`
+  byte for byte. Server mutes and listener mutes work in either kind of session: the roster and the mute sets still
+  travel. Solo play offers voice, to nobody.
+- **The wire, and why the protocol stays at 1.0.0.** The setting is one byte after the join generation, `false`, written
+  only when the session offers no voice. A host that offers voice writes `JoinAccepted` exactly as before, and a reader
+  that finds nothing after the join generation reads a session that offers voice, as every earlier host did. A reader
+  never reads past the fields it knows, so one that predates the byte skips it: such a player joins a session without
+  voice as before, has whatever it sends dropped on arrival without a strike, and hears nothing, since nothing is
+  relayed. The joining checks compare major versions only (`MultiplayerSessionEngine.md`, "Protocol"), and nothing
+  branches on a peer's minor version, so a minor bump would refuse nobody and tell nobody anything; it would only move
+  the public `MultiplayerModule.ProtocolVersion`, which descriptors, LAN info and the launcher's checks all carry. No
+  released peer exists either: live sessions are still behind the developer switch. A field added to `JoinAccepted`
+  after this one needs the byte in every message, true or false, so that readers find the new field in place.
 
 ## Part 3: the voice service
 
@@ -599,6 +667,9 @@ it; otherwise every mute, stream and capture the session went on producing would
 - **Nobody to hear.** In a solo session, when muted by the host, or when not connected, frames are cut and metered but
   not coded. `TransmitState` says which. A host counts only players who are Ready as listeners, since it relays to no
   one else: a player still joining, perhaps held short of Ready while the runtime loads the world, hears nothing yet.
+- **No voice in the session.** While this game hosts, or has joined, a session that offers no voice chat (section
+  2.12), nothing is coded either, whether or not voice is on, and `TransmitState` says `NotOffered`, ahead of every
+  state but `Failed`.
 
 ### 3.4 Receiving and playback
 
@@ -703,7 +774,8 @@ it; otherwise every mute, stream and capture the session went on producing would
 
 - whether voice is on;
 - capture, sending and receiving counters, with the frames the session took to send (`FramesSent`) and refused
-  (`FramesRefused`), and the coded frames dropped when voice was turned off before they left (`FramesDroppedOff`);
+  (`FramesRefused`, which counts those refused because the session offers no voice, `NotOffered`, too), and the coded
+  frames dropped when voice was turned off before they left (`FramesDroppedOff`);
 - frames dropped because the bound on streams left their speaker none (`UnlistedFramesDropped`), and the streams
   ended because the participants did not list their speaker in time or a listed one needed the room
   (`UnlistedStreamsEnded`);
@@ -727,6 +799,12 @@ does four things:
 - it creates the `VoiceService` with that engine and the engine's clock, with voice off until the player turns it on;
 - it pumps voice after the live sessions and the engine;
 - it disposes voice before the live sessions and the engine shut down.
+
+Voice options and the service belong to the process, whatever any session's setting; the engine enforces each session's
+own (section 2.12). Each hosting run tells the engine whether it offers voice chat as it starts (`LiveHost`, through
+`OfferVoice`), fixed until hosting stops, and each join tells it, with every link it opens, whether what the player was
+shown before joining, the descriptor or the LAN listing, said the session offers none (`LiveJoin`, through `Connect`).
+The voice service then codes nothing in a session without voice, and says so in `TransmitState`.
 
 ### 3.8 Tests and measurements
 
@@ -792,6 +870,12 @@ engine, deterministic except where noted:
   - a code of its own for each engine diagnostic the provider passes on, the worker's failure included.
 - `InternalVoiceTests` and `InternalVoiceStreamTests`: the service through the runtime's SPI, over real providers on
   the deterministic network; [MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md), section 9.
+- `InternalVoiceOfferTests`, over the same peers: a session that offers no voice, where the host's player and two
+  joined players with voice on code, send, relay and hear nothing and every indicator says `NotOffered`; three hosting
+  runs, voice off, on and off, each with its own descriptor and setting, cleared when hosting stops; a session the
+  launcher planned with `voice: false`; a join shown without voice that reconnects to its host restarted with voice and
+  still sends and plays nothing, while a player shown voice is heard; and, over real sockets on loopback, a LAN
+  listing that showed no voice holding against a descriptor that says voice.
 
 | Measurement | Result |
 | --- | --- |

@@ -246,7 +246,7 @@ inline after the reference `4097` and take no index. Nobody maintains numeric id
 | Type | Direction | Message |
 | --- | --- | --- |
 | `0x01` | client → host | `JoinRequest`: protocol version, display name, registered contracts, opaque content descriptor |
-| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report, join generation |
+| `0x02` | host → client | `JoinAccepted`: session id, seed, epoch, participant, host participant, tick, step rate, next sequence, whether the host kept the player's record, opaque admission report, join generation, and, only for a session that offers no voice chat, a `false` byte saying so (`MultiplayerVoice.md`, section 2.12) |
 | `0x03` | host → client | `JoinRejected`: end reason, message, opaque admission report |
 | `0x04`, `0x05` | host → client | `SnapshotBegin` (epoch), `SnapshotEnd` |
 | `0x06` | client → host | `ReadyAck` (epoch) |

@@ -72,7 +72,7 @@ A host describes its session in a descriptor and signs it. A joining player chec
 | `gameBuild` | Robotopia build, 1 to 16 of `[0-9A-Za-z._-]` |
 | `runtimeVersion`, `protocolVersion` | Semantic versions of the TopiaForge runtime and the multiplayer protocol |
 | `maxPlayers` | 2 to 16 |
-| `passwordRequired`, `voice` | Session settings shown before joining |
+| `passwordRequired`, `voice` | Session settings shown before joining. `voice` says whether the session offers voice chat, and the host enforces it: a session that offers none carries none, and a join shown so stays without it whatever the host says later ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12) |
 | `visibility` | `public`, `invite` or `lan` |
 | `hostServesPackages` | Developer mode: the host serves its own package archives to joining players |
 | `gamemode`, `world` | Display names, 1 to 48 characters, or `null` |
@@ -132,7 +132,8 @@ A host describes its session in a descriptor and signs it. A joining player chec
   - the name, game build, runtime and protocol versions;
   - the gamemode and world display names;
   - players and maximum players;
-  - whether a password is required and whether voice is on.
+  - whether a password is required and whether the session offers voice chat; a join from the LAN list holds to a
+    "no voice" shown here, as it does to the descriptor's.
 
   The widest valid info measures 935 bytes.
 - **Trust.** Beacons and info are unauthenticated hints, and they never carry an address. Before trusting anything
@@ -479,7 +480,10 @@ adds links to it, and stopping closes them while the host plays on.
    alone. One address holds at most four links, enough for a household behind one router; paths whose source cannot
    be told apart, such as a relay's, are not capped.
 5. **Serving.** The host signs its descriptor (the packages it read, `hostServesPackages` false) and serves it.
-   It sets the engine's capacity and join policy, and keeps its session info current as players come and go. A host
+   It sets the engine's capacity and join policy, and keeps its session info current as players come and go. Whether
+   the session offers voice chat is read once and fixed for the run: the descriptor and the info say it, and the engine
+   enforces it, telling every joining player in `JoinAccepted` (`MultiplayerVoice.md`, section 2.12). Hosting again
+   applies the setting given then. A host
    with LAN or public visibility also announces itself on the LAN; an invite-only host does not.
 6. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
    (section 19) and ends their session.
@@ -528,7 +532,7 @@ host is up, so any failure before that leaves the player's own session untouched
 | Checking | The game build, the protocol's major version, the path against the player's privacy choice, and the content must all agree. Packages of this game's own that cannot be read end the join as `ContentUnreadable`. |
 | AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
 | PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |
-| Connecting | The transport connects with the descriptor's transport key pinned. Once the link is up, the engine switches to the host's session and sends the join with a proof bound to this link. |
+| Connecting | The transport connects with the descriptor's transport key pinned. Once the link is up, the engine switches to the host's session and sends the join with a proof bound to this link, and with whether the descriptor or the LAN listing showed the session without voice chat, which holds for every link the join opens. |
 | Synchronizing, InSession | The engine joins and plays. The host has two minutes to admit the player and send the session, and two more for each replacement that asks for a new snapshot; after that, the runtime's readiness holds may keep the player waiting a minute without progress and five minutes from the first hold, and the player waits seven minutes in all, however often the host replaces the session, until it has been Ready. A session the host replaces later is synchronized again within the same bounds. A link lost before the first Ready ends the join, back in solo play. |
 | Reconnecting | A link lost in session is retried every two seconds for 30 seconds, each time with a new proof for the new link; a retry whose link drops before Ready keeps the same window. The host keeps the player's place for its grace period, so the player comes back as the same participant. |
 | Ended | The join failed or the session ended; the process is in solo play again. |

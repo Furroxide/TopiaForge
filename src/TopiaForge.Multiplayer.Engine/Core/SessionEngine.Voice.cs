@@ -29,7 +29,13 @@ namespace TopiaForge.Multiplayer.Engine
         /// The frame, and the one waiting for it, were dropped: sending them would break the host's voice limits, as
         /// when frames bunch up after a stall.
         /// </summary>
-        RateLimited = 6
+        RateLimited = 6,
+
+        /// <summary>
+        /// The session offers no voice chat, as its host chose or as the join was shown before it began, so nothing is
+        /// sent; see <see cref="SessionEngine.IsVoiceOffered"/>.
+        /// </summary>
+        NotOffered = 7
     }
 
     /// <summary>
@@ -40,7 +46,7 @@ namespace TopiaForge.Multiplayer.Engine
     internal sealed partial class SessionEngine
     {
         private const string VoiceKickMessage = "The host removed this player for abusing voice chat.";
-        private readonly long[] voiceDropped = new long[(int)VoiceDropReason.InboxOverflow + 1];
+        private readonly long[] voiceDropped = new long[(int)VoiceDropReason.NotOffered + 1];
         private readonly Dictionary<ulong, VoiceRosterEntry> voiceRoster = new Dictionary<ulong, VoiceRosterEntry>();
         private readonly Dictionary<string, VoiceModeration> voiceModeration = new Dictionary<string, VoiceModeration>(StringComparer.Ordinal);
         private VoiceRelayPolicy? voicePolicy;
@@ -89,7 +95,7 @@ namespace TopiaForge.Multiplayer.Engine
                 return VoiceSubmitResult.Invalid;
             }
 
-            if (!CanTalk(out var serverMuted)) return serverMuted ? VoiceSubmitResult.ServerMuted : VoiceSubmitResult.NotConnected;
+            if (!CanTalk(out var refused)) return refused;
             voiceSubmitted++;
             hasVoiceTimestamp = true;
             lastVoiceTimestamp = timestamp;
@@ -293,27 +299,49 @@ namespace TopiaForge.Multiplayer.Engine
             if (options.Voice != null) voiceRosterDirty = true;
         }
 
-        private bool CanTalk(out bool serverMuted)
+        /// <summary>
+        /// Says whether the local talker may send now and, when not, why: no ready session to talk in, a session that offers
+        /// no voice chat, or a mute by the host.
+        /// </summary>
+        private bool CanTalk(out VoiceSubmitResult refused)
         {
-            serverMuted = false;
+            refused = VoiceSubmitResult.NotConnected;
             if (ended) return false;
+            var serverMuted = false;
             if (Role == EngineRole.Host)
             {
                 var speaker = localParticipantId.HasValue ? FindParticipant(localParticipantId.Value)?.Voice : null;
                 if (speaker == null) return false;
-                serverMuted = speaker.IsMuted(nowMicros);
-                return !serverMuted;
-            }
-
-            if (channel == null || channel.Phase != ClientPhase.Ready || channel.Link.State == EngineLinkState.Closed) return false;
-            foreach (var entry in voiceRoster.Values)
-            {
-                if (localParticipantId.HasValue && string.Equals(entry.ParticipantId, localParticipantId.Value.Value, StringComparison.Ordinal))
+                if (!voiceOffered)
                 {
-                    serverMuted = entry.ServerMuted;
+                    // The host's own player is in a session that offers no voice: nothing of theirs is relayed.
+                    refused = VoiceSubmitResult.NotOffered;
+                    return false;
+                }
+
+                serverMuted = speaker.IsMuted(nowMicros);
+            }
+            else
+            {
+                if (channel == null || channel.Phase != ClientPhase.Ready || channel.Link.State == EngineLinkState.Closed) return false;
+                if (!voiceOffered || shownWithoutVoice)
+                {
+                    // The host said in JoinAccepted, before this player could be ready, that it offers no voice, or the join
+                    // was shown so before it began: no frame of the microphone leaves.
+                    refused = VoiceSubmitResult.NotOffered;
+                    return false;
+                }
+
+                foreach (var entry in voiceRoster.Values)
+                {
+                    if (localParticipantId.HasValue && string.Equals(entry.ParticipantId, localParticipantId.Value.Value, StringComparison.Ordinal))
+                    {
+                        serverMuted = entry.ServerMuted;
+                    }
                 }
             }
 
+            if (serverMuted) refused = VoiceSubmitResult.ServerMuted;
             return !serverMuted;
         }
 
@@ -366,12 +394,13 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>
         /// Handles a voice datagram from a client: the relay policy, then the relay and the host's own playback. Voice is
         /// taken as soon as the host has admitted the client, before it acknowledges the session snapshot: links hand
-        /// datagrams over before session frames, so a datagram sent just after the acknowledgement is often read first.
+        /// datagrams over before session frames, so a datagram sent just after the acknowledgement is often read first. A
+        /// session that offers no voice takes none at all.
         /// </summary>
         private void HandleUplinkVoice(HostConnection connection, byte[] datagram)
         {
             var policy = voicePolicy;
-            if (policy == null) return;
+            if (policy == null || DropsUplinkWithoutVoice()) return;
             var record = connection.Participant;
             if (!connection.IsJoined || record?.Voice == null)
             {
@@ -439,11 +468,14 @@ namespace TopiaForge.Multiplayer.Engine
             }
         }
 
-        /// <summary>Handles a relayed voice datagram on a client: the speaker must be in the roster and the packets valid.</summary>
+        /// <summary>
+        /// Handles a relayed voice datagram on a client: the session must offer voice, the speaker must be in the roster and
+        /// the packets valid.
+        /// </summary>
         private void HandleRelayedVoice(ClientChannel current, byte[] datagram)
         {
             var voice = options.Voice;
-            if (voice == null) return;
+            if (voice == null || DropsRelayedWithoutVoice()) return;
             if (current.Phase != ClientPhase.Ready)
             {
                 voiceDropped[(int)VoiceDropReason.NotReady]++;
@@ -551,8 +583,8 @@ namespace TopiaForge.Multiplayer.Engine
 
         /// <summary>
         /// Forgets the voice of a session the process leaves for another role: what it held, heard and expected, the
-        /// moderation it kept as a host, and whom its player muted. A join decides for itself whether the mutes stay; see
-        /// <see cref="AdoptListenerMutes"/>.
+        /// moderation it kept as a host, whom its player muted, and whether the session offered voice. A join decides for
+        /// itself whether the mutes stay; see <see cref="AdoptListenerMutes"/>.
         /// </summary>
         private void RetireVoice()
         {
@@ -560,6 +592,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (options.Voice != null) voicePace = new VoiceSpeaker(1, options.Voice);
             voiceModeration.Clear();
             RetireListenerMutes();
+            ForgetVoiceOffer();
             voiceRosterDirty = false;
             voiceSequence = 0;
             lastVoiceTimestamp = 0;

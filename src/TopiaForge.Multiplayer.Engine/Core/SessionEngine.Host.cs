@@ -430,7 +430,8 @@ namespace TopiaForge.Multiplayer.Engine
                 NextSequence = record.LastSequence + 1,
                 RecordKept = recordKept,
                 Report = decision.Report,
-                Generation = connection.JoinGeneration
+                Generation = connection.JoinGeneration,
+                VoiceOffered = VoiceOfferedToPlayers
             }));
             connection.Enqueue(CaptureSnapshot());
             connection.ClearPendingDeltas();

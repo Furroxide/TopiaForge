@@ -37,7 +37,14 @@ namespace TopiaForge.Multiplayer.Engine
         internal int PendingSubmissionCount => pending.Count;
 
         /// <summary>Joins a host over <paramref name="link"/>, replacing any previous connection.</summary>
-        internal void Connect(IEngineLink link, string displayName, byte[]? content = null)
+        /// <param name="link">The link to the host.</param>
+        /// <param name="displayName">The name to join as.</param>
+        /// <param name="content">The opaque content the host's admission reads.</param>
+        /// <param name="shownWithoutVoice">
+        /// Whether the player was shown, before this join, that the session offers no voice chat, as its signed descriptor
+        /// or its listing said. The join then carries no voice even if the host says otherwise in <c>JoinAccepted</c>.
+        /// </param>
+        internal void Connect(IEngineLink link, string displayName, byte[]? content = null, bool shownWithoutVoice = false)
         {
             if (link == null) throw new ArgumentNullException(nameof(link));
             if (!ProtocolLimits.IsValidIdentity(displayName)) throw new ArgumentException("A bounded display name is required.", nameof(displayName));
@@ -49,6 +56,7 @@ namespace TopiaForge.Multiplayer.Engine
 
             // A new join starts the readiness holds' total again; a rejoin before the player was Ready keeps counting it.
             if (!joinedBefore) readinessAnchored = false;
+            NoteVoiceShown(shownWithoutVoice);
             channel = new ClientChannel(link, displayName, content ?? Array.Empty<byte>());
             state = MultiplayerSessionState.Connecting;
             MarkSessionChanged();
@@ -233,6 +241,9 @@ namespace TopiaForge.Multiplayer.Engine
             // session id: see AdoptParticipantList and AdoptListenerMutes.
             AdoptParticipantList(current.Link.PeerIdentity, message);
             AdoptListenerMutes(current.Link.PeerIdentity, message.RecordKept);
+
+            // The host's first answer says whether its session offers voice, so this player knows before it is ready to send.
+            HearVoiceOffer(message.VoiceOffered);
 
             // A rejoin keeps the session and its epoch but restarts every system stream: what the old link carried is gone,
             // so what the channels still hold from it goes too, and the new generation tells their owners to start again.

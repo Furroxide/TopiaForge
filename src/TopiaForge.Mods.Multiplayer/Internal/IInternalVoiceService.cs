@@ -29,7 +29,14 @@ namespace TopiaForge.Mods.Internal
         NotConnected = 4,
 
         /// <summary>Voice stopped after repeated failures and stays off until the provider restarts.</summary>
-        Failed = 5
+        Failed = 5,
+
+        /// <summary>
+        /// The session offers no voice chat: its host turned "Offer voice chat" off, or the session was shown so before
+        /// this player joined. Nothing is coded, sent or played, whether or not voice is on, until the player is in a
+        /// session that offers it. This state outranks every other but <see cref="Failed"/>.
+        /// </summary>
+        NotOffered = 6
     }
 
     /// <summary>
@@ -43,7 +50,9 @@ namespace TopiaForge.Mods.Internal
     /// <remarks>
     /// <para>
     /// Voice is off until <see cref="Enabled"/> is set, which the runtime does only once the player has consented: until
-    /// then nothing is captured, coded or sent.
+    /// then nothing is captured, coded or sent. A session that offers no voice chat carries none whatever the player turned
+    /// on, and <see cref="TransmitState"/> reads <see cref="InternalVoiceTransmitState.NotOffered"/> while this game hosts
+    /// or has joined one.
     /// </para>
     /// <para>
     /// Listener mutes follow two rules. <b>Names belong to the host that listed them.</b> A participant id names a player
@@ -192,7 +201,10 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Gets the frames the session delivered for playback.</summary>
         internal long FramesReceived { get; set; }
 
-        /// <summary>Gets the frames the session refused to send when it was handed them: rate limits, a host mute, or no connection.</summary>
+        /// <summary>
+        /// Gets the frames the session refused to send when it was handed them: rate limits, a host mute, no connection, or a
+        /// session that offers no voice chat.
+        /// </summary>
         internal long FramesRefused { get; set; }
 
         internal IReadOnlyList<InternalVoiceSpeakerStatistics> Speakers { get; set; } = Array.Empty<InternalVoiceSpeakerStatistics>();

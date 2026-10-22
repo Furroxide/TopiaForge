@@ -10,6 +10,32 @@ namespace TopiaForge.ModManager.Tests
     /// <summary>SESSION: players once the host lists them, moderation checked against the current snapshot, and leaving.</summary>
     internal static partial class MultiplayerSessionsTests
     {
+        private static void VoiceSaysWhenTheSessionOffersNone()
+        {
+            // VOICE's line follows the voice service, which applies the session's setting: what the host said, and what the
+            // join was shown before it began, the stricter of the two.
+            var rig = new SessionsRig();
+            rig.Presenter.SelectTab(MultiplayerSubTab.Voice);
+            rig.Frame();
+            That(rig.Presenter.VoiceNote.Length == 0, "without a voice service VOICE says nothing about the session");
+            var voice = new ScriptedVoiceService();
+            rig.Control.Voice = voice;
+            foreach (InternalVoiceTransmitState state in Enum.GetValues(typeof(InternalVoiceTransmitState)))
+            {
+                voice.State = state;
+                rig.Frame();
+                var expected = state == InternalVoiceTransmitState.NotOffered ? VoiceScreenText.NotOffered : string.Empty;
+                That(rig.Presenter.VoiceNote == expected, "while the voice service says " + state + ", VOICE says \"" + rig.Presenter.VoiceNote + "\"");
+            }
+
+            voice.State = InternalVoiceTransmitState.NotOffered;
+            That(VoiceScreenText.NotOffered == "This session offers no voice chat.", "in one plain line");
+            var allocated = Seam.Allocated(() => _ = rig.Presenter.VoiceNote, 10_000);
+            That(allocated == 0, "which the view reads every frame without allocating (" + allocated + " bytes over 10,000 reads)");
+            voice.Failure = new InvalidOperationException("The voice service broke.");
+            That(rig.Presenter.VoiceNote.Length == 0, "a voice service that cannot answer says nothing, and throws nothing at the view");
+        }
+
         private static void PlayersShowOnceTheHostListsThem()
         {
             // A join that has not connected runs no session of its own: what the snapshot lists then is solo play's.

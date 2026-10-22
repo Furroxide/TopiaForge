@@ -16,7 +16,9 @@ namespace TopiaForge.Multiplayer.Voice
     /// <remarks>
     /// <para>
     /// Voice stays off until the player turns it on: until <see cref="Enabled"/> is set, nothing is captured, coded or
-    /// sent. While it is on, <see cref="SetTransmitting"/> says when the player transmits, while push-to-talk is held or
+    /// sent. In a session that offers no voice chat nothing is coded, sent or played whatever the player turned on, and
+    /// <see cref="TransmitState"/> says so (<see cref="SessionEngine.IsVoiceOffered"/>). While it is on,
+    /// <see cref="SetTransmitting"/> says when the player transmits, while push-to-talk is held or
     /// while voice activation listens, and turning it off ends the talk spurt. Capture calls may come at any cadence. How
     /// much of one call is kept, and how long an encoded frame may wait to be sent, follow the main thread's frame
     /// interval, so a slow frame rate loses nothing while a stall's backlog is still dropped.
@@ -84,6 +86,7 @@ namespace TopiaForge.Multiplayer.Voice
         private long rateLimited;
         private long serverMuted;
         private long notConnected;
+        private long notOffered;
         private long invalid;
 
         /// <summary>Creates the service for <paramref name="engine"/>, whose voice options name <paramref name="codec"/>.</summary>
@@ -257,6 +260,7 @@ namespace TopiaForge.Multiplayer.Voice
                 RateLimited = rateLimited,
                 ServerMuted = serverMuted,
                 NotConnected = notConnected,
+                NotOffered = notOffered,
                 Invalid = invalid,
                 FramesReceived = framesReceived,
                 InboundOverflow = inboundOverflow,
@@ -360,6 +364,9 @@ namespace TopiaForge.Multiplayer.Voice
                     case VoiceSubmitResult.NotConnected:
                         notConnected++;
                         break;
+                    case VoiceSubmitResult.NotOffered:
+                        notOffered++;
+                        break;
                     default:
                         invalid++;
                         break;
@@ -378,7 +385,10 @@ namespace TopiaForge.Multiplayer.Voice
             // A host relays only to players who are Ready, so one still joining hears nothing yet and is no listener.
             var listeners = connectedOthers - (engine.Role == EngineRole.Host ? engine.ConnectionsAwaitingReady : 0);
             var hasListeners = listeners > 0;
-            var blocked = !enabled || !ready || !hasListeners || mutedByHost || worker.Failed;
+
+            // A session that offers no voice chat, as its host chose or as the join was shown, codes nothing at all.
+            var offered = engine.IsVoiceOffered;
+            var blocked = !enabled || !ready || !hasListeners || mutedByHost || !offered || worker.Failed;
             worker.Configure(mode, thresholdDb, loss.ExpectedLossPercent, blocked);
             if (worker.Failed && !failureReported)
             {
@@ -390,6 +400,7 @@ namespace TopiaForge.Multiplayer.Voice
             }
 
             TransmitState = worker.Failed ? VoiceTransmitState.Failed
+                : !offered ? VoiceTransmitState.NotOffered
                 : !enabled ? VoiceTransmitState.Idle
                 : !ready ? VoiceTransmitState.NotConnected
                 : mutedByHost ? VoiceTransmitState.MutedByHost

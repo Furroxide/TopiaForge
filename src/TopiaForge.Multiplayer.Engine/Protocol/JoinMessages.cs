@@ -63,6 +63,15 @@ namespace TopiaForge.Multiplayer.Engine
         /// connection never shares system-channel traffic with the one it replaced.
         /// </summary>
         internal ulong Generation;
+
+        /// <summary>
+        /// Whether the session offers voice chat, as its host chose when it started hosting. It travels as one byte after
+        /// the join generation, written only when the session offers none, so a session that offers voice sends the bytes
+        /// it always did. A reader that finds nothing there reads a session that offers voice, as every host before the
+        /// field was; a reader that predates it never reads past the fields it knows, so it skips the byte. A field added
+        /// after this one needs the byte in every message, true or false, so that readers find the new field in place.
+        /// </summary>
+        internal bool VoiceOffered = true;
     }
 
     internal sealed class JoinRejectedMessage
@@ -135,6 +144,7 @@ namespace TopiaForge.Multiplayer.Engine
             body.WriteBool(message.RecordKept);
             body.WriteBytes(message.Report);
             body.WriteVarUInt(message.Generation);
+            if (!message.VoiceOffered) body.WriteBool(false);
             frame.WriteEnvelope(MessageType.JoinAccepted, body);
         }
 
@@ -154,6 +164,9 @@ namespace TopiaForge.Multiplayer.Engine
                 Report = reader.ReadBytes(ProtocolLimits.MaximumOpaqueBytes),
                 Generation = reader.ReadVarUInt()
             };
+
+            // Written only for a session that offers no voice chat; a host that leaves it out offers voice.
+            message.VoiceOffered = reader.AtEnd || reader.ReadBool();
             if (message.StepRateHz < 1) throw new ProtocolException("The host announced a step rate of zero.");
             return message;
         }

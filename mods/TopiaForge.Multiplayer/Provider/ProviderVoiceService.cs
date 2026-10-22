@@ -127,8 +127,9 @@ namespace TopiaForge.Multiplayer
                 FramesSent = statistics.Sent + statistics.Held,
                 FramesReceived = statistics.FramesReceived,
 
-                // Refused: rate limits, a mute by the host, or no session to talk in. Invalid frames are a fault, not a refusal.
-                FramesRefused = statistics.RateLimited + statistics.ServerMuted + statistics.NotConnected,
+                // Refused: rate limits, a mute by the host, no session to talk in, or one that offers no voice chat. Invalid
+                // frames are a fault, not a refusal.
+                FramesRefused = statistics.RateLimited + statistics.ServerMuted + statistics.NotConnected + statistics.NotOffered,
                 Speakers = speakers
             };
         }
@@ -150,6 +151,7 @@ namespace TopiaForge.Multiplayer
             VoiceTransmitState.MutedByHost => InternalVoiceTransmitState.MutedByHost,
             VoiceTransmitState.NotConnected => InternalVoiceTransmitState.NotConnected,
             VoiceTransmitState.Failed => InternalVoiceTransmitState.Failed,
+            VoiceTransmitState.NotOffered => InternalVoiceTransmitState.NotOffered,
             _ => InternalVoiceTransmitState.Idle
         };
 

@@ -155,6 +155,10 @@ hands out none once it has stopped.
   `ParticipantListGeneration` moves at a join that finds another host or one without this player's record, and at a
   return to solo play, and from then on the same id may name someone else. Follow a player across a join by player key,
   never by id alone.
+- **A session without voice.** While this game hosts, or has joined, a session that offers no voice chat, nothing is
+  coded, sent or played whatever `Enabled` says, and `TransmitState` reads `NotOffered`, ahead of every state but
+  `Failed`. A host's setting is fixed for its hosting run, and a join holds to what its descriptor or LAN listing showed
+  before it began, whatever the host says later ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12).
 - **Asking again.** `TryGetPlaybackStream` gives the speaker's stream, or makes one for a speaker the session listed at
   the last pump while there is room, and otherwise returns false, making and allocating nothing, so it may run every
   frame. `GetPlaybackStream` always gives a stream: for a speaker the session does not list it makes one, a 64 KiB ring
@@ -172,7 +176,7 @@ The statistics are mapped by what each counter means:
 | `FramesEncoded` | `FramesEncoded` | Frames coded for sending |
 | `FramesSent` | `Sent` and `Held` | Frames the session took to send. The engine holds every other frame of a steady talker to share a datagram with the next, so `Sent` alone counts about half of them |
 | `FramesReceived` | `FramesReceived` | Frames the engine delivered for playback |
-| `FramesRefused` | `RateLimited`, `ServerMuted` and `NotConnected` | Frames the session refused to send when it was handed them. `Invalid` frames are a fault, not a refusal, and stay out |
+| `FramesRefused` | `RateLimited`, `ServerMuted`, `NotConnected` and `NotOffered` | Frames the session refused to send when it was handed them. `Invalid` frames are a fault, not a refusal, and stay out |
 | Each speaker's `Decoded`, `Recovered`, `Late`, `TargetDelayMicros`, `IsSpeaking` | The same, for that speaker | — |
 | Each speaker's `Concealed` | `Concealed` and `Faded` | Frames concealed because nothing usable arrived in time. After three, the jitter buffer fades two more to silence, and those are concealment too. A frame it adds on purpose to keep its delay is not counted |
 | Each speaker's `Underruns` | The stream's `Underruns` | Reads that found too little audio |
@@ -518,7 +522,7 @@ plug in here:
 | WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
-| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is only announced so far, in its descriptor and beacon: a session that says it offers no voice still relays a player who turned voice on, and enforcing it is still to come |
+| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is enforced: a session that offers no voice chat carries none, and `TransmitState` reads `NotOffered` for the transmit indicator to show ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12) |
 
 Two rules hold for everything that plugs in:
 
@@ -553,7 +557,10 @@ answers no and is reported.
   allocating nothing while `GetPlaybackStream` makes a ring each time; every statistic against the service's own, and
   every frame counted as sent reaching the host through a 2.5-second stall; every member refused off the main thread
   while a stream reads past the service's gate; and a stream for one host process's p1 ending at the reconnect to its
-  restarted process, never playing the new p1.
+  restarted process, never playing the new p1. `InternalVoiceOfferTests` adds sessions that offer no voice chat: the
+  host's player and two joined players with voice on coding, sending and hearing nothing, three hosting runs each with
+  its own setting, a session the launcher planned without voice, and a join shown without voice that stays without it
+  after reconnecting to its host restarted with voice.
 - **Admission through the runtime host** (`RuntimeAdmissionTests`): the descriptor's packages by role, a stale player
   refused by the host's planner with its report reaching the player, the joining player's own check before connecting, a
   required session mod at a compatible version joining, the offer's format and its refusals, the content seam

@@ -24,7 +24,13 @@ namespace TopiaForge.Multiplayer.Voice
         NotConnected = 4,
 
         /// <summary>The voice worker stopped after repeated failures; voice is off until the provider restarts.</summary>
-        Failed = 5
+        Failed = 5,
+
+        /// <summary>
+        /// The session offers no voice chat, as its host chose or as the join was shown before it began: nothing is coded,
+        /// sent or played until this player is in a session that offers it.
+        /// </summary>
+        NotOffered = 6
     }
 
     /// <summary>
@@ -178,13 +184,23 @@ namespace TopiaForge.Multiplayer.Voice
         internal long RateLimited { get; set; }
         internal long ServerMuted { get; set; }
         internal long NotConnected { get; set; }
+
+        /// <summary>
+        /// Gets the coded frames the session refused because it offers no voice chat. A frame is coded only while the
+        /// session offers voice, so this counts only frames coded before the session changed.
+        /// </summary>
+        internal long NotOffered { get; set; }
+
         internal long Invalid { get; set; }
 
         /// <summary>Gets the frames the session took to send: <see cref="Sent"/> and <see cref="Held"/>.</summary>
         internal long FramesSent => Sent + Held;
 
-        /// <summary>Gets the frames the session refused to send: rate limits, a host mute, or no connection.</summary>
-        internal long FramesRefused => RateLimited + ServerMuted + NotConnected;
+        /// <summary>
+        /// Gets the frames the session refused to send: rate limits, a host mute, no connection, or a session that offers
+        /// no voice chat.
+        /// </summary>
+        internal long FramesRefused => RateLimited + ServerMuted + NotConnected + NotOffered;
 
         internal long FramesReceived { get; set; }
         internal long InboundOverflow { get; set; }

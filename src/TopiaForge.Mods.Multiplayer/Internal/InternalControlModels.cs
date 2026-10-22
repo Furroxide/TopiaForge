@@ -57,7 +57,11 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         internal bool RouterForwarding { get; set; }
 
-        /// <summary>Gets or sets whether the session offers voice chat.</summary>
+        /// <summary>
+        /// Gets or sets whether the session offers voice chat. It holds for the whole hosting run, as the descriptor is
+        /// signed with it once: a session that offers none carries no voice at all, the host's own player's included, and
+        /// every joining player learns so before it could send. Hosting again applies the setting given then.
+        /// </summary>
         internal bool Voice { get; set; }
 
         /// <summary>Gets or sets the gamemode's display name, shown to browsing players.</summary>

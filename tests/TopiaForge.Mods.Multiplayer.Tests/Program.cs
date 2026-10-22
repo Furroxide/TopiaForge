@@ -626,6 +626,17 @@ internal static class Program
             CommandAnswerTests.AnAnswerActsForThePlayerWhoSubmitted();
             CommandAnswerTests.AnAnswerAllocatesOnlyItsGuard();
             CommandAnswerTests.AScopesAnswersEndWithItsFacade();
+            VoiceOfferTests.ASessionWithoutVoiceCarriesNone();
+            VoiceOfferTests.ATalkerPastItsOwnGateIsDroppedOnArrivalWithoutAStrike();
+            VoiceOfferTests.AHostileHostIsNeverPlayed();
+            VoiceOfferTests.AJoinShownWithoutVoiceStaysWithoutIt();
+            VoiceOfferTests.EachHostingRunAppliesItsOwnSetting();
+            VoiceOfferTests.JoinAcceptedSaysWhenTheSessionOffersNoVoice();
+            InternalVoiceOfferTests.ASessionWithoutVoiceCarriesNoneThroughTheSpi();
+            InternalVoiceOfferTests.EachHostingRunOffersVoiceAsItWasToldTo();
+            InternalVoiceOfferTests.ALauncherPlannedHostWithoutVoiceHostsWithoutIt();
+            InternalVoiceOfferTests.AJoinShownWithoutVoiceStaysWithoutItWhateverTheHostSays();
+            InternalVoiceOfferTests.TheLanListingShownBeforeJoiningCounts();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }
