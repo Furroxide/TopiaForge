@@ -10,9 +10,10 @@ namespace TopiaForge.ModManager.Tests
     /// The mod's own asset loads beside the network world's (WS3.7). The game loads a bundle once per process, so a load the
     /// network world made itself, on a listen host for a player's spawn or on a joined player for a replica, gives way when
     /// the mod starts its own load of the bundle, however a player spelled its path: a mod that loads lazily is never
-    /// refused. One file is one load there, and a spelling the game's platform reads as another name of the file is
-    /// refused before it loads. A replica built through a mod context's own handles, which ends with that context, is built
-    /// again, as is one whose build failed through them as it ended; and the host's next build for a player outlives them.
+    /// refused, whichever way the mod itself named the file. One file is one load there, and a spelling the game's
+    /// platform reads as another name of the file is refused before it loads. A replica built through a mod context's own
+    /// handles, which ends with that context, is built again, as is one whose build failed through them as it ended, and a
+    /// build that fails again is not tried every frame; and the host's next build for a player outlives them.
     /// </summary>
     internal static class AuthorityAssetLoadTests
     {
@@ -26,6 +27,8 @@ namespace TopiaForge.ModManager.Tests
             OneFileIsOneLoadHoweverPlayersSpellIt();
             AReplicaWhoseBuildEndedWithItsContextIsBuiltAgain();
             TheHostsNextBuildOutlivesTheContextThatHeldItsBundle();
+            AModThatSpellsItsBundleAnotherWayIsNeverRefusedItsLoad();
+            ARebuildThatFailsIsNotTriedAgainEveryFrame();
         }
 
         private static void TheHostsOwnLoadGivesWayToItsModsLoad()
@@ -318,6 +321,91 @@ namespace TopiaForge.ModManager.Tests
             var next = mine.SpawnAsPlayer(prefab, 2);
             That(next.Succeeded && rig.Run(() => p1.Client.PendingPredictions == 0, 120) && next.Value!.IsAlive && mine.Ui.Toasts.Count == 0,
                 "the host makes the next one from a load of its own, and refuses nothing (" + string.Join(" | ", mine.Ui.Toasts.Select(toast => toast.Message)) + ")");
+        }
+
+        private static void AModThatSpellsItsBundleAnotherWayIsNeverRefusedItsLoad()
+        {
+            // A mod may load its bundle by a path that is not plain; the asset service reads it as the plain path's file.
+            const string ModsSpelling = "./assets/world.bundle";
+            var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "TopiaForgePackage");
+            That(TopiaForge.ModManager.Core.PathSafety.CombineRelativeChild(root, ModsSpelling) == TopiaForge.ModManager.Core.PathSafety.CombineRelativeChild(root, AuthorityMod.Bundle),
+                "the asset service reads " + ModsSpelling + " as the file " + AuthorityMod.Bundle);
+
+            // A hostile player names the host mod's bundle by the plain path, every second, so the host keeps a load of its own.
+            var rig = AuthorityRig.Create(players: 1);
+            var host = rig.Host;
+            var p1 = rig.Players[0];
+            var native = new NativeWorldAssets(host.Scene, host.Lifetime);
+            host.ModAssets = native;
+            var log = SpawnAbuseTests.Log(rig);
+            for (var drop = 1; drop <= 3; drop++)
+            {
+                var made = drop;
+                SpawnAbuseTests.Inject(rig, p1, SpawnAbuseTests.Spawn((uint)made, x: made));
+                That(rig.Run(() => Settled(native, () => SpawnAbuseTests.Verdicts(log, p1).Count == made), 120) && SpawnAbuseTests.Verdicts(log, p1).Last().Id.IsValid &&
+                     host.World.Proxies.OwnLoads == 2, "the host makes the hostile player's crate " + made + " from a load of its own");
+                rig.Clock.Advance(1_000_000);
+            }
+
+            // The host's mod then loads the file lazily, by its own spelling: the host's load gives way all the same.
+            var hosts = new AuthorityMod(host, assets: _ => native);
+            var load = hosts.Assets.LoadBundleAsync(ModsSpelling);
+            native.CompleteLoads();
+            That(load.IsCompleted && load.Result.Succeeded && native.RefusedLoads == 0 && host.Counters().AssetLoadsYielded == 1 && host.World.Proxies.OwnLoads == 0,
+                "and the mod's own load of the file, by its spelling, is never refused (" + Describe(load) + ")");
+
+            // On a joined player whose world built the hostile player's crate first, the same.
+            var other = AuthorityRig.Create(players: 2);
+            var victim = other.Players[0];
+            var victimNative = new NativeWorldAssets(victim.Scene, victim.Lifetime);
+            victim.ModAssets = victimNative;
+            SpawnAbuseTests.Inject(other, other.Players[1], SpawnAbuseTests.Spawn(1));
+            That(other.Run(() => Settled(victimNative, () => victimNative.Spawned.Count(item => item.IsAlive) == 1), 120) && victimNative.LoadedBundles == 1,
+                "the other player builds the hostile player's crate from a load of the world's own");
+            var victims = new AuthorityMod(victim, assets: _ => victimNative);
+            var spelled = victims.Assets.LoadBundleAsync(ModsSpelling);
+            victimNative.CompleteLoads();
+            That(spelled.IsCompleted && spelled.Result.Succeeded && victimNative.RefusedLoads == 0 && victim.Counters().AssetLoadsYielded == 1,
+                "and its mod's own load of the file, by its spelling, is never refused (" + Describe(spelled) + ")");
+
+            // A joined player keys its loads the same way: the host's scripted crate, from its mod's spelling, and a hostile
+            // player's, named by the plain path, are built there from one load of the file.
+            var third = AuthorityRig.Create(players: 2);
+            var watcher = third.Players[0];
+            var watched = new NativeWorldAssets(watcher.Scene, watcher.Lifetime);
+            watcher.ModAssets = watched;
+            var scripted = new AuthorityMod(third.Host);
+            scripted.Spawn(scripted.Load(bundlePath: ModsSpelling), 3);
+            SpawnAbuseTests.Inject(third, third.Players[1], SpawnAbuseTests.Spawn(1, x: 6));
+            That(third.Run(() => Settled(watched, () => watched.Spawned.Count(item => item.IsAlive) == 2), 120) && watched.BundleLoads == 1 && watched.RefusedLoads == 0,
+                "a joined player builds both crates from one load of the file (" + watched.BundleLoads + " loads, " + watched.RefusedLoads + " refused)");
+        }
+
+        private static void ARebuildThatFailsIsNotTriedAgainEveryFrame()
+        {
+            var rig = AuthorityRig.Create(players: 1);
+            var host = rig.Host;
+            var p1 = rig.Players[0];
+
+            // The player's world-owner scope holds the crate's bundle, and the package's loads go through that scope's service
+            // too, so once the scope has gone nothing loads the bundle again: its rebuild fails for good.
+            NativeWorldAssets? held = null;
+            var scope = new AuthorityMod(p1, ModExecutionContext.WorldOwner, assets: lifetime => held = new NativeWorldAssets(p1.Scene, lifetime));
+            var bundle = scope.Assets.LoadBundleAsync(AuthorityMod.Bundle);
+            held!.CompleteLoads();
+            p1.ModAssets = held;
+            var hosts = new AuthorityMod(host);
+            hosts.Spawn(hosts.Load(), 3);
+            That(bundle.Result.Succeeded && rig.Run(() => Settled(held, () => AuthorityRig.Live(p1).Count == 1), 60), "the player builds the host's crate through the scope");
+
+            // The scope ends: the crate is built again once, that build fails, and nothing tries it again, frame after frame.
+            scope.Lifetime.Dispose();
+            rig.Frames(5);
+            var rebuilt = p1.Counters().ReplicasRebuilt;
+            var loads = held.BundleLoads;
+            rig.Frames(120);
+            That(rebuilt == 1 && p1.Counters().ReplicasRebuilt == 1 && held.BundleLoads == loads && AuthorityRig.Live(p1).Count == 0,
+                "a rebuild that fails is tried once, not every frame (" + p1.Counters().ReplicasRebuilt + " rebuilds, " + loads + " then " + held.BundleLoads + " loads)");
         }
 
         private static string Describe(System.Threading.Tasks.Task<OperationResult<IAssetBundle>> load) =>

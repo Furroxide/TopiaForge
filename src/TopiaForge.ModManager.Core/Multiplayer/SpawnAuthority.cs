@@ -203,9 +203,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// Whether a bundle path a joined player names is a plain path inside a package: 1 to 512 characters, relative,
         /// with no empty, <c>.</c> or <c>..</c> segment, no drive or scheme, and no control character. No segment ends in a
         /// period or a space, or is shaped like a short name such as <c>WORLD~1.BUN</c>: the game's platform reads each as
-        /// another name of a file the mod knows by its plain one, so only case and separators are left for
-        /// <see cref="SameBundleFile"/> to tell apart. The asset service checks the path against the package's folder again
-        /// before any file is touched.
+        /// another name of a file the mod knows by its plain one, and no reading of the name alone sees a short name, so a
+        /// player's spellings of one file differ only by case and separators. The asset service checks the path against the
+        /// package's folder again before any file is touched.
         /// </summary>
         internal static bool IsSafeBundlePath(string? path)
         {
@@ -236,35 +236,148 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         }
 
         /// <summary>
-        /// Whether two bundle paths may name one file of a package on the game's platform, whose file names ignore case and
-        /// take either separator. A load the network world made gives way to a mod's own load of the same file however a
-        /// player spelled it, since the game refuses a second load of a bundle that is loaded already.
+        /// Whether two bundle paths may name one file of a package on the game's platform, read as the asset service
+        /// resolves a path there: either separator, an empty or <c>.</c> segment naming nothing, <c>..</c> taking back the
+        /// segment before it, whitespace or a period that ends a name dropped, and case ignored. A player's path is a plain
+        /// one (<see cref="IsSafeBundlePath"/>), but the mod's own need not be: a mod that loads
+        /// <c>./assets/world.bundle</c> holds the file a player names <c>assets/world.bundle</c>. A load the network world
+        /// made gives way to a mod's own load of the same file however either spelled it, since the game refuses a second
+        /// load of a bundle that is loaded already. It allocates nothing unless a path has a <c>..</c> segment.
         /// </summary>
         internal static bool SameBundleFile(string? left, string? right)
         {
-            if (left == null || right == null || left.Length != right.Length) return false;
-            for (var index = 0; index < left.Length; index++)
+            if (left == null || right == null || EndsInSeparator(left) != EndsInSeparator(right)) return false;
+            if (HasParentSegment(left) || HasParentSegment(right)) return string.Equals(BundleFileKey(left), BundleFileKey(right), StringComparison.Ordinal);
+            var leftIndex = 0;
+            var rightIndex = 0;
+            while (true)
             {
-                var one = left[index] == '\\' ? '/' : left[index];
-                var other = right[index] == '\\' ? '/' : right[index];
-                if (one != other && char.ToUpperInvariant(one) != char.ToUpperInvariant(other)) return false;
+                var more = NextName(left, ref leftIndex, out var leftStart, out var leftLength);
+                if (more != NextName(right, ref rightIndex, out var rightStart, out var rightLength)) return false;
+                if (!more) return true;
+                if (leftLength != rightLength) return false;
+                for (var offset = 0; offset < leftLength; offset++)
+                {
+                    var one = left[leftStart + offset];
+                    var other = right[rightStart + offset];
+                    if (one != other && char.ToUpperInvariant(one) != char.ToUpperInvariant(other)) return false;
+                }
             }
-
-            return true;
         }
 
         /// <summary>
-        /// The key that every spelling <see cref="SameBundleFile"/> calls one file shares: each separator as <c>/</c>, each
-        /// letter in upper case. The network world keys its loads by it, so one file is one load there, however the players
-        /// who named it spelled it.
+        /// The key that every spelling <see cref="SameBundleFile"/> calls one file shares: the names the path keeps, each
+        /// letter in upper case, joined by <c>/</c>. The network world keys its loads by it, so one file is one load there,
+        /// however the players who named it, or the mod that loaded it, spelled it.
         /// </summary>
         internal static string BundleFileKey(string path)
         {
             if (path == null) throw new ArgumentNullException(nameof(path));
-            var folded = new char[path.Length];
-            for (var index = 0; index < path.Length; index++) folded[index] = path[index] == '\\' ? '/' : char.ToUpperInvariant(path[index]);
-            return new string(folded);
+            if (HasParentSegment(path)) return KeyWithParents(path);
+            var length = EndsInSeparator(path) ? 1 : 0;
+            var names = 0;
+            var index = 0;
+            while (NextName(path, ref index, out _, out var nameLength))
+            {
+                length += nameLength + (names > 0 ? 1 : 0);
+                names++;
+            }
+
+            var key = new char[length];
+            var at = 0;
+            index = 0;
+            while (NextName(path, ref index, out var start, out var nameLength))
+            {
+                if (at > 0) key[at++] = '/';
+                for (var offset = 0; offset < nameLength; offset++) key[at++] = char.ToUpperInvariant(path[start + offset]);
+            }
+
+            if (at < length) key[at] = '/';
+            return new string(key);
         }
+
+        /// <summary>The key of a path with a <c>..</c> segment, which takes back the name before it.</summary>
+        private static string KeyWithParents(string path)
+        {
+            var names = new List<string>();
+            var index = 0;
+            while (NextSegment(path, ref index, out var start, out var end))
+            {
+                if (end == start || IsDot(path, start, end)) continue;
+                var parent = IsParent(path, start, end);
+                if (parent && names.Count > 0 && names[names.Count - 1] != "..")
+                {
+                    names.RemoveAt(names.Count - 1);
+                    continue;
+                }
+
+                // A ".." with nothing left to take back names something outside the package, so it stays in the key.
+                var name = new char[parent ? 2 : NameLength(path, start, end)];
+                for (var offset = 0; offset < name.Length; offset++) name[offset] = char.ToUpperInvariant(path[start + offset]);
+                names.Add(new string(name));
+            }
+
+            var key = string.Join("/", names);
+            return EndsInSeparator(path) ? key + "/" : key;
+        }
+
+        /// <summary>
+        /// Moves <paramref name="index"/> past the next segment of <paramref name="path"/>, and gives where the segment
+        /// starts and where it ends without the whitespace that ends it, which the platform drops; false past the last one.
+        /// </summary>
+        private static bool NextSegment(string path, ref int index, out int start, out int end)
+        {
+            start = index;
+            end = index;
+            if (index > path.Length) return false;
+            while (index < path.Length && path[index] != '/' && path[index] != '\\') index++;
+            end = index++;
+            while (end > start && char.IsWhiteSpace(path[end - 1])) end--;
+            return true;
+        }
+
+        /// <summary>Moves past the next segment that names a folder or a file, and gives the length of its name as the platform reads it.</summary>
+        private static bool NextName(string path, ref int index, out int start, out int length)
+        {
+            while (NextSegment(path, ref index, out start, out var end))
+            {
+                if (end == start || IsDot(path, start, end)) continue;
+                length = NameLength(path, start, end);
+                return true;
+            }
+
+            length = 0;
+            return false;
+        }
+
+        /// <summary>
+        /// A name's length without the periods and whitespace that end it, which the platform drops; a name of periods
+        /// alone keeps them.
+        /// </summary>
+        private static int NameLength(string path, int start, int end)
+        {
+            var trimmed = end;
+            while (trimmed > start && (path[trimmed - 1] == '.' || char.IsWhiteSpace(path[trimmed - 1]))) trimmed--;
+            return trimmed > start ? trimmed - start : end - start;
+        }
+
+        private static bool IsDot(string path, int start, int end) => end - start == 1 && path[start] == '.';
+
+        private static bool IsParent(string path, int start, int end) => end - start == 2 && path[start] == '.' && path[start + 1] == '.';
+
+        private static bool HasParentSegment(string path)
+        {
+            var index = 0;
+            while (NextSegment(path, ref index, out var start, out var end))
+            {
+                if (IsParent(path, start, end)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Whether a path names a folder: one that ends in a separator never names the file without it.</summary>
+        private static bool EndsInSeparator(string path) => path.Length > 0 && (path[path.Length - 1] == '/' || path[path.Length - 1] == '\\');
 
         /// <summary>
         /// Whether the segment of <paramref name="path"/> at <paramref name="start"/> is shaped like an 8.3 short name: a

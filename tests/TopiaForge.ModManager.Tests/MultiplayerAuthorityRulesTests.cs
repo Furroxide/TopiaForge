@@ -152,11 +152,42 @@ namespace TopiaForge.ModManager.Tests
                 That(SpawnAuthorityRules.BundleFileKey(left) == SpawnAuthorityRules.BundleFileKey(right), "'" + left + "' and '" + right + "' are one load");
             }
 
-            foreach (var (left, right) in new (string?, string?)[] { ("assets/world.bundle", "assets/world2.bundle"), ("assets/world.bundle", "assets/worle.bundle"),
-                         ("a/b", "a/b/"), ("assets/world.bundle", null), (null, null) })
+            // A mod's own path need not be plain: the platform reads each of these as the file a player names assets/world.bundle.
+            var spellings = new[] { "./assets/world.bundle", "assets//world.bundle", "assets/./world.bundle", "assets/x/../world.bundle", "assets/x/y/../../world.bundle",
+                "assets /world.bundle", "assets/world.bundle.", "assets./world.bundle ", ".\\Assets\\.\\World.Bundle" };
+            foreach (var spelling in spellings)
+            {
+                That(SpawnAuthorityRules.SameBundleFile(spelling, AuthorityMod.Bundle) && SpawnAuthorityRules.SameBundleFile(AuthorityMod.Bundle, spelling),
+                    "'" + spelling + "', a mod's own spelling, names the file a player names " + AuthorityMod.Bundle);
+                That(SpawnAuthorityRules.BundleFileKey(spelling) == SpawnAuthorityRules.BundleFileKey(AuthorityMod.Bundle), "'" + spelling + "' is one load with it");
+            }
+
+            var others = new (string?, string?)[] { ("assets/world.bundle", "assets/world2.bundle"), ("assets/world.bundle", "assets/worle.bundle"),
+                ("a/b", "a/b/"), ("assets/world.bundle", null), (null, null), ("../assets/world.bundle", "assets/world.bundle"), ("assets/../../world.bundle", "world.bundle"),
+                ("assets/x/../world.bundle", "assets/x/world.bundle"), ("assets/.../world.bundle", "assets/world.bundle"), ("a/b/..", "a/b") };
+            foreach (var (left, right) in others)
             {
                 That(!SpawnAuthorityRules.SameBundleFile(left, right), "'" + (left ?? "null") + "' and '" + (right ?? "null") + "' do not");
                 That(left == null || right == null || SpawnAuthorityRules.BundleFileKey(left) != SpawnAuthorityRules.BundleFileKey(right), "nor are they one load");
+            }
+
+            // Two spellings name one file exactly when they are one load, and a key names the file it was made from.
+            var all = new List<string>(spellings);
+            foreach (var (left, right) in others)
+            {
+                if (left != null) all.Add(left);
+                if (right != null) all.Add(right);
+            }
+
+            foreach (var left in all)
+            {
+                var key = SpawnAuthorityRules.BundleFileKey(left);
+                That(SpawnAuthorityRules.SameBundleFile(left, key) && SpawnAuthorityRules.BundleFileKey(key) == key, "'" + left + "' names the file its key '" + key + "' names");
+                foreach (var right in all)
+                {
+                    That(SpawnAuthorityRules.SameBundleFile(left, right) == (key == SpawnAuthorityRules.BundleFileKey(right)),
+                        "'" + left + "' and '" + right + "' name one file only when they are one load");
+                }
             }
         }
 

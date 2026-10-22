@@ -1638,17 +1638,19 @@ held it.
    character, at most 512 characters, which the asset service checks against the package's folder again), or a
    provider's kind, made by the spawn handler the same mod registered. A plain path has no segment that ends in a
    period or a space, and none shaped like a short name such as `WORLD~1.BUN`: the game's platform reads each as
-   another name of a file the mod knows by its plain one, which no comparison of names would see, so only case and
-   separators are left to tell one file's spellings apart. The runtime's own `asset.` kinds are never made for a
-   player. Nothing is loaded and no mod code runs before all of that passes.
+   another name of a file the mod knows by its plain one, and no reading of a name alone sees a short name, so a
+   player's spellings of one file differ only by case and separators. The runtime's own `asset.` kinds are never made
+   for a player. Nothing is loaded and no mod code runs before all of that passes.
 3. **The host makes it canonically,** as an object of the player's `ProxyParticipant` scope: an asset through the mod's
    own handles first, a prefab its code loaded, else a prefab loaded from a bundle it holds, waiting while its own load
    of the bundle runs, since the game refuses a second load of a bundle that is loaded already; only a bundle the mod
    does not hold is loaded through its package, and let go of after 2 seconds unused, or at once when the mod starts its
    own load of the same file, however a player spelled its path, so the mod's own load is never refused. One file is one
    load, on the host as on a joined player, and a player's spelling of it finds the mod's own loads of it
-   (`SpawnAuthorityRules.BundleFileKey`); a prefab loaded off a bundle the mod has let go of since is loaded again from
-   what holds the bundle then. A provider's kind is made by its handler inside the player's forwarded intent
+   (`SpawnAuthorityRules.BundleFileKey`) whichever way the mod named it: the mod's own path need not be plain, and is
+   read as the platform resolves it, so a mod that loads `./assets/world.bundle` holds the file a player names
+   `assets/world.bundle`. A prefab loaded off a bundle the mod has let go of since is loaded again from what holds the
+   bundle then. A provider's kind is made by its handler inside the player's forwarded intent
    (`EnterForwarded`), so the provider reads whose object it makes from `CurrentIntent`. A build that takes over 30
    seconds is refused as unbuildable. The object is recorded like any other spawn, with the player's slot as its owner
    and no shadow key, and announced to everyone.
@@ -1757,8 +1759,8 @@ copy of each message and the SDK's result for each call included.
 - **Rules** (`MultiplayerAuthorityRulesTests`): relations by owner slot, limiter answers as refusals, verdicts read from
   the wire, which profiles and intents are shadowed, an honest pace against the host's limit under jitter of up to
   0.9 seconds in order, safe and unsafe bundle paths, other names the game's platform reads for one file, one file's
-  spellings as one load, refusal texts, both state machines for every state and event, and the numbering, which
-  allocates nothing once a mod has a number.
+  spellings as one load, a mod's own spellings that are not plain among them, refusal texts, both state machines for
+  every state and event, and the numbering, which allocates nothing once a mod has a number.
 - **Wire** (`AuthorityWireTests`): every message round trips, sits in its range, and is refused whole when a field is
   bent, a byte follows its last field, or it is cut anywhere.
 - **Adoption** (`SpawnAdoptionTests`): adoption in place under the same handle and id, a lookup by network id finding
@@ -1774,7 +1776,9 @@ copy of each message and the SDK's result for each call included.
   or a prefab loaded off its bundle, built again when that context ends, as is one whose build failed through them as
   it ended; a hostile player's spellings that the game's platform reads as the mod's file refused before anything
   loads; crates spelled three ways built from one load, and a spawn spelled another way waiting for the mod's own load;
-  and the host's next build for a player outliving the mod context whose bundle it used.
+  the host's next build for a player outliving the mod context whose bundle it used; and a mod that names its bundle
+  `./assets/world.bundle` never refused its lazy load by a hostile player who names the plain path, on the host or a
+  joined player, whose world builds the host's scripted crate and that player's from one load.
 - **Requests** (`SpawnChangeTests`): moving and destroying the player's own object through the host, by its action,
   by script and by disposing its handle; changes before the verdict; another player's, the host's and a scene object
   refused here with nothing sent, and left to the host's script when scripted; an entity outside the world passing
@@ -1835,6 +1839,10 @@ copy of each message and the SDK's result for each call included.
   spawned through that context's asset service: on a listen host that is the end of the world session or gamemode the
   context ran for, which ends that context's own objects as well. The player hears the host's despawn, its handle dies
   and its quota frees; what the host makes for it next comes from what holds the bundle then.
+- **A player's spawn while the mod context that holds its bundle is stopping is refused**, with the host's toast: that
+  context's handles take no new load or spawn while it stops, and the game would refuse the host a load of its own of a
+  file that is still loaded. It is the moment a world session or a gamemode takes to close; the player's next spawn,
+  once the context has gone, is made from a load of the host's own.
 - **Commands are not forwarded yet**: `SubmitCommand` still runs the mod's handler here in every realm.
 
 ### Choices

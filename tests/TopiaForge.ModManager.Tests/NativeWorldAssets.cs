@@ -94,22 +94,31 @@ namespace TopiaForge.ModManager.Tests
         public OperationResult<ISpawnedEntity> Spawn(AssetSpawnRequest request) => spawner.Spawn(request);
 
         /// <summary>
-        /// The file a path names on the game's platform: either separator, with a period or a space that ends a name dropped,
-        /// and the short name the platform gives a long one, as WORLD~1.BUN for the test mod's world.bundle.
+        /// The file a path names on the game's platform, as the asset service resolves it there: either separator, an
+        /// empty or <c>.</c> segment naming nothing and <c>..</c> taking back the one before it, as
+        /// <c>Path.GetFullPath</c> reads them, whitespace or a period that ends a name dropped, and the short name the
+        /// platform gives a long one, as WORLD~1.BUN for the test mod's world.bundle.
         /// </summary>
         private static string FileOf(string relativePath)
         {
-            var segments = relativePath.Replace('\\', '/').Split('/');
-            for (var index = 0; index < segments.Length; index++)
+            var names = new List<string>();
+            foreach (var segment in relativePath.Replace('\\', '/').Split('/'))
             {
-                var segment = segments[index];
-                var end = segment.Length;
-                while (end > 0 && (segment[end - 1] == '.' || char.IsWhiteSpace(segment[end - 1]))) end--;
-                segment = segment.Substring(0, end);
-                segments[index] = string.Equals(segment, "WORLD~1.BUN", StringComparison.OrdinalIgnoreCase) ? "world.bundle" : segment;
+                var name = segment.TrimEnd();
+                if (name.Length == 0 || name == ".") continue;
+                if (name == "..")
+                {
+                    if (names.Count > 0) names.RemoveAt(names.Count - 1);
+                    continue;
+                }
+
+                var end = name.Length;
+                while (end > 0 && (name[end - 1] == '.' || char.IsWhiteSpace(name[end - 1]))) end--;
+                name = name.Substring(0, end);
+                names.Add(string.Equals(name, "WORLD~1.BUN", StringComparison.OrdinalIgnoreCase) ? "world.bundle" : name);
             }
 
-            return string.Join("/", segments);
+            return string.Join("/", names);
         }
 
         /// <summary>Lets a handle go as the engine does: on the game thread only, refused anywhere else.</summary>
