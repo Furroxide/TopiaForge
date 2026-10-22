@@ -183,14 +183,16 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>
-        /// Reads the record's bytes: anything that does not read as the record yields an empty one, and an entry that does
-        /// not read is skipped. A file that could not be read at all never comes here; <see cref="KnownHostsStore"/> keeps
-        /// the record unread instead, and copies a damaged file aside before replacing it.
+        /// Reads the record's bytes in any layout another program may have left them in: white space, a byte-order mark and
+        /// members in any order read as this game's canonical bytes do, so every pin in them is kept. Anything that does not
+        /// read as the record yields an empty one, and an entry that does not read is skipped. A file that could not be read
+        /// at all never comes here; <see cref="KnownHostsStore"/> keeps the record unread instead, and copies a file that is
+        /// not canonical aside before replacing it.
         /// </summary>
         internal static KnownHosts Parse(byte[]? bytes)
         {
             var result = new KnownHosts();
-            if (bytes == null || !CanonicalJson.TryParse(bytes, MaximumBytes, out var node, out _)) return result;
+            if (bytes == null || !CanonicalJson.TryParseAnyLayout(bytes, MaximumBytes, out var node, out _)) return result;
             if (!(node is JsonObjectNode value) || !value.HasExactly("schema", "hosts") ||
                 !value.TryGet("schema", out var schema) || !(schema is JsonStringNode text) || text.Value != Schema ||
                 !value.TryGet("hosts", out var hosts) || !(hosts is JsonArrayNode list))

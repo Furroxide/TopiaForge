@@ -48,6 +48,9 @@ produce byte for byte. Each runtime also has an ordinary JSON writer that produc
   Unpaired surrogates are refused.
 - **Parsing.** A reader accepts a document only if writing what it parsed gives back the same bytes. A signature
   therefore never covers an ambiguous document. Depth is limited to 16, and every document type has a size bound.
+- **One exception.** Salvaging the known-hosts record (section 21) reads it in any layout: white space, a UTF-8
+  byte-order mark and members in any order. It is this game's own record, never signed or shared, and it still counts
+  as damaged until it is rewritten in canonical form. Every other document is read in canonical form only.
 - **Binary values.** Keys and signatures are unpadded base64url. The unused low bits of the last character must be
   zero, so every value has one spelling. Hashes and ids are lowercase hexadecimal.
 - **Display text.** Names are 1 to N UTF-16 code units, with no surrounding whitespace, control characters or
@@ -209,8 +212,8 @@ address serves now, and confirming trusts exactly that server there: any other s
   player may still trust that one server for the join, as for a changed identity; that is not recorded either. That
   trust was given without the record, so it holds only while the record cannot be read: once it reads, another
   server at a pinned address is a changed identity again, asked in those words, before anything is recorded.
-- **Damage is salvaged** (section 21): the entries that read are kept, and the damaged file is copied aside before
-  anything replaces it.
+- **Damage is salvaged** (section 21): a record in another layout keeps every pin, the entries that read are kept,
+  and the damaged file is copied aside before anything replaces it, never over an earlier copy.
 
 ## 9. Fixtures
 
@@ -597,14 +600,18 @@ Each provider keeps its live-session files in its own data folder, read on the f
   addresses are refused with the reason, nothing is saved over the file, and each later check reads it again. Hosting,
   LAN and service joins, and joins to a link that names its server never need the record, so they go on.
 - **Known hosts that are damaged** are salvaged, following the launcher's rule (#214) where it fits: what reads is
-  kept, and before anything replaces the file its bytes are copied to `multiplayer/known-hosts.damaged.json`. While that
-  copy cannot be written, the damaged file stays in place, to be salvaged again. A file of another schema, an entry
-  that does not read, more than 256 entries or bytes that are not canonical all count as damage. The game differs from
-  the launcher in three ways, because the provider sees its folder only through the SDK's file service, which names no
-  path and lists nothing: there is one copy, the newest damage replacing an older one, rather than three stamped copies;
-  a file the service reports missing is missing, since a folder that lists but cannot be searched cannot be told apart
-  through it; and leftovers of an interrupted write are the service's own, written to a temporary file and moved into
-  place.
+  kept, and before anything replaces the file its bytes are copied to the first of
+  `multiplayer/known-hosts.damaged.json`, `known-hosts.damaged-2.json` and `known-hosts.damaged-3.json` that holds no
+  file. A copy is never written over: a place that holds a file, or cannot be read, is passed over, and once all three
+  hold copies a damaged record is salvaged without one. While the copy cannot be written, the damaged file stays in
+  place, to be salvaged again. A record in another layout, with white space, a byte-order mark or its members in another
+  order, is read whole, so it keeps every pin; it still counts as damage, so it is copied aside before the canonical
+  rewrite replaces it. A file of another schema, an entry that does not read, more than 256 entries or bytes that are
+  not canonical all count as damage. The game differs from the launcher in three ways, because the provider sees its
+  folder only through the SDK's file service, which names no path and lists nothing: it keeps the first three copies,
+  never replacing one, where the launcher keeps the three newest, stamped, and drops older ones; a file the service
+  reports missing is missing, since a folder that lists but cannot be searched cannot be told apart through it; and
+  leftovers of an interrupted write are the service's own, written to a temporary file and moved into place.
 - **Order.** Each file's saves run one after another, so a slow save can never land after, and overwrite, a newer
   one. A ban starts saving at once.
 - **Closing.** Saves are never cancelled. Closing starts any save still due and waits up to two seconds for the saves

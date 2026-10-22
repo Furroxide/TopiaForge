@@ -37,15 +37,30 @@ namespace TopiaForge.Multiplayer.Network
     /// </para>
     /// <para>
     /// A file that reads but is damaged is salvaged as before: the entries that read are kept, and the rest are dropped.
-    /// Before anything replaces it, its bytes are copied to <see cref="DamagedPath"/>, so a record the game could not
-    /// use is never lost silently, and while that copy cannot be written the damaged file stays where it is, to be
-    /// salvaged again. Anything that does not read back exactly as this game writes it counts as damaged: a file of
-    /// another schema, an entry that does not read, more entries than the record keeps, or bytes that are not canonical.
+    /// A record in another layout, with white space, a byte-order mark or its members in another order, reads whole, so it
+    /// keeps every pin. Before anything replaces such a file, its bytes are copied to the first of
+    /// <see cref="DamagedPaths"/> that holds no file, so a record the game could not use as it stands is never lost
+    /// silently; while that copy cannot be written the file stays where it is, to be salvaged again. A copy is never
+    /// written over. Anything that does not read back exactly as this game writes it counts as damaged: a file of another
+    /// schema, an entry that does not read, more entries than the record keeps, or bytes that are not canonical.
     /// </para>
     /// </remarks>
     internal sealed class KnownHostsStore
     {
         internal const string DamagedPath = "multiplayer/known-hosts.damaged.json";
+
+        /// <summary>
+        /// Where a damaged file's bytes are kept, in order, <see cref="DamagedPath"/> first. The provider's file service names
+        /// no path and lists nothing, so the copies are a fixed set: each damage takes the first place that holds no file,
+        /// and a place that holds one, or cannot be read, is never written. Once all three hold copies, a damaged file is
+        /// salvaged without one.
+        /// </summary>
+        internal static readonly IReadOnlyList<string> DamagedPaths = new[]
+        {
+            DamagedPath,
+            "multiplayer/known-hosts.damaged-2.json",
+            "multiplayer/known-hosts.damaged-3.json"
+        };
 
         /// <summary>How many servers reported unchecked are remembered, the oldest forgotten first.</summary>
         private const int MaximumUncheckedServers = 64;
@@ -148,18 +163,15 @@ namespace TopiaForge.Multiplayer.Network
         internal Task SaveAfter(Task previous)
         {
             if (previous == null) throw new ArgumentNullException(nameof(previous));
-            byte[]? copy;
             lock (gate)
             {
                 if (!dirty || !read) return previous;
                 dirty = false;
-                copy = damaged;
-                damaged = null;
             }
 
             byte[] bytes;
             lock (Record) bytes = Record.Serialize();
-            return Queue(previous, copy, bytes);
+            return Queue(previous, bytes);
         }
 
         /// <summary>
@@ -167,8 +179,8 @@ namespace TopiaForge.Multiplayer.Network
         /// nothing to save allocates nothing: a lambda in <see cref="SaveAfter"/> would capture its locals on every call.
         /// Saves are never cancelled, even while closing: a cancelled write would lose the change, and each is small.
         /// </summary>
-        private Task Queue(Task previous, byte[]? copy, byte[] bytes) =>
-            previous.ContinueWith(_ => WriteAsync(copy, bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        private Task Queue(Task previous, byte[] bytes) =>
+            previous.ContinueWith(_ => WriteAsync(bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
 
         private async Task<bool> ReadAsync()
         {
@@ -195,23 +207,50 @@ namespace TopiaForge.Multiplayer.Network
             return true;
         }
 
-        private async Task WriteAsync(byte[]? copy, byte[] bytes)
+        /// <summary>
+        /// Writes the record, after the damaged file's copy while one is still due. The damaged bytes are taken when the write
+        /// runs, not when it was queued, and let go only once their copy landed: a save queued behind one whose copy failed
+        /// tries the copy again first, so the canonical rewrite never replaces the damaged file without it.
+        /// </summary>
+        private async Task WriteAsync(byte[] bytes)
         {
+            byte[]? copy;
+            lock (gate) copy = damaged;
             if (copy != null)
             {
-                try
+                // A copy that cannot be written throws here, before the record: the damaged file stays where it is.
+                await KeepCopyAsync(copy).ConfigureAwait(false);
+                lock (gate)
                 {
-                    await files.WriteAsync(DamagedPath, copy, CancellationToken.None).ConfigureAwait(false);
-                }
-                catch (Exception)
-                {
-                    // Without its copy, the damaged file stays where it is; the next save tries the copy again first.
-                    lock (gate) damaged ??= copy;
-                    throw;
+                    if (ReferenceEquals(damaged, copy)) damaged = null;
                 }
             }
 
             await files.WriteAsync(KnownHosts.FilePath, bytes, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Writes <paramref name="copy"/> to the first of <see cref="DamagedPaths"/> that holds no file, and throws when that
+        /// write fails. A place that holds a file, or cannot be read just now, holds a copy already, so it is never written.
+        /// </summary>
+        private async Task KeepCopyAsync(byte[] copy)
+        {
+            foreach (var path in DamagedPaths)
+            {
+                byte[]? kept;
+                try
+                {
+                    kept = await files.ReadAsync(path, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (kept != null) continue;
+                await files.WriteAsync(path, copy, CancellationToken.None).ConfigureAwait(false);
+                return;
+            }
         }
 
         private static bool SameBytes(byte[] left, byte[] right)
