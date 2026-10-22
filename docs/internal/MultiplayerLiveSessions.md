@@ -315,6 +315,11 @@ they found. None of them opens a socket.
 - **The loop.** Each turn runs up to 256 queued commands, reads up to 1,024 waiting datagrams (a dropped one counts),
   polls the stack, sends what it yields, and reports accepted links and info replies. The thread then sleeps until its
   next timer or a datagram, and at most 2 ms, so frames the main thread queues go out within that.
+- **Idle turns.** A turn with nothing to do throws nothing and allocates nothing. Every socket loop on the thread, the
+  game socket's, the LAN browser's and the descriptor endpoint's accepts, reads and writes, asks its socket without
+  waiting whether a datagram, a connection, bytes or room to write are there before it acts; reading an empty socket
+  would throw, and allocate the source's address first. It asks with `Poll`, not `Available`, which reports nothing for
+  an empty datagram, so a loop that asked it would never read past one.
 - **Talking to it.** The main thread posts commands, takes events and reads each link's own queues; nothing else is
   shared. At most 1,024 events wait. Past that, new ones are dropped and a link nobody would take is closed, so a
   main thread that never reads cannot make the queue grow. The thread's end is always told.

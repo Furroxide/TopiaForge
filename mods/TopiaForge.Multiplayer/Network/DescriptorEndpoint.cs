@@ -116,6 +116,8 @@ namespace TopiaForge.Multiplayer.Network
         {
             for (var count = 0; count < MaximumAcceptsPerTurn; count++)
             {
+                // Asked first, a listener with no connection waiting ends the turn without an accept, which would throw.
+                if (!SocketReadiness.CanRead(listener)) return;
                 Socket socket;
                 try
                 {
@@ -220,6 +222,9 @@ namespace TopiaForge.Multiplayer.Network
                 for (var chunks = 0; chunks < ChunksPerTurn; chunks++)
                 {
                     if (client.Pending.Count == 0 && !client.FillFromBody(chunk)) break;
+
+                    // A reader that has stopped reading leaves no room: the turn waits for it rather than throw.
+                    if (!SocketReadiness.CanWrite(client.Socket)) return true;
                     var segment = client.Pending;
                     var sent = client.Socket.Send(segment.Array!, segment.Offset, segment.Count, SocketFlags.None);
                     client.Pending = new ArraySegment<byte>(segment.Array!, segment.Offset + sent, segment.Count - sent);
@@ -320,6 +325,9 @@ namespace TopiaForge.Multiplayer.Network
             {
                 parsed = default;
                 closed = false;
+
+                // A connection that has sent nothing more costs its turn nothing; one the peer closed reads as closed.
+                if (!SocketReadiness.CanRead(Socket)) return false;
                 try
                 {
                     var read = Socket.Receive(request, requestLength, request.Length - requestLength, SocketFlags.None);
