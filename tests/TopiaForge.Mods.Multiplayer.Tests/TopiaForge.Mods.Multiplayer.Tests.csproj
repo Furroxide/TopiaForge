@@ -79,4 +79,20 @@
     <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Presence\*.cs" Link="Runtime\Presence\%(Filename)%(Extension)" />
     <Compile Include="..\TopiaForge.ModRuntime.Tests\FakePresenceBackend.cs" Link="Presence\FakePresenceBackend.cs" />
   </ItemGroup>
+
+  <!-- Voice chat's runtime is Unity-free: its microphone gate, capture, playback and mutes run here over real providers,
+       as the game runs them. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceChatRuntime.cs" Link="Runtime\Voice\VoiceChatRuntime.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceChatRuntime.State.cs" Link="Runtime\Voice\VoiceChatRuntime.State.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceTalkStatus.cs" Link="Runtime\Voice\VoiceTalkStatus.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceCapture.cs" Link="Runtime\Voice\VoiceCapture.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoicePlayback.cs" Link="Runtime\Voice\VoicePlayback.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceMuteBook.cs" Link="Runtime\Voice\VoiceMuteBook.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceDevices.cs" Link="Runtime\Voice\VoiceDevices.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceEmitterReader.cs" Link="Runtime\Voice\VoiceEmitterReader.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoicePushToTalk.cs" Link="Runtime\Voice\VoicePushToTalk.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\VoiceControls.cs" Link="Runtime\Voice\VoiceControls.cs" />
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Voice\NativeInputCensus.cs" Link="Runtime\Voice\NativeInputCensus.cs" />
+  </ItemGroup>
 </Project>
