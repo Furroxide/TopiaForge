@@ -158,8 +158,9 @@ namespace TopiaForge.Multiplayer.Network
     /// Info queries keep the launcher's budget too (<see cref="LanQueryBudget"/>): at most 32 a second, and at most 8 to
     /// one sender address in any two seconds. A query the budget holds back leaves its session unasked, and goes out in
     /// the first turn the budget has room for it, the longest held first and ahead of new beacons, or at the session's
-    /// next beacon. So a sender that changes port as fast as it can takes at most 8 of the endpoint's 64 outstanding
-    /// queries, and never pushes another host's out before its answer comes.
+    /// next beacon. So a sender that changes port as fast as it can is asked at most 8 times in any two seconds, which
+    /// holds it to 24 of the endpoint's 64 outstanding queries over their five-second lifetime, and it never pushes
+    /// another host's out before its answer comes.
     /// </para>
     /// </remarks>
     internal sealed class LanBrowser : INetworkService

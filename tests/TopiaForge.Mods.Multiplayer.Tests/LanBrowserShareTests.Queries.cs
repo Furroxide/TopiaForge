@@ -47,6 +47,12 @@ internal static partial class LanBrowserShareTests
             Hear(browser, stack, 0, senders[4], Id(33), senders[4].Port);
             Hear(browser, stack, 500_000, senders[5], Id(32), senders[5].Port);
             That(Asked(stack).Count == 0 && browser.Throttled == 2, "a 33rd and a 34th query within one second wait");
+
+            // The network thread sleeps until the earliest time its services ask to be woken, so the browser asks for the
+            // time the budget has room and never an earlier one: a wake at or before now would turn the thread again at once,
+            // without sleeping, for as long as a query waits. Once nothing waits, it asks for its list's expiry alone, 60 s
+            // after the first beacon.
+            That(browser.NextTimeoutMicros() == 1_000_000, "the browser asks to be woken when the second has room, and not before");
             Turn(browser, stack, 999_999);
             That(Asked(stack).Count == 0, "and still wait just short of the second");
 
@@ -54,16 +60,19 @@ internal static partial class LanBrowserShareTests
             Turn(browser, stack, 1_000_000);
             That(Asked(stack).SequenceEqual(new[] { At(senders[4], senders[4].Port), At(senders[5], senders[5].Port) }),
                 "the waiting queries go out once the budget has room, the longest held first, with no further beacon");
+            That(browser.NextTimeoutMicros() == 60_000_000, "with nothing waiting, the browser asks to be woken for its list's expiry alone");
 
             // A host asked eight times in the last two seconds waits for a ninth, though the second has room: one of its
             // sessions moves to another port.
             Hear(browser, stack, 1_000_000, senders[0], Id(0), LanBeacon.DefaultGamePort);
             That(Asked(stack).Count == 0 && browser.Throttled == 3, "a ninth query to one host within two seconds waits, though the second has room");
+            That(browser.NextTimeoutMicros() == 2_000_000, "the browser asks to be woken when that host has room again, and not before");
             Turn(browser, stack, 1_999_999);
             That(Asked(stack).Count == 0, "and still waits just short of two seconds after that host's first");
             Turn(browser, stack, 2_000_000);
             That(Asked(stack).SequenceEqual(new[] { At(senders[0], LanBeacon.DefaultGamePort) }),
                 "it goes out once that host's two seconds have passed, to the port the session moved to");
+            That(browser.NextTimeoutMicros() == 60_000_000, "and then nothing waits but the list's expiry");
         }
         finally
         {

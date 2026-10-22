@@ -458,8 +458,9 @@ Every line ends in a single newline (`\n`).
   - Info queries keep the launcher's budget: at most 32 a second, and at most 8 to one sender address in any two
     seconds, the requery interval. A query the budget holds back leaves its session unasked. It goes out in the first
     turn the budget has room for it, the longest held first and ahead of new beacons, or at the session's next beacon,
-    whichever comes first. So a sender that changes port as fast as it can takes at most 8 of the endpoint's 64
-    outstanding queries, and never pushes another host's out before its answer comes. Held-back queries are counted.
+    whichever comes first. So a sender that changes port as fast as it can is asked at most 8 times in any two
+    seconds, which holds it to 24 of the endpoint's 64 outstanding queries over their five-second lifetime, and it
+    never pushes another host's out before its answer comes. Held-back queries are counted.
   - The main thread reads a snapshot that is replaced on every change. Each entry keeps its path inside the network
     layer, for the join flow.
 - **Browsing is always relay-only.** LAN paths are allowed, so LAN hosts are queried as usual. A beacon from any
