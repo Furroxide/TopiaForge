@@ -43,5 +43,18 @@ namespace TopiaForge.Chronos
                 ledger.AnyExemptPlayer && scale < 1f,
                 !nativePaused);
         }
+
+        /// <summary>
+        /// A joined player's plan (WS3.13): the host's scale and mode, this process's own player exemption, and always a
+        /// native write, since online the shared world never yields to one player's pause menu.
+        /// </summary>
+        public static TimeScalePlan Follow(LeaseLedger ledger, float hostScale, TimeMode hostMode)
+        {
+            return new TimeScalePlan(
+                hostScale,
+                hostMode,
+                ledger.AnyExemptPlayer && hostScale < 1f,
+                writeNativeScale: true);
+        }
     }
 }

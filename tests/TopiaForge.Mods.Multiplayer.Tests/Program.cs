@@ -521,6 +521,7 @@ internal static class Program
             SystemChannelTests.HostsEndPlayersThatNeverBecomeReady();
             SystemChannelTests.SourcesAnswerTheSessionsLookups();
             SystemChannelTests.TheFrameFlushSendsWithoutReceiving();
+            SessionTimeChannelTests.OnlyTheHostSendsTheSessionsTime();
             SystemStreamTests.StreamsRestartWhenAPlayerRejoins();
             SystemStreamTests.OneSenderCannotStarveTheOthers();
             SystemStreamTests.HonestSendersAreNeverDropped();

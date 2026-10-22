@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.4, WS3.6, WS3.9 and part of WS3.7 of the live-multiplayer plan) · Date: 2026-10-22 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.9 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-22 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -16,10 +16,10 @@ The work lands in three steps:
    every player.
 
 All three have landed, and so have the voice service behind the SPI (section 2, "Voice"), intent tracking (WS3.4,
-section 14), the participant realm (WS3.9, section 15) and the first part of authority routing (WS3.7, section 16):
-spawn adoption, shadows, and validated transform changes and destroys. Section 8 says what each later WS3 slice plugs in
-where, and section 13 says exactly where motion ownership (WS3.7's second part) and session follow (WS3.8) attach to the
-network world.
+section 14), the participant realm (WS3.9, section 15), the first part of authority routing (WS3.7, section 16):
+spawn adoption, shadows, and validated transform changes and destroys; and pause and time (WS3.13, section 17).
+Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where motion ownership (WS3.7's
+second part) and session follow (WS3.8) attach to the network world.
 
 ## 1. Shape
 
@@ -32,6 +32,7 @@ network world.
 | The replication SPI (section 11) | `src/TopiaForge.Mods.Abstractions/Internal/`, namespace `TopiaForge.Mods.Internal` |
 | The realm, the spawn ledger, the replication seam and the network decorators | `src/TopiaForge.ModManager/Multiplayer/` |
 | The network world (section 13) | `src/TopiaForge.ModManager/Multiplayer/World/`, Unity-free; its engine side in `World/Unity/` |
+| Pause and time (section 17) | `src/TopiaForge.ModManager/Multiplayer/Time/`, Unity-free; the game's clock over Unity in `Time/Unity/`; Chronos' side in `mods/TopiaForge.Chronos/` |
 
 - **Visibility.** Every SPI type is internal. The multiplayer SDK assembly grants its internals to the provider,
   ModManager, the test rig and the three test harnesses that use them. The replication SPI lives in the core SDK
@@ -374,14 +375,15 @@ and a log that throws loses the line rather than the frame.
 ## 5. System channels
 
 The runtime's own traffic between peers travels as engine `SystemMessage` envelopes (type `0x20`), apart from any mod's
-contract. `OpenSystemChannel` opens one of four channels, one owner each: `WorldReplication`, `Avatars`, `Chat` and
-`SceneFollow`.
+contract. `OpenSystemChannel` opens one of five channels, one owner each: `WorldReplication`, `Avatars`, `Chat`,
+`SceneFollow` and `Time`.
 
 - **Wire.** `[epoch varint][join generation varint][kind byte][payload bytes]` on the session channel, reliable and
   ordered with the session's own traffic. `SystemCredit` (type `0x21`) carries `[epoch][join generation][kind][consumed
   messages][consumed bytes]`, cumulative for the stream. The host gives every accepted connection its join generation
   in `JoinAccepted`.
-- **Targets.** A joined player sends to the host only. The host sends to everyone, one player, or everyone but one.
+- **Targets.** A joined player sends to the host only, and never on `Time`, which carries the host's messages alone
+  (section 17). The host sends to everyone, one player, or everyone but one.
   Messages go to joined connections, players still synchronizing included, so a joining player receives the world
   before it is Ready. A joined player hears its host's messages from the host's player, or, from a host without one such
   as a dedicated server, from `InternalSystemMessage.HeadlessHostSender`, an id no player is ever given.
@@ -423,8 +425,8 @@ contract. `OpenSystemChannel` opens one of four channels, one owner each: `World
   same burst and rate: within it they are dropped and counted, past it they are discarded uncounted, and neither ever
   ends their sender. A stale message costs only its header, never a copy of its payload.
 - **Abuse.** A peer that sends past its window, credits what it was never sent, sends faster than its host allows, sends
-  an oversized payload, or sends a system message before joining, ends its connection as a protocol violation, and so
-  does a Ready player that stalls its window as above.
+  an oversized payload, sends a system message before joining, or sends anything on `Time`, ends its connection as a
+  protocol violation, and so does a Ready player that stalls its window as above.
 - **Unknown kinds**, which a newer peer may send, are left unclaimed and credited as taken at once, and so are messages
   for a channel nobody has open. A minor protocol version can therefore add a channel: the joining checks compare major
   versions only, and an older peer's credits keep a newer sender's window open.
@@ -492,10 +494,10 @@ The frame:
 | Step | Where | What runs | When |
 | --- | --- | --- | --- |
 | 1 | `DispatchUpdate`, before the mods | The provider's `Pump`: network receive and the session engine | Whenever a provider is attached |
-| 2 | `DispatchUpdate`, before the mods | `WorldEvents`: world events and the session follower | Online |
+| 2 | `DispatchUpdate`, before the mods | The host's time on a joined player (section 17), then `WorldEvents`: world events and the session follower | Online |
 | 3 | `DispatchUpdate` | The mods' Update | Always |
-| 4 | `DispatchUpdate`, after the mods | `PresenceSend` (pose and voice), `HostSnapshots` (host only), then the provider's `Flush` | Online |
-| Late | `DispatchLateUpdate`, before the mods | `ReplicaInterpolation` | Joined players |
+| 4 | `DispatchUpdate`, after the mods | `PresenceSend` (pose and voice), `HostSnapshots` and the session's time (host only), then the provider's `Flush` | Online |
+| Late | `DispatchLateUpdate`, before the mods | The pause guard (section 17), then `ReplicaInterpolation` | The guard online, and after leaving until it has handed the clock back; interpolation on joined players |
 
 - `BeginFrame` (time, input and the mods' scheduler) still runs first, as before.
 - The late step runs from `CoreGameplayServices.BeginLateUpdate` through the runtime's LateUpdate dispatch, ahead of the
@@ -523,8 +525,8 @@ plug in here:
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
 | WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references |
 | WS3.12 presentation routing | `NetUiService`, routing each call by `PresentationRoutingPolicy.Route(realm, profile, kind)` |
-| WS3.13 pause and time | `TimeAuthority` and `NativePauseFreezesWorld`; the bridge that publishes the host's time scale and applies it on joined players adds to the SPI |
-| WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority |
+| WS3.13 pause and time | Landed (section 17): the `Time` channel and `MultiplayerSessionClock`, `IRuntimeReplication.GameClock`, `SessionTime` and `PublishSessionTime` beside `TimeAuthority` and `NativePauseFreezesWorld`, the pause guard in the late step, and Chronos' bridge |
+| WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority, which landed with WS3.13 (section 17) |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
 | WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is enforced: a session that offers no voice chat carries none, and `TransmitState` reads `NotOffered` for the transmit indicator to show ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12) |
@@ -639,6 +641,7 @@ answers no and is reported.
   or names a network type, and nothing the realm and the seam log or answer holds one, however many addresses the
   failures they report carry. Other internal contracts in the namespace are held to their own rules.
 - **Intent tracking** (section 14 lists its suites).
+- **Pause and time** (section 17 lists its suites).
 
 ## 10. The realm
 
@@ -769,7 +772,8 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | `RegisterSpawnHandler` | Kept, one per kind in the process: how the host makes the mod's kind for a player, inside that player's forwarded intent, and how it ends one | — |
   | `RegisterCommand`, `SubmitCommand` | Runs the mod's own handler here at once, in every realm (stub) | WS3.7 forwards from a joined player; the host checks the sender |
   | `TryCreateRef`, `TryResolveRef` | The network world names its entities, `world-` and the network id | WS3.11 names players |
-  | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | WS3.13 publishes and applies the host's scale |
+  | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | — |
+  | `GameClock`, `SessionTime`, `PublishSessionTime` | The game's clock, and the session's time: what this process publishes, the host's on a joined player (section 17) | — |
   | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | WS5 feeds the game's recording and holds voice chat's leases |
 
 - **Bounds.** Replica and command kinds are lowercase tokens of at most 64 characters, the same rule as the entity
@@ -845,6 +849,7 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   harnesses, which compile and implement the seam's realm and profile types.
 - **The network world's choices** are recorded with it, at the end of section 13.
 - **Intent tracking's choices** are recorded with it, at the end of section 14.
+- **Pause and time's choices** are recorded with it, at the end of section 17.
 
 ## 13. The network world
 
@@ -1871,3 +1876,178 @@ copy of each message and the SDK's result for each call included.
 - **The mod's own handles first**, on the host and for replicas: the game loads a bundle once per process, so sharing
   the mod's handle is the only way both can use it. For the same reason a load of the network world's own yields to the
   mod's: a mod that loads lazily, on its player's first action, never finds its bundle taken.
+
+## 17. Pause and time
+
+WS3.13 makes time the shared world's. Robotopia keeps one clock, Unity's time scale, with two writers: its own pause
+menu, which freezes the world as it opens, and Chronos, which every mod changes time through. Offline both behave
+exactly as before. Online a player's pause menu opens the menu only, the gamemode's server controller on the host is
+the only code that changes time, and every joined player runs at the host's time, a late joiner from its first frame
+in the session. The runtime's side is in `src/TopiaForge.ModManager/Multiplayer/Time/`, Unity-free, with the game's
+clock over Unity in `Time/Unity/`; Chronos' side is `ChronosNetBridge` and `ChronosNetRules` in
+`mods/TopiaForge.Chronos/`.
+
+### The session's time
+
+- **What it is.** `InternalSessionTime`, in the core SDK assembly's internal namespace: a scale and a mode,
+  `InternalTimeMode`, which mirrors Chronos' public `TimeMode` name for name and value for value. It is valid by
+  construction: the scale is finite and from zero to one, and the mode agrees with it, `Realtime` at one, `Slowed`
+  below one, `Paused` at zero and `TurnBased` at any scale. A negative zero is zero, and the default is real time.
+- **Who holds it.** `MultiplayerSessionClock`, the composition root's first observer of the control and the realm. Its
+  `Current` is the session's time as this process runs it: on a joined player the host's, real time until the host's
+  first arrives; otherwise what this process published last.
+- **The SPI.** Three members join `IRuntimeReplication` (section 11):
+
+  | Member | What it does |
+  | --- | --- |
+  | `GameClock` | The game's clock, `IInternalGameClock`: Unity's time in the game, through `UnityGameClock`, which `CoreGameplayServices` gives the runtime. Chronos drives time through it, so Chronos and the pause guard act on one clock. Null under a gameplay host without one |
+  | `SessionTime` | The clock's `Current` |
+  | `PublishSessionTime(time)` | Offline, kept, so a game opened to other players starts from it; on a listen host, the session's time, which every joined player follows; on a joined player, refused with `NotAuthoritative`; while the context stops, `Cancelled`. True when the time changed. It allocates nothing |
+
+  Chronos is the only caller, from its package context: what decides is the realm, not the profile.
+
+### The channel
+
+The session's time travels on a system channel of its own, `InternalSystemChannelKind.Time` (section 5), which only the
+host sends on.
+
+- **The message.** Seven bytes: a version (1), a type (1), the scale as an IEEE 754 single in little-endian order, and
+  the mode (`SessionTimeWire`). A joined player reads it strictly. Another length, version, type or mode, a scale that
+  is not a number or lies outside zero to one, or a mode that disagrees with its scale is refused: the player keeps the
+  time it had, counts the refusal and warns once, "Multiplayer: the host sent a session time outside the bounds every
+  player keeps (a scale from zero to one, with a matching mode); this game keeps the time it had." A hostile host's
+  scale never reaches a player's clock; what such a host can still do is what any host can, choose a scale within the
+  bounds.
+- **Who sends.** The host, after the mods' Update and before the flush, so a change a gamemode makes in its Update can
+  leave in that frame. A joined player's engine refuses to send on the channel with `NotAuthoritative`, "Only the host
+  sends the session's time; a joined player follows it.", and a player's message that reaches a host anyway ends that
+  player's connection as a protocol violation, as every other abuse in section 5 does. The runtime on a host also takes
+  and refuses anything on its channel, from a provider that would not end the player, so nothing ever holds a window.
+- **When.** Nothing goes at rest. A change goes to everyone once 100 ms have passed since the last send, measured by
+  the runtime's network clock: at most ten a second, the newest winning. A driver that ramps the scale every frame sends
+  its newest scale ten times a second, and the last change of a burst goes once its interval has passed. When a stream
+  starts, restarts or ends (`Generation`), the time goes to everyone at once, whatever the interval, so a player that
+  joins, rejoins or moves to a replaced session follows it from its first frame there. A player a full window skipped
+  is named, and gets the newest time alone as soon as `CanSend` to it says there is room.
+- **Cost.** At most ten seven-byte messages a second to each player, against the link's 32 KiB a second. A joined
+  player takes what arrived before the mods' Update, every frame, so the messages never fill an honest player's window,
+  and Chronos follows the host's time in the frame it arrives. A frame at rest allocates nothing, on the host or on a
+  player.
+
+### The pause guard
+
+Robotopia's pause menu freezes the world: as it opens it keeps the scale it finds and sets zero, and as it closes it
+puts back what it kept. `IMultiplayerGameClock.IsPaused` says whether it is open (`UIState.IsPaused`). The guard,
+`MultiplayerPauseGuard`, runs at the start of the late step, after the mods' Update, so it sees each frame's final scale
+before the next frame's clock advances.
+
+- **Offline** it is disarmed: the late step reads one field and touches nothing, and the menu freezes the world as it
+  always has.
+- **Online**, on the host and on a joined player alike, the menu opens the menu only:
+  - while it is open, a clock that reads zero gets the session's scale back, unless the session itself is frozen. Any
+    other scale is someone's own write, such as the single frame a host's step runs, and stays;
+  - as it closes, the scale it puts back, which is stale if the session's time changed meanwhile, is corrected to the
+    session's.
+- **Leaving behind the menu.** A game that stops hosting or leaves with its menu open gets single player's behaviour
+  back: the guard sets zero once, so the world is frozen behind the menu, and leaves the clock alone while the menu
+  stays open. Once it closes, whatever scale the menu kept, the guard sets this game's own time if the clock differs,
+  then disarms: real time, or what Chronos derives from what this game still holds, such as a host's gamemode slow. A
+  game that leaves with its menu closed writes nothing and disarms at once. Going online again before the menu closes
+  ends the hand-back, and the online rules apply.
+- **Cost.** Online, at most two reads of the clock a frame, and a write only where the menu wrote. Nothing allocates.
+- **The menu's other effects**, such as its sound and input, are the game's and unchanged: the guard keeps only the
+  clock.
+
+### Chronos
+
+Chronos (`TimeControlService`) reaches the runtime through its package context's replication seam, in
+`ChronosNetBridge`. Offline every behaviour it had is unchanged, its handoff behind the native pause included.
+
+- **Who may change time.** Each consuming context gets a facade bound to it, now through
+  `IOwnerContextBoundExtensionFactory`, so the facade knows where its caller's code runs. `Freeze`, `Slow`,
+  `SetDriver`, `Step`, `StepFixed` and `BeginTurnBased` follow the caller's `TimeAuthority`
+  (`ExecutionRouting.TimeControl`): offline every context may; online only the gamemode's server controller on the
+  host, a `GamemodeServer` scope of a mod that is not client-local. Everything else is refused with `NotAuthoritative`
+  before anything happens, argument checks included:
+
+  | Caller | Text |
+  | --- | --- |
+  | A host's participant controller, package code or world scope | "Time is shared in a multiplayer session, so only the gamemode's server controller can freeze, slow or step it; ask it to, for example through a command." |
+  | Anything on a joined player | "This game follows the host's time in a multiplayer session, so only the host's gamemode server controller can freeze, slow or step it; ask it to through a command." |
+  | A client-local mod, online | "A client-local mod cannot freeze, slow or step time in a multiplayer session, which every player shares." |
+
+  `ExemptPlayer` changes only this process's own player, so it is never refused. A context without the seam, such as a
+  test double's, is single player.
+- **A change of realm.** Chronos reads the realm once a frame, at the start of its tick. A change ends every lease,
+  driver and turn scheduler whose holder may no longer change time there, as a scene change ends them all. Opening a
+  game to other players ends the participant controller's, the package code's and the world scope's, and keeps the
+  server controller's; joining a session ends everything this game held; leaving ends nothing, since offline every
+  holder may change time. A mod sees its lease's `IsActive` turn false. `GameplayPause` already falls back to
+  suspending player control when its preferred source refuses, and reacquires when its lease ends, so a participant's
+  modal pause suspends that player's control alone.
+- **The host's time.** The scale and mode Chronos derives from its leases and driver are published when they change and
+  after every change of realm: kept offline, the session's time on a host. A driver's scale that is not a number
+  describes no session time and is not published. A step lifts the host's own clock for one frame and publishes
+  nothing, so players stay frozen; the host's world, which every player sees through the network world, moves the
+  beat.
+- **A joined player** runs at the host's time instead of its own leases (`TimeScalePlan.Follow`): the host's scale and
+  mode, written every frame, with its own player's exemption. `WorldScale`, `Mode` and `IsFrozen` report the host's.
+- **The pause menu.** Offline Chronos still yields to it, by the pause panel's state and the observed-zero fallback, and
+  defers its writes until the menu closes. Online it never yields (`NativePauseFreezesWorld` is false), so its writes
+  and its release go through at once, and Chronos and the guard keep the same scale.
+
+### Tests
+
+- **ModManager harness** (`SessionTimeTests`, also `--pause-time`):
+  - `SessionTimeWireTests`: validity by construction, the modes against Chronos', exact round trips, the byte layout,
+    and every refusal: lengths from 0 to 12 bytes, other versions and types, scales that are not numbers, infinite,
+    negative or above one, whatever bits a NaN carries, undefined modes and modes that disagree with their scale.
+  - `MultiplayerSessionClockTests`: publishing in each realm, while stopping and with the channel failing; the host's
+    time reaching a player at once, then a late joiner, a rejoin and a replaced session; a change every frame for a
+    second sending nine to eleven messages and ending on the newest; a player a full window skipped catching up; hostile
+    times refused on either side and warned of once; the channel following the provider; and frames at rest on a host,
+    a player and offline sending and allocating nothing.
+  - `MultiplayerPauseGuardTests`: offline nothing touched; online, on a host and on a joined player, the menu's zero put
+    back, and a frozen session and a step's frame left alone; a stale restore corrected; leaving behind the menu, as a
+    player and as a host keeping its own slow, with the menu closed, hosting again before it closes, and without a
+    clock; and the composition root running it.
+  - `ChronosNetRulesTests` and `ChronosNetBridgeTests`: the refusals' words; the pause and restore rules equal to single
+    player's offline at every combination, and never yielding online; who may change time in every realm, network class
+    and execution context, a refusal never reaching the service; what each change of realm ends, with the leases it
+    follows bounded; a joined player following, never publishing; and a host publishing only what changed.
+  - `ChronosTests`, Chronos' single-player suite, unchanged.
+- **ModRuntime harness** (`TestPauseAndTime`): three games over the loopback network, each loading the real Chronos
+  package and a gamemode's package that resolves time control through its package context and its server, world and
+  participant scopes. Offline, a participant's slow, which ends as the game opens to other players; the host's menu at
+  real time, the world running on; the server controller's freeze, which the player follows; every way a host's
+  participant controller, world scope or package code, and every part of a joined player, could change time, refused in
+  the game's words and changing nothing, while exempting a player's own player goes through; a step of one frame; a slow
+  followed; the host's menu over a slow and a player's, with the time changing while it is open and the stale restore
+  corrected; a late joiner at the host's time from its first frame in the session, from the one message each player got
+  as it joined; a player leaving behind its menu, frozen until it closes, then at real time, its participant allowed to
+  freeze time again, and the menu freezing its world with nothing of multiplayer touching the clock; and the host
+  leaving behind its menu, frozen, then at its gamemode's own slow. Every game ends without an error, at real time. With
+  Chronos loaded, 10,000 frames allocate zero bytes offline, solo, online at rest, and holding a slow behind both menus.
+- **Multiplayer harness** (`SessionTimeChannelTests`): over the engine, the host's time reaching its player; a joined
+  player's engine refusing to send it; and a raw peer that sends it anyway ended as a protocol violation, nothing
+  reaching the host's channel, while the remaining player still hears the host.
+- **In the game.** Robotopia's own pause menu and Unity's clock are checked there.
+
+### Choices
+
+- **A channel of the host's own.** A kind the engine keeps one-way makes a player's publish a protocol violation that
+  the engine ends as it ends every other, before any runtime code sees it.
+- **The scale, not the clock.** Each game runs its own clock at the host's scale, and the network world carries the
+  host's objects. Sending clock values would make two clocks agree no better and cost a message every frame.
+- **Ten a second, the newest winning.** Players need the current scale, not every step of a ramp: 100 ms behind a
+  slow-motion ramp is within a link's latency, and a burst of changes costs one message.
+- **The guard puts back the menu's zero, not every scale.** A host's step runs one frame at real time while the session
+  stays frozen, and an `unsafe-native` mod may write the clock itself; the guard undoes only what the menu did.
+- **The guard runs after the mods.** It sees what Chronos wrote that frame, and corrects the menu before the next
+  frame's clock advances, so the shared world never loses a frame to a menu.
+- **Leases end at a change of realm**, rather than being refused at their next call, so the shared world's time is only
+  ever what the host's server controller holds, and a gamemode's offline leases cannot carry into a session.
+- **The game's clock in the SPI.** Chronos and the guard act on one clock, and the real Chronos runs in the ModRuntime
+  harness on a clock the test reads; in the game both are Unity's, so nothing changes there.
+- **Nothing public changes.** Every new type and member is internal, so the SDK API baselines stay as they are, and a
+  mod sees only `NotAuthoritative` where single player would have changed time.

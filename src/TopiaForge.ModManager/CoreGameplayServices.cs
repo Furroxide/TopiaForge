@@ -7,8 +7,9 @@ using UnityEngine;
 namespace TopiaForge.ModManager
 {
     /// <summary>Unity-backed manager-owned implementation of the safe V1 gameplay contracts.</summary>
-    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource
+    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource, IGameClockSource
     {
+        private readonly UnityGameClock gameClock = new UnityGameClock();
         private readonly UnityInputRegistry input = new UnityInputRegistry();
         private readonly UnityEntityRegistry entities = new UnityEntityRegistry();
         private readonly UnityGameTime time = new UnityGameTime();
@@ -46,6 +47,9 @@ namespace TopiaForge.ModManager
 
         /// <summary>Gets the network world's engine side, over the loaded scenes and this host's entity registry.</summary>
         public INetworkWorldBackend NetworkWorldBackend => networkWorldBackend;
+
+        /// <summary>Gets the game's clock, which Chronos drives time through and the multiplayer pause guard keeps running online.</summary>
+        public IMultiplayerGameClock GameClock => gameClock;
 
         /// <summary>Gets or sets Unity's <c>Application.runInBackground</c>; multiplayer keeps it on while online.</summary>
         public bool RunInBackground

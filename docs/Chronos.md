@@ -26,7 +26,7 @@ effective world scale is derived from all active leases instead of using last-wr
 Releasing a lease restores the state implied by remaining leases; mod lifetime cleanup handles
 partial loads and unload automatically.
 
-Robotopia's own pause menu remains authoritative. Chronos reads its pause-panel state without a
+In single player, Robotopia's own pause menu remains authoritative. Chronos reads its pause-panel state without a
 `GameCode` compile dependency and retains observed-zero ownership detection as a fallback. Lease
 changes still update `WorldScale`, `Mode`, and player-exemption state while the native pause is open,
 but Chronos defers all `timeScale` writes—including release, reset, and step—until that pause lifts.
@@ -34,6 +34,29 @@ but Chronos defers all `timeScale` writes—including release, reset, and step�
 Use Chronos service clocks for behavior that should obey world scale or continue while Robotopia's
 world is paused. UI, input, and deadlines generally use control time. Simulation actors and world
 timers use world time.
+
+## In a multiplayer session
+
+Every player in a session shares one world, so they share its time too:
+
+- **Only the gamemode's server controller changes time.** On the host, a server controller that resolves Chronos from
+  its own session's `Context`, the session `IGamemodeFactory.StartAsync` receives, may freeze, slow, set a driver, step
+  and begin turn-based play, as in single player. Anywhere else these calls return `NotAuthoritative` with a sentence
+  saying why: a participant controller, your package's own code, a client-local mod, and anything on a joined player.
+  To change time from there, ask the server controller, for example through a command.
+- **`ExemptPlayer` always works.** It changes only the local player's own speed.
+- **A joined player follows the host's time.** `WorldScale`, `Mode` and `IsFrozen` report the host's, within a tenth
+  of a second of the host's change, and a player who joins later gets it at once.
+- **Leases end when they lose their authority.** Opening the game to other players ends the leases, drivers and turn
+  schedulers that code other than the server controller holds, as a scene change does, and joining a session ends
+  every one this game holds. Check `IsActive` before relying on a lease once a session starts. `GameplayPause` handles
+  this for you: where Chronos refuses, it suspends the player's own controls instead.
+- **The pause menu pauses no one else.** Robotopia's pause menu, opened in a session, shows the menu, while the shared
+  world keeps running at the session's time for every player, this one included. Leaving the session with the menu
+  open brings single player's pause back: the world freezes behind the menu, and runs at this game's own time once it
+  closes.
+
+Nothing changes in single player.
 
 ## Turn scheduling
 

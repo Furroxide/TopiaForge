@@ -277,6 +277,12 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--pause-time", StringComparison.Ordinal))
+            {
+                SessionTimeTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 &&
                 string.Equals(args[0], "--installed-version-coexistence", StringComparison.Ordinal))
             {
@@ -468,6 +474,7 @@ namespace TopiaForge.ModManager.Tests
                 MainThreadGuardTests.Run();
                 SafeEventTests.Run();
                 ChronosTests.Run();
+                SessionTimeTests.Run();
                 CreatorContentTests.Run();
                 CreatorSceneAdapterTests.Run();
                 CreatorEventGraphRunnerTests.Run();
