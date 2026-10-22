@@ -285,6 +285,95 @@ void main() {
     expect(joinFolders(rig.game), isEmpty);
     await rig.repository.loadExactPackageCatalog(rig.install);
   });
+
+  test('killed before its journal was saved, the next start still sweeps '
+      'its folder', () async {
+    final rig = await playerWithDownloads();
+    final before = await rig.everything(StandardJoin.downloads);
+    final killed = await killedAt(rig, 'staged');
+    expect(killed.exitCode, 86, reason: '${killed.stdout}${killed.stderr}');
+    _journalOf(rig.game).deleteSync();
+
+    rig.repository = rig.open();
+    expect(await rig.everything(StandardJoin.downloads), before);
+    expect(joinFolders(rig.game), isEmpty);
+  });
+
+  // The catalog takes no staging lease, so another launcher's install can be
+  // saving the journal while it reads; on Windows a save that cannot replace
+  // the journal in one move moves it aside first.
+  for (final (moment, afterTheLook) in [('before', false), ('after', true)]) {
+    test('killed part way, a journal that a save moves aside just $moment the '
+        'catalog looks for it is not taken for none', () async {
+      final rig = await playerWithDownloads();
+      final killed = await killedAt(rig, 'committed 2');
+      expect(killed.exitCode, 86, reason: '${killed.stdout}${killed.stderr}');
+      final journal = _journalOf(rig.game);
+      final folder = joinFolders(rig.game).single;
+      rig.repository = rig.open();
+
+      // The recovery finds the journal at the first look; the save moves it
+      // aside around the second, the read's own.
+      var looks = 0;
+      await expectLater(
+        IOOverrides.runZoned(
+          () => rig.repository.loadExactPackageCatalog(rig.install),
+          fseGetTypeSync: (path, followLinks) {
+            FileSystemEntityType look() => IOOverrides.runWithIOOverrides(
+              () => FileSystemEntity.typeSync(path, followLinks: followLinks),
+              _plain,
+            );
+            if (p.basename(path) != 'journal.json' ||
+                p.basename(p.dirname(path)) != folder ||
+                ++looks != 2) {
+              return look();
+            }
+            final seen = afterTheLook ? look() : null;
+            IOOverrides.runWithIOOverrides(
+              () => _leaveOnlyBackup(journal),
+              _plain,
+            );
+            return seen ?? look();
+          },
+        ),
+        throwsA(
+          isA<FileSystemException>().having(
+            (error) => error.toString(),
+            'message',
+            _unreadableJournal(rig, 'Another program may be using it'),
+          ),
+        ),
+      );
+    });
+  }
+
+  test('a join whose own journal another program holds once it is saved '
+      'goes ahead, since only an earlier join can be unsettled', () async {
+    late JoinRig rig;
+    rig = await JoinRig.create(
+      hook: (step) async {
+        if (step == 'staged') await holdUnreadable(_journalOf(rig.game));
+      },
+    );
+    await preparePlayer(rig);
+    rig.cache(StandardJoin.downloads);
+    final (server, plan) = await StandardJoin.plan();
+    final event = await rig.repository.installJoinContent(
+      rig.install,
+      installingJoin(server, plan),
+    );
+    expect(
+      event,
+      isA<JoinInstallCompleted>(),
+      reason: event is JoinFailed ? event.detail : null,
+    );
+    for (final archive in StandardJoin.downloads) {
+      expect(
+        packageFolder(rig.game, archive.id, archive.version).existsSync(),
+        isTrue,
+      );
+    }
+  });
 }
 
 /// The label of a join's journal in what the launcher says about it.
@@ -348,3 +437,8 @@ String _launcherLog(JoinRig rig) {
   final log = File(p.join(rig.dataRoot, 'logs', 'launcher.log'));
   return log.existsSync() ? log.readAsStringSync() : '';
 }
+
+/// What `dart:io` does with no overrides in force.
+final class _Plain extends IOOverrides {}
+
+final _plain = _Plain();

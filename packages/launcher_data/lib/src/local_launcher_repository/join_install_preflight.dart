@@ -30,10 +30,14 @@ extension _JoinInstallPreflight on _JoinInstall {
     // their record entries, until a later sweep takes them out, so nothing
     // may count them as installed meanwhile. Nor may anything build on one
     // whose journal cannot be read just now: what it left is unknown, and
-    // the refusal says what to do without naming the file.
+    // the refusal says what to do without naming the file. This join's own
+    // folder, there once it is staged, is no earlier join's.
     final bool unsettled;
     try {
-      unsettled = await _repository._hasUnsettledJoinInstall(_install);
+      unsettled = await _repository._hasUnsettledJoinInstall(
+        _install,
+        except: _root,
+      );
     } on LauncherFileUnreadable catch (unreadable) {
       throw _JoinInstallRefused(unreadable.message);
     }

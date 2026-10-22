@@ -242,25 +242,34 @@ extension _JoinInstallJournal on LocalLauncherRepository {
   /// unsettled after a sweep, as while another program holds a file in one
   /// of its folders. Those folders keep their record entries until a later
   /// sweep takes them out, so nothing may build on them meanwhile. Throws as
-  /// [_unsettledJoinJournals] does.
-  Future<bool> _hasUnsettledJoinInstall(GameInstall install) async =>
-      (await _unsettledJoinJournals(install)).isNotEmpty;
+  /// [_unsettledJoinJournals] does. [except] is the folder of the install
+  /// that asks, whose own journal is never an earlier join's.
+  Future<bool> _hasUnsettledJoinInstall(
+    GameInstall install, {
+    Directory? except,
+  }) async =>
+      (await _unsettledJoinJournals(install, except: except)).isNotEmpty;
 
   /// The journals of the joins in manager staging whose install failed or
-  /// stopped part way. What each names that is still in place goes at the
-  /// next sweep that can finish, so no plan may count it as installed.
+  /// stopped part way, but for the folder [except]. What each names that is
+  /// still in place goes at the next sweep that can finish, so no plan may
+  /// count it as installed.
   ///
   /// Throws [LauncherFileUnreadable] while a join's journal cannot be read
   /// just now ([_readJoinJournal]): that join is unsettled too, and what it
   /// left in place is unknown, so nothing may be planned or installed
   /// until it can be read.
-  Future<List<_JoinJournal>> _unsettledJoinJournals(GameInstall install) async {
+  Future<List<_JoinJournal>> _unsettledJoinJournals(
+    GameInstall install, {
+    Directory? except,
+  }) async {
     final staging = _managerStaging(install);
     if (!staging.existsSync()) return const [];
     final unsettled = <_JoinJournal>[];
     for (final entity in staging.listSync(followLinks: false)) {
       if (entity is! Directory ||
-          !p.basename(entity.path).startsWith('launcher-join-')) {
+          !p.basename(entity.path).startsWith('launcher-join-') ||
+          (except != null && p.equals(entity.path, except.path))) {
         continue;
       }
       final journal = await _readJoinJournal(entity);
@@ -324,14 +333,18 @@ extension _JoinInstallJournal on LocalLauncherRepository {
   /// cannot be listed or searched, or the journal itself cannot be read. Its
   /// join is then not settled yet, never one with no journal, which would
   /// keep what that join had put in place as the player's own.
+  ///
+  /// So is a journal the recovery found that is gone when it is read: a save
+  /// of it that is running moved it aside, as a save does on Windows when it
+  /// cannot replace the journal in one move. The catalog reads without the
+  /// staging lease, so it can meet another launcher's install doing that.
   Future<_JoinJournal?> _readJoinJournal(Directory root) async {
     final file = File(p.join(root.path, _JoinJournal.fileName));
-    await recoverAtomicBackupIfMissing(
-      file,
-      label: _JoinJournal.unreadableLabel,
-    );
-    if (FileSystemEntity.typeSync(file.path, followLinks: false) !=
-        FileSystemEntityType.file) {
+    if (await recoverAtomicBackupIfMissing(
+          file,
+          label: _JoinJournal.unreadableLabel,
+        ) ==
+        AtomicFileState.missing) {
       return null;
     }
     final Object? json;
@@ -341,13 +354,16 @@ extension _JoinInstallJournal on LocalLauncherRepository {
           await _readLauncherFileBounded(file, _JoinJournal.maximumBytes),
         ),
       );
-    } on PathNotFoundException {
-      // Gone meanwhile with its folder, as when its join finished.
-      return null;
     } on FileSystemException {
+      // Held, or moved aside since the recovery found it.
       throw LauncherFileUnreadable.heldFile(_JoinJournal.unreadableLabel);
     } on Object {
-      // Too large, or not JSON.
+      // Moved aside since the recovery found it, as above; otherwise a
+      // folder, a link, too large, or not JSON.
+      if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+          FileSystemEntityType.notFound) {
+        throw LauncherFileUnreadable.heldFile(_JoinJournal.unreadableLabel);
+      }
       return null;
     }
     return _JoinJournal.tryRead(json);
