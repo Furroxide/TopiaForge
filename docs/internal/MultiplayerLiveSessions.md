@@ -434,7 +434,14 @@ Every line ends in a single newline (`\n`).
     waits for a reply from the new socket that names the same server.
   - A host on another transport version is listed as incompatible.
   - A session silent for six seconds leaves the list.
-  - At most 64 sessions are listed.
+  - At most 64 sessions are listed, and at most 8 of them from one sender address, on any port, as in the launcher's
+    browser, so one host announcing many servers never hides the others. Only silence makes room: a beacon that would
+    add a session to a full list, add a ninth for its sender, or move a session there from another address is dropped
+    and counted. A session that moves to another port on its own sender keeps its place, and a move to another address
+    with room is heard even while the list is full, since it adds no session.
+  - **Accepted limit.** Forged beacons from many spoofed sender addresses can still fill the list, in the game and the
+    launcher alike. A beacon is an unauthenticated hint on a local network, where anyone who can send it can also
+    flood the discovery port, so that is accepted: a sender's share stops one host doing it, not a forger.
   - The main thread reads a snapshot that is replaced on every change. Each entry keeps its path inside the network
     layer, for the join flow.
 - **Browsing is always relay-only.** LAN paths are allowed, so LAN hosts are queried as usual. A beacon from any

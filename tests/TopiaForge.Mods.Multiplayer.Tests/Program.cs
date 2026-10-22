@@ -233,6 +233,8 @@ internal static class Program
             NetworkServiceTests.WithoutIPv6TheDescriptorEndpointAndClientUseIPv4();
             NetworkServiceTests.LanBrowsersFindAnnouncedHosts();
             NetworkServiceTests.AMovedServerIsHeardAfresh();
+            LanBrowserShareTests.ALanSenderHoldsAtMostItsShareOfTheList();
+            LanBrowserShareTests.TheLanListIsBoundedAndOnlySilenceMakesRoom();
             NetworkServiceTests.ServicesStopWithTheirThread();
             LiveSessionTests.APlayerJoinsAHostAndLeaves();
             LiveSessionTests.PasswordsAreProvedNeverSent();

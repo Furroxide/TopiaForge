@@ -39,6 +39,9 @@ typedef LanTicker = Timer Function(Duration interval, void Function() tick);
 ///   [maximumOutstandingQueries] queries are kept, and queries are rate
 ///   limited overall and per host, so a flood of forged beacons cannot turn
 ///   the browser into an amplifier, and one host cannot hide the others.
+///   Forged beacons from many spoofed sender addresses can still fill the
+///   list, as they can the game's: on a local network that is accepted, and a
+///   sender's share only stops one host doing it.
 /// - **Robustness.** Datagrams are hostile input: nothing on the network path
 ///   throws, and anything malformed is dropped and counted.
 /// - **Sockets.** The listener binds [LanBeacon.discoveryPort] with address
