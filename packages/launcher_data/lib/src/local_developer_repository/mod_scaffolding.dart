@@ -106,7 +106,7 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
           ..._pinnedSdkPackages(project, original, sdk, modulePackages),
           if (isTest &&
               sourcesNeedGenerator &&
-              _compilesSourcesFromOutside(original))
+              _compilesSourcesFromOutside(original, project.parent.path))
             _multiplayerGeneratorPackage,
         },
         version: sdk.version,
@@ -398,10 +398,11 @@ bool _importsDevProps(String project) => startTags(project, 'Import').any(
   }),
 );
 
-/// Whether [project] has a `Compile` item outside comments that includes
-/// files from outside its own folder, as the single-project templates' test
-/// projects compile the mod's sources with `<Compile Include="..\..\*.cs" />`.
-bool _compilesSourcesFromOutside(String project) =>
+/// Whether [project], the text of the project file in [folder], has a
+/// `Compile` item outside comments that includes files from outside
+/// [folder], as the single-project templates' test projects compile the
+/// mod's sources with `<Compile Include="..\..\*.cs" />`.
+bool _compilesSourcesFromOutside(String project, String folder) =>
     startTags(project, 'Compile', anyCase: true).any(
       (found) => found.tag.attributes.any((attribute) {
         if (!isAttributeNamed(project, attribute, 'Include')) return false;
@@ -409,6 +410,27 @@ bool _compilesSourcesFromOutside(String project) =>
         return project
             .substring(value.start, value.end)
             .split(';')
-            .any((spec) => spec.trim().replaceAll(r'\', '/').startsWith('../'));
+            .any((spec) => _leavesFolder(spec, folder));
       }),
     );
+
+/// `$(MSBuildProjectDirectory)` and `$(MSBuildThisFileDirectory)` at the
+/// start of a path, with the separators after them. Both are reserved
+/// properties that name the project file's folder, so a path that starts
+/// with one starts there, as a relative path does.
+final _projectFolderPrefix = RegExp(
+  r'^\$\((?:MSBuildProjectDirectory|MSBuildThisFileDirectory)\)[\\/]*',
+  caseSensitive: false,
+);
+
+/// Whether [spec], one path of a `Compile` item's `Include`, names files
+/// outside [folder], the folder of its project file, once its `..` parts
+/// are resolved as MSBuild resolves them, with either separator.
+bool _leavesFolder(String spec, String folder) {
+  final relative = spec
+      .trim()
+      .replaceFirst(_projectFolderPrefix, '')
+      .replaceAll(r'\', '/');
+  final path = p.normalize(p.join(folder, relative));
+  return !p.equals(path, folder) && !p.isWithin(folder, path);
+}

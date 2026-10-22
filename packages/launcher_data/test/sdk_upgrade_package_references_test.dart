@@ -105,8 +105,9 @@ void main() {
   test(
     'a test project that compiles the mod sources gets the generator',
     () async {
+      // A space in the path, as many a Windows user folder has.
       final root = Directory.systemTemp.createTempSync(
-        'topiaforge-sdk-sources-',
+        'topiaforge sdk sources-',
       );
       addTearDown(() => root.deleteSync(recursive: true));
       final source = p.join(root.path, 'source');
@@ -128,6 +129,7 @@ void main() {
       File testProject(String name) =>
           File(p.join(workspace.projectRoot, 'tests', name, '$name.csproj'));
       final compiling = testProject('Sources.Tests');
+      final compilingFromFolder = testProject('Sources.Folder.Tests');
       final referencing = testProject('Sources.Reference.Tests');
       const testItems = {
         'NUnit': '4.3.2',
@@ -136,6 +138,7 @@ void main() {
       };
       // Without multiplayer, no test project needs the generator.
       expect(_versions(compiling), testItems);
+      expect(_versions(compilingFromFolder), testItems);
       expect(_versions(referencing), testItems);
 
       // `topiaforge mod add multiplayer` gives the mod project the contract
@@ -166,25 +169,41 @@ void main() {
         throwsA(isA<_RestoreSkipped>()),
       );
 
-      // The test project that compiles the mod's sources compiles its
-      // contract too, so it gets the generator that writes the contract's
-      // other half. The one that references the built mod has that half.
-      expect(_versions(compiling), {
-        ...testItems,
-        'TopiaForge.Mods.Multiplayer': '1.0.0',
-        'TopiaForge.Mods.Multiplayer.Generators': '1.0.0',
-      });
-      expect(
-        compiling.readAsStringSync(),
-        contains(
-          '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" '
-          'Version="1.0.0" PrivateAssets="all" />',
-        ),
-      );
+      // A test project that compiles the mod's sources compiles its contract
+      // too, so it gets the generator that writes the contract's other half,
+      // whether its path starts at its folder or at a property that names
+      // that folder. The one that references the built mod has that half.
+      for (final project in [compiling, compilingFromFolder]) {
+        expect(_versions(project), {
+          ...testItems,
+          'TopiaForge.Mods.Multiplayer': '1.0.0',
+          'TopiaForge.Mods.Multiplayer.Generators': '1.0.0',
+        }, reason: project.path);
+        expect(
+          project.readAsStringSync(),
+          contains(
+            '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" '
+            'Version="1.0.0" PrivateAssets="all" />',
+          ),
+        );
+      }
       expect(_versions(referencing), {
         ...testItems,
         'TopiaForge.Mods.Multiplayer': '1.0.0',
       });
+
+      // Restoring again changes nothing.
+      final restored = {
+        for (final project in [compiling, compilingFromFolder, referencing])
+          project.path: project.readAsStringSync(),
+      };
+      await expectLater(
+        repository.resolveDeveloperProject(workspace.projectRoot),
+        throwsA(isA<_RestoreSkipped>()),
+      );
+      for (final MapEntry(key: path, value: text) in restored.entries) {
+        expect(File(path).readAsStringSync(), text, reason: path);
+      }
     },
   );
 }
@@ -306,10 +325,12 @@ void _writeTemplate(String source) {
 ''');
 }
 
-/// Writes the `sources` mod template: a mod with no module yet and two test
-/// projects, one that compiles the mod's own sources, as the single-project
-/// templates' tests do, and one that references the built mod, as the
-/// multiplayer template's tests do, and compiles only files of its own.
+/// Writes the `sources` mod template: a mod with no module yet and three test
+/// projects. Two compile the mod's own sources, as the single-project
+/// templates' tests do, one from its folder and one from
+/// `$(MSBuildThisFileDirectory)`, which names that folder. The third
+/// references the built mod, as the multiplayer template's tests do, and
+/// compiles only files of its own.
 void _writeSourcesTemplate(String source) {
   final template = Directory(p.join(source, 'templates', 'mod', 'sources'))
     ..createSync(recursive: true);
@@ -355,7 +376,12 @@ void _writeSourcesTemplate(String source) {
     r'<Compile Include="..\..\*.cs" Link="ModSources\%(Filename)%(Extension)" />',
   );
   writeTests(
+    'Sources.Folder.Tests',
+    r'<Compile Include="$(MSBuildThisFileDirectory)..\..\*.cs" />',
+  );
+  // The empty part after the `;` names nothing, so nothing outside.
+  writeTests(
     'Sources.Reference.Tests',
-    r'<ProjectReference Include="..\..\Sources.csproj" /><Compile Include="Fixtures\*.cs" />',
+    r'<ProjectReference Include="..\..\Sources.csproj" /><Compile Include="Fixtures\*.cs;" />',
   );
 }
