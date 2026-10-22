@@ -20,9 +20,9 @@ enum SessionLinkKind {
 /// everything else exact.
 ///
 /// A link never joins on its own; it opens the consent flow. A direct link
-/// carries the host's address, so [toString] leaves the address out; only
-/// [canonical] spells it, for the network layer and the launcher's own link
-/// handling.
+/// carries the host's address, and an invite link a code that lets anyone
+/// who holds it join, so [toString] leaves both out; only [canonical] spells
+/// them, for the network layer and the launcher's own link handling.
 final class SessionLink {
   SessionLink._(
     this.kind, {
@@ -80,7 +80,8 @@ final class SessionLink {
 
   final SessionLinkKind kind;
 
-  /// The canonical invite code of an invite link.
+  /// The canonical invite code of an invite link. Anyone who holds it may
+  /// join: keep it out of logs, diagnostics and anything mods can read.
   final String? inviteCode;
 
   /// The server id of a server or direct link.
@@ -170,19 +171,24 @@ final class SessionLink {
     return true;
   }
 
-  /// The canonical link. For a direct link it holds the host's address.
+  /// The canonical link. For a direct link it holds the host's address, and
+  /// for an invite link its code.
   String get canonical => switch (kind) {
     SessionLinkKind.invite => '$_prefix$inviteCode',
     SessionLinkKind.server => '${_prefix}server/$serverId',
     SessionLinkKind.direct => '${_prefix}direct/$serverId/$host/$port',
   };
 
-  /// The canonical link with a direct link's host and port left out, safe for
-  /// logs and diagnostics.
+  /// The link without what only [canonical] may spell, safe for logs and
+  /// diagnostics: a server link whole, a direct link without its host and
+  /// port, and an invite link as its kind alone, `invite`, as the game prints
+  /// an invite target.
   @override
-  String toString() => kind == SessionLinkKind.direct
-      ? '${_prefix}direct/$serverId/<address withheld>'
-      : canonical;
+  String toString() => switch (kind) {
+    SessionLinkKind.invite => 'invite',
+    SessionLinkKind.server => canonical,
+    SessionLinkKind.direct => '${_prefix}direct/$serverId/<address withheld>',
+  };
 
   @override
   bool operator ==(Object other) =>
