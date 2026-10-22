@@ -139,7 +139,8 @@ internal static class LiveSessionFailureTests
         rig.HostFiles.FailReadsOf.Add(BanList.FilePath);
         rig.HostFiles.FailReadsOf.Add(KnownHosts.FilePath);
         rig.StartHosting(new HostSettings("Careful") { Port = 0 });
-        That(rig.Host.Live!.HostPhase == HostPhase.Hosting, "unreadable ban and known-host files read as empty, so hosting still starts");
+        That(rig.Host.Live!.HostPhase == HostPhase.Hosting,
+            "an unreadable ban file reads as empty, and an unreadable known-hosts file stays unread, so hosting still starts");
         rig.HostFiles.FailReadsOf.Clear();
 
         var first = rig.AddClient("first");

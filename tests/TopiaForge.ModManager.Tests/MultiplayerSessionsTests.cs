@@ -40,6 +40,7 @@ namespace TopiaForge.ModManager.Tests
             FailuresStopAtTheirStep();
             CancelWorksThroughout();
             RetryTrustAndTheLauncher();
+            AnUncheckedServerMayBeTrustedOrTriedAgain();
             CopiedDetailsNeverHoldAnAddress();
             LauncherLinksCarryNoAddressUnlessTyped();
             PlayersShowOnceTheHostListsThem();

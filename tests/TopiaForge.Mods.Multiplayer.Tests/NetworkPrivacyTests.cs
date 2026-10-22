@@ -76,7 +76,7 @@ internal static class NetworkPrivacyTests
         That(fetch.Outcome != DescriptorFetchOutcome.Fetched && fetch.Detail.Length > 0 && !Mentions(fetch.Detail, "127.0.0.1", closed),
             "a failed fetch names a reason, not the address (" + fetch.Detail + ")");
 
-        var resolver = new NetworkTargetResolver(() => null, new KnownHosts(), () => { }, () => 0);
+        var resolver = new NetworkTargetResolver(() => null, new KnownHostsStore(new MemoryDataFiles()), () => 0);
         var missing = resolver.ResolveAsync(JoinTarget.Direct("no-such-host.invalid", 27250), true, null, CancellationToken.None).GetAwaiter().GetResult();
         That(missing.Failure != LiveFailure.None && !missing.Detail.Contains("no-such-host", StringComparison.OrdinalIgnoreCase),
             "an unknown host name is reported without the name (" + missing.Detail + ")");
@@ -92,9 +92,10 @@ internal static class NetworkPrivacyTests
         var second = Signed(1);
         var serving = first;
         var contacted = new List<IPEndPoint>();
-        var known = new KnownHosts();
-        var saves = 0;
-        var resolver = new NetworkTargetResolver(() => null, known, () => saves++, () => 1_000, (endpoint, _, _) =>
+        var files = new MemoryDataFiles();
+        var store = new KnownHostsStore(files);
+        var known = store.Record;
+        var resolver = new NetworkTargetResolver(() => null, store, () => 1_000, (endpoint, _, _) =>
         {
             lock (contacted) contacted.Add(endpoint);
             return Task.FromResult(new DescriptorFetch(DescriptorFetchOutcome.Fetched, serving, string.Empty));
@@ -121,8 +122,9 @@ internal static class NetworkPrivacyTests
 
         // Trust on first use: an address is remembered with the server it served, and another server there later is a
         // changed identity unless the player trusts it.
-        var savesBefore = saves;
-        That(known.Check("203.0.113.5", 27250, first.Descriptor.ServerId) == KnownHostCheck.Match && savesBefore >= 2, "each new address is remembered and saved");
+        store.SaveAfter(Task.CompletedTask).GetAwaiter().GetResult();
+        That(known.Check("203.0.113.5", 27250, first.Descriptor.ServerId) == KnownHostCheck.Match &&
+             KnownHosts.Parse(files.Contents[KnownHosts.FilePath]).Count == 2, "each new address is remembered and saved");
         serving = second;
         var changed = Resolve("203.0.113.5", true);
         That(changed.Failure == LiveFailure.HostIdentityChanged && changed.ServedServerId == second.Descriptor.ServerId,

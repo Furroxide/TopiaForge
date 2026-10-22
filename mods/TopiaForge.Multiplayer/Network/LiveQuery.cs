@@ -118,7 +118,7 @@ namespace TopiaForge.Multiplayer.Network
 
         internal ContentCheck? Content { get; private set; }
 
-        /// <summary>Gets, when a typed host now serves a different server, that server's id.</summary>
+        /// <summary>Gets, when a typed host now serves a different server, or one that could not be checked, that server's id.</summary>
         internal string? ChangedServerId { get; private set; }
 
         public void Dispose()

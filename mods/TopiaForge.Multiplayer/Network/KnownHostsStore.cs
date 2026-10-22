@@ -1,0 +1,204 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace TopiaForge.Multiplayer.Network
+{
+    /// <summary>What the known-hosts record says about the server a typed address serves now.</summary>
+    internal enum KnownHostTrust
+    {
+        /// <summary>
+        /// The address served this server before; or it served none, and this one is now recorded; or the player trusted
+        /// exactly this server for this join.
+        /// </summary>
+        Trusted = 0,
+
+        /// <summary>The address served another server before, and the player has not trusted this one.</summary>
+        Changed = 1,
+
+        /// <summary>The record could not be read just now, so the server could not be checked; nothing was recorded.</summary>
+        Unchecked = 2
+    }
+
+    /// <summary>
+    /// Trust on first use as live sessions keep it: the <see cref="KnownHosts"/> record and its file,
+    /// <c>multiplayer/known-hosts.json</c>, read before the first check and saved as checks change the record.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A file that cannot be read just now, as when another program holds it or the disk fails, is never taken for an
+    /// empty record and never written over. Until a read succeeds, every check is <see cref="KnownHostTrust.Unchecked"/>,
+    /// nothing is recorded and nothing is saved; the next check reads the file again, so trying again once it reads
+    /// recovers. A server the player trusts for one join is still let through, as a changed server is, and is not
+    /// recorded either.
+    /// </para>
+    /// <para>
+    /// A file that reads but is damaged is salvaged as before: the entries that read are kept, and the rest are dropped.
+    /// Before anything replaces it, its bytes are copied to <see cref="DamagedPath"/>, so a record the game could not
+    /// use is never lost silently, and while that copy cannot be written the damaged file stays where it is, to be
+    /// salvaged again. Anything that does not read back exactly as this game writes it counts as damaged: a file of
+    /// another schema, an entry that does not read, more entries than the record keeps, or bytes that are not canonical.
+    /// </para>
+    /// </remarks>
+    internal sealed class KnownHostsStore
+    {
+        internal const string DamagedPath = "multiplayer/known-hosts.damaged.json";
+
+        private readonly INetworkDataFiles files;
+        private readonly object gate = new object();
+        private Task<bool>? reading;
+        private bool read;
+        private bool dirty;
+        private byte[]? damaged;
+
+        internal KnownHostsStore(INetworkDataFiles files)
+        {
+            this.files = files ?? throw new ArgumentNullException(nameof(files));
+        }
+
+        /// <summary>Gets the record this process keeps. Every use locks it.</summary>
+        internal KnownHosts Record { get; } = new KnownHosts();
+
+        /// <summary>Gets whether the record holds what the file held: once a read succeeded, or found no file.</summary>
+        internal bool IsRead
+        {
+            get
+            {
+                lock (gate) return read;
+            }
+        }
+
+        /// <summary>
+        /// Reads the file unless a read already succeeded; true once the record holds what the file held. A read that fails
+        /// leaves the record unread, and the next call reads again. One read runs at a time, and a caller that comes while
+        /// one runs shares it.
+        /// </summary>
+        internal Task<bool> EnsureReadAsync()
+        {
+            lock (gate)
+            {
+                if (read) return Task.FromResult(true);
+                if (reading == null || reading.IsCompleted) reading = ReadAsync();
+                return reading;
+            }
+        }
+
+        /// <summary>
+        /// Checks that a typed <paramref name="host"/> and <paramref name="port"/> serve <paramref name="serverId"/>, and
+        /// records a first server there. <paramref name="trustedServerId"/> is the one server the player trusted for this
+        /// join, if any.
+        /// </summary>
+        internal async Task<KnownHostTrust> TrustAsync(string host, int port, string serverId, string? trustedServerId, long unixSeconds)
+        {
+            var trusted = string.Equals(serverId, trustedServerId, StringComparison.Ordinal);
+            if (!await EnsureReadAsync().ConfigureAwait(false))
+            {
+                // Nothing can be checked, and nothing is recorded: only the player's own trust in this very server goes on.
+                return trusted ? KnownHostTrust.Trusted : KnownHostTrust.Unchecked;
+            }
+
+            lock (Record)
+            {
+                var check = Record.Check(host, port, serverId);
+                if (check == KnownHostCheck.Match) return KnownHostTrust.Trusted;
+                if (check == KnownHostCheck.Mismatch && !trusted) return KnownHostTrust.Changed;
+                Record.Remember(host, port, serverId, unixSeconds);
+            }
+
+            MarkChanged();
+            return KnownHostTrust.Trusted;
+        }
+
+        /// <summary>Marks the record for saving after a change, from any thread.</summary>
+        internal void MarkChanged()
+        {
+            lock (gate) dirty = true;
+        }
+
+        /// <summary>
+        /// Queues a save behind <paramref name="previous"/> when the record changed since the last one, and returns it, or
+        /// returns <paramref name="previous"/> when there is nothing to save. Nothing is saved until a read succeeded, so a
+        /// file this process could not read is never written over. A damaged file's copy is written first, and the record
+        /// only once the copy landed.
+        /// </summary>
+        internal Task SaveAfter(Task previous)
+        {
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            byte[]? copy;
+            lock (gate)
+            {
+                if (!dirty || !read) return previous;
+                dirty = false;
+                copy = damaged;
+                damaged = null;
+            }
+
+            byte[] bytes;
+            lock (Record) bytes = Record.Serialize();
+            return Queue(previous, copy, bytes);
+        }
+
+        /// <summary>
+        /// Chains the writes behind <paramref name="previous"/>. It is a method of its own so that the frame that has
+        /// nothing to save allocates nothing: a lambda in <see cref="SaveAfter"/> would capture its locals on every call.
+        /// Saves are never cancelled, even while closing: a cancelled write would lose the change, and each is small.
+        /// </summary>
+        private Task Queue(Task previous, byte[]? copy, byte[] bytes) =>
+            previous.ContinueWith(_ => WriteAsync(copy, bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+
+        private async Task<bool> ReadAsync()
+        {
+            byte[]? bytes;
+            try
+            {
+                bytes = await files.ReadAsync(KnownHosts.FilePath, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Held, failing or refused: the record stays unread, so nothing is checked against it or saved over it.
+                return false;
+            }
+
+            var parsed = KnownHosts.Parse(bytes);
+            var intact = bytes == null || SameBytes(parsed.Serialize(), bytes);
+            lock (Record) Record.MergeFrom(parsed);
+            lock (gate)
+            {
+                read = true;
+                if (!intact) damaged = bytes;
+            }
+
+            return true;
+        }
+
+        private async Task WriteAsync(byte[]? copy, byte[] bytes)
+        {
+            if (copy != null)
+            {
+                try
+                {
+                    await files.WriteAsync(DamagedPath, copy, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // Without its copy, the damaged file stays where it is; the next save tries the copy again first.
+                    lock (gate) damaged ??= copy;
+                    throw;
+                }
+            }
+
+            await files.WriteAsync(KnownHosts.FilePath, bytes, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        private static bool SameBytes(byte[] left, byte[] right)
+        {
+            if (left.Length != right.Length) return false;
+            for (var index = 0; index < left.Length; index++)
+            {
+                if (left[index] != right[index]) return false;
+            }
+
+            return true;
+        }
+    }
+}

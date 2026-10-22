@@ -63,8 +63,11 @@ namespace TopiaForge.ModManager.Sessions
                     Result(NeedsText(problems), ScreenTone.Warning);
                     break;
                 case InternalLiveFailure.HostIdentityChanged when InternalText.IsServerId(changed):
-                    Result(TrustBody, ScreenTone.Warning);
-                    context.Ask(PrivacyPrompts.Destructive(TrustTitle, TrustBody, TrustConfirm, confirmed =>
+                case InternalLiveFailure.KnownHostsUnreadable when InternalText.IsServerId(changed):
+                    // The record could not be read to check the server: the player decides, as for a changed server.
+                    var body = failure == InternalLiveFailure.HostIdentityChanged ? TrustBody : LiveFailureMessages.UncheckedServer;
+                    Result(body, ScreenTone.Warning);
+                    context.Ask(PrivacyPrompts.Destructive(TrustTitle, body, TrustConfirm, confirmed =>
                     {
                         if (!confirmed || target != chosen) return;
                         trustedServerId = changed;

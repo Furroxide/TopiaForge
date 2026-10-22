@@ -152,7 +152,9 @@ server the service no longer lists leaves the recent servers, and a wrong or wit
 after the host refused the password, or turned away too many wrong ones, joins again without it, so the overlay asks
 for the password in place instead of sending the refused one again. Once the link is up, the Connecting step says the
 route the status reports, Relay or Direct. The failure view offers Retry where trying again can help, Open launcher
-where the launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server.
+where the launcher can take the join over, Copy details, and Trust for a typed host that now serves a different server,
+or whose server could not be checked because this game's record of earlier ones could not be read
+(`KnownHostsUnreadable`). CONNECT's check asks the same "Trust this server?" question for both, each with its own words.
 Cancel, the close button and ESC stop a running join at any step, and leaving is never refused.
 
 The overlay and the prompts are persistent modals: joining from a running game returns to the main menu first, and a

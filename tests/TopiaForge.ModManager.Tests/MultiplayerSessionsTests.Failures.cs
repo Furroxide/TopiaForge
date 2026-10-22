@@ -154,6 +154,49 @@ namespace TopiaForge.ModManager.Tests
             That(changed.Control.LastJoin!.TrustedServerId == new string('4', 64), "trusting joins that one server only");
         }
 
+        /// <summary>
+        /// A typed host whose server could not be checked, because this game's record of earlier servers could not be read,
+        /// says so in words of its own: CONNECT's check asks the player as it does for a changed server, and a join that
+        /// ends that way offers both trust and retry.
+        /// </summary>
+        private static void AnUncheckedServerMayBeTrustedOrTriedAgain()
+        {
+            var served = new string('6', 64);
+            var rig = new SessionsRig();
+            rig.Presenter.Connect.SetAddress("192.0.2.9:27250");
+            rig.Presenter.Connect.JoinAddress();
+            rig.Frame();
+            rig.Control.Queries[0].Complete(InternalLiveFailure.KnownHostsUnreadable, changed: served);
+            rig.Frame();
+            That(rig.Prompt?.Kind == ScreenPromptKind.Destructive && rig.Prompt.Title == ConnectPresenter.TrustTitle &&
+                 rig.Prompt.Paragraphs[0] == LiveFailureMessages.UncheckedServer && rig.Presenter.Connect.ResultText == LiveFailureMessages.UncheckedServer,
+                "a server the game could not check asks the player, and says why (" + rig.Presenter.Connect.ResultText + ")");
+            rig.Answer(ScreenPromptKind.Destructive, false);
+            That(!rig.Control.Calls.Any(call => call.StartsWith("Join", StringComparison.Ordinal)), "declining joins nothing");
+            rig.Presenter.Connect.JoinAddress();
+            rig.Frame();
+            rig.Control.Queries[1].Complete(InternalLiveFailure.KnownHostsUnreadable, changed: served);
+            rig.Frame();
+            rig.Answer(ScreenPromptKind.Destructive, true);
+            That(rig.Control.LastJoin?.TrustedServerId == served, "trusting it joins that one server only");
+
+            var joined = new SessionsRig();
+            joined.Presenter.Connect.SetAddress("192.0.2.9:27250");
+            joined.Presenter.Connect.JoinAddress();
+            joined.Frame();
+            joined.Control.Queries[0].Complete(InternalLiveFailure.None, Server('3', "Typed"));
+            joined.Frame();
+            joined.Status(InternalSessionRole.Solo, InternalJoinPhase.Ended, InternalLiveFailure.KnownHostsUnreadable);
+            joined.Control.Status.ChangedServerId = new string('7', 64);
+            joined.Frame();
+            var overlay = joined.Presenter.Connecting;
+            That(overlay.HasFailed && overlay.FailureTitle == "Server not checked" && overlay.CanTrust && overlay.CanRetry,
+                "a join that ends unchecked offers trust and retry (" + overlay.FailureTitle + ")");
+            overlay.Trust();
+            joined.Frame();
+            That(joined.Control.LastJoin!.TrustedServerId == new string('7', 64), "and trusting joins that one server only");
+        }
+
         private static void CopiedDetailsNeverHoldAnAddress()
         {
             var rig = new SessionsRig();

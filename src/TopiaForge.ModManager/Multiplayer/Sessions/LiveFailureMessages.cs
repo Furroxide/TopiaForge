@@ -46,6 +46,10 @@ namespace TopiaForge.ModManager.Sessions
         internal const string ServiceNotConfigured =
             "This game is not set up to reach the TopiaForge service, so invites and listed servers are unavailable. LAN and direct play still work.";
 
+        /// <summary>A typed host's server that could not be checked, because the record of earlier ones could not be read.</summary>
+        internal const string UncheckedServer =
+            "This game could not read its record of the servers it has met by address, so it could not check this one. Join it only if you trust it, or try again in a moment.";
+
         /// <summary>
         /// Reads what the runtime or the provider threw as hosting or a join started as a refusal: a bad setting or state
         /// keeps its words, which the screens redact before they show them, and anything else is named by its type alone.
@@ -80,6 +84,8 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Server not verified", "The host's server information could not be verified, so nothing was joined. Try again; if it fails again, ask the host to update TopiaForge.", ConnectingStep.Resolving, true);
                 case InternalLiveFailure.HostIdentityChanged:
                     return new FailureMessage("Server changed", "This address now leads to a different server than it did before. Join it only if you trust it.", ConnectingStep.Resolving, false, canTrust: true);
+                case InternalLiveFailure.KnownHostsUnreadable:
+                    return new FailureMessage("Server not checked", UncheckedServer, ConnectingStep.Resolving, true, canTrust: true);
                 case InternalLiveFailure.WrongGameBuild:
                     return new FailureMessage("Different game build", "The host runs a different build of Robotopia. Both players need the same build to play together: update the game, or ask the host to.", ConnectingStep.VerifyingMods, false);
                 case InternalLiveFailure.ProtocolMismatch:

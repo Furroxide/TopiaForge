@@ -123,8 +123,9 @@ namespace TopiaForge.Multiplayer.Network
         internal InternetJoinRoute? Internet => internet;
 
         /// <summary>
-        /// Gets, when a typed address now serves a different server, that server's id. A new join that sets it as
-        /// <see cref="JoinSettings.TrustedServerId"/> trusts exactly that server there.
+        /// Gets, when a typed address now serves a different server, or one the known-hosts record could not be read to
+        /// check, that server's id. A new join that sets it as <see cref="JoinSettings.TrustedServerId"/> trusts exactly
+        /// that server there.
         /// </summary>
         internal string? ChangedServerId { get; private set; }
 

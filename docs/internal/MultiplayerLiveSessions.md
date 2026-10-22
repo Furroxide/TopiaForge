@@ -201,7 +201,14 @@ address serves now, and confirming trusts exactly that server there: any other s
 
 - The record lives in `multiplayer/known-hosts.json`. Each entry maps the SHA-256 of the normalized `host:port` to
   the server id, so the file never holds an address or a name.
-- It keeps the 256 most recent targets. An unreadable file is treated as empty: losing it only costs a prompt.
+- It keeps the 256 most recent targets.
+- **It fails closed.** A file that cannot be read just now, as when another program holds it, is never taken for an
+  empty record, which would let another server at a pinned address in unchecked and then save over every pin. Until
+  a read succeeds, a typed address is refused as `KnownHostsUnreadable`, naming the server it serves now; nothing is
+  recorded and nothing is written. The next check reads the file again, so trying again once it reads recovers. The
+  player may still trust that one server for the join, as for a changed identity; that is not recorded either.
+- **Damage is salvaged** (section 21): the entries that read are kept, and the damaged file is copied aside before
+  anything replaces it.
 
 ## 9. Fixtures
 
@@ -528,7 +535,7 @@ host is up, so any failure before that leaves the player's own session untouched
 
 | Phase | What happens |
 | --- | --- |
-| Resolving | The target becomes a path and a verified descriptor, off the main thread. A LAN target comes from the browser. A typed address is looked up, IPv4 first, and trusted on first use (section 8). |
+| Resolving | The target becomes a path and a verified descriptor, off the main thread. A LAN target comes from the browser. A typed address is looked up, IPv4 first, and trusted on first use (section 8), or refused as `KnownHostsUnreadable` while that record cannot be read. |
 | Checking | The game build, the protocol's major version, the path against the player's privacy choice, and the content must all agree. Packages of this game's own that cannot be read end the join as `ContentUnreadable`. |
 | AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
 | PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |
@@ -568,12 +575,24 @@ Each provider keeps its live-session files in its own data folder, read on the f
 | `multiplayer/known-hosts.json` | `topiaforge.known-hosts/1`: the hashes of typed addresses and the server each served (section 8), at most 256 |
 
 - **Damage.** A file that does not read as its schema yields an empty record, and the next save replaces it. Entries
-  that do not read are skipped and the rest kept. A ban or known-hosts file that cannot be read at all, locked or
-  failing, is treated the same way, so it never keeps the player out of live play.
+  that do not read are skipped and the rest kept. A ban file that cannot be read at all, locked or failing, is treated
+  the same way, so it never keeps the player out of live play.
+- **Known hosts that cannot be read** are never treated that way (section 8). The record stays unread: typed
+  addresses are refused with the reason, nothing is saved over the file, and each later check reads it again. Hosting,
+  LAN and service joins, and joins to a link that names its server never need the record, so they go on.
+- **Known hosts that are damaged** are salvaged, following the launcher's rule (#214) where it fits: what reads is
+  kept, and before anything replaces the file its bytes are copied to `multiplayer/known-hosts.damaged.json`. While that
+  copy cannot be written, the damaged file stays in place, to be salvaged again. A file of another schema, an entry
+  that does not read, more than 256 entries or bytes that are not canonical all count as damage. The game differs from
+  the launcher in three ways, because the provider sees its folder only through the SDK's file service, which names no
+  path and lists nothing: there is one copy, the newest damage replacing an older one, rather than three stamped copies;
+  a file the service reports missing is missing, since a folder that lists but cannot be searched cannot be told apart
+  through it; and leftovers of an interrupted write are the service's own, written to a temporary file and moved into
+  place.
 - **Order.** Each file's saves run one after another, so a slow save can never land after, and overwrite, a newer
   one. A ban starts saving at once.
-- **Closing.** Saves are never cancelled. Closing starts any save still due and waits up to a second for the saves to
-  land, so a ban made just before quitting survives.
+- **Closing.** Saves are never cancelled. Closing starts any save still due and waits up to two seconds for the saves
+  to land, so a ban made just before quitting survives. Known hosts never read are not saved.
 - **Merging.** Known hosts read from disk are merged in as older than those this process recorded, in their own order,
   so the cap drops the oldest first.
 

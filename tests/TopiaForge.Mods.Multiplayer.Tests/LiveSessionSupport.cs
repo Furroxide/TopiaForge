@@ -247,6 +247,9 @@ internal sealed class MemoryDataFiles : INetworkDataFiles
     /// <summary>Gets the files whose reads fail, while the rest read normally.</summary>
     internal HashSet<string> FailReadsOf { get; } = new();
 
+    /// <summary>Gets the files whose writes fail, as on a full disk, while the rest write normally.</summary>
+    internal HashSet<string> FailWritesOf { get; } = new();
+
     /// <summary>Gets or sets what each write waits for before it lands, so a test can make one slow.</summary>
     internal Func<string, Task>? BeforeWrite { get; set; }
 
@@ -283,8 +286,9 @@ internal sealed class MemoryDataFiles : INetworkDataFiles
             }
         }
 
-        // Like the SDK's mod files, a cancelled write is refused.
+        // Like the SDK's mod files, a cancelled write is refused, and a write that fails leaves the file as it was.
         cancellationToken.ThrowIfCancellationRequested();
+        if (FailWritesOf.Contains(relativePath)) throw new IOException("The disk is full.");
         lock (Contents) Contents[relativePath] = copy;
     }
 }

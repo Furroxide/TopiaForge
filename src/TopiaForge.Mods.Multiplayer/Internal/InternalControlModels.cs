@@ -104,8 +104,9 @@ namespace TopiaForge.Mods.Internal
         internal bool AllowDirect { get; set; }
 
         /// <summary>
-        /// Gets or sets the one server the player accepted after a typed host served a different server than last time
-        /// (<see cref="InternalLiveStatus.ChangedServerId"/>). Only that server is trusted there.
+        /// Gets or sets the one server the player accepted after a typed host served a different server than last time,
+        /// or one its record could not be read to check (<see cref="InternalLiveStatus.ChangedServerId"/>). Only that
+        /// server is trusted there.
         /// </summary>
         internal string? TrustedServerId
         {
@@ -311,7 +312,15 @@ namespace TopiaForge.Mods.Internal
         /// The hosted session already holds as many live invites as the service allows, eight; withdrawing one, or waiting
         /// for one to expire, makes room.
         /// </summary>
-        InviteLimit = 37
+        InviteLimit = 37,
+
+        /// <summary>
+        /// This game's record of the servers typed addresses served could not be read just now, as when another program
+        /// holds it, so the server a typed host serves could not be checked; nothing was recorded or written over.
+        /// Trying again once the record reads goes on, and so does trusting that one server
+        /// (<see cref="InternalLiveStatus.ChangedServerId"/>) for the join.
+        /// </summary>
+        KnownHostsUnreadable = 38
     }
 
     /// <summary>The reason code of a host's admission report.</summary>
@@ -397,8 +406,9 @@ namespace TopiaForge.Mods.Internal
         internal bool ContentProblemsFromHost { get; set; }
 
         /// <summary>
-        /// Gets, when a typed host now serves a different server, that server's id. Joining again with it as
-        /// <see cref="InternalJoinSettings.TrustedServerId"/> trusts exactly that server there.
+        /// Gets, when a typed host now serves a different server, or one that could not be checked because the record
+        /// could not be read, that server's id. Joining again with it as <see cref="InternalJoinSettings.TrustedServerId"/>
+        /// trusts exactly that server there.
         /// </summary>
         internal string? ChangedServerId { get; set; }
 
@@ -436,7 +446,7 @@ namespace TopiaForge.Mods.Internal
         /// <summary>Gets what this game would need to change to join; empty when it fits.</summary>
         IReadOnlyList<string> ContentProblems { get; }
 
-        /// <summary>Gets, when a typed host now serves a different server, that server's id.</summary>
+        /// <summary>Gets, when a typed host now serves a different server, or one that could not be checked, that server's id.</summary>
         string? ChangedServerId { get; }
     }
 
