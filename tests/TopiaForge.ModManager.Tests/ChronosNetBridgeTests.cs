@@ -68,6 +68,14 @@ namespace TopiaForge.ModManager.Tests
                         That(time.ExemptPlayer("run").Succeeded && backend.Calls == calls + (allowed ? 4 : 1),
                             label + ": exempting its own player changes no one's time, so it is never refused");
                         That(!allowed || time.Slow("bad", 2f).ErrorCode == ModErrorCode.InvalidArgument, label + ": bad arguments are still refused as such");
+                        if (allowed)
+                        {
+                            Throws<ArgumentNullException>(() => time.SetDriver("none", null!), label + ": a missing driver throws, as in single player");
+                        }
+                        else
+                        {
+                            Expect(time.SetDriver("none", null!), false, reason, label + " sets no driver: the refusal comes before the argument check");
+                        }
                     }
                 }
             }

@@ -22,6 +22,7 @@ namespace TopiaForge.ModRuntime.Tests
         private static void TestPauseAndTime(string root)
         {
             TestTimeAcrossRuntimes(root);
+            TestLeavingAsTheMenuCloses(root);
             TestTimeFramesCostNothing(root);
             Console.WriteLine("ModRuntime pause and time tests passed.");
         }
@@ -73,7 +74,7 @@ namespace TopiaForge.ModRuntime.Tests
                 // code, and every part of a joined player, its participant controller first.
                 foreach (var refused in new[] { host.Participant, host.World, host.Package })
                 {
-                    ExpectRefused(refused, "only the gamemode's server controller", "on the host");
+                    ExpectRefused(refused, "only the gamemode's server controller can freeze, slow or step it, with the time control it resolves from its session's Context", "on the host");
                 }
 
                 foreach (var refused in new[] { player.Participant, player.World, player.Server, player.Package })
@@ -186,6 +187,79 @@ namespace TopiaForge.ModRuntime.Tests
             foreach (var game in games)
             {
                 Assert(game.Logger.Errors.Count == 0 && game.Clock.Scale == 1f, "every game unloads cleanly at real time (" + string.Join(" | ", game.Logger.Errors) + ")");
+            }
+        }
+
+        /// <summary>
+        /// A pause menu that closes in the very frame its game leaves the session, after the session's time changed behind it:
+        /// the menu puts back the freeze it kept as it opened, which no longer holds anything. The player, and then the host,
+        /// each run at their own time from then on, as single player would after its own menu, never frozen with no menu open.
+        /// </summary>
+        private static void TestLeavingAsTheMenuCloses(string root)
+        {
+            var network = new LoopbackNetPair();
+            var clock = new WorldTestClock();
+            var host = new TimeGame(Path.Combine(root, "time-close-host"), network.Host, clock);
+            var player = new TimeGame(Path.Combine(root, "time-close-player"), network.AddPlayer("p1"), clock);
+            var games = new[] { host, player };
+            try
+            {
+                foreach (var game in games)
+                {
+                    game.Load();
+                    game.Attach();
+                }
+
+                Assert(host.Runtime.Multiplayer.OpenToMultiplayer(new InternalHostSettings("Time", 4)).Succeeded, "the host opens its game");
+                TimeFrames(games, clock, 2);
+                Assert(player.Runtime.Multiplayer.Join(new FakeJoinTarget(), new InternalJoinSettings()).Succeeded, "a player joins");
+                Assert(TimeRunUntil(games, clock, () => player.Runtime.Multiplayer.Realm == NetRealm.Client && player.Time.HasHostTime, 4),
+                    "the player is in the session and hears the host's time");
+
+                // The server controller freezes the shared world, and the player opens its menu over that freeze, which the menu
+                // keeps to put back. The server lets go while the menu is open, and the player's world runs on behind it.
+                var round = host.Server.Freeze("round").Value!;
+                Assert(TimeRunUntil(games, clock, () => player.Clock.Scale == 0f, 8), "the player's world freezes with the host's");
+                player.Clock.OpenPauseMenu();
+                TimeFrames(games, clock, 1);
+                round.Release();
+                Assert(TimeRunUntil(games, clock, () => player.Clock.Scale == 1f, 8), "the server lets go, and behind its menu the player's world runs on");
+
+                // The player leaves, and its menu closes in the frame the leave takes effect, putting back the freeze it kept.
+                Assert(player.Runtime.Multiplayer.Leave().Succeeded, "the player leaves");
+                player.Clock.ClosePauseMenu();
+                Assert(player.Clock.Scale == 0f, "its menu closes, putting back the freeze it kept as it opened");
+                TimeFrames(games, clock, 5);
+                Assert(player.Runtime.Multiplayer.Realm == NetRealm.Offline && player.Clock.Scale == 1f && !player.Clock.MenuOpen,
+                    "back in single player with no menu open, the player runs at its own time, not that stale freeze (" + player.Clock.Scale + ")");
+
+                // The host's own menu, the same way: opened over the server's freeze, which the server lets go of while it is open,
+                // then closed in the frame the host stops hosting.
+                round = host.Server.Freeze("round again").Value!;
+                TimeFrames(games, clock, 1);
+                host.Clock.OpenPauseMenu();
+                TimeFrames(games, clock, 1);
+                round.Release();
+                TimeFrames(games, clock, 1);
+                Assert(host.Clock.Scale == 1f, "behind the host's menu the world runs on once its server lets go");
+                Assert(host.Runtime.Multiplayer.Leave().Succeeded, "the host stops hosting");
+                host.Clock.ClosePauseMenu();
+                TimeFrames(games, clock, 5);
+                Assert(host.Runtime.Multiplayer.Realm == NetRealm.Offline && host.Clock.Scale == 1f,
+                    "and back in single player with no menu open, the host runs at its own time too (" + host.Clock.Scale + ")");
+                foreach (var game in games)
+                {
+                    Assert(game.Logger.Errors.Count == 0, "no game logged an error (" + string.Join(" | ", game.Logger.Errors) + ")");
+                }
+            }
+            finally
+            {
+                foreach (var game in games) game.Unload();
+            }
+
+            foreach (var game in games)
+            {
+                Assert(game.Logger.Errors.Count == 0 && game.Clock.Scale == 1f, "both games unload cleanly at real time (" + string.Join(" | ", game.Logger.Errors) + ")");
             }
         }
 

@@ -77,7 +77,16 @@ namespace TopiaForge.ModManager
                 // The session ended since the last frame. Behind a menu that is still open, single player freezes the world.
                 guarding = false;
                 handingBack = paused;
-                if (paused) clock.TimeScale = 0f;
+                if (paused)
+                {
+                    clock.TimeScale = 0f;
+                }
+                else if (wasPaused && clock.TimeScale != scale)
+                {
+                    // The menu closed as the session ended, putting back a scale it kept from the session: this game now
+                    // runs at its own, as it does when the menu closes after the session ended behind it.
+                    clock.TimeScale = scale;
+                }
             }
             else if (handingBack && !paused)
             {

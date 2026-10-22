@@ -140,6 +140,24 @@ namespace TopiaForge.ModManager.Tests
             guard.Run(clock, Slower);
             That(clock.Scale == 0.25f && !guard.IsArmed, "a host that leaves runs at its own slow once the menu closes");
 
+            // The menu closes in the very frame the session ends, after the session's time changed behind it: the menu puts back
+            // the freeze it kept as it opened, and the game runs at its own time, not that stale freeze.
+            guard = new MultiplayerPauseGuard();
+            clock = new FakeGameClock();
+            guard.RealmChanged(NetRealm.Client);
+            clock.Set(0f);
+            guard.Run(clock, Frozen);
+            clock.OpenPauseMenu();
+            guard.Run(clock, Frozen);
+            clock.Set(1f);
+            guard.Run(clock, InternalSessionTime.Realtime);
+            clock.ClosePauseMenu();
+            guard.RealmChanged(NetRealm.Offline);
+            That(clock.Scale == 0f, "the menu closes as the session ends, putting back the freeze it kept");
+            guard.Run(clock, InternalSessionTime.Realtime);
+            That(clock.Scale == 1f && !guard.IsArmed && !guard.IsHandingBack,
+                "and the guard hands the clock back at this game's own time at once (" + clock.Scale + ")");
+
             // Leaving with the menu closed leaves nothing to hand back.
             guard = new MultiplayerPauseGuard();
             clock = new FakeGameClock();

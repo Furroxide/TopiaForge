@@ -30,6 +30,11 @@ namespace TopiaForge.ModManager.Tests
                      !message.Contains("NotAuthoritative", StringComparison.Ordinal) && !message.Contains("GamemodeServer", StringComparison.Ordinal),
                     "a refusal is a sentence in the game's own words: " + message);
             }
+
+            // A server controller's own code that resolved Chronos outside its session's scope meets the host's refusal too, so
+            // it says where the server controller's time control comes from.
+            That(ChronosNetRules.HostRefusal.Contains("the time control it resolves from its session's Context", StringComparison.Ordinal),
+                "the host's refusal says where a server controller's time control comes from: " + ChronosNetRules.HostRefusal);
         }
 
         private static void TheNativePauseHoldsTheClockOnlyOffline()

@@ -46,6 +46,24 @@ internal static class SessionTimeChannelTests
             "a player that sends the session's time anyway is ended as a protocol violation");
         That(!host.TryReceive(out _) && host.GetStatistics().Received == 0, "and nothing it sent reaches the host's channel");
 
+        // Whatever stream the message claims, another connection's generation or another session's epoch, which an honest
+        // player's stale message could carry: a player never sends the session's time, so it is ended all the same.
+        foreach (var (name, epoch, offset) in new[] { ("stale", 0UL, 1UL), ("other", 7UL, 0UL) })
+        {
+            var peer = harness.AddRawPeer(name);
+            peer.Join(name);
+            harness.Flush();
+            var joined = SystemStreamTests.JoinedGeneration(peer);
+            var before = harness.Diagnostics.Count(EngineDiagnosticKind.ProtocolViolation);
+            That(harness.Host.IsConnectedParticipant(new ParticipantId(name)), "the " + name + " peer has joined");
+            peer.Send((frame, body) => SystemMessages.Write(frame, body, epoch, joined + offset, (byte)InternalSystemChannelKind.Time, time));
+            harness.Flush();
+            That(harness.Diagnostics.Count(EngineDiagnosticKind.ProtocolViolation) == before + 1 && !harness.Host.IsConnectedParticipant(new ParticipantId(name)),
+                "a player's time stamped with epoch " + epoch + " and generation " + (joined + offset) + " is a protocol violation too");
+        }
+
+        That(!host.TryReceive(out _) && host.GetStatistics().Received == 0, "and none of it reaches the host's channel");
+
         That(host.Send(new ArraySegment<byte>(time), InternalSystemTarget.Everyone).Value == 1, "the host goes on sending its time");
         harness.Flush();
         That(player.TryReceive(out _) && alpha.Engine.Snapshot.Id.Equals(harness.Host.Snapshot.Id), "to the player that remains, still in the session");

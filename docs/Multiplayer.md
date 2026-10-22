@@ -377,9 +377,11 @@ commands still waiting for the host complete as cancelled. The mod's own session
 the mod itself stops.
 
 Time is the shared world's too. Only the server controller on the host may freeze, slow or step it through
-[Chronos](Chronos.md#in-a-multiplayer-session); anywhere else, a participant controller and every part of a joined
-player included, those calls return `NotAuthoritative`, and joined players run at the host's time. In a session,
-Robotopia's pause menu shows the menu without pausing anyone's world.
+[Chronos](Modules.md#chronos), with the time control it resolves from its session's `Context`; anywhere else, a
+participant controller and every part of a joined player included, those calls return `NotAuthoritative`, and joined
+players run at the host's time. A lease that loses that authority as the game opens to other players or joins a session
+ends, and `GameplayPause` then suspends only the player's own controls. In a session, Robotopia's pause menu shows the
+menu without pausing anyone's world.
 
 ## What solo cannot tell you
 

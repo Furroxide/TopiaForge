@@ -1952,8 +1952,9 @@ before the next frame's clock advances.
   back: the guard sets zero once, so the world is frozen behind the menu, and leaves the clock alone while the menu
   stays open. Once it closes, whatever scale the menu kept, the guard sets this game's own time if the clock differs,
   then disarms: real time, or what Chronos derives from what this game still holds, such as a host's gamemode slow. A
-  game that leaves with its menu closed writes nothing and disarms at once. Going online again before the menu closes
-  ends the hand-back, and the online rules apply.
+  menu that closes in the very frame the game leaves is handed back the same way, since what it puts back is a scale it
+  kept from the session. A game that leaves with its menu already closed writes nothing and disarms at once. Going
+  online again before the menu closes ends the hand-back, and the online rules apply.
 - **Cost.** Online, at most two reads of the clock a frame, and a write only where the menu wrote. Nothing allocates.
 - **The menu's other effects**, such as its sound and input, are the game's and unchanged: the guard keeps only the
   clock.
@@ -1972,7 +1973,7 @@ Chronos (`TimeControlService`) reaches the runtime through its package context's
 
   | Caller | Text |
   | --- | --- |
-  | A host's participant controller, package code or world scope | "Time is shared in a multiplayer session, so only the gamemode's server controller can freeze, slow or step it; ask it to, for example through a command." |
+  | A host's participant controller, package code or world scope | "Time is shared in a multiplayer session, so only the gamemode's server controller can freeze, slow or step it, with the time control it resolves from its session's Context; ask it to, for example through a command." |
   | Anything on a joined player | "This game follows the host's time in a multiplayer session, so only the host's gamemode server controller can freeze, slow or step it; ask it to through a command." |
   | A client-local mod, online | "A client-local mod cannot freeze, slow or step time in a multiplayer session, which every player shares." |
 
@@ -2009,8 +2010,8 @@ Chronos (`TimeControlService`) reaches the runtime through its package context's
     a player and offline sending and allocating nothing.
   - `MultiplayerPauseGuardTests`: offline nothing touched; online, on a host and on a joined player, the menu's zero put
     back, and a frozen session and a step's frame left alone; a stale restore corrected; leaving behind the menu, as a
-    player and as a host keeping its own slow, with the menu closed, hosting again before it closes, and without a
-    clock; and the composition root running it.
+    player and as a host keeping its own slow, with the menu closing in the frame the game leaves, with the menu
+    closed, hosting again before it closes, and without a clock; and the composition root running it.
   - `ChronosNetRulesTests` and `ChronosNetBridgeTests`: the refusals' words; the pause and restore rules equal to single
     player's offline at every combination, and never yielding online; who may change time in every realm, network class
     and execution context, a refusal never reaching the service; what each change of realm ends, with the leases it
@@ -2026,11 +2027,14 @@ Chronos (`TimeControlService`) reaches the runtime through its package context's
   corrected; a late joiner at the host's time from its first frame in the session, from the one message each player got
   as it joined; a player leaving behind its menu, frozen until it closes, then at real time, its participant allowed to
   freeze time again, and the menu freezing its world with nothing of multiplayer touching the clock; and the host
-  leaving behind its menu, frozen, then at its gamemode's own slow. Every game ends without an error, at real time. With
-  Chronos loaded, 10,000 frames allocate zero bytes offline, solo, online at rest, and holding a slow behind both menus.
+  leaving behind its menu, frozen, then at its gamemode's own slow. Every game ends without an error, at real time. A
+  player's menu, then the host's, that opened over the server's freeze, saw it end, and closes in the frame its game
+  leaves, putting the freeze back: each game runs at its own time after, never frozen with no menu open. With Chronos
+  loaded, 10,000 frames allocate zero bytes offline, solo, online at rest, and holding a slow behind both menus.
 - **Multiplayer harness** (`SessionTimeChannelTests`): over the engine, the host's time reaching its player; a joined
-  player's engine refusing to send it; and a raw peer that sends it anyway ended as a protocol violation, nothing
-  reaching the host's channel, while the remaining player still hears the host.
+  player's engine refusing to send it; and a raw peer that sends it anyway ended as a protocol violation, whatever
+  epoch or generation it stamps the message with, nothing reaching the host's channel, while the remaining player still
+  hears the host.
 - **In the game.** Robotopia's own pause menu and Unity's clock are checked there.
 
 ### Choices

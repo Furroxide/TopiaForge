@@ -103,6 +103,8 @@ namespace TopiaForge.ModManager.Tests
                  !SessionTimeWire.TryRead(Scale(good, 1f, InternalTimeMode.Slowed), out _), "and so is a mode that disagrees with its scale");
             var quietNaN = BitConverter.Int32BitsToSingle(0x7FC00001);
             That(!SessionTimeWire.TryRead(Scale(good, quietNaN, InternalTimeMode.Slowed), out _), "whatever payload a NaN carries");
+            That(SessionTimeWire.TryRead(Scale(good, -0f, InternalTimeMode.Paused), out var negativeZero) && BitConverter.SingleToInt32Bits(negativeZero.Scale) == 0 &&
+                 negativeZero.Equals(new InternalSessionTime(0f, InternalTimeMode.Paused)), "a host's negative zero reads as the one frozen time");
         }
 
         private static byte[] With(byte[] source, int index, byte value)

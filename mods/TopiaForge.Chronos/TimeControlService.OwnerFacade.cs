@@ -73,12 +73,14 @@ namespace TopiaForge.Chronos
             public OperationResult<ITimeLease> SetDriver(string usage, ITimeDriver driver)
             {
                 if (lifetime.IsStopping) return Stopping<ITimeLease>();
+                var refused = NotAuthoritative<ITimeLease>();
+                if (refused != null) return refused;
                 if (driver == null)
                 {
                     throw new ArgumentNullException(nameof(driver));
                 }
 
-                return NotAuthoritative<ITimeLease>() ?? Track(service.SetDriver(consumerId, usage, driver), followRealm: true);
+                return Track(service.SetDriver(consumerId, usage, driver), followRealm: true);
             }
 
             public OperationResult<bool> Step(float seconds)

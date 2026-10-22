@@ -13,7 +13,7 @@ namespace TopiaForge.Chronos
     internal static class ChronosNetRules
     {
         internal const string HostRefusal =
-            "Time is shared in a multiplayer session, so only the gamemode's server controller can freeze, slow or step it; ask it to, for example through a command.";
+            "Time is shared in a multiplayer session, so only the gamemode's server controller can freeze, slow or step it, with the time control it resolves from its session's Context; ask it to, for example through a command.";
 
         internal const string ClientRefusal =
             "This game follows the host's time in a multiplayer session, so only the host's gamemode server controller can freeze, slow or step it; ask it to through a command.";
