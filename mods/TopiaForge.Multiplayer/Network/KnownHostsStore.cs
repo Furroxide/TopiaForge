@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,7 +31,9 @@ namespace TopiaForge.Multiplayer.Network
     /// empty record and never written over. Until a read succeeds, every check is <see cref="KnownHostTrust.Unchecked"/>,
     /// nothing is recorded and nothing is saved; the next check reads the file again, so trying again once it reads
     /// recovers. A server the player trusts for one join is still let through, as a changed server is, and is not
-    /// recorded either.
+    /// recorded either. That trust was given without the record, so it holds only while the record cannot be read: once
+    /// it reads, an address that served another server is a changed identity again, for the player to decide on in those
+    /// words, and a server trusted then is recorded as any changed server the player trusts is.
     /// </para>
     /// <para>
     /// A file that reads but is damaged is salvaged as before: the entries that read are kept, and the rest are dropped.
@@ -44,8 +47,17 @@ namespace TopiaForge.Multiplayer.Network
     {
         internal const string DamagedPath = "multiplayer/known-hosts.damaged.json";
 
+        /// <summary>How many servers reported unchecked are remembered, the oldest forgotten first.</summary>
+        private const int MaximumUncheckedServers = 64;
+
         private readonly INetworkDataFiles files;
         private readonly object gate = new object();
+
+        /// <summary>
+        /// The servers checks reported <see cref="KnownHostTrust.Unchecked"/> while the record could not be read, as a typed
+        /// target's key and the server id, oldest first. A trust the player gave for one of them was given without the record.
+        /// </summary>
+        private readonly List<string> uncheckedServers = new List<string>();
         private Task<bool>? reading;
         private bool read;
         private bool dirty;
@@ -86,22 +98,34 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>
         /// Checks that a typed <paramref name="host"/> and <paramref name="port"/> serve <paramref name="serverId"/>, and
         /// records a first server there. <paramref name="trustedServerId"/> is the one server the player trusted for this
-        /// join, if any.
+        /// join, if any; a trust given after the server was reported unchecked counts only while the record cannot be read.
         /// </summary>
         internal async Task<KnownHostTrust> TrustAsync(string host, int port, string serverId, string? trustedServerId, long unixSeconds)
         {
             var trusted = string.Equals(serverId, trustedServerId, StringComparison.Ordinal);
+            var reported = KnownHosts.TargetKey(host, port) + ":" + serverId;
             if (!await EnsureReadAsync().ConfigureAwait(false))
             {
                 // Nothing can be checked, and nothing is recorded: only the player's own trust in this very server goes on.
-                return trusted ? KnownHostTrust.Trusted : KnownHostTrust.Unchecked;
+                if (trusted) return KnownHostTrust.Trusted;
+                lock (gate)
+                {
+                    if (!uncheckedServers.Contains(reported)) uncheckedServers.Add(reported);
+                    if (uncheckedServers.Count > MaximumUncheckedServers) uncheckedServers.RemoveAt(0);
+                }
+
+                return KnownHostTrust.Unchecked;
             }
 
+            // A trust given for a server that could not be checked was given without the record. Now that it reads, an
+            // address that served another server asks again, in the changed server's words, before anything is recorded.
+            bool trustedUnchecked;
+            lock (gate) trustedUnchecked = uncheckedServers.Remove(reported) && trusted;
             lock (Record)
             {
                 var check = Record.Check(host, port, serverId);
                 if (check == KnownHostCheck.Match) return KnownHostTrust.Trusted;
-                if (check == KnownHostCheck.Mismatch && !trusted) return KnownHostTrust.Changed;
+                if (check == KnownHostCheck.Mismatch && (!trusted || trustedUnchecked)) return KnownHostTrust.Changed;
                 Record.Remember(host, port, serverId, unixSeconds);
             }
 

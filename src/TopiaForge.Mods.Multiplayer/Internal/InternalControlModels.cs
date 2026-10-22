@@ -318,7 +318,8 @@ namespace TopiaForge.Mods.Internal
         /// This game's record of the servers typed addresses served could not be read just now, as when another program
         /// holds it, so the server a typed host serves could not be checked; nothing was recorded or written over.
         /// Trying again once the record reads goes on, and so does trusting that one server
-        /// (<see cref="InternalLiveStatus.ChangedServerId"/>) for the join.
+        /// (<see cref="InternalLiveStatus.ChangedServerId"/>) for the join while the record still cannot be read; once
+        /// it reads, a typed host that served another server ends as <see cref="HostIdentityChanged"/> again.
         /// </summary>
         KnownHostsUnreadable = 38
     }

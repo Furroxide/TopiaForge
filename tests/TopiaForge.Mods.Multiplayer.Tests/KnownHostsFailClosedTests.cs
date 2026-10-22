@@ -35,8 +35,8 @@ internal static class KnownHostsFailClosedTests
         That(impostor.Failure == LiveFailure.KnownHostsUnreadable && impostor.ServedServerId == second.Descriptor.ServerId &&
              impostor.Detail.Contains("could not be read", StringComparison.Ordinal),
             "while the record cannot be read, another server at a pinned address is refused with the reason (" + impostor.Failure + ")");
-        That((int)LiveFailure.KnownHostsUnreadable == 38 && ((InternalLiveFailure)38).ToString() == nameof(LiveFailure.KnownHostsUnreadable),
-            "and the internal control reports it under the same code");
+        That((int)LiveFailure.KnownHostsUnreadable == 38 && SameCodesBothWays(),
+            "and the internal control reports it under the same code, as it does every failure");
         serving = first;
         That(Resolve(resolver, Pinned).Failure == LiveFailure.KnownHostsUnreadable, "so is the server the record pins: nothing can be checked");
         That(Resolve(resolver, Fresh).Failure == LiveFailure.KnownHostsUnreadable, "and a first server at an address the record may not hold");
@@ -64,6 +64,42 @@ internal static class KnownHostsFailClosedTests
         That(saved.Count == 2 && saved.Check(Pinned, 27250, first.Descriptor.ServerId) == KnownHostCheck.Match &&
              saved.Check(Fresh, 27250, first.Descriptor.ServerId) == KnownHostCheck.Match && !files.Contents.ContainsKey(KnownHostsStore.DamagedPath),
             "and the next save keeps the file's pin beside the new one");
+    }
+
+    internal static void ATrustGivenUncheckedEndsOnceTheRecordReads()
+    {
+        var (first, second) = Servers();
+        var files = new MemoryDataFiles();
+        var original = Record((Pinned, first.Descriptor.ServerId));
+        files.Contents[KnownHosts.FilePath] = original;
+        files.FailReadsOf.Add(KnownHosts.FilePath);
+        var store = new KnownHostsStore(files);
+        var resolver = Resolver(store, () => second);
+
+        // Another server answers at the pinned address, and at a new one, while the record cannot be read: the player is
+        // told only that they could not be checked, and may trust them for this join.
+        That(Resolve(resolver, Pinned).Failure == LiveFailure.KnownHostsUnreadable && Resolve(resolver, Fresh).Failure == LiveFailure.KnownHostsUnreadable,
+            "servers that cannot be checked are refused with the reason");
+
+        // The other program lets go before the trusted join resolves. The record says the address served another server,
+        // which the player was never told, so the join stops as a changed identity, and nothing is recorded or saved.
+        files.FailReadsOf.Clear();
+        var join = Resolve(resolver, Pinned, trusted: second.Descriptor.ServerId);
+        That(join.Failure == LiveFailure.HostIdentityChanged && join.ServedServerId == second.Descriptor.ServerId,
+            "a trust given while the record could not be read ends once it reads: the changed server is asked about again (" + join.Failure + ")");
+        That(ReferenceEquals(store.SaveAfter(Task.CompletedTask), Task.CompletedTask) && Holds(files, KnownHosts.FilePath, original),
+            "and nothing is recorded or saved");
+
+        // Trusted once told it changed, the server joins and is pinned there, as a changed server the player trusts always
+        // was. At the address the record does not hold, the server is simply the first one there.
+        That(Resolve(resolver, Pinned, trusted: second.Descriptor.ServerId).Failure == LiveFailure.None &&
+             Resolve(resolver, Fresh, trusted: second.Descriptor.ServerId).Failure == LiveFailure.None,
+            "trusting the changed server joins it, and the new address takes its first server");
+        store.SaveAfter(Task.CompletedTask).GetAwaiter().GetResult();
+        var saved = KnownHosts.Parse(files.Contents[KnownHosts.FilePath]);
+        That(saved.Count == 2 && saved.Check(Pinned, 27250, second.Descriptor.ServerId) == KnownHostCheck.Match &&
+             saved.Check(Fresh, 27250, second.Descriptor.ServerId) == KnownHostCheck.Match,
+            "and both are recorded");
     }
 
     internal static void ClosingWritesNothingOverAnUnreadableRecord()
@@ -172,6 +208,16 @@ internal static class KnownHostsFailClosedTests
         That(!intactFiles.Contents.ContainsKey(KnownHostsStore.DamagedPath) && KnownHosts.Parse(intactFiles.Contents[KnownHosts.FilePath]).Count == 2,
             "and saved without a copy");
     }
+
+    /// <summary>
+    /// Whether the provider and the internal control give every failure the same code: each value of either enum is the
+    /// other's value of the same name, as the provider maps it, and neither enum gives one code two names.
+    /// </summary>
+    private static bool SameCodesBothWays() =>
+        Enum.GetValues<LiveFailure>().Distinct().Count() == Enum.GetNames<LiveFailure>().Length &&
+        Enum.GetValues<InternalLiveFailure>().Distinct().Count() == Enum.GetNames<InternalLiveFailure>().Length &&
+        Enum.GetValues<LiveFailure>().All(failure => provider::TopiaForge.Multiplayer.InternalControl.ToFailure(failure).ToString() == failure.ToString()) &&
+        Enum.GetValues<InternalLiveFailure>().All(failure => ((LiveFailure)(int)failure).ToString() == failure.ToString());
 
     /// <summary>The two servers of the shared descriptor fixtures, signed: one pinned at an address, one that may take its place.</summary>
     private static (SignedServerDescriptor First, SignedServerDescriptor Second) Servers()

@@ -280,7 +280,8 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>
         /// The record of the servers typed addresses served could not be read just now, as when another program holds it,
         /// so the server a typed address serves could not be checked; nothing was recorded. Trying again once the record
-        /// reads, or trusting that one server for the join, goes on.
+        /// reads goes on, and so does trusting that one server for the join while the record still cannot be read; once it
+        /// reads, an address that served another server is <see cref="HostIdentityChanged"/> again.
         /// </summary>
         KnownHostsUnreadable = 38
     }

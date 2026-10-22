@@ -206,7 +206,9 @@ address serves now, and confirming trusts exactly that server there: any other s
   empty record, which would let another server at a pinned address in unchecked and then save over every pin. Until
   a read succeeds, a typed address is refused as `KnownHostsUnreadable`, naming the server it serves now; nothing is
   recorded and nothing is written. The next check reads the file again, so trying again once it reads recovers. The
-  player may still trust that one server for the join, as for a changed identity; that is not recorded either.
+  player may still trust that one server for the join, as for a changed identity; that is not recorded either. That
+  trust was given without the record, so it holds only while the record cannot be read: once it reads, another
+  server at a pinned address is a changed identity again, asked in those words, before anything is recorded.
 - **Damage is salvaged** (section 21): the entries that read are kept, and the damaged file is copied aside before
   anything replaces it.
 
