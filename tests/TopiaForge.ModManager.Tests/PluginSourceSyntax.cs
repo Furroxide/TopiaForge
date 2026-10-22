@@ -80,6 +80,14 @@ namespace TopiaForge.ModManager.Tests
                 call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText == "Quit"
                 && LastName(access.Expression) == "Application");
 
+        /// <summary>
+        /// Whether the code asks Unity to quit: <c>Application.Quit</c> itself, or a call to one of the plugin's own methods
+        /// that calls it.
+        /// </summary>
+        internal bool AsksToQuit(SyntaxNode code) =>
+            CallsApplicationQuit(code) || code.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>().Any(call =>
+                methods.Any(method => IsOwn(call.Expression, method.Identifier.ValueText) && CallsApplicationQuit(method)));
+
         /// <summary>Whether the statement is <c>Application.wantsToQuit -= handler;</c>, the plugin's own handler.</summary>
         internal static bool Unsubscribes(StatementSyntax statement, string handler) =>
             statement is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }

@@ -192,8 +192,10 @@ namespace TopiaForge.ModManager.Tests
 
         // The model's plugin asks for the held quit every frame. The real one asks in Update, and the teardown the quit
         // starts clears ready, so Update must ask before anything reads ready: behind the ready guard the request never
-        // comes, and the game stays open with every mod unloaded. The source is read as syntax, so a change of layout
-        // cannot fool the check, and a guard written another way still counts as one.
+        // comes, and the game stays open with every mod unloaded. Nor may anything on the way to the request leave Update,
+        // whatever it reads, a helper or a flag of its own included, unless it asks Unity to quit itself, since that request
+        // starts the same held quit. The source is read as syntax, so a change of layout cannot fool the check, and a guard
+        // written another way still counts as one.
         private static void UpdateAsksForTheHeldQuitAheadOfItsReadyGuard()
         {
             var plugin = PluginSourceSyntax.Read();
@@ -208,6 +210,12 @@ namespace TopiaForge.ModManager.Tests
             Check(!update.Take(at + 1).Any(statement => PluginSourceSyntax.Mentions(statement, "ready")),
                 "Update asks for the held quit before anything reads ready: the teardown clears ready, so a request behind the"
                 + " ready guard never comes and the game stays open with every mod unloaded.");
+            var request = ((IfStatementSyntax)requests[0]).Statement;
+            var body = request is BlockSyntax block ? block.Statements.ToArray() : new[] { request };
+            Check(update.Take(at).Concat(body.TakeWhile(statement => !PluginSourceSyntax.CallsApplicationQuit(statement)))
+                    .All(statement => !PluginSourceSyntax.CanLeave(statement) || plugin.AsksToQuit(statement)),
+                "Nothing on Update's way to its request for the held quit leaves Update unless it asks Unity to quit itself: after"
+                + " the teardown, an early return there keeps the request from coming, and the game stays open with every mod unloaded.");
             Check(update.Skip(at + 1).Any(statement => statement is IfStatementSyntax guard
                     && PluginSourceSyntax.Mentions(guard.Condition, "ready") && PluginSourceSyntax.CanLeave(guard.Statement)),
                 "Update keeps its ready guard after the request.");
