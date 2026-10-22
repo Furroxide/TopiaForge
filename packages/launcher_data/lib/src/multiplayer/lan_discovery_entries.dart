@@ -54,6 +54,19 @@ final class _Query {
 int _sessionsAt(Iterable<_Entry> entries, InternetAddress address) =>
     entries.where((entry) => _sameAddress(entry.address, address)).length;
 
+/// The IPv4 address an IPv4-mapped IPv6 address stands for, so both
+/// spellings of one host compare and classify alike.
+InternetAddress _unmapped(InternetAddress address) {
+  final raw = address.rawAddress;
+  if (raw.length != 16 || raw[10] != 0xFF || raw[11] != 0xFF) {
+    return address;
+  }
+  for (var index = 0; index < 10; index++) {
+    if (raw[index] != 0) return address;
+  }
+  return InternetAddress.fromRawAddress(Uint8List.sublistView(raw, 12));
+}
+
 bool _sameAddress(InternetAddress left, InternetAddress right) {
   final a = left.rawAddress;
   final b = right.rawAddress;
@@ -128,5 +141,45 @@ final class _QueryBudget {
   void clear() {
     _recent.clear();
     _byHost.clear();
+  }
+}
+
+/// The listed sessions, as a snapshot: what each entry's info says, by
+/// server id, with the senders beyond the local network only counted.
+extension _Listing on LanDiscoveryClient {
+  LanBrowseSnapshot _listing() {
+    final listings = <ServerListing>[];
+    final incompatible = <String>[];
+    var pending = 0;
+    var beyond = 0;
+    final ids = _entries.keys.toList()..sort();
+    for (final id in ids) {
+      final entry = _entries[id]!;
+      final info = entry.info;
+      if (!entry.local) {
+        beyond++;
+      } else if (entry.incompatible) {
+        incompatible.add(id);
+      } else if (info == null) {
+        pending++;
+      } else {
+        listings.add(
+          ServerListing.fromSessionInfo(
+            info,
+            pingMilliseconds: (entry.roundTripMicros ~/ 1000).clamp(
+              0,
+              ServerListing.maximumPingMilliseconds,
+            ),
+          ),
+        );
+      }
+    }
+    return LanBrowseSnapshot(
+      status: LanDiscoveryStatus.listening,
+      listings: listings,
+      pending: pending,
+      incompatibleServerIds: incompatible,
+      beyondLocalNetwork: beyond,
+    );
   }
 }

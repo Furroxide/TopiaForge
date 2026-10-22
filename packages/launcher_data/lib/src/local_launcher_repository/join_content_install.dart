@@ -4,11 +4,17 @@ part of '../local_launcher_repository.dart';
 final class _PendingJoinPackage {
   _PendingJoinPackage(
     this.item, {
+    required this.manifest,
     required this.hidden,
     required this.addRecord,
   });
 
   final JoinPlanPackage item;
+
+  /// What it installs as: the trusted manifest, or, for a package only the
+  /// host serves, its downloaded archive's own, which names the mod and
+  /// version the descriptor claims.
+  final ModManifest manifest;
 
   /// Whether the player's own profiles never see it: the mod was already
   /// the player's ([ServerContentEntry.hidden]).
@@ -17,8 +23,6 @@ final class _PendingJoinPackage {
   /// Whether the mod has neither a manager record nor an installed version,
   /// so the join records it, disabled, before its folder appears.
   final bool addRecord;
-
-  ModManifest get manifest => item.manifest!;
 }
 
 /// One package staged in a join's transaction folder.
@@ -55,12 +59,18 @@ extension _JoinContentInstall on LocalLauncherRepository {
   }) async {
     final plan = state.plan;
     if (state.stage != JoinStage.installing || plan == null) return null;
+    // No source the player chose vouches for what the host served, so it
+    // installs only while developer mode and the acknowledgement stand.
     if (plan.hasUnverifiedPackages) {
-      return _nothingInstalled(
-        'Only the host has some of these mods, and this launcher cannot '
-        'install mods from a host yet. Ask the host to publish them to a mod '
-        'source you use, then join again.',
+      final refusal = await _hostServedRefusal(
+        state,
+        [
+          for (final item in plan.packages)
+            if (item.disposition == JoinPackageDisposition.downloadFromHost)
+              _joinModName(item),
+        ].join(', '),
       );
+      if (refusal != null) return _nothingInstalled(refusal);
     }
     final LaunchStagingLease? lease;
     try {
@@ -158,6 +168,9 @@ final class _JoinInstall {
   final bool _closeOwnedGame;
   final _pending = <_PendingJoinPackage>[];
   final _staged = <_StagedJoinPackage>[];
+
+  /// The manifests of the host-served archives, read once, by SHA-256.
+  final _hostManifests = <String, ModManifest>{};
 
   /// The ids whose manager record this join added.
   final _addedRecords = <String>[];
@@ -273,7 +286,11 @@ final class _JoinInstall {
       source: _packageReceiptSource(
         reference: item.resolution.downloadUrl,
         sourceId: item.resolution.sourceId,
-        sourceKind: 'registry',
+        // A host-served archive installs from the verified package cache;
+        // the host's address is never recorded.
+        sourceKind: item.disposition == JoinPackageDisposition.downloadFromHost
+            ? 'cache'
+            : 'registry',
       ),
       transactionParent: root,
     );

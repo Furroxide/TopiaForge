@@ -223,4 +223,110 @@ void main() {
     expect(failure.code, JoinFailureCode.directNotAllowed);
     expect(failure.stage, JoinStage.connecting);
   });
+
+  group('the acknowledgement', () {
+    final lanListing = JoinListingTarget(
+      serverId: hostAServerId,
+      source: ServerListingSource.lan,
+    );
+
+    JoinSessionState awaiting() {
+      final state = checking(startJoin(lanListing));
+      return JoinSession.reduce(state, JoinPlanReady(planFor(state)));
+    }
+
+    test('stays with the join for the data layer to check again', () {
+      final waiting = awaiting();
+      expect(waiting.stage, JoinStage.awaitingConsent);
+      expect(waiting.hostServedAcknowledged, isFalse);
+      // Without the box ticked the join waits, and nothing downloads.
+      final unticked = JoinSession.reduce(waiting, const JoinConsentGiven());
+      expect(unticked, same(waiting));
+      expect(unticked.downloadRequest, isNull);
+      final downloading = JoinSession.reduce(
+        waiting,
+        const JoinConsentGiven(hostServedAcknowledged: true),
+      );
+      expect(downloading.stage, JoinStage.downloading);
+      expect(downloading.hostServedAcknowledged, isTrue);
+      final installing = JoinSession.reduce(
+        downloading,
+        const JoinDownloadsCompleted(),
+      );
+      expect(installing.stage, JoinStage.installing);
+      expect(installing.hostServedAcknowledged, isTrue);
+    });
+
+    test('is not recorded for a plan the host serves nothing in', () {
+      final state = checking(startJoin(lanListing));
+      final plan = const JoinPlanner().plan(
+        server: server,
+        resolutions: {
+          testSha('example.local'): availableOf(testManifest('example.local')),
+          testSha('example.sandbox'): availableOf(sandbox),
+        },
+        environment: environment,
+        mayContactHost: state.mayContactHost,
+      );
+      expect(plan.hasUnverifiedPackages, isFalse);
+      final downloading = [
+        JoinPlanReady(plan),
+        const JoinConsentGiven(hostServedAcknowledged: true),
+      ].fold(state, JoinSession.reduce);
+      expect(downloading.stage, JoinStage.downloading);
+      expect(downloading.hostServedAcknowledged, isFalse);
+    });
+
+    test('survives a re-plan that keeps the consent', () {
+      final connecting = [
+        const JoinConsentGiven(hostServedAcknowledged: true),
+        const JoinDownloadsCompleted(),
+        const JoinInstallCompleted(),
+        const JoinProfilePrepared(),
+        const JoinGameStarted(),
+      ].fold(awaiting(), JoinSession.reduce);
+      expect(connecting.stage, JoinStage.connecting);
+      final refetching = JoinSession.reduce(
+        connecting,
+        JoinFailed(JoinFailureCode.admissionChanged),
+      );
+      expect(refetching.stage, JoinStage.fetchingDescriptor);
+      final verified = JoinSession.reduce(
+        refetching,
+        JoinDescriptorVerified(server),
+      );
+      final replanned = JoinSession.reduce(
+        verified,
+        JoinPlanReady(planFor(verified)),
+      );
+      expect(replanned.stage, JoinStage.downloading);
+      expect(replanned.hostServedAcknowledged, isTrue);
+    });
+  });
+
+  test('a host gone at download time ends the join as unreachable', () {
+    final state = checking(
+      startJoin(
+        JoinListingTarget(
+          serverId: hostAServerId,
+          source: ServerListingSource.lan,
+        ),
+      ),
+    );
+    final downloading = [
+      JoinPlanReady(planFor(state)),
+      const JoinConsentGiven(hostServedAcknowledged: true),
+    ].fold(state, JoinSession.reduce);
+    final ended = JoinSession.reduce(
+      downloading,
+      JoinFailed(
+        JoinFailureCode.unreachable,
+        detail: 'The host is no longer heard on your local network.',
+      ),
+    );
+    expect(ended.stage, JoinStage.ended);
+    final failure = ended.outcome!.failure!;
+    expect(failure.code, JoinFailureCode.unreachable);
+    expect(failure.stage, JoinStage.downloading);
+  });
 }

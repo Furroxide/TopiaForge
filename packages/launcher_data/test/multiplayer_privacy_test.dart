@@ -8,11 +8,13 @@ import 'package:launcher_data/src/multiplayer/control_plane_pacing.dart';
 import 'package:launcher_data/src/multiplayer/control_plane_requests.dart';
 import 'package:launcher_data/src/multiplayer/descriptor_client.dart';
 import 'package:launcher_data/src/multiplayer/descriptor_response.dart';
+import 'package:launcher_data/src/multiplayer/host_package_client.dart';
 import 'package:launcher_data/src/multiplayer/join_descriptor_resolver.dart';
 import 'package:launcher_data/src/multiplayer/lan_datagrams.dart';
 import 'package:launcher_data/src/multiplayer/lan_discovery_client.dart';
 import 'package:launcher_data/src/multiplayer/lan_sockets.dart';
 import 'package:launcher_data/src/multiplayer/multiplayer_store_salvage.dart';
+import 'package:launcher_data/src/multiplayer/package_response.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -29,6 +31,7 @@ final _covered = <Object>[
   DescriptorClient,
   Tfd1ResponseReader,
   Ed25519DescriptorSignatureVerifier,
+  HostPackageClient,
   JoinDescriptorResolver,
   LanInfoReply,
   LanDiscoveryClient,
@@ -38,6 +41,7 @@ final _covered = <Object>[
   MultiplayerStore,
   salvageMultiplayerSettings,
   MultiplayerNetworkReport,
+  Tfd1PackageReader,
 ];
 
 const _prefix = 'package:launcher_data/src/multiplayer/';

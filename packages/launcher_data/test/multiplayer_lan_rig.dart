@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:launcher_data/src/multiplayer/descriptor_client.dart';
+import 'package:launcher_data/src/multiplayer/host_package_client.dart';
 import 'package:launcher_data/src/multiplayer/lan_datagrams.dart';
 import 'package:launcher_data/src/multiplayer/lan_discovery_client.dart';
 import 'package:launcher_domain/launcher_domain.dart';
@@ -11,13 +12,14 @@ import 'multiplayer_network_support.dart';
 
 /// A LAN client over fake sockets, with time and timers in the test's hands.
 final class LanRig {
-  LanRig({DescriptorClient? descriptors}) {
+  LanRig({DescriptorClient? descriptors, HostPackageClient? packages}) {
     client = LanDiscoveryClient(
       listenAddress: InternetAddress.loopbackIPv4,
       port: 0,
       queryAddress: InternetAddress.loopbackIPv4,
       bind: binder.call,
       descriptors: descriptors,
+      packages: packages,
       random: Random(7),
       clock: clock.call,
       ticker: ticker.call,

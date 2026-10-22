@@ -41,7 +41,8 @@ final class JoinConsentGiven extends JoinEvent {
   });
 
   /// Whether the player ticked the developer-mode host-served box. A plan
-  /// with host-served packages needs it.
+  /// with host-served packages needs it, and the join keeps it as
+  /// [JoinSessionState.hostServedAcknowledged].
   final bool hostServedAcknowledged;
 
   /// Whether the consent told the player that joining closes a game this

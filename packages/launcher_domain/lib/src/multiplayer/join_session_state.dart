@@ -38,6 +38,7 @@ final class JoinSessionState {
     this.descriptor,
     this.plan,
     this.consentKey,
+    this.hostServedAcknowledged = false,
     this.closeOwnedGameAcknowledged = false,
     this.progress,
     this.installProgress,
@@ -67,6 +68,13 @@ final class JoinSessionState {
 
   /// The [JoinPlan.consentKey] the player consented to.
   final String? consentKey;
+
+  /// Whether the plan the player consented to has packages only the host
+  /// serves, and the player ticked the developer-mode box for them
+  /// ([JoinConsentGiven.hostServedAcknowledged]). A re-plan that keeps the
+  /// consent keeps it. The data layer checks it again before it downloads
+  /// or installs anything the host serves.
+  final bool hostServedAcknowledged;
 
   /// Whether the player's consent covered closing a game this launcher
   /// started ([JoinConsentGiven.closeOwnedGameAcknowledged]). Only then does
@@ -135,6 +143,7 @@ final class JoinSessionState {
     Object? descriptor = _keep,
     Object? plan = _keep,
     Object? consentKey = _keep,
+    bool? hostServedAcknowledged,
     bool? closeOwnedGameAcknowledged,
     Object? progress = _keep,
     Object? installProgress = _keep,
@@ -153,6 +162,8 @@ final class JoinSessionState {
     consentKey: identical(consentKey, _keep)
         ? this.consentKey
         : consentKey as String?,
+    hostServedAcknowledged:
+        hostServedAcknowledged ?? this.hostServedAcknowledged,
     closeOwnedGameAcknowledged:
         closeOwnedGameAcknowledged ?? this.closeOwnedGameAcknowledged,
     progress: identical(progress, _keep)

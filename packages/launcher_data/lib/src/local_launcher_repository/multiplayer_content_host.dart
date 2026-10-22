@@ -27,10 +27,12 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
     JoinSessionState state, {
     void Function(JoinDownloadProgressed progress)? onProgress,
     CancellationToken? cancellation,
+    JoinHostPackageSource? hostPackages,
   }) => _host._downloadJoinContent(
     state,
     onProgress: onProgress,
     cancellation: cancellation,
+    hostPackages: hostPackages,
   );
 
   @override
