@@ -121,8 +121,9 @@ void _registerLaunchV4IntegrationTests({
           const LauncherProfile(id: 'menu', name: 'Menu'),
         );
         await entered.future;
-        await repo.dispose();
+        final closing = repo.dispose();
         proceed.complete();
+        await closing;
         final result = await pending;
         expect(result.processStarted, isFalse);
         expect(starts, 0);
@@ -166,8 +167,9 @@ void _registerLaunchV4IntegrationTests({
           const LauncherProfile(id: 'menu', name: 'Menu'),
         );
         await entered.future;
-        await repo.dispose();
+        final closing = repo.dispose();
         receipt.complete(404);
+        await closing;
         final result = await pending;
         expect(result.processStarted, isTrue);
         expect(result.latestActivity!.unconfirmed, isTrue);

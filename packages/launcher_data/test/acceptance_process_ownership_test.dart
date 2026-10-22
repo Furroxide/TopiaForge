@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import 'acceptance_isolation_fixture.dart';
+import 'open_handle_support.dart';
 
 void main() {
   group('Repository acceptance receipt ownership', () {
@@ -142,8 +143,9 @@ void main() {
         await fixture.creationEntered!.future.timeout(
           const Duration(seconds: 5),
         );
-        await fixture.repository.dispose();
+        final closing = fixture.repository.dispose();
         fixture.creationRelease!.complete();
+        await closing;
         final result = await pending;
         expect(result.processStarted, isTrue, reason: result.message);
         expect(result.latestActivity!.unconfirmed, isTrue);
@@ -369,6 +371,10 @@ final class _OwnershipFixture {
 
   Future<void> dispose() async {
     await repository.dispose();
-    isolation.dispose();
+    try {
+      expectNothingOpenUnder(isolation.root);
+    } finally {
+      isolation.dispose();
+    }
   }
 }

@@ -4,16 +4,16 @@ part of '../local_launcher_repository.dart';
 extension AcceptanceLaunchAccess on LocalLauncherRepository {
   Future<AcceptanceIsolationAcknowledgement?> acceptanceAcknowledgement(
     LaunchResult result,
-  ) {
+  ) => _tracked(() {
     final owned = _ownedAcceptanceReceipt(result);
     final request = _acceptanceRequests[result.requestId]!;
     request.context.verify();
     return LaunchStagingStore(
       request.context.gameRoot,
     ).readAcceptanceAcknowledgement(request, owned);
-  }
+  });
 
-  Future<void> stopAcceptanceProcess(LaunchResult result) async {
+  Future<void> stopAcceptanceProcess(LaunchResult result) => _tracked(() async {
     final owned = _ownedAcceptanceReceipt(result);
     // Equivalent transported values may identify the receipt, but operations
     // and ownership retirement always use the actual creation receipt object.
@@ -31,7 +31,7 @@ extension AcceptanceLaunchAccess on LocalLauncherRepository {
     _ownedLaunchRequests.remove(owned);
     _acceptanceReceipts.remove(result.requestId);
     _acceptanceRequests.remove(result.requestId);
-  }
+  });
 
   LaunchProcessIdentity _ownedAcceptanceReceipt(LaunchResult result) {
     final process = result.process;

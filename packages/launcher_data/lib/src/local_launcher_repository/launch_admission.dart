@@ -90,6 +90,25 @@ extension _LaunchAdmission on LocalLauncherRepository {
     LaunchSelection? selectionOverride,
     required bool restart,
     LaunchSessionRequest? session,
+  }) => _tracked(
+    () => _admitLaunch(
+      install,
+      source,
+      selectionOverride: selectionOverride,
+      restart: restart,
+      session: session,
+    ),
+  );
+
+  /// Admits one launch at a time per install. A launch admitted before the
+  /// repository closes stops at its next step with "The launcher repository
+  /// is closed.", which the close waits for ([_close]).
+  Future<LaunchResult> _admitLaunch(
+    GameInstall install,
+    LauncherProfile source, {
+    LaunchSelection? selectionOverride,
+    required bool restart,
+    LaunchSessionRequest? session,
   }) async {
     if (_disposed) {
       return const LaunchResult(

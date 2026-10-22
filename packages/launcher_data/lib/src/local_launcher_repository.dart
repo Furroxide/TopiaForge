@@ -68,6 +68,8 @@ part 'local_launcher_repository/registry_source_models.dart';
 part 'local_launcher_repository/registry_source_parsing.dart';
 part 'local_launcher_repository/exact_package_catalog_loading.dart';
 part 'local_launcher_repository/repository_hooks.dart';
+part 'local_launcher_repository/repository_work.dart';
+part 'local_launcher_repository/snapshot_loading.dart';
 part 'local_launcher_repository/runtime_transaction.dart';
 part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
@@ -186,6 +188,8 @@ class LocalLauncherRepository
   Future<void> _launcherLogMutationTail = Future<void>.value();
   bool _launcherLogSwept = false;
   bool _disposed = false;
+  Future<void>? _disposal;
+  final Set<Future<Object?>> _inFlight = {};
   final _launchActivities = StreamController<LaunchActivity>.broadcast();
   @override
   Stream<LaunchActivity> get launchActivities => _launchActivities.stream;
@@ -194,7 +198,10 @@ class LocalLauncherRepository
     GameInstall install,
     LauncherProfile profile, {
     LaunchSelection? selectionOverride,
-  }) => _previewLaunch(install, profile, selectionOverride: selectionOverride);
+  }) => _tracked(
+    () =>
+        _previewLaunch(install, profile, selectionOverride: selectionOverride),
+  );
   @override
   String get dataRoot => _dataRoot.path;
   File get _settingsFile => File(p.join(_dataRoot.path, 'settings.json'));
@@ -206,104 +213,53 @@ class LocalLauncherRepository
       Directory(p.join(_dataRoot.path, 'package-cache'));
 
   @override
-  Future<LauncherSnapshot> loadSnapshot() async {
-    _ensureDataRoot();
-    final profiles = await _loadProfiles();
-    final settings = await _loadSettings();
-    final selectedProfileId =
-        (settings['selectedProfileId'] as String?) ?? profiles.first.id;
-    final discovery = await _resolveGameInstallDiscovery(settings);
-    final gameInstallCandidates = discovery.candidates;
-    final gameInstall = discovery.install;
-    var installedMods = <InstalledMod>[];
-    if (gameInstall != null) {
-      // A damaged record of server content is repaired first, failing
-      // closed, then a join's install the launcher did not live to finish is
-      // undone.
-      await _repairServerContentWhenFree(gameInstall);
-      await _sweepJoinInstallsWhenFree(gameInstall);
-      try {
-        installedMods = await _loadInstalledMods(gameInstall);
-      } on _ManagerStateContentException {
-        // Keep profiles and their explicit recovery previews available. Never
-        // reconcile or replace manager state whose content cannot be trusted.
-      }
-    }
-    final packageSources = await _loadPackageSources();
-    final registryOutcome = await _loadRegistryOutcome(
-      installedMods,
-      packageSources,
-    );
-    final registryMods = registryOutcome.mods;
-    final previews = <String, LaunchPreview>{};
-    if (gameInstall != null) {
-      for (final profile in profiles) {
-        previews[profile.id] = await previewLaunch(gameInstall, profile);
-      }
-    }
-    return LauncherSnapshot(
-      gameInstall: gameInstall,
-      gameInstallCandidates: gameInstallCandidates,
-      profiles: profiles,
-      selectedProfileId: selectedProfileId,
-      installedMods: installedMods,
-      registryMods: registryMods,
-      packageSources: packageSources,
-      previewsByProfile: previews,
-      recentLog: gameInstall == null
-          ? await _readLauncherLog()
-          : await readRecentLog(gameInstall),
-      launcherUpdates: LauncherUpdateSettings.fromJson(
-        _objectMap(settings['launcherUpdates']),
-      ),
-      developerMode: (settings['developerMode'] as bool?) ?? false,
-      sourceStatuses: registryOutcome.statuses,
-      launcherLog: await _readLauncherLog(),
-    );
-  }
+  Future<LauncherSnapshot> loadSnapshot() => _tracked(_loadSnapshot);
 
   @override
-  Future<void> setDeveloperMode(bool enabled) async {
-    await _updateSettings((settings) => settings['developerMode'] = enabled);
-  }
+  Future<void> setDeveloperMode(bool enabled) => _tracked(
+    () => _updateSettings((settings) => settings['developerMode'] = enabled),
+  );
 
   @override
-  Future<void> saveLauncherUpdateSettings(
-    LauncherUpdateSettings settings,
-  ) async {
-    final trustedSettings = LauncherUpdateSettings.fromJson(settings.toJson());
-    await _updateSettings(
-      (persisted) => persisted['launcherUpdates'] = trustedSettings.toJson(),
-    );
-  }
+  Future<void> saveLauncherUpdateSettings(LauncherUpdateSettings settings) =>
+      _tracked(() async {
+        final trustedSettings = LauncherUpdateSettings.fromJson(
+          settings.toJson(),
+        );
+        await _updateSettings(
+          (persisted) =>
+              persisted['launcherUpdates'] = trustedSettings.toJson(),
+        );
+      });
 
   @override
   Future<List<GameInstallCandidate>> discoverGameInstalls() =>
-      _discoverGameInstalls();
+      _tracked(_discoverGameInstalls);
 
   @override
-  Future<GameInstall?> detectKnownInstall() => _detectKnownInstall();
+  Future<GameInstall?> detectKnownInstall() => _tracked(_detectKnownInstall);
 
   @override
   Future<GameInstall> selectGameDirectory(String path) =>
-      _selectGameDirectory(path);
+      _tracked(() => _selectGameDirectory(path));
 
   @override
-  Future<GameCompatStatus> checkGameCompat(GameInstall install) async {
-    final layout = GameLayout.resolve(install.path);
-    if (layout == null) {
-      return GameCompatStatus.skipped();
-    }
-    return _checkGameCompat(
-      Directory(layout.gameRoot),
-      Directory(layout.managedDirPath),
-      force: true,
-    );
-  }
+  Future<GameCompatStatus> checkGameCompat(GameInstall install) =>
+      _tracked(() async {
+        final layout = GameLayout.resolve(install.path);
+        if (layout == null) {
+          return GameCompatStatus.skipped();
+        }
+        return _checkGameCompat(
+          Directory(layout.gameRoot),
+          Directory(layout.managedDirPath),
+          force: true,
+        );
+      });
 
   @override
   Future<RepairReport> installOrRepairRuntime(GameInstall install) =>
-      _installOrRepairRuntime(install);
+      _tracked(() => _installOrRepairRuntime(install));
 
   @override
   Future<PackageInstallPlan> previewPackage(
@@ -312,15 +268,15 @@ class LocalLauncherRepository
     String expectedSha256 = '',
     String sourceId = '',
     String sourceName = '',
-  }) async {
-    return _previewPackageInstallPlan(
+  }) => _tracked(
+    () => _previewPackageInstallPlan(
       packagePath,
       install,
       expectedSha256: expectedSha256,
       sourceId: sourceId,
       sourceName: sourceName,
-    );
-  }
+    ),
+  );
 
   @override
   Future<List<InstalledMod>> installPackage(
@@ -328,64 +284,67 @@ class LocalLauncherRepository
     GameInstall install, {
     String expectedSha256 = '',
     String sourceId = '',
-  }) => _installPackage(
-    packagePath,
-    install,
-    expectedSha256: expectedSha256,
-    sourceId: sourceId,
+  }) => _tracked(
+    () => _installPackage(
+      packagePath,
+      install,
+      expectedSha256: expectedSha256,
+      sourceId: sourceId,
+    ),
   );
 
   @override
   Future<List<PackageSource>> savePackageSources(List<PackageSource> sources) =>
-      _savePackageSources(sources);
+      _tracked(() => _savePackageSources(sources));
 
   @override
   Future<PackageInboxInstallOutcome> installInboxPackages(
     GameInstall install,
-  ) => _installInboxPackages(install);
+  ) => _tracked(() => _installInboxPackages(install));
 
   @override
   Future<List<InstalledMod>> repairInstalledMod(
     GameInstall install,
     InstalledMod mod,
-  ) => _repairInstalledMod(install, mod);
+  ) => _tracked(() => _repairInstalledMod(install, mod));
 
   @override
   Future<List<InstalledMod>> setModEnabled(
     GameInstall install,
     String modId,
     bool enabled,
-  ) => _setModEnabled(install, modId, enabled);
+  ) => _tracked(() => _setModEnabled(install, modId, enabled));
 
   @override
   Future<List<InstalledMod>> disableAllMods(GameInstall install) =>
-      _disableAllMods(install);
+      _tracked(() => _disableAllMods(install));
 
   @override
   Future<List<InstalledMod>> uninstallMod(GameInstall install, String modId) =>
-      _uninstallMod(install, modId);
+      _tracked(() => _uninstallMod(install, modId));
 
   @override
   Future<List<LauncherProfile>> saveProfiles(
     List<LauncherProfile> profiles,
     String selectedProfileId,
-  ) => _saveVersionedProfiles(profiles, selectedProfileId);
+  ) => _tracked(() => _saveVersionedProfiles(profiles, selectedProfileId));
 
   @override
-  Future<void> exportProfile(LauncherProfile profile, String path) async {
-    _requireProfileExportPath(path);
-    _requireValidLauncherProfile(profile);
-    await _writeJsonFileAtomic(
-      File(path),
-      {'schemaVersion': _profileFormatVersion, 'profile': profile.toJson()},
-      maxBytes: _maxProfilesBytes,
-      label: 'Exported launcher profile',
-    );
-  }
+  Future<void> exportProfile(LauncherProfile profile, String path) =>
+      _tracked(() async {
+        _requireProfileExportPath(path);
+        _requireValidLauncherProfile(profile);
+        await _writeJsonFileAtomic(
+          File(path),
+          {'schemaVersion': _profileFormatVersion, 'profile': profile.toJson()},
+          maxBytes: _maxProfilesBytes,
+          label: 'Exported launcher profile',
+        );
+      });
 
   @override
   Future<LauncherProfile> importProfile(String path) =>
-      _importVersionedProfile(path);
+      _tracked(() => _importVersionedProfile(path));
 
   @override
   Future<LaunchResult> launch(
@@ -442,38 +401,30 @@ class LocalLauncherRepository
   /// package sources, history included, for planning a join
   /// ([JoinPlanner.planFromCatalog]).
   Future<ExactPackageCatalog> loadExactPackageCatalog(GameInstall install) =>
-      _loadExactPackageCatalog(install);
+      _tracked(() => _loadExactPackageCatalog(install));
 
   @override
   Future<DiagnosticBundle> createDiagnosticBundle(
     GameInstall install,
     DependencyResolutionResult resolution,
-  ) => _createDiagnosticBundle(install, resolution);
+  ) => _tracked(() => _createDiagnosticBundle(install, resolution));
 
   @override
   Future<String> readRecentLog(GameInstall install, {int maxLines = 200}) =>
-      _readRecentCombinedLog(install, maxLines: maxLines);
+      _tracked(() => _readRecentCombinedLog(install, maxLines: maxLines));
 
   @override
-  Future<void> openPath(String path) => _openPath(path);
+  Future<void> openPath(String path) => _tracked(() => _openPath(path));
 
   @override
   Future<void> openContainingFolder(String path) =>
-      _openPath(File(path).absolute.parent.path);
+      _tracked(() => _openPath(File(path).absolute.parent.path));
 
   @override
-  Future<void> ensureDirectory(String path) async {
-    await Directory(path).create(recursive: true);
-  }
+  Future<void> ensureDirectory(String path) =>
+      _tracked(() => Directory(path).create(recursive: true));
 
+  /// Closes the repository once nothing it started still runs ([_close]).
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
-    _disposed = true;
-    for (final monitor in _launchMonitors.values) {
-      await monitor.dispose();
-    }
-    _launchMonitors.clear();
-    await _launchActivities.close();
-  }
+  Future<void> dispose() => _disposal ??= _close();
 }

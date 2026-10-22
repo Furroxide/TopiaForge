@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import 'held_file_support.dart';
+import 'open_handle_support.dart';
 
 part 'launcher_data_test_helpers.dart';
 part 'installed_build_provenance_test_part.dart';
@@ -74,7 +75,11 @@ void main() {
   tearDown(() async {
     await repository.dispose();
     if (root.existsSync()) {
-      root.deleteSync(recursive: true);
+      try {
+        expectNothingOpenUnder(root);
+      } finally {
+        root.deleteSync(recursive: true);
+      }
     }
   });
 
