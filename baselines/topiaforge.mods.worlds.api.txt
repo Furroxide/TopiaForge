@@ -18,6 +18,17 @@ type public interface TopiaForge.Mods.IGamemodeController : System.IDisposable
 type public interface TopiaForge.Mods.IGamemodeFactory
   method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGamemodeController>> StartAsync(TopiaForge.Mods.IGamemodeSession session, System.Threading.CancellationToken cancellationToken)
 
+type public interface TopiaForge.Mods.IGamemodeParticipantController : System.IDisposable
+
+type public interface TopiaForge.Mods.IGamemodeParticipantFactory : TopiaForge.Mods.IGamemodeFactory
+  method [abstract,virtual,newslot] System.Threading.Tasks.Task<TopiaForge.Mods.OperationResult<TopiaForge.Mods.IGamemodeParticipantController>> StartParticipantAsync(TopiaForge.Mods.IGamemodeParticipantSession participant, System.Threading.CancellationToken cancellationToken)
+
+type public interface TopiaForge.Mods.IGamemodeParticipantSession : TopiaForge.Mods.IWorldSession
+  property System.Threading.CancellationToken CancellationToken { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModContext Context { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.IModLifetime Lifetime { get [abstract,virtual,newslot]; }
+  property TopiaForge.Mods.WorldReadiness World { get [abstract,virtual,newslot]; }
+
 type public interface TopiaForge.Mods.IGamemodeSession : TopiaForge.Mods.IWorldSession
   property System.Threading.CancellationToken CancellationToken { get [abstract,virtual,newslot]; }
   property TopiaForge.Mods.IModContext Context { get [abstract,virtual,newslot]; }

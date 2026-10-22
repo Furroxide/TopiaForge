@@ -34,6 +34,7 @@ namespace TopiaForge.ModManager
         }
         public PackageIdentity Package { get; }
         public string DeclarationId { get; }
+        public Type ImplementationType => typeof(Provider);
         public IWorldContentProvider Create() => new Provider(DeclarationId, kind, bundle, prefab, sceneName);
 
         private sealed class Provider : IWorldContentProvider

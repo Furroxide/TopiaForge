@@ -88,6 +88,7 @@ namespace TopiaForge.ModManager.Tests
                     HostDispatcherTests.Run();
                     SessionLifecycleTests.Run(Path.Combine(sessionRoot, "state"));
                     GamemodeSessionOrchestratorTests.Run(sessionRoot);
+                    GamemodeParticipantRealmTests.Run(Path.Combine(sessionRoot, "participant"));
                     SessionActivationTests.Run(sessionRoot);
                     ContentAdmissionTests.Run(Path.Combine(sessionRoot, "content-admission"));
                     WorldsActivationTests.RunAsync().GetAwaiter().GetResult();
@@ -391,6 +392,7 @@ namespace TopiaForge.ModManager.Tests
                 HostDispatcherTests.Run();
                 SessionLifecycleTests.Run(root + "-state");
                 GamemodeSessionOrchestratorTests.Run(root + "-session");
+                GamemodeParticipantRealmTests.Run(root + "-participant");
                 SessionActivationTests.Run(root + "-activation");
                 ContentAdmissionTests.Run(root + "-content-admission");
                 RuntimeSessionSelectionTests.Run();

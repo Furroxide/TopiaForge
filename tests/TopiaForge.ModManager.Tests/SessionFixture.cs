@@ -17,6 +17,8 @@ namespace TopiaForge.ModManager.Tests
     {
         internal static Func<IWorldLoadContext, CancellationToken, Task<OperationResult<IWorldInstance>>> Load = null!;
         internal static Func<IGamemodeSession, CancellationToken, Task<OperationResult<IGamemodeController>>> Start = null!;
+        internal static Func<IGamemodeParticipantSession, CancellationToken, Task<OperationResult<IGamemodeParticipantController>>> StartParticipant = null!;
+        internal static IGamemodeParticipantSession? ParticipantSession;
         internal static Action ProviderConstructor = null!;
         internal static Action FactoryConstructor = null!;
         internal static IGamemodeSession? ModeSession;
@@ -34,8 +36,16 @@ namespace TopiaForge.ModManager.Tests
         internal Action<IModLifetime>? ScopeFactory;
         internal int MenuLoads;
         internal Func<CancellationToken, Task<OperationResult<bool>>>? Menu;
+        /// <summary>The gamemode's implementation type; <see cref="SessionTestParticipantFactory"/> adds a participant.</summary>
+        internal Type FactoryType = typeof(SessionTestFactory);
 
-        internal SessionFixture(string root, bool endOnScene = false, Func<INativeTransitionExecutor, INativeTransitionExecutor>? decorateNative = null)
+        /// <param name="replication">The process's replication services, whose realm the session starts in; single player when null.</param>
+        /// <param name="configure">Changes the package's manifest before its context is made, such as a dependency to resolve.</param>
+        /// <param name="registry">The service registry the package context resolves extensions through.</param>
+        /// <param name="available">The other manifests the package's dependencies may name.</param>
+        internal SessionFixture(string root, bool endOnScene = false, Func<INativeTransitionExecutor, INativeTransitionExecutor>? decorateNative = null,
+            MultiplayerReplication? replication = null, Action<ModManifest>? configure = null, ModServiceRegistry? registry = null,
+            IEnumerable<ModManifest>? available = null)
         {
             Load = (_, _) => Task.FromResult(OperationResult<IWorldInstance>.Success(new SessionTestWorld()));
             Start = (session, _) =>
@@ -43,6 +53,12 @@ namespace TopiaForge.ModManager.Tests
                 ModeSession = session;
                 return Task.FromResult(OperationResult<IGamemodeController>.Success(new SessionTestController()));
             };
+            StartParticipant = (participant, _) =>
+            {
+                ParticipantSession = participant;
+                return Task.FromResult(OperationResult<IGamemodeParticipantController>.Success(new SessionTestParticipantController()));
+            };
+            ParticipantSession = null;
             ProviderConstructor = () => { };
             FactoryConstructor = () => { };
             ModeSession = null; ChildLifetime = null; Slot = null;
@@ -52,11 +68,12 @@ namespace TopiaForge.ModManager.Tests
                 .GetProperty("manifest").GetRawText());
             manifest.Contributions!.Gamemodes[0].SceneChangePolicy = endOnScene
                 ? ModGamemodeDeclaration.EndSessionPolicy : ModGamemodeDeclaration.KeepControllerPolicy;
+            configure?.Invoke(manifest);
             Profile = new EffectiveProfile("session-fixture", 1, new[] { new ResolvedPackage(manifest.Id, manifest.Version, manifest) });
             Plan = LaunchResolver.Resolve(Profile, new LaunchRequest(manifest.Contributions.LaunchTargets[0].Id)).Plan!;
             var paths = new ManagerPaths(root); paths.EnsureCreated();
             Parent = new ModContext(manifest, paths, Path.Combine(root, "package"), new OwnerFacadeStoppingTests.Logger(),
-                new ModServiceRegistry(), null, this);
+                registry ?? new ModServiceRegistry(), null, this, available, replication);
             Native = new SceneCoordinator(dispatcher: Host);
             Dispatch = new DelayedSessionDispatcher(Host);
             Hosted = new GamemodeSessionOrchestrator(Dispatch, decorateNative?.Invoke(Native) ?? Native, this, "runtime-fixture");
@@ -78,7 +95,7 @@ namespace TopiaForge.ModManager.Tests
                 InvalidBindings ? Array.Empty<string>() : new[] { Plan.WorldId },
                 InvalidBindings ? Array.Empty<string>() : new[] { Plan.GamemodeId });
             return new RuntimeSessionSnapshot(Profile, bindings, new Dictionary<string, ModContext> { [Parent.Identity.Id] = Parent },
-                new[] { new SessionImplementation<IGamemodeFactory>(Plan.Packages[0], Plan.GamemodeId, typeof(SessionTestFactory)) },
+                new[] { new SessionImplementation<IGamemodeFactory>(Plan.Packages[0], Plan.GamemodeId, FactoryType) },
                 new[] { new SessionImplementation<IWorldContentProvider>(Plan.Packages[0], Plan.WorldId, typeof(SessionTestProvider)) });
         }
         public Task<OperationResult<bool>> LoadMainMenuAsync(IInternalSceneTransitionService transitions, CancellationToken cancellationToken)
@@ -138,6 +155,21 @@ namespace TopiaForge.ModManager.Tests
         public SessionTestFactory() => SessionFixture.FactoryConstructor();
         public Task<OperationResult<IGamemodeController>> StartAsync(IGamemodeSession session, CancellationToken token) => SessionFixture.Start(session, token);
         public void Dispose() { }
+    }
+    /// <summary>A gamemode that gives the local player a participant controller too.</summary>
+    public sealed class SessionTestParticipantFactory : IGamemodeParticipantFactory, IDisposable
+    {
+        public SessionTestParticipantFactory() => SessionFixture.FactoryConstructor();
+        public Task<OperationResult<IGamemodeController>> StartAsync(IGamemodeSession session, CancellationToken token) => SessionFixture.Start(session, token);
+        public Task<OperationResult<IGamemodeParticipantController>> StartParticipantAsync(IGamemodeParticipantSession participant, CancellationToken token) =>
+            SessionFixture.StartParticipant(participant, token);
+        public void Dispose() { }
+    }
+    public sealed class SessionTestParticipantController : IGamemodeParticipantController
+    {
+        private readonly Action? dispose;
+        public SessionTestParticipantController(Action? dispose = null) { this.dispose = dispose; }
+        public void Dispose() => dispose?.Invoke();
     }
     public sealed class SessionTestWorld : IWorldInstance
     {

@@ -17,7 +17,7 @@ namespace TopiaForge.ModRuntime.Tests
     internal static partial class Program
     {
         private const string BindingAssembly = "TopiaForge.BindingTestMod.dll";
-        private static readonly string[] BindingCases = { "wire-success", "wire-menu", "wire-drift", "wire-provider-failed", "wire-observation", "success", "shapes", "hash", "hash-missing", "hash-valid", "location", "forwarder", "receipt", "entry-race", "selection-drift", "snapshot", "ownership", "registry", "discovery-drain", "discover-valid", "discover-failed", "discover-bounded", "discover-constructor", "discover-stale", "discover-cancel", "discover-cancel-cleanup", "discover-worker-cancel", "discover-worker-cancel-callback", "discover-scope-construction", "discover-scope-construction-cleanup", "discover-malformed", "discover-duplicate", "discover-null", "discover-null-result", "discover-null-item", "discover-cleanup", "discover-limits", "discover-timeout", "startup", "constructor", "failed-owner", "native-owner-drain", "native-failed-owner", "native-failed-scene", "native-gate" };
+        private static readonly string[] BindingCases = { "wire-success", "wire-menu", "wire-drift", "wire-provider-failed", "wire-observation", "success", "shapes", "hash", "hash-missing", "hash-valid", "location", "forwarder", "receipt", "entry-race", "selection-drift", "snapshot", "ownership", "registry", "discovery-drain", "discover-valid", "discover-failed", "discover-bounded", "discover-constructor", "discover-stale", "discover-cancel", "discover-cancel-cleanup", "discover-worker-cancel", "discover-worker-cancel-callback", "discover-scope-construction", "discover-scope-construction-cleanup", "discover-malformed", "discover-duplicate", "discover-null", "discover-null-result", "discover-null-item", "discover-cleanup", "discover-limits", "discover-timeout", "startup", "constructor", "failed-owner", "native-owner-drain", "native-failed-owner", "native-failed-scene", "native-gate", "participant" };
 
         private static void TestProductionBindingsInFreshProcesses()
         {
@@ -66,6 +66,8 @@ namespace TopiaForge.ModRuntime.Tests
                     if (name == "hash") manifest.Hashes[BindingAssembly] = new string('0', 64);
                     if (name == "hash-valid") manifest.Hashes[BindingAssembly] = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(fixture.Package.PackagePath, BindingAssembly))));
                 }
+                if (name == "participant")
+                    manifest.Contributions.Gamemodes[0].Implementation!.Type = "TopiaForge.BindingTestMod.ParticipantFactory";
                 if (name == "forwarder")
                 {
                     const string forwarder = "TopiaForge.BindingForwarderTestMod.dll";
@@ -189,14 +191,35 @@ namespace TopiaForge.ModRuntime.Tests
             var plan = LaunchResolver.Resolve(profile, new LaunchRequest(manifest.Contributions!.LaunchTargets[0].Id)).Plan!;
             var launch = orchestrator.StartAsync(plan.Descriptor, "binding-request");
             PumpBinding(runtime.NativeDispatcher, launch);
-            Assert(launch.Result.Succeeded == (name == "success" || name == "hash-valid" || name == "ownership" || name == "snapshot"), "production-bound launch outcome must reflect callback failure");
-            if (name == "success" || name == "hash-valid" || name == "ownership" || name == "snapshot") Assert(orchestrator.Current.Phase == SessionPhase.Running, "launch succeeds only after Running");
+            var succeeds = name == "success" || name == "hash-valid" || name == "ownership" || name == "snapshot" || name == "participant";
+            Assert(launch.Result.Succeeded == succeeds, "production-bound launch outcome must reflect callback failure: " + launch.Result.ErrorMessage);
+            if (succeeds) Assert(orchestrator.Current.Phase == SessionPhase.Running, "launch succeeds only after Running");
+            if (name == "participant") TestBoundParticipantStarted(probe, events, manifest.Contributions.Gamemodes[0].Id);
             var stopped = orchestrator.ShutdownAsync();
             PumpBinding(runtime.NativeDispatcher, stopped);
+            if (name == "participant")
+            {
+                var participantStop = events.IndexOf("participant:dispose");
+                Assert(participantStop >= 0 && participantStop < events.IndexOf("controller:dispose") && events.Contains("participant:resource:dispose"),
+                    "the installed gamemode's participant is disposed before its server controller, and its scope releases what it tracked: "
+                    + string.Join(", ", events));
+            }
             Assert(events.Contains("provider:resource:dispose"), "allocated provider resource is always released");
             Assert(events.Contains("factory:constructor-resource:dispose"), "resource allocated through the actual child lifetime before factory constructor failure is released");
             if (name != "constructor") Assert(events.Contains("factory:resource:dispose"), "allocated startup resource is always released");
             Assert(runtime.SessionBindings!.Capture().Contexts.Values.All(context => context.ActiveChildScopeCount == 0), "failed startup drains every child scope");
+        }
+
+        /// <summary>A real installed package's declared type implements the participant factory, bound and started by production code.</summary>
+        private static void TestBoundParticipantStarted(Type probe, List<string> events, string gamemodeId)
+        {
+            var server = events.IndexOf("factory:start:" + gamemodeId);
+            var participant = events.IndexOf("participant:start:" + gamemodeId);
+            Assert(server >= 0 && participant > server, "the server controller starts, then the participant: " + string.Join(", ", events));
+            var context = (IModContext)probe.GetField("ParticipantContext")!.GetValue(null)!;
+            var seam = ((IInternalReplicationContext)context).Replication;
+            Assert(seam.ExecutionContext == InternalExecutionContext.Participant && seam.Realm == InternalNetRealm.Offline,
+                "the participant's services carry the Participant execution context, in single player");
         }
 
         private static void TestDiscoveryShutdownDrain(TopiaForge.ModManager.ModRuntime runtime, RuntimeBindingRegistry registry, Type probe, List<string> events, PackageIdentity package)

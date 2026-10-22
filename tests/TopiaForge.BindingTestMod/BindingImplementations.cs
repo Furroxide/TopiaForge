@@ -10,6 +10,7 @@ namespace TopiaForge.BindingTestMod
     {
         public static readonly List<string> Events = new List<string>();
         public static IModContext? PackageContext;
+        public static IModContext? ParticipantContext;
         public static Func<int>? ActiveScopes;
         public static IModLifetime? ConstructorLifetime;
         public static bool ThrowOnFirstDiscoveryDispose;
@@ -97,6 +98,20 @@ namespace TopiaForge.BindingTestMod
             if (sequence == 1 && BindingProbe.ThrowOnFirstDiscoveryDispose) throw new InvalidOperationException("synthetic discovery cleanup failure");
         }
         public Task<OperationResult<IWorldInstance>> LoadAsync(IWorldLoadContext context, CancellationToken cancellationToken) => new GoodProvider().LoadAsync(context, cancellationToken);
+    }
+    /// <summary>A gamemode whose declared type also gives the local player a participant controller.</summary>
+    public sealed class ParticipantFactory : GoodFactory, IGamemodeParticipantFactory
+    {
+        public Task<OperationResult<IGamemodeParticipantController>> StartParticipantAsync(IGamemodeParticipantSession participant, CancellationToken cancellationToken)
+        {
+            if (ReferenceEquals(participant.Context, BindingProbe.PackageContext)) throw new InvalidOperationException("package context leaked into participant");
+            BindingProbe.Events.Add("participant:start:" + participant.GamemodeId);
+            BindingProbe.ParticipantContext = participant.Context;
+            participant.Lifetime.Track(new OwnedProbe("participant:resource"));
+            return Task.FromResult(OperationResult<IGamemodeParticipantController>.Success(new ParticipantController()));
+        }
+        private sealed class ParticipantController : IGamemodeParticipantController
+        { public void Dispose() => BindingProbe.Events.Add("participant:dispose"); }
     }
     public abstract class AbstractFactory : GoodFactory { }
     public class OpenFactory<T> : GoodFactory { }

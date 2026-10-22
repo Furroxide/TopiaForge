@@ -243,7 +243,9 @@ only under a permitted open override. A resolved plan records both the instance 
 
 Required fields are `id`, `name` and `implementation`; optional fields are `description`,
 `worldRequirements` and `sceneChangePolicy`. The implementation is an `IGamemodeFactory` whose
-`StartAsync(session, cancellationToken)` returns an operation result containing one controller.
+`StartAsync(session, cancellationToken)` returns an operation result containing one controller. An
+implementation of `IGamemodeParticipantFactory` also gives every player a participant controller; see
+[Custom worlds](CustomWorlds.md#give-every-player-a-controller-of-their-own).
 
 Omitting `worldRequirements` means no extra requirement. A present object must be nonempty and may
 contain `transitions` (nonempty unique supported transitions) and `spawn` (`authored-marker` or `any`).

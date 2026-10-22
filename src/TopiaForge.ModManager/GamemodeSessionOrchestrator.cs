@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -117,7 +118,8 @@ namespace TopiaForge.ModManager
                     CompleteCommand(completion, requestId, "launch-target", null, Failure(reserved));
                     return;
                 }
-                var record = new SessionRecord(identity, plan, snapshot, mode, world, lease!, reservation, completion);
+                var record = new SessionRecord(identity, plan, snapshot, mode, world, lease!, reservation, completion,
+                    RealmOf(snapshot.Contexts[modeOwner.Id]));
                 RunDriver(() => LaunchAsync(record, cancellationToken));
             }
             catch (Exception error)
@@ -218,9 +220,12 @@ namespace TopiaForge.ModManager
         {
             internal SessionRecord(SessionIdentity identity, LaunchPlan plan, RuntimeSessionSnapshot snapshot,
                 ISessionImplementation<IGamemodeFactory> mode, ISessionImplementation<IWorldContentProvider> world,
-                SessionOperationLease lease, INativeTransitionReservation reservation, TaskCompletionSource<OperationResult<bool>> start)
-            { Identity = identity; Plan = plan; Snapshot = snapshot; Mode = mode; World = world; Lease = lease; Reservation = reservation; Start = start; }
+                SessionOperationLease lease, INativeTransitionReservation reservation, TaskCompletionSource<OperationResult<bool>> start,
+                NetRealm realm)
+            { Identity = identity; Plan = plan; Snapshot = snapshot; Mode = mode; World = world; Lease = lease; Reservation = reservation; Start = start; Realm = realm; }
             internal readonly SessionIdentity Identity;
+            /// <summary>The realm the session started in, which decides what of the gamemode runs here; see Participant.cs.</summary>
+            internal readonly NetRealm Realm;
             internal readonly LaunchPlan Plan;
             internal readonly RuntimeSessionSnapshot Snapshot;
             internal readonly ISessionImplementation<IGamemodeFactory> Mode;
@@ -240,6 +245,7 @@ namespace TopiaForge.ModManager
             internal WorldReadiness? Readiness;
             internal IGamemodeFactory? Factory;
             internal IGamemodeController? Controller;
+            internal IGamemodeParticipantController? ParticipantController;
             internal CancellationTokenRegistration CallerCancellation;
             internal bool Starting = true;
             internal bool ReachedRunning;

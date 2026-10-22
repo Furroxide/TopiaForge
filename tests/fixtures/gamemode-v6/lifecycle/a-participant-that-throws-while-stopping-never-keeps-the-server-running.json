@@ -1,0 +1,33 @@
+{
+  "id": "a-participant-that-throws-while-stopping-never-keeps-the-server-running",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A participant whose disposal throws is reported, and the server controller is still disposed after it.",
+  "scenario": {
+    "role": "host",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "succeeds",
+    "participantStop": "throws",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "succeeded",
+          "code": "none",
+          "message": ""
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "participant.stop",
+          "server.stop"
+        ],
+        "stop": "failed"
+      }
+    }
+  }
+}

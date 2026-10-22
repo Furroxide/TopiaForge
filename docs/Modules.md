@@ -59,7 +59,8 @@ deterministic local fallback.
 Declare worlds, gamemodes and launch targets in Manifest V6 `contributions`. The manager binds
 factories from each verified owning package and runs one session lifecycle. `StartAsync` receives
 an `IGamemodeSession` with prepared world identity and a child-scoped mod context; acquire gameplay
-resources through that context. `IWorldSessionService` only observes committed state. Session-bound
+resources through that context. An `IGamemodeParticipantFactory` also starts a participant controller in
+every player's own game, for that player's tools and HUD. `IWorldSessionService` only observes committed state. Session-bound
 stop, restart and main-menu operations share the native transition executor. The `gamemode` and
 `world` templates demonstrate these contracts; see [Custom worlds](CustomWorlds.md).
 

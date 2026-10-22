@@ -8,9 +8,13 @@ using TopiaForge.Mods.Internal;
 namespace TopiaForge.Multiplayer.Engine
 {
     /// <summary>
-    /// The <see cref="IMultiplayerSession"/> one owner mod sees. Its registrations are keyed by the owner. Disposing
-    /// the facade, or stopping the mod lifetime it is bound to, retires the owner's objects and disposes everything
-    /// registered through it; a closing facade refuses new work with <see cref="ModErrorCode.Cancelled"/>.
+    /// The <see cref="IMultiplayerSession"/> one owner mod sees from one of its contexts: the mod's own, or a scope of it
+    /// that resolves the session, such as a gamemode's server or a player's participant controller. Its registrations are
+    /// keyed by the owner, so every facade of a mod sees the same states, commands and objects. Disposing the facade, or
+    /// stopping the lifetime it is bound to, disposes everything registered through it and retires what it made: the
+    /// objects it spawned and the commands it submitted that still wait. The owner's last facade retires the owner as a
+    /// whole (see <see cref="SessionEngine.CloseFacade"/>). A closing facade refuses new work with
+    /// <see cref="ModErrorCode.Cancelled"/>.
     /// </summary>
     internal sealed class EngineSessionFacade : IMultiplayerSession, IDisposable
     {
@@ -28,6 +32,7 @@ namespace TopiaForge.Multiplayer.Engine
             this.engine = engine;
             this.lifetime = lifetime;
             OwnerModId = ownerModId;
+            engine.OpenFacade(ownerModId);
             lifetime?.Track(this);
         }
 
@@ -71,7 +76,7 @@ namespace TopiaForge.Multiplayer.Engine
             where TRequest : class
             where TResponse : class
         {
-            if (!IsClosing) return engine.SubmitCommand(OwnerModId, commandType, request, cancellationToken);
+            if (!IsClosing) return engine.SubmitCommand(OwnerModId, commandType, request, cancellationToken, this);
             var tick = engine.CurrentTick;
             return Task.FromResult(new MultiplayerCommandConfirmation<TResponse>(
                 tick,
@@ -86,7 +91,7 @@ namespace TopiaForge.Multiplayer.Engine
             ParticipantId? ownerId = null)
             where TState : class
             where TInput : class =>
-            IsClosing ? Closing<IReplicatedObject<TState, TInput>>() : engine.SpawnObject(OwnerModId, type, initialState, ownerId);
+            IsClosing ? Closing<IReplicatedObject<TState, TInput>>() : engine.SpawnObject(OwnerModId, type, initialState, ownerId, this);
 
         public OperationResult<bool> DespawnObject(NetworkObjectId id) =>
             IsClosing ? Closing<bool>() : engine.DespawnObject(OwnerModId, id);
@@ -157,7 +162,10 @@ namespace TopiaForge.Multiplayer.Engine
 
         public bool TryGetPose(ParticipantId participantId, out MultiplayerPose pose) => engine.TryGetPose(participantId, out pose);
 
-        /// <summary>Retires the owner's objects and disposes every registration and subscription made through this facade.</summary>
+        /// <summary>
+        /// Retires what this facade made, or the whole owner when it is the owner's last facade, and disposes every
+        /// registration and subscription made through it.
+        /// </summary>
         public void Dispose()
         {
             IDisposable[] leases;
@@ -169,7 +177,7 @@ namespace TopiaForge.Multiplayer.Engine
                 owned.Clear();
             }
 
-            engine.RetireOwner(OwnerModId);
+            engine.CloseFacade(this);
             for (var index = leases.Length - 1; index >= 0; index--) leases[index].Dispose();
         }
 

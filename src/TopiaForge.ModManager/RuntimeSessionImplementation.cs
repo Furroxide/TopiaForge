@@ -8,6 +8,8 @@ namespace TopiaForge.ModManager
     {
         PackageIdentity Package { get; }
         string DeclarationId { get; }
+        /// <summary>Gets the type <see cref="Create"/> constructs, so what it implements is known without constructing it.</summary>
+        Type ImplementationType { get; }
         T Create();
     }
 
@@ -25,9 +27,11 @@ namespace TopiaForge.ModManager
                 throw new ArgumentException("Activation requires a public concrete implementation of " + typeof(T).Name + ".");
             constructor = implementation.GetConstructor(Type.EmptyTypes)
                 ?? throw new ArgumentException("Activation requires a public parameterless constructor.");
+            ImplementationType = implementation;
         }
         public PackageIdentity Package { get; }
         public string DeclarationId { get; }
+        public Type ImplementationType { get; }
         public T Create() => (T)constructor.Invoke(Array.Empty<object>());
     }
 }

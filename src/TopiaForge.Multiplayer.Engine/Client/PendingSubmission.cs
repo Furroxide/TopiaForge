@@ -43,6 +43,12 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>Gets the owner mod of the command or object type this submission targets.</summary>
         internal abstract string Owner { get; }
 
+        /// <summary>
+        /// Gets or sets the facade a command was submitted through, so closing that facade cancels it and no other facade's.
+        /// Null for a replicated object's input, which belongs to the object's owner as a whole.
+        /// </summary>
+        internal object? Submitter { get; set; }
+
         internal void RegisterCancellation(CancellationToken cancellationToken)
         {
             if (!cancellationToken.CanBeCanceled) return;

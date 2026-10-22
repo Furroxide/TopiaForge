@@ -11,7 +11,8 @@ namespace TopiaForge.Multiplayer.Engine
             string owner,
             MultiplayerCommandType<TRequest, TResponse> commandType,
             TRequest request,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            object? submitter = null)
             where TRequest : class
             where TResponse : class
         {
@@ -52,7 +53,10 @@ namespace TopiaForge.Multiplayer.Engine
                 epoch,
                 bytes,
                 CurrentTick,
-                binding.Prediction == PredictionMode.Owner);
+                binding.Prediction == PredictionMode.Owner)
+            {
+                Submitter = submitter
+            };
             return SubmitPending(pending, pending.Task, cancellationToken);
         }
 

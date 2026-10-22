@@ -1,0 +1,32 @@
+{
+  "id": "a-participant-that-fails-ends-the-session",
+  "channel": "lifecycle",
+  "kind": "participant-lifecycle",
+  "summary": "A participant that returns a failure ends the session with its reason, said to be the participant's, and the server controller is disposed.",
+  "scenario": {
+    "role": "host",
+    "factory": "participant",
+    "serverStart": "succeeds",
+    "participantStart": "fails",
+    "participantStop": "succeeds",
+    "serverStop": "succeeds"
+  },
+  "expect": {
+    "csharp": {
+      "outcome": "accept",
+      "normalized": {
+        "launch": {
+          "outcome": "failed",
+          "code": "unavailable",
+          "message": "The gamemode's participant controller failed to start: The tool bar has no slot for this player."
+        },
+        "calls": [
+          "server.start",
+          "participant.start",
+          "server.stop"
+        ],
+        "stop": "not-running"
+      }
+    }
+  }
+}

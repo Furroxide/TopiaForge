@@ -33,6 +33,9 @@ Specialist modules have first-class, engine-free fakes too:
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover catalog registrations, owned
   spawns, temporary native edits, persistence-isolation leases, and local event projects.
 - `FakeWorldGamemodeService` owns typed registrations and lets tests pause and complete a world load.
+- `FakeGamemodeSession` and `FakeGamemodeParticipantSession` hand a gamemode's server and participant controllers
+  their prepared session. `GamemodeSessionRunner` starts and stops a gamemode by the runtime's rules for single
+  player, a host or a joined player, so a test sees exactly which controllers run where and in what order.
 - `FakeTimeControlService` derives freeze/slow state and advances scaled and control clocks only on request.
 - `FakePromptOverrideRegistry` reproduces deterministic priority and conflict selection.
 

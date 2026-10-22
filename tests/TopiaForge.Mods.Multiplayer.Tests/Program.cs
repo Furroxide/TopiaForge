@@ -98,6 +98,11 @@ internal static class Program
             EngineReconciliationTests.AFrameHoldsOneMaximumMessageAfterTheSoftLimit();
             EngineOwnerTests.RetiringAnOwnerCancelsOnlyItsSubmissions();
             EngineOwnerTests.ARegistrationOutlivedByItsFacadeIsCancelled();
+            ScopedFacadeRetirementTests.AScopeThatStopsLeavesTheModsDrone();
+            ScopedFacadeRetirementTests.ClosingAFacadeDespawnsOnlyWhatItSpawned();
+            ScopedFacadeRetirementTests.ClosingAFacadeCancelsOnlyItsOwnSubmissions();
+            ScopedFacadeRetirementTests.ClosesAreDecidedWhereTheySettle();
+            ScopedFacadeRetirementTests.FacadesAtRestAllocateNothing();
             EngineRoleTests.ASoloSessionJoinsAnotherHostAndComesBack();
             EngineRoleTests.AnEndedClientSessionReturnsToSolo();
             EngineRoleTests.AHostClosesItsConnectionsAndPlaysOn();

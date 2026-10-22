@@ -28,6 +28,9 @@ namespace TopiaForge.ModManager.Tests
             TestPartialLoadFailureCleanup();
             TestEveryOwnedResourceAcrossTenReloads();
             TestEveryOwnedResourceAfterPartialLoadFailure();
+            TestParticipantSessionFake();
+            TestGamemodeSessionRunnerRoles();
+            TestGamemodeSessionRunnerFailures();
             Console.WriteLine("TestingKitTests passed.");
         }
 

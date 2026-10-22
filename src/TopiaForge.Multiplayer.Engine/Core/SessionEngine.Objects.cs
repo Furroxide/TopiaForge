@@ -15,7 +15,8 @@ namespace TopiaForge.Multiplayer.Engine
             string owner,
             ReplicatedObjectType<TState, TInput> type,
             TState initialState,
-            ParticipantId? ownerId)
+            ParticipantId? ownerId,
+            object? spawner = null)
             where TState : class
             where TInput : class
         {
@@ -59,6 +60,7 @@ namespace TopiaForge.Multiplayer.Engine
             if (!check.Succeeded) return OperationResult<IReplicatedObject<TState, TInput>>.Failure(check.ErrorCode, check.ErrorMessage);
             var record = (ObjectRecord<TState, TInput>)binding.CreateRecord(AllocateObjectId(), ownerId, bytes, 0);
             record.Life = ObjectLife.PendingSpawn;
+            record.Spawner = spawner;
             AddObject(record);
             if (scope.IsOpen)
             {
@@ -214,12 +216,10 @@ namespace TopiaForge.Multiplayer.Engine
         }
 
         /// <summary>
-        /// Retires an owner whose facade closed, at the next settle point. A host despawns the owner's objects
+        /// Retires an owner whose last facade closed: the mod has left the session. A host despawns the owner's objects
         /// canonically, so every peer sees them leave; a client drops its copies and cancels the owner's pending
-        /// submissions.
+        /// submissions. Runs at a settle point; see <see cref="CloseFacade"/>.
         /// </summary>
-        internal void RetireOwner(string owner) => Defer(() => RetireOwnerNow(owner));
-
         private void RetireOwnerNow(string owner)
         {
             if (ended) return;
@@ -231,18 +231,7 @@ namespace TopiaForge.Multiplayer.Engine
 
             if (Role == EngineRole.Host)
             {
-                if (retired.Count == 0) return;
-                RunTopLevel(() =>
-                {
-                    foreach (var record in retired)
-                    {
-                        scope.TouchObject(record);
-                        record.Life = ObjectLife.PendingDespawn;
-                        scope.Despawned.Add(record);
-                    }
-
-                    return OperationResult<bool>.Success(true);
-                });
+                DespawnCanonically(retired);
                 return;
             }
 
@@ -253,6 +242,23 @@ namespace TopiaForge.Multiplayer.Engine
             }
 
             CancelOwnerSubmissions(owner, "The mod that submitted this stopped.");
+        }
+
+        /// <summary>Despawns live objects in one canonical transaction, so every peer sees them leave together.</summary>
+        private void DespawnCanonically(List<ObjectRecord> retired)
+        {
+            if (retired.Count == 0) return;
+            RunTopLevel(() =>
+            {
+                foreach (var record in retired)
+                {
+                    scope.TouchObject(record);
+                    record.Life = ObjectLife.PendingDespawn;
+                    scope.Despawned.Add(record);
+                }
+
+                return OperationResult<bool>.Success(true);
+            });
         }
 
         private NetworkObjectId AllocateObjectId() =>

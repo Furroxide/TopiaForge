@@ -24,7 +24,8 @@
       "enum": [
         "serialization",
         "schema",
-        "resolution"
+        "resolution",
+        "lifecycle"
       ]
     },
     "kind": {
@@ -33,7 +34,8 @@
         "manifest-rejects",
         "manifest-model-rejects",
         "launch-resolution",
-        "transport-codec"
+        "transport-codec",
+        "participant-lifecycle"
       ],
       "description": "Selects the runner's dispatch arm. Both runners dispatch exhaustively with a failing default, so adding a kind here without teaching both runners fails the harness rather than silently skipping."
     },
@@ -166,6 +168,66 @@
     },
     "bindings": {
       "type": "object"
+    },
+    "scenario": {
+      "type": "object",
+      "description": "A participant-lifecycle case's gamemode: where it runs and what each of its controllers does as it starts and stops.",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "factory",
+        "serverStart",
+        "participantStart",
+        "participantStop",
+        "serverStop"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "single-player",
+            "host",
+            "client"
+          ]
+        },
+        "factory": {
+          "enum": [
+            "participant",
+            "server-only"
+          ]
+        },
+        "serverStart": {
+          "enum": [
+            "succeeds",
+            "fails",
+            "fails-without-reason",
+            "fails-with-an-unknown-code",
+            "throws"
+          ]
+        },
+        "participantStart": {
+          "enum": [
+            "succeeds",
+            "fails",
+            "fails-without-reason",
+            "fails-with-an-unknown-code",
+            "throws",
+            "throws-without-reason",
+            "cancelled-while-pending"
+          ]
+        },
+        "participantStop": {
+          "enum": [
+            "succeeds",
+            "throws"
+          ]
+        },
+        "serverStop": {
+          "enum": [
+            "succeeds",
+            "throws"
+          ]
+        }
+      }
     }
   },
   "allOf": [
@@ -335,6 +397,84 @@
                 "wireJson"
               ]
             }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "participant-lifecycle"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "scenario"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "manifest"
+              ]
+            },
+            {
+              "required": [
+                "schemaOutcome"
+              ]
+            },
+            {
+              "required": [
+                "modelMutation"
+              ]
+            },
+            {
+              "required": [
+                "profile"
+              ]
+            },
+            {
+              "required": [
+                "request"
+              ]
+            },
+            {
+              "required": [
+                "observation"
+              ]
+            },
+            {
+              "required": [
+                "bindings"
+              ]
+            },
+            {
+              "required": [
+                "transport"
+              ]
+            },
+            {
+              "required": [
+                "payload"
+              ]
+            },
+            {
+              "required": [
+                "wireJson"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "scenario"
           ]
         }
       }
