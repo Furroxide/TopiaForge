@@ -1502,7 +1502,13 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 }
                 if (RequiresBound(memberType) && bound == null)
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(MissingBound, member.Locations.FirstOrDefault(), member.Name));
+                    // A bound the compiler cannot resolve, typically for want of `using TopiaForge.Mods;`, is the
+                    // compiler's to report: TFMP004 would claim the member declares no bound at all.
+                    if (!HasUnresolvedBound(member))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(MissingBound, member.Locations.FirstOrDefault(), member.Name));
+                    }
+
                     success = false;
                     continue;
                 }
@@ -2338,6 +2344,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 Array.Empty<ObjectModel>(),
                 Array.Empty<EventModel>());
         }
+
+        /// <summary>Whether <paramref name="member"/> carries a <c>[NetworkBound]</c> that the compiler cannot resolve.</summary>
+        private static bool HasUnresolvedBound(ISymbol member) =>
+            member.GetAttributes().Any(attribute =>
+                attribute.AttributeClass is { TypeKind: TypeKind.Error } unresolved &&
+                (unresolved.Name == "NetworkBound" || unresolved.Name == "NetworkBoundAttribute"));
 
         private static AttributeData? FindAttribute(ISymbol symbol, string metadataName) =>
             symbol.GetAttributes().FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == metadataName);

@@ -128,6 +128,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
                 ReportsPayloadInstanceInitializerSideEffect();
                 ReportsPayloadStaticInitializerSideEffect();
                 ReportsUnboundedStringsAndCollections();
+                RunPayloadBoundGeneratorTests();
                 ReportsNondeterministicPrediction();
                 ReportsPredictedProcessLocalSideEffect();
                 ReportsPredictedHelperBypass();
