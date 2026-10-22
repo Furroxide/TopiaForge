@@ -93,9 +93,35 @@ void main() {
       expect(link.toString(), isNot(contains('192.168.1.20')));
       expect(link.toString(), isNot(contains('27250')));
       expect(link.toString(), contains(server));
-      final invite = SessionLink.invite('abcde-12345');
-      expect(invite.toString(), invite.canonical);
       expect(SessionLink.server(server).toString(), contains(server));
+    });
+
+    test('an invite link keeps its code out of toString', () {
+      // Anyone who holds the code may join, so no spelling of it reaches a
+      // log line through toString or an interpolation. The link prints its
+      // kind, as the game's invite target does; only canonical spells it.
+      for (final typed in ['RJ9JM-V1V09', 'abcde-12345', 'f80bh rs9yw']) {
+        final invite = SessionLink.invite(typed);
+        final code = invite.inviteCode!;
+        final display = InviteCode.display(code);
+        expect(invite.canonical, 'topiaforge://join/$code');
+        expect(invite.toString(), 'invite');
+        final parsed = SessionLink.tryParse(invite.canonical)!;
+        final texts = ['$invite', '$parsed', '${JoinLinkTarget(parsed)}'];
+        for (final text in texts) {
+          for (final spelling in {
+            typed,
+            code,
+            code.toLowerCase(),
+            display,
+            display.toLowerCase(),
+            code.substring(0, 5),
+            code.substring(5),
+          }) {
+            expect(text, isNot(contains(spelling)), reason: typed);
+          }
+        }
+      }
     });
 
     test('constructors refuse what parsing refuses', () {

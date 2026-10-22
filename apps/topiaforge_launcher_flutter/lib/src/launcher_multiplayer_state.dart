@@ -48,8 +48,9 @@ final class SessionLinkIdle extends SessionLinkIntake {
 ///
 /// A valid link waits here, and nothing joins: the consent flow will plan
 /// the join from trusted manifests and ask the player before anything is
-/// installed or started. A direct [link] holds the host's address, so it is
-/// never logged; its `toString` withholds the address.
+/// installed or started. A direct [link] holds the host's address, and an
+/// invite [link] a code that lets anyone who holds it join, so it is never
+/// logged; its `toString` withholds both.
 final class SessionLinkConsentPlaceholder extends SessionLinkIntake {
   const SessionLinkConsentPlaceholder({
     required this.link,

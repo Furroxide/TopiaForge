@@ -1,6 +1,7 @@
 part of '../multiplayer.dart';
 
-/// What the player asked to join. No target's [toString] shows an address.
+/// What the player asked to join. No target's [toString] shows an address or
+/// an invite code.
 sealed class JoinTarget {
   const JoinTarget();
 
@@ -22,7 +23,8 @@ sealed class JoinTarget {
   int? get directPort;
 }
 
-/// A `topiaforge://join/…` link. A direct link holds an address.
+/// A `topiaforge://join/…` link. A direct link holds an address, and an invite
+/// link its code.
 final class JoinLinkTarget extends JoinTarget {
   const JoinLinkTarget(this.link);
 
