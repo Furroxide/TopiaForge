@@ -121,6 +121,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators.Tests
             ReportsPredictedArrayCopyIntoAField();
             ReportsPredictedExternalArrayMember();
             PredictedSideEffectNamesTheWayOut();
+            RunPredictionEscapeGeneratorTests();
         }
 
         private static void AllowsPredictedReadsOfPayloadArrays()
