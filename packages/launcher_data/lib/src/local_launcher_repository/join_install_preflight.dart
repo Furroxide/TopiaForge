@@ -28,8 +28,20 @@ extension _JoinInstallPreflight on _JoinInstall {
     }
     // An earlier join whose rollback could not finish keeps its folders, and
     // their record entries, until a later sweep takes them out, so nothing
-    // may count them as installed meanwhile.
-    if (await _repository._hasUnsettledJoinInstall(_install)) {
+    // may count them as installed meanwhile. Nor may anything build on one
+    // whose journal cannot be read just now: what it left is unknown, and
+    // the refusal says what to do without naming the file. This join's own
+    // folder, there once it is staged, is no earlier join's.
+    final bool unsettled;
+    try {
+      unsettled = await _repository._hasUnsettledJoinInstall(
+        _install,
+        except: _root,
+      );
+    } on LauncherFileUnreadable catch (unreadable) {
+      throw _JoinInstallRefused(unreadable.message);
+    }
+    if (unsettled) {
       throw const _JoinInstallRefused(
         'A join that failed earlier is still being put back: some of its '
         'files are in use or could not be removed yet. Close any program '

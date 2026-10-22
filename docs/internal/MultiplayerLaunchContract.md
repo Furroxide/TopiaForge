@@ -330,7 +330,14 @@ launcher log, and neither ever names a URL or an address.
   stopped part way through it left disabled records and hidden versions, which no profile of the player's own loads.
   Either way the next start, the next install or the next cleanup takes the staging lease and settles the journal: it
   undoes a partial install, or one whose rollback began, moving each folder out whole as the rollback does; it keeps an
-  install whose every package is in place and whose rollback never began; and it removes the folder.
+  install whose every package is in place and whose rollback never began; and it removes the folder. A journal that a
+  save stopped between its two moves left aside as a backup is put back first, as every file the launcher saves is.
+  While a journal cannot be read just now, as while another program holds that backup, its folder waits for a later
+  start with nothing undone or kept, and what that join left in place is unknown: a join is refused, and the catalog a
+  join plans from (`loadExactPackageCatalog`) throws, each with the launcher's message for a file it cannot read, which
+  names no path and says what to do. The catalog reads without the lease, so a journal that a save in another launcher
+  has just moved aside counts as one that cannot be read, never as none. A join's own journal never refuses it. A
+  journal that is there but not as written is never acted on, and its folder goes.
 - **A running game.** It writes its manager state when it quits, over anything written while it ran, which would drop
   the disabled records. So nothing installs or cleans up beside one; the package inbox likewise holds what arrives
   until the next start. An install closes a game this launcher started only when the player's consent covered it
