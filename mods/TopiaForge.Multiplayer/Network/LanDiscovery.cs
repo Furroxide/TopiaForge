@@ -154,6 +154,13 @@ namespace TopiaForge.Multiplayer.Network
     /// is dropped and counted. A session that moves to another port on its own sender keeps its place. Forged beacons
     /// from many spoofed addresses can still fill the list, as they can the launcher's; on a local network that is
     /// accepted, and a sender's share only stops one host doing it.
+    /// <para>
+    /// Info queries keep the launcher's budget too (<see cref="LanQueryBudget"/>): at most 32 a second, and at most 8 to
+    /// one sender address in any two seconds. A query the budget holds back leaves its session unasked, and goes out in
+    /// the first turn the budget has room for it, the longest held first and ahead of new beacons, or at the session's
+    /// next beacon. So a sender that changes port as fast as it can takes at most 8 of the endpoint's 64 outstanding
+    /// queries, and never pushes another host's out before its answer comes.
+    /// </para>
     /// </remarks>
     internal sealed class LanBrowser : INetworkService
     {
@@ -169,9 +176,12 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Dictionary<string, Entry> entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
         private readonly byte[] buffer = new byte[LanBeacon.Size + 1];
         private readonly long expiryMicros;
+        private readonly LanQueryBudget budget = new LanQueryBudget();
         private IReadOnlyList<LanServer> servers = Array.Empty<LanServer>();
         private long nextExpiry = long.MaxValue;
+        private long nextRetry = long.MaxValue;
         private long dropped;
+        private long throttled;
 
         /// <param name="port">The discovery port; tests listen elsewhere.</param>
         /// <param name="expiryMicros">How long a silent session stays listed.</param>
@@ -204,8 +214,16 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         internal long Dropped => Interlocked.Read(ref dropped);
 
+        /// <summary>
+        /// Gets how many info queries a beacon asked for that the budget held back; safe to read from any thread, for tests
+        /// and diagnostics. A query held back still goes out once the budget has room for it.
+        /// </summary>
+        internal long Throttled => Interlocked.Read(ref throttled);
+
         public void Turn(NetworkStack stack, long now)
         {
+            // Queries the budget held back go first, before new beacons ask for more.
+            if (now >= nextRetry) AskHeldBack(stack, now);
             var changed = false;
             for (var count = 0; count < MaximumBeaconsPerTurn; count++)
             {
@@ -262,7 +280,7 @@ namespace TopiaForge.Multiplayer.Network
             return claimed;
         }
 
-        public long NextTimeoutMicros() => nextExpiry;
+        public long NextTimeoutMicros() => Math.Min(nextExpiry, nextRetry);
 
         public void Dispose() => socket.Dispose();
 
@@ -287,23 +305,62 @@ namespace TopiaForge.Multiplayer.Network
             if (moved)
             {
                 // What the old path answered says nothing about the new one: the entry waits for a reply from there
-                // that names the same server.
+                // that names the same server, and is asked there as a new session is.
                 entry.Info = null;
                 entry.Incompatible = false;
                 entry.RoundTripMicros = 0;
+                entry.QueriedAt = long.MinValue;
             }
 
             entry.Path = path;
             entry.Sender = sender;
             entry.LastSeenMicros = now;
             nextExpiry = Math.Min(nextExpiry, now + expiryMicros);
-            if (moved || entry.QueriedAt == long.MinValue || now - entry.QueriedAt >= RequeryMicros)
+            if (entry.QueriedAt == long.MinValue || now - entry.QueriedAt >= RequeryMicros) Ask(stack, entry, now, beacon: true);
+            return moved || entry.Info == null;
+        }
+
+        /// <summary>
+        /// Asks the entry's host for its info, within the budget. A query the budget holds back leaves the entry as it
+        /// was, unasked, until the first turn the budget has room for it or its next beacon.
+        /// </summary>
+        private void Ask(NetworkStack stack, Entry entry, long now, bool beacon)
+        {
+            if (!stack.Endpoint.Permits(entry.Path))
             {
                 entry.QueriedAt = now;
-                if (stack.Endpoint.Permits(path)) stack.Endpoint.QueryInfo(path, now);
+                entry.HeldBackSince = long.MaxValue;
+                return;
             }
 
-            return moved || entry.Info == null;
+            if (!budget.TryAdmit(entry.Sender, now))
+            {
+                if (beacon) Interlocked.Increment(ref throttled);
+                if (entry.HeldBackSince == long.MaxValue) entry.HeldBackSince = now;
+                nextRetry = Math.Min(nextRetry, budget.NextRoom(entry.Sender, now));
+                return;
+            }
+
+            entry.QueriedAt = now;
+            entry.HeldBackSince = long.MaxValue;
+            stack.Endpoint.QueryInfo(entry.Path, now);
+        }
+
+        /// <summary>Asks again, the longest held first, the hosts whose queries the budget held back, as far as it has room.</summary>
+        private void AskHeldBack(NetworkStack stack, long now)
+        {
+            nextRetry = long.MaxValue;
+            List<Entry>? heldBack = null;
+            foreach (var entry in entries.Values)
+            {
+                if (entry.HeldBackSince != long.MaxValue) (heldBack ??= new List<Entry>()).Add(entry);
+            }
+
+            if (heldBack == null) return;
+            heldBack.Sort((left, right) => left.HeldBackSince != right.HeldBackSince
+                ? left.HeldBackSince.CompareTo(right.HeldBackSince)
+                : string.CompareOrdinal(left.ServerId, right.ServerId));
+            foreach (var entry in heldBack) Ask(stack, entry, now, beacon: false);
         }
 
         /// <summary>Counts the listed sessions last heard from <paramref name="sender"/>, on any port.</summary>
@@ -375,6 +432,9 @@ namespace TopiaForge.Multiplayer.Network
             internal long RoundTripMicros { get; set; }
             internal long LastSeenMicros { get; set; }
             internal long QueriedAt { get; set; } = long.MinValue;
+
+            /// <summary>Gets or sets when the budget first held back the query this entry waits for, or <see cref="long.MaxValue"/>.</summary>
+            internal long HeldBackSince { get; set; } = long.MaxValue;
         }
     }
 }
