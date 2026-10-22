@@ -50,6 +50,10 @@ namespace TopiaForge.ModManager.Sessions
         internal const string UncheckedServer =
             "This game could not read its record of the servers it has met by address, so it could not check this one. Join it only if you trust it, or try again in a moment.";
 
+        /// <summary>A session that did not open, because the host's list of the players it banned could not be read.</summary>
+        internal const string UnreadBans =
+            "This game could not read its list of the players you banned, so it did not open the session: they could have joined. Close any program that may be using the list and check that TopiaForge can read its data folder, then try again.";
+
         /// <summary>
         /// Reads what the runtime or the provider threw as hosting or a join started as a refusal: a bad setting or state
         /// keeps its words, which the screens redact before they show them, and anything else is named by its type alone.
@@ -116,6 +120,8 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Network stopped", "The host's network stopped after repeated errors, so the session ended. Join again once the host is back.", ConnectingStep.Resolving, false);
                 case InternalLiveFailure.ContentUnreadable:
                     return new FailureMessage("Mods could not be read", UnreadableContent, ConnectingStep.VerifyingMods, true);
+                case InternalLiveFailure.BansUnreadable:
+                    return new FailureMessage("Ban list could not be read", UnreadBans, ConnectingStep.Resolving, true);
                 default:
                     return new FailureMessage("Join failed", "The join could not finish. Try again.", ConnectingStep.Resolving, true);
             }
@@ -136,6 +142,8 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Identity unavailable", "This game's multiplayer identity could not be read or created, so it could not host. Check that TopiaForge can write to its data folder, then try again.", ConnectingStep.Resolving, true);
                 case InternalLiveFailure.ContentUnreadable:
                     return new FailureMessage("Mods could not be read", UnreadableContent, ConnectingStep.Resolving, true);
+                case InternalLiveFailure.BansUnreadable:
+                    return new FailureMessage("Ban list could not be read", UnreadBans, ConnectingStep.Resolving, true);
                 case InternalLiveFailure.NetworkStopped:
                     return new FailureMessage("Network stopped", "This game's network stopped after repeated errors, so hosting ended and every player left. Host again to let them back in.", ConnectingStep.Resolving, true);
                 case InternalLiveFailure.Rejected:

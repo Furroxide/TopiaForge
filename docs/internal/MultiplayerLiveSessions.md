@@ -469,12 +469,17 @@ the identity, bans and known hosts they share.
   through the engine's `AfterClientSessionEnds` hook (`MultiplayerSessionEngine.md`, "Role changes"), with a fresh
   solo session id.
 - **Failures** are a `LiveFailure` and a sentence for the player. Neither ever names an address. A host that cannot
-  start reports why (`PortInUse`, `IdentityUnavailable`, `ContentUnreadable`, …) and may simply be started again.
+  start reports why (`PortInUse`, `IdentityUnavailable`, `ContentUnreadable`, `BansUnreadable`, …) and may simply be
+  started again.
 
 ## 18. Hosting
 
 `LiveHost` turns the running solo session into a listen host. The engine keeps the same session throughout: hosting
 adds links to it, and stopping closes them while the host plays on.
+
+Hosting starts only once the ban list has been read (section 21). While it cannot be read, hosting fails as
+`BansUnreadable` before anything binds, so no player is ever admitted unchecked against it, and hosting again reads it
+again.
 
 1. **Packages.** The packages the descriptor lists are read from the runtime first. A host whose packages cannot be
    read fails as `ContentUnreadable` before anything binds, rather than serve a descriptor that lists none.
@@ -505,6 +510,7 @@ adds links to it, and stopping closes them while the host plays on.
 A host admits players through `HostPolicy`, which checks, in order:
 
 1. **Bans.** A banned transport key is refused first. Rotating the key escapes a ban, as the player-facing docs say.
+   A host runs only with its ban list read, so no join skips this check.
 2. **The engine's own checks:** the protocol's major version, capacity, and every shared contract's schema.
 3. **The join content's form.** A player's join request carries version 1, a flag byte, a 32-byte password proof when
    the flag says so, and the runtime's content bytes with a minimal varint length, read in full so that no length
@@ -576,10 +582,18 @@ Each provider keeps its live-session files in its own data folder, read on the f
 | `multiplayer/bans.json` | `topiaforge.bans/1`: each banned transport key with a display name and the time, at most 1,024, the oldest giving way; read up to 512 KiB, which a full list of the longest names fits |
 | `multiplayer/known-hosts.json` | `topiaforge.known-hosts/1`: the hashes of typed addresses and the server each served (section 8), at most 256 |
 
-- **Damage.** A file that does not read as its schema yields an empty record, and the next save replaces it. Entries
-  that do not read are skipped and the rest kept. A ban file that cannot be read at all, locked or failing, is treated
-  the same way, so it never keeps the player out of live play.
-- **Known hosts that cannot be read** are never treated that way (section 8). The record stays unread: typed
+- **Bans that cannot be read** are never taken for an empty list, which would admit every player the host banned and
+  let its next ban save a list holding that ban alone. The list stays unread: hosting does not start
+  (`BansUnreadable`), nothing is saved over the file, and hosting again reads it again, so it recovers once the file
+  reads. A ban made while the list is unread is held: it counts at once, joins the file's bans as the newest once they
+  read, and is saved with them. Joining never needs the list.
+- **Bans that are damaged** are salvaged: the bans that read are kept, and before anything replaces the file its bytes
+  are copied to the first of `multiplayer/bans.damaged.json`, `bans.damaged-2.json` and `bans.damaged-3.json` that
+  holds no file. A copy is never written over: a place that holds a file, or cannot be read, is passed over, and once
+  all three hold copies a damaged list is salvaged without one. While the copy cannot be written, the damaged file
+  stays in place, to be salvaged again. A file of another schema, a ban that does not read, a name that is not display
+  text, a key banned twice, more than 1,024 bans or bytes that are not canonical all count as damage.
+- **Known hosts that cannot be read** are never read as empty either (section 8). The record stays unread: typed
   addresses are refused with the reason, nothing is saved over the file, and each later check reads it again. Hosting,
   LAN and service joins, and joins to a link that names its server never need the record, so they go on.
 - **Known hosts that are damaged** are salvaged, following the launcher's rule (#214) where it fits: what reads is
@@ -594,7 +608,7 @@ Each provider keeps its live-session files in its own data folder, read on the f
 - **Order.** Each file's saves run one after another, so a slow save can never land after, and overwrite, a newer
   one. A ban starts saving at once.
 - **Closing.** Saves are never cancelled. Closing starts any save still due and waits up to two seconds for the saves
-  to land, so a ban made just before quitting survives. Known hosts never read are not saved.
+  to land, so a ban made just before quitting survives. Bans and known hosts never read are not saved.
 - **Merging.** Known hosts read from disk are merged in as older than those this process recorded, in their own order,
   so the cap drops the oldest first.
 

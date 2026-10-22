@@ -132,15 +132,14 @@ internal static class LiveSessionFailureTests
         That(thread.TryTakeEvent(out _) && thread.PendingEvents == NetworkThread.MaximumEvents - 1, "and taking one makes room");
     }
 
-    internal static void ClosingSavesWhatChangedAndUnreadableFilesAreEmpty()
+    internal static void ClosingSavesWhatChangedWhileKnownHostsStayUnread()
     {
         using var rig = new LiveRig(144);
         Register(rig.Host);
-        rig.HostFiles.FailReadsOf.Add(BanList.FilePath);
         rig.HostFiles.FailReadsOf.Add(KnownHosts.FilePath);
         rig.StartHosting(new HostSettings("Careful") { Port = 0 });
         That(rig.Host.Live!.HostPhase == HostPhase.Hosting,
-            "an unreadable ban file reads as empty, and an unreadable known-hosts file stays unread, so hosting still starts");
+            "an unreadable known-hosts file stays unread, and hosting, which never needs it, still starts");
         rig.HostFiles.FailReadsOf.Clear();
 
         var first = rig.AddClient("first");
