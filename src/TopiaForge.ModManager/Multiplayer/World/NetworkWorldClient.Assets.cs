@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -34,9 +32,11 @@ namespace TopiaForge.ModManager
 
     /// <summary>
     /// A joined player's asset replicas: a spawn made through a mod's asset service is built here through the owning mod's
-    /// own asset service, its bundle and prefab loaded once and shared by every replica of them. Loads are polled each
-    /// frame and never awaited, a load that takes longer than <see cref="BuildTimeoutMicros"/> counts as unbuildable, and
-    /// leaving lets go of every handle, including those still loading.
+    /// own asset service, its bundle and prefab loaded once and shared by every replica of them. The mod's own handles come
+    /// first (WS3.7): a prefab it loaded, or a bundle it holds, which the game would refuse to load a second time, as a
+    /// listen host's builds of its players' spawns do. Loads are polled each frame and never awaited, a load that takes
+    /// longer than <see cref="BuildTimeoutMicros"/> counts as unbuildable, and leaving lets go of every handle, including
+    /// those still loading.
     /// </summary>
     internal sealed partial class NetworkWorldClient
     {
@@ -54,10 +54,19 @@ namespace TopiaForge.ModManager
         internal const int MaximumPrefabLoads = 4096;
 
         private readonly Func<string, IAssetService?> findAssets;
-        private readonly Dictionary<string, AssetLoad<IAssetBundle>> bundles = new Dictionary<string, AssetLoad<IAssetBundle>>(StringComparer.Ordinal);
-        private readonly Dictionary<string, AssetLoad<IPrefabAsset>> prefabs = new Dictionary<string, AssetLoad<IPrefabAsset>>(StringComparer.Ordinal);
+        private readonly ModAssetLoads modLoads;
+        private readonly Dictionary<string, WorldAssetLoad<IAssetBundle>> bundles = new Dictionary<string, WorldAssetLoad<IAssetBundle>>(StringComparer.Ordinal);
+        private readonly Dictionary<string, WorldAssetLoad<IPrefabAsset>> prefabs = new Dictionary<string, WorldAssetLoad<IPrefabAsset>>(StringComparer.Ordinal);
+        private readonly Dictionary<string, IAssetService> prefabServices = new Dictionary<string, IAssetService>(StringComparer.Ordinal);
         private readonly List<ClientWorldEntity> building = new List<ClientWorldEntity>();
         private int pendingBuilds;
+
+        private enum BuildStep
+        {
+            Waiting,
+            Ready,
+            Failed
+        }
 
         /// <summary>Gets how many asset replicas are still loading.</summary>
         internal int PendingBuilds => pendingBuilds;
@@ -99,7 +108,11 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>Moves one asset replica on: its bundle, then its prefab, then the spawn. Loads are shared and polled, never awaited.</summary>
+        /// <summary>
+        /// Moves one asset replica on: its prefab, the mod's own first, else its bundle, the mod's own first, then the
+        /// prefab from it; then the spawn, through the service that holds the prefab. Loads are shared and polled, never
+        /// awaited.
+        /// </summary>
         private void AdvanceBuild(ClientWorldEntity mirrored, long now)
         {
             var build = mirrored.Build;
@@ -110,40 +123,24 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            if (!bundles.TryGetValue(build.BundleKey, out var bundle))
+            if (modLoads.TryGetPrefab(mirrored.OwnerModId, build.BundlePath, build.AssetName, out var modAssets, out var modPrefab))
             {
-                // Each load asks the package's files, and is kept for the session: a host that names paths without end
-                // gets no more of either.
-                if (bundles.Count >= MaximumBundleLoads)
-                {
-                    counters.AssetLoadsRefused++;
-                    FinishBuild(mirrored, false);
-                    return;
-                }
-
-                bundle = AssetLoad<IAssetBundle>.Start(token => build.Assets.LoadBundleAsync(build.BundlePath, token));
-                bundles.Add(build.BundleKey, bundle);
-            }
-
-            if (!bundle.IsSettled) return;
-            if (!bundle.Succeeded)
-            {
-                FinishBuild(mirrored, false);
+                SpawnReplica(mirrored, modAssets, modPrefab);
                 return;
             }
 
-            if (!prefabs.TryGetValue(build.PrefabKey, out var prefab))
+            if (prefabs.TryGetValue(build.PrefabKey, out var prefab) && prefab.IsSettled && prefab.Succeeded && !IsAlive(prefab.Value!))
             {
-                if (prefabs.Count >= MaximumPrefabLoads)
-                {
-                    counters.AssetLoadsRefused++;
-                    FinishBuild(mirrored, false);
-                    return;
-                }
+                // Loaded from a bundle the mod has let go of since: it goes, and loads again from what holds the bundle now.
+                ForgetPrefab(build.PrefabKey);
+                prefab = null;
+            }
 
-                var loaded = bundle.Value!;
-                prefab = AssetLoad<IPrefabAsset>.Start(token => build.Assets.LoadPrefabAsync(loaded, build.AssetName, token));
-                prefabs.Add(build.PrefabKey, prefab);
+            if (prefab == null)
+            {
+                var step = LoadPrefab(mirrored, build);
+                if (step != BuildStep.Ready) return;
+                prefab = prefabs[build.PrefabKey];
             }
 
             if (!prefab.IsSettled) return;
@@ -153,10 +150,90 @@ namespace TopiaForge.ModManager
                 return;
             }
 
+            SpawnReplica(mirrored, prefabServices[build.PrefabKey], prefab.Value!);
+        }
+
+        /// <summary>Starts loading a replica's prefab: from the bundle the mod holds, waiting while its own load runs, else from one loaded here.</summary>
+        private BuildStep LoadPrefab(ClientWorldEntity mirrored, AssetReplicaBuild build)
+        {
+            IAssetService prefabAssets;
+            IAssetBundle from;
+            if (!bundles.ContainsKey(build.BundleKey) && modLoads.TryGetBundle(mirrored.OwnerModId, build.BundlePath, out var bundleAssets, out var modBundle))
+            {
+                prefabAssets = bundleAssets;
+                from = modBundle;
+            }
+            else if (!bundles.ContainsKey(build.BundleKey) && modLoads.IsLoadingBundle(mirrored.OwnerModId, build.BundlePath))
+            {
+                // The mod's own load of the bundle lands first; a second load of it would be refused.
+                return BuildStep.Waiting;
+            }
+            else
+            {
+                if (!bundles.TryGetValue(build.BundleKey, out var bundle))
+                {
+                    // Each load asks the package's files, and is kept for the session: a host that names paths without end
+                    // gets no more of either.
+                    if (bundles.Count >= MaximumBundleLoads)
+                    {
+                        counters.AssetLoadsRefused++;
+                        FinishBuild(mirrored, false);
+                        return BuildStep.Failed;
+                    }
+
+                    bundle = WorldAssetLoad<IAssetBundle>.Start(token => build.Assets.LoadBundleAsync(build.BundlePath, token));
+                    bundles.Add(build.BundleKey, bundle);
+                }
+
+                if (!bundle.IsSettled) return BuildStep.Waiting;
+                if (!bundle.Succeeded)
+                {
+                    FinishBuild(mirrored, false);
+                    return BuildStep.Failed;
+                }
+
+                prefabAssets = build.Assets;
+                from = bundle.Value!;
+            }
+
+            if (prefabs.Count >= MaximumPrefabLoads)
+            {
+                counters.AssetLoadsRefused++;
+                FinishBuild(mirrored, false);
+                return BuildStep.Failed;
+            }
+
+            prefabs.Add(build.PrefabKey, WorldAssetLoad<IPrefabAsset>.Start(token => prefabAssets.LoadPrefabAsync(from, build.AssetName, token)));
+            prefabServices.Add(build.PrefabKey, prefabAssets);
+            return BuildStep.Ready;
+        }
+
+        private void ForgetPrefab(string key)
+        {
+            if (prefabs.TryGetValue(key, out var load)) load.Release();
+            prefabs.Remove(key);
+            prefabServices.Remove(key);
+        }
+
+        private static bool IsAlive(IPrefabAsset prefab)
+        {
+            try
+            {
+                return prefab.IsAlive;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Spawns a replica from <paramref name="prefab"/> through <paramref name="assets"/>, the service that holds it.</summary>
+        private void SpawnReplica(ClientWorldEntity mirrored, IAssetService assets, IPrefabAsset prefab)
+        {
             OperationResult<ISpawnedEntity>? spawned;
             try
             {
-                spawned = build.Assets.Spawn(new AssetSpawnRequest(prefab.Value!, ToTransform(mirrored.EntryPose, mirrored.Scale)));
+                spawned = assets.Spawn(new AssetSpawnRequest(prefab, ToTransform(mirrored.EntryPose, mirrored.Scale)));
             }
             catch (Exception)
             {
@@ -198,84 +275,8 @@ namespace TopiaForge.ModManager
             foreach (var prefab in prefabs.Values) prefab.Release();
             foreach (var bundle in bundles.Values) bundle.Release();
             prefabs.Clear();
+            prefabServices.Clear();
             bundles.Clear();
-        }
-
-        /// <summary>One shared load of a bundle or a prefab, polled each frame. Releasing it disposes what it loaded, now or when it lands.</summary>
-        private sealed class AssetLoad<T> where T : class, IDisposable
-        {
-            private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
-            private Task<OperationResult<T>>? task;
-            private bool released;
-
-            internal bool IsSettled => task == null || task.IsCompleted;
-
-            internal bool Succeeded => Value != null;
-
-            internal T? Value
-            {
-                get
-                {
-                    if (released || task == null || task.Status != TaskStatus.RanToCompletion) return null;
-                    var result = task.Result;
-                    return result != null && result.TryGetValue(out var value) ? value : null;
-                }
-            }
-
-            internal static AssetLoad<T> Start(Func<CancellationToken, Task<OperationResult<T>>> start)
-            {
-                var load = new AssetLoad<T>();
-                try
-                {
-                    load.task = start(load.cancellation.Token);
-                }
-                catch (Exception)
-                {
-                    load.task = null;
-                }
-
-                return load;
-            }
-
-            /// <summary>
-            /// Lets go of what the load holds. One still running is cancelled first: the engine's loader then lets go of whatever
-            /// it loads as it lands, on the game thread. A continuation here could not promise that thread, since the loader runs
-            /// what waits for a load elsewhere, and a handle let go of there stays loaded, so a later load of its bundle fails.
-            /// </summary>
-            internal void Release()
-            {
-                if (released) return;
-                released = true;
-                var current = task;
-                if (current == null) return;
-                if (!current.IsCompleted)
-                {
-                    try
-                    {
-                        cancellation.Cancel();
-                    }
-                    catch (Exception)
-                    {
-                        // A loader whose cancellation throws is let go of below, like one that takes no notice of it.
-                    }
-                }
-
-                // A loader that takes no notice of cancellation hands back what it loaded anyway, and that goes as it lands.
-                if (current.IsCompleted) DisposeResult(current);
-                else current.ContinueWith(landed => DisposeResult(landed), TaskContinuationOptions.ExecuteSynchronously);
-            }
-
-            private static void DisposeResult(Task<OperationResult<T>> landed)
-            {
-                try
-                {
-                    if (landed.Status == TaskStatus.RanToCompletion && landed.Result != null && landed.Result.TryGetValue(out var value)) value.Dispose();
-                }
-                catch (Exception)
-                {
-                    // A handle that cannot be let go of goes with its mod's lifetime.
-                }
-            }
         }
     }
 }

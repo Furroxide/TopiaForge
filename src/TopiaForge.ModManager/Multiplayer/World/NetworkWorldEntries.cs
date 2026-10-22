@@ -40,12 +40,15 @@ namespace TopiaForge.ModManager
 
         internal string OwnerModId { get; set; } = string.Empty;
 
-        /// <summary>Gets the spawn's sequence in its owner's records, which names its origin with the mod.</summary>
+        /// <summary>
+        /// Gets the spawn's shadow key: its number in its mod's shadowable spawns, which names its origin with the mod and
+        /// which a joined player's own run of the same script binds its shadow by (WS3.7). Zero when no shadow stands for it.
+        /// </summary>
         internal long OriginSequence { get; set; }
 
         internal string? ContentKey { get; set; }
 
-        /// <summary>Gets the lifetime owner: zero for the server. Authority routing (WS3.7) gives players' spawns theirs.</summary>
+        /// <summary>Gets the lifetime owner: zero for the server, or the slot of the player whose spawn the host adopted (WS3.7).</summary>
         internal int OwnerSlot { get; set; }
 
         internal NetVector3 Scale { get; set; }
@@ -57,7 +60,7 @@ namespace TopiaForge.ModManager
 
     /// <summary>
     /// Writes and reads world entries. An entry starts with its source byte, then, for a scene object, its id, key and
-    /// pose; for an SDK spawn, its id, kind, owning mod, origin sequence, owner slot, scale, pose and description; for world
+    /// pose; for an SDK spawn, its id, kind, owning mod, shadow key (zero for none), owner slot, scale, pose and description; for world
     /// content, its id, kind, content key, owning mod, owner slot, scale, pose and description; for a removed scene object,
     /// its key; for an unbound scene object's pose, its key and pose. Every field a host sends is checked as the runtime
     /// checks its own.
@@ -163,7 +166,7 @@ namespace TopiaForge.ModManager
                     return TryReadId(reader, entry) && TryReadKey(reader, entry) && TryReadPose(reader, entry);
                 case WorldEntrySource.SdkSpawn:
                     return TryReadId(reader, entry) && TryReadKind(reader, entry) && TryReadMod(reader, entry) &&
-                           reader.TryReadVarUInt(long.MaxValue, out var sequence) && sequence >= 1 && Set(entry, (long)sequence) &&
+                           reader.TryReadVarUInt(long.MaxValue, out var sequence) && Set(entry, (long)sequence) &&
                            TryReadOwner(reader, entry) && TryReadScale(reader, entry) && TryReadPose(reader, entry) && TryReadPayload(reader, entry);
                 case WorldEntrySource.WorldContent:
                     return TryReadId(reader, entry) && TryReadKind(reader, entry) && TryReadContentKey(reader, entry) && TryReadMod(reader, entry) &&

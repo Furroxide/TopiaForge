@@ -27,6 +27,7 @@ namespace TopiaForge.ModRuntime.Tests
             TestTheRealmWaitsForTheMainMenu(root);
             TestNetworkWorldAcrossRuntimes(root);
             TestSceneKeysCostOnlyTheLoad(root);
+            TestAuthorityRoutingAcrossRuntimes(root);
             Console.WriteLine("ModRuntime multiplayer composition tests passed.");
         }
 

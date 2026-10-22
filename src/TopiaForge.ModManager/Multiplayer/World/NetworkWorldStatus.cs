@@ -167,5 +167,77 @@ namespace TopiaForge.ModManager
         internal long ActivationFailures { get; set; }
 
         internal long HoldFailures { get; set; }
+
+        // Authority routing (WS3.7), on the host.
+
+        /// <summary>Gets the host's scripted spawns registered without their shadow key, because an earlier world session's spawn still held it.</summary>
+        internal long ShadowKeysReused { get; set; }
+
+        internal long SpawnRequests { get; set; }
+
+        internal long SpawnsAdopted { get; set; }
+
+        internal long SpawnsRefused { get; set; }
+
+        internal long TransformRequests { get; set; }
+
+        internal long TransformsApplied { get; set; }
+
+        internal long DestroyRequests { get; set; }
+
+        internal long DestroysApplied { get; set; }
+
+        /// <summary>Gets the transform and destroy requests the host refused: rate, rules, or a target that is not there.</summary>
+        internal long ChangesRefused { get; set; }
+
+        /// <summary>Gets the requests that could not be read; reading stops at the first bad field and nothing runs.</summary>
+        internal long MalformedRequests { get; set; }
+
+        /// <summary>Gets the forwarded spawns a player's process made from an input-active frame, the coarse source.</summary>
+        internal long SpawnsFromInputFrames { get; set; }
+
+        /// <summary>Gets the verdicts dropped because a player's queue of them was full; only a player that floods reaches it.</summary>
+        internal long VerdictsDropped { get; set; }
+
+        /// <summary>Gets the players whose objects the host ended because they left the session.</summary>
+        internal long PlayersCleanedUp { get; set; }
+
+        /// <summary>Gets the objects the host ended because the player who made them left.</summary>
+        internal long PlayerObjectsEnded { get; set; }
+
+        // Authority routing (WS3.7), on a joined player.
+
+        internal long PredictionsMade { get; set; }
+
+        internal long PredictionsAdopted { get; set; }
+
+        internal long PredictionsRefused { get; set; }
+
+        internal long PredictionsTimedOut { get; set; }
+
+        /// <summary>Gets the predictions that ended before a verdict: their mod destroyed them, or the player left.</summary>
+        internal long PredictionsEnded { get; set; }
+
+        internal long RefusalToasts { get; set; }
+
+        internal long ShadowsMade { get; set; }
+
+        internal long ShadowsBound { get; set; }
+
+        internal long ShadowsMismatched { get; set; }
+
+        internal long ShadowsExpired { get; set; }
+
+        /// <summary>Gets the requests this player sent its host: spawns, transform changes and destroys.</summary>
+        internal long AuthorityRequestsSent { get; set; }
+
+        /// <summary>Gets the calls this player refused before anything was sent: another's object, or past the host's limits.</summary>
+        internal long RequestsRefusedHere { get; set; }
+
+        /// <summary>Gets the objects of this player's that its mod ended by disposing them, which it asked the host to destroy.</summary>
+        internal long DisposalsForwarded { get; set; }
+
+        /// <summary>Gets the verdicts that named no prediction waiting for one, or an entity another copy stands for.</summary>
+        internal long VerdictsIgnored { get; set; }
     }
 }

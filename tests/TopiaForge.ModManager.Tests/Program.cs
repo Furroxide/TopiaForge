@@ -271,6 +271,12 @@ namespace TopiaForge.ModManager.Tests
                 return 0;
             }
 
+            if (args.Length == 1 && string.Equals(args[0], "--authority-routing", StringComparison.Ordinal))
+            {
+                AuthorityTests.Run();
+                return 0;
+            }
+
             if (args.Length == 1 &&
                 string.Equals(args[0], "--installed-version-coexistence", StringComparison.Ordinal))
             {

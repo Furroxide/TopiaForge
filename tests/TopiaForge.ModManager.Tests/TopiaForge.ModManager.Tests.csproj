@@ -346,6 +346,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerReplication.cs" Link="Runtime/Multiplayer/MultiplayerReplication.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerMicrophoneArbiter.cs" Link="Runtime/Multiplayer/MultiplayerMicrophoneArbiter.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.cs" Link="Runtime/Multiplayer/RuntimeReplication.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/RuntimeReplication.Authority.cs" Link="Runtime/Multiplayer/RuntimeReplication.Authority.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetAssetService.cs" Link="Runtime/Multiplayer/NetAssetService.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/NetGameplayServices.cs" Link="Runtime/Multiplayer/NetGameplayServices.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/MultiplayerRuntimeHost.cs" Link="Runtime/Multiplayer/MultiplayerRuntimeHost.cs" />

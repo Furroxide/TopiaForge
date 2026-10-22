@@ -6,11 +6,13 @@ using TopiaForge.Mods;
 namespace TopiaForge.ModManager
 {
     /// <summary>
-    /// The network seam's asset service. It changes no behaviour: every member forwards its arguments to the service the
-    /// gameplay host made and returns exactly what that returns, failures and exceptions included. It also records each
-    /// spawn that succeeds, at spawn time, so that opening the session to other players later can baseline it. It keeps
+    /// The network seam's asset service. Offline and on a listen host it changes no behaviour: every member forwards its
+    /// arguments to the service the gameplay host made and returns exactly what that returns, failures and exceptions
+    /// included, and each spawn that succeeds is recorded at spawn time, so that opening the session to other players later
+    /// can baseline it. On a joined player a spawn is routed (WS3.7): on the player's intent it is a prediction the host is
+    /// asked for, and scripted it is a shadow of the host's own; the mod holds the handle the gameplay host made either way.
+    /// Every load is listed by the mod, so a listen host makes a player's spawn from the mod's own handles. It keeps
     /// <see cref="IParentAssetScope"/>: a session scope's service accepts its package's prefabs as it did before.
-    /// Authority routing (WS3.7) turns a joined player's spawn into a forwarded, predicted request here.
     /// </summary>
     internal sealed class NetAssetService : IAssetService, IParentAssetScope
     {
@@ -39,14 +41,24 @@ namespace TopiaForge.ModManager
             if (inner is IParentAssetScope scope) scope.AttachParent(source);
         }
 
-        public Task<OperationResult<IAssetBundle>> LoadBundleAsync(string relativePath, CancellationToken cancellationToken = default) =>
-            inner.LoadBundleAsync(relativePath, cancellationToken);
+        public Task<OperationResult<IAssetBundle>> LoadBundleAsync(string relativePath, CancellationToken cancellationToken = default)
+        {
+            var load = inner.LoadBundleAsync(relativePath, cancellationToken);
+            if (load != null && relativePath != null) Replication.ListBundleLoad(inner, relativePath, load);
+            return load!;
+        }
 
-        public Task<OperationResult<IPrefabAsset>> LoadPrefabAsync(IAssetBundle bundle, string assetName, CancellationToken cancellationToken = default) =>
-            inner.LoadPrefabAsync(bundle, assetName, cancellationToken);
+        public Task<OperationResult<IPrefabAsset>> LoadPrefabAsync(IAssetBundle bundle, string assetName, CancellationToken cancellationToken = default)
+        {
+            var load = inner.LoadPrefabAsync(bundle, assetName, cancellationToken);
+            if (load != null && bundle != null && assetName != null) Replication.ListPrefabLoad(inner, bundle, assetName, load);
+            return load!;
+        }
 
         public OperationResult<ISpawnedEntity> Spawn(AssetSpawnRequest request)
         {
+            var authority = Replication.JoinedAuthority;
+            if (authority != null) return Replication.RouteAssetSpawn(request, inner, authority);
             var result = inner.Spawn(request);
             if (result.TryGetValue(out var spawned)) Replication.RecordAssetSpawn(spawned, request);
             return result;

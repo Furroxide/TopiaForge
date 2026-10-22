@@ -24,6 +24,12 @@ namespace TopiaForge.ModManager
                 new BoundSessionEnvironment(sessionBindings!, mainMenu ?? LoadSessionMainMenuAsync, sessionSelectionRejections), runtimeOwnershipId);
             AttachSessionLifecycle(activeSessions, nativeDispatcher);
             activeSessions.DiagnosticFailure += error => logger.Error(error, "Session lifecycle failure.");
+
+            // A world session that starts numbers its mods' shadowable spawns afresh, as a joined player following it does (WS3.7).
+            activeSessions.StateChanged += state =>
+            {
+                if (state.Phase == SessionPhase.Preparing) multiplayer.Spawns.BeginWorldSession();
+            };
             return activeSessions;
         }
         internal RuntimeSessionSnapshot CaptureSessionRuntime() => sessionBindings?.Capture()

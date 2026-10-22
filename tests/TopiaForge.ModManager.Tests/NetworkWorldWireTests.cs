@@ -142,7 +142,6 @@ namespace TopiaForge.ModManager.Tests
                 ("a kind that is not a token", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), "Asset.Prefab", "io.example.mod", 1, 0, new NetVector3(1, 1, 1), pose, default)),
                 ("a kind past 64 characters", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), new string('a', 65), "io.example.mod", 1, 0, new NetVector3(1, 1, 1), pose, default)),
                 ("a mod id that is not one", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), "x.y", ".mod", 1, 0, new NetVector3(1, 1, 1), pose, default)),
-                ("sequence zero", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), "x.y", "io.example.mod", 0, 0, new NetVector3(1, 1, 1), pose, default)),
                 ("an owner past the slots", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), "x.y", "io.example.mod", 1, 256, new NetVector3(1, 1, 1), pose, default)),
                 ("a zero scale", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), "x.y", "io.example.mod", 1, 0, new NetVector3(0, 1, 1), pose, default)),
                 ("a NaN scale", w => WorldEntryCodec.WriteSpawn(w, new NetworkEntityId(1), "x.y", "io.example.mod", 1, 0, new NetVector3(float.NaN, 1, 1), pose, default)),
@@ -160,6 +159,12 @@ namespace TopiaForge.ModManager.Tests
                 write(writer);
                 That(!WorldEntryCodec.TryRead(Read(writer), new WorldEntry()), "an entry with " + name + " is refused");
             }
+
+            // A spawn no joined player shadows, such as one the host made for a player, carries no shadow key (WS3.7).
+            var keyless = new WorldWireWriter();
+            WorldEntryCodec.WriteSpawn(keyless, new NetworkEntityId(1), "x.y", "io.example.mod", 0, 3, new NetVector3(1, 1, 1), pose, default);
+            var read = new WorldEntry();
+            That(WorldEntryCodec.TryRead(Read(keyless), read) && read.OriginSequence == 0 && read.OwnerSlot == 3, "a spawn without a shadow key reads as one");
         }
 
         private static void AssetDescriptionsRoundTripAndRefuseGarbage()

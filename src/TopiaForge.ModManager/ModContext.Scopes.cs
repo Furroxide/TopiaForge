@@ -103,6 +103,7 @@ namespace TopiaForge.ModManager
             if (Assets is IParentAssetScope assetScope) assetScope.AttachParent(parent.Assets);
             Audio = gameplay.Audio;
             Ui = new NetUiService(gameplay.Ui, replication);
+            replication.Ui = gameplay.Ui;
             Ui.ApplyAccessibility(parent.Ui.Accessibility);
             SceneTransitions = gameplay.SceneTransitions;
             WorldRuntime = gameplay.WorldRuntime;

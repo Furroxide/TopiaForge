@@ -280,9 +280,10 @@ and the snapshot says which one is current, whether this process holds world aut
 - **What replicates.** What a contract declares: `[ReplicatedState]` values, `[ReplicatedObject]` objects, commands
   with their confirmations, and presentation events, which reach players only once the host commits them. And, with no
   code from you, the host's world: what the host spawns through the SDK, its custom-world content, and the scene props
-  it moves or removes, which a joining player receives before `Ready` and then follows. What a joined player spawns or
-  moves itself stays in its own game until authority routing, a later step, sends it to the host, and players' avatars
-  are later work too. Unity objects, files, configuration and a mod's own fields stay in their process.
+  it moves or removes, which a joining player receives before `Ready` and then follows. What a joined player spawns,
+  moves or removes goes through the host, which makes the change for everyone, as [the player's own
+  actions](#the-players-own-actions) describes; players' avatars are later work. Unity objects, files, configuration
+  and a mod's own fields stay in their process.
 - **Session replacement.** Whenever a session gives way to another, a mod sees the same steps. `CurrentSessionToken` is
   cancelled, every replicated value returns to its declared default, every object despawns with a notification, and
   the snapshot names the new session. `OnMultiplayerSessionEnded` runs with the old session's last snapshot, then
@@ -320,9 +321,21 @@ and a relay also needs the TopiaForge service, and joining from the launcher is 
 ## The player's own actions
 
 In a session, scripts run on the host and a player's own actions run where that player is. The runtime tells the two
-apart by itself, with no code or attribute from you, so that authority routing, a later step, can send a joined player's
-own spawns to the host instead of making them twice. Offline nothing changes: every call takes effect at once, as it
-always has.
+apart by itself, with no code or attribute from you, and in a live session it routes what your mod does on a joined
+player:
+
+- **A spawn on the player's action** appears at once, and the host makes it for everyone. Your mod keeps the same
+  handle, so it can move or remove the object later. If the host refuses it, because the player made too many at once,
+  already has as many as the host allows, or the object comes from a mod the host does not share, the object goes, its
+  handle is no longer alive, and the player sees a short message saying why.
+- **A spawn your scripts make**, such as one when a scene loads, stands for the host's own run of the same script, so
+  nothing appears twice. Make the same spawns in the same order on every machine: a spawn the host never makes goes
+  again after ten seconds, so the player sees the host's world.
+- **Moving or removing an object the player made** goes through the host, whatever code does it. Moving or removing
+  anything else on the player's action returns `NotAuthoritative`; your scripts doing so change nothing on a joined
+  player, because the host's own run of them makes that change for everyone.
+
+Offline and on the host nothing changes: every call takes effect at once, as it always has.
 
 - **What counts as the player's action:** your mod's Update and LateUpdate in a frame where one of its `Context.Input`
   actions is pressed, released or held; a `Context.Ui` callback that the player's click, choice, typing or

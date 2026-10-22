@@ -22,7 +22,13 @@ namespace TopiaForge.ModManager
         Asset = 3,
 
         /// <summary>A replica a provider's factory built.</summary>
-        Factory = 4
+        Factory = 4,
+
+        /// <summary>This player's own prediction, which the host adopted: its mod's instance stands in place of a replica (WS3.7).</summary>
+        Own = 5,
+
+        /// <summary>This player's shadow of the host's scripted spawn: its mod's instance stands in place of a replica (WS3.7).</summary>
+        Shadow = 6
     }
 
     /// <summary>One entity a joined player mirrors from its host, and how it is present here.</summary>
@@ -77,6 +83,15 @@ namespace TopiaForge.ModManager
         internal SnapshotInterpolationBuffer? Buffer { get; set; }
 
         internal int DriverIndex { get; set; } = -1;
+
+        /// <summary>Gets the shadow key the host's entry names: the spawn's number in its mod's shadowable spawns, or zero.</summary>
+        internal long ShadowKey { get; set; }
+
+        /// <summary>Gets the slot of the player whose objects the entity counts among, or zero for the host's world.</summary>
+        internal int OwnerSlot { get; set; }
+
+        /// <summary>Gets this player's own instance that stands for the entity: an adopted prediction or a bound shadow (WS3.7).</summary>
+        internal LocalSpawn? Local { get; set; }
     }
 
     /// <summary>
@@ -143,7 +158,9 @@ namespace TopiaForge.ModManager
             Func<long> clock,
             NetworkWorldCounters counters,
             Func<string, IInternalReplicaFactory?> factories,
-            Func<string, IAssetService?> findAssets)
+            Func<string, IAssetService?> findAssets,
+            ShadowKeyNumbering shadowKeys,
+            ModAssetLoads modLoads)
         {
             this.channel = channel ?? throw new ArgumentNullException(nameof(channel));
             this.backend = backend ?? throw new ArgumentNullException(nameof(backend));
@@ -152,7 +169,11 @@ namespace TopiaForge.ModManager
             this.counters = counters ?? throw new ArgumentNullException(nameof(counters));
             this.factories = factories ?? throw new ArgumentNullException(nameof(factories));
             this.findAssets = findAssets ?? throw new ArgumentNullException(nameof(findAssets));
+            this.shadowKeys = shadowKeys ?? throw new ArgumentNullException(nameof(shadowKeys));
+            this.modLoads = modLoads ?? throw new ArgumentNullException(nameof(modLoads));
             for (var type = WorldMessages.BaselineBegin; type <= WorldMessages.SceneRemoved; type++) channel.Register(type, this);
+            channel.Register(AuthorityMessages.SpawnAdopted, this);
+            channel.Register(AuthorityMessages.SpawnRefused, this);
         }
 
         /// <summary>Gets whether this process mirrors a host's world now.</summary>
@@ -206,6 +227,9 @@ namespace TopiaForge.ModManager
             IsActive = true;
             control = joined;
             counters.Joins++;
+
+            // This player follows the host's world from now, so its scripts number their shadows from there (WS3.7).
+            shadowKeys.Restart();
             TakeHold();
             streamGeneration = channel.Generation;
             requestPending = true;
@@ -233,6 +257,12 @@ namespace TopiaForge.ModManager
             foreach (var mirrored in scratch) Release(mirrored);
             scratch.Clear();
             entities.Clear();
+
+            // This player's own instances were copies of the host's world, which it leaves: each ends, as the host ends what
+            // it made for this player once it is gone (WS3.7).
+            EndPredictions(keepWaiting: false);
+            EndShadows();
+            ClearChanges();
             driver.Clear();
             table.Clear();
             index.Clear();
@@ -267,6 +297,13 @@ namespace TopiaForge.ModManager
             foreach (var mirrored in scratch) Release(mirrored);
             scratch.Clear();
             entities.Clear();
+
+            // What the old world adopted or numbered is not the new one's: adopted instances and shadows end, and spawns still
+            // waiting for a verdict are asked of the new world (WS3.7).
+            EndPredictions(keepWaiting: true);
+            EndShadows();
+            ClearChanges();
+            shadowKeys.Restart();
             driver.Clear();
             table.Clear();
             index.Clear();
@@ -365,6 +402,11 @@ namespace TopiaForge.ModManager
             if (requestPending && now >= nextRequestMicros) SendRequest(now);
             if (progressPending && receiving >= 0) SendProgress();
             if (synchronized && pendingBuilds == 0) ReleaseHold();
+
+            // Authority routing (WS3.7): what this player asks of its host, and what its own instances wait for.
+            PumpPredictions(now);
+            PumpChanges(now);
+            PumpShadows(now);
         }
 
         /// <summary>LateUpdate, before the mods: replicas move to the host's samples.</summary>
