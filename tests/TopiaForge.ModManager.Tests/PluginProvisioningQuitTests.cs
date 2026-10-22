@@ -121,10 +121,11 @@ namespace TopiaForge.ModManager.Tests
                 Check(plugin.Count("LogProvisioningPhase(\"" + phase + "\");") == 1, "The phase line \"" + phase + "\" keeps its exact text.");
             Check(InOrder(plugin.Body("private void RequestProvisioningQuitOnUpdate()"), FirstUpdate, "UnityEngine.Application.Quit();", QuitCallReturned),
                 "The first two phase lines stay on either side of the quit call.");
-            Check(plugin.Body("private void OnApplicationQuit()").Contains(ApplicationQuitReached, StringComparison.Ordinal)
-                && plugin.Body("private void LogProvisioningDestroyPhase()").Contains(DestroyReached, StringComparison.Ordinal)
+            Check(plugin.Body("private void OnApplicationQuit()").Contains(Gated(ApplicationQuitReached), StringComparison.Ordinal)
+                && plugin.Body("private void LogProvisioningDestroyPhase()").Contains(Gated(DestroyReached), StringComparison.Ordinal)
                 && plugin.Body("private void OnDestroy()").StartsWith("LogProvisioningDestroyPhase();", StringComparison.Ordinal),
-                "OnApplicationQuit logs its phase line, and OnDestroy logs its own before anything else.");
+                "OnApplicationQuit logs its phase line, and OnDestroy logs its own before anything else, each only in a provisioning"
+                + " run that recorded its observation.");
 
             var run = new PluginRun(root, "phases", provisioning: true);
             run.RunUntilQuit();
@@ -143,9 +144,18 @@ namespace TopiaForge.ModManager.Tests
             Check(plugin.Declarations("OnDestroy") == 1, "The plugin has one OnDestroy.");
         }
 
-        // The same run outside provisioning: the handler answers after the game and holds the quit for the teardown.
+        // The same run outside provisioning: the handler answers after the game and holds the quit for the teardown. Update
+        // asks for the held quit again ahead of its ready guard, because the teardown clears ready.
         private static void NormalQuitStillWaitsForTheTeardown(string root)
         {
+            var plugin = PluginSource.Read();
+            var update = plugin.Body("private void Update()");
+            var handlerRequest = update.IndexOf("if (quitHandler?.ShouldRequestQuit() == true)", StringComparison.Ordinal);
+            Check(handlerRequest >= 0 && update.IndexOf("if (!ready)", StringComparison.Ordinal) > handlerRequest
+                && plugin.Body("private void BeginPluginTeardown()").Contains("ready = false;", StringComparison.Ordinal),
+                "Update asks for the held quit again ahead of its ready guard: the teardown clears ready, so a request behind the"
+                + " guard never comes and the game stays open with every mod unloaded.");
+
             var run = new PluginRun(root, "normal", provisioning: false);
             run.PressQuit();
             run.RunUntilQuit();
@@ -164,6 +174,11 @@ namespace TopiaForge.ModManager.Tests
                 count++;
             return count;
         }
+
+        // How the plugin logs a phase line that Unity's own quit steps reach: only in a provisioning run that recorded its
+        // observation.
+        private static string Gated(string phase) =>
+            "if (initializationLifetime.ProvisioningObservationRecorded) LogProvisioningPhase(\"" + phase + "\");";
 
         private static bool InOrder(string text, params string[] values)
         {
