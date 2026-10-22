@@ -124,6 +124,96 @@ void registerMultiplayerRaceTests() {
       expect(gateway.heldRounds, hasLength(3));
     });
 
+    test("a change's own check that answers after a newer one never locks "
+        'over it', () async {
+      // A round is due, as after one that failed, so the newer check runs it.
+      final (bloc, gateway) = await _settledMultiplayerBloc(
+        round: MultiplayerPreferencesRoundFailed(
+          _named('Sam'),
+          MultiplayerRoundProblem.gameCopyNotWritten,
+        ),
+      );
+      bloc.add(_renamed);
+      await _idle();
+      // While the change asks, the window comes back to the front and asks
+      // too. That newer check answers first: the game has closed.
+      bloc.add(const MultiplayerGameCheckRequested());
+      await _idle();
+      gateway.heldGames[2].complete(GameRunState.notRunning);
+      await _idle();
+      expect(view(bloc).syncing, isTrue);
+      // The change's own check answers last, from before the game closed.
+      gateway.heldGames[1].complete(GameRunState.running);
+      await _idle();
+      expect(bloc.state.statusMessage, contains('nothing was changed'));
+      expect(gateway.calls, isNot(contains(startsWith('change'))));
+      expect(view(bloc).lock, MultiplayerPreferencesLock.none);
+      expect(gateway.roundTokens.last!.isCancelled, isFalse);
+      gateway.heldRounds.last.complete(
+        MultiplayerPreferencesSynced(_named('Sam'), changedInGame: true),
+      );
+      await _idle();
+      expect(view(bloc).editable, isTrue);
+    });
+
+    test('the first read shows even when a round that overtook it fails or '
+        'is cancelled, and never over a newer answer', () async {
+      // The game check answers before the first read, so a round starts
+      // first; [ends] is how it ends, and [roundFirst] whether it answers
+      // before the read does.
+      Future<LauncherBloc> overtaken(
+        MultiplayerPreferencesRound ends, {
+        bool gameStarts = false,
+        bool roundFirst = false,
+      }) async {
+        final gateway = _FakeMultiplayerGateway()..hold = true;
+        final bloc = _multiplayerBloc(gateway);
+        await _idle();
+        gateway.heldGames.single.complete(GameRunState.notRunning);
+        await _idle();
+        expect(gateway.heldRounds, hasLength(1));
+        if (gameStarts) {
+          bloc.add(const MultiplayerGameCheckRequested());
+          await _idle();
+          gateway.heldGames.last.complete(GameRunState.running);
+          await _idle();
+          expect(gateway.roundTokens.single!.isCancelled, isTrue);
+        }
+        final read = gateway.heldLoads.single;
+        if (!roundFirst) read.complete(_named('Sam'));
+        await _idle();
+        gateway.heldRounds.single.complete(ends);
+        await _idle();
+        if (roundFirst) read.complete(_named('Sam'));
+        await _idle();
+        return bloc;
+      }
+
+      final failed = MultiplayerPreferencesRoundFailed(
+        _named('Sam'),
+        MultiplayerRoundProblem.gameCopyNotWritten,
+      );
+      for (final roundFirst in [false, true]) {
+        final bloc = await overtaken(failed, roundFirst: roundFirst);
+        expect(view(bloc).phase, MultiplayerPreferencesPhase.ready);
+        expect(view(bloc).preferences!.settings.displayName, 'Sam');
+        expect(view(bloc).problem, startsWith("Robotopia's copy"));
+      }
+      final cancelled = await overtaken(
+        MultiplayerPreferencesSynced(_named('Robin'), changedInGame: true),
+        gameStarts: true,
+      );
+      expect(view(cancelled).lock, MultiplayerPreferencesLock.gameRunning);
+      expect(view(cancelled).preferences!.settings.displayName, 'Sam');
+      // A round that answers first is newer than the read, which then
+      // changes nothing.
+      final synced = await overtaken(
+        MultiplayerPreferencesSynced(_named('Robin'), changedInGame: true),
+        roundFirst: true,
+      );
+      expect(view(synced).preferences!.settings.displayName, 'Robin');
+    });
+
     test('a link choice saved during a round still shows once the round '
         'ends', () async {
       final links = _FakeSessionLinkHandling();

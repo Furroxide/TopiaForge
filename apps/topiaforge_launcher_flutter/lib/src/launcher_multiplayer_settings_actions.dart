@@ -67,7 +67,7 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
   ) async {
     final gateway = _multiplayer;
     if (gateway == null) return;
-    final generation = ++_multiplayerWork.preferences;
+    final generation = _multiplayerWork.read = ++_multiplayerWork.preferences;
     final view = _settingsView;
     _showSettings(
       emit,
@@ -90,7 +90,13 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
     MultiplayerPreferencesLoaded event,
     Emitter<LauncherState> emit,
   ) async {
-    if (event.generation != _multiplayerWork.preferences) return;
+    // A newer change or round answers for the preferences, except before
+    // anything shows: a round that started before the newest read answered
+    // may fail or be cancelled, and that read is then all there is to show.
+    final waiting =
+        event.generation == _multiplayerWork.read &&
+        _settingsView.phase == MultiplayerPreferencesPhase.loading;
+    if (event.generation != _multiplayerWork.preferences && !waiting) return;
     _showPreferences(emit, event.preferences, generation: event.generation);
   }
 
@@ -239,9 +245,14 @@ extension LauncherMultiplayerSettingsActions on LauncherBloc {
       case MultiplayerChangeLocked(:final state):
         _multiplayerWork.roundDue = true;
         final lock = _lockFor(state);
+        // The change is refused either way, but only the newest check says
+        // whether the game runs: the answer to a check asked since the
+        // change's own stands, as the change's own outranks an older one.
         _showSettings(
           emit,
-          view.copyWith(lock: lock),
+          event.gameCheck == _multiplayerWork.game
+              ? view.copyWith(lock: lock)
+              : view,
           status: _lockedStatus(lock),
           severity: IssueSeverity.warning,
         );
