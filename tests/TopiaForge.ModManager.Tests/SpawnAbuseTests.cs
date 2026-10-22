@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
             AFloodOfSpawnsIsThrottled();
             WhatAFloodLeavesIsBounded();
             TheHostMakesOnlyWhatPlayersMayHave();
+            ADevicesNameOpensNothing();
             ForgedIdentitiesReachNothing();
             NoPlayerChangesWhatIsNotItsOwn();
             PlayersPastTheSlotsAreToldTheHostIsBusy();
@@ -128,6 +129,52 @@ namespace TopiaForge.ModManager.Tests
             Inject(rig, p1, Spawn(9));
             rig.Frames(3);
             That(Verdicts(log, p1).Last().Provisional == 9 && Verdicts(log, p1).Last().Id.IsValid && AuthorityRig.Live(host).Count == 1, "while this mod's crate is made");
+        }
+
+        private static void ADevicesNameOpensNothing()
+        {
+            // Windows opens a device, not a file, for a name such as CON or COM1, in any case and with any extension. A hostile
+            // player's spawn that names one is refused before the host's loader opens anything.
+            var rig = AuthorityRig.Create(players: 1);
+            var host = rig.Host;
+            var p1 = rig.Players[0];
+            var log = Log(rig);
+            var bundles = host.Assets.BundleLoads;
+            var devices = new[] { "assets/CON", "assets/con.bundle", "Nul", "aux.bundle", "assets/CoM1.bundle", "LPT9", "PRN/world.bundle", "assets/lpt0.tar.gz",
+                "assets/com\u00B9.bundle", "assets/Con .bundle" };
+            for (var index = 0; index < devices.Length; index++)
+            {
+                // Past the host's burst of eight the player waits for the host to take them in, so each is refused by the rule,
+                // never by the pace.
+                if (index == 8)
+                {
+                    rig.Frames(3);
+                    rig.Clock.Advance(2_000_000);
+                }
+
+                Inject(rig, p1, Spawn((uint)index + 1, bundle: devices[index]));
+            }
+
+            rig.Frames(3);
+            var verdicts = Verdicts(log, p1);
+            for (var index = 0; index < devices.Length; index++)
+            {
+                var verdict = verdicts.FirstOrDefault(item => item.Provisional == index + 1);
+                That(verdict.Provisional == index + 1 && verdict.Reason == SpawnRefusal.NotPermitted,
+                    "a spawn from '" + devices[index] + "', a device's name, is refused as NotPermitted (" + verdict.Reason + ")");
+            }
+
+            That(host.Assets.BundleLoads == bundles && AuthorityRig.Live(host).Count == 0, "and the host opened nothing and made nothing");
+
+            // Names that only start like a device's are ordinary names, and the host loads and makes them.
+            rig.Clock.Advance(2_000_000);
+            var ordinary = new[] { "assets/console.bundle", "assets/com10.bundle", "nullable/x.bundle" };
+            for (var index = 0; index < ordinary.Length; index++) Inject(rig, p1, Spawn((uint)(devices.Length + index + 1), bundle: ordinary[index], x: index + 2));
+            rig.Frames(3);
+            var made = Verdicts(log, p1).Where(verdict => verdict.Provisional > devices.Length).ToList();
+            That(made.Count == ordinary.Length && made.All(verdict => verdict.Id.IsValid) && AuthorityRig.Live(host).Count == ordinary.Length &&
+                 host.Assets.BundleLoads == bundles + ordinary.Length,
+                "while '" + string.Join("', '", ordinary) + "' are loaded and made (" + string.Join(", ", made.Select(verdict => verdict.Reason)) + ")");
         }
 
         private static void ForgedIdentitiesReachNothing()

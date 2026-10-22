@@ -1639,8 +1639,11 @@ held it.
    provider's kind, made by the spawn handler the same mod registered. A plain path has no segment that ends in a
    period or a space, and none shaped like a short name such as `WORLD~1.BUN`: the game's platform reads each as
    another name of a file the mod knows by its plain one, and no reading of a name alone sees a short name, so a
-   player's spellings of one file differ only by case and separators. The runtime's own `asset.` kinds are never made
-   for a player. Nothing is loaded and no mod code runs before all of that passes.
+   player's spellings of one file differ only by case and separators. Nor has it a segment that Windows keeps for a
+   device, `CON`, `PRN`, `AUX`, `NUL`, or `COM` or `LPT` and a digit, in any case and with any extension (`con`,
+   `Nul.bundle`, `lpt1.tar.gz`): opening one opens the device, not a file, and Windows reserves these names in every
+   folder. The runtime's own `asset.` kinds are never made for a player. Nothing is loaded and no mod code runs before
+   all of that passes.
 3. **The host makes it canonically,** as an object of the player's `ProxyParticipant` scope: an asset through the mod's
    own handles first, a prefab its code loaded, else a prefab loaded from a bundle it holds, waiting while its own load
    of the bundle runs, since the game refuses a second load of a bundle that is loaded already; only a bundle the mod
@@ -1758,9 +1761,10 @@ copy of each message and the SDK's result for each call included.
 
 - **Rules** (`MultiplayerAuthorityRulesTests`): relations by owner slot, limiter answers as refusals, verdicts read from
   the wire, which profiles and intents are shadowed, an honest pace against the host's limit under jitter of up to
-  0.9 seconds in order, safe and unsafe bundle paths, other names the game's platform reads for one file, one file's
-  spellings as one load, a mod's own spellings that are not plain among them, refusal texts, both state machines for
-  every state and event, and the numbering, which allocates nothing once a mod has a number.
+  0.9 seconds in order, safe and unsafe bundle paths, other names the game's platform reads for one file, the names
+  Windows keeps for devices in every case and with any extension, beside ordinary names that only start like them, one
+  file's spellings as one load, a mod's own spellings that are not plain among them, refusal texts, both state machines
+  for every state and event, and the numbering, which allocates nothing once a mod has a number.
 - **Wire** (`AuthorityWireTests`): every message round trips, sits in its range, and is refused whole when a field is
   bent, a byte follows its last field, or it is cut anywhere.
 - **Adoption** (`SpawnAdoptionTests`): adoption in place under the same handle and id, a lookup by network id finding
@@ -1791,10 +1795,11 @@ copy of each message and the SDK's result for each call included.
 - **Abuse** (`SpawnAbuseTests`): a raw flood throttled to the burst and the rate and bounded by the quota without
   touching another player; what a flood leaves bounded when the player stops reading; assets of an unshared mod, from
   outside the package or a rooted or drive path, undescribed assets, the runtime's kinds, unknown kinds and another
-  mod's kind refused before anything loads or runs; a provisional id reused or another player's, origins appended and
-  messages in the host's voice; every change of another player's, the host's, a scene object, a destroyed and an
-  unknown entity refused, by a player with a scope or without one; and a player past the 255 slots told the host is
-  busy, then given a leaver's slot once its grace is over.
+  mod's kind refused before anything loads or runs; bundles named by a device's name refused before the host opens
+  anything, while names that only start like one are made; a provisional id reused or another player's, origins
+  appended and messages in the host's voice; every change of another player's, the host's, a scene object, a destroyed
+  and an unknown entity refused, by a player with a scope or without one; and a player past the 255 slots told the
+  host is busy, then given a leaver's slot once its grace is over.
 - **The scope** (`ProxyParticipantTests`): a leaving player's objects ending after its grace and nothing else, a mod's
   spawn, record, lifetime and another player's object untouched; coming back within the grace, and a link that drops
   and returns keeping the handles bound; hosting stopping; and a slot given again starting with whole budgets.
@@ -1831,6 +1836,11 @@ copy of each message and the SDK's result for each call included.
   builds use the mod's own handles when it holds the bundle; a bundle the network world loaded first is let go of when
   the mod starts its own load of the same file, and what was built from it stands on. A load the network world still
   has under way then is cancelled, and the engine may refuse the mod's load for that moment.
+- **A mod's own bundle path is read without its package's folder name.** A path that leaves the package folder and
+  comes back into it, such as `../1.0.0/assets/world.bundle` in a package whose folder is `1.0.0`, names the file
+  `assets/world.bundle` names, but is read as one outside the package, so it is not one load with the plain path, and a
+  load the network world made of that file does not give way to the mod's own load of it. No mod needs to name its
+  bundle so, and a player cannot make one do it.
 - **A replica built through a mod context's own handles ends with that context**, as everything spawned through it does,
   and is built again on the next frame from whatever holds the bundle then, as is one whose build failed through those
   handles as the context ended. A shadow whose context ends takes its instance with it, as the host's run of the same

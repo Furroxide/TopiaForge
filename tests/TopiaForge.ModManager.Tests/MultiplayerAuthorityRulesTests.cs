@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager.Tests
             OnlyScriptedCodeEveryPeerRunsIsShadowed();
             AnHonestPlayerNeverMeetsTheHostsLimits();
             BundlePathsArePlainPathsInsideAPackage();
+            ADevicesNameIsNoPlainPath();
             OneFileIsOneBundleHoweverItIsSpelled();
             RefusalsSayWhatHappenedAndWhatToDo();
             PredictionsFollowTheirStateMachine();
@@ -141,6 +142,37 @@ namespace TopiaForge.ModManager.Tests
                          "assets/world.bundle\u00A0", "assets\u3000/world.bundle", "assets/WORLD~1.BUN", "assets/world~1.bun", "ASSETS~1/world.bundle", "WO1F2C~1/world.bundle" })
             {
                 That(!SpawnAuthorityRules.IsSafeBundlePath(alias), "'" + alias + "', another name of a package's file, is refused before a file is touched");
+            }
+        }
+
+        private static void ADevicesNameIsNoPlainPath()
+        {
+            // Windows opens a device, not a file, for these names, in any case and with any extension, as a file or as a folder.
+            var names = new List<string> { "CON", "PRN", "AUX", "NUL", "COM\u00B9", "COM\u00B2", "COM\u00B3", "LPT\u00B9", "LPT\u00B2", "LPT\u00B3" };
+            for (var digit = 0; digit <= 9; digit++)
+            {
+                names.Add("COM" + digit);
+                names.Add("LPT" + digit);
+            }
+
+            foreach (var name in names)
+            {
+                var mixed = string.Concat(name.Select((character, index) => index % 2 == 0 ? char.ToLowerInvariant(character) : character));
+                foreach (var spelled in new[] { name, name.ToLowerInvariant(), name.Substring(0, 1) + name.Substring(1).ToLowerInvariant(), mixed })
+                {
+                    foreach (var path in new[] { spelled, "assets/" + spelled, "assets\\" + spelled + ".bundle", spelled + "/world.bundle", "a/" + spelled + ".tar.gz/world.bundle",
+                                 "assets/" + spelled + " .bundle" })
+                    {
+                        That(!SpawnAuthorityRules.IsSafeBundlePath(path), "'" + path + "' names a device, which is refused before a file is touched");
+                    }
+                }
+            }
+
+            // Names that only start or end like one are ordinary names.
+            foreach (var ordinary in new[] { "assets/console.bundle", "assets/com10.bundle", "nullable/x.bundle", "assets/con1.bundle", "assets/com.bundle", "assets/lpt10/x.bundle",
+                         "auxiliary/prn_notes.bundle", "assets/xcon.bundle", "assets/nul_.bundle", "assets/comx.bundle", "assets/com1x.bundle", "assets/.con", "assets/a.con.bundle" })
+            {
+                That(SpawnAuthorityRules.IsSafeBundlePath(ordinary), "'" + ordinary + "' only looks like a device's name, and is a plain path");
             }
         }
 

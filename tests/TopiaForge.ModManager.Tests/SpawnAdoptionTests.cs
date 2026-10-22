@@ -311,6 +311,15 @@ namespace TopiaForge.ModManager.Tests
             var spawned = mine.SpawnAsPlayer(prefab, 1);
             That(!spawned.Succeeded && spawned.ErrorCode == ModErrorCode.Unavailable && spawned.ErrorMessage == RuntimeReplication.NotAPlainPath,
                 "the player's spawn is refused before anything is made, saying how to name the bundle (" + spawned.ErrorMessage + ")");
+
+            // So is one from a bundle named as Windows names a device, which the host would never open.
+            foreach (var device in new[] { "assets/aux.bundle", "Assets/Com1.bundle", "nul/world.bundle" })
+            {
+                var named = mine.SpawnAsPlayer(mine.Load(bundlePath: device), 2);
+                That(!named.Succeeded && named.ErrorCode == ModErrorCode.Unavailable && named.ErrorMessage == RuntimeReplication.NotAPlainPath,
+                    "a spawn from '" + device + "', a device's name, is refused here too (" + named.ErrorMessage + ")");
+            }
+
             rig.Frames(10);
             That(p1.Assets.Spawned.Count == made && p1.Counters().AuthorityRequestsSent == sent && mine.Ui.Toasts.Count == 0 && AuthorityRig.Live(rig.Host).Count == 0,
                 "nothing was made or asked for, and no toast blames the host");

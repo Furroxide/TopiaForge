@@ -204,8 +204,9 @@ namespace TopiaForge.ModManager.Core.Multiplayer
         /// with no empty, <c>.</c> or <c>..</c> segment, no drive or scheme, and no control character. No segment ends in a
         /// period or a space, or is shaped like a short name such as <c>WORLD~1.BUN</c>: the game's platform reads each as
         /// another name of a file the mod knows by its plain one, and no reading of the name alone sees a short name, so a
-        /// player's spellings of one file differ only by case and separators. The asset service checks the path against the
-        /// package's folder again before any file is touched.
+        /// player's spellings of one file differ only by case and separators. No segment is a name Windows keeps for a device,
+        /// such as <c>CON</c> or <c>com1.bundle</c> (<see cref="IsDeviceName"/>): opening it opens the device, not a file. The
+        /// asset service checks the path against the package's folder again before any file is touched.
         /// </summary>
         internal static bool IsSafeBundlePath(string? path)
         {
@@ -226,9 +227,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 if (length == 1 && path[start] == '.') return false;
                 if (length == 2 && path[start] == '.' && path[start + 1] == '.') return false;
 
-                // The platform drops a period or a space that ends a name, and finds a file by its short name as well.
+                // The platform drops a period or a space that ends a name, finds a file by its short name as well, and opens a
+                // device, not a file, for a name it keeps for one.
                 var last = path[index - 1];
-                if (last == '.' || char.IsWhiteSpace(last) || IsShortName(path, start, length)) return false;
+                if (last == '.' || char.IsWhiteSpace(last) || IsShortName(path, start, length) || IsDeviceName(path, start, length)) return false;
                 start = index + 1;
             }
 
@@ -311,7 +313,8 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                     continue;
                 }
 
-                // A ".." with nothing left to take back names something outside the package, so it stays in the key.
+                // A ".." with nothing left to take back leaves the package, so it stays in the key. A path read without the
+                // package's folder name cannot tell when one comes back in by that name, as ../1.0.0/x does in a folder 1.0.0.
                 var name = new char[parent ? 2 : NameLength(path, start, end)];
                 for (var offset = 0; offset < name.Length; offset++) name[offset] = char.ToUpperInvariant(path[start + offset]);
                 names.Add(new string(name));
@@ -395,6 +398,38 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
             return false;
         }
+
+        /// <summary>
+        /// Whether the segment of <paramref name="path"/> at <paramref name="start"/> is a name Windows keeps for a device:
+        /// <c>CON</c>, <c>PRN</c>, <c>AUX</c> or <c>NUL</c>, or <c>COM</c> or <c>LPT</c> and one digit, 0 to 9 or a
+        /// superscript one, two or three, which Windows reads as digits there. Case is ignored, and so is everything from the
+        /// segment's first period on, with the whitespace before that period, so <c>con</c>, <c>Nul.bundle</c>,
+        /// <c>LPT1.tar.gz</c> and <c>aux .bundle</c> all are. Windows reserves these names in every folder, so a mod's files
+        /// do not use them, while <c>console.bundle</c> and <c>com10.bundle</c> are ordinary names.
+        /// </summary>
+        private static bool IsDeviceName(string path, int start, int length)
+        {
+            var end = path.IndexOf('.', start, length);
+            if (end < 0) end = start + length;
+            while (end > start && char.IsWhiteSpace(path[end - 1])) end--;
+            var stem = end - start;
+            if (stem != 3 && stem != 4) return false;
+            var first = AsciiUpper(path[start]);
+            var second = AsciiUpper(path[start + 1]);
+            var third = AsciiUpper(path[start + 2]);
+            if (stem == 3)
+            {
+                return (first == 'C' && second == 'O' && third == 'N') || (first == 'P' && second == 'R' && third == 'N') ||
+                       (first == 'A' && second == 'U' && third == 'X') || (first == 'N' && second == 'U' && third == 'L');
+            }
+
+            var digit = path[start + 3];
+            if ((digit < '0' || digit > '9') && digit != '\u00B9' && digit != '\u00B2' && digit != '\u00B3') return false;
+            return (first == 'C' && second == 'O' && third == 'M') || (first == 'L' && second == 'P' && third == 'T');
+        }
+
+        /// <summary>An ASCII letter in upper case, and any other character as it is: Windows matches device names by their ASCII letters.</summary>
+        private static char AsciiUpper(char character) => character >= 'a' && character <= 'z' ? (char)(character - ('a' - 'A')) : character;
 
         /// <summary>
         /// What the player reads when a spawn of theirs ends unadopted: what happened, and what to do next. The toast names
