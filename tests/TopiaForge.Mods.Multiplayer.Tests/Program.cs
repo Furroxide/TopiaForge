@@ -200,6 +200,9 @@ internal static class Program
             NetworkIdentityTests.SecretsMatchTheSharedFixtures();
             NetworkIdentityTests.IdentitiesPersistAndSurviveDamage();
             NetworkIdentityTests.KnownHostsRememberServersNotAddresses();
+            KnownHostsLayoutTests.ARecordInAnyLayoutKeepsItsPins();
+            KnownHostsLayoutTests.ASecondDamageKeepsTheFirstCopy();
+            KnownHostsLayoutTests.SignedAndSharedDocumentsStayCanonical();
             OpusVoiceCodecTests.RoundTripKeepsSyntheticSpeech();
             OpusVoiceCodecTests.PacketsStayWithinTheirBounds();
             OpusVoiceCodecTests.ForwardErrorCorrectionBeatsConcealment();

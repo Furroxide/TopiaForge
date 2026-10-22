@@ -141,7 +141,22 @@ namespace TopiaForge.Multiplayer.Network
         /// Parses <paramref name="bytes"/> and accepts it only when it is already canonical: re-serializing the result
         /// must give the same bytes back, so a signature never covers an ambiguous document.
         /// </summary>
-        internal static bool TryParse(byte[] bytes, int maximumBytes, out JsonNode node, out string error)
+        internal static bool TryParse(byte[] bytes, int maximumBytes, out JsonNode node, out string error) =>
+            TryRead(bytes, maximumBytes, anyLayout: false, out node, out error);
+
+        /// <summary>
+        /// Parses <paramref name="bytes"/> in any layout another program may leave a record of this game's own in: a UTF-8
+        /// byte-order mark, white space between values, and members in any order. It does not insist on canonical bytes,
+        /// so a needless escape reads as its character, but it refuses what <see cref="TryParse"/> refuses before that
+        /// comparison: malformed UTF-8, a repeated key, a number that is not an integer in range, nesting past
+        /// <see cref="MaximumDepth"/>, anything after the document, and more than <paramref name="maximumBytes"/>. Only
+        /// salvaging the known-hosts record reads this way. A signed or shared document is read with
+        /// <see cref="TryParse"/>, so a signature still never covers anything but canonical bytes.
+        /// </summary>
+        internal static bool TryParseAnyLayout(byte[] bytes, int maximumBytes, out JsonNode node, out string error) =>
+            TryRead(bytes, maximumBytes, anyLayout: true, out node, out error);
+
+        private static bool TryRead(byte[] bytes, int maximumBytes, bool anyLayout, out JsonNode node, out string error)
         {
             node = JsonNullNode.Instance;
             if (bytes == null) throw new ArgumentNullException(nameof(bytes));
@@ -162,13 +177,14 @@ namespace TopiaForge.Multiplayer.Network
                 return false;
             }
 
-            var reader = new Reader(text);
+            // A byte-order mark decodes as U+FEFF, which only a document of any layout may start with.
+            if (anyLayout && text.Length > 0 && text[0] == '\uFEFF') text = text.Substring(1);
+            var reader = new Reader(text, anyLayout);
             try
             {
                 var parsed = reader.ReadValue(0);
-                if (!reader.AtEnd) throw new FormatException("Unexpected content after the document.");
-                var canonical = Serialize(parsed);
-                if (!WireText.FixedTimeEquals(canonical, bytes)) throw new FormatException("The document is not in canonical form.");
+                if (!reader.AtDocumentEnd()) throw new FormatException("Unexpected content after the document.");
+                if (!anyLayout && !WireText.FixedTimeEquals(Serialize(parsed), bytes)) throw new FormatException("The document is not in canonical form.");
                 node = parsed;
                 error = string.Empty;
                 return true;
@@ -283,18 +299,30 @@ namespace TopiaForge.Multiplayer.Network
         private sealed class Reader
         {
             private readonly string text;
+
+            /// <summary>Whether white space may stand between values, as in a document of any layout; canonical bytes have none.</summary>
+            private readonly bool anyLayout;
             private int position;
 
-            internal Reader(string text)
+            internal Reader(string text, bool anyLayout)
             {
                 this.text = text;
+                this.anyLayout = anyLayout;
             }
 
             internal bool AtEnd => position == text.Length;
 
+            /// <summary>Whether nothing but the white space the layout allows is left.</summary>
+            internal bool AtDocumentEnd()
+            {
+                SkipLayout();
+                return AtEnd;
+            }
+
             internal JsonNode ReadValue(int depth)
             {
                 if (depth > MaximumDepth) throw new FormatException("The document nests too deeply.");
+                SkipLayout();
                 if (AtEnd) throw new FormatException("The document ended early.");
                 switch (text[position])
                 {
@@ -325,6 +353,7 @@ namespace TopiaForge.Multiplayer.Network
                 if (TryConsume('}')) return result;
                 while (true)
                 {
+                    SkipLayout();
                     if (AtEnd || text[position] != '"') throw new FormatException("An object key must be a string.");
                     var key = ReadString();
                     if (!IsKey(key)) throw new FormatException("An object key must be 1 to 64 ASCII letters and digits.");
@@ -445,9 +474,17 @@ namespace TopiaForge.Multiplayer.Network
 
             private bool TryConsume(char character)
             {
+                SkipLayout();
                 if (AtEnd || text[position] != character) return false;
                 position++;
                 return true;
+            }
+
+            /// <summary>Steps over the white space JSON allows between values, in a document of any layout only.</summary>
+            private void SkipLayout()
+            {
+                if (!anyLayout) return;
+                while (!AtEnd && (text[position] == ' ' || text[position] == '\t' || text[position] == '\n' || text[position] == '\r')) position++;
             }
         }
     }

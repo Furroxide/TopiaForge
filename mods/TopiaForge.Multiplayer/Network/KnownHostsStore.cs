@@ -37,15 +37,30 @@ namespace TopiaForge.Multiplayer.Network
     /// </para>
     /// <para>
     /// A file that reads but is damaged is salvaged as before: the entries that read are kept, and the rest are dropped.
-    /// Before anything replaces it, its bytes are copied to <see cref="DamagedPath"/>, so a record the game could not
-    /// use is never lost silently, and while that copy cannot be written the damaged file stays where it is, to be
-    /// salvaged again. Anything that does not read back exactly as this game writes it counts as damaged: a file of
-    /// another schema, an entry that does not read, more entries than the record keeps, or bytes that are not canonical.
+    /// A record in another layout, with white space, a byte-order mark or its members in another order, reads whole, so it
+    /// keeps every pin. Before anything replaces such a file, its bytes are copied to the first of
+    /// <see cref="DamagedPaths"/> that holds no file, so a record the game could not use as it stands is never lost
+    /// silently; while that copy cannot be written the file stays where it is, to be salvaged again. A copy is never
+    /// written over. Anything that does not read back exactly as this game writes it counts as damaged: a file of another
+    /// schema, an entry that does not read, more entries than the record keeps, or bytes that are not canonical.
     /// </para>
     /// </remarks>
     internal sealed class KnownHostsStore
     {
         internal const string DamagedPath = "multiplayer/known-hosts.damaged.json";
+
+        /// <summary>
+        /// Where a damaged file's bytes are kept, in order, <see cref="DamagedPath"/> first. The provider's file service names
+        /// no path and lists nothing, so the copies are a fixed set: each damage takes the first place that holds no file,
+        /// and a place that holds one, or cannot be read, is never written. Once all three hold copies, a damaged file is
+        /// salvaged without one.
+        /// </summary>
+        internal static readonly IReadOnlyList<string> DamagedPaths = new[]
+        {
+            DamagedPath,
+            "multiplayer/known-hosts.damaged-2.json",
+            "multiplayer/known-hosts.damaged-3.json"
+        };
 
         /// <summary>How many servers reported unchecked are remembered, the oldest forgotten first.</summary>
         private const int MaximumUncheckedServers = 64;
@@ -201,7 +216,7 @@ namespace TopiaForge.Multiplayer.Network
             {
                 try
                 {
-                    await files.WriteAsync(DamagedPath, copy, CancellationToken.None).ConfigureAwait(false);
+                    await KeepCopyAsync(copy).ConfigureAwait(false);
                 }
                 catch (Exception)
                 {
@@ -212,6 +227,30 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             await files.WriteAsync(KnownHosts.FilePath, bytes, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Writes <paramref name="copy"/> to the first of <see cref="DamagedPaths"/> that holds no file, and throws when that
+        /// write fails. A place that holds a file, or cannot be read just now, holds a copy already, so it is never written.
+        /// </summary>
+        private async Task KeepCopyAsync(byte[] copy)
+        {
+            foreach (var path in DamagedPaths)
+            {
+                byte[]? kept;
+                try
+                {
+                    kept = await files.ReadAsync(path, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (kept != null) continue;
+                await files.WriteAsync(path, copy, CancellationToken.None).ConfigureAwait(false);
+                return;
+            }
         }
 
         private static bool SameBytes(byte[] left, byte[] right)
