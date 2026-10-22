@@ -34,7 +34,9 @@ enum JoinFailureCode {
   rateLimited,
   offline,
 
-  /// The host's descriptor endpoint could not be reached.
+  /// The host's descriptor endpoint could not be reached: for the
+  /// descriptor, or, in developer mode, for a package the host serves, when
+  /// the host is gone, does not answer, or stops sending part way.
   unreachable,
 
   /// The descriptor was malformed, for another server, or badly signed.
@@ -61,14 +63,19 @@ enum JoinFailureCode {
   cancelled,
   downloadFailed,
 
-  /// The plan needs packages only the host serves, and this launcher does not
-  /// download packages from a host. Nothing was downloaded.
+  /// The plan needs packages only the host serves, and this launcher cannot
+  /// download them from it: developer mode is off, the player did not
+  /// acknowledge them, or the join reaches its host only through the
+  /// TopiaForge service, while a host shares packages only over a direct or
+  /// local-network connection. Nothing was downloaded.
   hostDownloadUnsupported,
 
   /// A downloaded archive's SHA-256 differs from the pinned one.
   integrityFailed,
 
-  /// A downloaded archive's manifest differs from the trusted one.
+  /// A downloaded archive's manifest differs from the trusted one, or, for a
+  /// package the host serves, names another mod or version than the
+  /// descriptor claims.
   manifestMismatch,
 
   /// See [JoinFailure.rollbackComplete].

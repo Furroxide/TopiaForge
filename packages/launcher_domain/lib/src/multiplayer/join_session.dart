@@ -39,9 +39,12 @@ part of '../multiplayer.dart';
 ///   [JoinFailureCode.installFailed] with nothing installed, and says what
 ///   to do. Otherwise it, and any game the launcher did not start, ends
 ///   the install as [JoinFailureCode.gameRunning], as it ends a launch.
-/// - Packages only the host serves are not downloaded by this launcher: a
-///   plan that needs one ends while downloading as
-///   [JoinFailureCode.hostDownloadUnsupported], before anything is fetched.
+/// - Packages only the host serves (developer mode) need the player's
+///   acknowledgement at consent, which the state keeps
+///   ([JoinSessionState.hostServedAcknowledged]). They download from the
+///   host's own endpoint after every other package; a host that can no
+///   longer be reached ends the join while downloading as
+///   [JoinFailureCode.unreachable].
 /// - A game that exits ends the join from launching onwards, and ends the
 ///   session once it began.
 /// - When admission changes while connecting, the join fetches the
@@ -85,12 +88,15 @@ abstract final class JoinSession {
       JoinFailureCode.directNotAllowed,
     },
     JoinStage.awaitingConsent: {},
+    // A host that serves its own packages can be gone, or stop answering, by
+    // the time they download.
     JoinStage.downloading: {
       JoinFailureCode.downloadFailed,
       JoinFailureCode.hostDownloadUnsupported,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
       JoinFailureCode.directNotAllowed,
+      JoinFailureCode.unreachable,
     },
     JoinStage.installing: {
       JoinFailureCode.installFailed,
@@ -412,6 +418,7 @@ abstract final class JoinSession {
     return _afterConsent(
       state._copy(
         consentKey: plan.consentKey,
+        hostServedAcknowledged: plan.hasUnverifiedPackages,
         closeOwnedGameAcknowledged: event.closeOwnedGameAcknowledged,
       ),
     );

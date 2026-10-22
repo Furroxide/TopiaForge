@@ -102,11 +102,14 @@ final class JoinDescriptorRequest extends JoinContactRules {
 ///   or [JoinFailureCode.manifestMismatch] otherwise.
 /// - [hostDownloads] (developer mode only) come from the host's own
 ///   descriptor endpoint, with `TFD1 package <sha256>`, under exactly the
-///   rules the descriptor fetch had. Each archive must match its SHA-256 and
-///   hold a manifest with the claimed id and version.
+///   rules the descriptor fetch had, and only where it contacted the host:
+///   never for an invite, server link or Internet listing, whose descriptor
+///   came from the service. Each archive must match its SHA-256 and hold a
+///   manifest with the claimed id and version.
 /// - When those rules now forbid reaching the host, because a local name
 ///   resolves to no local address or a LAN listing's sender is off the local
-///   network, report [JoinFailureCode.directNotAllowed]; the join ends.
+///   network, report [JoinFailureCode.directNotAllowed]; the join ends. A
+///   host that is gone or stops answering is [JoinFailureCode.unreachable].
 final class JoinDownloadRequest extends JoinContactRules {
   JoinDownloadRequest._({
     required super.target,

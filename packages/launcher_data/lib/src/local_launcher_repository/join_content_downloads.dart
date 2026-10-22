@@ -12,7 +12,8 @@ part of '../local_launcher_repository.dart';
 /// - **Cancellation** closes the transfer at once and leaves no partial file.
 ///   Archives already verified stay in the cache, which every install reads
 ///   by SHA-256, so joining again does not fetch them twice.
-/// - Packages only the host serves are never downloaded here.
+/// - **Packages only the host serves** come last, under the same rules, from
+///   the host's own endpoint ([_JoinHostDownloads]).
 ///
 /// Failures name the mod and its source and say what to do next. What went
 /// wrong underneath goes to the launcher log, never a URL or an address.
@@ -21,38 +22,46 @@ extension _JoinContentDownloads on LocalLauncherRepository {
     JoinSessionState state, {
     void Function(JoinDownloadProgressed progress)? onProgress,
     CancellationToken? cancellation,
+    JoinHostPackageSource? hostPackages,
   }) async {
     final request = state.downloadRequest;
     final plan = state.plan;
     if (request == null || plan == null) return null;
-    if (request.hostDownloads.isNotEmpty) {
-      final mods = request.hostDownloads;
-      final names = mods
-          .map((package) => '${package.id} ${package.version}')
-          .join(', ');
-      return JoinFailed(
-        JoinFailureCode.hostDownloadUnsupported,
-        detail:
-            'Only the host has $names, and this launcher cannot download mods '
-            'from a host yet. Ask the host to publish '
-            '${mods.length == 1 ? 'it' : 'them'} to a mod source you use, '
-            'then join again. Nothing was downloaded.',
-      );
-    }
     final items = [
       for (final item in plan.packages)
         if (item.disposition == JoinPackageDisposition.download) item,
     ];
-    final progress = _JoinDownloadProgress(items, onProgress);
+    final hosted = [
+      for (final item in plan.packages)
+        if (item.disposition == JoinPackageDisposition.downloadFromHost) item,
+    ];
+    // Developer mode, the acknowledgement and the host's reach are checked
+    // before anything is fetched.
+    if (hosted.isNotEmpty) {
+      final refusal = await _hostDownloadRefusal(
+        state,
+        hosted,
+        hostPackages,
+        cancellation,
+      );
+      if (refusal != null) return refusal;
+    }
+    final all = [...items, ...hosted];
+    final progress = _JoinDownloadProgress(all, onProgress);
     await _sweepStaleCacheDownloads();
-    for (var index = 0; index < items.length; index++) {
+    for (var index = 0; index < all.length; index++) {
       if (cancellation?.isCancelled ?? false) return null;
+      void update(int received, int? total) =>
+          progress.update(index, received, total);
       try {
-        final failure = await _obtainJoinArchive(
-          items[index],
-          (received, total) => progress.update(index, received, total),
-          cancellation,
-        );
+        final failure = index < items.length
+            ? await _obtainJoinArchive(items[index], update, cancellation)
+            : await _obtainHostArchive(
+                all[index],
+                hostPackages!,
+                update,
+                cancellation,
+              );
         if (failure != null) return failure;
       } on OperationCancelledException {
         return null;
@@ -330,7 +339,8 @@ extension _JoinContentDownloads on LocalLauncherRepository {
 }
 
 /// A plan package's name for the player: the trusted manifest's display
-/// name and the version, or the id when there is no manifest.
+/// name and the version, or the id when there is no manifest, as for a
+/// package only the host serves.
 String _joinModName(JoinPlanPackage item) {
   final name = item.manifest?.name.trim() ?? '';
   return '${name.isEmpty ? item.package.id : name} ${item.package.version}';

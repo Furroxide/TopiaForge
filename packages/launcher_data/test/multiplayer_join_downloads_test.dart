@@ -358,7 +358,8 @@ void main() {
     );
   });
 
-  test('packages only the host serves are never downloaded', () async {
+  test('packages only the host serves need developer mode, checked before '
+      'anything is fetched', () async {
     final hosted = TestArchive('example.hosted', '1.0.0');
     final server = await verifiedServer([
       hosted.package,
@@ -379,7 +380,8 @@ void main() {
     final failure = event as JoinFailed;
     expect(failure.code, JoinFailureCode.hostDownloadUnsupported);
     expect(failure.detail, contains('example.hosted 1.0.0'));
-    expect(failure.detail, contains('Ask the host'));
+    expect(failure.detail, contains('developer mode'));
+    expect(failure.detail, contains('ask the host'));
     expect(overrides.clientsCreated, 0);
     expect(cacheLeftovers(), isEmpty);
     expect(

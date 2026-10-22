@@ -82,8 +82,11 @@ extension _JoinInstallPreflight on _JoinInstall {
         }
         continue;
       }
-      if (item.disposition != JoinPackageDisposition.download) continue;
-      final manifest = item.manifest!;
+      if (item.disposition != JoinPackageDisposition.download &&
+          item.disposition != JoinPackageDisposition.downloadFromHost) {
+        continue;
+      }
+      final manifest = item.manifest ?? await _hostArchiveManifest(item);
       final key = manifest.id.toLowerCase();
       final folder = folders[key];
       final name = _joinModName(item);
@@ -119,6 +122,7 @@ extension _JoinInstallPreflight on _JoinInstall {
       pending.add(
         _PendingJoinPackage(
           item,
+          manifest: manifest,
           hidden:
               recorded.contains(key) || folder != null || named.contains(key),
           addRecord: !recorded.contains(key) && folder == null,
@@ -137,6 +141,36 @@ extension _JoinInstallPreflight on _JoinInstall {
       );
     }
     return pending;
+  }
+
+  /// The manifest of [item]'s archive, which only the host served, from the
+  /// package cache, where the download verified it; read once per install.
+  /// Refuses when it is not there, or does not name the mod and version the
+  /// descriptor claims.
+  Future<ModManifest> _hostArchiveManifest(JoinPlanPackage item) async {
+    final sha256 = item.package.sha256;
+    final known = _hostManifests[sha256];
+    if (known != null) return known;
+    final name = _joinModName(item);
+    final ModManifest manifest;
+    try {
+      manifest = (await _repository._readPackage(
+        _repository._joinCacheFile(sha256).path,
+        expectedSha256: sha256,
+      )).manifest;
+    } on Object {
+      throw _JoinInstallRefused(
+        'The download of $name is missing or damaged. Join again to download '
+        'it.',
+      );
+    }
+    if (!_namesHostPackage(manifest, item.package)) {
+      throw _JoinInstallRefused(
+        'The download of $name holds another mod or version than the server '
+        'lists. Join again to download it afresh.',
+      );
+    }
+    return _hostManifests[sha256] = manifest;
   }
 
   /// Whether [decided] is what was staged: the same packages, each as
