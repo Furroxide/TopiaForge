@@ -36,8 +36,25 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>Gets the delay the TopiaForge service named when it refused the lookup, in seconds, or zero.</summary>
         internal int RetryAfterSeconds { get; private set; }
 
-        internal static ResolvedTarget Found(TransportPath path, SignedServerDescriptor descriptor) =>
-            new ResolvedTarget(LiveFailure.None, string.Empty, path ?? throw new ArgumentNullException(nameof(path)), descriptor ?? throw new ArgumentNullException(nameof(descriptor)), null);
+        /// <summary>
+        /// Gets whether what the player was shown of the session before joining said it offers no voice chat: the host's
+        /// signed descriptor, which every join resolves, or the session info of the LAN listing the target came from. The
+        /// join holds to it for every link it opens, so a host that later says otherwise in-band, as one restarted with the
+        /// other setting would, is not believed: the stricter setting wins.
+        /// </summary>
+        internal bool ShownWithoutVoice => (Descriptor != null && !Descriptor.Descriptor.Voice) || ListedWithoutVoice;
+
+        /// <summary>Gets whether the LAN listing the target came from said the session offers no voice chat.</summary>
+        internal bool ListedWithoutVoice { get; private set; }
+
+        /// <param name="path">The way to the host.</param>
+        /// <param name="descriptor">The host's verified descriptor.</param>
+        /// <param name="listedWithoutVoice">Whether the LAN listing the target came from said the session offers no voice chat.</param>
+        internal static ResolvedTarget Found(TransportPath path, SignedServerDescriptor descriptor, bool listedWithoutVoice = false) =>
+            new ResolvedTarget(LiveFailure.None, string.Empty, path ?? throw new ArgumentNullException(nameof(path)), descriptor ?? throw new ArgumentNullException(nameof(descriptor)), null)
+            {
+                ListedWithoutVoice = listedWithoutVoice
+            };
 
         internal static ResolvedTarget Failed(LiveFailure failure, string detail, int? retryAfterSeconds = null) =>
             new ResolvedTarget(failure, detail, null, null, null) { RetryAfterSeconds = retryAfterSeconds ?? 0 };

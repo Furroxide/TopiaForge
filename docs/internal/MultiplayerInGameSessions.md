@@ -46,7 +46,7 @@ developer switch until the release enables them: with them off, the tab says so 
 | BROWSE | LAN, Internet, Favorites and History, in a sortable, virtualized table: lock, name, gamemode, world, players, ping and mods (Ready, Needs N, Incompatible). JOIN, INSTALL & JOIN IN LAUNCHER, and favorites |
 | HOST | The game to host (chosen at the menu from the games it can start, the running one otherwise), name (1 to 48 characters), players (2 to 16, 8 by default), password (optional, never kept), visibility (Public, Invite or LAN), and the host policy |
 | CONNECT | An invite code or the invite's link, or an invite or server link pasted as the address, which need the TopiaForge service; or an address and password the player types |
-| VOICE | A slot the voice slice fills (`IMultiplayerVoiceSlot`) |
+| VOICE | A slot the voice slice fills (`IMultiplayerVoiceSlot`). Until then a placeholder, which says "This session offers no voice chat." while this game hosts, or has joined, a session without it |
 | SESSION | The invite, with COPY INVITE CODE for the host; the players with kick, ban and mute for the host; and "End session for everyone" or "Leave server" |
 
 - **Searching** the local network starts only when the player presses SEARCH LAN, and stops when they leave BROWSE or
@@ -77,8 +77,9 @@ developer switch until the release enables them: with them off, the tab says so 
     invited session or a listed server, never by the code.
   - **The Internet list** points to the TopiaForge launcher, which owns the Internet browser; the game does not browse
     the service.
-- **Host policy.** The session engine supports offering voice chat today. Guests building, prop protection and per-player
-  quotas are named seams the HOST view shows as not available yet.
+- **Host policy.** "Offer voice chat" works today: a session that offers none carries none, fixed for the hosting run,
+  and every joining player learns so before it could talk ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12).
+  Guests building, prop protection and per-player quotas are named seams the HOST view shows as not available yet.
 - **Favorites and history** keep a server's id and name, never an address. A typed address is typed again; a server the
   local network hears can be joined from either list.
 - **Results** are toasts; long content scrolls; every action that removes a player, ends a session or leaves a game

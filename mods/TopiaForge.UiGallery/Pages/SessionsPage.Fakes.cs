@@ -51,6 +51,9 @@ namespace TopiaForge.UiGallery.Pages
 
         public string SettingsNote { get; set; } = string.Empty;
 
+        /// <summary>Gets VOICE's line: shown while the fake session is hosted with "Offer voice chat" off.</summary>
+        public string VoiceNote => HostFake.Hosting && !HostFake.Voice ? VoiceScreenText.NotOffered : string.Empty;
+
         public MultiplayerSubTab SelectedTab { get; private set; }
 
         public IBrowseScreen Browse => BrowseFake;

@@ -39,7 +39,8 @@ namespace TopiaForge.ModManager.Tests
 
         public bool IsReadinessHeld { get; set; }
 
-        public IInternalVoiceService? Voice => null;
+        /// <summary>Gets or sets the voice service the control hands out; none unless a test gives one.</summary>
+        public IInternalVoiceService? Voice { get; set; }
 
         public IReadOnlyList<InternalLanListing> LanSessions => Lan;
 
@@ -209,6 +210,40 @@ namespace TopiaForge.ModManager.Tests
             Calls.Add("RevokeInvite");
             return OperationResult<bool>.Success(true);
         }
+    }
+
+    /// <summary>A voice service whose transmit state the test sets, or makes throw; the screens read nothing else of it.</summary>
+    internal sealed class ScriptedVoiceService : IInternalVoiceService
+    {
+        internal InternalVoiceTransmitState State { get; set; }
+
+        internal Exception? Failure { get; set; }
+
+        public bool Enabled { get; set; }
+
+        public InternalVoiceTransmitMode Mode { get; set; }
+
+        public float ActivationThresholdDb { get; set; } = -40f;
+
+        public float InputLevelDb => -96f;
+
+        public InternalVoiceTransmitState TransmitState => Failure != null ? throw Failure : State;
+
+        public void SubmitCapture(float[] samples, int count, int sampleRate) => throw new NotSupportedException();
+
+        public void SetTransmitting(bool transmitting) => throw new NotSupportedException();
+
+        public IVoicePlaybackStream GetPlaybackStream(ParticipantId speaker) => throw new NotSupportedException();
+
+        public bool TryGetPlaybackStream(ParticipantId speaker, out IVoicePlaybackStream? stream) => throw new NotSupportedException();
+
+        public bool IsSpeaking(ParticipantId speaker) => false;
+
+        public void SetListenerMutes(IReadOnlyCollection<ParticipantId> muted, bool muteAll = false) => throw new NotSupportedException();
+
+        public bool GetListenerMutes(ICollection<ParticipantId> into) => throw new NotSupportedException();
+
+        public InternalVoiceStatistics GetStatistics() => throw new NotSupportedException();
     }
 
     internal sealed class ScriptedJoinTarget : IInternalJoinTarget

@@ -447,7 +447,9 @@ namespace TopiaForge.Multiplayer.Network
                 engineJoined = true;
             }
 
-            engine.Connect(link, settings.DisplayName, joinContent);
+            // What the player was shown before joining holds for every link this join opens: a session shown as offering no
+            // voice stays without it, whatever the host says in JoinAccepted.
+            engine.Connect(link, settings.DisplayName, joinContent, resolved!.ShownWithoutVoice);
             Phase = JoinPhase.Synchronizing;
             Readiness.LinkUp(now, engine.SessionReplacementsReceived);
         }

@@ -67,7 +67,11 @@ namespace TopiaForge.Multiplayer.Network
             // A beacon can come from beyond the local network; such a host is joined directly or not at all.
             if (found.Path.Kind != Transport.TransportPathKind.Lan && !allowDirect) return ResolvedTarget.Failed(LiveFailure.DirectNotAllowed, DirectNotAllowed);
             var fetched = await fetch(endpoint, target.ServerId, cancellationToken).ConfigureAwait(false);
-            return fetched.Outcome == DescriptorFetchOutcome.Fetched ? ResolvedTarget.Found(found.Path, fetched.Descriptor!) : Failed(fetched);
+
+            // The listing the player picked from showed the session's info; a session it showed without voice stays so.
+            return fetched.Outcome == DescriptorFetchOutcome.Fetched
+                ? ResolvedTarget.Found(found.Path, fetched.Descriptor!, listedWithoutVoice: found.Info != null && !found.Info.Voice)
+                : Failed(fetched);
         }
 
         private async Task<ResolvedTarget> ResolveDirectAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken)

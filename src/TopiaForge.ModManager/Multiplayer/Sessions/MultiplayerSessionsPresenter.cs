@@ -78,6 +78,24 @@ namespace TopiaForge.ModManager.Sessions
 
         public string SettingsNote => !settings.IsLoaded ? LoadingSettings : settings.IsSaving || queue.IsBusy ? SavingSettings : string.Empty;
 
+        public string VoiceNote
+        {
+            get
+            {
+                // The voice service applies the session's setting, the stricter of what the host said and what the join was
+                // shown, so its state is the one to tell. Reading it allocates nothing.
+                try
+                {
+                    return environment.Control?.Voice?.TransmitState == InternalVoiceTransmitState.NotOffered ? VoiceScreenText.NotOffered : string.Empty;
+                }
+                catch (Exception)
+                {
+                    // A control that cannot answer says nothing about voice; the next frame asks again.
+                    return string.Empty;
+                }
+            }
+        }
+
         public MultiplayerSubTab SelectedTab => selectedTab;
 
         public IBrowseScreen Browse => browse;

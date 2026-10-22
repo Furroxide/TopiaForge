@@ -112,7 +112,13 @@ namespace TopiaForge.Multiplayer.Engine
         UnknownSpeaker = 8,
 
         /// <summary>The receive queue was full, so its oldest frame made room.</summary>
-        InboxOverflow = 9
+        InboxOverflow = 9,
+
+        /// <summary>
+        /// The session offers no voice chat. A host that offers none drops every voice datagram as it arrives, never with a
+        /// strike; a joined player whose host said so, or whose join was shown so, drops whatever its host relays anyway.
+        /// </summary>
+        NotOffered = 10
     }
 
     /// <summary>

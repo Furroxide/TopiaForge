@@ -22,6 +22,13 @@ namespace TopiaForge.ModManager.Sessions
         History = 3
     }
 
+    /// <summary>What VOICE says about the session, while the voice slice's settings are still to come.</summary>
+    internal static class VoiceScreenText
+    {
+        /// <summary>The line VOICE shows while this game hosts, or has joined, a session that offers no voice chat.</summary>
+        internal const string NotOffered = "This session offers no voice chat.";
+    }
+
     /// <summary>A semantic tone the views turn into the kit's own; screens never name colors.</summary>
     internal enum ScreenTone
     {

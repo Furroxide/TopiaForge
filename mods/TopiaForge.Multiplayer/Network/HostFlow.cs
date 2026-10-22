@@ -118,6 +118,9 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<TransportOptions> transportOptions;
         private readonly InternetServices? services;
         private readonly Func<NatAgentOptions> natOptions;
+
+        /// <summary>Whether the session offers voice chat, taken once as hosting starts and fixed for the whole run.</summary>
+        private readonly bool offersVoice;
         private INetworkControl? network;
         private TraversalNetwork? traversal;
         private IReadOnlyList<DescriptorPackage>? packages;
@@ -147,6 +150,10 @@ namespace TopiaForge.Multiplayer.Network
             this.transportOptions = transportOptions ?? (() => new TransportOptions());
             this.services = settings.Visibility == ServerVisibility.Lan ? null : services;
             this.natOptions = natOptions ?? (() => new NatAgentOptions());
+
+            // The descriptor is signed with it once and the engine holds it while anyone is connected, so a later change to
+            // the settings object reaches neither: hosting again is how the setting changes.
+            offersVoice = settings.Voice;
             Bans = bans ?? throw new ArgumentNullException(nameof(bans));
             Policy = new HostPolicy(bans, passwordKey, content, clock);
         }
@@ -199,6 +206,10 @@ namespace TopiaForge.Multiplayer.Network
 
             engine.Options.MaximumParticipants = settings.MaxPlayers;
             engine.Options.JoinPolicy = Policy;
+
+            // Before the first player can join: a session that offers no voice carries none, and every player hears so in
+            // JoinAccepted. Stopping closes every connection, which ends the setting with the run.
+            engine.OfferVoice(offersVoice);
             RefreshInfo(force: true);
             if (traversal != null) Internet = new InternetHost(services!, identity, traversal, Descriptor, settings, ConnectedPlayers, clock);
             return LiveFailure.None;
@@ -335,7 +346,7 @@ namespace TopiaForge.Multiplayer.Network
                 SessionEngine.ProtocolVersion,
                 settings.MaxPlayers,
                 settings.Password != null,
-                settings.Voice,
+                offersVoice,
                 settings.Visibility,
                 false,
                 settings.Gamemode,
@@ -381,7 +392,7 @@ namespace TopiaForge.Multiplayer.Network
                 Math.Min(players, settings.MaxPlayers),
                 settings.MaxPlayers,
                 settings.Password != null,
-                settings.Voice).Encode();
+                offersVoice).Encode();
             network!.Post((stack, _) => stack.Endpoint.SetInfo(info));
         }
     }

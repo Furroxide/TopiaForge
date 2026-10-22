@@ -66,6 +66,7 @@ namespace TopiaForge.ModManager.Tests
             HostOffersTheGameLastHostedFirst();
             TheSettingsFileReadsAcrossVersions(root);
             SettledFramesAllocateNothing();
+            VoiceSaysWhenTheSessionOffersNone();
             Console.WriteLine("MultiplayerSessionsTests passed.");
         }
 

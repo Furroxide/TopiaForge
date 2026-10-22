@@ -38,6 +38,12 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Gets a note while the multiplayer settings load or save, off the main thread; empty otherwise.</summary>
         string SettingsNote { get; }
 
+        /// <summary>
+        /// Gets the one plain line VOICE shows about this session's voice chat: <see cref="VoiceScreenText.NotOffered"/>
+        /// while this game hosts, or has joined, a session that offers none; empty otherwise.
+        /// </summary>
+        string VoiceNote { get; }
+
         MultiplayerSubTab SelectedTab { get; }
 
         void SelectTab(MultiplayerSubTab tab);

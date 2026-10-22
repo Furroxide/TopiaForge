@@ -161,6 +161,7 @@ namespace TopiaForge.ModManager.Tests
                 _ = presenter.StatusText;
                 _ = presenter.HideMyIp;
                 _ = presenter.SettingsNote;
+                _ = presenter.VoiceNote;
                 _ = presenter.PendingPrompt;
                 var browse = presenter.Browse;
                 _ = browse.Rows;

@@ -113,7 +113,7 @@ namespace TopiaForge.ModManager.Sessions
                     current = new MultiplayerConnectView(body!, screens.Connect);
                     break;
                 case MultiplayerSubTab.Voice:
-                    current = voice != null ? voice.Build(body!) : new MultiplayerVoicePlaceholder(body!);
+                    current = voice != null ? voice.Build(body!) : new MultiplayerVoicePlaceholder(body!, screens);
                     break;
                 default:
                     current = new MultiplayerSessionView(host, body!, screens.Session);
@@ -122,19 +122,31 @@ namespace TopiaForge.ModManager.Sessions
         }
     }
 
-    /// <summary>The VOICE sub-tab until the voice slice fills its slot.</summary>
+    /// <summary>
+    /// The VOICE sub-tab until the voice slice fills its slot: what is still to come, and one plain line while this game
+    /// hosts, or has joined, a session that offers no voice chat.
+    /// </summary>
     internal sealed class MultiplayerVoicePlaceholder : IMultiplayerSubView
     {
         internal const string Text = "Voice chat settings arrive with voice chat.";
 
-        internal MultiplayerVoicePlaceholder(TopiaForgeContainer parent)
+        private readonly IMultiplayerScreens screens;
+        private readonly TopiaForgeLabel session;
+
+        internal MultiplayerVoicePlaceholder(TopiaForgeContainer parent, IMultiplayerScreens screens)
         {
+            this.screens = screens;
             parent.SectionHeader("VOICE");
             MultiplayerViewKit.Note(parent, Text);
+            session = MultiplayerViewKit.Note(parent);
+            Tick();
         }
 
         public void Tick()
         {
+            var note = screens.VoiceNote;
+            session.SetText(note);
+            session.SetShown(note.Length != 0);
         }
     }
 }
