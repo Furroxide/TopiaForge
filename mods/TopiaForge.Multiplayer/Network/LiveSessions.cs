@@ -49,7 +49,7 @@ namespace TopiaForge.Multiplayer.Network
         private INetworkControl? browserNetwork;
         private LanBrowser? browser;
         private int bansDirty;
-        private int knownHostsDirty;
+        private readonly KnownHostsStore knownHosts;
         private Task bansWrite = Task.CompletedTask;
         private Task knownHostsWrite = Task.CompletedTask;
         private readonly List<Task> endings = new List<Task>();
@@ -77,10 +77,10 @@ namespace TopiaForge.Multiplayer.Network
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
             this.transportOptions = transportOptions ?? (() => new Transport.TransportOptions());
             this.natOptions = natOptions ?? (() => new NatAgentOptions());
-            KnownHosts = new KnownHosts();
+            knownHosts = new KnownHostsStore(files);
 
             // Invites and listed servers go to the TopiaForge service, while one is configured; every other target to the network.
-            this.resolver = new ServiceAwareResolver(resolver ?? new NetworkTargetResolver(() => browser, KnownHosts, MarkKnownHostsChanged, unixSeconds), () => Services);
+            this.resolver = new ServiceAwareResolver(resolver ?? new NetworkTargetResolver(() => browser, knownHosts, unixSeconds), () => Services);
             endHook = OnClientSessionEnded;
             engine.Options.AfterClientSessionEnds = endHook;
         }
@@ -94,7 +94,11 @@ namespace TopiaForge.Multiplayer.Network
 
         internal LiveJoin? Join { get; private set; }
 
-        internal KnownHosts KnownHosts { get; }
+        /// <summary>Gets the trust-on-first-use record; every use locks it.</summary>
+        internal KnownHosts KnownHosts => knownHosts.Record;
+
+        /// <summary>Gets the record's file: whether it was read, and what is saved when.</summary>
+        internal KnownHostsStore KnownHostsFile => knownHosts;
 
         /// <summary>
         /// Gets or sets how this provider reaches the TopiaForge service, or null while no service origin is configured:
@@ -103,8 +107,8 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         internal InternetServices? Services { get; set; }
 
-        /// <summary>Marks the known-hosts record for saving; the resolver calls it from its own thread after a change.</summary>
-        internal void MarkKnownHostsChanged() => Interlocked.Exchange(ref knownHostsDirty, 1);
+        /// <summary>Marks the known-hosts record for saving, from any thread; nothing is saved before its file was read.</summary>
+        internal void MarkKnownHostsChanged() => knownHosts.MarkChanged();
 
         /// <summary>Gets the sessions heard on the LAN while browsing; empty otherwise.</summary>
         internal IReadOnlyList<LanServer> LanServers => browser?.Servers ?? Array.Empty<LanServer>();
@@ -335,11 +339,12 @@ namespace TopiaForge.Multiplayer.Network
                 var handedOver = false;
                 try
                 {
-                    // The ban list and known hosts are side records: one that cannot be read is treated as empty, the
-                    // way a damaged one is, rather than keeping the player out of live play.
+                    // The ban list is a side record: one that cannot be read is treated as empty, the way a damaged one
+                    // is, rather than keeping the player out of live play. Known hosts that cannot be read are never
+                    // taken for an empty record: they stay unread, so typed addresses are refused with the reason and
+                    // nothing is written over the file, until a later check reads it.
                     var banned = BanList.Parse(await ReadSideFileAsync(BanList.FilePath, token).ConfigureAwait(false));
-                    var parsed = Network.KnownHosts.Parse(await ReadSideFileAsync(Network.KnownHosts.FilePath, token).ConfigureAwait(false));
-                    lock (KnownHosts) KnownHosts.MergeFrom(parsed);
+                    await knownHosts.EnsureReadAsync().ConfigureAwait(false);
                     handedOver = true;
                     return (loaded, banned);
                 }
@@ -439,17 +444,12 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>
         /// Saves what changed. Each file's writes run one after another, so a slow save can never land after, and
-        /// overwrite, the newer one behind it.
+        /// overwrite, the newer one behind it. Known hosts are saved only once their file was read.
         /// </summary>
         private void Persist()
         {
             if (Interlocked.Exchange(ref bansDirty, 0) == 1 && bans != null) bansWrite = After(bansWrite, BanList.FilePath, bans.Serialize());
-            if (Interlocked.Exchange(ref knownHostsDirty, 0) == 1)
-            {
-                byte[] bytes;
-                lock (KnownHosts) bytes = KnownHosts.Serialize();
-                knownHostsWrite = After(knownHostsWrite, Network.KnownHosts.FilePath, bytes);
-            }
+            knownHostsWrite = knownHosts.SaveAfter(knownHostsWrite);
         }
 
         /// <summary>

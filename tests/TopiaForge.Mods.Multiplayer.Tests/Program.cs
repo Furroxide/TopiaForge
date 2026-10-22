@@ -261,6 +261,10 @@ internal static class Program
             LiveSessionFailureTests.ClosingSavesWhatChangedAndUnreadableFilesAreEmpty();
             LiveSessionFailureTests.ASaveSlowerThanClosingStillLands();
             LiveSessionFailureTests.ClosingSavesAKnownHostRecordedOffTheMainThread();
+            KnownHostsFailClosedTests.AnUnreadableRecordRefusesAndWritesNothing();
+            KnownHostsFailClosedTests.ATrustGivenUncheckedEndsOnceTheRecordReads();
+            KnownHostsFailClosedTests.ClosingWritesNothingOverAnUnreadableRecord();
+            KnownHostsFailClosedTests.ADamagedRecordIsSalvagedAndKeptAside();
             LiveSessionFailureTests.JoinsEndCleanlyWhenTheNetworkFails();
             LiveSessionFailureTests.AHostWhoseNetworkStopsEndsEveryoneAndPlaysOn();
             LiveSessionFailureTests.EveryEndingWipesThePasswordKey();

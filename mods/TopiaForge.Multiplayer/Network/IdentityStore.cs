@@ -182,7 +182,11 @@ namespace TopiaForge.Multiplayer.Network
             return CanonicalJson.Serialize(new JsonObjectNode().Add("schema", Schema).Add("hosts", new JsonArrayNode(items)));
         }
 
-        /// <summary>Reads the file. An unreadable file yields an empty record rather than an error: it only costs a prompt.</summary>
+        /// <summary>
+        /// Reads the record's bytes: anything that does not read as the record yields an empty one, and an entry that does
+        /// not read is skipped. A file that could not be read at all never comes here; <see cref="KnownHostsStore"/> keeps
+        /// the record unread instead, and copies a damaged file aside before replacing it.
+        /// </summary>
         internal static KnownHosts Parse(byte[]? bytes)
         {
             var result = new KnownHosts();

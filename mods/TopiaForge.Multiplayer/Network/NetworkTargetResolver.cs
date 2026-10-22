@@ -12,7 +12,9 @@ namespace TopiaForge.Multiplayer.Network
     /// is looked up, IPv4 addresses first. Either way the host's descriptor is fetched from its endpoint and verified,
     /// against the server id the target named when it named one. A hand-typed address names none, so the first server it
     /// served is remembered, and a different one later is reported as a changed identity unless the player trusts it.
-    /// A relay-only player's resolve never contacts an address beyond the local network, not even for the descriptor.
+    /// While the record of those servers cannot be read, no typed address is trusted unchecked: the resolve fails with
+    /// the reason, unless the player trusts the one server the address serves now. A relay-only player's resolve never
+    /// contacts an address beyond the local network, not even for the descriptor.
     /// </summary>
     internal sealed class NetworkTargetResolver : IJoinTargetResolver
     {
@@ -20,25 +22,21 @@ namespace TopiaForge.Multiplayer.Network
         private const string DirectNotAllowed = "Joining directly would show the host your address; allow it for this session to continue.";
 
         private readonly Func<LanBrowser?> browser;
-        private readonly KnownHosts knownHosts;
-        private readonly Action knownHostsChanged;
+        private readonly KnownHostsStore knownHosts;
         private readonly Func<long> unixSeconds;
         private readonly Func<IPEndPoint, string?, CancellationToken, Task<DescriptorFetch>> fetch;
 
         /// <param name="browser">Gets the LAN browser, when the player is browsing.</param>
-        /// <param name="knownHosts">The trust-on-first-use record; every use locks it.</param>
-        /// <param name="knownHostsChanged">Called after the record changed, so it can be saved.</param>
+        /// <param name="knownHosts">The trust-on-first-use record and its file, which save what checks record.</param>
         /// <param name="fetch">Fetches a descriptor; tests watch what is contacted. Null uses <see cref="DescriptorClient"/>.</param>
         internal NetworkTargetResolver(
             Func<LanBrowser?> browser,
-            KnownHosts knownHosts,
-            Action knownHostsChanged,
+            KnownHostsStore knownHosts,
             Func<long> unixSeconds,
             Func<IPEndPoint, string?, CancellationToken, Task<DescriptorFetch>>? fetch = null)
         {
             this.browser = browser ?? throw new ArgumentNullException(nameof(browser));
             this.knownHosts = knownHosts ?? throw new ArgumentNullException(nameof(knownHosts));
-            this.knownHostsChanged = knownHostsChanged ?? throw new ArgumentNullException(nameof(knownHostsChanged));
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.fetch = fetch ?? ((endpoint, serverId, token) => DescriptorClient.FetchAsync(endpoint, serverId, FetchTimeout, token));
         }
@@ -133,9 +131,12 @@ namespace TopiaForge.Multiplayer.Network
                 last = await fetch(endpoint, target.ServerId, cancellationToken).ConfigureAwait(false);
                 if (last.Outcome != DescriptorFetchOutcome.Fetched) continue;
                 var descriptor = last.Descriptor!;
-                if (target.ServerId == null && !Trust(target, descriptor.Descriptor.ServerId, trustedServerId))
+                if (target.ServerId == null)
                 {
-                    return ResolvedTarget.IdentityChanged(descriptor.Descriptor.ServerId);
+                    var served = descriptor.Descriptor.ServerId;
+                    var trust = await knownHosts.TrustAsync(target.Host!, target.Port, served, trustedServerId, unixSeconds()).ConfigureAwait(false);
+                    if (trust == KnownHostTrust.Changed) return ResolvedTarget.IdentityChanged(served);
+                    if (trust == KnownHostTrust.Unchecked) return ResolvedTarget.Unchecked(served);
                 }
 
                 return ResolvedTarget.Found(UdpPaths.For(endpoint), descriptor);
@@ -163,20 +164,6 @@ namespace TopiaForge.Multiplayer.Network
         private static bool IsLocalName(string host) =>
             string.Equals(host, "localhost", StringComparison.Ordinal) || host.EndsWith(".localhost", StringComparison.Ordinal) ||
             host.EndsWith(".local", StringComparison.Ordinal);
-
-        private bool Trust(JoinTarget target, string serverId, string? trustedServerId)
-        {
-            lock (knownHosts)
-            {
-                var check = knownHosts.Check(target.Host!, target.Port, serverId);
-                if (check == KnownHostCheck.Match) return true;
-                if (check == KnownHostCheck.Mismatch && !string.Equals(serverId, trustedServerId, StringComparison.Ordinal)) return false;
-                knownHosts.Remember(target.Host!, target.Port, serverId, unixSeconds());
-            }
-
-            knownHostsChanged();
-            return true;
-        }
 
         private static ResolvedTarget Failed(DescriptorFetch fetch) =>
             fetch.Outcome switch

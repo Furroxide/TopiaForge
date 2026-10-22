@@ -65,6 +65,11 @@ namespace TopiaForge.Multiplayer.Network
 
         internal static ResolvedTarget IdentityChanged(string servedServerId) =>
             new ResolvedTarget(LiveFailure.HostIdentityChanged, "This address served a different server last time.", null, null, servedServerId);
+
+        /// <summary>The known-hosts record could not be read, so the server a typed address serves could not be checked.</summary>
+        internal static ResolvedTarget Unchecked(string servedServerId) =>
+            new ResolvedTarget(LiveFailure.KnownHostsUnreadable,
+                "The record of the servers typed addresses served could not be read, so this server could not be checked.", null, null, servedServerId);
     }
 
     /// <summary>Finds where a target is and fetches what it says it is, off the main thread.</summary>
@@ -74,7 +79,8 @@ namespace TopiaForge.Multiplayer.Network
         /// Resolves <paramref name="target"/>. Unless <paramref name="allowDirect"/>, nothing beyond the local network
         /// is contacted, a name server included: such a host fails with <see cref="LiveFailure.DirectNotAllowed"/>
         /// before anything is sent. A typed address that served another server before is trusted only when the server
-        /// it serves now is <paramref name="trustedServerId"/>.
+        /// it serves now is <paramref name="trustedServerId"/>, and so is any typed address while the known-hosts record
+        /// cannot be read.
         /// </summary>
         Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken);
     }
