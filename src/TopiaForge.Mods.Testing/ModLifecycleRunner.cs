@@ -182,9 +182,9 @@ namespace TopiaForge.Mods.Testing
             var bound = generated.BindMultiplayer(session);
             if (!bound.TryGetValue(out var binding) || binding == null)
             {
+                // Worded as the game words a failed binding, so a test reads what a player's log would.
                 throw new InvalidOperationException(
-                    "The mod's generated multiplayer contract did not bind (" + bound.ErrorCode + "): " +
-                    bound.ErrorMessage);
+                    "Binding the generated multiplayer contract failed (" + bound.ErrorCode + "): " + bound.ErrorMessage);
             }
 
             context.Lifetime.Track(binding);

@@ -1,3 +1,4 @@
+using TopiaForge.ModManager;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Testing;
 using TopiaForge.Multiplayer.CounterSample;
@@ -62,12 +63,17 @@ internal static class TestingKitBindingTests
         // A mod without session hooks, so binding it by hand before it has a context is harmless.
         var mod = new CounterSampleMod();
         using var elsewhere = Require(mod.BindMultiplayer(first.Server.Session));
+
+        // The game's own binder, refused the same way, words the failure the runner must match.
+        var game = Catch<InvalidOperationException>(() =>
+            GeneratedMultiplayerBinder.Bind(mod, () => second.Server.Session, new FakeModLifetime(), new CapturedModLogger()));
         using var context = new FakeModContext();
         context.Extensions.Register(second.Server.Session);
         using var runner = new ModLifecycleRunner(mod, context);
         var failure = Catch<InvalidOperationException>(runner.Load);
-        That(failure != null && failure.Message.Contains("did not bind (Conflict)", StringComparison.Ordinal),
-            "a contract bound to another session fails the load with the code and the reason: " + failure?.Message);
+        That(failure != null && failure.Message.Contains("(Conflict)", StringComparison.Ordinal) && failure.Message == game?.Message,
+            "a contract bound to another session fails the load with the code and the reason, worded as the game words it: " +
+            failure?.Message + " (the game: " + game?.Message + ")");
         That(runner.IsFinished && context.Logger.Entries.Count == 0, "OnLoad never runs, and the runner has cleaned up");
     }
 
