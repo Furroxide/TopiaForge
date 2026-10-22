@@ -211,7 +211,7 @@ internal static class InternalVoiceOfferTests
         That(WaitFor(() => browser.Servers.Count(server => server.Info != null) == 2, 5_000), "the browser lists both sessions with their info");
 
         var served = Signed(voice: true);
-        var resolver = new NetworkTargetResolver(() => browser, new KnownHosts(), () => { }, () => 1_000,
+        var resolver = new NetworkTargetResolver(() => browser, new KnownHostsStore(new MemoryDataFiles()), () => 1_000,
             (endpoint, _, _) => Task.FromResult(new DescriptorFetch(DescriptorFetchOutcome.Fetched, served, string.Empty)));
         ResolvedTarget Resolve(string serverId)
         {
