@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager.Tests
             WhatTheHostMakesForAPlayerTakesNoNumber();
             TheNumberingStartsOverWhenThePlayerJoins();
             AKeyGivenAgainReachesAPlayerThatMissedTheOldOnesEnd();
+            AKeyALiveEntityHoldsIsGivenToNoOther();
             AProvidersScriptedSpawnsShadowToo();
             ScriptedChangesLeaveTheHostsObjectsToTheHost();
         }
@@ -238,6 +239,30 @@ namespace TopiaForge.ModManager.Tests
             var shadow = mine.Spawn(mine.Load(), 2).Value!;
             That(shadow.IsAlive && new NetworkEntityId(AuthorityRig.Object(shadow).Mark).Equals(renewedId) && AuthorityRig.Live(p1).Count == 1,
                 "and the player's own run of the new session's script stands for it");
+        }
+
+        private static void AKeyALiveEntityHoldsIsGivenToNoOther()
+        {
+            var rig = AuthorityRig.Create(players: 1);
+            var host = rig.Host;
+            var p1 = rig.Players[0];
+            var hosts = new AuthorityMod(host);
+            var crate = hosts.Spawn(hosts.Load(), 1).Value!;
+            var key = host.Runtime.Spawns.Find(crate)!.ShadowKey;
+            That(key > 0 && rig.Run(() => AuthorityRig.Live(p1).Count == 1, 60), "the player mirrors the host's scripted crate, which holds a shadow key");
+            var id = new NetworkEntityId(AuthorityRig.Object(crate).Mark);
+
+            // Outside any baseline, a host announces another entity under the key the live crate holds.
+            var other = new NetworkEntityId(id.Value + 100);
+            var writer = new WorldWireWriter();
+            writer.Begin(WorldMessages.Spawn);
+            writer.WriteVarUInt(1);
+            WorldEntryCodec.WriteSpawn(writer, other, MultiplayerSpawnKinds.AssetPrefab, WorldPeer.ModId, key, 0, new NetVector3(1, 1, 1),
+                new NetPose(new NetVector3(5, 1, 0), NetQuaternion.Identity), WorldEntryCodec.EncodeAsset(MultiplayerAssetDescriptor.Create(AuthorityMod.Bundle, "Crate")));
+            p1.Control.Channel(InternalSystemChannelKind.WorldReplication)!.Inject(rig.Network.Host.Id, writer.Segment.ToArray());
+            rig.Frames(3);
+            That(p1.Client.Knows(id) && !p1.Client.Knows(other) && p1.Counters().EntitiesRefused == 1 && AuthorityRig.Live(p1).Count == 1,
+                "the live crate keeps its key and the other is refused: only a holder the baseline under way has not listed gives its key up");
         }
 
         private static void AProvidersScriptedSpawnsShadowToo()

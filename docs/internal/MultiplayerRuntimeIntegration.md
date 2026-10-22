@@ -1630,22 +1630,28 @@ held it.
    name, as world entries carry them, or the provider's payload. A prediction is refused here, before the spawn runs,
    when the player already has as many objects and waiting predictions as the host's quota (64), and an asset whose
    prefab does not say which bundle it comes from, or names it by a path the host would refuse, such as one with a
-   `./` part, is refused as unshareable, with a message that says how to name the bundle.
+   `./` part or a name that ends in a dot, is refused as unshareable, with a message that says how to name the bundle.
 2. **The host validates.** Every request spends from the player's spawn bucket first (`PlayerRequestLimiter` over
    `PermissionPolicy.Default`: a burst of 8, then 4 a second), so a flood is throttled whatever it asks for; then the
    rules, then the quota of 64 live objects. Then what it asks for: an asset of a mod the host shares, named by a plain
    path inside the package (`IsSafeBundlePath`: relative, no `.` or `..` segment, no drive, scheme or control
    character, at most 512 characters, which the asset service checks against the package's folder again), or a
-   provider's kind, made by the spawn handler the same mod registered. The runtime's own `asset.` kinds are never made
-   for a player. Nothing is loaded and no mod code runs before all of that passes.
+   provider's kind, made by the spawn handler the same mod registered. A plain path has no segment that ends in a
+   period or a space, and none shaped like a short name such as `WORLD~1.BUN`: the game's platform reads each as
+   another name of a file the mod knows by its plain one, which no comparison of names would see, so only case and
+   separators are left to tell one file's spellings apart. The runtime's own `asset.` kinds are never made for a
+   player. Nothing is loaded and no mod code runs before all of that passes.
 3. **The host makes it canonically,** as an object of the player's `ProxyParticipant` scope: an asset through the mod's
    own handles first, a prefab its code loaded, else a prefab loaded from a bundle it holds, waiting while its own load
    of the bundle runs, since the game refuses a second load of a bundle that is loaded already; only a bundle the mod
    does not hold is loaded through its package, and let go of after 2 seconds unused, or at once when the mod starts its
-   own load of the same file, however a player spelled its path, so the mod's own load is never refused. A provider's
-   kind is made by its handler inside the player's forwarded intent (`EnterForwarded`), so the provider reads
-   whose object it makes from `CurrentIntent`. A build that takes over 30 seconds is refused as unbuildable. The object
-   is recorded like any other spawn, with the player's slot as its owner and no shadow key, and announced to everyone.
+   own load of the same file, however a player spelled its path, so the mod's own load is never refused. One file is one
+   load, on the host as on a joined player, and a player's spelling of it finds the mod's own loads of it
+   (`SpawnAuthorityRules.BundleFileKey`); a prefab loaded off a bundle the mod has let go of since is loaded again from
+   what holds the bundle then. A provider's kind is made by its handler inside the player's forwarded intent
+   (`EnterForwarded`), so the provider reads whose object it makes from `CurrentIntent`. A build that takes over 30
+   seconds is refused as unbuildable. The object is recorded like any other spawn, with the player's slot as its owner
+   and no shadow key, and announced to everyone.
 4. **The verdict.** The host owes the player its verdict, sent as the player's window allows. Adopted, the instance
    stands in place of a replica when the entry arrives, under the same handle and `IEntity.Id`, and a lookup by its
    network id finds the mod's own handle; if the entry came first, the replica built for it gives way. Refused, the
@@ -1732,7 +1738,7 @@ message in the host's voice, a verdict or an announcement, is discarded on the h
 | A player's shadows waiting | 4,096 |
 | Verdicts a host owes one player | 128; past it they are dropped and counted (`VerdictsDropped`) |
 | Spawns a host tracks for one player, live and being made | 128 |
-| Bundles and prefabs a host loads itself at once | 256 and 4,096, as a joined player's replicas |
+| Bundles and prefabs a host loads itself at once | 256 and 4,096, as a joined player's replicas, each bundle one load however its path is spelled |
 | A host's build; a player's wait for a verdict; a shadow's wait | 30 seconds; 60 seconds; 10 seconds while synchronized |
 
 ### Privacy and cost
@@ -1750,8 +1756,9 @@ copy of each message and the SDK's result for each call included.
 
 - **Rules** (`MultiplayerAuthorityRulesTests`): relations by owner slot, limiter answers as refusals, verdicts read from
   the wire, which profiles and intents are shadowed, an honest pace against the host's limit under jitter of up to
-  0.9 seconds in order, safe and unsafe bundle paths, refusal texts, both state machines for every state and event,
-  and the numbering, which allocates nothing once a mod has a number.
+  0.9 seconds in order, safe and unsafe bundle paths, other names the game's platform reads for one file, one file's
+  spellings as one load, refusal texts, both state machines for every state and event, and the numbering, which
+  allocates nothing once a mod has a number.
 - **Wire** (`AuthorityWireTests`): every message round trips, sits in its range, and is refused whole when a field is
   bent, a byte follows its last field, or it is cut anywhere.
 - **Adoption** (`SpawnAdoptionTests`): adoption in place under the same handle and id, a lookup by network id finding
@@ -1763,8 +1770,11 @@ copy of each message and the SDK's result for each call included.
 - **Asset loads** (`AuthorityAssetLoadTests`): the host's own load of a bundle, kept alive by a player who spawns from it
   every second, giving way to the host's mod's lazy load of it, and to a load of the same file a hostile player spelled
   another way; a joined player's replica load giving way to its mod's lazy load, so the player's own drop is adopted,
-  also when another player spelled the file another way; and a replica built through a mod context's handles built
-  again when that context ends.
+  also when another player spelled the file another way; a replica built through a mod context's handles, its prefab
+  or a prefab loaded off its bundle, built again when that context ends, as is one whose build failed through them as
+  it ended; a hostile player's spellings that the game's platform reads as the mod's file refused before anything
+  loads; crates spelled three ways built from one load, and a spawn spelled another way waiting for the mod's own load;
+  and the host's next build for a player outliving the mod context whose bundle it used.
 - **Requests** (`SpawnChangeTests`): moving and destroying the player's own object through the host, by its action,
   by script and by disposing its handle; changes before the verdict; another player's, the host's and a scene object
   refused here with nothing sent, and left to the host's script when scripted; an entity outside the world passing
@@ -1772,8 +1782,8 @@ copy of each message and the SDK's result for each call included.
 - **Shadows** (`SpawnShadowTests`): binding when the host's spawn is here and when it comes later, ending for another
   asset either way, ending when it never comes and only while synchronized, the numbering skipping the host player's,
   a gamemode's and a player's spawns, starting over on joining and at a world session, a number given again reaching a
-  player that missed the old entity's despawn, a provider's spawns and registrations, and scripted changes left to the
-  host.
+  player that missed the old entity's despawn while a number a live entity holds is given to no other, a provider's
+  spawns and registrations, and scripted changes left to the host.
 - **Abuse** (`SpawnAbuseTests`): a raw flood throttled to the burst and the rate and bounded by the quota without
   touching another player; what a flood leaves bounded when the player stops reading; assets of an unshared mod, from
   outside the package or a rooted or drive path, undescribed assets, the runtime's kinds, unknown kinds and another
@@ -1818,8 +1828,13 @@ copy of each message and the SDK's result for each call included.
   the mod starts its own load of the same file, and what was built from it stands on. A load the network world still
   has under way then is cancelled, and the engine may refuse the mod's load for that moment.
 - **A replica built through a mod context's own handles ends with that context**, as everything spawned through it does,
-  and is built again on the next frame from whatever holds the bundle then. A shadow whose context ends takes its
-  instance with it, as the host's run of the same context would.
+  and is built again on the next frame from whatever holds the bundle then, as is one whose build failed through those
+  handles as the context ended. A shadow whose context ends takes its instance with it, as the host's run of the same
+  context would.
+- **A player's object the host made through a mod context's own handles ends with that context** too, since it was
+  spawned through that context's asset service: on a listen host that is the end of the world session or gamemode the
+  context ran for, which ends that context's own objects as well. The player hears the host's despawn, its handle dies
+  and its quota frees; what the host makes for it next comes from what holds the bundle then.
 - **Commands are not forwarded yet**: `SubmitCommand` still runs the mod's handler here in every realm.
 
 ### Choices

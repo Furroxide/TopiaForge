@@ -201,8 +201,11 @@ namespace TopiaForge.ModManager.Core.Multiplayer
 
         /// <summary>
         /// Whether a bundle path a joined player names is a plain path inside a package: 1 to 512 characters, relative,
-        /// with no empty, <c>.</c> or <c>..</c> segment, no drive or scheme, and no control character. The asset service
-        /// checks the path against the package's folder again before any file is touched.
+        /// with no empty, <c>.</c> or <c>..</c> segment, no drive or scheme, and no control character. No segment ends in a
+        /// period or a space, or is shaped like a short name such as <c>WORLD~1.BUN</c>: the game's platform reads each as
+        /// another name of a file the mod knows by its plain one, so only case and separators are left for
+        /// <see cref="SameBundleFile"/> to tell apart. The asset service checks the path against the package's folder again
+        /// before any file is touched.
         /// </summary>
         internal static bool IsSafeBundlePath(string? path)
         {
@@ -222,6 +225,10 @@ namespace TopiaForge.ModManager.Core.Multiplayer
                 if (length == 0) return false;
                 if (length == 1 && path[start] == '.') return false;
                 if (length == 2 && path[start] == '.' && path[start + 1] == '.') return false;
+
+                // The platform drops a period or a space that ends a name, and finds a file by its short name as well.
+                var last = path[index - 1];
+                if (last == '.' || char.IsWhiteSpace(last) || IsShortName(path, start, length)) return false;
                 start = index + 1;
             }
 
@@ -244,6 +251,36 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// The key that every spelling <see cref="SameBundleFile"/> calls one file shares: each separator as <c>/</c>, each
+        /// letter in upper case. The network world keys its loads by it, so one file is one load there, however the players
+        /// who named it spelled it.
+        /// </summary>
+        internal static string BundleFileKey(string path)
+        {
+            if (path == null) throw new ArgumentNullException(nameof(path));
+            var folded = new char[path.Length];
+            for (var index = 0; index < path.Length; index++) folded[index] = path[index] == '\\' ? '/' : char.ToUpperInvariant(path[index]);
+            return new string(folded);
+        }
+
+        /// <summary>
+        /// Whether the segment of <paramref name="path"/> at <paramref name="start"/> is shaped like an 8.3 short name: a
+        /// <c>~</c> and a digit in at most eight characters before its last period, and at most three after it.
+        /// </summary>
+        private static bool IsShortName(string path, int start, int length)
+        {
+            var dot = path.LastIndexOf('.', start + length - 1, length);
+            var stem = dot < 0 ? length : dot - start;
+            if (stem > 8 || length - stem - 1 > 3) return false;
+            for (var index = start; index < start + stem - 1; index++)
+            {
+                if (path[index] == '~' && path[index + 1] >= '0' && path[index + 1] <= '9') return true;
+            }
+
+            return false;
         }
 
         /// <summary>

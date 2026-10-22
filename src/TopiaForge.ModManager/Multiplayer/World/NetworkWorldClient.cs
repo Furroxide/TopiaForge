@@ -70,7 +70,8 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Gets the mod context whose own handles built <see cref="AssetReplica"/>, which takes the replica with it when it
-        /// ends; null when the replica came from a load of the network world's own (WS3.7).
+        /// ends, or through whose handles its build failed, perhaps because that context was ending; null when the replica
+        /// came from a load of the network world's own (WS3.7). Either way the context's end builds the replica again.
         /// </summary>
         internal object? ReplicaOwner { get; set; }
 

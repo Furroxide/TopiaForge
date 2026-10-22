@@ -17,7 +17,7 @@ namespace TopiaForge.ModManager
     {
         internal const string OnlyTheHostMakes = "Only the host can make this kind of object here; its provider does not say how the host makes it for players.";
         internal const string NotShareable = "This object cannot be shared with the other players: its prefab does not say which bundle it comes from.";
-        internal const string NotAPlainPath = "This object cannot be shared with the other players: load its bundle by a plain path inside the mod's package, such as assets/world.bundle, without \"./\" or doubled slashes.";
+        internal const string NotAPlainPath = "This object cannot be shared with the other players: load its bundle by its plain path inside the mod's package, such as assets/world.bundle, without \"./\", doubled slashes, a name that ends in a dot or a space, or a short name such as WORLD~1.BUN.";
         internal const string TooManyWaiting = "Too many objects are waiting for the host; wait a moment, then try again.";
         internal const string TooManyObjects = "This player already has as many objects as the host allows. Remove some, then try again.";
         internal const string HostNotReady = "The host is not ready for new objects yet; try again in a moment.";

@@ -36,10 +36,11 @@ namespace TopiaForge.ModManager
     /// own asset service, its bundle and prefab loaded once and shared by every replica of them. The mod's own handles come
     /// first (WS3.7): a prefab it loaded, or a bundle it holds, which the game would refuse to load a second time, as a
     /// listen host's builds of its players' spawns do. A replica built through a mod context's handles ends with that
-    /// context, so it is built again once the context has gone; and a bundle loaded here gives way when the mod starts its
-    /// own load of it, so the mod's load is never refused. Loads are polled each frame and never awaited, a load that takes
-    /// longer than <see cref="BuildTimeoutMicros"/> counts as unbuildable, and leaving lets go of every handle, including
-    /// those still loading.
+    /// context, so it is built again once the context has gone, as is one whose build failed through them as it ended; and
+    /// a bundle loaded here gives way when the mod starts its own load of it, so the mod's load is never refused. One file
+    /// is one load however the host's entries spell its path. Loads are polled each frame and never awaited, a load that
+    /// takes longer than <see cref="BuildTimeoutMicros"/> counts as unbuildable, and leaving lets go of every handle,
+    /// including those still loading.
     /// </summary>
     internal sealed partial class NetworkWorldClient
     {
@@ -151,13 +152,15 @@ namespace TopiaForge.ModManager
             }
 
             if (!prefab.IsSettled) return;
+            prefabOwners.TryGetValue(build.PrefabKey, out var owner);
             if (!prefab.Succeeded)
             {
+                // A load through a mod context's handles may fail because that context is ending: its end builds this again.
+                mirrored.ReplicaOwner = owner;
                 FinishBuild(mirrored, false);
                 return;
             }
 
-            prefabOwners.TryGetValue(build.PrefabKey, out var owner);
             SpawnReplica(mirrored, prefabServices[build.PrefabKey], prefab.Value!, owner);
         }
 
@@ -262,14 +265,23 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
-        /// A mod context ended: the asset replicas built through its handles ended with it. Each is built again on the next
-        /// frame, once the context has let go of its bundle, from whatever holds it then.
+        /// A mod context ended: the asset replicas built through its handles ended with it, and a build that failed through
+        /// them may have failed because it was ending. Its prefab loads are forgotten, and each such replica is built again on
+        /// the next frame, once the context has let go of its bundle, from whatever holds it then.
         /// </summary>
         private void QueueRebuilds(object owner)
         {
+            keyScratch.Clear();
+            foreach (var pair in prefabOwners)
+            {
+                if (ReferenceEquals(pair.Value, owner)) keyScratch.Add(pair.Key);
+            }
+
+            foreach (var key in keyScratch) ForgetPrefab(key);
+            keyScratch.Clear();
             foreach (var mirrored in entities.Values)
             {
-                if (mirrored.Binding == ClientEntityBinding.Asset && ReferenceEquals(mirrored.ReplicaOwner, owner)) rebuilds.Add(mirrored);
+                if (ReferenceEquals(mirrored.ReplicaOwner, owner) && (mirrored.Binding == ClientEntityBinding.Asset || IsFailedBuild(mirrored))) rebuilds.Add(mirrored);
             }
         }
 
@@ -279,7 +291,7 @@ namespace TopiaForge.ModManager
             {
                 var mirrored = rebuilds[index];
                 if (!entities.TryGetValue(mirrored.Id.Value, out var current) || !ReferenceEquals(current, mirrored) ||
-                    mirrored.Binding != ClientEntityBinding.Asset || IsAlive(mirrored.AssetReplica))
+                    (mirrored.Binding == ClientEntityBinding.Asset ? IsAlive(mirrored.AssetReplica) : !IsFailedBuild(mirrored)))
                 {
                     continue;
                 }
@@ -293,6 +305,10 @@ namespace TopiaForge.ModManager
             rebuilds.Clear();
         }
 
+        /// <summary>Whether an asset replica's build ended without one, so only a new description or its context's end tries again.</summary>
+        private static bool IsFailedBuild(ClientWorldEntity mirrored) =>
+            mirrored.Binding == ClientEntityBinding.None && mirrored.Build == null && mirrored.Unbuildable && mirrored.Kind == MultiplayerSpawnKinds.AssetPrefab;
+
         private static bool IsAlive(ISpawnedEntity? replica)
         {
             try
@@ -305,8 +321,11 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>A bundle's key: its mod, as the runtime compares mod ids, ignoring case, and its path in the mod's package.</summary>
-        private static string BundleKey(string modId, string bundlePath) => modId.ToLowerInvariant() + "\n" + bundlePath;
+        /// <summary>
+        /// A bundle's key: its mod, as the runtime compares mod ids, ignoring case, and its file in the mod's package, however
+        /// its path is spelled, so a host's entries that spell one file two ways share one load of it.
+        /// </summary>
+        private static string BundleKey(string modId, string bundlePath) => modId.ToLowerInvariant() + "\n" + SpawnAuthorityRules.BundleFileKey(bundlePath);
 
         private static bool IsAlive(IPrefabAsset prefab)
         {
@@ -338,6 +357,7 @@ namespace TopiaForge.ModManager
 
             if (spawned == null || !spawned.TryGetValue(out var replica) || replica == null)
             {
+                mirrored.ReplicaOwner = owner;
                 FinishBuild(mirrored, false);
                 return;
             }

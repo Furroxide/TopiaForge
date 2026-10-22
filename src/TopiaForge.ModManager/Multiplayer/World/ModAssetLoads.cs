@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
@@ -9,8 +10,9 @@ namespace TopiaForge.ModManager
     /// The bundles and prefabs each mod's own code loaded, as its contexts' network decorators saw the loads go by (WS3.7).
     /// A listen host makes a joined player's asset spawn from the mod's own handles first: the game refuses a second load
     /// of a bundle that is loaded already, so a load of its own would fail whenever the mod holds the bundle, and would
-    /// keep the mod from loading it while it held it. Entries are checked when read, never awaited, and end with the
-    /// context that loaded them. Main thread only.
+    /// keep the mod from loading it while it held it. A bundle is found however its path is spelled
+    /// (<see cref="SpawnAuthorityRules.SameBundleFile"/>), since a player may name the mod's file another way. Entries are
+    /// checked when read, never awaited, and end with the context that loaded them. Main thread only.
     /// </summary>
     internal sealed class ModAssetLoads
     {
@@ -57,7 +59,7 @@ namespace TopiaForge.ModManager
             for (var index = loads.Count - 1; index >= 0; index--)
             {
                 var load = loads[index];
-                if (load.Prefab == null || !string.Equals(load.BundlePath, bundlePath, StringComparison.Ordinal) ||
+                if (load.Prefab == null || !SpawnAuthorityRules.SameBundleFile(load.BundlePath, bundlePath) ||
                     !string.Equals(load.AssetName, assetName, StringComparison.Ordinal))
                 {
                     continue;
@@ -83,7 +85,7 @@ namespace TopiaForge.ModManager
             for (var index = loads.Count - 1; index >= 0; index--)
             {
                 var load = loads[index];
-                if (load.Bundle == null || !string.Equals(load.BundlePath, bundlePath, StringComparison.Ordinal)) continue;
+                if (load.Bundle == null || !SpawnAuthorityRules.SameBundleFile(load.BundlePath, bundlePath)) continue;
                 if (!TryResult(load.Bundle, out var found) || !Alive(found)) continue;
                 assets = load.Assets;
                 bundle = found;
@@ -100,7 +102,7 @@ namespace TopiaForge.ModManager
             if (!byMod.TryGetValue(modId, out var loads)) return false;
             foreach (var load in loads)
             {
-                if (load.Bundle != null && !load.Bundle.IsCompleted && string.Equals(load.BundlePath, bundlePath, StringComparison.Ordinal)) return true;
+                if (load.Bundle != null && !load.Bundle.IsCompleted && SpawnAuthorityRules.SameBundleFile(load.BundlePath, bundlePath)) return true;
             }
 
             return false;

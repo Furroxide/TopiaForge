@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
         private readonly IModLifetime lifetime;
         private readonly int gameThread = Thread.CurrentThread.ManagedThreadId;
         private readonly List<IHeldLoad> waiting = new List<IHeldLoad>();
-        // The game's platform names a file ignoring case and with either separator, so one file loads once however it is spelled.
+        // The game's platform names a file ignoring case, so one file loads once however it is spelled (see FileOf).
         private readonly HashSet<string> loadedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private int offThreadReleases;
 
@@ -93,7 +93,24 @@ namespace TopiaForge.ModManager.Tests
 
         public OperationResult<ISpawnedEntity> Spawn(AssetSpawnRequest request) => spawner.Spawn(request);
 
-        private static string FileOf(string relativePath) => relativePath.Replace('\\', '/');
+        /// <summary>
+        /// The file a path names on the game's platform: either separator, with a period or a space that ends a name dropped,
+        /// and the short name the platform gives a long one, as WORLD~1.BUN for the test mod's world.bundle.
+        /// </summary>
+        private static string FileOf(string relativePath)
+        {
+            var segments = relativePath.Replace('\\', '/').Split('/');
+            for (var index = 0; index < segments.Length; index++)
+            {
+                var segment = segments[index];
+                var end = segment.Length;
+                while (end > 0 && (segment[end - 1] == '.' || char.IsWhiteSpace(segment[end - 1]))) end--;
+                segment = segment.Substring(0, end);
+                segments[index] = string.Equals(segment, "WORLD~1.BUN", StringComparison.OrdinalIgnoreCase) ? "world.bundle" : segment;
+            }
+
+            return string.Join("/", segments);
+        }
 
         /// <summary>Lets a handle go as the engine does: on the game thread only, refused anywhere else.</summary>
         private void Release(Action release)

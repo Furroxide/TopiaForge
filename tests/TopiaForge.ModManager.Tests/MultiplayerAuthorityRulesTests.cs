@@ -124,7 +124,7 @@ namespace TopiaForge.ModManager.Tests
         private static void BundlePathsArePlainPathsInsideAPackage()
         {
             foreach (var good in new[] { "assets/world.bundle", "world.bundle", "a/b/c/d.bundle", "assets\\world.bundle", "assets/.hidden/x.bundle", "assets/..x/y.bundle",
-                         "assets/world..bundle", new string('a', 512) })
+                         "assets/world..bundle", "assets/v1.2/world.bundle", "assets/world~2.bundle", "assets/world~v.bun", "assets/a b/world.bundle", new string('a', 512) })
             {
                 That(SpawnAuthorityRules.IsSafeBundlePath(good), "'" + good.Substring(0, Math.Min(40, good.Length)) + "' is a plain path inside a package");
             }
@@ -135,6 +135,13 @@ namespace TopiaForge.ModManager.Tests
             {
                 That(!SpawnAuthorityRules.IsSafeBundlePath(bad), "'" + (bad ?? "null").Replace("\0", "\\0").Replace("\n", "\\n") + "' is refused before a file is touched");
             }
+
+            // The game's platform reads each of these as another name of assets/world.bundle, which no comparison of names sees.
+            foreach (var alias in new[] { "assets/world.bundle.", "assets/world.bundle..", "assets./world.bundle", "assets /world.bundle", "assets/world.bundle ",
+                         "assets/world.bundle\u00A0", "assets\u3000/world.bundle", "assets/WORLD~1.BUN", "assets/world~1.bun", "ASSETS~1/world.bundle", "WO1F2C~1/world.bundle" })
+            {
+                That(!SpawnAuthorityRules.IsSafeBundlePath(alias), "'" + alias + "', another name of a package's file, is refused before a file is touched");
+            }
         }
 
         private static void OneFileIsOneBundleHoweverItIsSpelled()
@@ -142,12 +149,14 @@ namespace TopiaForge.ModManager.Tests
             foreach (var (left, right) in new[] { ("assets/world.bundle", "assets/world.bundle"), ("assets/world.bundle", "Assets\\World.BUNDLE"), ("a\\b", "a/b") })
             {
                 That(SpawnAuthorityRules.SameBundleFile(left, right) && SpawnAuthorityRules.SameBundleFile(right, left), "'" + left + "' and '" + right + "' name one file");
+                That(SpawnAuthorityRules.BundleFileKey(left) == SpawnAuthorityRules.BundleFileKey(right), "'" + left + "' and '" + right + "' are one load");
             }
 
             foreach (var (left, right) in new (string?, string?)[] { ("assets/world.bundle", "assets/world2.bundle"), ("assets/world.bundle", "assets/worle.bundle"),
                          ("a/b", "a/b/"), ("assets/world.bundle", null), (null, null) })
             {
                 That(!SpawnAuthorityRules.SameBundleFile(left, right), "'" + (left ?? "null") + "' and '" + (right ?? "null") + "' do not");
+                That(left == null || right == null || SpawnAuthorityRules.BundleFileKey(left) != SpawnAuthorityRules.BundleFileKey(right), "nor are they one load");
             }
         }
 

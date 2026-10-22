@@ -11,8 +11,8 @@ namespace TopiaForge.ModManager
     /// its own load of that bundle runs. Only a bundle the mod does not hold is loaded by the host, through the mod's
     /// package, and let go of once nothing has used it for <see cref="OwnLoadIdleMicros"/>, or at once when the mod starts
     /// its own load of it (<see cref="YieldBundle"/>), so however often players spawn from it the mod's load is never
-    /// refused. Loads are polled, never awaited, and a build that takes longer than
-    /// <see cref="SpawnAuthorityRules.HostBuildTimeoutMicros"/> is refused as unbuildable.
+    /// refused. One file is one load however players spell its path. Loads are polled, never awaited, and a build that
+    /// takes longer than <see cref="SpawnAuthorityRules.HostBuildTimeoutMicros"/> is refused as unbuildable.
     /// </summary>
     internal sealed partial class NetworkWorldProxies
     {
@@ -127,7 +127,9 @@ namespace TopiaForge.ModManager
                 }
 
                 ReleaseOwnPrefab(prefabKey);
-                return BuildStep.Failed;
+                if (loaded == null) return BuildStep.Failed;
+
+                // Loaded from a bundle let go of since, as when the mod context that held it ended: found again below.
             }
 
             IAssetService bundleAssets;
@@ -281,7 +283,7 @@ namespace TopiaForge.ModManager
 
         private static string BundleKey(ProxySpawn spawn) => BundleKey(spawn.ModId, spawn.BundlePath!);
 
-        private static string BundleKey(string modId, string bundlePath) => modId.ToLowerInvariant() + "\n" + bundlePath;
+        private static string BundleKey(string modId, string bundlePath) => modId.ToLowerInvariant() + "\n" + SpawnAuthorityRules.BundleFileKey(bundlePath);
 
         private static string PrefabKey(ProxySpawn spawn) => BundleKey(spawn) + "\n" + spawn.AssetName;
 
