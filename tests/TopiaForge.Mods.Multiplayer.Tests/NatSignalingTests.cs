@@ -2,6 +2,7 @@ extern alias provider;
 
 using System.Diagnostics;
 using System.Text;
+using provider::TopiaForge.Multiplayer.ControlPlane;
 using provider::TopiaForge.Multiplayer.NatTraversal.Ice;
 using provider::TopiaForge.Multiplayer.NatTraversal.Signaling;
 using provider::TopiaForge.Multiplayer.NatTraversal.Turn;
@@ -122,7 +123,7 @@ internal static class NatSignalingTests
     {
         using var server = new LoopbackWebSocketServer();
         var serverId = new string('a', 64);
-        using var client = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + server.Port), serverId, "tfj1_ticket");
+        using var client = Open(server.Port, serverId, "tfj1_ticket");
         That(Wait(() => server.Upgraded && client.State == SignalingState.Open), "the client upgrades");
         That(server.Path == "/v1/signal/" + serverId && server.Authorization == "Bearer tfj1_ticket", "to the room's path, with the ticket in the header and not the URL");
         server.SendText(Frame(2));
@@ -137,7 +138,7 @@ internal static class NatSignalingTests
         That(!client.TrySend(SignalMessage.Punch(null, 1)), "nothing queues on a closed socket");
 
         using var polite = new LoopbackWebSocketServer();
-        using var leaving = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + polite.Port), serverId, "tfh1_token");
+        using var leaving = Open(polite.Port, serverId, "tfh1_token");
         That(Wait(() => leaving.State == SignalingState.Open), "a second client connects");
         leaving.TrySend(SignalMessage.Bye(PeerId, SignalByeReason.Done));
         leaving.Close();
@@ -158,14 +159,14 @@ internal static class NatSignalingTests
                  })
         {
             using var server = new LoopbackWebSocketServer();
-            using var client = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + server.Port), serverId, "tfj1_ticket");
+            using var client = Open(server.Port, serverId, "tfj1_ticket");
             That(Wait(() => client.State == SignalingState.Open), "the client connects");
             attack(server);
             That(Wait(() => client.State == SignalingState.Closed) && client.CloseReason == expected, "the client closes as " + expected + " (" + client.CloseReason + ")");
         }
 
         using (var refusing = new LoopbackWebSocketServer(401))
-        using (var refused = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + refusing.Port), serverId, "tfj1_stale"))
+        using (var refused = Open(refusing.Port, serverId, "tfj1_stale"))
         {
             That(Wait(() => refused.State == SignalingState.Closed) && refused.CloseReason == SignalingCloseReason.Refused, "a refused upgrade reads as refused (" + refused.CloseReason + ")");
         }
@@ -174,17 +175,22 @@ internal static class NatSignalingTests
         closedPort.Start();
         var port = ((System.Net.IPEndPoint)closedPort.LocalEndpoint).Port;
         closedPort.Stop();
-        using (var nowhere = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + port), serverId, "tfj1_ticket", TimeSpan.FromSeconds(2)))
+        using (var nowhere = Open(port, serverId, "tfj1_ticket", TimeSpan.FromSeconds(2)))
         {
             That(Wait(() => nowhere.State == SignalingState.Closed) && nowhere.CloseReason == SignalingCloseReason.Unreachable, "nothing listening reads as unreachable (" + nowhere.CloseReason + ")");
         }
 
-        That(WebSocketSignalingClient.Endpoint(new Uri("https://control.example.test"), serverId).ToString() == "wss://control.example.test/v1/signal/" + serverId, "an https origin becomes wss");
-        Throws<ArgumentException>(() => WebSocketSignalingClient.Endpoint(new Uri("http://control.example.test"), serverId), "plain http is refused off this machine");
-        Throws<ArgumentException>(() => WebSocketSignalingClient.Endpoint(new Uri("https://control.example.test/v2"), serverId), "an origin with a path is refused");
-        Throws<ArgumentException>(() => WebSocketSignalingClient.Endpoint(new Uri("https://control.example.test"), "ABC"), "a malformed server id is refused");
-        Throws<ArgumentException>(() => WebSocketSignalingClient.Open(new Uri("https://control.example.test"), serverId, "two words"), "a credential with a space is refused");
+        That(ControlPlaneOrigin.TryParse("https://control.example.test", out _) && SignalingUpgrade.Path(serverId) == "/v1/signal/" + serverId,
+            "the room is the server's path on the service's https origin");
+        That(!ControlPlaneOrigin.TryParse("http://control.example.test", out _), "plain http is refused off this machine");
+        That(!ControlPlaneOrigin.TryParse("https://control.example.test/v2", out _), "an origin with a path is refused");
+        Throws<ArgumentException>(() => SignalingUpgrade.Path("ABC"), "a malformed server id is refused");
+        Throws<ArgumentException>(() => Open(port, serverId, "two words"), "a credential with a space is refused");
     }
+
+    /// <summary>Opens a signaling socket to a loopback room over the HTTPS client's own connection, as the game does.</summary>
+    private static WebSocketSignalingClient Open(int port, string serverId, string credential, TimeSpan? connectTimeout = null) =>
+        SignalingUpgrade.Open(new HttpsControlPlaneTransport(ControlPlaneOrigin.Loopback(port)), serverId, credential, connectTimeout);
 
     private static (int Step, string From, string Frame)[] LoadTranscript() =>
         NetworkFixtures.Load(Path.Combine("control-plane", "signaling.json")).GetProperty("transcript").EnumerateArray()

@@ -3,6 +3,7 @@ extern alias provider;
 using System.Net;
 using System.Net.Sockets;
 using TopiaForge.Mods.Internal;
+using provider::TopiaForge.Multiplayer.ControlPlane;
 using provider::TopiaForge.Multiplayer.NatTraversal.Signaling;
 using provider::TopiaForge.Multiplayer.Network;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
@@ -12,7 +13,7 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// Where the TopiaForge service comes from and when it is reached: a LAN host never contacts it, a session launch's own
 /// origin comes before the manager's, a launch to an invite or an Internet listing is planned through it, and the
-/// signaling socket, like the HTTPS client, never goes through a proxy the system names.
+/// signaling socket, like the HTTPS client, never goes through a proxy the system or the environment names.
 /// </summary>
 internal static class InternetConfigurationTests
 {
@@ -89,23 +90,44 @@ internal static class InternetConfigurationTests
             "without a service origin an invite still cannot be planned");
     }
 
-    /// <summary>A proxy that would take every request: the signaling socket must reach the room directly all the same.</summary>
+    /// <summary>
+    /// A proxy that would take every request, named by the system and by the environment: the signaling socket must reach
+    /// the room directly all the same, since it opens over the HTTPS client's own connection.
+    /// </summary>
     internal static void SignalingNeverAsksAProxy()
     {
         using var proxy = LoopbackHttpServer.Answering(LoopbackHttpServer.Answer(502, null));
         using var room = new LoopbackWebSocketServer();
-        var saved = System.Net.Http.HttpClient.DefaultProxy;
+        var names = new[] { "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy" };
+        var exceptions = new[] { "NO_PROXY", "no_proxy" };
+        var saved = names.Concat(exceptions).ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        var savedDefault = System.Net.Http.HttpClient.DefaultProxy;
         try
         {
+            foreach (var name in names) Environment.SetEnvironmentVariable(name, "http://127.0.0.1:" + proxy.Port);
+
+            // No exception the machine names may let loopback past the proxy, or a client that asked one would pass.
+            foreach (var name in exceptions) Environment.SetEnvironmentVariable(name, null);
             System.Net.Http.HttpClient.DefaultProxy = new GreedyProxy(new Uri("http://127.0.0.1:" + proxy.Port));
-            using var client = WebSocketSignalingClient.Open(new Uri("http://127.0.0.1:" + room.Port + "/"), ServerId, "tfj1_ticket");
+            using var client = SignalingUpgrade.Open(new HttpsControlPlaneTransport(ControlPlaneOrigin.Loopback(room.Port)), ServerId, "tfj1_ticket");
             var opened = SpinWait.SpinUntil(() => client.State != SignalingState.Connecting, TimeSpan.FromSeconds(10));
             That(opened && client.State == SignalingState.Open && room.Upgraded, "the room is reached directly (" + client.State + ", " + client.CloseReason + ")");
-            That(proxy.Connections == 0, "and the proxy the system names is never asked");
+            That(proxy.Connections == 0, "and the proxy the system or the environment names is never asked");
         }
         finally
         {
-            System.Net.Http.HttpClient.DefaultProxy = saved;
+            foreach (var (name, value) in saved) Environment.SetEnvironmentVariable(name, value);
+            System.Net.Http.HttpClient.DefaultProxy = savedDefault;
+        }
+
+        // By construction: neither the HTTPS client nor the signaling client names the runtime's WebSocket client, whose
+        // handshake follows each runtime's own proxy and redirect rules.
+        foreach (var folder in new[] { "ControlPlane", Path.Combine("Nat", "Signaling") })
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(NetworkFixtures.RepositoryRoot(), "mods", "TopiaForge.Multiplayer", folder), "*.cs"))
+            {
+                That(!System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(file), "\\bClientWebSocket\\b"), Path.GetFileName(file) + " never names ClientWebSocket");
+            }
         }
     }
 

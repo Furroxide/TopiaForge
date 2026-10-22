@@ -19,7 +19,8 @@ namespace TopiaForge.Multiplayer.ControlPlane
     /// for the origin's name. Every step shares one deadline, so a service that answers slowly, a byte at a time, cannot
     /// hold a request past it, and the answer is read within the request's bound (<see cref="HttpAnswerReader"/>). Nothing
     /// throws out of <see cref="SendAsync"/>: a failure is a <see cref="ControlPlaneTransportFailure"/>, which never names
-    /// an address, and no exception's text is ever read.
+    /// an address, and no exception's text is ever read. The signaling socket is opened over a connection made here too
+    /// (<see cref="ConnectAsync"/>, <see cref="SignalingUpgrade"/>), so it keeps every one of these rules.
     /// </summary>
     internal sealed class HttpsControlPlaneTransport : IControlPlaneTransport
     {
@@ -39,6 +40,9 @@ namespace TopiaForge.Multiplayer.ControlPlane
             this.resolve = resolve ?? Dns.GetHostAddressesAsync;
             this.validate = validate ?? Verified;
         }
+
+        /// <summary>Gets the origin every connection goes to.</summary>
+        internal ControlPlaneOrigin Origin => origin;
 
         /// <summary>Gets or sets how long each connection attempt may take, within the request's whole deadline.</summary>
         internal TimeSpan ConnectTimeout { get; set; } = DefaultConnectTimeout;
@@ -95,40 +99,56 @@ namespace TopiaForge.Multiplayer.ControlPlane
             return whole;
         }
 
-        private async Task<ControlPlaneResponse> ExchangeAsync(ControlPlaneRequest request, CancellationToken cancellation)
+        /// <summary>
+        /// Opens one connection to the origin, as every request does: its addresses in turn, each attempt within
+        /// <see cref="ConnectTimeout"/>, then TLS that verifies the certificate for the origin's name, all within
+        /// <paramref name="cancellation"/>, which closes the connection if it fires first. The caller owns the connection.
+        /// A failure throws whatever the runtime's sockets and TLS throw; callers read none of its text.
+        /// </summary>
+        internal async Task<ControlPlaneConnection> ConnectAsync(CancellationToken cancellation)
         {
             var addresses = await ResolveAsync(cancellation).ConfigureAwait(false);
             TcpClient? client = null;
             foreach (var address in addresses)
             {
-                client = await ConnectAsync(address, cancellation).ConfigureAwait(false);
+                client = await ConnectToAsync(address, cancellation).ConfigureAwait(false);
                 if (client != null) break;
             }
 
             if (client == null) throw new SocketException((int)SocketError.HostUnreachable);
-            using (client)
-            using (cancellation.Register(() => client.Dispose()))
+            Stream stream = client.GetStream();
+            try
             {
-                Stream stream = client.GetStream();
-                SslStream? tls = null;
-                try
+                using (cancellation.Register(client.Dispose))
                 {
                     if (origin.IsSecure)
                     {
-                        tls = new SslStream(stream, false, validate);
-                        await tls.AuthenticateAsClientAsync(origin.Host).ConfigureAwait(false);
+                        var tls = new SslStream(stream, false, validate);
                         stream = tls;
+                        await tls.AuthenticateAsClientAsync(origin.Host).ConfigureAwait(false);
                     }
+                }
 
-                    var bytes = Write(origin, request);
-                    await stream.WriteAsync(bytes, 0, bytes.Length, cancellation).ConfigureAwait(false);
-                    await stream.FlushAsync(cancellation).ConfigureAwait(false);
-                    return await HttpAnswerReader.ReadAsync(stream, request.MaximumResponseBytes, cancellation).ConfigureAwait(false);
-                }
-                finally
-                {
-                    tls?.Dispose();
-                }
+                cancellation.ThrowIfCancellationRequested();
+                return new ControlPlaneConnection(client, stream);
+            }
+            catch (Exception)
+            {
+                stream.Dispose();
+                client.Dispose();
+                throw;
+            }
+        }
+
+        private async Task<ControlPlaneResponse> ExchangeAsync(ControlPlaneRequest request, CancellationToken cancellation)
+        {
+            using (var connection = await ConnectAsync(cancellation).ConfigureAwait(false))
+            using (cancellation.Register(connection.Dispose))
+            {
+                var bytes = Write(origin, request);
+                await connection.Stream.WriteAsync(bytes, 0, bytes.Length, cancellation).ConfigureAwait(false);
+                await connection.Stream.FlushAsync(cancellation).ConfigureAwait(false);
+                return await HttpAnswerReader.ReadAsync(connection.Stream, request.MaximumResponseBytes, cancellation).ConfigureAwait(false);
             }
         }
 
@@ -170,7 +190,7 @@ namespace TopiaForge.Multiplayer.ControlPlane
         }
 
         /// <summary>Connects to one address within its own time limit; null when it refused or did not answer, so the next is tried.</summary>
-        private async Task<TcpClient?> ConnectAsync(IPAddress address, CancellationToken cancellation)
+        private async Task<TcpClient?> ConnectToAsync(IPAddress address, CancellationToken cancellation)
         {
             var client = new TcpClient(address.AddressFamily);
             using (var attempt = CancellationTokenSource.CreateLinkedTokenSource(cancellation))
@@ -215,6 +235,38 @@ namespace TopiaForge.Multiplayer.ControlPlane
             }
 
             return false;
+        }
+    }
+
+    /// <summary>
+    /// One connection the HTTPS client opened to the service: the socket, and the stream over it, TLS unless the origin is
+    /// a loopback control plane. Disposing it closes both, from any thread and any number of times.
+    /// </summary>
+    internal sealed class ControlPlaneConnection : IDisposable
+    {
+        private readonly TcpClient client;
+
+        internal ControlPlaneConnection(TcpClient client, Stream stream)
+        {
+            this.client = client ?? throw new ArgumentNullException(nameof(client));
+            Stream = stream ?? throw new ArgumentNullException(nameof(stream));
+        }
+
+        /// <summary>Gets the stream requests are written to and answers read from.</summary>
+        internal Stream Stream { get; }
+
+        public void Dispose()
+        {
+            try
+            {
+                Stream.Dispose();
+            }
+            catch (Exception)
+            {
+                // A stream torn down mid-read may throw as it closes; this can run on a deadline's timer, so nothing escapes.
+            }
+
+            client.Dispose();
         }
     }
 }

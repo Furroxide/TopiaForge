@@ -391,10 +391,15 @@ final before the connection is up; once it is up, the joiner tries again later, 
 too and the client cannot tell the refusals apart. The host keeps a peer's session across its reconnections, since the
 peer id comes from the ticket.
 
-**The WebSocket client.** `WebSocketSignalingClient` opens `GET /v1/signal/{serverId}`:
+**The WebSocket client.** `WebSocketSignalingClient` runs the socket for `GET /v1/signal/{serverId}`, which the game
+opens through `SignalingUpgrade` over the HTTPS client's own connection (`MultiplayerInternetSessions.md`, section 3):
 
-- **Origin.** An https origin makes the socket wss. Plain ws is accepted only to a loopback address, for a control plane
-  running on this machine during development.
+- **Origin.** The service's https origin, so the socket is wss, with the certificate verified for the origin's name.
+  Plain ws reaches only a loopback origin, for a control plane running on this machine during development.
+- **Handshake.** The game writes and reads the upgrade itself and hands the connection to `WebSocket.CreateFromStream`,
+  so on every runtime no proxy is asked, no redirect is followed, and the HTTPS client's deadlines and strict reading
+  hold. Opening ends as unreachable when the connection fails, times out or ends early, and as refused for any answer
+  that does not upgrade.
 - **Credential.** The host token or join ticket travels in the `Authorization` header, never in the URL.
 - **Loops.** Its own receive and send loops run apart from the agent. Both queues are bounded at 256 frames.
 - **Frames.** A binary frame, or one over 8 KiB, closes the socket. Every failure becomes a close reason, never an
@@ -402,10 +407,11 @@ peer id comes from the ticket.
   limited (4408), replaced (4409), session ended (4410) and expired (4411); a refused upgrade, whatever its status, is
   refused.
 
-The game's Mono runs `ClientWebSocket` over TLS 1.2 (`MultiplayerMonoSpike.md`, section 2). It was measured against
-two public echo servers first, and then inside the game against the staging control plane's Worker
-(`MultiplayerInternetSessions.md`, section 11). Everything outside this one class depends only on `ISignalingClient`,
-and the tests run the real client against a loopback server.
+Before the handshake was the game's own, the game's Mono ran `ClientWebSocket` over TLS 1.2
+(`MultiplayerMonoSpike.md`, section 2), measured against two public echo servers first and then inside the game against
+the staging control plane's Worker (`MultiplayerInternetSessions.md`, section 11). `WebSocket.CreateFromStream` over
+the game's TLS has not been measured in the game yet. Everything outside this one class depends only on
+`ISignalingClient`, and the tests run the real client, through the real handshake, against a loopback server.
 
 ## 9. Privacy
 

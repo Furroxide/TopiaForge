@@ -20,12 +20,36 @@ namespace TopiaForge.Multiplayer.ControlPlane
         internal ControlPlaneTransportFailure Failure { get; }
     }
 
+    /// <summary>The head of the answer to an upgrade, and whatever the service sent past it in the same reads.</summary>
+    internal sealed class UpgradeAnswer
+    {
+        internal UpgradeAnswer(bool http11, int status, IReadOnlyList<KeyValuePair<string, string>> headers, byte[] rest)
+        {
+            Http11 = http11;
+            Status = status;
+            Headers = headers ?? throw new ArgumentNullException(nameof(headers));
+            Rest = rest ?? throw new ArgumentNullException(nameof(rest));
+        }
+
+        /// <summary>Gets whether the status line named HTTP/1.1, which an upgrade needs.</summary>
+        internal bool Http11 { get; }
+
+        internal int Status { get; }
+
+        /// <summary>Gets the header lines in the order they came, each name as the service spelled it and its value trimmed.</summary>
+        internal IReadOnlyList<KeyValuePair<string, string>> Headers { get; }
+
+        /// <summary>Gets the bytes that came after the head: the first of the upgraded protocol's own.</summary>
+        internal byte[] Rest { get; }
+    }
+
     /// <summary>
     /// Reads one HTTP/1.1 answer strictly and within bounds: a status line, at most 64 header lines in 16 KiB, and a body
     /// framed by Content-Length, chunked encoding or the end of the connection, never larger than the caller allows; a
     /// chunked body's framing has a budget of its own. Every line ends in CR LF, folded and malformed lines are refused,
     /// and an answer that names both framings is refused as ambiguous. A redirect is never followed. Nothing the service
-    /// writes is kept but the status, the body, whether the body is JSON, and a plain Retry-After.
+    /// writes is kept but the status, the body, whether the body is JSON, and a plain Retry-After. The answer to the
+    /// signaling socket's upgrade is read by the same rules, its head alone (<see cref="ReadUpgradeAsync"/>).
     /// </summary>
     internal static class HttpAnswerReader
     {
@@ -111,6 +135,31 @@ namespace TopiaForge.Multiplayer.ControlPlane
             }
 
             return ControlPlaneResponse.Answered(status, body, IsJson(contentType), retryAfter);
+        }
+
+        /// <summary>
+        /// Reads the head of the answer to an upgrade by the same rules as any answer's head: the status line and at most
+        /// 64 header lines in 16 KiB, each ending in CR LF. No interim answer is skipped and no body is read: once the head
+        /// ends, the connection belongs to the upgraded protocol, so whatever was read past it is handed back. A
+        /// connection that ends before the head does throws <see cref="EndOfStreamException"/>, as a dropped connection
+        /// does; a head that breaks a rule throws <see cref="ControlPlaneProtocolException"/>.
+        /// </summary>
+        internal static async Task<UpgradeAnswer> ReadUpgradeAsync(Stream stream, CancellationToken cancellation)
+        {
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
+            var reader = new BoundedReader(stream, cancellation);
+            try
+            {
+                reader.BeginHead(MaximumHeaderBytes);
+                var line = await reader.ReadLineAsync().ConfigureAwait(false);
+                var status = ParseStatus(line);
+                var headers = await ReadHeadersAsync(reader).ConfigureAwait(false);
+                return new UpgradeAnswer(line.StartsWith("HTTP/1.1 ", StringComparison.Ordinal), status, headers, reader.TakeBuffered());
+            }
+            catch (ControlPlaneProtocolException) when (reader.Ended)
+            {
+                throw new EndOfStreamException("The connection ended before the answer's head did.");
+            }
         }
 
         /// <summary>Whether a media type is JSON: <c>application/json</c> in any case, with or without parameters.</summary>
@@ -277,8 +326,20 @@ namespace TopiaForge.Multiplayer.ControlPlane
                 this.cancellation = cancellation;
             }
 
+            /// <summary>Gets whether the stream has ended: a read returned nothing.</summary>
+            internal bool Ended { get; private set; }
+
             /// <summary>Starts counting header bytes afresh: what the next lines, CR LF included, may take in all.</summary>
             internal void BeginHead(int budget) => headBudget = budget;
+
+            /// <summary>Takes every byte read but not yet consumed, leaving none.</summary>
+            internal byte[] TakeBuffered()
+            {
+                var rest = new byte[end - start];
+                Buffer.BlockCopy(buffer, start, rest, 0, rest.Length);
+                start = end;
+                return rest;
+            }
 
             /// <summary>Reads one line ending in CR LF, without it. A bare CR or LF, or a line past the budget, is refused.</summary>
             internal async Task<string> ReadLineAsync()
@@ -338,6 +399,7 @@ namespace TopiaForge.Multiplayer.ControlPlane
                 start = 0;
                 end = await stream.ReadAsync(buffer, 0, buffer.Length, cancellation).ConfigureAwait(false);
                 if (end < 0) end = 0;
+                if (end == 0) Ended = true;
                 return end > 0;
             }
         }

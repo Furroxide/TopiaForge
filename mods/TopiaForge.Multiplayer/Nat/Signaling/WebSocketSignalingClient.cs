@@ -1,22 +1,48 @@
 using System;
 using System.Collections.Concurrent;
-using System.IO;
-using System.Net;
-using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace TopiaForge.Multiplayer.NatTraversal.Signaling
 {
+    /// <summary>The outcome of opening a signaling socket: the socket, upgraded and ready, or why there is none.</summary>
+    internal sealed class SignalingConnection
+    {
+        private SignalingConnection(WebSocket? socket, SignalingCloseReason failure)
+        {
+            Socket = socket;
+            Failure = failure;
+        }
+
+        /// <summary>Gets the upgraded socket, or null when opening failed.</summary>
+        internal WebSocket? Socket { get; }
+
+        /// <summary>Gets why opening failed: <see cref="SignalingCloseReason.Unreachable"/> or <see cref="SignalingCloseReason.Refused"/>.</summary>
+        internal SignalingCloseReason Failure { get; }
+
+        internal static SignalingConnection Opened(WebSocket socket) =>
+            new SignalingConnection(socket ?? throw new ArgumentNullException(nameof(socket)), SignalingCloseReason.None);
+
+        internal static SignalingConnection Failed(SignalingCloseReason reason)
+        {
+            if (reason != SignalingCloseReason.Unreachable && reason != SignalingCloseReason.Refused)
+            {
+                throw new ArgumentOutOfRangeException(nameof(reason), "Opening fails as unreachable or refused.");
+            }
+
+            return new SignalingConnection(null, reason);
+        }
+    }
+
     /// <summary>
     /// The signaling socket over WebSocket: <c>GET /v1/signal/{serverId}</c> on the control plane's origin, the host token
-    /// or join ticket in the Authorization header and never in the URL. It runs its own receive and send loops, so every
-    /// call the agent makes returns at once. Frames are canonical JSON text of at most 8 KiB; a binary or oversized frame
-    /// from the service closes the socket. The origin must be https, which makes the socket wss; plain ws is accepted
-    /// only to a loopback address, for a control plane running on this machine during development. The game's Mono runs
-    /// ClientWebSocket over TLS 1.2 (MultiplayerMonoSpike.md, section 2); nothing outside this class depends on that.
-    /// Failures become a <see cref="SignalingCloseReason"/>, never an exception or a message that could name anything.
+    /// or join ticket in the Authorization header and never in the URL. Whoever opens it makes the connection and the
+    /// upgrade: in the game, the HTTPS client's own connection (<c>SignalingUpgrade</c>), so no runtime's WebSocket client,
+    /// with its own redirect and proxy rules, is involved. The socket runs its own receive and send loops, so every call
+    /// the agent makes returns at once. Frames are canonical JSON text of at most 8 KiB; a binary or oversized frame from
+    /// the service closes the socket. Failures become a <see cref="SignalingCloseReason"/>, never an exception or a message
+    /// that could name anything.
     /// </summary>
     internal sealed class WebSocketSignalingClient : ISignalingClient
     {
@@ -24,11 +50,11 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
         internal static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(2);
 
-        private readonly ClientWebSocket socket = new ClientWebSocket();
         private readonly ConcurrentQueue<SignalMessage> inbound = new ConcurrentQueue<SignalMessage>();
         private readonly ConcurrentQueue<byte[]> outbound = new ConcurrentQueue<byte[]>();
         private readonly SemaphoreSlim wake = new SemaphoreSlim(0);
         private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
+        private WebSocket? socket;
         private int state = (int)SignalingState.Connecting;
         private int closeReason;
         private int inboundCount;
@@ -44,34 +70,17 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
         public SignalingCloseReason CloseReason => (SignalingCloseReason)Volatile.Read(ref closeReason);
 
         /// <summary>
-        /// Opens the session's signaling room. <paramref name="credential"/> is the host session token or the join ticket,
-        /// sent only in the Authorization header.
+        /// Starts opening a signaling socket through <paramref name="connect"/>, which makes the connection and the upgrade
+        /// within the token it is given: <paramref name="connectTimeout"/>, 10 s by default, or until the socket is
+        /// disposed. Returns at once.
         /// </summary>
-        internal static WebSocketSignalingClient Open(Uri origin, string serverId, string credential, TimeSpan? connectTimeout = null)
+        internal static WebSocketSignalingClient Open(Func<CancellationToken, Task<SignalingConnection>> connect, TimeSpan? connectTimeout = null)
         {
-            var endpoint = Endpoint(origin, serverId);
-            if (!IsCredential(credential)) throw new ArgumentException("A signaling credential is a token or ticket of printable ASCII.", nameof(credential));
+            if (connect == null) throw new ArgumentNullException(nameof(connect));
             var client = new WebSocketSignalingClient();
-            // The room is the control plane's own origin, reached directly: never through a proxy the system names.
-            client.socket.Options.Proxy = null;
-            client.socket.Options.SetRequestHeader("Authorization", "Bearer " + credential);
-            client.socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
             var timeout = connectTimeout ?? ConnectTimeout;
-            Task.Run(() => client.RunAsync(endpoint, timeout));
+            Task.Run(() => client.RunAsync(connect, timeout));
             return client;
-        }
-
-        /// <summary>Builds the room's URL: wss for an https origin, ws only for a loopback http origin.</summary>
-        internal static Uri Endpoint(Uri origin, string serverId)
-        {
-            if (origin == null) throw new ArgumentNullException(nameof(origin));
-            if (!Network.WireText.IsHex(serverId, 32)) throw new ArgumentException("A server id is 64 lowercase hexadecimal characters.", nameof(serverId));
-            var secure = origin.Scheme == Uri.UriSchemeHttps;
-            var local = origin.Scheme == Uri.UriSchemeHttp && IPAddress.TryParse(origin.Host.Trim('[', ']'), out var address) && IPAddress.IsLoopback(address);
-            if (!secure && !local) throw new ArgumentException("The control plane is reached over https, or plain http on this machine only.", nameof(origin));
-            if (!string.IsNullOrEmpty(origin.Query) || !string.IsNullOrEmpty(origin.Fragment) || origin.AbsolutePath != "/") throw new ArgumentException("An origin has no path, query or fragment.", nameof(origin));
-            var builder = new UriBuilder(origin) { Scheme = secure ? "wss" : "ws", Path = "/v1/signal/" + serverId };
-            return builder.Uri;
         }
 
         public bool TrySend(SignalMessage message)
@@ -116,9 +125,11 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
             Finish(SignalingCloseReason.Normal);
             try
             {
+                // Cancelling first ends an open still under way; a socket that lands meanwhile is released by the open.
                 lifetime.Cancel();
-                socket.Abort();
-                socket.Dispose();
+                var current = Volatile.Read(ref socket);
+                current?.Abort();
+                current?.Dispose();
             }
             catch (ObjectDisposedException)
             {
@@ -126,26 +137,42 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
             }
         }
 
-        private async Task RunAsync(Uri endpoint, TimeSpan timeout)
+        private async Task RunAsync(Func<CancellationToken, Task<SignalingConnection>> connect, TimeSpan timeout)
         {
+            SignalingConnection connection;
             try
             {
                 using (var connecting = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
                 {
                     connecting.CancelAfter(timeout);
-                    await socket.ConnectAsync(endpoint, connecting.Token).ConfigureAwait(false);
+                    connection = await connect(connecting.Token).ConfigureAwait(false);
                 }
             }
-            catch (Exception exception)
+            catch (Exception)
             {
-                Finish(IsNetworkFailure(exception) ? SignalingCloseReason.Unreachable : SignalingCloseReason.Refused);
-                Release();
+                // An opener should answer rather than throw; one that throws reads as a connection that failed.
+                Finish(SignalingCloseReason.Unreachable);
+                return;
+            }
+
+            var opened = connection.Socket;
+            if (opened == null)
+            {
+                Finish(connection.Failure);
+                return;
+            }
+
+            Interlocked.Exchange(ref socket, opened);
+            if (lifetime.IsCancellationRequested)
+            {
+                // Disposed while the upgrade landed: the socket it made is let go at once.
+                Release(opened);
                 return;
             }
 
             Interlocked.CompareExchange(ref state, (int)SignalingState.Open, (int)SignalingState.Connecting);
-            var sending = SendLoopAsync();
-            await ReceiveLoopAsync().ConfigureAwait(false);
+            var sending = SendLoopAsync(opened);
+            await ReceiveLoopAsync(opened).ConfigureAwait(false);
             lifetime.Cancel();
             try
             {
@@ -156,10 +183,10 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
                 // The send loop ends with the socket.
             }
 
-            Release();
+            Release(opened);
         }
 
-        private async Task ReceiveLoopAsync()
+        private async Task ReceiveLoopAsync(WebSocket open)
         {
             var buffer = new byte[SignalCodec.MaximumFrameBytes + 1];
             try
@@ -172,21 +199,21 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
                     {
                         if (length >= buffer.Length)
                         {
-                            await CloseAsync(WebSocketCloseStatus.MessageTooBig).ConfigureAwait(false);
+                            await CloseAsync(open, WebSocketCloseStatus.MessageTooBig).ConfigureAwait(false);
                             Finish(SignalingCloseReason.Invalid);
                             return;
                         }
 
-                        result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer, length, buffer.Length - length), lifetime.Token).ConfigureAwait(false);
+                        result = await open.ReceiveAsync(new ArraySegment<byte>(buffer, length, buffer.Length - length), lifetime.Token).ConfigureAwait(false);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            Finish(Reason(socket.CloseStatus));
+                            Finish(Reason(open.CloseStatus));
                             return;
                         }
 
                         if (result.MessageType != WebSocketMessageType.Text)
                         {
-                            await CloseAsync(WebSocketCloseStatus.InvalidMessageType).ConfigureAwait(false);
+                            await CloseAsync(open, WebSocketCloseStatus.InvalidMessageType).ConfigureAwait(false);
                             Finish(SignalingCloseReason.Invalid);
                             return;
                         }
@@ -197,7 +224,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
 
                     if (length > SignalCodec.MaximumFrameBytes)
                     {
-                        await CloseAsync(WebSocketCloseStatus.MessageTooBig).ConfigureAwait(false);
+                        await CloseAsync(open, WebSocketCloseStatus.MessageTooBig).ConfigureAwait(false);
                         Finish(SignalingCloseReason.Invalid);
                         return;
                     }
@@ -220,7 +247,7 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
             }
         }
 
-        private async Task SendLoopAsync()
+        private async Task SendLoopAsync(WebSocket open)
         {
             while (!lifetime.IsCancellationRequested)
             {
@@ -228,26 +255,26 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
                 while (outbound.TryDequeue(out var frame))
                 {
                     Interlocked.Decrement(ref outboundCount);
-                    await socket.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Text, true, lifetime.Token).ConfigureAwait(false);
+                    await open.SendAsync(new ArraySegment<byte>(frame), WebSocketMessageType.Text, true, lifetime.Token).ConfigureAwait(false);
                 }
 
                 if (Volatile.Read(ref closing) == 0) continue;
 
                 // Everything queued has gone: close, and give the service a moment to answer before letting go.
-                await CloseAsync(WebSocketCloseStatus.NormalClosure).ConfigureAwait(false);
+                await CloseAsync(open, WebSocketCloseStatus.NormalClosure).ConfigureAwait(false);
                 Finish(SignalingCloseReason.Normal);
                 lifetime.CancelAfter(CloseTimeout);
                 return;
             }
         }
 
-        private async Task CloseAsync(WebSocketCloseStatus status)
+        private static async Task CloseAsync(WebSocket open, WebSocketCloseStatus status)
         {
             try
             {
                 using (var budget = new CancellationTokenSource(CloseTimeout))
                 {
-                    await socket.CloseOutputAsync(status, string.Empty, budget.Token).ConfigureAwait(false);
+                    await open.CloseOutputAsync(status, string.Empty, budget.Token).ConfigureAwait(false);
                 }
             }
             catch (Exception)
@@ -262,11 +289,11 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
             Volatile.Write(ref closeReason, (int)reason);
         }
 
-        private void Release()
+        private static void Release(WebSocket open)
         {
             try
             {
-                socket.Dispose();
+                open.Dispose();
             }
             catch (ObjectDisposedException)
             {
@@ -297,27 +324,6 @@ namespace TopiaForge.Multiplayer.NatTraversal.Signaling
                 default:
                     return SignalingCloseReason.Unreachable;
             }
-        }
-
-        private static bool IsNetworkFailure(Exception exception)
-        {
-            for (var current = exception; current != null; current = current.InnerException)
-            {
-                if (current is SocketException || current is IOException || current is OperationCanceledException) return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsCredential(string? credential)
-        {
-            if (string.IsNullOrEmpty(credential) || credential!.Length > 256) return false;
-            foreach (var character in credential)
-            {
-                if (character < 0x21 || character > 0x7E) return false;
-            }
-
-            return true;
         }
     }
 }

@@ -136,6 +136,23 @@ internal static class ControlPlaneHttpTests
             That(Send(silent.Port, TimeSpan.FromSeconds(1)).Failure == ControlPlaneTransportFailure.TimedOut && clock.Elapsed < TimeSpan.FromSeconds(4), "a silent service times out");
         }
 
+        // A service that takes the connection but never finishes TLS times out as well; the handshake takes no token of its own.
+        var mute = new TcpListener(IPAddress.Loopback, 0);
+        mute.Start();
+        try
+        {
+            That(ControlPlaneOrigin.TryParse("https://localhost:" + ((IPEndPoint)mute.LocalEndpoint).Port, out var origin), "a service origin with a port parses");
+            var transport = new HttpsControlPlaneTransport(origin, _ => Task.FromResult(new[] { IPAddress.Loopback })) { TotalTimeout = TimeSpan.FromSeconds(1) };
+            var clock = Stopwatch.StartNew();
+            var sending = transport.SendAsync(Status, CancellationToken.None);
+            That(sending.Wait(6_000) && sending.Result.Failure == ControlPlaneTransportFailure.TimedOut && clock.Elapsed < TimeSpan.FromSeconds(4),
+                "a service that never finishes TLS times out (" + (sending.IsCompleted ? sending.Result.ToString() : "still waiting") + ", " + clock.ElapsedMilliseconds + " ms)");
+        }
+        finally
+        {
+            mute.Stop();
+        }
+
         That(Send(ClosedPort()).Failure == ControlPlaneTransportFailure.Unreachable, "a port nobody listens on is unreachable");
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();

@@ -2,6 +2,7 @@ extern alias provider;
 
 using System.Net;
 using System.Reflection;
+using provider::TopiaForge.Multiplayer.ControlPlane;
 using provider::TopiaForge.Multiplayer.NatTraversal;
 using provider::TopiaForge.Multiplayer.NatTraversal.Ice;
 using provider::TopiaForge.Multiplayer.NatTraversal.Signaling;
@@ -142,7 +143,7 @@ internal static class NatPrivacyTests
         texts.Add(Message(() => TurnRelayPath.For(1, null!)));
         texts.Add(Message(() => new IceCredentials("x", "short")));
         texts.Add(Message(() => IceServerSet.Create(Array.Empty<IceServerAddress>(), new[] { new IceServerAddress("turn.example.test", 3478) }, "user name", "secret", 600)));
-        texts.Add(Message(() => WebSocketSignalingClient.Endpoint(new Uri("http://198.51.100.10:8787"), new string('a', 64))));
+        texts.Add(Message(() => SignalingUpgrade.Path("198.51.100.10:8787")));
 
         // Every object that holds an address prints without it.
         foreach (var session in joiner.Agent.Sessions.Concat(host.Agent.Sessions))
