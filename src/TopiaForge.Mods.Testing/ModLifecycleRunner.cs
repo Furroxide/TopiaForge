@@ -49,6 +49,12 @@ namespace TopiaForge.Mods.Testing
         /// Attaches the context and invokes the mod's load callback. A failing callback triggers best-effort unload
         /// and lifetime cleanup before the exception is rethrown.
         /// </summary>
+        /// <remarks>
+        /// As TopiaForge does in the game, a mod's generated multiplayer contract is bound to the context's multiplayer
+        /// session after the context is attached and before <c>OnLoad</c>, and released with the context's lifetime.
+        /// Register the session with <see cref="FakeExtensionService.Register{T}"/> first; without one, the contract
+        /// stays unbound. A contract that cannot bind fails the load with the reason.
+        /// </remarks>
         public void Load()
         {
             if (loaded || finished)
@@ -58,7 +64,7 @@ namespace TopiaForge.Mods.Testing
 
             try
             {
-                mod.Load(Context);
+                mod.Load(Context, attached => BindGeneratedContract(mod, attached));
                 loaded = true;
             }
             catch (Exception loadException)
@@ -157,6 +163,31 @@ namespace TopiaForge.Mods.Testing
             {
                 failures.Add(exception);
             }
+        }
+
+        /// <summary>
+        /// Binds the mod's generated multiplayer contract to the context's multiplayer session, as TopiaForge binds it
+        /// in the game: once the context is attached, so the contract's session hooks may read it, and before
+        /// <c>OnLoad</c>, so <c>OnLoad</c> may submit. The binding ends with the context's lifetime.
+        /// </summary>
+        private static void BindGeneratedContract(TopiaForgeMod mod, IModContext context)
+        {
+            if (!(mod is IGeneratedMultiplayerBinding generated) ||
+                !context.TryGetMultiplayer(out var session) ||
+                session == null)
+            {
+                return;
+            }
+
+            var bound = generated.BindMultiplayer(session);
+            if (!bound.TryGetValue(out var binding) || binding == null)
+            {
+                // Worded as the game words a failed binding, so a test reads what a player's log would.
+                throw new InvalidOperationException(
+                    "Binding the generated multiplayer contract failed (" + bound.ErrorCode + "): " + bound.ErrorMessage);
+            }
+
+            context.Lifetime.Track(binding);
         }
     }
 }

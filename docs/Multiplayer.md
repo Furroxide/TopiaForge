@@ -403,6 +403,9 @@ delayed, lost, or duplicated frame holds later frames behind it rather than lett
   `Ready`.
 - **Accounting.** `Traffic(node)` reports the bytes and frames a node sent and received.
   `CreateOwnerSession(node, modId)` adds a second mod's session to a node.
+- **Mods.** Register a node's `Session` with a `FakeModContext`'s `Extensions`, and `ModLifecycleRunner` binds the mod's
+  generated contract to it as the game does: after the context is attached, so session hooks may read it, and before
+  `OnLoad`. The binding ends with the mod's lifetime, so a test writes no binding code.
 
 A session becomes `Ready` only after its canonical snapshot is installed. A client receives presentation events only
 after it acknowledges `Ready`, so an event published while it synchronizes is dropped, never delivered late.

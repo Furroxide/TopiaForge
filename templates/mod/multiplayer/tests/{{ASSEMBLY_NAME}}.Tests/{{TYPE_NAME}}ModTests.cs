@@ -247,15 +247,9 @@ namespace {{ASSEMBLY_NAME}}.Tests
 
             internal Player(MultiplayerTestNode node, string? firstScene = World)
             {
-                var mod = new {{TYPE_NAME}}Mod();
-                var bound = mod.BindMultiplayer(node.Session);
-                if (!bound.TryGetValue(out var binding))
-                {
-                    throw new InvalidOperationException("The generated contract did not bind: " + bound.ErrorMessage);
-                }
-
-                context.Lifetime.Track(binding);
-                runner = new ModLifecycleRunner(mod, context);
+                // The runner binds the contract to the session the context offers, as the game does.
+                context.Extensions.Register(node.Session);
+                runner = new ModLifecycleRunner(new {{TYPE_NAME}}Mod(), context);
                 runner.Load();
                 if (firstScene != null)
                 {

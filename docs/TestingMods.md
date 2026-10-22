@@ -40,7 +40,8 @@ dotnet test --configuration Release
   dismissal, and isolates callback failures.
 - `FakeInteractionService` and `FakeItemService` cover interactables and held-item flows.
 - `FakeExtensionService` registers Creator Content, RobotKit, Worlds, Chronos, Prompts,
-  multiplayer, or custom providers.
+  multiplayer, or custom providers. With a multiplayer session registered, `ModLifecycleRunner` binds a
+  mod's generated contract to it as the game does, after the context is attached and before `OnLoad`.
 - `FakeRobotKit` covers agents, objectives, controlled brain queries, conversations, and voice input.
 - `FakeCreatorContentService`, `FakeCreatorMutationSafetyService`,
   `FakeCreatorProjectLibrary`, and `FakeCreatorSceneTarget` cover authenticated catalog
