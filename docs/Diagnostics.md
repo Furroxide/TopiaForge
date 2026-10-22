@@ -263,7 +263,7 @@ An owner-predicted handler runs on the sender and again on the server, and both 
 
 **Predicted handler performs a process-local side effect.**
 
-Predicted handlers may only update generated replicated state, read their own data, and emit buffered presentation events. Move UI, audio, file, and service calls into a `[PresentationEvent]` handler. One expression reports once, at its outermost offending call.
+An owner-predicted handler runs on the sender and again on the server, so it may only touch what both runs share. It may update generated replicated state, read its request, its state, its locals and arrays, copy and resize arrays with `Array.Copy`, `CopyTo`, `Clone` and `Array.Resize`, call this mod's own non-virtual methods, whose bodies answer to the same rules, and emit buffered presentation events. Move UI, audio, file, and service calls into a `[PresentationEvent]` handler, or set `Prediction = PredictionMode.None` when the presser can wait for the host. A virtual or async method, one from another assembly, a static constructor the call would run first, `new T()`, an interface's or overridable property, and an event are refused, because the generator cannot read what would run. So is handing `this` on to a helper, a local or a return value, which would let the helper reach the mod's fields. One expression reports once, at its outermost offending call.
 
 ### TFMP007
 

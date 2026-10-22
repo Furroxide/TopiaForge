@@ -83,7 +83,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
         private static readonly DiagnosticDescriptor PredictedSideEffect = new DiagnosticDescriptor(
             "TFMP006",
             "Predicted command performs a process-local side effect",
-            "Predicted command '{0}' accesses '{1}'; predicted handlers may only mutate generated replicated state and emit buffered presentation events",
+            "Predicted command '{0}' uses '{1}'. A predicted handler runs on the sender and again on the host, so it may only read its request, its state, its locals and arrays, call this mod's own methods that follow the same rules, update replicated state and emit presentation events. Move other work into a [PresentationEvent] handler, or set Prediction = PredictionMode.None.",
             "TopiaForge.Multiplayer",
             DiagnosticSeverity.Error,
             true,
@@ -647,6 +647,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 context,
                 compilation,
                 method.Name,
+                method.ContainingType,
                 method,
                 generatedPresentationEmitters,
                 reported,
@@ -657,6 +658,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             SourceProductionContext context,
             Compilation compilation,
             string predictedMethodName,
+            INamedTypeSymbol contractType,
             IMethodSymbol method,
             ISet<string> generatedPresentationEmitters,
             ISet<string> reported,
@@ -700,13 +702,41 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                     else if (operation is IInvocationOperation invocation &&
                              !IsAllowedPredictedInvocation(invocation))
                     {
-                        invalid |= ReportPredictedDiagnostic(
-                            context,
-                            reported,
-                            PredictedSideEffect,
-                            operation.Syntax.GetLocation(),
-                            predictedMethodName,
-                            display);
+                        if (IsPredictedHelper(compilation, invocation.TargetMethod))
+                        {
+                            // The call may first run its type's static constructor, which nothing here reads.
+                            if (TryGetPendingStaticConstructor(invocation.TargetMethod, contractType, out var staticConstructor))
+                            {
+                                invalid |= ReportPredictedDiagnostic(
+                                    context,
+                                    reported,
+                                    PredictedSideEffect,
+                                    staticConstructor!.Locations.FirstOrDefault() ?? operation.Syntax.GetLocation(),
+                                    predictedMethodName,
+                                    staticConstructor.ToDisplayString());
+                            }
+
+                            // The mod's own method runs on both sides too, so its body answers to the same rules.
+                            invalid |= ReportPredictedMethodSafetyDiagnostics(
+                                context,
+                                compilation,
+                                predictedMethodName,
+                                contractType,
+                                invocation.TargetMethod.OriginalDefinition,
+                                generatedPresentationEmitters,
+                                reported,
+                                inspectedMethods);
+                        }
+                        else
+                        {
+                            invalid |= ReportPredictedDiagnostic(
+                                context,
+                                reported,
+                                PredictedSideEffect,
+                                operation.Syntax.GetLocation(),
+                                predictedMethodName,
+                                display);
+                        }
                     }
                     else if (operation is IObjectCreationOperation creation &&
                              !IsAllowedPredictedObjectCreation(creation))
@@ -778,6 +808,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                                 context,
                                 compilation,
                                 predictedMethodName,
+                                contractType,
                                 callback!,
                                 generatedPresentationEmitters,
                                 reported,
@@ -793,6 +824,20 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                             operation.Syntax.GetLocation(),
                             predictedMethodName,
                             operatorMethod!.ToDisplayString());
+                    }
+                    else if (operation is IEventReferenceOperation ||
+                             operation is ITypeParameterObjectCreationOperation ||
+                             operation is IInstanceReferenceOperation instance && IsEscapingContractInstance(instance))
+                    {
+                        // An event's handlers, a type argument's constructor and whatever a helper does with the mod
+                        // instance it was handed are all invisible to these rules.
+                        invalid |= ReportPredictedDiagnostic(
+                            context,
+                            reported,
+                            PredictedSideEffect,
+                            operation.Syntax.GetLocation(),
+                            predictedMethodName,
+                            display);
                     }
                 }
 
@@ -836,6 +881,63 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                        syntax is LocalFunctionStatementSyntax local &&
                        (local.Body != null || local.ExpressionBody != null);
             });
+        }
+
+        /// <summary>
+        /// Whether a call from a predicted handler is to a method of this compilation whose body can be checked by the
+        /// same rules: an ordinary or local method with a body, which no override can replace and no await suspends.
+        /// </summary>
+        private static bool IsPredictedHelper(Compilation compilation, IMethodSymbol method)
+        {
+            method = method.OriginalDefinition;
+            if (method.MethodKind != MethodKind.Ordinary && method.MethodKind != MethodKind.LocalFunction) return false;
+            if (method.IsVirtual || method.IsAbstract || method.IsOverride || method.IsExtern || method.IsAsync) return false;
+            if (!SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, compilation.Assembly)) return false;
+            return HasPredictedMethodBody(method);
+        }
+
+        /// <summary>
+        /// Finds the explicit static constructor a helper call would run first. A static method's type, or a struct's,
+        /// may not be initialised yet; the contract's own type is, since its instance runs the handler.
+        /// </summary>
+        private static bool TryGetPendingStaticConstructor(
+            IMethodSymbol method,
+            INamedTypeSymbol contractType,
+            out IMethodSymbol? staticConstructor)
+        {
+            staticConstructor = null;
+            method = method.OriginalDefinition;
+            var type = method.ContainingType?.OriginalDefinition;
+            if (type == null || method.MethodKind == MethodKind.LocalFunction || !method.IsStatic && !type.IsValueType)
+            {
+                return false;
+            }
+
+            for (INamedTypeSymbol? initialized = contractType; initialized != null; initialized = initialized.BaseType)
+            {
+                if (SymbolEqualityComparer.Default.Equals(initialized.OriginalDefinition, type)) return false;
+            }
+
+            staticConstructor = type.StaticConstructors.FirstOrDefault(constructor => !constructor.IsImplicitlyDeclared);
+            return staticConstructor != null;
+        }
+
+        /// <summary>
+        /// Whether the mod instance is used as a value rather than to reach one of its members. Handed to a helper's
+        /// parameter, a local or a return value, it would pass as predicted data and open every field to the helper.
+        /// </summary>
+        private static bool IsEscapingContractInstance(IInstanceReferenceOperation instance)
+        {
+            if (instance.ReferenceKind != InstanceReferenceKind.ContainingTypeInstance) return false;
+            IOperation receiver = instance;
+            while (receiver.Parent is IConversionOperation conversion) receiver = conversion;
+            return receiver.Parent switch
+            {
+                IMemberReferenceOperation member => !ReferenceEquals(member.Instance, receiver),
+                IInvocationOperation invocation => !ReferenceEquals(invocation.Instance, receiver),
+                IInvalidOperation => false,
+                _ => true
+            };
         }
 
         private static bool TryGetAllowedPredictedCallback(
@@ -917,6 +1019,7 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             IObjectCreationOperation creation => creation.Constructor,
             IPropertyReferenceOperation property => property.Property,
             IFieldReferenceOperation field => field.Field,
+            IEventReferenceOperation eventReference => eventReference.Event,
             IBinaryOperation binary => binary.OperatorMethod,
             IUnaryOperation unary => unary.OperatorMethod,
             IConversionOperation conversion => conversion.OperatorMethod,
@@ -946,8 +1049,14 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             if (method.ContainingType is INamedTypeSymbol result &&
                 result.ConstructedFrom.ToDisplayString() == OperationResultType &&
                 method.Name == "TryGetValue" && IsRootedInLocal(invocation.Instance)) return true;
+            // Copying, cloning, resizing or emptying an array touches only the arrays it is given, and each of those
+            // operands answers to these rules where it appears.
+            if (method.ContainingType?.SpecialType == SpecialType.System_Array && IsPureArrayMember(method.Name)) return true;
             return false;
         }
+
+        private static bool IsPureArrayMember(string name) =>
+            name == "Copy" || name == "CopyTo" || name == "Clone" || name == "Resize" || name == "Empty";
 
         private static bool IsCommandRandom(IOperation? operation) =>
             Unwrap(operation) is IInvocationOperation invocation &&
@@ -1147,7 +1256,12 @@ namespace TopiaForge.Mods.Multiplayer.Generators
                 IsRootedInPredictedData(reference.Instance)) return true;
             if (property.ContainingType?.SpecialType == SpecialType.System_String && property.Name == "Length" &&
                 IsRootedInPredictedData(reference.Instance)) return true;
+            if (property.ContainingType?.SpecialType == SpecialType.System_Array &&
+                (property.Name == "Length" || property.Name == "LongLength") &&
+                IsRootedInPredictedData(reference.Instance)) return true;
+            // An interface's or an overridable property may run a body that is not this declaration's.
             return property.Locations.Any(location => location.IsInSource) && IsAutoProperty(property) &&
+                   !property.IsAbstract && !property.IsVirtual && !property.IsOverride &&
                    IsRootedInPredictedData(reference.Instance);
         }
 
@@ -1156,7 +1270,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             var field = reference.Field;
             if (field.IsConst || field.ContainingType?.TypeKind == TypeKind.Enum) return true;
             if (field.ContainingType?.SpecialType == SpecialType.System_String && field.Name == "Empty") return true;
-            if (field.Type is INamedTypeSymbol state &&
+            // Only an instance field can be generated state; reading a static one runs its type's initializer.
+            if (field.Type is INamedTypeSymbol state && !field.IsStatic &&
                 state.ConstructedFrom.ToDisplayString() == "TopiaForge.Mods.ReplicatedState<T>" &&
                 field.Locations.Any(location => location.IsInSource)) return true;
             return field.Locations.Any(location => location.IsInSource) &&
@@ -1188,7 +1303,8 @@ namespace TopiaForge.Mods.Multiplayer.Generators
             operation = Unwrap(operation);
             return operation is IParameterReferenceOperation || operation is ILocalReferenceOperation ||
                    operation is IPropertyReferenceOperation property && IsRootedInPredictedData(property.Instance) ||
-                   operation is IFieldReferenceOperation field && IsRootedInPredictedData(field.Instance);
+                   operation is IFieldReferenceOperation field && IsRootedInPredictedData(field.Instance) ||
+                   operation is IArrayElementReferenceOperation element && IsRootedInPredictedData(element.ArrayReference);
         }
 
         private static IOperation? Unwrap(IOperation? operation)
