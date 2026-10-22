@@ -124,21 +124,40 @@ Future<bool?> probeLinuxLaunchProcessRunning(
       if (processId == null || processId == pid || processId <= 0) continue;
       if (entity is! Directory) return null;
       try {
-        final bytes = <int>[];
-        await for (final chunk in File(
-          p.join(entity.path, 'cmdline'),
-        ).openRead().timeout(const Duration(seconds: 1))) {
-          if (chunk.length > 1024 * 1024 - bytes.length) return null;
-          bytes.addAll(chunk);
+        final shown = await _linuxArguments(entity);
+        if (shown == null) return null;
+        var view = entity;
+        var arguments = shown;
+        if (arguments.every((value) => value.isEmpty)) {
+          // A process whose main thread has exited shows no arguments and no
+          // exe link, even to its own account, but its other threads share
+          // its memory and still show both: the first of them that shows
+          // arguments decides. A kernel thread or a zombie has no thread but
+          // itself.
+          await for (final thread in Directory(
+            p.join(entity.path, 'task'),
+          ).list(followLinks: false)) {
+            if (p.basename(thread.path) == p.basename(entity.path)) continue;
+            if (++count > 32768 ||
+                elapsed.elapsed >= const Duration(seconds: 10)) {
+              return null;
+            }
+            final threadShown = await _linuxArguments(Directory(thread.path));
+            if (threadShown == null) return null;
+            if (threadShown.any((value) => value.isNotEmpty)) {
+              view = Directory(thread.path);
+              arguments = threadShown;
+              break;
+            }
+          }
         }
-        final arguments = utf8.decode(bytes).split('\u0000');
         if (processArgumentsReferenceExecutable(arguments, executablePath)) {
           return true;
         }
         final link = readLink ?? (path) => Link(path).target();
         String? image;
         try {
-          image = await link(p.join(entity.path, 'exe'));
+          image = await link(p.join(view.path, 'exe'));
         } on Object {
           // Another account's process, PID 1 included, shows its arguments
           // but refuses its exe and cwd links: its arguments alone decide
@@ -161,7 +180,7 @@ Future<bool?> probeLinuxLaunchProcessRunning(
           } else {
             // Wine drive mappings are not inferred from an arbitrary process.
             if (p.windows.isAbsolute(argument)) return null;
-            final cwd = await link(p.join(entity.path, 'cwd'));
+            final cwd = await link(p.join(view.path, 'cwd'));
             if (!p.isAbsolute(cwd)) return null;
             if (_canonicalProbeImage(p.join(cwd, argument)) == target) {
               return true;
@@ -177,6 +196,19 @@ Future<bool?> probeLinuxLaunchProcessRunning(
   } on Object {
     return null;
   }
+}
+
+// The arguments /proc shows for a process or one of its threads, or null when
+// they are too long to judge.
+Future<List<String>?> _linuxArguments(Directory process) async {
+  final bytes = <int>[];
+  await for (final chunk in File(
+    p.join(process.path, 'cmdline'),
+  ).openRead().timeout(const Duration(seconds: 1))) {
+    if (chunk.length > 1024 * 1024 - bytes.length) return null;
+    bytes.addAll(chunk);
+  }
+  return utf8.decode(bytes).split('\u0000');
 }
 
 String _canonicalProbeImage(String path) {

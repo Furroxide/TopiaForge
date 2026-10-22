@@ -73,6 +73,15 @@ void main() {
       return File(p.join(directory.path, 'cmdline'));
     }
 
+    // Every process lists its threads, itself included, under task.
+    Future<File> threadCommandLine(int processId, int threadId) async {
+      final directory = Directory(
+        p.join(root.path, '$processId', 'task', '$threadId'),
+      );
+      await directory.create(recursive: true);
+      return File(p.join(directory.path, 'cmdline'));
+    }
+
     // Another account's process shows its arguments, but Linux refuses every
     // other account its exe and cwd links.
     Future<String> refused(String path) async =>
@@ -177,10 +186,60 @@ void main() {
     test(
       'kernel threads and zombies, which show no arguments, are not the game',
       () async {
-        // Even root cannot read their exe links.
-        await (await commandLine(2)).writeAsBytes(const []);
-        await (await commandLine(2147480006)).writeAsBytes(const []);
+        // Even root cannot read their exe links, and neither has a thread
+        // but itself.
+        for (final processId in [2, 2147480006]) {
+          await (await commandLine(processId)).writeAsBytes(const []);
+          await (await threadCommandLine(
+            processId,
+            processId,
+          )).writeAsBytes(const []);
+        }
         expect(await probeAnotherAccount(), isFalse);
+      },
+    );
+    test(
+      'a process whose main thread has exited is judged by its other threads',
+      () async {
+        // Its main thread shows no arguments and no exe link, even to its own
+        // account. Its other threads share its memory and still show both.
+        const processId = 2147480012;
+        const threadId = 2147480013;
+        await (await commandLine(processId)).writeAsBytes(const []);
+        await (await threadCommandLine(
+          processId,
+          processId,
+        )).writeAsBytes(const []);
+        final file = await threadCommandLine(processId, threadId);
+        await file.writeAsBytes(utf8.encode('wine\u0000$target\u0000'));
+        expect(await probeAnotherAccount(), isTrue);
+        await file.writeAsBytes(
+          utf8.encode(
+            'wine\u0000${p.join(root.path, 'other', 'Robotopia.exe')}\u0000',
+          ),
+        );
+        expect(await probeAnotherAccount(), isFalse);
+        // Its own account reads the thread's links: its image, then its
+        // working folder for a relative argument.
+        final thread = p.join(root.path, '$processId', 'task', '$threadId');
+        Future<bool?> probeOwnAccount(String image) =>
+            probeLinuxLaunchProcessRunning(
+              target,
+              procRoot: root,
+              readLink: (path) async =>
+                  switch (p.relative(path, from: thread)) {
+                    'exe' => image,
+                    'cwd' => p.dirname(target),
+                    _ => throw FileSystemException(
+                      'No such file or directory',
+                      path,
+                    ),
+                  },
+            );
+        await file.writeAsBytes(utf8.encode('renamed\u0000'));
+        expect(await probeOwnAccount(target), isTrue);
+        await file.writeAsBytes(utf8.encode('wine\u0000./Robotopia.exe\u0000'));
+        expect(await probeOwnAccount(p.join(root.path, 'wine')), isTrue);
       },
     );
     test(
