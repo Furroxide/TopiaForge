@@ -299,12 +299,24 @@ extension LocalDeveloperMultiplayerContractLock on LocalDeveloperRepository {
     'contracts': contracts.map((contract) => contract.toJson()).toList(),
   };
 
+  /// Whether packing [manifest] from [root] verifies and ships its contract
+  /// lock. A session mod synchronizes the lock, so admission compares it and
+  /// packing always needs a current one. No other mode puts a lock in front of
+  /// admission: a client-local, server-only or standalone mod that carries one
+  /// still has it verified and packed, and one without a lock needs none.
+  bool _packsMultiplayerContractLock(Directory root, ModManifest manifest) {
+    final multiplayer = manifest.multiplayer;
+    if (!manifest.multiplayerIsPresent || multiplayer == null) return false;
+    return multiplayer.mode == ModMultiplayerMode.session ||
+        File(p.join(root.path, _multiplayerContractLockName)).existsSync();
+  }
+
   void _validateMultiplayerContractLock(
     Directory root,
     ModManifest manifest,
     List<_GeneratedMultiplayerContract> contracts,
   ) {
-    if (!manifest.multiplayerIsPresent || manifest.multiplayer == null) return;
+    if (!_packsMultiplayerContractLock(root, manifest)) return;
     final lockFile = File(p.join(root.path, _multiplayerContractLockName));
     const remedy =
         'Run `topiaforge mod sync multiplayer --project <path>` and commit '

@@ -22,7 +22,7 @@ For a code mod, `pack` builds Release configuration and stages:
 | Package entry | Source |
 | --- | --- |
 | `topiaforge.mod.json` | Validated manifest plus generated `builtWith` metadata. |
-| `topiaforge.multiplayer.lock.json` | Generated and pack-verified contract descriptor for multiplayer mods. |
+| `topiaforge.multiplayer.lock.json` | Generated and pack-verified contract descriptor. Every session mod has one; a mod in another multiplayer mode packs one only if it keeps one. |
 | Entry DLL and symbols | Selected target output. |
 | `apiAssemblies` | Explicit public dependency contracts only. |
 | `assets/`, `AssetBundles/`, `Resources/` | Declared project content when present. |

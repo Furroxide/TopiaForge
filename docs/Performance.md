@@ -86,8 +86,10 @@ button) to apply.
 
 Performance is client-local: its manifest declares `"multiplayer": {"mode": "client-local"}`, so each player
 chooses it, and its preset, for their own game, and nobody else needs it to host or join. Its levers change only that
-player's game. The physics levers (`fixed_delta_time`, `solver_iterations`) do too, but a host's game runs the
-session's simulation, so on a host they set the fidelity every player sees.
+player's game. Three of them change how the world runs, not just how it looks: the physics step and solver
+(`fixed_delta_time`, `solver_iterations`) and the time robots may spend finding paths each frame
+(`pathfind_budget_ms`). A host's game runs the session's world, its robots included, so on a host these three set the
+fidelity every player sees. No preset sets them; only an edit to the config does.
 
 ## Caveats
 - **`balanced` enables vSync** (`vsync_count: 1`), which caps frame rate to your monitor's refresh rate.

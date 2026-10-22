@@ -164,7 +164,8 @@ Compatibility is mutual: each peer's protocol version must satisfy the other pee
 `synchronizedFiles` is a bounded list of portable, package-relative paths whose bytes affect shared simulation.
 For session mods, packing automatically appends `topiaforge.multiplayer.lock.json` and its generated hash to the
 packed manifest, so contract/schema changes participate in admission without author-maintained identifiers or hashes.
-The source manifest is left unchanged, and non-session modes do not synchronize the lock. The 256-entry packed limit
+The source manifest is left unchanged, and non-session modes do not synchronize the lock, so they need none: a
+`client-local`, `server-only` or `standalone` mod without one packs as it is. The 256-entry packed limit
 reserves one entry for this lock, so a session source manifest may list at most 255 other synchronized files.
 `topiaforge pack` hashes every listed file and writes its SHA-256 to the packed manifest. Source manifests do not
 contain hand-maintained hashes. Packing rejects a missing file; installation and runtime scanning reject a missing

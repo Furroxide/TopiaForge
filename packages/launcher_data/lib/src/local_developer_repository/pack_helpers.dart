@@ -178,7 +178,8 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
             .where((file) => file.path.toLowerCase().endsWith('.csproj'))
             .toList()
           ..sort((a, b) => a.path.compareTo(b.path));
-    if (manifestContract.multiplayerIsPresent && csprojCandidates.isEmpty) {
+    final packsLock = _packsMultiplayerContractLock(root, manifestContract);
+    if (packsLock && csprojCandidates.isEmpty) {
       throw StateError(
         'Multiplayer packaging requires one root C# project so TopiaForge can '
         'rebuild and verify generated contract descriptors. Source-less or '
@@ -200,7 +201,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
             configuration,
             addFile,
             exactAdded.contains,
-            emitContractMetadata: manifestContract.multiplayerIsPresent,
+            emitContractMetadata: packsLock,
           )
         : const <_GeneratedMultiplayerContract>[];
     if (csproj == null) {
@@ -212,8 +213,7 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
       manifestContract,
       generatedContracts,
     );
-    if (manifestContract.multiplayerIsPresent &&
-        !exactAdded.contains(_multiplayerContractLockName)) {
+    if (packsLock && !exactAdded.contains(_multiplayerContractLockName)) {
       addFile(
         _multiplayerContractLockName,
         File(p.join(root.path, _multiplayerContractLockName)),
