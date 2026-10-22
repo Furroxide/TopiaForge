@@ -20,7 +20,16 @@ enum JoinStage {
 enum JoinFailureCode {
   /// The link or target is not one the launcher can join.
   invalidLink,
+
+  /// The control plane found no live server for the invite: it was
+  /// mistyped, it expired or was withdrawn, or its session ended. Every miss
+  /// is the same answer, so a failure never says which.
   inviteExpired,
+
+  /// The control plane does not list the server a server link or an
+  /// Internet listing names: its session ended, or it is no longer public.
+  /// The answer is the same either way, so a failure never says which.
+  serverNotListed,
   serviceUnavailable,
   rateLimited,
   offline,

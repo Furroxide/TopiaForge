@@ -13,6 +13,9 @@ void main() {
     JoinStage.resolving: {
       JoinFailureCode.invalidLink,
       JoinFailureCode.inviteExpired,
+      // A server link or Internet listing whose server the service no
+      // longer lists.
+      JoinFailureCode.serverNotListed,
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       JoinFailureCode.offline,
@@ -21,7 +24,10 @@ void main() {
       JoinFailureCode.unreachable,
       JoinFailureCode.offline,
       JoinFailureCode.descriptorInvalid,
-      // Invite and listing descriptors come from the control plane.
+      // Invite and listing descriptors come from the control plane, and a
+      // re-plan asks it again, when the invite or the listing can be gone.
+      JoinFailureCode.inviteExpired,
+      JoinFailureCode.serverNotListed,
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       // Relay-only refuses a host beyond the local network; a typed address

@@ -389,7 +389,9 @@ void main() {
               expect(resolved.stage, JoinStage.fetchingDescriptor);
               final event = await repo.answerJoin(resolved) as JoinFailed;
               expect(event.code, JoinFailureCode.serviceUnavailable);
-              final browse = await repo.browseInternet();
+              final browse = await repo.browseInternet(
+                ServerBrowseFilter(gameBuild: '2545', protocolMajor: 1),
+              );
               expect(browse.isAvailable, isFalse);
               expect(browse.listings, isEmpty);
               return null;

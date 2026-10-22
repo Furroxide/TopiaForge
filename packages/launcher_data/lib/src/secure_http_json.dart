@@ -40,6 +40,7 @@ final class SecureHttpJsonResponse {
     required this.statusCode,
     required this.body,
     this.retryAfter,
+    this.bytes = const [],
   });
 
   final int statusCode;
@@ -47,6 +48,11 @@ final class SecureHttpJsonResponse {
   /// The decoded JSON body; null for an empty body, and for a non-JSON body
   /// of an unsuccessful response, whose status alone is the answer.
   final Object? body;
+
+  /// The body exactly as it arrived, within the response bound, for callers
+  /// that must read it more strictly than [body] does, such as canonical
+  /// JSON whose bytes are hashed.
+  final List<int> bytes;
 
   /// The `Retry-After` delay in whole seconds, when the service sent one
   /// such header, of at most a day.
@@ -233,6 +239,7 @@ Future<SecureHttpJsonResponse> _sendJson(
     body: _decodeJsonBody(response, bytes, label),
     // `value` throws on a repeated header, so the list is read instead.
     retryAfter: _retryAfter(response.headers['retry-after']),
+    bytes: bytes.asUnmodifiableView(),
   );
 }
 

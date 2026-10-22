@@ -53,14 +53,20 @@ abstract final class JoinSession {
     JoinStage.resolving: {
       JoinFailureCode.invalidLink,
       JoinFailureCode.inviteExpired,
+      JoinFailureCode.serverNotListed,
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       JoinFailureCode.offline,
     },
+    // A target the control plane resolves gets its descriptor from it, and a
+    // re-plan asks it again, so the server, or the invite that led to it,
+    // can be gone by then.
     JoinStage.fetchingDescriptor: {
       JoinFailureCode.unreachable,
       JoinFailureCode.offline,
       JoinFailureCode.descriptorInvalid,
+      JoinFailureCode.inviteExpired,
+      JoinFailureCode.serverNotListed,
       JoinFailureCode.serviceUnavailable,
       JoinFailureCode.rateLimited,
       JoinFailureCode.directNotAllowed,

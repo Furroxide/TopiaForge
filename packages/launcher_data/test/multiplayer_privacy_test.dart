@@ -2,6 +2,10 @@ import 'dart:io';
 import 'dart:mirrors';
 
 import 'package:launcher_data/launcher_data.dart';
+import 'package:launcher_data/src/multiplayer/control_plane_answers.dart';
+import 'package:launcher_data/src/multiplayer/control_plane_client.dart';
+import 'package:launcher_data/src/multiplayer/control_plane_pacing.dart';
+import 'package:launcher_data/src/multiplayer/control_plane_requests.dart';
 import 'package:launcher_data/src/multiplayer/descriptor_client.dart';
 import 'package:launcher_data/src/multiplayer/descriptor_response.dart';
 import 'package:launcher_data/src/multiplayer/join_descriptor_resolver.dart';
@@ -17,6 +21,11 @@ import 'package:test/test.dart';
 /// coverage test fails.
 final _covered = <Object>[
   ControlPlaneClient,
+  HttpsControlPlaneClient,
+  ServerAnswer,
+  ControlPlanePacer,
+  ControlPlaneRequester,
+  MultiplayerServiceFeatures,
   DescriptorClient,
   Tfd1ResponseReader,
   Ed25519DescriptorSignatureVerifier,
