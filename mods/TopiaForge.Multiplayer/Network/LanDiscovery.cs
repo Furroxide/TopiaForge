@@ -147,11 +147,22 @@ namespace TopiaForge.Multiplayer.Network
     /// list of the sessions whose info names the server their beacon did. A session silent for six seconds leaves the
     /// list. The main thread reads <see cref="Servers"/>, a snapshot replaced whenever the list changes.
     /// </summary>
+    /// <remarks>
+    /// The list holds at most 64 sessions, and at most 8 of them from one sender address, as the launcher's browser
+    /// does, so one host announcing many servers can never hide the others. Only silence makes room: a beacon that
+    /// would add a session to a full list, add one for a sender at its share, or move one there from another address
+    /// is dropped and counted. A session that moves to another port on its own sender keeps its place. Forged beacons
+    /// from many spoofed addresses can still fill the list, as they can the launcher's; on a local network that is
+    /// accepted, and a sender's share only stops one host doing it.
+    /// </remarks>
     internal sealed class LanBrowser : INetworkService
     {
         internal const long ExpiryMicros = 6_000_000;
         internal const long RequeryMicros = 2_000_000;
         private const int MaximumServers = 64;
+
+        /// <summary>Sessions one sender address may hold in the list, on any port: enough for a machine running several peers.</summary>
+        private const int MaximumServersPerSender = 8;
         private const int MaximumBeaconsPerTurn = 64;
 
         private readonly Socket socket;
@@ -160,6 +171,7 @@ namespace TopiaForge.Multiplayer.Network
         private readonly long expiryMicros;
         private IReadOnlyList<LanServer> servers = Array.Empty<LanServer>();
         private long nextExpiry = long.MaxValue;
+        private long dropped;
 
         /// <param name="port">The discovery port; tests listen elsewhere.</param>
         /// <param name="expiryMicros">How long a silent session stays listed.</param>
@@ -185,6 +197,12 @@ namespace TopiaForge.Multiplayer.Network
 
         /// <summary>Gets the sessions heard so far; safe to read from any thread.</summary>
         internal IReadOnlyList<LanServer> Servers => Volatile.Read(ref servers);
+
+        /// <summary>
+        /// Gets how many beacons were dropped because the list, or their sender's share of it, was full; safe to read from
+        /// any thread, for tests and diagnostics.
+        /// </summary>
+        internal long Dropped => Interlocked.Read(ref dropped);
 
         public void Turn(NetworkStack stack, long now)
         {
@@ -251,11 +269,18 @@ namespace TopiaForge.Multiplayer.Network
         private bool Heard(NetworkStack stack, LanBeacon beacon, IPAddress from, long now)
         {
             var path = UdpPaths.For(new IPEndPoint(from, beacon.GamePort));
+            var sender = UdpPaths.SourceOf(path)!;
             if (!entries.TryGetValue(beacon.ServerId, out var entry))
             {
-                if (entries.Count >= MaximumServers) return false;
-                entry = new Entry(beacon.ServerId, path);
+                if (entries.Count >= MaximumServers || SessionsFrom(sender) >= MaximumServersPerSender) return Drop();
+                entry = new Entry(beacon.ServerId, path, sender);
                 entries.Add(beacon.ServerId, entry);
+            }
+            else if (!string.Equals(entry.Sender, sender, StringComparison.Ordinal) && SessionsFrom(sender) >= MaximumServersPerSender)
+            {
+                // A session moving here from another address would take a place in this sender's share. A move adds no
+                // session, so a full list alone never stops one.
+                return Drop();
             }
 
             var moved = !entry.Path.Equals(path);
@@ -269,6 +294,7 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             entry.Path = path;
+            entry.Sender = sender;
             entry.LastSeenMicros = now;
             nextExpiry = Math.Min(nextExpiry, now + expiryMicros);
             if (moved || entry.QueriedAt == long.MinValue || now - entry.QueriedAt >= RequeryMicros)
@@ -278,6 +304,24 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             return moved || entry.Info == null;
+        }
+
+        /// <summary>Counts the listed sessions last heard from <paramref name="sender"/>, on any port.</summary>
+        private int SessionsFrom(string sender)
+        {
+            var count = 0;
+            foreach (var entry in entries.Values)
+            {
+                if (string.Equals(entry.Sender, sender, StringComparison.Ordinal)) count++;
+            }
+
+            return count;
+        }
+
+        private bool Drop()
+        {
+            Interlocked.Increment(ref dropped);
+            return false;
         }
 
         private bool Expire(long now)
@@ -314,14 +358,18 @@ namespace TopiaForge.Multiplayer.Network
 
         private sealed class Entry
         {
-            internal Entry(string serverId, TransportPath path)
+            internal Entry(string serverId, TransportPath path, string sender)
             {
                 ServerId = serverId;
                 Path = path;
+                Sender = sender;
             }
 
             internal string ServerId { get; }
             internal TransportPath Path { get; set; }
+
+            /// <summary>Gets or sets the host the path reaches, without its port, as <see cref="UdpPaths.SourceOf"/> names it.</summary>
+            internal string Sender { get; set; }
             internal SessionInfo? Info { get; set; }
             internal bool Incompatible { get; set; }
             internal long RoundTripMicros { get; set; }
