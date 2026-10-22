@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Reflection;
 using System.Text;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -259,6 +260,70 @@ internal static class BansFailClosedTests
         heldStore.SaveAfter(Task.CompletedTask).GetAwaiter().GetResult();
         That(Holds(held, BanStore.DamagedPaths[0], first) && Holds(held, BanStore.DamagedPaths[1], corrupt),
             "a copy that cannot be read is kept, and the damage takes the next place");
+    }
+
+    internal static void ASaveQueuedBehindAFailedCopyKeepsTheDamagedList()
+    {
+        // The copy of a damaged list fails while another save is already queued behind it. That save tries the copy again
+        // first, so no save ever writes the list over the damaged file before its bytes are kept aside.
+        var files = new MemoryDataFiles();
+        var corrupt = Encoding.UTF8.GetBytes("not a list");
+        files.Contents[BanList.FilePath] = corrupt;
+        var store = new BanStore(files);
+        That(store.EnsureReadAsync().GetAwaiter().GetResult() && store.Record.Count == 0, "a corrupt list reads as no bans");
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        files.BeforeWrite = path => path == BanStore.DamagedPaths[0] ? held.Task : Task.CompletedTask;
+        files.FailWritesOf.Add(BanStore.DamagedPaths[0]);
+        store.Record.Add(Key(1), "First", 1);
+        store.MarkChanged();
+        var first = store.SaveAfter(Task.CompletedTask);
+        That(SpinWait.SpinUntil(() => files.HeldWrites == 1, 5_000), "the copy is being written");
+        store.Record.Add(Key(2), "Second", 2);
+        store.MarkChanged();
+        var second = store.SaveAfter(first);
+        held.SetResult();
+        That(Faults(first) && Faults(second) && Holds(files, BanList.FilePath, corrupt) && !HoldsAnyCopy(files),
+            "while the copy cannot be written, no save writes the list over the damaged file, a save queued meanwhile included");
+
+        // Once the copy can be written, the next save keeps the damage aside first, then saves every ban.
+        files.FailWritesOf.Clear();
+        files.BeforeWrite = null;
+        store.Record.Add(Key(3), "Third", 3);
+        store.MarkChanged();
+        store.SaveAfter(second).GetAwaiter().GetResult();
+        That(Holds(files, BanStore.DamagedPaths[0], corrupt) && BanList.Parse(files.Contents[BanList.FilePath]).Count == 3,
+            "then the damaged list is copied aside, and the list saved with every ban");
+    }
+
+    internal static void AHostThatCannotReadItsListWipesItsKey()
+    {
+        // A password host derives its key while the list is read. Hosting that fails because the list cannot be read wipes
+        // that key, as hosting that opens does once the host's policy has taken its own copy.
+        using var rig = new LiveRig(191);
+        Register(rig.Host);
+        rig.HostFiles.FailReadsOf.Add(BanList.FilePath);
+        var live = rig.Host.Live!;
+        live.StartHosting(new HostSettings("Locked") { Port = 0, Password = "open sesame" });
+        var refused = DerivedKey(live);
+        That(refused.Any(value => value != 0), "the host derives its password key");
+        That(rig.Run(() => live.HostPhase == HostPhase.Failed) && live.HostFailure == LiveFailure.BansUnreadable && rig.HostFactory.Networks.Count == 0,
+            "hosting fails before anything binds (" + live.HostFailure + ")");
+        That(refused.All(value => value == 0), "and the key it derived is wiped");
+
+        // Once the list reads, hosting opens, and the key derived for it is wiped too.
+        rig.HostFiles.FailReadsOf.Clear();
+        live.StartHosting(new HostSettings("Locked") { Port = 0, Password = "open sesame" });
+        var opened = DerivedKey(live);
+        That(rig.Run(() => live.HostPhase == HostPhase.Hosting) && opened.All(value => value == 0), "hosting opens, and that key is wiped as well");
+    }
+
+    /// <summary>The password key a pending host derived, read before the host takes its own copy.</summary>
+    private static byte[] DerivedKey(LiveSessions live)
+    {
+        var field = typeof(LiveSessions).GetField("hostKey", BindingFlags.NonPublic | BindingFlags.Instance) ??
+                    throw new InvalidOperationException("Assertion failed: live sessions hold the key being derived");
+        return ((Task<byte[]?>)field.GetValue(live)!).GetAwaiter().GetResult() ??
+               throw new InvalidOperationException("Assertion failed: a password host derives a key");
     }
 
     /// <summary>A list as the game writes it, canonical, with a ban per key, oldest first.</summary>

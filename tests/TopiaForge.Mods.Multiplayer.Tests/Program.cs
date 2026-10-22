@@ -270,6 +270,8 @@ internal static class Program
             BansFailClosedTests.ClosingWritesNothingOverAnUnreadableList();
             BansFailClosedTests.ADamagedListIsSalvagedAndKeptAside();
             BansFailClosedTests.ACopyKeptBeforeIsNeverWrittenOver();
+            BansFailClosedTests.ASaveQueuedBehindAFailedCopyKeepsTheDamagedList();
+            BansFailClosedTests.AHostThatCannotReadItsListWipesItsKey();
             LiveSessionFailureTests.JoinsEndCleanlyWhenTheNetworkFails();
             LiveSessionFailureTests.AHostWhoseNetworkStopsEndsEveryoneAndPlaysOn();
             LiveSessionFailureTests.EveryEndingWipesThePasswordKey();
