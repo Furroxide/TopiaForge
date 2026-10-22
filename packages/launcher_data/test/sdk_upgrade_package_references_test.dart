@@ -25,6 +25,10 @@ const _analyzers = [
 /// dependencies do not imply used to stay on the old SDK: the multiplayer
 /// generator and the Unity interop contracts that `topiaforge mod add`
 /// writes, and a module the mod depends on only optionally.
+///
+/// Restoring also gives a test project that compiles the mod's own sources
+/// the multiplayer generator the mod project has, since those sources carry
+/// the mod's contract.
 void main() {
   test('adopting a newer SDK re-pins every SDK item a project has', () async {
     final root = Directory.systemTemp.createTempSync('topiaforge-sdk-upgrade-');
@@ -97,6 +101,111 @@ void main() {
     // has move, with the ones every test project needs.
     expect(_versions(tests), testItems('2.0.0'));
   });
+
+  test(
+    'a test project that compiles the mod sources gets the generator',
+    () async {
+      // A space in the path, as many a Windows user folder has.
+      final root = Directory.systemTemp.createTempSync(
+        'topiaforge sdk sources-',
+      );
+      addTearDown(() => root.deleteSync(recursive: true));
+      final source = p.join(root.path, 'source');
+      final installed = {'1.0.0': _writeSdkPack(source, '1.0.0')};
+      _writeSdkIndex(source, installed, defaultVersion: '1.0.0');
+      _writeSourcesTemplate(source);
+      final repository = LocalDeveloperRepository(
+        dataRoot: p.join(root.path, 'data'),
+        repositoryRoot: source,
+        dotnetSdkResolver: (_) async => throw const _RestoreSkipped(),
+      );
+      final workspace = await repository.createModProject(
+        parentDirectory: p.join(root.path, 'mods'),
+        id: 'sample.sources',
+        name: 'Sources',
+        options: const ModScaffoldOptions(template: 'sources'),
+      );
+      final project = File(p.join(workspace.projectRoot, 'Sources.csproj'));
+      File testProject(String name) =>
+          File(p.join(workspace.projectRoot, 'tests', name, '$name.csproj'));
+      final compiling = testProject('Sources.Tests');
+      final compilingFromFolder = testProject('Sources.Folder.Tests');
+      final referencing = testProject('Sources.Reference.Tests');
+      const testItems = {
+        'NUnit': '4.3.2',
+        'TopiaForge.Mods.Abstractions': '1.0.0',
+        'TopiaForge.Mods.Testing': '1.0.0',
+      };
+      // Without multiplayer, no test project needs the generator.
+      expect(_versions(compiling), testItems);
+      expect(_versions(compilingFromFolder), testItems);
+      expect(_versions(referencing), testItems);
+
+      // `topiaforge mod add multiplayer` gives the mod project the contract
+      // and its generator, and the manifest the dependency; then the author
+      // restores.
+      project.writeAsStringSync(
+        withPinnedSdkPackageReferences(
+          project.readAsStringSync(),
+          packages: const [
+            'TopiaForge.Mods.Multiplayer',
+            'TopiaForge.Mods.Multiplayer.Generators',
+          ],
+          version: '1.0.0',
+        ),
+      );
+      final manifest = File(
+        p.join(workspace.projectRoot, 'topiaforge.mod.json'),
+      );
+      final map =
+          jsonDecode(manifest.readAsStringSync()) as Map<String, Object?>;
+      map['dependencies'] = {
+        ...?(map['dependencies'] as Map?)?.cast<String, Object?>(),
+        'io.github.furroxide.topiaforge.multiplayer': '1.0.0',
+      };
+      manifest.writeAsStringSync(jsonEncode(map));
+      await expectLater(
+        repository.resolveDeveloperProject(workspace.projectRoot),
+        throwsA(isA<_RestoreSkipped>()),
+      );
+
+      // A test project that compiles the mod's sources compiles its contract
+      // too, so it gets the generator that writes the contract's other half,
+      // whether its path starts at its folder or at a property that names
+      // that folder. The one that references the built mod has that half.
+      for (final project in [compiling, compilingFromFolder]) {
+        expect(_versions(project), {
+          ...testItems,
+          'TopiaForge.Mods.Multiplayer': '1.0.0',
+          'TopiaForge.Mods.Multiplayer.Generators': '1.0.0',
+        }, reason: project.path);
+        expect(
+          project.readAsStringSync(),
+          contains(
+            '<PackageReference Include="TopiaForge.Mods.Multiplayer.Generators" '
+            'Version="1.0.0" PrivateAssets="all" />',
+          ),
+        );
+      }
+      expect(_versions(referencing), {
+        ...testItems,
+        'TopiaForge.Mods.Multiplayer': '1.0.0',
+      });
+
+      // Restoring again changes nothing.
+      final restored = {
+        for (final project in [compiling, compilingFromFolder, referencing])
+          project.path: project.readAsStringSync(),
+      };
+      await expectLater(
+        repository.resolveDeveloperProject(workspace.projectRoot),
+        throwsA(isA<_RestoreSkipped>()),
+      );
+      for (final MapEntry(key: path, value: text) in restored.entries) {
+        expect(File(path).readAsStringSync(), text, reason: path);
+      }
+    },
+  );
 }
 
 /// Stands in for the NuGet restore that resolving runs after its rewrite,
@@ -214,4 +323,65 @@ void _writeTemplate(String source) {
   </ItemGroup>
 </Project>
 ''');
+}
+
+/// Writes the `sources` mod template: a mod with no module yet and three test
+/// projects. Two compile the mod's own sources, as the single-project
+/// templates' tests do, one from its folder and one from
+/// `$(MSBuildThisFileDirectory)`, which names that folder. The third
+/// references the built mod, as the multiplayer template's tests do, and
+/// compiles only files of its own.
+void _writeSourcesTemplate(String source) {
+  final template = Directory(p.join(source, 'templates', 'mod', 'sources'))
+    ..createSync(recursive: true);
+  File(p.join(template.path, 'template.json')).writeAsStringSync(
+    jsonEncode({'id': 'sources', 'manifestDefaults': <String, Object?>{}}),
+  );
+  File(p.join(template.path, 'Sources.csproj')).writeAsStringSync('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference Include="TopiaForge.Mods.Analyzers" Version="1.0.0" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="tests\\**\\*.cs" />
+  </ItemGroup>
+</Project>
+''');
+  void writeTests(String name, String sources) {
+    final tests = Directory(p.join(template.path, 'tests', name))
+      ..createSync(recursive: true);
+    File(p.join(tests.path, '$name.csproj')).writeAsStringSync('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    $sources
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="TopiaForge.Mods.Abstractions" Version="1.0.0" />
+    <PackageReference Include="TopiaForge.Mods.Testing" Version="1.0.0" />
+  </ItemGroup>
+</Project>
+''');
+  }
+
+  writeTests(
+    'Sources.Tests',
+    r'<Compile Include="..\..\*.cs" Link="ModSources\%(Filename)%(Extension)" />',
+  );
+  writeTests(
+    'Sources.Folder.Tests',
+    r'<Compile Include="$(MSBuildThisFileDirectory)..\..\*.cs" />',
+  );
+  // The empty part after the `;` names nothing, so nothing outside.
+  writeTests(
+    'Sources.Reference.Tests',
+    r'<ProjectReference Include="..\..\Sources.csproj" /><Compile Include="Fixtures\*.cs;" />',
+  );
 }

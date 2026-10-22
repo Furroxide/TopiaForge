@@ -12,6 +12,8 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     'io.github.furroxide.topiaforge.multiplayer': 'TopiaForge.Mods.Multiplayer',
     'io.github.furroxide.topiaforge.worlds': 'TopiaForge.Mods.Worlds',
   };
+  static const _multiplayerGeneratorPackage =
+      'TopiaForge.Mods.Multiplayer.Generators';
   Directory get _modTemplatesRoot =>
       Directory(p.join(_repositoryRoot.path, 'templates', 'mod'));
 
@@ -77,12 +79,36 @@ extension LocalDeveloperModScaffolding on LocalDeveloperRepository {
     SdkReferencePack sdk,
   ) async {
     final modulePackages = await _sdkModulePackages(root, sdk);
-    for (final project in _sdkPinnedProjects(root)) {
+    final projects = _sdkPinnedProjects(root);
+    final texts = <String, String>{
+      for (final project in projects)
+        project.path: await project.readAsString(),
+    };
+    // A test project that compiles the mod's own sources compiles its
+    // multiplayer contract with them, so it needs the generator that writes
+    // the contract's other half whenever the mod project has it. Without
+    // it, every generated member the mod calls is missing there (CS0103).
+    final sourcesNeedGenerator =
+        sdk.containsPackage(_multiplayerGeneratorPackage) &&
+        projects.any(
+          (project) =>
+              !_isSdkTestProject(project) &&
+              includedPackageReferences(texts[project.path]!, const [
+                _multiplayerGeneratorPackage,
+              ]).isNotEmpty,
+        );
+    for (final project in projects) {
       final isTest = _isSdkTestProject(project);
-      final original = await project.readAsString();
+      final original = texts[project.path]!;
       final updated = _withExactSdkPackageReferences(
         original,
-        packages: _pinnedSdkPackages(project, original, sdk, modulePackages),
+        packages: {
+          ..._pinnedSdkPackages(project, original, sdk, modulePackages),
+          if (isTest &&
+              sourcesNeedGenerator &&
+              _compilesSourcesFromOutside(original, project.parent.path))
+            _multiplayerGeneratorPackage,
+        },
         version: sdk.version,
         safeProject: !isTest,
         devPropsPath: p.posix.joinAll(
@@ -371,3 +397,40 @@ bool _importsDevProps(String project) => startTags(project, 'Import').any(
         .endsWith('topiaforge.dev.props');
   }),
 );
+
+/// Whether [project], the text of the project file in [folder], has a
+/// `Compile` item outside comments that includes files from outside
+/// [folder], as the single-project templates' test projects compile the
+/// mod's sources with `<Compile Include="..\..\*.cs" />`.
+bool _compilesSourcesFromOutside(String project, String folder) =>
+    startTags(project, 'Compile', anyCase: true).any(
+      (found) => found.tag.attributes.any((attribute) {
+        if (!isAttributeNamed(project, attribute, 'Include')) return false;
+        final value = trimmedAttributeValue(project, attribute);
+        return project
+            .substring(value.start, value.end)
+            .split(';')
+            .any((spec) => _leavesFolder(spec, folder));
+      }),
+    );
+
+/// `$(MSBuildProjectDirectory)` and `$(MSBuildThisFileDirectory)` at the
+/// start of a path, with the separators after them. Both are reserved
+/// properties that name the project file's folder, so a path that starts
+/// with one starts there, as a relative path does.
+final _projectFolderPrefix = RegExp(
+  r'^\$\((?:MSBuildProjectDirectory|MSBuildThisFileDirectory)\)[\\/]*',
+  caseSensitive: false,
+);
+
+/// Whether [spec], one path of a `Compile` item's `Include`, names files
+/// outside [folder], the folder of its project file, once its `..` parts
+/// are resolved as MSBuild resolves them, with either separator.
+bool _leavesFolder(String spec, String folder) {
+  final relative = spec
+      .trim()
+      .replaceFirst(_projectFolderPrefix, '')
+      .replaceAll(r'\', '/');
+  final path = p.normalize(p.join(folder, relative));
+  return !p.equals(path, folder) && !p.isWithin(folder, path);
+}
