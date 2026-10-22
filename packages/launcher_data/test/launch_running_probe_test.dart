@@ -73,6 +73,25 @@ void main() {
       return File(p.join(directory.path, 'cmdline'));
     }
 
+    // Every process lists its threads, itself included, under task.
+    Future<File> threadCommandLine(int processId, int threadId) async {
+      final directory = Directory(
+        p.join(root.path, '$processId', 'task', '$threadId'),
+      );
+      await directory.create(recursive: true);
+      return File(p.join(directory.path, 'cmdline'));
+    }
+
+    // Another account's process shows its arguments, but Linux refuses every
+    // other account its exe and cwd links.
+    Future<String> refused(String path) async =>
+        throw FileSystemException('Permission denied', path);
+    Future<bool?> probeAnotherAccount() => probeLinuxLaunchProcessRunning(
+      target,
+      procRoot: root,
+      readLink: refused,
+    );
+
     test('missing proc snapshot remains unknown', () async {
       expect(
         await probeLinuxLaunchProcessRunning(
@@ -83,11 +102,9 @@ void main() {
       );
     });
     test('present unreadable process remains unknown', () async {
+      // Neither its arguments nor its links can be read.
       await commandLine(2147480001);
-      expect(
-        await probeLinuxLaunchProcessRunning(target, procRoot: root),
-        isNull,
-      );
+      expect(await probeAnotherAccount(), isNull);
     });
     test('oversized and malformed process arguments remain unknown', () async {
       final file = await commandLine(2147480002);
@@ -157,6 +174,138 @@ void main() {
           isFalse,
         );
       },
+    );
+    test(
+      "root's PID 1, whose arguments name no game, is not the game",
+      () async {
+        final file = await commandLine(1);
+        await file.writeAsBytes(utf8.encode('/sbin/init\u0000splash\u0000'));
+        expect(await probeAnotherAccount(), isFalse);
+      },
+    );
+    test(
+      'kernel threads and zombies, which show no arguments, are not the game',
+      () async {
+        // Even root cannot read their exe links, and neither has a thread
+        // but itself.
+        for (final processId in [2, 2147480006]) {
+          await (await commandLine(processId)).writeAsBytes(const []);
+          await (await threadCommandLine(
+            processId,
+            processId,
+          )).writeAsBytes(const []);
+        }
+        expect(await probeAnotherAccount(), isFalse);
+      },
+    );
+    test(
+      'a process whose main thread has exited is judged by its other threads',
+      () async {
+        // Its main thread shows no arguments and no exe link, even to its own
+        // account. Its other threads share its memory and still show both.
+        const processId = 2147480012;
+        const threadId = 2147480013;
+        await (await commandLine(processId)).writeAsBytes(const []);
+        await (await threadCommandLine(
+          processId,
+          processId,
+        )).writeAsBytes(const []);
+        final file = await threadCommandLine(processId, threadId);
+        await file.writeAsBytes(utf8.encode('wine\u0000$target\u0000'));
+        expect(await probeAnotherAccount(), isTrue);
+        await file.writeAsBytes(
+          utf8.encode(
+            'wine\u0000${p.join(root.path, 'other', 'Robotopia.exe')}\u0000',
+          ),
+        );
+        expect(await probeAnotherAccount(), isFalse);
+        // Its own account reads the thread's links: its image, then its
+        // working folder for a relative argument.
+        final thread = p.join(root.path, '$processId', 'task', '$threadId');
+        Future<bool?> probeOwnAccount(String image) =>
+            probeLinuxLaunchProcessRunning(
+              target,
+              procRoot: root,
+              readLink: (path) async =>
+                  switch (p.relative(path, from: thread)) {
+                    'exe' => image,
+                    'cwd' => p.dirname(target),
+                    _ => throw FileSystemException(
+                      'No such file or directory',
+                      path,
+                    ),
+                  },
+            );
+        await file.writeAsBytes(utf8.encode('renamed\u0000'));
+        expect(await probeOwnAccount(target), isTrue);
+        await file.writeAsBytes(utf8.encode('wine\u0000./Robotopia.exe\u0000'));
+        expect(await probeOwnAccount(p.join(root.path, 'wine')), isTrue);
+      },
+    );
+    test(
+      "another account's process naming this install's game by an absolute "
+      'path is running',
+      () async {
+        final file = await commandLine(2147480007);
+        await file.writeAsBytes(utf8.encode('wine\u0000$target\u0000'));
+        expect(await probeAnotherAccount(), isTrue);
+        await File(target).create(recursive: true);
+        final alias = await Link(
+          p.join(root.path, 'alias'),
+        ).create(p.dirname(target));
+        await file.writeAsBytes(
+          utf8.encode('wine\u0000${p.join(alias.path, 'Robotopia.exe')}\u0000'),
+        );
+        expect(await probeAnotherAccount(), isTrue);
+      },
+      skip: Platform.isWindows
+          ? 'Windows symlink creation needs privilege.'
+          : false,
+    );
+    test(
+      "another account's process naming another install's game is not the game",
+      () async {
+        final file = await commandLine(2147480008);
+        await file.writeAsBytes(
+          utf8.encode('wine\u0000/elsewhere/Robotopia.exe\u0000'),
+        );
+        expect(await probeAnotherAccount(), isFalse);
+      },
+    );
+    test("another account's process naming the game by a relative path remains "
+        'unknown', () async {
+      final file = await commandLine(2147480009);
+      await file.writeAsBytes(utf8.encode('wine\u0000./Robotopia.exe\u0000'));
+      expect(await probeAnotherAccount(), isNull);
+    });
+    test("another account's process naming the game by a Windows path remains "
+        'unknown', () async {
+      final file = await commandLine(2147480010);
+      await file.writeAsBytes(
+        utf8.encode('wine\u0000Z:\\games\\Robotopia.exe\u0000'),
+      );
+      expect(await probeAnotherAccount(), isNull);
+    }, skip: Platform.isWindows ? 'The Linux probe reads POSIX paths.' : false);
+    test(
+      'a process gone before its exe link is read is skipped',
+      () async {
+        final file = await commandLine(2147480011);
+        await file.writeAsBytes(
+          utf8.encode('wine\u0000Z:\\games\\Robotopia.exe\u0000'),
+        );
+        expect(
+          await probeLinuxLaunchProcessRunning(
+            target,
+            procRoot: root,
+            readLink: (path) async {
+              await file.parent.delete(recursive: true);
+              throw FileSystemException('No such file or directory', path);
+            },
+          ),
+          isFalse,
+        );
+      },
+      skip: Platform.isWindows ? 'The Linux probe reads POSIX paths.' : false,
     );
   });
   group('Windows running-process admission', () {

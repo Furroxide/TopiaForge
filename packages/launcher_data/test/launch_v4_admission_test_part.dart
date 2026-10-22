@@ -137,6 +137,39 @@ void _registerLaunchV4AdmissionTests({
       },
     );
 
+    test("another account's process whose exe link is refused never makes a "
+        'Linux launch Busy', () async {
+      // PID 1 belongs to root: every account reads its arguments, and only
+      // root its exe link.
+      final proc = Directory(p.join(root().path, 'proc'));
+      File(p.join(proc.path, '1', 'cmdline'))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(utf8.encode('/sbin/init\u0000splash\u0000'));
+      var starts = 0;
+      final (repo, install) = await _prepareProfileLaunchRepository(
+        dataRoot: dataRoot(),
+        repositoryRoot: repositoryRoot(),
+        gameRoot: gameRoot(),
+        // The Linux probe over that snapshot, with the default probe's own
+        // rule that an unknown answer is a running game.
+        probe: (game) async =>
+            await probeLinuxLaunchProcessRunning(
+              p.join(game.path, 'Robotopia.exe'),
+              procRoot: proc,
+              readLink: (path) async =>
+                  throw FileSystemException('Permission denied', path),
+            ) ??
+            true,
+        starter: (_) async => ++starts + 515,
+      );
+      final result = await repo.launch(
+        install,
+        const LauncherProfile(id: 'menu', name: 'Menu'),
+      );
+      expect(result.processStarted, isTrue, reason: result.message);
+      expect(starts, 1);
+    });
+
     test(
       'dead previous process does not leave monitor admission permanently Busy',
       () async {
