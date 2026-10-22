@@ -181,6 +181,52 @@ void main() {
     expect(packed, isNot(contains('hashes')));
   });
 
+  test('packs non-session modes that carry no contract lock', () async {
+    // Admission compares only a session mod's lock, so no other mode needs
+    // one: first-party Performance Fixes is client-local and carries none.
+    for (final mode in ['client-local', 'server-only', 'standalone']) {
+      fixture.writeManifest({
+        'multiplayer': {'mode': mode},
+      });
+      File(
+        p.join(fixture.projectDir.path, 'Sample.dll'),
+      ).writeAsStringSync('payload');
+
+      final archive = fixture.readPackage(
+        await fixture.repository.packModDirectory(fixture.projectDir.path),
+      );
+      final packed = fixture.packedManifest(archive);
+
+      expect(packed['multiplayer'], {'mode': mode}, reason: mode);
+      expect(packed, isNot(contains('hashes')), reason: mode);
+      expect(
+        archive.files.map((file) => file.name),
+        isNot(contains('topiaforge.multiplayer.lock.json')),
+        reason: mode,
+      );
+    }
+  });
+
+  test('still verifies a lock that a non-session mod carries', () async {
+    fixture.writeManifest({
+      'multiplayer': {'mode': 'client-local'},
+    });
+    File(p.join(fixture.projectDir.path, 'Sample.csproj')).writeAsStringSync('''
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+</Project>
+''');
+    await fixture.useFakeMultiplayerBuild();
+    fixture.writeEmptyContractLock();
+
+    await expectLater(
+      fixture.repository.packModDirectory(fixture.projectDir.path),
+      throwsA(
+        predicate((error) => error.toString().contains('stale or tampered')),
+      ),
+    );
+  });
+
   test('sync generates and pack verifies the checked-in lock', () async {
     fixture.writeManifest({
       'multiplayer': {

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 
 namespace TopiaForge.ModManager.Tests
 {
@@ -33,6 +34,36 @@ namespace TopiaForge.ModManager.Tests
         };
         private const string LoaderRange = ">=0.1.0-rc.1 <0.2.0";
         private const string SdkRange = ">=0.1.0-rc.1 <0.2.0";
+
+        // The network class WS4 of the live-multiplayer plan gives each first-party mod. Four change only the game of the
+        // player who enables them: behaviour-identical engine fixes, performance and quality levers (whose physics knobs
+        // set only a host's own fidelity), the shutdown feedback page, and a developer catalog of widgets. Every other mod
+        // is shared by every peer. The plan's CreatorCloud has no mod of its own here.
+        private static readonly Dictionary<string, ModNetworkClass> Ws4NetworkClasses = new(StringComparer.Ordinal)
+        {
+            ["io.github.furroxide.topiaforge.chronos"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.creatorcontent"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.gravitygun"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.multiplayer"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.no-feedback-url"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.opposite-day"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.perffixes"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.performance"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.prompts"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.robotkit"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.sandbox"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.uigallery"] = ModNetworkClass.ClientLocal,
+            ["io.github.furroxide.topiaforge.worlds"] = ModNetworkClass.Shared,
+            ["io.github.furroxide.topiaforge.zombies"] = ModNetworkClass.Shared,
+        };
+
+        // The mods WS4 leaves unchanged, which stay shared by declaring nothing.
+        private static readonly HashSet<string> Ws4Unchanged = new(StringComparer.Ordinal)
+        {
+            "io.github.furroxide.topiaforge.gravitygun",
+            "io.github.furroxide.topiaforge.opposite-day",
+            "io.github.furroxide.topiaforge.prompts",
+        };
 
         internal static void Run()
         {
@@ -137,7 +168,46 @@ namespace TopiaForge.ModManager.Tests
                 manifests["io.github.furroxide.topiaforge.zombies"],
                 "navigation", "scene-management", "network", "remote-ai", "player-token", "microphone", "speech-to-text");
             AssertAdvancedInterop(manifests, manifestPaths);
+            AssertWs4NetworkClasses(manifests);
             Console.WriteLine("FirstPartyManifestTests passed.");
+        }
+
+        /// <summary>
+        /// Holds every first-party manifest to the network class WS4 gives it. A client-local mod declares the mode and
+        /// nothing else, as WS4 writes it; a mod WS4 leaves unchanged declares no block, so every peer shares it
+        /// implicitly. No shared mod may depend on a client-local one, which a peer without it could not load.
+        /// </summary>
+        private static void AssertWs4NetworkClasses(IReadOnlyDictionary<string, ModManifest> manifests)
+        {
+            Assert(manifests.Keys.OrderBy(id => id, StringComparer.Ordinal)
+                    .SequenceEqual(Ws4NetworkClasses.Keys.OrderBy(id => id, StringComparer.Ordinal)),
+                "every first-party mod has the network class WS4 gives it, and no other mod is listed");
+            foreach (var (id, expected) in Ws4NetworkClasses)
+            {
+                var manifest = manifests[id];
+                var actual = ModNetworkClasses.Classify(manifest);
+                Assert(actual == expected, id + " is " + expected + " as WS4 gives it, not " + actual);
+                var multiplayer = manifest.Multiplayer;
+                if (expected == ModNetworkClass.ClientLocal)
+                {
+                    Assert(multiplayer != null && multiplayer.Mode == ModMultiplayerMetadata.ClientLocalMode &&
+                           multiplayer.Presence.Length == 0 && multiplayer.Protocol == null && multiplayer.SynchronizedFiles.Count == 0,
+                        id + " declares client-local and nothing else");
+                }
+
+                if (Ws4Unchanged.Contains(id))
+                {
+                    Assert(multiplayer == null && manifest.EffectiveMultiplayerMode == ModMultiplayerEffectiveMode.ImplicitShared,
+                        id + " is unchanged by WS4, so it declares no multiplayer block and every peer shares it implicitly");
+                }
+
+                if (expected != ModNetworkClass.Shared) continue;
+                foreach (var dependency in manifest.Dependencies.Keys.Concat(manifest.OptionalDependencies.Keys))
+                {
+                    Assert(!Ws4NetworkClasses.TryGetValue(dependency, out var dependencyClass) || dependencyClass == ModNetworkClass.Shared,
+                        id + " is shared, so it cannot depend on the client-local " + dependency);
+                }
+            }
         }
 
         private static void AssertAdvancedInterop(

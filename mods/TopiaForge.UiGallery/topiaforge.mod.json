@@ -33,5 +33,8 @@
   "capabilities": [
     "hud",
     "input"
-  ]
+  ],
+  "multiplayer": {
+    "mode": "client-local"
+  }
 }
