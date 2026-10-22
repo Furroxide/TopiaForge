@@ -324,6 +324,7 @@ A warning: a handler with `Prediction = None` runs only on the session authority
 **Invalid multiplayer setting.**
 
 A setting is outside its range: `Prediction` is `None` or `Owner`, `MaximumPerSecond` is 1 to 1000, `MaximumPayloadBytes` is 64 to 1048576, `Delivery` is `Coalesced` or `Immediate`, and `MaximumUpdatesPerSecond` is 1 to 60, or 0 for the provider's snapshot rate.
+
 ## Runtime diagnostics
 
 Use `Context.Runtime.UnavailableCapabilities` to explain why a Robotopia binding or provider feature is

@@ -5,15 +5,18 @@ description: Build and deterministically test server-canonical TopiaForge mods f
 
 # Multiplayer API preview
 
-TopiaForge does not ship live multiplayer yet. `TopiaForge.Mods.Multiplayer` freezes the future-facing public
-contract, generated wire format, real-game solo provider, and deterministic multi-peer test rig before a supported
-live transport exists. A V6 mod that omits `multiplayer` is shared implicitly: admission requires the identical package
-on every peer, and `"mode": "standalone"` keeps a mod out of sessions. Replicated state, commands, and objects remain an
-explicit module opt-in, not a claim that arbitrary local mutations can be synchronized safely.
+TopiaForge does not offer live multiplayer to players yet. Live sessions on a LAN or at a direct address already run,
+hosted and joined from the game's MULTIPLAYER tab, behind a developer switch that stays until a release turns live play
+on, as [How sessions work](#how-sessions-work) explains. `TopiaForge.Mods.Multiplayer` already freezes the public
+contract, the generated wire format, the session engine that runs solo play in the game, and a deterministic multi-peer
+test rig. A V6 mod that omits `multiplayer` is shared implicitly: admission requires the identical package on every
+peer, and `"mode": "standalone"` keeps a mod out of sessions. Replicated state, commands, and objects remain an explicit
+module opt-in, not a claim that arbitrary local mutations can be synchronized safely.
 
-`IMultiplayerSession` is a stable owner-scoped facade, not one match object. Bind the generated contract once for the
-mod lifetime. Its registrations survive sequential sessions; `Snapshot.Id` changes and `CurrentSessionToken` cancels
-when a match is replaced, while a new session starts from each replicated state's immutable declared default.
+`IMultiplayerSession` is a stable owner-scoped facade, not one match object. TopiaForge binds a mod's generated contract
+to it once, before `OnLoad`, for the mod's whole lifetime. Its registrations survive sequential sessions; `Snapshot.Id`
+changes and `CurrentSessionToken` cancels when a match is replaced, while a new session starts from each replicated
+state's immutable declared default.
 
 The architecture preserves the normal TopiaForge boundary: one BepInEx runtime sits behind Unity-free, owner-scoped
 contracts, deterministic launcher/profile tooling, and optional specialist modules. Multiplayer identities and roles
@@ -104,7 +107,9 @@ public partial class ScoreMod : TopiaForgeMod
 
 TopiaForge binds the generated contract after it attaches `Context` and before `OnLoad` runs, so a contract needs no
 binding code. A mod that still calls `BindMultiplayer` for the same session gets a harmless success; mods compiled
-before automatic binding keep binding themselves.
+before automatic binding keep binding themselves. The session itself, for its `Snapshot` and its players, is the one the
+mod's own `Context.RequireMultiplayer()` returns, the same session the contract is bound to. Keep it in a field from
+`OnLoad` rather than resolving it every frame.
 
 To run code once per session, implement `partial void OnMultiplayerSessionStarted(MultiplayerSessionSnapshot
 snapshot)`, `OnMultiplayerSessionEnded(MultiplayerSessionSnapshot snapshot)`, or both. Started runs on the first
@@ -175,6 +180,8 @@ invariants that generated code normally supplies.
 ## State, objects, commands, and presentation
 
 - `ReplicatedState<T>` is persistent for the current session and included in snapshots for late join/reconnect.
+  `Update` hands its updater a detached copy of the current value, so the updater may change that copy in place and
+  return it.
 - `[ReplicatedObject]` turns one transactional `(context, state, input)` handler into a registered wire type plus typed
   `Spawn...Object`, `TryGet...Object`, `Get...Objects`, and `Subscribe...Objects` proxies. Clients reconstruct objects
   through their own generated codecs and handlers; snapshots never carry server delegates.
@@ -185,6 +192,12 @@ invariants that generated code normally supplies.
 - presentation events are transient accepted effects, deliberately separate from snapshot state. Every peer registers
   the generated bounded codec, while only presentation-capable peers attach the local handler; and
 - `MultiplayerSessionSnapshot` exposes readiness, participants, tick, session seed, logical sides, and process kind.
+
+Every handler the session or a contract calls runs on the game's main thread: session and state changes, presentation
+events, tick handlers and command confirmations. None of them may block. The session's `SubscribeChanged` runs at every
+network tick, because the snapshot's `Tick` advances, so a handler that redraws a HUD or window from the snapshot should
+first compare what it shows. A replicated state's `SubscribeChanged` runs only when the state is updated, never for a
+tick alone, and an update that writes the same value again runs it too.
 
 ## Session contract for live play
 
@@ -203,9 +216,11 @@ The contract also carries what live sessions need. It is additive, so existing m
 - `[ReplicatedState]` and `[ReplicatedObject]` accept `Delivery` (`Coalesced` by default, or `Immediate`) and
   `MaximumUpdatesPerSecond` (zero uses the provider's snapshot rate).
 - `session.Players` is an `IPlayerDirectory` of `IPlayer` handles. Each handle carries identity, host status, and the
-  player's key, which is stable on one host and unlinkable across hosts. Each handle also reads replicated position,
-  aim, and health, and routes `Damage`, `Heal`, `Teleport`, per-player `Input`, and per-player `Ui` to the process
-  that owns the player. Single-player play has exactly one player, so player-aware code needs no separate path.
+  player's key, which is stable on one host and unlinkable across hosts. Replicated position, aim and health, the
+  `Damage`, `Heal` and `Teleport` actions, per-player `Input` and `Ui`, scoreboard columns, and the join and leave
+  subscriptions arrive with the Players API runtime. Until then the reads find nothing, the actions and columns report
+  `Unavailable`, and `SubscribeJoined` and `SubscribeLeft` never run, so follow who is playing through
+  `Snapshot.Participants`. Single-player play has exactly one player, so player-aware code needs no separate path.
 - Participants report `IsHost`, a bucketed `Quality`, `PingMilliseconds` rounded to 10 ms, and `PlayerKey`.
   Snapshots report `HostParticipantId`, `TryGetParticipant`, a `Reconnecting` state, and an `EndReason` once ended.
 
@@ -231,10 +246,12 @@ and the snapshot says which one is current, whether this process holds world aut
   join. The state goes from `Connecting` through `Synchronizing` to `Ready`, which it reaches only once all the host's
   values and objects have arrived. A participant id names a player only on the host that gave it, so the snapshot lists
   nobody until the host's own list arrives, which it does before `Ready`.
-- **What replicates.** What a contract declares, and nothing else: `[ReplicatedState]` values, `[ReplicatedObject]`
-  objects, commands with their confirmations, and presentation events, which reach players only once the host commits
-  them. Unity objects, files, configuration and a mod's own fields stay in their process. Replicating the world itself,
-  such as scene props, spawned entities and players' avatars, is later work.
+- **What replicates.** What a contract declares: `[ReplicatedState]` values, `[ReplicatedObject]` objects, commands
+  with their confirmations, and presentation events, which reach players only once the host commits them. And, with no
+  code from you, the host's world: what the host spawns through the SDK, its custom-world content, and the scene props
+  it moves or removes, which a joining player receives before `Ready` and then follows. What a joined player spawns or
+  moves itself stays in its own game until authority routing, a later step, sends it to the host, and players' avatars
+  are later work too. Unity objects, files, configuration and a mod's own fields stay in their process.
 - **Session replacement.** Whenever a session gives way to another, a mod sees the same steps. `CurrentSessionToken` is
   cancelled, every replicated value returns to its declared default, every object despawns with a notification, and
   the snapshot names the new session. `OnMultiplayerSessionEnded` runs with the old session's last snapshot, then
@@ -264,14 +281,15 @@ What a mod sees at each step:
 | The host restarts its session | `Synchronizing`, then `Ready`; the host stays `Ready` | Unchanged | Ended, then Started |
 | Leaving, a kick or ban, the host stopping, or the reconnect window running out | `Ready`, in a new solo session | Yes | Ended for the host's session, Started for the solo one |
 
-Live sessions on a LAN or at a direct address already exist in the provider, behind a developer switch
-(`TOPIAFORGE_LIVE_MULTIPLAYER=1`) until the in-game interface for hosting and joining arrives. That interface, Internet
-play through invite codes and a relay, and joining from the launcher are later work.
+Live sessions on a LAN or at a direct address already run in the provider, and the game's MULTIPLAYER tab hosts and
+joins them, behind a developer switch (`TOPIAFORGE_LIVE_MULTIPLAYER=1`) that stays until a release turns live play on.
+Without the switch the tab says that live multiplayer is switched off in this build. Internet play through invite codes
+and a relay also needs the TopiaForge service, and joining from the launcher is later work.
 
 ## The player's own actions
 
 In a session, scripts run on the host and a player's own actions run where that player is. The runtime tells the two
-apart by itself, with no code or attribute from you, so that world replication, a later step, can send a joined player's
+apart by itself, with no code or attribute from you, so that authority routing, a later step, can send a joined player's
 own spawns to the host instead of making them twice. Offline nothing changes: every call takes effect at once, as it
 always has.
 
