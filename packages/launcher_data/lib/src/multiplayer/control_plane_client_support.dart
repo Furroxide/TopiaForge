@@ -98,6 +98,13 @@ const _unreadable = _Failure(
   'again shortly.',
 );
 
+/// [failure]'s sentence where the screen also offers LAN and direct play,
+/// which still work unless this computer has no network at all.
+String _withLocalPlay(_Failure failure) =>
+    failure.problem == MultiplayerServiceProblem.offline
+    ? failure.message
+    : '${failure.message} LAN and direct play still work.';
+
 InternetServerLookup _lookupFailed(_Failure failure) =>
     InternetServerLookup.failed(
       failure.problem,
@@ -142,7 +149,7 @@ _Failure _failureOf(ControlPlaneOutcome outcome, _Subject subject) {
       'The TopiaForge service is unavailable right now. $later',
     MultiplayerServiceProblem.turnedOff =>
       'The TopiaForge service has turned this off for now. Try again later.',
-    MultiplayerServiceProblem.rateLimited when outcome.heldBack =>
+    MultiplayerServiceProblem.rateLimited when outcome.paced =>
       'This computer asked the TopiaForge service too often just now. $later',
     MultiplayerServiceProblem.rateLimited =>
       'The TopiaForge service is turning away requests from this network '

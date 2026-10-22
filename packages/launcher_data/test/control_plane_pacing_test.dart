@@ -4,6 +4,7 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:test/test.dart';
 
 import 'control_plane_support.dart';
+import 'multiplayer_network_support.dart';
 
 /// The launcher never sends faster than the service's limits allow
 /// (ControlPlaneApi.md, section 1), counting its own requests as the
@@ -30,7 +31,7 @@ void main() {
       // 60 s from now.
       expect(pacer.holdFor(ControlPlaneScope.browse), (
         const Duration(seconds: 60),
-        ControlPlaneHold.rateLimited,
+        ControlPlaneHold.paced,
       ));
       time.advance(const Duration(seconds: 60));
       expect(pacer.holdFor(ControlPlaneScope.browse), isNull);
@@ -46,7 +47,7 @@ void main() {
       }
       // 40 minutes in: the minute window is clear, the hour's is not.
       final (wait, why) = pacer.holdFor(ControlPlaneScope.browse)!;
-      expect(why, ControlPlaneHold.rateLimited);
+      expect(why, ControlPlaneHold.paced);
       expect(wait, const Duration(minutes: 80));
       time.advance(wait);
       expect(pacer.holdFor(ControlPlaneScope.browse), isNull);
@@ -60,7 +61,7 @@ void main() {
       ];
       expect(
         pacer.holdFor(ControlPlaneScope.invite)?.$2,
-        ControlPlaneHold.rateLimited,
+        ControlPlaneHold.paced,
       );
       // A hit gives its slot back.
       pacer.giveBack(slots.first);
@@ -132,9 +133,11 @@ void main() {
     test('sends no more than 60 browsing requests in two minutes, and holds '
         'the next without contact', () async {
       final service = await FakeControlPlane.start(
-        (request) => request.path == '/v1/status'
-            ? exchanges.answer('status')
-            : exchanges.answer('servers-list'),
+        (request) => switch (request.path) {
+          '/v1/status' => exchanges.answer('status'),
+          '/v1/servers' => exchanges.answer('servers-list'),
+          _ => exchanges.answer('server-detail'),
+        },
       );
       final time = FakeTime();
       final client = testClient(time: time);
@@ -147,15 +150,14 @@ void main() {
         expect(held.problem, MultiplayerServiceProblem.rateLimited);
         expect(held.retryAfter, const Duration(minutes: 2));
         expect(held.unavailableMessage, contains('too often'));
-        // Joins through a server's detail count as browsing too.
+        // The browser's detail pane is browsing too, and is held.
+        final detail = await client.fetchServer(hostAServerId);
+        expect(detail.problem, MultiplayerServiceProblem.rateLimited);
+        // A join is paced apart, so browsing never holds it back.
         final join = await client.resolve(
-          JoinLinkTarget(
-            SessionLink.server(
-              'c5f39060271ebd2f22d9bf155a26bf459274e31b795145fd9d862dc206d98bb3',
-            ),
-          ),
+          JoinLinkTarget(SessionLink.server(hostAServerId)),
         );
-        expect((join! as JoinFailed).code, JoinFailureCode.rateLimited);
+        expect(join, isA<JoinTargetResolved>());
       });
       expect(
         service.seen.where((seen) => seen.path == '/v1/servers'),
@@ -163,7 +165,31 @@ void main() {
       );
       expect(
         service.seen.where((seen) => seen.path.startsWith('/v1/servers/')),
-        isEmpty,
+        hasLength(1),
+      );
+    });
+
+    test('paces joins apart from browsing, under the same limits', () async {
+      final service = await FakeControlPlane.start(
+        (request) => request.path == '/v1/status'
+            ? exchanges.answer('status')
+            : exchanges.answer('server-detail'),
+      );
+      final time = FakeTime();
+      final client = testClient(time: time);
+      final link = JoinLinkTarget(SessionLink.server(hostAServerId));
+      await service.run(() async {
+        for (var request = 0; request < 60; request++) {
+          expect(await client.resolve(link), isA<JoinTargetResolved>());
+        }
+        final held = await client.resolve(link);
+        expect((held! as JoinFailed).code, JoinFailureCode.rateLimited);
+        // Browsing has its own budget.
+        expect((await client.fetchServer(hostAServerId)).isFound, isTrue);
+      });
+      expect(
+        service.seen.where((seen) => seen.path.startsWith('/v1/servers/')),
+        hasLength(61),
       );
     });
 

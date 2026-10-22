@@ -106,7 +106,7 @@ final class HttpsControlPlaneClient implements ControlPlaneClient {
         ? MultiplayerServiceCheck.available(features)
         : MultiplayerServiceCheck.unavailable(
             failure!.problem,
-            '${failure.message} LAN and direct play still work.',
+            _withLocalPlay(failure),
             retryAfter: failure.retryAfter,
           );
   }
@@ -145,7 +145,7 @@ final class HttpsControlPlaneClient implements ControlPlaneClient {
         ? _unreadable
         : _failureOf(outcome, _Subject.servers);
     return InternetBrowseResult.unavailable(
-      '${failure.message} LAN and direct play still work.',
+      _withLocalPlay(failure),
       problem: failure.problem,
       retryAfter: failure.retryAfter,
     );
@@ -290,7 +290,8 @@ final class HttpsControlPlaneClient implements ControlPlaneClient {
     return _serverOf(outcome, _Subject.invite);
   }
 
-  /// Asks for the public server [serverId]; a join reads the status first.
+  /// Asks for the public server [serverId]; a join reads the status first,
+  /// and is paced apart from browsing.
   Future<(ServerAnswer?, _Failure?)> _findServer(
     String serverId,
     CancellationToken? cancellation, {
@@ -302,7 +303,7 @@ final class HttpsControlPlaneClient implements ControlPlaneClient {
     }
     final outcome = await _requests.send(
       ControlPlaneRequest(
-        scope: ControlPlaneScope.browse,
+        scope: joining ? ControlPlaneScope.join : ControlPlaneScope.browse,
         operation: 'server detail',
         path: '/v1/servers/$serverId',
         maxBytes: ControlPlaneBounds.server,

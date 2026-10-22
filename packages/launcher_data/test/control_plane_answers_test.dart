@@ -182,6 +182,44 @@ void main() {
       }
     });
 
+    test('whose content coding does not decode is refused, and no call '
+        'throws', () async {
+      CannedAnswer garbled(int status, {String? retryAfter}) => CannedAnswer(
+        status,
+        // Not gzip, whatever the header says.
+        bytes: [for (var index = 0; index < 64; index++) index],
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'content-encoding': 'gzip',
+          'retry-after': ?retryAfter,
+        },
+      );
+      final service = await FakeControlPlane.start(
+        (request) => switch (request.path) {
+          '/v1/status' => garbled(200),
+          '/v1/servers' => garbled(429, retryAfter: '30'),
+          _ => garbled(200),
+        },
+      );
+      final client = testClient();
+      await service.run(() async {
+        final status = await client.readStatus();
+        expect(status.problem, MultiplayerServiceProblem.invalidAnswer);
+        final lookup = await client.fetchServer(hostAServerId);
+        expect(lookup.problem, MultiplayerServiceProblem.invalidAnswer);
+        expect(
+          (await client.lookUpInvite('F80BH-RS9YW')).problem,
+          MultiplayerServiceProblem.invalidAnswer,
+        );
+        final event = await client.resolve(serverLink);
+        expect((event! as JoinFailed).code, JoinFailureCode.serviceUnavailable);
+        // A refusal is read by its status, so its delay still holds.
+        final page = await client.browse(filter);
+        expect(page.problem, MultiplayerServiceProblem.rateLimited);
+        expect(page.retryAfter, const Duration(seconds: 30));
+      });
+    });
+
     test('that is not canonical JSON is refused', () async {
       final status = utf8.decode(exchanges.answer('status').bytes!);
       for (final text in [

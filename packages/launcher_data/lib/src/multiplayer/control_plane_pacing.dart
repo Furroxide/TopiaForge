@@ -11,8 +11,15 @@ enum ControlPlaneScope {
   /// `GET /v1/status`, which the service does not limit.
   status,
 
-  /// `GET /v1/servers` and `GET /v1/servers/{id}`: server browsing.
+  /// `GET /v1/servers`, and `GET /v1/servers/{id}` for the browser's detail
+  /// pane: server browsing.
   browse,
+
+  /// `GET /v1/servers/{id}` for a join of a server link or an Internet
+  /// listing. The service limits only the list, and that limit is shared by
+  /// every launcher on the network, so joins count apart from browsing:
+  /// neither browsing nor a delay the list was given ever holds a join back.
+  join,
 
   /// `POST /v1/invites/resolve`, whose misses the service limits.
   invite,
@@ -20,9 +27,13 @@ enum ControlPlaneScope {
 
 /// Why a scope must wait before its next request.
 enum ControlPlaneHold {
-  /// The service named a delay with a 429, or this launcher's own count of
-  /// recent requests reached the service's limit.
+  /// The service named a delay with a 429. Its limits count every launcher
+  /// on the network, not only this one.
   rateLimited,
+
+  /// This launcher's own count of recent requests reached the service's
+  /// limit.
+  paced,
 
   /// The service failed, or named a delay while it was unavailable, and is
   /// given time to recover.
@@ -50,12 +61,14 @@ final class ControlPlaneSlot {
 ///
 /// - **The service's limits.** Server browsing may make 60 requests a minute
 ///   and 1,200 an hour, and invite resolutions may miss 10 times a minute and
-///   30 an hour. The service counts sliding windows: a window's own requests
-///   plus a share of the previous window's. This pacer counts every request
-///   of the last two windows against one window's limit, which can never pass
-///   the service's estimate, however its windows fall against this clock. An
-///   invite resolution holds a slot while it runs, as the service holds one,
-///   and gives it back unless it missed.
+///   30 an hour. Joins' server details, which the service does not limit, are
+///   held to browsing's limits apart from it, so a caller that loops can never
+///   flood them. The service counts sliding windows: a window's own requests
+///   plus a share of the previous window's. This pacer counts every request of
+///   the last two windows against one window's limit, which can never pass the
+///   service's estimate, however its windows fall against this clock. An invite
+///   resolution holds a slot while it runs, as the service holds one, and gives
+///   it back unless it missed.
 /// - **Named delays.** A `Retry-After` holds its scope for that long.
 /// - **Failures.** Each 5xx in a row, or answer that never came, holds the
 ///   scope for twice as long as the one before: one second, then two, up to
@@ -70,6 +83,10 @@ final class ControlPlanePacer {
   static const windows = <ControlPlaneScope, List<ControlPlaneWindow>>{
     ControlPlaneScope.status: [],
     ControlPlaneScope.browse: [
+      ControlPlaneWindow(Duration(minutes: 1), 60),
+      ControlPlaneWindow(Duration(hours: 1), 1200),
+    ],
+    ControlPlaneScope.join: [
       ControlPlaneWindow(Duration(minutes: 1), 60),
       ControlPlaneWindow(Duration(hours: 1), 1200),
     ],
@@ -122,7 +139,7 @@ final class ControlPlanePacer {
       final leaving = recent[recent.length - window.limit];
       final wait = leaving.at.add(span).difference(now);
       if (hold == null || wait > hold.$1) {
-        hold = (wait, ControlPlaneHold.rateLimited);
+        hold = (wait, ControlPlaneHold.paced);
       }
     }
     return hold;

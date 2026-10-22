@@ -184,11 +184,16 @@ void main() {
     expect(held.problem, MultiplayerServiceProblem.rateLimited);
     expect(held.retryAfter, const Duration(seconds: 1));
     expect(held.unavailableMessage, contains('Try again in 1 second.'));
-    // A join of a server link counts against browsing too, and is held.
+    // The service named the delay for the whole network, so the message
+    // does not blame this computer.
+    expect(held.unavailableMessage, contains('from this network'));
+    expect(held.unavailableMessage, isNot(contains('This computer')));
+    // The list's limit is shared by every launcher on the network, and the
+    // service does not limit a server's detail, so a join is not held.
     final join = await service.run(() => client.resolve(serverLink));
-    expect((join! as JoinFailed).code, JoinFailureCode.rateLimited);
+    expect(join, isA<JoinTargetResolved>());
     expect(sentTo(service, '/v1/servers'), 1);
-    expect(sentTo(service, '/v1/servers/$hostAServerId'), 0);
+    expect(sentTo(service, '/v1/servers/$hostAServerId'), 1);
 
     time.advance(const Duration(seconds: 1));
     await service.run(() => client.browse(filter));
@@ -277,6 +282,21 @@ void main() {
       () => testClient(online: false).browse(filter),
     );
     expect(page.problem, MultiplayerServiceProblem.offline);
+    // Without a network LAN play does not work either, so neither sentence
+    // says it does; with one, it still works.
+    final status = await service.run(
+      () => testClient(online: false).readStatus(),
+    );
+    for (final message in [page.unavailableMessage, status.message]) {
+      expect(message, contains('not connected to a network'));
+      expect(message, isNot(contains('LAN')));
+    }
+    final unreachable = await service.run(() => testClient().browse(filter));
+    expect(unreachable.problem, MultiplayerServiceProblem.unreachable);
+    expect(
+      unreachable.unavailableMessage,
+      contains('LAN and direct play still work'),
+    );
   });
 
   test('a service that does not answer in time fails within the call\'s '

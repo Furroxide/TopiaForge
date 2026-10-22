@@ -227,13 +227,26 @@ Future<SecureHttpJsonResponse> _sendJson(
     '$label sent more than $maxResponseBytes bytes.',
   );
   if (response.contentLength > maxResponseBytes) throw tooLarge;
-  final bytes = await _readBodyBounded(
-    response,
-    maxBytes: maxResponseBytes,
-    timeout: responseTimeout,
-    onProgress: onProgress,
-    tooLarge: () => tooLarge,
-  );
+  Uint8List bytes;
+  try {
+    bytes = await _readBodyBounded(
+      response,
+      maxBytes: maxResponseBytes,
+      timeout: responseTimeout,
+      onProgress: onProgress,
+      tooLarge: () => tooLarge,
+    );
+  } on FormatException {
+    // The body does not decode from the content coding it names. A refusal
+    // is read by its status alone, which still stands; a success is not.
+    if (status < 300) {
+      throw SecureHttpRequestException(
+        SecureHttpFailure.invalidResponse,
+        '$label sent an answer that could not be read.',
+      );
+    }
+    bytes = Uint8List(0);
+  }
   return SecureHttpJsonResponse(
     statusCode: status,
     body: _decodeJsonBody(response, bytes, label),

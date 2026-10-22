@@ -79,7 +79,8 @@ final class ControlPlaneOutcome {
       retryAfter = null,
       code = null,
       timedOut = false,
-      heldBack = false;
+      heldBack = false,
+      paced = false;
 
   const ControlPlaneOutcome.failed(
     MultiplayerServiceProblem this.problem, {
@@ -87,6 +88,7 @@ final class ControlPlaneOutcome {
     this.code,
     this.timedOut = false,
     this.heldBack = false,
+    this.paced = false,
   }) : bytes = null;
 
   final List<int>? bytes;
@@ -103,6 +105,10 @@ final class ControlPlaneOutcome {
 
   /// Whether nothing was sent, because the scope is held back.
   final bool heldBack;
+
+  /// Whether this launcher's own count of recent requests held it back,
+  /// rather than a delay the service named.
+  final bool paced;
 
   bool get succeeded => bytes != null;
 }
@@ -177,11 +183,12 @@ final class ControlPlaneRequester {
         if (!retrying) {
           _note('$request held back for ${_seconds(wait)} s (${why.name})');
           return ControlPlaneOutcome.failed(
-            why == ControlPlaneHold.rateLimited
-                ? MultiplayerServiceProblem.rateLimited
-                : MultiplayerServiceProblem.unavailable,
+            why == ControlPlaneHold.unavailable
+                ? MultiplayerServiceProblem.unavailable
+                : MultiplayerServiceProblem.rateLimited,
             retryAfter: wait,
             heldBack: true,
+            paced: why == ControlPlaneHold.paced,
           );
         }
         waits++;
