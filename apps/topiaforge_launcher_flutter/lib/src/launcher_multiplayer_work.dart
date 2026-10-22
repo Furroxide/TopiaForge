@@ -8,6 +8,11 @@ final class _MultiplayerWork {
   /// The newest read, change or round of the preferences.
   int preferences = 0;
 
+  /// The [preferences] generation of the newest read. Until anything shows,
+  /// its answer shows even after a round has started since: that round may
+  /// fail or be cancelled, and show nothing.
+  int read = 0;
+
   /// The newest check of whether the game runs.
   int game = 0;
 

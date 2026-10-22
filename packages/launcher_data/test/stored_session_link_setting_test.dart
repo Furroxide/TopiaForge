@@ -13,6 +13,9 @@ import 'multiplayer_unreadable_settings.dart';
 final class _RecordingRegistrar implements SessionLinkRegistrar {
   final calls = <String>[];
 
+  /// The next removal fails, as when the registry refuses it.
+  bool failRemoval = false;
+
   @override
   Future<SessionLinkRegistrationResult> register() async {
     calls.add('register');
@@ -24,6 +27,13 @@ final class _RecordingRegistrar implements SessionLinkRegistrar {
   @override
   Future<SessionLinkRegistrationResult> unregister() async {
     calls.add('unregister');
+    if (failRemoval) {
+      failRemoval = false;
+      return const SessionLinkRegistrationResult(
+        SessionLinkRegistration.failed,
+        detail: 'The registration could not be removed.',
+      );
+    }
     return const SessionLinkRegistrationResult(SessionLinkRegistration.removed);
   }
 }
@@ -95,23 +105,43 @@ void main() {
     await first.close();
 
     // The launcher starts again over the same folder: "off" was kept, so it
-    // neither registers nor removes anything.
+    // never registers, and the registration follows "off" at start too.
     final second = launcher();
     final status = await second.handling.start();
     expect(status.enabled, isFalse);
-    expect(status.registration, isNull);
+    expect(status.registration, SessionLinkRegistration.removed);
     await pumpEventQueue();
-    expect(second.registrar.calls, isEmpty);
+    expect(second.registrar.calls, ['unregister']);
     expect(second.statuses, isEmpty);
 
     // Turning it on again registers, once.
     await second.handling.setEnabled(true);
     await pumpEventQueue();
-    expect(second.registrar.calls, ['register']);
+    expect(second.registrar.calls, ['unregister', 'register']);
     expect(stored()['linkHandlingEnabled'], isTrue);
     await second.handling.setEnabled(true);
     await pumpEventQueue();
-    expect(second.registrar.calls, ['register']);
+    expect(second.registrar.calls, ['unregister', 'register']);
+  });
+
+  test('a removal that failed is made at the next start', () async {
+    final first = launcher();
+    await first.handling.start();
+    first.registrar.failRemoval = true;
+    await first.handling.setEnabled(false);
+    await pumpEventQueue();
+    expect(first.registrar.calls, ['register', 'unregister']);
+    expect(first.statuses.single.registration, SessionLinkRegistration.failed);
+    expect(stored()['linkHandlingEnabled'], isFalse);
+    await first.close();
+
+    // The registration still names this launcher, so the next start, with
+    // "off" kept, removes it rather than leave it for good.
+    final second = launcher();
+    final status = await second.handling.start();
+    expect(second.registrar.calls, ['unregister']);
+    expect(status.enabled, isFalse);
+    expect(status.registration, SessionLinkRegistration.removed);
   });
 
   test(
