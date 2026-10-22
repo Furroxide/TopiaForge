@@ -42,9 +42,6 @@ namespace TopiaForge.Multiplayer.ControlPlane
             (Host.IndexOf(':') >= 0 ? "[" + Host + "]" : Host) +
             ((IsSecure && Port == 443) || (!IsSecure && Port == 80) ? string.Empty : ":" + Port.ToString(CultureInfo.InvariantCulture));
 
-        /// <summary>Gets the origin as a URI with an empty path, the shape the signaling client builds its room from.</summary>
-        internal Uri Uri => new Uri((IsSecure ? "https://" : "http://") + Authority + "/");
-
         /// <summary>
         /// Reads a service origin; false when it is anything but https, a lowercase DNS name and an optional port other
         /// than 443. Surrounding white space is never trimmed: V5 and the preferences already hold the exact spelling.

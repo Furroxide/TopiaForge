@@ -19,6 +19,7 @@ The live flows in `Network/` and the internal control in `Provider/` call it.
 | --- | --- | --- |
 | `ControlPlaneOrigin` | Any thread | Reads the service's origin, in its one canonical spelling |
 | `HttpsControlPlaneTransport`, `HttpAnswerReader` | Thread-pool tasks | One bounded HTTPS exchange: no proxy, no redirect, one deadline, a strict HTTP/1.1 reader |
+| `SignalingUpgrade` | Thread-pool tasks | Opens the signaling socket over the HTTPS client's own connection: the upgrade, read as strictly, then `WebSocket.CreateFromStream` |
 | `ControlPlaneClient`, `ControlPlaneAnswers` | Thread-pool tasks | Every endpoint the game uses, with canonical request bodies and strict readers for the answers |
 | `ServiceResult`, `ServiceErrors` | Any thread | A request's outcome; the error catalogue, read by code and status alone |
 | `InternetServices` | Any thread | What the flows reach the service with: the client, the signaling socket's opener and the name resolver |
@@ -65,8 +66,8 @@ runtime's. The small client keeps every rule in this code, and runs the same on 
 
 - **One connection per request**, to the origin's own name and port, with `Connection: close`. No other host is ever
   contacted: a request carries a path under `/v1/`, never a URL.
-- **No proxy.** The client never asks the system for one. The signaling socket sets `ClientWebSocket.Options.Proxy` to
-  null for the same reason.
+- **No proxy.** The client never asks the system for one, and neither does the signaling socket, which opens over a
+  connection the client makes.
 - **No redirect.** An answer in the 300s is the failure `Redirected`.
 - **Headers.** Exactly `Host`, `User-Agent: TopiaForge`, `Accept: application/json`, `Authorization: Bearer` when the
   request has a credential, and `Content-Type: application/json` with `Content-Length` when it has a body. No cookie,
@@ -87,6 +88,17 @@ runtime's. The small client keeps every rule in this code, and runs the same on 
   whole signed descriptor as an escaped string.
 - **Failures.** Nothing throws out of the transport. A failure is `Unreachable`, `TimedOut`, `Tls`, `Redirected`,
   `TooLarge`, `Malformed` or `Cancelled`, and no exception's text is read.
+- **The signaling socket.** `SignalingUpgrade` opens it over a connection made exactly as a request's is: the same
+  lookup, attempts and certificate check, and the whole open within the 20 s as well as the signaling client's own
+  10 s. It writes `GET /v1/signal/{serverId}` with exactly `Host`, `User-Agent: TopiaForge`, `Upgrade: websocket`,
+  `Connection: Upgrade`, a fresh 16-byte `Sec-WebSocket-Key`, `Sec-WebSocket-Version: 13` and the credential's
+  `Authorization: Bearer`, then reads the answer's head by the rules above, skipping no interim answer. Only an
+  HTTP/1.1 `101` with one `Upgrade: websocket`, a `Connection` that names the upgrade and one `Sec-WebSocket-Accept`
+  made from the key opens it. Any other status, a redirect included, is a refusal and is never followed, and so is
+  an extension or subprotocol never offered, or a body's framing. The connection, with any bytes that came behind
+  the head, then goes to `WebSocket.CreateFromStream`, so no runtime's own WebSocket client, with its own proxy and
+  redirect rules, is involved. Opening ends as unreachable when the connection fails, times out or ends before the
+  head does, and as refused for every answer that does not upgrade.
 
 ## 4. Reading the service's answers
 
@@ -291,8 +303,9 @@ network.
 | --- | --- |
 | `ControlPlaneClientTests` | Requests and answers byte for byte against the shared recordings in `tests/fixtures/multiplayer/control-plane/`; the wire form; errors read by code and status; strict readers |
 | `ControlPlaneHttpTests` | Oversized, malformed, slow and silent answers; redirects; certificate names; no proxy; a fuzz of hostile answers that must never throw |
+| `SignalingUpgradeTests` | The signaling socket's upgrade: 301, 302, 307 and 308 never followed; answers of the wrong shape refused; the HTTPS client's deadlines and certificate check; exactly the headers it needs |
 | `ControlPlaneFakeTests` | The fake service answers as the recordings do |
-| `InternetConfigurationTests` | A LAN host contacts nothing; a launch's origin comes first; invite and listing launches go through the service; the signaling socket asks no proxy |
+| `InternetConfigurationTests` | A LAN host contacts nothing; a launch's origin comes first; invite and listing launches go through the service; the signaling socket asks no proxy the system or the environment names |
 | `InternetHostingTests` | Heartbeats, expiry and re-registration; 429 and 503 with backoff and `Retry-After`; the kill switch and degraded status; hostile answers; invites through the SPI; descriptor updates |
 | `InternetSessionTests` | An invited joiner through symmetric NATs, relay-only; a direct upgrade only when the joiner chose it; a host that quits takes its listing; stopping hosting deletes the listing; reconnecting through the service |
 | `InternetFailureTests` | Relay-only honoured when the relay is unavailable, at the status, the mint and the host; every join failure with its code and sentence; no service, no contact |
@@ -354,6 +367,9 @@ an overlay root (`MultiplayerMonoSpike.md`, S1). The runtime was Mono 6.13.0 wit
 relay-only joins through Cloudflare's relay all work. A single request, or the signaling socket's open, can take over a
 second in the game; every deadline in the client is at least 10 s.
 
+**Since then.** The signaling socket no longer uses `ClientWebSocket`: it opens over the HTTPS client's own
+connection (section 3). `WebSocket.CreateFromStream` over UnityTLS has not been measured in the game yet.
+
 ## 12. Limits and choices
 
 - **Browsing** (`GET /v1/servers`) and the host view (`GET /v1/hosts/{id}`) are not used by the game. The launcher owns
@@ -366,9 +382,9 @@ second in the game; every deadline in the client is at least 10 s.
 - **Public and Invite hosting without a service** are refused rather than quietly hosting on the LAN, so the player
   never believes friends can reach a session they cannot.
 - **The listing's world** follows `LiveHost.UpdateWorld`; the SPI has no member of its own for it yet.
-- **The signaling socket is the runtime's `ClientWebSocket`,** so its handshake follows each runtime's rules. Under the
-  game's Mono 6.13 it is the managed handshake over its own socket: measured in the game on 2026-10-17, it followed no
-  302 or 307 the origin answered its upgrade with, and used no proxy, whether one was set on its options or named by
-  environment variables. On .NET, where the tests and the staging spike run, it asks no proxy but does follow a redirect
-  to another ws or wss address, without the `Authorization` header. A handshake of its own over the HTTPS client's
-  connection, handed to `WebSocket.CreateFromStream`, would hold both runtimes to the HTTPS client's rules.
+- **The signaling socket's handshake is the game's own** (section 3), so both runtimes open it by the HTTPS client's
+  rules. It was the runtime's `ClientWebSocket` before, whose handshake followed each runtime's rules: under the
+  game's Mono 6.13, measured in the game on 2026-10-17, it followed no 302 or 307 the origin answered its upgrade with
+  and used no proxy, whether one was set on its options or named by environment variables; on .NET, where the tests
+  and the staging spike run, it asked no proxy but followed a redirect to another ws or wss address, without the
+  `Authorization` header.

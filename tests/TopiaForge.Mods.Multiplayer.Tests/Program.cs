@@ -424,6 +424,10 @@ internal static class Program
             NatSignalingTests.SignalFramesAreReadStrictlyAndBounded();
             NatSignalingTests.TheWebSocketClientSpeaksTheRoomProtocol();
             NatSignalingTests.TheWebSocketClientRefusesAbuseAndNamesFailures();
+            SignalingUpgradeTests.RedirectsToTheUpgradeAreNeverFollowed();
+            SignalingUpgradeTests.UpgradesOfTheWrongShapeAreRefused();
+            SignalingUpgradeTests.TheUpgradeKeepsTheClientsDeadlinesAndShape();
+            SignalingUpgradeTests.TheUpgradeKeepsTheClientsCertificateCheck();
             NatPortMappingTests.NatPmpFramesFollowRfc6886();
             NatPortMappingTests.NatPmpMapsRenewsAndDeletes();
             NatPortMappingTests.UnusableGatewaysLeaveNothingMapped();

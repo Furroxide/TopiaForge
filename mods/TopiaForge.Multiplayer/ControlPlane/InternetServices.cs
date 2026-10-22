@@ -44,14 +44,17 @@ namespace TopiaForge.Multiplayer.ControlPlane
         /// <summary>Lists this machine's usable addresses, for host candidates; called off the main thread, and only for direct play.</summary>
         internal Func<IReadOnlyList<IPAddress>> LocalAddresses { get; }
 
-        /// <summary>The services of the game: the HTTPS client and the WebSocket signaling client to one origin, and the system's resolver.</summary>
+        /// <summary>
+        /// The services of the game: the HTTPS client to one origin, the signaling socket opened over that client's own
+        /// connection, and the system's resolver.
+        /// </summary>
         internal static InternetServices ForOrigin(ControlPlaneOrigin origin)
         {
             if (origin == null) throw new ArgumentNullException(nameof(origin));
-            var room = origin.Uri;
+            var transport = new HttpsControlPlaneTransport(origin);
             return new InternetServices(
-                new ControlPlaneClient(new HttpsControlPlaneTransport(origin)),
-                (serverId, credential) => WebSocketSignalingClient.Open(room, serverId, credential),
+                new ControlPlaneClient(transport),
+                (serverId, credential) => SignalingUpgrade.Open(transport, serverId, credential),
                 Dns.GetHostAddressesAsync,
                 origin: origin);
         }
