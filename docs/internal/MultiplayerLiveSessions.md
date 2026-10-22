@@ -538,8 +538,12 @@ again.
 6. **Moderation.** A kick ends one player's session with the host's message. A ban records the player's transport key
    (section 19) and ends their session.
 7. **Stopping** ends every player's session with `HostEnded`, gives the closing messages 250 ms to leave, and stops
-   the network, and the password key is wiped. The host plays on alone in the same session. A network that gives up
-   on its own (section 11) stops the host the same way, reported as `NetworkStopped`, and the player may host again.
+   the network. The host plays on alone in the same session. A network that gives up on its own (section 11) stops the
+   host the same way, reported as `NetworkStopped`, and the player may host again.
+8. **The password key** is wiped however hosting ends. Stopping wipes the host's copy, and a key derived for an attempt
+   that has not opened yet, as while the ban list is read. A key still being derived when hosting stops is wiped the
+   moment it is done and opens nothing, and only the attempt that derived it is touched, never a newer one. A host that
+   could not start wipes its copy at once.
 
 ## 19. Admission
 

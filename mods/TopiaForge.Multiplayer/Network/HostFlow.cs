@@ -205,9 +205,17 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>
         /// Binds the network and starts serving. Returns <see cref="LiveFailure.ContentUnreadable"/> when this game's
         /// packages cannot be read, before anything binds, and <see cref="LiveFailure.PortInUse"/> when no port could be
-        /// bound; the session is then untouched.
+        /// bound; the session is then untouched, and the policy's copy of the password key is wiped, since a host that did
+        /// not start admits nobody.
         /// </summary>
         internal LiveFailure Start(INetworkFactory factory)
+        {
+            var failure = Open(factory);
+            if (failure != LiveFailure.None) Policy.Wipe();
+            return failure;
+        }
+
+        private LiveFailure Open(INetworkFactory factory)
         {
             if (factory == null) throw new ArgumentNullException(nameof(factory));
             if (network != null) throw new InvalidOperationException("The host has already started.");
