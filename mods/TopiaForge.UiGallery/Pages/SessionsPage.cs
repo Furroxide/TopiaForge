@@ -47,11 +47,18 @@ namespace TopiaForge.UiGallery.Pages
                 "Leave current game?", "Joining this session ends the game you are playing. Anything you have not saved is lost.", "LEAVE AND JOIN",
                 ok => fake.Notify(ok ? "Left the game." : "You stayed in your game."))), TopiaForgeButtonStyle.Ghost);
 
+            var voice = page.Row(TopiaForgeGap.Sm);
+            voice.Button("VOICE: READY", () => fake.VoiceFake.State = VoiceIndicator.Idle, TopiaForgeButtonStyle.Ghost);
+            voice.Button("TALKING", () => fake.VoiceFake.State = VoiceIndicator.Talking, TopiaForgeButtonStyle.Ghost);
+            voice.Button("MUTED BY HOST", () => fake.VoiceFake.State = VoiceIndicator.MutedByHost, TopiaForgeButtonStyle.Ghost);
+            voice.Button("MIC BUSY", () => fake.VoiceFake.State = VoiceIndicator.MicBusy, TopiaForgeButtonStyle.Ghost);
+            voice.Button("NO MIC", () => fake.VoiceFake.State = VoiceIndicator.NoMic, TopiaForgeButtonStyle.Ghost);
+
             var panel = page.Panel(TopiaForgePanelStyle.Sunken);
             panel.FixedHeight(620f);
             var content = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
             content.Stretch();
-            var tab = new MultiplayerTabView(host, fake);
+            var tab = new MultiplayerTabView(host, fake, fake.VoiceFake);
             tab.Build(content);
             Demos.Add(new Demo(page, fake, tab, new MultiplayerSessionsUi(host, fake)));
         }

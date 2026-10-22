@@ -529,7 +529,7 @@ plug in here:
 | WS4 first-party mods | Each provider reaches its context's `IRuntimeReplication`: RobotKit's replica factory, spawn requests, routed mutators, references for `Chase` targets and its dialogue's microphone lease; CreatorContent's `creator.content` factory and routed commands; the Worlds arena registered as world content by key; Chronos's time authority, which landed with WS3.13 (section 17) |
 | WS5 interface | `OpenToMultiplayer`, `Join`, `Leave` and `EvaluateRealmChange` on the runtime, never the control's own hosting and joining, so "Leave current game?" follows `RequiresLeave`; `GetStatus`, targets, `Query`, LAN listings, moderation, `PreferredDisplayName` and `ContentReadiness`, with the host-authored text rules of section 2; see [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md) |
 | WS5 chat | The `Chat` channel, relayed by the host; server mute already drops at ingress |
-| WS5 voice | The control's `Voice` (section 2, "Voice"): `Enabled` once the player consents, `SubmitCapture` and `SetTransmitting` from `PresenceSend`'s capture, each speaker's `IVoicePlaybackStream` read in an audio callback and asked for again with `TryGetPlaybackStream` once it ends, and mutes shown from `GetListenerMutes`; the microphone arbiter's `NativeRecording` from the game's recording state, and a `VoiceChat` lease that capture stops under while it is preempted. The host's `InternalHostSettings.Voice` is enforced: a session that offers no voice chat carries none, and `TransmitState` reads `NotOffered` for the transmit indicator to show ([MultiplayerVoice.md](MultiplayerVoice.md), section 2.12) |
+| WS5 voice | `VoiceChatRuntime` drives the control's `Voice` through `VoiceCapture`, the microphone arbiter and pooled playback streams; `VoicePresenter` supplies consent and the VOICE page. Named mutes use player keys, while joins carry only Hear nobody. Native recording includes decoding; unreadable state closes capture. A session without voice still reports `NotOffered`. See [MultiplayerVoice.md](MultiplayerVoice.md#part-4-voice-in-the-game) |
 
 Two rules hold for everything that plugs in:
 
@@ -774,7 +774,7 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | `TryCreateRef`, `TryResolveRef` | The network world names its entities, `world-` and the network id | WS3.11 names players |
   | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | — |
   | `GameClock`, `SessionTime`, `PublishSessionTime` | The game's clock, and the session's time: what this process publishes, the host's on a joined player (section 17) | — |
-  | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | WS5 feeds the game's recording and holds voice chat's leases |
+  | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | WS5c feeds native recording and decoding, holds voice leases, and RobotKit holds a dialogue lease around capture; the current tick order can expose a one-frame native-state delay to RobotKit |
 
 - **Bounds.** Replica and command kinds are lowercase tokens of at most 64 characters, the same rule as the entity
   table's, and kinds that start with `asset.` are the runtime's own. Descriptions and command payloads are at most

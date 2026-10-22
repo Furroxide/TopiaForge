@@ -8,14 +8,6 @@ namespace TopiaForge.ModManager.Sessions
         void Tick();
     }
 
-    /// <summary>
-    /// The VOICE sub-tab's slot, which the voice slice fills with its settings view. Until then the tab shows a placeholder.
-    /// </summary>
-    internal interface IMultiplayerVoiceSlot
-    {
-        IMultiplayerSubView Build(TopiaForgeContainer parent);
-    }
-
     /// <summary>Helpers the multiplayer views share. Kit only: no Unity type appears here, so the UI Gallery compiles these views.</summary>
     internal static class MultiplayerViewKit
     {

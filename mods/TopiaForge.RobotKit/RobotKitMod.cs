@@ -39,7 +39,7 @@ namespace TopiaForge.RobotKit
                 null,
                 Context.Identity.Id);
             Context.Lifetime.Track(objectiveService);
-            dialogueInputService = new PlayerDialogueInputService(logger);
+            dialogueInputService = new PlayerDialogueInputService(logger, RobotDialogueMicrophone.For(Context));
             Context.Lifetime.Track(dialogueInputService);
             conversationService = new RobotConversationService(brainService, logger);
             Context.Lifetime.Track(conversationService);

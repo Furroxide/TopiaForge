@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added the game's VOICE controls, versioned consent, push-to-talk, microphone test and meter, global playback and player-key mutes. Microphone capture yields to native recording and RobotKit; positional playback and HUD indicators follow their dependent slices.
+
 ## 0.1.0-rc.1
 
 - Added the stable Unity-free multiplayer authoring contract and generated registration, codecs, snapshots, and prediction support.

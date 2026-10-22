@@ -1,10 +1,10 @@
 # Multiplayer voice — design record
 
-Status: Implementing (WS2g of the live-multiplayer plan) · Date: 2026-10-13 · Owner: multiplayer
+Status: Implementing (WS2g and WS5c of the live-multiplayer plan) · Date: 2026-10-23 · Owner: multiplayer
 
-This records voice chat below the user interface: the codec the provider runs, the session engine's path for voice
-frames between peers, and the provider's voice service around them. Microphone capture in Unity, emitters and every
-in-game control come in later workstreams. No player-facing behaviour changes until then.
+This records the provider's codec, the session engine's path for voice frames, the voice service, and the game's
+capture, playback and VOICE controls. Live multiplayer remains behind its developer switch; each player's voice
+stays off until the player agrees to the approved consent and turns it on. Part 4 covers the game integration.
 
 WS2g lands in three pull requests, each with its own part of this record:
 
@@ -601,8 +601,8 @@ its signed descriptor and its LAN session info, and the engine enforces it.
 ## Part 3: the voice service
 
 The provider's side of voice lives in `mods/TopiaForge.Multiplayer/Voice/`, and every type is internal. It covers
-everything between the microphone's samples and each speaker's playback samples. The Unity pieces come later: capture
-from the microphone, emitters, the push-to-talk binding, consent and the settings page (WS5). The internal SPI that
+everything between the microphone's samples and each speaker's playback samples. Part 4 supplies the Unity capture,
+emitters, push-to-talk binding, consent and VOICE page. The internal SPI that
 ModManager calls carries the service: `IInternalMultiplayerControl.Voice` is `ProviderVoiceService` over it, the SPI
 gained `Enabled`, `SetTransmitting`, `GetListenerMutes` and `TryGetPlaybackStream`, and `VoicePlaybackStream` is the
 SPI's `IVoicePlaybackStream` as it is, handed out without a wrapper ([MultiplayerRuntimeIntegration.md](MultiplayerRuntimeIntegration.md),
@@ -885,3 +885,96 @@ engine, deterministic except where noted:
 | Both players at 10, 15, 20, 30 and 60 frames a second | 366, 276, 226, 186 and 146 ms of delay; all capture kept but the first call's excess over 60 ms, and every coded frame sent; at 10 frames a second the first second conceals 10 frames while the jitter buffer adapts |
 | Device clock 0.5% fast, 120 s | 29 extra pulls; never ran dry; at most 71 ms waiting |
 | Device clock 0.5% slow, 120 s | 28 skipped pulls; never skipped audio; at most 117 ms waiting |
+
+
+## Part 4: voice in the game
+
+### 4.1 Shape and lifetime
+
+`MultiplayerVoiceChat` composes the Unity-free `VoiceChatRuntime` and `VoicePresenter` with Unity's microphone,
+input, native recording state and pooled emitters. The manager overlay starts it once, ticks it after the sessions
+presenter even while the overlay is closed, and disposes it at shutdown. Each stage runs through the overlay's
+existing frame guard. A startup failure leaves the VOICE page explaining that voice could not start.
+
+`VoiceCapture` owns one reusable buffer, sized for one second at the device rate. Unity uses a one-second looping
+clip at 48 kHz, or the nearest rate the device supports, and reads only the samples since the last frame. The
+provider still owns resampling, voice activity detection, Opus and jitter handling. No audio is written to disk.
+
+### 4.2 Gate and arbitration
+
+The microphone opens only with current consent, voice enabled, and either a microphone test or permission to
+transmit. Push-to-talk also requires a held binding without text focus or binding capture; voice activation follows
+the provider's mode. Solo play, no listeners, a disconnected session, host muting and a session that offers no
+voice do not open the microphone for transmission. A microphone test can run in solo play but never transmits.
+The first enabled frame waits for the provider's next pump before trusting its transmit state.
+
+The existing `MultiplayerMicrophoneArbiter` gives priority to native recording, then RobotKit dialogue, then voice.
+Native recording includes both `UIState.Recording` and `UIState.IsDecodingVoice`; an unreadable state is treated as
+busy. Voice stops reading as soon as another use holds the microphone. Because Unity owns recordings by device,
+it leaves that device running and ends its abandoned recording only once the higher-priority use is done.
+
+`RobotDialogueMicrophone` takes the runtime's `RobotDialogue` lease around `PlayerDialogueInputService` capture.
+A preempted capture returns `Conflict` and leaves the device alone until native recording finishes. The current
+composition updates native recording in the voice tick after mod updates: RobotKit can therefore see a recording
+that started this frame one frame late. That timing limitation is an open decision, not an accepted guarantee.
+
+### 4.3 Push-to-talk and controls
+
+`VoicePushToTalk` names `topiaforge.voice.push-to-talk` and offers two rebindable slots on VOICE, defaulting to
+Caps Lock and Mouse Forward. `NativeInputCensus` reads every native `PlayerInput` action map's effective bindings,
+including overrides and composite parts. Reserved V, B, Q, E, Z, F5, F8, F10, Esc and primary/secondary mouse
+buttons are always refused. A chosen control the game takes later falls back to a free control of the same kind;
+the page explains the change. A slot can also be cleared. The game input registry does not yet list this action.
+Esc currently cancels binding capture and closes the overlay, matching the kit's keybind control.
+
+### 4.4 Consent and preferences
+
+The first-use modal uses the approved voice title, body and buttons from
+[MultiplayerPrivacyText.md](MultiplayerPrivacyText.md) word for word. It persists through scene loads, renders
+plain text, and focuses the primary **Not now** button. Withdrawing consent turns voice off and requires the modal
+again before another enable. Consent counts only for `VoiceConsentVersion`.
+
+Consent and enabled state use the launcher's existing preference projection and journal in manager staging;
+there is no second writable copy. Reading applies journal entries the projection has not counted, respecting its
+epoch. `JournalGate` serializes writers inside the game so concurrent preference changes cannot replace one another.
+Reads and writes run on the background queue. Failed consent writes retry every five seconds and the page warns
+that the launcher may still show the earlier choice. An unreadable switch starts off.
+
+Game-only mode, bindings, device, volumes, threshold and Hear nobody live in `data/multiplayer-voice.json`, schema 1.
+Unknown schemas and unreadable files are preserved; changes then last for the session only. Writes coalesce.
+No named mute or audio sample is persisted.
+
+### 4.5 VOICE, playback and mutes
+
+The kit-only page offers enable, consent withdrawal, mode, both bindings, activation threshold and level meter,
+device selection and refresh, microphone test, microphone/voice volumes, Hear nobody, and per-player mute buttons.
+Transmit state appears as text and a talk glyph. The existing no-voice-session line remains. The page scrolls and
+uses dirty-checked setters; the gallery's SESSIONS page supplies synthetic states without opening a microphone.
+
+`VoicePlayback` rents one emitter for each listed speaking participant. Each emitter has a streaming 48 kHz mono
+clip whose callback reads only its attached `IVoicePlaybackStream`. `VoiceEmitterReader` uses volatile handoff;
+its read takes no lock, waits for nothing and allocates nothing. An ended stream gives its emitter back, and later
+lookups use `TryGetPlaybackStream`, avoiding an allocation for every unsuccessful lookup.
+
+Named mutes use stable player keys and are reapplied only when a Ready session lists its players. During a join,
+only the wish to hear nobody is passed. A participant without a stable key is muted by id for that session only.
+The in-memory book is bounded at 256 entries and compares unchanged state with the engine once a second.
+
+Playback is global for this slice. `VoicePlayback.Positions` accepts `IVoicePositions` when avatars arrive in
+WS3.10; placed voices use the 3 m full-volume and 40 m maximum distances. The proximity control is disabled until
+that source exists. HUD transmit and talking indicators wait for #252's placement and gameplay-gate lifetime.
+The provider still owns its voice service, so transport-loss counters are not newly fed by this runtime.
+
+### 4.6 Verification and limits
+
+The manager's 23 focused tests cover the gate, test mode, priority, unreadable native state, approved consent,
+withdrawal/versioning, journal concurrency and failures, indicator states, reserved/censused controls, rebinding,
+devices, stable and session-scoped mutes, playback, allocation, wait-free callback shape and bounds.
+Provider tests carry push-to-talk capture through the real SPI and codec to another player's stream, and keep
+player-key mutes across a move to another host and back, on the deterministic virtual network.
+
+The allocation tests require zero bytes across 2,000 idle frames, talking frames and VOICE getter reads, and
+10,000 emitter callback reads. The callback's IL permits only volatile reads, clearing silence and the stream's
+wait-free read. Mutating consent, native priority or reserved-key checks makes its corresponding test fail.
+Native consent, microphone, meter and real-input checks remain distinct from these Unity-free tests. Two-machine
+audio acceptance belongs to the owner; neither the virtual network nor a local microphone test replaces it.

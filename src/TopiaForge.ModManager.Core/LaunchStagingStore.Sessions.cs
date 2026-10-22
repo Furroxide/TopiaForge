@@ -19,6 +19,9 @@ namespace TopiaForge.ModManager.Core
         /// <summary>How often a refused channel write is tried again.</summary>
         internal const int ChannelWriteRetries = 5;
 
+        // The journal's writers in this process, such as the display name's and voice chat's, take turns through it.
+        private static readonly object JournalGate = new object();
+
         /// <summary>How old a claim must be before a sweep removes it. A live take holds its claim for milliseconds.</summary>
         internal static readonly TimeSpan StaleClaimAge = TimeSpan.FromHours(1);
 
@@ -127,17 +130,21 @@ namespace TopiaForge.ModManager.Core
         /// <paramref name="change"/> receives the change's sequence. The journal on disk keeps its epoch; a new journal, under a
         /// fresh epoch (<see cref="MultiplayerPreferencesJournal.Start"/>), starts only when there is no journal file or the one
         /// there is not a journal the launcher could ever apply. A journal file that cannot be opened is retried briefly and
-        /// then refused, so its changes are never dropped for a new journal. Call it from one thread at a time, and not from
+        /// then refused, so its changes are never dropped for a new journal. Calls from several threads of this process take
+        /// turns, so two changes recorded at once never read the same journal and write over each other. Do not call it from
         /// the main thread: a refused read or write sleeps between tries, for about 310 ms in all.
         /// </summary>
         public MultiplayerPreferencesJournal RecordPreferenceChange(Func<int, MultiplayerPreferenceChange> change)
         {
             if (change == null) throw new ArgumentNullException(nameof(change));
-            var projection = ReadPreferences();
-            var journal = ReadJournalToAppend() ?? MultiplayerPreferencesJournal.Start();
-            var next = journal.Append(change(journal.NextSequence(projection)), projection);
-            WritePreferencesJournal(next);
-            return next;
+            lock (JournalGate)
+            {
+                var projection = ReadPreferences();
+                var journal = ReadJournalToAppend() ?? MultiplayerPreferencesJournal.Start();
+                var next = journal.Append(change(journal.NextSequence(projection)), projection);
+                WritePreferencesJournal(next);
+                return next;
+            }
         }
 
         /// <summary>

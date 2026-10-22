@@ -387,6 +387,14 @@
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakeGameClock.cs" Link="Multiplayer/FakeGameClock.cs" />
   </ItemGroup>
 
+  <!-- Voice chat keeps its gate, binding, preferences, mutes and playback in Unity-free classes; globbed at the folder's top
+       level, so a class added later cannot fall out of test scope and none can take a Unity dependency. Its Unity side lives
+       in Voice/Unity/. RobotKit's microphone claim is Unity-free too, and its arbitration with voice chat is tested here. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Voice/*.cs" Link="Runtime/Multiplayer/Voice/%(Filename)%(Extension)" />
+    <Compile Include="../../mods/TopiaForge.RobotKit/RobotDialogueMicrophone.cs" Link="RobotKit/RobotDialogueMicrophone.cs" />
+  </ItemGroup>
+
   <!-- Intent tracking (WS3.4) is Unity-free too: the runtime's tracker, the decorators that feed it, the frame dispatch in
        ModContext, and both halves of the UI kit's hook. -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">

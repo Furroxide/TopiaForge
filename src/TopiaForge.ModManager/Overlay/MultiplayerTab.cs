@@ -21,12 +21,17 @@ namespace TopiaForge.ModManager
     {
         private readonly MultiplayerSessionsPresenter screens;
         private readonly MultiplayerFrameGuard guard;
+        private readonly IVoiceScreen? voice;
         private MultiplayerTabView? view;
 
-        internal MultiplayerTab(MultiplayerSessionsPresenter screens, MultiplayerFrameGuard guard)
+        /// <param name="screens">The sessions presenter.</param>
+        /// <param name="guard">Where building and hiding run.</param>
+        /// <param name="voice">VOICE's screen; null when voice chat could not start.</param>
+        internal MultiplayerTab(MultiplayerSessionsPresenter screens, MultiplayerFrameGuard guard, IVoiceScreen? voice)
         {
             this.screens = screens;
             this.guard = guard;
+            this.voice = voice;
         }
 
         public string Title => ManagerTabLookup.Multiplayer;
@@ -37,7 +42,7 @@ namespace TopiaForge.ModManager
             guard.Run(MultiplayerOverlayFrame.BuildStage, () =>
             {
                 screens.OnShown();
-                var built = new MultiplayerTabView(context.Host, screens);
+                var built = new MultiplayerTabView(context.Host, screens, voice);
                 built.Build(content);
                 view = built;
             });
@@ -47,7 +52,9 @@ namespace TopiaForge.ModManager
 
         public void OnHidden()
         {
+            var shown = view;
             view = null;
+            if (shown != null) guard.Run(MultiplayerOverlayFrame.HiddenStage, shown.OnHidden);
             guard.Run(MultiplayerOverlayFrame.HiddenStage, screens.OnHidden);
         }
     }

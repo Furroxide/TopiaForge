@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The SESSIONS page now previews the actual VOICE controls with synthetic consent, microphone, transmission and player states.
+
 ## 0.1.0-rc.1
 
 - Migrated to the owner-scoped TopiaForge V1 lifecycle, package, and SDK contracts.
