@@ -21,22 +21,28 @@ enum KnownHostCheck {
 /// its descriptor proved, so the record never holds an address. It keeps the
 /// [maximumEntries] most recent targets, oldest first. [encode] writes the
 /// game's own `topiaforge.known-hosts/1` file, and [KnownHosts.decode] reads
-/// it as the game does: an unreadable file is an empty record, because
-/// losing it only costs a prompt. Links, listings and beacons name a server
-/// id and need no entry.
+/// it as the game does, in any layout, keeping every entry that reads. Links,
+/// listings and beacons name a server id and need no entry.
 final class KnownHosts {
   KnownHosts._(List<_KnownHost> entries)
     : _entries = List.unmodifiable(entries);
 
   KnownHosts.empty() : _entries = const [];
 
-  /// Reads a record, keeping what is valid. Anything unreadable gives an
-  /// empty record, and a later entry for a target replaces an earlier one.
+  /// Reads a record, keeping what is valid, in any layout another program may
+  /// have left it in: white space, a byte-order mark and members in any order
+  /// read as the canonical bytes do, so every entry in them is kept. Anything
+  /// unreadable gives an empty record, and a later entry for a target
+  /// replaces an earlier one. The record is still written only in canonical
+  /// form, so a file that is not is salvaged.
   factory KnownHosts.decode(List<int>? bytes) {
     if (bytes == null) return KnownHosts.empty();
     final Object? document;
     try {
-      document = CanonicalJson.decode(bytes, maximumBytes: maximumBytes);
+      document = CanonicalJson._decodeAnyLayout(
+        bytes,
+        maximumBytes: maximumBytes,
+      );
     } on FormatException {
       return KnownHosts.empty();
     }

@@ -288,10 +288,10 @@ final class MultiplayerStore {
         await _files.setAside(file);
         return KnownHosts.empty();
       case _Read(:final bytes):
-        // The domain keeps what is valid; anything it had to drop means the
-        // file was damaged, so a copy of the original is kept aside for
-        // inspection, and the file stays in place until the record that
-        // replaces it is written.
+        // The domain reads any layout and keeps what is valid. A file that
+        // does not read back as its canonical bytes, damaged or only laid out
+        // another way, is kept aside as a copy for inspection, and stays in
+        // place until the canonical record that replaces it is written.
         final hosts = KnownHosts.decode(bytes);
         final encoded = hosts.encode();
         if (!_sameBytes(encoded, bytes) && await _files.keepCopy(file, bytes)) {
