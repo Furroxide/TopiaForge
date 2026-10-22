@@ -7,6 +7,8 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'zip_entry_support.dart';
+
 void main() {
   late Directory root;
   late LocalLauncherRepository repository;
@@ -158,6 +160,57 @@ void main() {
     );
   });
 
+  test('installing refuses an entry assembly that expands beyond its declared '
+      'size, and leaves no staging behind', () async {
+    final encoded = ZipEncoder().encode(_validArchive());
+    declareEntrySize(encoded, 'Validation.dll', 1);
+    final package = File(p.join(root.path, 'overrun.topiaforgemod'))
+      ..writeAsBytesSync(encoded);
+
+    await expectLater(
+      repository.installPackage(package.path, install),
+      throwsA(
+        predicate(
+          (error) =>
+              error.toString().contains('declared') &&
+              error.toString().contains('Validation.dll'),
+        ),
+      ),
+    );
+    _expectNothingStaged(install);
+  });
+
+  test(
+    'a damaged entry is refused as damaged, not blamed on its declared size',
+    () async {
+      final damaged = predicate(
+        (error) =>
+            error.toString().contains('damaged') &&
+            !error.toString().contains('declared'),
+      );
+      final manifest = ZipEncoder().encode(_validArchive());
+      damageEntryData(manifest, 'topiaforge.mod.json');
+      final manifestPackage = File(
+        p.join(root.path, 'damaged-manifest.topiaforgemod'),
+      )..writeAsBytesSync(manifest);
+      await expectLater(
+        repository.previewPackage(manifestPackage.path, install),
+        throwsA(damaged),
+      );
+
+      final assembly = ZipEncoder().encode(_validArchive());
+      damageEntryData(assembly, 'Validation.dll');
+      final assemblyPackage = File(
+        p.join(root.path, 'damaged-assembly.topiaforgemod'),
+      )..writeAsBytesSync(assembly);
+      await expectLater(
+        repository.installPackage(assemblyPackage.path, install),
+        throwsA(damaged),
+      );
+      _expectNothingStaged(install);
+    },
+  );
+
   test(
     'uninstall rejects traversal ids before touching the filesystem',
     () async {
@@ -237,6 +290,31 @@ Archive _archiveWithAuthor(Object author) => Archive()
     ),
   )
   ..addFile(ArchiveFile.string('Validation.dll', 'dll'));
+
+/// Checks that a refused install left no transaction in the manager's
+/// staging folder and installed nothing.
+void _expectNothingStaged(GameInstall install) {
+  final manager = p.join(install.path, 'BepInEx', 'TopiaForge');
+  final staging = Directory(p.join(manager, 'staging'));
+  final transactions = staging.existsSync()
+      ? staging
+            .listSync()
+            .where(
+              (entry) => p.basename(entry.path).startsWith('launcher-install-'),
+            )
+            .toList()
+      : const <FileSystemEntity>[];
+  expect(
+    transactions,
+    isEmpty,
+    reason: 'no install transaction is left behind',
+  );
+  expect(
+    Directory(p.join(manager, 'packages', 'validation.mod')).existsSync(),
+    isFalse,
+    reason: 'nothing is installed',
+  );
+}
 
 File _writeArchive(Directory root, String name, Archive archive) =>
     File(p.join(root.path, name))
