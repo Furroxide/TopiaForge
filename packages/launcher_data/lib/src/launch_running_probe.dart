@@ -136,19 +136,21 @@ Future<bool?> probeLinuxLaunchProcessRunning(
           return true;
         }
         final link = readLink ?? (path) => Link(path).target();
-        String image;
+        String? image;
         try {
           image = await link(p.join(entity.path, 'exe'));
         } on Object {
-          if (arguments.every((value) => value.isEmpty) &&
-              await _linuxKernelProcess(entity)) {
-            continue;
-          }
-          rethrow;
+          // Another account's process, PID 1 included, shows its arguments
+          // but refuses its exe and cwd links: its arguments alone decide
+          // below. A kernel thread or a zombie has none. A process gone by
+          // now is skipped.
+          if (!await entity.exists()) continue;
         }
-        if (!p.isAbsolute(image)) return null;
         final target = _canonicalProbeImage(executablePath);
-        if (_canonicalProbeImage(image) == target) return true;
+        if (image != null) {
+          if (!p.isAbsolute(image)) return null;
+          if (_canonicalProbeImage(image) == target) return true;
+        }
         for (final argument in arguments.where((value) => value.isNotEmpty)) {
           final name = argument.split(RegExp(r'[/\\]')).last;
           if (name.toLowerCase() != p.basename(executablePath).toLowerCase()) {
@@ -186,23 +188,6 @@ String _canonicalProbeImage(String path) {
       path.endsWith(' (deleted)') ? path.substring(0, path.length - 10) : path,
     );
   }
-}
-
-Future<bool> _linuxKernelProcess(Directory process) async {
-  final bytes = <int>[];
-  await for (final chunk in File(
-    p.join(process.path, 'stat'),
-  ).openRead().timeout(const Duration(seconds: 1))) {
-    if (chunk.length > 65536 - bytes.length) return false;
-    bytes.addAll(chunk);
-  }
-  final text = utf8.decode(bytes);
-  final close = text.lastIndexOf(')');
-  if (close < 1) return false;
-  final fields = text.substring(close + 1).trim().split(RegExp(r'\s+'));
-  if (fields.length < 7) return false;
-  final flags = int.tryParse(fields[6]);
-  return flags != null && flags & 0x00200000 != 0; // Linux PF_KTHREAD.
 }
 
 // A failed query or unreadable candidate never establishes absence. The target
