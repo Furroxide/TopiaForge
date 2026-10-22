@@ -4,14 +4,21 @@ using System.Text;
 using System.Text.RegularExpressions;
 using provider::TopiaForge.Multiplayer.Network;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
+using ControlPlaneAnswers = provider::TopiaForge.Multiplayer.ControlPlane.ControlPlaneAnswers;
+using ControlPlaneResponse = provider::TopiaForge.Multiplayer.ControlPlane.ControlPlaneResponse;
+using IceServerSet = provider::TopiaForge.Multiplayer.NatTraversal.Turn.IceServerSet;
+using ServiceErrors = provider::TopiaForge.Multiplayer.ControlPlane.ServiceErrors;
+using ServiceFailure = provider::TopiaForge.Multiplayer.ControlPlane.ServiceFailure;
+using SignalCodec = provider::TopiaForge.Multiplayer.NatTraversal.Signaling.SignalCodec;
 
 namespace TopiaForge.Mods.Multiplayer.Tests;
 
 /// <summary>
 /// The known-hosts record keeps its pins in any valid layout. A record another program rewrote, with white space, a
 /// byte-order mark or its members in another order, reads whole; it is still copied aside before the canonical rewrite
-/// replaces it, and a copy is never written over. Every other document, signed or shared, is still read in canonical form
-/// only.
+/// replaces it, and a copy is never written over. The provider's other own records, the ban list and the identity, read
+/// the same way (LocalRecordsLayoutTests.cs); every document another machine sends, and every one signed or hashed, is
+/// still read in canonical form only.
 /// </summary>
 internal static class KnownHostsLayoutTests
 {
@@ -157,17 +164,26 @@ internal static class KnownHostsLayoutTests
                 "the any-layout reader reads a descriptor with " + layout + " as the served document");
         }
 
-        // So is this game's identity, which never takes the known hosts' leniency.
-        var files = new MemoryDataFiles();
-        LiveRig.SeedIdentity(files, 1901);
-        var identity = files.Contents[IdentityStore.IdentityPath];
-        That(LocalIdentity.TryParse(identity.ToArray(), out var read, out _), "an identity reads as written");
-        read!.Dispose();
-        That(!LocalIdentity.TryParse(Spaced(identity), out _, out _) && !LocalIdentity.TryParse(Bom(identity), out _, out _),
-            "an identity in another layout is refused");
+        // So does every other document another machine sends: each reads as sent, and the same document with a trailing
+        // newline, a byte-order mark or spaces after its separators is refused.
+        foreach (var (document, sent, reads) in Received())
+        {
+            That(reads(sent), document + " reads as sent");
+            foreach (var (layout, bytes) in new[]
+                     {
+                         ("a trailing newline", sent.Concat(new[] { (byte)'\n' }).ToArray()),
+                         ("a byte-order mark", Bom(sent)),
+                         ("spaces after its separators", Spaced(sent)),
+                     })
+            {
+                That(!bytes.SequenceEqual(sent) && !reads(bytes), document + " with " + layout + " is refused");
+            }
+        }
 
-        // By construction: in the provider only the known-hosts record's reader, which the tests above show reading any
-        // layout, calls the any-layout reader. Every other document, the ban list included, keeps the canonical one.
+        // By construction: in the provider only the readers of its own records call the any-layout reader, once each: the
+        // ban list (HostPolicy.cs), the known-hosts record (IdentityStore.cs) and the identity (LocalIdentity.cs), each
+        // shown reading any layout by its own tests. Everything another machine sends, and everything signed or hashed,
+        // keeps the canonical one.
         var provider = Path.Combine(NetworkFixtures.RepositoryRoot(), "mods", "TopiaForge.Multiplayer");
         var callers = new List<string>();
         foreach (var file in Directory.EnumerateFiles(provider, "*.cs", SearchOption.AllDirectories))
@@ -178,8 +194,31 @@ internal static class KnownHostsLayoutTests
             for (var call = 0; call < calls; call++) callers.Add(Path.GetFileName(file));
         }
 
-        That(callers.SequenceEqual(new[] { "IdentityStore.cs" }),
-            "the known-hosts record is the one document the provider reads in any layout (" + string.Join(", ", callers) + ")");
+        callers.Sort(StringComparer.Ordinal);
+        That(callers.SequenceEqual(new[] { "HostPolicy.cs", "IdentityStore.cs", "LocalIdentity.cs" }),
+            "the provider's own records, the ban list, the known-hosts record and the identity, are the only documents it reads in any layout (" +
+            string.Join(", ", callers) + ")");
+    }
+
+    /// <summary>
+    /// A document of each kind another machine sends, as it would send it, and how the provider reads it: session info and
+    /// admission reports from hosts, signaling frames, the relay's server set, and the TopiaForge service's answers and
+    /// errors. The signed descriptor is checked above.
+    /// </summary>
+    private static IEnumerable<(string Document, byte[] Sent, Func<byte[], bool> Reads)> Received()
+    {
+        var info = new SessionInfo(new string('a', 64), new string('b', 64), "LAN Party", "2545", "0.2.0", "1.0.0", "Open Sandbox", null, 2, 8, false, true);
+        yield return ("session info", info.Encode(), bytes => SessionInfo.TryDecode(bytes, out _, out _));
+        yield return ("an admission report", AdmissionReport.Encode(AdmissionCode.Content, new[] { "Zombies 0.2.0 is missing." }),
+            bytes => AdmissionReport.TryDecode(bytes, out _, out _));
+        yield return ("a signaling frame", Encoding.UTF8.GetBytes("{\"peer\":\"74aea50c644d302f\",\"type\":\"left\"}"),
+            bytes => SignalCodec.TryDecode(bytes, false, out _));
+        yield return ("the relay's server set", Encoding.UTF8.GetBytes("{\"iceServers\":[{\"urls\":[\"stun:a.example.test\"]}],\"ttlSeconds\":600}"),
+            bytes => IceServerSet.TryParse(bytes, out _));
+        yield return ("a service answer", Encoding.UTF8.GetBytes("{\"expiresAt\":1969660920,\"heartbeatSeconds\":30,\"listed\":true}"),
+            bytes => ControlPlaneAnswers.Heartbeat(bytes) != null);
+        yield return ("a service error", Encoding.UTF8.GetBytes("{\"error\":{\"code\":\"not-found\",\"message\":\"x\"}}"),
+            bytes => ServiceErrors.Read(ControlPlaneResponse.Answered(404, bytes, true, null)) == ServiceFailure.NotFound);
     }
 
     internal static void ASaveQueuedBehindAFailedCopyKeepsTheDamagedRecord()

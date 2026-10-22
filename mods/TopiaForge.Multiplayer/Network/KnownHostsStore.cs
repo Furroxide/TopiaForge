@@ -44,6 +44,10 @@ namespace TopiaForge.Multiplayer.Network
     /// written over. Anything that does not read back exactly as this game writes it counts as damaged: a file of another
     /// schema, an entry that does not read, more entries than the record keeps, or bytes that are not canonical.
     /// </para>
+    /// <para>
+    /// A save that fails, its copy's or the record's, leaves the change unsaved, so it is tried again: by the first frame
+    /// once <see cref="RetryMicros"/> have passed, never every frame, and once more, at once, as the game closes.
+    /// </para>
     /// </remarks>
     internal sealed class KnownHostsStore
     {
@@ -65,7 +69,17 @@ namespace TopiaForge.Multiplayer.Network
         /// <summary>How many servers reported unchecked are remembered, the oldest forgotten first.</summary>
         private const int MaximumUncheckedServers = 64;
 
+        /// <summary>
+        /// How long a save that failed waits before a frame tries it again, so a disk that keeps failing is tried every few
+        /// seconds rather than every frame. Closing tries once more without waiting.
+        /// </summary>
+        internal const long RetryMicros = 5_000_000;
+
+        /// <summary>The value of <see cref="retryAt"/> while no failed save waits to be tried again.</summary>
+        private const long NoRetry = long.MinValue;
+
         private readonly INetworkDataFiles files;
+        private readonly Func<long> clock;
         private readonly object gate = new object();
 
         /// <summary>
@@ -78,9 +92,15 @@ namespace TopiaForge.Multiplayer.Network
         private bool dirty;
         private byte[]? damaged;
 
-        internal KnownHostsStore(INetworkDataFiles files)
+        /// <summary>When a failed save is next tried, or <see cref="NoRetry"/>.</summary>
+        private long retryAt = NoRetry;
+
+        /// <param name="files">The provider's data files.</param>
+        /// <param name="clock">The time in microseconds that paces a failed save's next try; the provider's clock by default.</param>
+        internal KnownHostsStore(INetworkDataFiles files, Func<long>? clock = null)
         {
             this.files = files ?? throw new ArgumentNullException(nameof(files));
+            this.clock = clock ?? MultiplayerProvider.MonotonicMicros;
         }
 
         /// <summary>Gets the record this process keeps. Every use locks it.</summary>
@@ -155,23 +175,68 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>
-        /// Queues a save behind <paramref name="previous"/> when the record changed since the last one, and returns it, or
-        /// returns <paramref name="previous"/> when there is nothing to save. Nothing is saved until a read succeeded, so a
-        /// file this process could not read is never written over. A damaged file's copy is written first, and the record
-        /// only once the copy landed.
+        /// Queues a save behind <paramref name="previous"/> when the record changed since the last one, or when the last save
+        /// failed and its pause is over, and returns it, or returns <paramref name="previous"/> when there is nothing to save.
+        /// Nothing is saved until a read succeeded, so a file this process could not read is never written over. A damaged
+        /// file's copy is written first, and the record only once the copy landed. With nothing to save, it allocates
+        /// nothing, a failed save waiting for its next try included.
         /// </summary>
         internal Task SaveAfter(Task previous)
         {
             if (previous == null) throw new ArgumentNullException(nameof(previous));
             lock (gate)
             {
-                if (!dirty || !read) return previous;
+                if (!read) return previous;
+                if (!dirty)
+                {
+                    // A save that failed left the change unsaved: it is tried again once its pause is over, and not before.
+                    if (!previous.IsFaulted) return previous;
+                    var now = clock();
+                    if (retryAt == NoRetry)
+                    {
+                        // Its exception is observed here, once, so a failure that is tried again is never reported later
+                        // as one nobody saw; its text goes nowhere.
+                        _ = previous.Exception;
+                        retryAt = now + RetryMicros;
+                    }
+
+                    if (now < retryAt) return previous;
+                }
+
                 dirty = false;
+                retryAt = NoRetry;
             }
 
-            byte[] bytes;
-            lock (Record) bytes = Record.Serialize();
-            return Queue(previous, bytes);
+            return Queue(previous, Serialized());
+        }
+
+        /// <summary>
+        /// Saves for the last time as the game closes, behind <paramref name="previous"/>: a change not yet saved now, and a
+        /// save that failed, or that fails while closing waits for it, once more at once, without waiting out the pause.
+        /// Nothing is saved until a read succeeded.
+        /// </summary>
+        internal Task SaveOnClose(Task previous)
+        {
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            bool changed;
+            lock (gate)
+            {
+                if (!read) return previous;
+                changed = dirty;
+                dirty = false;
+                retryAt = NoRetry;
+            }
+
+            var last = changed ? Queue(previous, Serialized()) : previous;
+            return last.ContinueWith(TryAgainIfFailed, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        }
+
+        /// <summary>Writes the record again when <paramref name="saved"/> failed; the record holds every change since.</summary>
+        private Task TryAgainIfFailed(Task saved) => saved.IsFaulted ? WriteAsync(Serialized()) : saved;
+
+        private byte[] Serialized()
+        {
+            lock (Record) return Record.Serialize();
         }
 
         /// <summary>

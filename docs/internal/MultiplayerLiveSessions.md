@@ -28,9 +28,13 @@ Each install has one identity, in the provider's data folder at `multiplayer/ide
 
 - There are no accounts, so the identity is the key. Rotating it creates a new identity, which also escapes any ban
   keyed by the old one; the player-facing docs say so.
-- The file is canonical JSON (section 2) with schema `topiaforge.identity/1`. A file that cannot be read is kept as
+- The file is canonical JSON (section 2) with schema `topiaforge.identity/1`. A file in another layout, with white
+  space, a byte-order mark or its members in another order, is the same identity: it reads whole, through every check
+  on the keys, and is rewritten in canonical form once its bytes are kept as `multiplayer/identity.damaged.json`. That
+  copy holds the keys too, so it is one place only, never written over; a later file in another layout is rewritten
+  without one, since the rewrite keeps every key. A file that cannot be read is kept as
   `multiplayer/identity.unreadable.json` beside a new identity, so it is never silently lost. The notice of that names
-  no key.
+  no key, and a rewrite raises none.
 - `LocalIdentity` hands out copies of its secrets only to their single consumer, the transport endpoint or the
   descriptor signer, and zeroes its own copies when disposed.
 
@@ -48,10 +52,11 @@ produce byte for byte. Each runtime also has an ordinary JSON writer that produc
   Unpaired surrogates are refused.
 - **Parsing.** A reader accepts a document only if writing what it parsed gives back the same bytes. A signature
   therefore never covers an ambiguous document. Depth is limited to 16, and every document type has a size bound.
-- **One exception.** Salvaging the known-hosts record (section 21) reads it in any layout: white space, a UTF-8
-  byte-order mark and members in any order. The game and the launcher each read their own record this way; it is never
-  signed or shared, and it still counts as damaged until it is rewritten in canonical form. Every other document is
-  read in canonical form only.
+- **The provider's own records.** The identity (section 1), the ban list and the known-hosts record (section 21) are
+  read in any layout: white space, a UTF-8 byte-order mark and members in any order; the launcher reads its own
+  known-hosts record this way too. They are each program's own files, never received, signed or shared, and each
+  still counts as damaged until it is rewritten in canonical form. Every other document, everything another machine
+  sends and everything signed or hashed, is read in canonical form only.
 - **Binary values.** Keys and signatures are unpadded base64url. The unused low bits of the last character must be
   zero, so every value has one spelling. Hashes and ids are lowercase hexadecimal.
 - **Display text.** Names are 1 to N UTF-16 code units, with no surrounding whitespace, control characters or
@@ -622,8 +627,10 @@ Each provider keeps its live-session files in its own data folder, read on the f
   are copied to the first of `multiplayer/bans.damaged.json`, `bans.damaged-2.json` and `bans.damaged-3.json` that
   holds no file. A copy is never written over: a place that holds a file, or cannot be read, is passed over, and once
   all three hold copies a damaged list is salvaged without one. While the copy cannot be written, the damaged file
-  stays in place, to be salvaged again. A file of another schema, a ban that does not read, a name that is not display
-  text, a key banned twice, more than 1,024 bans or bytes that are not canonical all count as damage.
+  stays in place, to be salvaged again. A list in another layout, with white space, a byte-order mark or its members in
+  another order, is read whole, so it keeps every ban; it still counts as damage, so it is copied aside before the
+  canonical rewrite replaces it. A file of another schema, a ban that does not read, a name that is not display text, a
+  key banned twice, more than 1,024 bans or bytes that are not canonical all count as damage.
 - **Known hosts that cannot be read** are never read as empty either (section 8). The record stays unread: typed
   addresses are refused with the reason, nothing is saved over the file, and each later check reads it again. Hosting,
   LAN and service joins, and joins to a link that names its server never need the record, so they go on.
@@ -642,8 +649,12 @@ Each provider keeps its live-session files in its own data folder, read on the f
   leftovers of an interrupted write are the service's own, written to a temporary file and moved into place.
 - **Order.** Each file's saves run one after another, so a slow save can never land after, and overwrite, a newer
   one. A ban starts saving at once.
-- **Closing.** Saves are never cancelled. Closing starts any save still due and waits up to two seconds for the saves
-  to land, so a ban made just before quitting survives. Bans and known hosts never read are not saved.
+- **A save that fails**, its copy's or its file's, for the bans and the known hosts alike, leaves its change unsaved, so
+  it is tried again: by the first frame once five seconds have passed, never every frame, so a disk that keeps failing
+  costs a frame nothing; and once more, at once, as the game closes.
+- **Closing.** Saves are never cancelled. Closing starts any save still due, tries a save that failed once more, and
+  waits up to two seconds for the saves to land, so a ban made just before quitting survives. Bans and known hosts
+  never read are not saved.
 - **Merging.** Known hosts read from disk are merged in as older than those this process recorded, in their own order,
   so the cap drops the oldest first.
 

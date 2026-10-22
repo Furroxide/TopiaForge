@@ -105,10 +105,21 @@ namespace TopiaForge.Multiplayer.Network
                 .Add("hostSecret", WireText.ToBase64Url(hostSecret)));
         }
 
-        internal static bool TryParse(byte[] bytes, out LocalIdentity? identity, out string error)
+        /// <summary>Reads an identity file in any layout; see the overload that says whether it was canonical.</summary>
+        internal static bool TryParse(byte[] bytes, out LocalIdentity? identity, out string error) => TryParse(bytes, out identity, out _, out error);
+
+        /// <summary>
+        /// Reads an identity file in any layout another program may have left it in: white space, a byte-order mark and
+        /// members in any order read as this game's canonical bytes do. Every check on the keys is the one this game's own
+        /// bytes pass: exactly the version 1 members, the schema, each key 32 bytes in its one base64url spelling, and the
+        /// creation time. <paramref name="canonical"/> says whether the bytes are exactly what this game writes. Neither
+        /// <paramref name="error"/> nor anything else says anything about the keys: it names only what was wrong.
+        /// </summary>
+        internal static bool TryParse(byte[] bytes, out LocalIdentity? identity, out bool canonical, out string error)
         {
             identity = null;
-            if (!CanonicalJson.TryParse(bytes, MaximumBytes, out var node, out error)) return false;
+            canonical = false;
+            if (!CanonicalJson.TryParseAnyLayout(bytes, MaximumBytes, out var node, out error)) return false;
             byte[]? transport = null;
             byte[]? signing = null;
             byte[]? secret = null;
@@ -127,7 +138,9 @@ namespace TopiaForge.Multiplayer.Network
                     throw new FormatException("An identity key is malformed.");
                 }
 
-                identity = new LocalIdentity(transport, signing, secret, JsonRead.Integer(value, "createdAt"));
+                var read = new LocalIdentity(transport, signing, secret, JsonRead.Integer(value, "createdAt"));
+                canonical = IsWrittenAs(read, bytes);
+                identity = read;
                 error = string.Empty;
                 return true;
             }
@@ -141,6 +154,20 @@ namespace TopiaForge.Multiplayer.Network
                 if (transport != null) Array.Clear(transport, 0, transport.Length);
                 if (signing != null) Array.Clear(signing, 0, signing.Length);
                 if (secret != null) Array.Clear(secret, 0, secret.Length);
+            }
+        }
+
+        /// <summary>Whether <paramref name="bytes"/> are exactly what <paramref name="identity"/> writes; that copy is zeroed.</summary>
+        private static bool IsWrittenAs(LocalIdentity identity, byte[] bytes)
+        {
+            var written = identity.Serialize();
+            try
+            {
+                return WireText.FixedTimeEquals(written, bytes);
+            }
+            finally
+            {
+                Array.Clear(written, 0, written.Length);
             }
         }
 
