@@ -1,5 +1,6 @@
 extern alias provider;
 
+using System.Globalization;
 using System.Text;
 using provider::TopiaForge.Multiplayer.Network;
 using static TopiaForge.Mods.Multiplayer.Tests.TransportAssert;
@@ -21,8 +22,8 @@ internal static class NetworkLinkTests
             That(link!.Kind == kind && link.InviteCode == testCase.OptionalText("inviteCode") && link.ServerId == testCase.OptionalText("serverId") &&
                  link.Host == testCase.OptionalText("host") && link.Port == (testCase.TryGetProperty("port", out var port) ? port.GetInt32() : 0),
                 input + " yields its fields");
-            That(link.ToString() == testCase.Text("canonical"), input + " formats as " + testCase.Text("canonical") + ", not " + link);
-            That(SessionLink.TryParse(link.ToString(), out var again) && again!.ToString() == link.ToString(), input + " round-trips");
+            That(link.Canonical == testCase.Text("canonical"), input + " formats as " + testCase.Text("canonical") + ", not " + link.Canonical);
+            That(SessionLink.TryParse(link.Canonical, out var again) && again!.Canonical == link.Canonical, input + " round-trips");
         }
 
         foreach (var testCase in fixture.GetProperty("invalid").EnumerateArray())
@@ -41,6 +42,73 @@ internal static class NetworkLinkTests
         That(SessionLink.TryParse(null, out _) == false && SessionLink.TryParse("", out _) == false, "nothing is not a link");
         Throws<ArgumentException>(() => InviteCode.Display("abcde12345"), "only canonical codes are displayed");
         Throws<ArgumentOutOfRangeException>(() => SessionLink.ForDirect(new string('a', 64), "example.org", 0), "direct links need a port");
+    }
+
+    /// <summary>
+    /// A link prints its kind alone, in a join target's words, however it is turned into text: no spelling of an invite's
+    /// code or of a direct link's host or port reaches it, in any case. <see cref="SessionLink.Canonical"/> still spells the
+    /// link, and reads back as the same link, for every kind.
+    /// </summary>
+    internal static void ALinkKeepsItsCodeAndAddressOutOfToString()
+    {
+        const string prefix = "://join/";
+        var serverId = new string('c', 64);
+        var cases = new List<(SessionLink Link, string Typed)>();
+        foreach (var testCase in NetworkFixtures.Load("links/cases.json").GetProperty("valid").EnumerateArray())
+        {
+            var input = testCase.Text("input");
+            That(SessionLink.TryParse(input, out var parsed), "parses " + input);
+            var segments = input.Substring(input.IndexOf(prefix, StringComparison.Ordinal) + prefix.Length).Split('/');
+            cases.Add((parsed!, parsed!.Kind == SessionLinkKind.Direct ? segments[2] : segments[segments.Length - 1]));
+        }
+
+        foreach (var typed in new[] { "RJ9JM-V1V09", "abcde-12345", "f80bh rs9yw" }) cases.Add((SessionLink.ForInvite(typed), typed));
+        foreach (var (host, port) in new[] { ("203.0.113.5", 27260), ("2001:DB8::7", 40123), ("Play.Example.ORG", 27262) })
+        {
+            cases.Add((SessionLink.ForDirect(serverId, host, port), host));
+        }
+
+        cases.Add((SessionLink.ForServer(serverId), serverId));
+        var kinds = new HashSet<SessionLinkKind>();
+        foreach (var (link, typed) in cases)
+        {
+            kinds.Add(link.Kind);
+            var texts = new[] { link.ToString(), $"{link}", string.Format(CultureInfo.InvariantCulture, "{0}", link), "joining " + link };
+            foreach (var secret in Secrets(link, typed))
+            {
+                That(texts.All(text => text.IndexOf(secret, StringComparison.OrdinalIgnoreCase) < 0),
+                    "a link holds no spelling of its code, host or port in its text ('" + secret + "' in '" + link + "')");
+            }
+
+            That(link.ToString() == Printed(link.Kind), "a link prints its kind alone, as a join target does: '" + link + "'");
+            That(SessionLink.TryParse(link.Canonical, out var again) && again!.Kind == link.Kind && again.InviteCode == link.InviteCode &&
+                 again.ServerId == link.ServerId && again.Host == link.Host && again.Port == link.Port && again.Canonical == link.Canonical,
+                "the canonical form reads back as the same " + Printed(link.Kind) + " link");
+        }
+
+        That(kinds.Count == 3, "every kind of link is checked");
+    }
+
+    /// <summary>Gets the words a link of <paramref name="kind"/> prints: those of the join target it becomes.</summary>
+    internal static string Printed(SessionLinkKind kind) =>
+        kind == SessionLinkKind.Invite ? "invite" : kind == SessionLinkKind.Server ? "listed server" : "direct session";
+
+    /// <summary>
+    /// Gets every spelling of what a link must never print: an invite's code canonical, displayed, as typed and in its
+    /// halves, and a direct link's host as read and as typed, its port, and the two joined. A server link names only its
+    /// public server id, so it has none. Each is compared in any case.
+    /// </summary>
+    private static IEnumerable<string> Secrets(SessionLink link, string typed)
+    {
+        if (link.Kind == SessionLinkKind.Invite)
+        {
+            var code = link.InviteCode!;
+            return new[] { code, InviteCode.Display(code), typed, code.Substring(0, 5), code.Substring(5) };
+        }
+
+        if (link.Kind != SessionLinkKind.Direct) return Array.Empty<string>();
+        var port = link.Port.ToString(CultureInfo.InvariantCulture);
+        return new[] { link.Host!, typed, port, link.Host + ":" + port, "[" + link.Host + "]:" + port };
     }
 
     internal static void IPv6AddressesFollowRfc5952()

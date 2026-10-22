@@ -64,7 +64,9 @@ namespace TopiaForge.Multiplayer.Network
     /// A <c>topiaforge://join/…</c> session link. The grammar is shared with the launcher and the control plane: no
     /// query, fragment or percent-encoding, at most 512 characters, the scheme in any case and everything else exact.
     /// A direct link carries the host's address, so it lives only in the network layer and the launcher; it never
-    /// reaches mods, snapshots, logs or diagnostics.
+    /// reaches mods, snapshots, logs or diagnostics. An invite link carries a code that lets anyone who holds it join.
+    /// Only <see cref="Canonical"/> spells either; <see cref="ToString"/> names the link's kind alone, as a join target
+    /// does, so a link that reaches a log line, an interpolation or an exception message shows neither.
     /// </summary>
     internal sealed class SessionLink
     {
@@ -82,9 +84,18 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         internal SessionLinkKind Kind { get; }
+
+        /// <summary>
+        /// Gets an invite link's canonical code. Anyone who holds it may join, so it stays out of logs, diagnostics and
+        /// anything mods can read.
+        /// </summary>
         internal string? InviteCode { get; }
+
         internal string? ServerId { get; }
+
+        /// <summary>Gets a direct link's host, a name or an address, which stays in the network layer.</summary>
         internal string? Host { get; }
+
         internal int Port { get; }
 
         internal static SessionLink ForInvite(string code)
@@ -146,17 +157,42 @@ namespace TopiaForge.Multiplayer.Network
             return link != null;
         }
 
-        /// <summary>Formats the canonical link.</summary>
+        /// <summary>
+        /// Gets the canonical link, which <see cref="TryParse"/> reads back as this same link. It spells an invite's code
+        /// and a direct link's host and port, so it goes only where the link itself must go, never into a log, a
+        /// diagnostic, an exception message or anything mods can read.
+        /// </summary>
+        internal string Canonical
+        {
+            get
+            {
+                switch (Kind)
+                {
+                    case SessionLinkKind.Invite:
+                        return Prefix + InviteCode;
+                    case SessionLinkKind.Server:
+                        return Prefix + "server/" + ServerId;
+                    default:
+                        return Prefix + "direct/" + ServerId + "/" + Host + "/" + Port.ToString(CultureInfo.InvariantCulture);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Names the link's kind alone, in a join target's words: <c>invite</c>, <c>listed server</c> or
+        /// <c>direct session</c>. It never shows an invite's code or a direct link's host or port; <see cref="Canonical"/>
+        /// spells the link.
+        /// </summary>
         public override string ToString()
         {
             switch (Kind)
             {
                 case SessionLinkKind.Invite:
-                    return Prefix + InviteCode;
+                    return "invite";
                 case SessionLinkKind.Server:
-                    return Prefix + "server/" + ServerId;
+                    return "listed server";
                 default:
-                    return Prefix + "direct/" + ServerId + "/" + Host + "/" + Port.ToString(CultureInfo.InvariantCulture);
+                    return "direct session";
             }
         }
 
