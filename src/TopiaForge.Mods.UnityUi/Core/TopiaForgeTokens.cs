@@ -117,6 +117,8 @@ namespace TopiaForge.Mods.UnityUi
         public const float ListRowHeight = 38f;
         /// <summary>The max content width design-token value.</summary>
         public const float MaxContentWidth = 1600f;
+        /// <summary>The space a scroll view keeps beside its content for the scroll bar.</summary>
+        public const float ScrollGutter = 12f;
 
         // Borders.
         /// <summary>The border hairline design-token value.</summary>

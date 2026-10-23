@@ -85,6 +85,13 @@ namespace TopiaForge.Mods.UnityUi
             return bases[(int)band];
         }
 
+        /// <summary>Gets whether a sorting order lies in a band's range.</summary>
+        public bool Holds(TopiaForgeLayerBand band, int sortingOrder)
+        {
+            var index = (int)band;
+            return index >= 0 && index < bases.Length && sortingOrder >= bases[index] && sortingOrder < limits[index];
+        }
+
         /// <summary>
         /// Allocates the next sorting order in a band. Returns false on exhaustion (the
         /// caller should log and reuse the band's last order rather than throw mid-game).

@@ -780,6 +780,23 @@ type public readonly struct TopiaForge.Mods.UiGraphViewport : System.ValueType, 
   property TopiaForge.Mods.Vec2 Offset { get; }
   property static TopiaForge.Mods.UiGraphViewport Default { get [static]; }
 
+type public enum TopiaForge.Mods.UiHudAnchor : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiHudAnchor Bottom = 7 (Bottom)
+  field const TopiaForge.Mods.UiHudAnchor BottomLeft = 6 (BottomLeft)
+  field const TopiaForge.Mods.UiHudAnchor BottomRight = 8 (BottomRight)
+  field const TopiaForge.Mods.UiHudAnchor Default = 0 (Default)
+  field const TopiaForge.Mods.UiHudAnchor Left = 4 (Left)
+  field const TopiaForge.Mods.UiHudAnchor Right = 5 (Right)
+  field const TopiaForge.Mods.UiHudAnchor Top = 2 (Top)
+  field const TopiaForge.Mods.UiHudAnchor TopLeft = 1 (TopLeft)
+  field const TopiaForge.Mods.UiHudAnchor TopRight = 3 (TopRight)
+
+type public enum TopiaForge.Mods.UiHudVisibility : System.Int32
+  field System.Int32 value__
+  field const TopiaForge.Mods.UiHudVisibility Always = 1 (Always)
+  field const TopiaForge.Mods.UiHudVisibility Gameplay = 0 (Gameplay)
+
 type public abstract class TopiaForge.Mods.UiLayoutNode : TopiaForge.Mods.UiNode
   property System.Collections.Generic.IReadOnlyList<TopiaForge.Mods.UiNode> Children { get; }
 
@@ -839,11 +856,15 @@ type public enum TopiaForge.Mods.UiSurfaceKind : System.Int32
 
 type public sealed class TopiaForge.Mods.UiSurfaceRequest : System.Object
   constructor .ctor(System.String id, System.String title, System.String body, TopiaForge.Mods.UiSurfaceKind kind = 1 (Window), System.Single width = 460, System.Single height = 320, TopiaForge.Mods.UiNode? content = null)
+  method TopiaForge.Mods.UiSurfaceRequest WithHudAnchor(TopiaForge.Mods.UiHudAnchor anchor)
+  method TopiaForge.Mods.UiSurfaceRequest WithHudVisibility(TopiaForge.Mods.UiHudVisibility visibility)
   property System.Single Height { get; }
   property System.Single Width { get; }
   property System.String Body { get; }
   property System.String Id { get; }
   property System.String Title { get; }
+  property TopiaForge.Mods.UiHudAnchor HudAnchor { get; }
+  property TopiaForge.Mods.UiHudVisibility HudVisibility { get; }
   property TopiaForge.Mods.UiNode? Content { get; }
   property TopiaForge.Mods.UiSurfaceKind Kind { get; }
 

@@ -16,17 +16,19 @@ namespace TopiaForge.Mods.Testing
         private readonly Dictionary<string, string?> graphSelections = new Dictionary<string, string?>(StringComparer.Ordinal);
         private readonly Dictionary<string, UiGraphViewport> graphViewports = new Dictionary<string, UiGraphViewport>(StringComparer.Ordinal);
         private readonly List<string> callbackErrors = new List<string>();
+        private readonly Func<bool>? gameplay;
         private ModErrorCode nextContentErrorCode;
         private string nextContentErrorMessage = string.Empty;
+        private bool shown = true;
 
-        internal FakeUiSurface(UiSurfaceRequest request, Action<FakeUiSurface> release)
+        internal FakeUiSurface(UiSurfaceRequest request, Action<FakeUiSurface> release, Func<bool>? gameplay = null)
         {
             Request = request;
             Body = request.Body;
             Content = request.Content;
             CaptureState(Content);
             this.release = release;
-            IsVisible = true;
+            this.gameplay = gameplay;
         }
 
         internal void AttachLifetimeLease(IDisposable lease)
@@ -46,8 +48,18 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public string Id => Request.Id;
 
-        /// <inheritdoc/>
-        public bool IsVisible { get; private set; }
+        /// <summary>
+        /// Gets whether the surface shows, as in the game: the mod shows it, and a gameplay HUD only while the fake scenes
+        /// are in gameplay (a loaded gameplay scene is active and no load is pending). At the fake's initial main-menu
+        /// scene a gameplay HUD is hidden until a gameplay scene loads.
+        /// </summary>
+        public bool IsVisible => IsShown && (!FollowsGameplay || gameplay == null || gameplay());
+
+        /// <summary>Gets whether the mod shows the surface, whether or not TopiaForge keeps a gameplay HUD hidden now.</summary>
+        public bool IsShown => shown && release != null;
+
+        private bool FollowsGameplay =>
+            Request.Kind == UiSurfaceKind.Hud && Request.HudVisibility == UiHudVisibility.Gameplay;
 
         /// <summary>Gets the current body text.</summary>
         public string Body { get; private set; }
@@ -65,16 +77,16 @@ namespace TopiaForge.Mods.Testing
         public void Show()
         {
             EnsureActive();
-            IsVisible = true;
+            shown = true;
         }
 
         /// <inheritdoc/>
         public void Hide()
         {
             EnsureActive();
-            if (!IsVisible) return;
-            IsVisible = false;
-            InvokeDismissed();
+            var wasVisible = IsVisible;
+            shown = false;
+            if (wasVisible) InvokeDismissed();
         }
 
         /// <inheritdoc/>
@@ -346,7 +358,7 @@ namespace TopiaForge.Mods.Testing
         /// <inheritdoc/>
         public void Dispose()
         {
-            IsVisible = false;
+            shown = false;
             Dismissed = null;
             var callback = release;
             release = null;

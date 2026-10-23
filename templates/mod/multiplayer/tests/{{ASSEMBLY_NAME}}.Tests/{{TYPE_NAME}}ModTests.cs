@@ -18,40 +18,44 @@ namespace {{ASSEMBLY_NAME}}.Tests
         private const string World = "World";
 
         [Test]
-        public void EachWorldGetsAHudAndTheMainMenuNone()
+        public void TheHudShowsInEveryWorldAndHidesAtTheMainMenu()
         {
             using var rig = MultiplayerTestRig.CreateStandalone();
             using var player = new Player(rig.Server, firstScene: null);
-            Assert.That(player.Hud, Is.Null, "mods load before the game's first scene, so nothing is shown yet");
+            var hud = player.HudSurface;
+            Assert.Multiple(() =>
+            {
+                Assert.That(hud, Is.Not.Null, "the mod makes its HUD once, when it loads");
+                Assert.That(player.Hud, Is.Null, "and nothing shows before the first world");
+            });
 
             player.LoadScene(GameScenes.MainMenuSceneName);
             player.Press();
-            Assert.That(player.Hud, Is.Null, "the main menu has no HUD");
+            Assert.That(player.Hud, Is.Null, "the main menu shows no HUD");
 
             player.LoadScene(World);
             Assert.That(player.Hud, Is.EqualTo(Showing(0)), "a press at the main menu does not count");
             player.Press();
-            var worldHud = player.HudSurface;
             player.LoadScene("Props", SceneLoadMode.Additive);
-            Assert.Multiple(() =>
-            {
-                Assert.That(player.Hud, Is.EqualTo(Showing(1)));
-                Assert.That(player.HudSurface, Is.SameAs(worldHud), "a scene loaded beside the world keeps its HUD");
-            });
+            Assert.That(player.Hud, Is.EqualTo(Showing(1)), "a scene loaded beside the world keeps the HUD up");
 
             // An arena loads beside the world and then takes over, as an additive world does.
             player.LoadScene("Arena", SceneLoadMode.Additive);
             player.ActivateScene("Arena");
+            Assert.That(player.Hud, Is.EqualTo(Showing(1)), "the arena shows the count the session kept");
+
+            player.BeginLoading(GameScenes.MainMenuSceneName);
+            player.Press();
+            Assert.That(player.Hud, Is.Null, "the HUD hides while a scene loads, and a press then does not count");
+            player.FinishLoading();
+            Assert.That(player.Hud, Is.Null, "the main menu shows no HUD");
+
+            player.LoadScene(World);
             Assert.Multiple(() =>
             {
-                Assert.That(player.Hud, Is.EqualTo(Showing(1)), "the arena's HUD shows the count the session kept");
-                Assert.That(player.HudSurface, Is.Not.SameAs(worldHud), "the arena gets a HUD of its own");
+                Assert.That(player.Hud, Is.EqualTo(Showing(1)), "the next world shows the count the session kept");
+                Assert.That(player.HudSurface, Is.SameAs(hud), "on the same HUD: nothing was made again");
             });
-
-            player.LoadScene(GameScenes.MainMenuSceneName);
-            Assert.That(player.Hud, Is.Null, "the HUD goes with its world");
-            player.LoadScene(World);
-            Assert.That(player.Hud, Is.EqualTo(Showing(1)));
 
             player.Unload();
         }
@@ -257,8 +261,8 @@ namespace {{ASSEMBLY_NAME}}.Tests
                 }
             }
 
-            /// <summary>Gets the HUD's text, or null while no HUD is shown.</summary>
-            internal string? Hud => HudSurface?.Body;
+            /// <summary>Gets the HUD's text while the HUD is on screen, or null while it is not.</summary>
+            internal string? Hud => HudSurface is { IsVisible: true } surface ? surface.Body : null;
 
             internal FakeUiSurface? HudSurface => context.Ui.Surfaces.Count == 0 ? null : context.Ui.Surfaces[0];
 
@@ -270,6 +274,20 @@ namespace {{ASSEMBLY_NAME}}.Tests
 
             /// <summary>Makes a scene loaded beside the others the active one.</summary>
             internal void ActivateScene(string name) => context.Scenes.Activate(name);
+
+            /// <summary>Starts loading a scene and leaves the load running, as a slow load in the game does.</summary>
+            internal void BeginLoading(string name)
+            {
+                context.Scenes.CompleteLoadsImmediately = false;
+                _ = context.Scenes.LoadAsync(new SceneLoadRequest(name));
+            }
+
+            /// <summary>Finishes the scene load that <see cref="BeginLoading"/> started.</summary>
+            internal void FinishLoading()
+            {
+                context.Scenes.CompleteNextLoad();
+                context.Scenes.CompleteLoadsImmediately = true;
+            }
 
             /// <summary>Taps the press key: down for one frame, up for the next.</summary>
             internal void Press()

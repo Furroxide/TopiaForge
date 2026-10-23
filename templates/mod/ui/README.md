@@ -5,6 +5,9 @@ Its named action defaults to **U** and rejects the framework-reserved F8 and F10
 demonstrates text, row/column layout, scrolling, buttons, a toggle, slider, text input, dropdown,
 and bounded virtual list without referencing Unity.
 
+The window lives as long as the mod: scene loads keep it, open or closed as the mod left it, so the
+mod creates it once and handles no scenes.
+
 ## Quick start
 
 1. Restore the pinned SDK: `topiaforge restore`

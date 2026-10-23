@@ -648,6 +648,7 @@ type public sealed class TopiaForge.Mods.Testing.FakeUiSurface : System.Object, 
   method [virtual,final,newslot] System.Void SetBody(System.String body)
   method [virtual,final,newslot] System.Void Show()
   method [virtual,final,newslot] TopiaForge.Mods.OperationResult<System.Boolean> SetContent(TopiaForge.Mods.UiNode content)
+  property System.Boolean IsShown { get; }
   property System.Boolean IsVisible { get [virtual,final,newslot]; }
   property System.Collections.Generic.IReadOnlyList<System.String> CallbackErrors { get; }
   property System.String Body { get; }

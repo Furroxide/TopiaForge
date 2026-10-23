@@ -75,6 +75,34 @@ namespace TopiaForge.Mods.Testing
             }
         }
 
+        /// <summary>Gets whether a scene load is under way: dispatched, and not yet completed or failed.</summary>
+        internal bool IsLoading => pending.Count != 0;
+
+        /// <summary>
+        /// Gets whether the game is in gameplay, as TopiaForge decides for gameplay HUDs: a loaded scene that is not a menu,
+        /// boot, loader or splash scene is active, and no load is under way.
+        /// </summary>
+        internal bool IsGameplay
+        {
+            get
+            {
+                if (IsLoading)
+                {
+                    return false;
+                }
+
+                foreach (var scene in loaded)
+                {
+                    if (scene.IsActive)
+                    {
+                        return !GameScenes.IsNonGameplayScene(scene.SceneName);
+                    }
+                }
+
+                return false;
+            }
+        }
+
         /// <summary>Gets the number of active checkpoint subscriptions.</summary>
         public int ActiveCheckpointSubscriptionCount => checkpointHandlers.Count;
 

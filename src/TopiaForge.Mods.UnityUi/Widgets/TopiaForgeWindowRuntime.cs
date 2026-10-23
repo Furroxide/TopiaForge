@@ -55,6 +55,21 @@ namespace TopiaForge.Mods.UnityUi
     }
 
     /// <summary>
+    /// Sits on a window's canvas and re-places the open window when the canvas changes size, as a new resolution or UI
+    /// scale does: the deferred clamp then runs on the next frame, so a title bar never stays off screen until the window
+    /// is reopened. Unity calls it only when the size changes, so it costs nothing per frame.
+    /// </summary>
+    internal sealed class TopiaForgeWindowCanvasResize : MonoBehaviour
+    {
+        public TopiaForgeWindow? Window;
+
+        private void OnRectTransformDimensionsChange()
+        {
+            Window?.ArmClamp();
+        }
+    }
+
+    /// <summary>
     /// Process-wide window z-order. Focus permutes only the canvas orders allocated to
     /// registered windows, preserving custom layers in the same band and avoiding new allocations.
     /// </summary>
@@ -71,10 +86,12 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             Order.Add(window);
-            var canvas = window.OwnCanvas;
-            if (canvas != null)
+
+            // A window's slot comes from the allocator's record, never from its canvas, which a scene or another mod may
+            // already have destroyed by the time the window is unregistered.
+            if (TopiaForgeLayers.TryGetOrder(window.CanvasRoot, out var slot))
             {
-                AllocatedSlots.Add(canvas.sortingOrder);
+                AllocatedSlots.Add(slot);
                 AllocatedSlots.Sort();
             }
 
@@ -83,15 +100,14 @@ namespace TopiaForge.Mods.UnityUi
 
         public static void Unregister(TopiaForgeWindow window)
         {
-            var canvas = window.OwnCanvas;
             if (!Order.Remove(window))
             {
                 return;
             }
 
-            if (canvas != null)
+            if (TopiaForgeLayers.TryGetOrder(window.CanvasRoot, out var slot))
             {
-                AllocatedSlots.Remove(canvas.sortingOrder);
+                AllocatedSlots.Remove(slot);
             }
 
             Reassign();

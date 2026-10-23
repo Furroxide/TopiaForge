@@ -171,6 +171,21 @@ namespace TopiaForge.Mods.UnityUi
             Closed = null;
         }
 
+        /// <summary>
+        /// The tool's canvas was destroyed outside the kit: let go of the cursor and the Escape stack as teardown does, and
+        /// raise <see cref="Closed"/> if the tool was showing.
+        /// </summary>
+        internal void Lose()
+        {
+            var wasShowing = open && !tornDown;
+            var closed = Closed;
+            Teardown();
+            if (wasShowing)
+            {
+                TopiaForgeCallbacks.Invoke(closed, "Fullscreen tool Closed");
+            }
+        }
+
         private void ThrowIfTornDown()
         {
             if (tornDown) throw new ObjectDisposedException(nameof(TopiaForgeFullscreenTool));

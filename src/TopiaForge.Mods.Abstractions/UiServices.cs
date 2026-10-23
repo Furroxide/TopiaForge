@@ -19,6 +19,53 @@ namespace TopiaForge.Mods
         FullscreenTool = 2
     }
 
+    /// <summary>Where a HUD surface docks on the screen.</summary>
+    public enum UiHudAnchor
+    {
+        /// <summary>
+        /// TopiaForge's choice, clear of the game's own HUD: the bottom-left corner for a gameplay HUD, and the middle of the
+        /// left edge for a HUD shown everywhere, which also stays clear of the main menu's buttons.
+        /// </summary>
+        Default = 0,
+
+        /// <summary>The top-left corner. In a world, the game shows its microphone label there.</summary>
+        TopLeft = 1,
+
+        /// <summary>The middle of the top edge. Development builds of the game show their version there.</summary>
+        Top = 2,
+
+        /// <summary>The top-right corner. The game shows a level's objective there, above every mod's UI.</summary>
+        TopRight = 3,
+
+        /// <summary>The middle of the left edge.</summary>
+        Left = 4,
+
+        /// <summary>The middle of the right edge.</summary>
+        Right = 5,
+
+        /// <summary>The bottom-left corner.</summary>
+        BottomLeft = 6,
+
+        /// <summary>The middle of the bottom edge. The game shows dialogue subtitles there.</summary>
+        Bottom = 7,
+
+        /// <summary>The bottom-right corner. Toasts stack there too, above every HUD.</summary>
+        BottomRight = 8
+    }
+
+    /// <summary>When a HUD surface shows.</summary>
+    public enum UiHudVisibility
+    {
+        /// <summary>
+        /// In gameplay scenes only. The HUD hides by itself at the main menu and while a scene loads, and shows again when
+        /// gameplay resumes, so a HUD made once in <c>OnLoad</c> needs no scene handling.
+        /// </summary>
+        Gameplay = 0,
+
+        /// <summary>Everywhere, the main menu and scene loads included.</summary>
+        Always = 1
+    }
+
     /// <summary>Identifies a semantic UI tone.</summary>
     public enum UiTone
     {
@@ -85,6 +132,19 @@ namespace TopiaForge.Mods
             Content = content;
         }
 
+        private UiSurfaceRequest(UiSurfaceRequest source, UiHudAnchor anchor, UiHudVisibility visibility)
+        {
+            Id = source.Id;
+            Title = source.Title;
+            Body = source.Body;
+            Kind = source.Kind;
+            Width = source.Width;
+            Height = source.Height;
+            Content = source.Content;
+            HudAnchor = anchor;
+            HudVisibility = visibility;
+        }
+
         /// <summary>Gets the stable id unique inside the current mod.</summary>
         public string Id { get; }
 
@@ -105,18 +165,80 @@ namespace TopiaForge.Mods
 
         /// <summary>Gets optional immutable interactive composition rendered below the dirty-checked body text.</summary>
         public UiNode? Content { get; }
+
+        /// <summary>
+        /// Gets where a HUD surface docks: <see cref="UiHudAnchor.Default"/> unless set with <see cref="WithHudAnchor"/>.
+        /// HUDs docked at the same place stack, a small gap apart, so they never overlap.
+        /// </summary>
+        public UiHudAnchor HudAnchor { get; }
+
+        /// <summary>
+        /// Gets when a HUD surface shows: <see cref="UiHudVisibility.Gameplay"/> unless set with
+        /// <see cref="WithHudVisibility"/>.
+        /// </summary>
+        public UiHudVisibility HudVisibility { get; }
+
+        /// <summary>Returns a copy of this HUD request that docks at <paramref name="anchor"/>.</summary>
+        /// <exception cref="InvalidOperationException">The request is for a window or a fullscreen tool.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="anchor"/> is not a defined anchor.</exception>
+        public UiSurfaceRequest WithHudAnchor(UiHudAnchor anchor)
+        {
+            RequireHud(nameof(WithHudAnchor));
+            if (!Enum.IsDefined(typeof(UiHudAnchor), anchor))
+            {
+                throw new ArgumentOutOfRangeException(nameof(anchor));
+            }
+
+            return new UiSurfaceRequest(this, anchor, HudVisibility);
+        }
+
+        /// <summary>
+        /// Returns a copy of this HUD request that shows as <paramref name="visibility"/> says, such as
+        /// <see cref="UiHudVisibility.Always"/> for a HUD that also shows at the main menu.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">The request is for a window or a fullscreen tool.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="visibility"/> is not a defined value.</exception>
+        public UiSurfaceRequest WithHudVisibility(UiHudVisibility visibility)
+        {
+            RequireHud(nameof(WithHudVisibility));
+            if (!Enum.IsDefined(typeof(UiHudVisibility), visibility))
+            {
+                throw new ArgumentOutOfRangeException(nameof(visibility));
+            }
+
+            return new UiSurfaceRequest(this, HudAnchor, visibility);
+        }
+
+        private void RequireHud(string method)
+        {
+            if (Kind != UiSurfaceKind.Hud)
+            {
+                throw new InvalidOperationException(
+                    method + " applies to HUD surfaces only. A window opens centred and keeps where the player moves it, "
+                    + "and a window or fullscreen tool shows exactly while the mod shows it; create the surface with "
+                    + "UiSurfaceKind.Hud to dock it.");
+            }
+        }
     }
 
-    /// <summary>Represents a lifetime-owned UI surface.</summary>
+    /// <summary>
+    /// Represents a UI surface that lives as long as the mod, or the scope, that created it: scene loads never end it.
+    /// </summary>
     public interface IUiSurface : IDisposable
     {
         /// <summary>Gets the stable surface id.</summary>
         string Id { get; }
 
-        /// <summary>Gets whether the surface is currently visible.</summary>
+        /// <summary>
+        /// Gets whether the surface shows on screen now: the mod shows it, TopiaForge is not keeping it hidden (as it keeps a
+        /// gameplay HUD hidden at the main menu and during scene loads), and its canvas still exists. A canvas destroyed
+        /// outside TopiaForge, by the game or another mod, never counts as visible.
+        /// </summary>
         bool IsVisible { get; }
 
-        /// <summary>Shows the surface.</summary>
+        /// <summary>
+        /// Shows the surface. A gameplay HUD shown outside gameplay appears by itself once gameplay resumes.
+        /// </summary>
         void Show();
 
         /// <summary>Hides the surface without releasing it.</summary>
@@ -136,8 +258,9 @@ namespace TopiaForge.Mods
     public interface IUiSurfaceDismissalSource
     {
         /// <summary>
-        /// Raised once whenever a visible surface becomes hidden, whether through user dismissal or
-        /// <see cref="IUiSurface.Hide"/>. It is not raised by disposal.
+        /// Raised once whenever a visible surface becomes hidden, whether through user dismissal,
+        /// <see cref="IUiSurface.Hide"/>, or the game or another mod destroying its canvas. It is not raised by disposal,
+        /// nor when TopiaForge keeps a gameplay HUD hidden outside gameplay.
         /// </summary>
         event Action? Dismissed;
     }
@@ -252,10 +375,17 @@ namespace TopiaForge.Mods
         /// <summary>Applies accessibility preferences to existing and future UI owned by this mod.</summary>
         OperationResult<UiAccessibilityPreferences> ApplyAccessibility(UiAccessibilityPreferences preferences);
 
-        /// <summary>Creates and lifetime-tracks a HUD panel or window.</summary>
+        /// <summary>
+        /// Creates and lifetime-tracks a HUD panel, window or fullscreen tool, shown at once. It lives until this mod, or the
+        /// scope that created it, ends or it is disposed: scene loads never end it. A HUD can be created once in
+        /// <c>OnLoad</c>; by default it shows only in gameplay scenes (see <see cref="UiHudVisibility"/>).
+        /// </summary>
         OperationResult<IUiSurface> CreateSurface(UiSurfaceRequest request);
 
-        /// <summary>Shows a lifetime-tracked modal and reports whether the user confirmed it.</summary>
+        /// <summary>
+        /// Shows a lifetime-tracked modal and reports whether the user confirmed it. It stays open across scene loads until
+        /// it is answered or closed, or the mod or scope that showed it ends, which counts as cancelling.
+        /// </summary>
         OperationResult<IUiModal> ShowModal(UiModalRequest request, Action<bool> completed);
 
         /// <summary>Shows a short TopiaForgeUi toast.</summary>

@@ -396,4 +396,12 @@
     <Compile Include="../../src/TopiaForge.Mods.UnityUi/Runtime/TopiaForgeIntent.cs" Link="Runtime/TopiaForgeIntent.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/MainThreadPump.cs" Link="Multiplayer/MainThreadPump.cs" />
   </ItemGroup>
+
+  <!-- SDK UI surface lifetimes: the gameplay gate, each surface's presence and where HUDs dock are Unity-free, so the
+       runtime's own code is tested here, and compiling it here keeps it Unity-free. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/UiGameplayGate.cs" Link="Runtime/UiGameplayGate.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiSurfacePresence.cs" Link="Runtime/UiSurfacePresence.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/UiHudAnchors.cs" Link="Runtime/UiHudAnchors.cs" />
+  </ItemGroup>
 </Project>

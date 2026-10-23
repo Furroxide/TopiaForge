@@ -28,9 +28,8 @@ at exactly this SDK's version; it ships with TopiaForge and must be installed be
 - `[MultiplayerCommand("increment", ...)]` is a press. Its request is empty, so a client can only say that it pressed
   and the host decides what that is worth. Owner prediction moves the presser's count at once; a press the host
   refuses rolls back.
-- Each gameplay world gets a HUD of its own when it loads, and the main menu gets none; a press counts only while the
-  HUD is up. Mods load before the game's first scene, and a scene that replaces another takes what was shown in it
-  along, so the HUD is made for each world rather than in `OnLoad`.
+- The HUD is made once, in `OnLoad`, and lives as long as the mod. TopiaForge shows it in every world and hides it at
+  the main menu and while a scene loads, so the mod handles no scenes. A press counts only while the HUD is on screen.
 - The HUD follows the value its own process holds. A press calls `SubmitIncrement`, and the host's answer comes back
   to a callback on the main thread: at once for the host's own player, a round trip later for anyone else, and never
   once the mod has stopped. Nothing waits for the answer, so the game never stalls (TF1008). A refused press shows a
@@ -62,8 +61,8 @@ key binding.
 - `{{TYPE_NAME}}Mod.cs`: the contract, its limits, the press action and the HUD.
 - `CounterPayloads.cs`: the payload types. To send data with a press, add bounded members to `IncrementRequest`
   and check every one in `Increment`, because a client can send any value the codec accepts.
-- `tests/`: NUnit tests on the multiplayer test rig, covering the HUD in each world and none at the main menu, two
-  players agreeing, a late joiner, a press past the rate limit being refused and rolled back, one warning for a burst
-  of refusals, no answer once the mod has stopped, a new session, and solo play.
+- `tests/`: NUnit tests on the multiplayer test rig, covering the HUD showing in every world and hiding at the main
+  menu and during loads, two players agreeing, a late joiner, a press past the rate limit being refused and rolled back,
+  one warning for a burst of refusals, no answer once the mod has stopped, a new session, and solo play.
 
 See `docs/Multiplayer.md` and `docs/Diagnostics.md` (the TFMP codes) in the TopiaForge repository.

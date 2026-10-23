@@ -5,8 +5,8 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// The toast stack's bookkeeping, Unity-free so it is tested: a bounded queue of waiting toasts, at most a few shown at
-    /// once in pooled views, each shown toast's time left, and where each rests, top to bottom, below the taller or shorter
-    /// toasts above it. Views are reused, and a view's last exit left it faded out and slid aside, so every toast a view
+    /// once in pooled views, each shown toast's time left, and where each rests along the stack, past the taller or shorter
+    /// toasts before it. Views are reused, and a view's last exit left it faded out and slid aside, so every toast a view
     /// takes is presented fresh: placed where it rests and brought in, whatever that view showed before.
     /// </summary>
     /// <typeparam name="T">What a toast carries, such as its text and tone.</typeparam>
@@ -76,7 +76,7 @@ namespace TopiaForge.Mods.UnityUi
             return true;
         }
 
-        /// <summary>Sets how tall a view's toast is, as its view measured the text; the toasts below rest that much lower.</summary>
+        /// <summary>Sets how tall a view's toast is, as its view measured the text; the toasts after it rest that much further along.</summary>
         internal void SetHeight(int view, float height)
         {
             if (view < 0 || view >= views.Count) return;
@@ -108,9 +108,9 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         /// <summary>
-        /// Gets where a view's toast rests: false for a view that holds no toast or is leaving; otherwise how far below the
-        /// first toast's top it rests, past each toast above it and a gap, and whether it is fresh, to be placed and brought
-        /// in rather than moved. A view is fresh for one placement only.
+        /// Gets where a view's toast rests: false for a view that holds no toast or is leaving; otherwise how far along the
+        /// stack from the first toast's edge it rests, past each toast before it and a gap, and whether it is fresh, to be
+        /// placed and brought in rather than moved. A view is fresh for one placement only.
         /// </summary>
         internal bool TryPlace(int view, out float top, out bool fresh)
         {

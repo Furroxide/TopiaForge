@@ -54,6 +54,21 @@ namespace {{ASSEMBLY_NAME}}.Tests
             PressToggle(context);
             Assert.That(surface.IsVisible, Is.True);
 
+            // The window lives as long as the mod: loading a world and returning to the main menu keep it, open, and the
+            // toggle still closes and opens the same window.
+            context.Scenes.Load("City Streets");
+            context.Scenes.Load(TopiaForge.Mods.GameScenes.MainMenuSceneName);
+            Assert.Multiple(() =>
+            {
+                Assert.That(context.Ui.Surfaces, Has.Count.EqualTo(1));
+                Assert.That(context.Ui.Surfaces[0], Is.SameAs(surface));
+                Assert.That(surface.IsVisible, Is.True);
+            });
+            PressToggle(context);
+            Assert.That(surface.IsVisible, Is.False);
+            PressToggle(context);
+            Assert.That(surface.IsVisible, Is.True);
+
             runner.Unload();
 
             Assert.Multiple(() =>

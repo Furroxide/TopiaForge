@@ -491,6 +491,10 @@ namespace TopiaForge.ModManager.Tests
                 UiKitSourceConventionTests.Run();
                 UiKitMultiplayerConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
+                UiKitLayerLedgerTests.Run();
+                UiKitHudLayoutTests.Run();
+                UiSurfaceLifetimeTests.Run();
+                UiSurfaceLifetimeConventionTests.Run();
                 LaunchSessionFixtureTests.Run(FindRepoRoot());
                 ServerContentFixtureTests.Run(FindRepoRoot());
                 LaunchSessionContractTests.Run(FindRepoRoot());
