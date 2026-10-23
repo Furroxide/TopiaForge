@@ -234,6 +234,7 @@ internal static class Program
             NetworkSocketCostTests.TheIPv4SocketCostsNoMorePerDatagram();
             NetworkIdleTurnTests.AnIdleNetworkTurnThrowsAndAllocatesNothing();
             NetworkIdleTurnTests.ADatagramThatArrivesIsReadInTheSameTurn();
+            NetworkIdleTurnTests.ASocketThatCannotAnswerCountsAsReady();
             NetworkSocketTests.EnginesJoinOverRealSocketsQuickly();
             NetworkSocketTests.StoppingHonoursItsGracePeriod();
             NetworkServiceTests.TheDescriptorEndpointServesOnlyWhatItShould();

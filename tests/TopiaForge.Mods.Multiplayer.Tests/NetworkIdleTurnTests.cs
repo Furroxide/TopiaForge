@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using provider::TopiaForge.Multiplayer.Network;
 using provider::TopiaForge.Multiplayer.Transport;
@@ -15,7 +16,8 @@ namespace TopiaForge.Mods.Multiplayer.Tests;
 /// <summary>
 /// What a turn of the network thread costs with nothing to do, over real sockets on the loopback interface. Every socket
 /// loop asks its socket before it reads, accepts or writes, so an idle turn throws nothing and allocates nothing, and a
-/// datagram that has arrived is still read in the turn that follows, as much of it as a turn reads.
+/// datagram that has arrived is still read in the turn that follows, as much of it as a turn reads. A socket that cannot
+/// answer counts as ready, so the loop's own call runs and reports as it did before anything asked.
 /// </summary>
 internal static class NetworkIdleTurnTests
 {
@@ -120,6 +122,59 @@ internal static class NetworkIdleTurnTests
     }
 
     /// <summary>
+    /// A socket that cannot answer counts as ready, so the loop's own call runs and reports as it did before anything asked:
+    /// the game socket and the browser still read what waits, and then report nothing, without throwing. Linux refuses every
+    /// poll while the soft limit on open files is zero, though sockets already open still read, so the limit drops for the
+    /// few calls this test makes and comes back at once. Nothing makes a poll fail on demand elsewhere, so only Linux runs it.
+    /// </summary>
+    internal static void ASocketThatCannotAnswerCountsAsReady()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        using var stack = Stack(174);
+        using var browser = new LanBrowser(0, expiryMicros: 60_000_000, bindAddress: IPAddress.Loopback);
+        using var driver = new UdpSocketDriver(0, IPAddress.Loopback);
+        using var sender = new Sender(1);
+        sender.Send(new LanBeacon(Id(0), 27_250).Encode(), new IPEndPoint(IPAddress.Loopback, browser.LocalPort));
+        sender.Send(new byte[] { 4, 5, 6 }, new IPEndPoint(IPAddress.Loopback, driver.LocalPort));
+        Arrive(browser);
+        That(driver.WaitReadable(2_000_000), "the datagram reaches the game socket");
+        var socket = (Socket)(typeof(UdpSocketDriver).GetField("socket", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(driver) ??
+                              throw new InvalidOperationException("Assertion failed: the game socket is a socket of its own"));
+        var buffer = new byte[TransportOptions.MaximumDatagramBytes];
+        That(GetLimit(OpenFiles, out var limit) == 0, "the limit on open files reads");
+        var refused = SocketError.Success;
+        bool read, more;
+        int count;
+        TransportPath? from;
+        var none = new ResourceLimit { Soft = 0, Hard = limit.Hard };
+        That(SetLimit(OpenFiles, ref none) == 0, "the limit on open files drops to zero");
+        try
+        {
+            try
+            {
+                socket.Poll(0, SelectMode.SelectRead);
+            }
+            catch (SocketException exception)
+            {
+                refused = exception.SocketErrorCode;
+            }
+
+            read = driver.TryReceive(buffer, out count, out from);
+            more = driver.TryReceive(buffer, out _, out _);
+            browser.Turn(stack, 1_000);
+        }
+        finally
+        {
+            SetLimit(OpenFiles, ref limit);
+        }
+
+        That(refused == SocketError.InvalidArgument, "a poll is refused while the limit is zero (" + refused + ")");
+        That(read && count == 3 && buffer[2] == 6 && from != null && !more,
+            "a socket that cannot answer counts as ready: the game socket still reads the datagram that waits, then reports nothing");
+        That(Listed(browser).SequenceEqual(new[] { Id(0) }), "and the browser still hears the beacon that waits");
+    }
+
+    /// <summary>
     /// The descriptor endpoint's loops: its accepts with no connection waiting, the read of a connection that has sent
     /// nothing, and the write to a reader that has stopped reading, whose transfer resumes whole once it reads again.
     /// </summary>
@@ -220,6 +275,15 @@ internal static class NetworkIdleTurnTests
     }
 
     private static void Count(object? sender, FirstChanceExceptionEventArgs arguments) => raised++;
+
+    /// <summary>The limit on open files, <c>RLIMIT_NOFILE</c>, as Linux numbers it.</summary>
+    private const int OpenFiles = 7;
+
+    [DllImport("libc", EntryPoint = "getrlimit", SetLastError = true)]
+    private static extern int GetLimit(int resource, out ResourceLimit limit);
+
+    [DllImport("libc", EntryPoint = "setrlimit", SetLastError = true)]
+    private static extern int SetLimit(int resource, ref ResourceLimit limit);
 
     /// <summary>Waits until the browser's socket holds what was sent to it, without reading it, so the next turn finds it there.</summary>
     private static void Arrive(LanBrowser browser)
@@ -342,5 +406,13 @@ internal static class NetworkIdleTurnTests
         internal void Send(byte[] datagram, IPEndPoint to) => socket.SendTo(datagram, to);
 
         public void Dispose() => socket.Dispose();
+    }
+
+    /// <summary>A resource's soft and hard limits, as Linux's <c>getrlimit</c> and <c>setrlimit</c> take them.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ResourceLimit
+    {
+        public ulong Soft;
+        public ulong Hard;
     }
 }
