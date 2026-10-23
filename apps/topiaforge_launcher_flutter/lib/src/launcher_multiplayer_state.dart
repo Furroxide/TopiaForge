@@ -2,13 +2,18 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'session_link_inbox.dart';
 
-/// The launcher's multiplayer state. The multiplayer section adds its own
-/// fields here; for now it holds the session link intake and link handling.
+part 'launcher_multiplayer_settings_state.dart';
+
+/// The launcher's multiplayer state: the session link intake and link
+/// handling, Settings → Multiplayer and Diagnostics → Network. The browser
+/// and the join flow add their own fields here.
 final class MultiplayerViewState {
   const MultiplayerViewState({
     this.sessionLink = const SessionLinkIdle(),
     this.linkArrivals = 0,
     this.linkHandling,
+    this.settings = const MultiplayerSettingsView(),
+    this.network = const MultiplayerNetworkView(),
   });
 
   /// The newest session link and what became of it. A newer link replaces
@@ -23,14 +28,25 @@ final class MultiplayerViewState {
   /// until the launcher applies it, and where nothing handles links.
   final SessionLinkHandlingStatus? linkHandling;
 
+  /// Settings → Multiplayer: the player's preferences, and whether they can
+  /// be changed now.
+  final MultiplayerSettingsView settings;
+
+  /// Diagnostics → Network: the service, the ports and LAN discovery.
+  final MultiplayerNetworkView network;
+
   MultiplayerViewState copyWith({
     SessionLinkIntake? sessionLink,
     int? linkArrivals,
     SessionLinkHandlingStatus? linkHandling,
+    MultiplayerSettingsView? settings,
+    MultiplayerNetworkView? network,
   }) => MultiplayerViewState(
     sessionLink: sessionLink ?? this.sessionLink,
     linkArrivals: linkArrivals ?? this.linkArrivals,
     linkHandling: linkHandling ?? this.linkHandling,
+    settings: settings ?? this.settings,
+    network: network ?? this.network,
   );
 }
 

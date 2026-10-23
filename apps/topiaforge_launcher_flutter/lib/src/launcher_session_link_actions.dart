@@ -23,6 +23,14 @@ extension LauncherSessionLinkActions on LauncherBloc {
         event,
         emit,
       ),
+      MultiplayerSettingsEvent() => _dispatchMultiplayerSettingsEvent(
+        event,
+        emit,
+      ),
+      MultiplayerNetworkEvent() => _dispatchMultiplayerNetworkEvent(
+        event,
+        emit,
+      ),
     };
   }
 
@@ -124,6 +132,7 @@ extension LauncherSessionLinkActions on LauncherBloc {
       // The registration follows the saved setting and reports back through
       // SessionLinkHandlingUpdated.
       await handling.setEnabled(event.enabled);
+      _linkHandlingSaved(event.enabled, emit);
     } on Object catch (error) {
       emit(
         state.copyWith(

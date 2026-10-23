@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
+import 'package:path/path.dart' as p;
 
 import 'src/launcher_app.dart';
 import 'src/launcher_exit.dart';
@@ -46,6 +47,11 @@ void _runLauncher(
   final updateRepository = LocalLauncherUpdateRepository(
     dataRoot: repository.dataRoot,
   );
+  // One store for everything that uses the multiplayer folder, so its reads
+  // and writes take turns.
+  final multiplayerStore = MultiplayerStore(
+    p.join(repository.dataRoot, LocalMultiplayerRepository.folderName),
+  );
   start.healthCheck?.schedule();
   WidgetsBinding.instance.addPostFrameCallback((_) {
     Future<void>.delayed(
@@ -71,12 +77,16 @@ void _runLauncher(
                 .toList(),
       ),
       sessionLinks: sessionLinks.arrivals,
-      // The setting lives in memory, on at every start, until the multiplayer
-      // settings store backs it (MultiplayerSettings.linkHandlingEnabled). A
-      // launcher on its own data root leaves the system registration alone.
+      // The setting is the player's MultiplayerSettings.linkHandlingEnabled in
+      // the multiplayer store, so "off" survives a restart. A launcher on its
+      // own data root leaves the system registration alone.
       sessionLinkHandling: SessionLinkHandling(
-        setting: TransientSessionLinkSetting(),
+        setting: StoredSessionLinkSetting(multiplayerStore),
         registrar: platformSessionLinkRegistrar(dataRoot: dataRoot),
+      ),
+      multiplayer: LocalMultiplayerRepository(
+        dataRoot: repository.dataRoot,
+        store: multiplayerStore,
       ),
     ),
   );

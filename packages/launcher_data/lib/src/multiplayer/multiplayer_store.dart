@@ -3,6 +3,7 @@
 /// record of what joins installed into each game install.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -11,6 +12,8 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 
 import 'multiplayer_store_salvage.dart';
+
+export 'multiplayer_store_salvage.dart' show MultiplayerSettingsExtras;
 
 part 'multiplayer_store_files.dart';
 part 'server_content_store.dart';
@@ -36,10 +39,17 @@ enum MultiplayerStoreRecovery {
 }
 
 final class MultiplayerSettingsLoad {
-  const MultiplayerSettingsLoad(this.settings, this.recovery);
+  const MultiplayerSettingsLoad(
+    this.settings,
+    this.recovery, {
+    this.extras = MultiplayerSettingsExtras.none,
+  });
 
   final MultiplayerSettings settings;
   final MultiplayerStoreRecovery recovery;
+
+  /// What the file keeps beside the settings; none while it cannot be read.
+  final MultiplayerSettingsExtras extras;
 }
 
 /// A change that was not made: the file could not be read, so it was left
@@ -61,9 +71,11 @@ final class MultiplayerStoreException implements Exception {
 /// Keeps the launcher's multiplayer state in one folder:
 ///
 /// - `settings.json`: [MultiplayerSettings] with its schema version, the
-///   favorites and the history. Servers are named by server id and their
-///   last-known name only. The domain never stores an address there: a
-///   hand-typed address is typed again.
+///   favorites and the history, and beside them the [MultiplayerSettingsExtras]:
+///   the hosting defaults, the network-check explanation the player read, and
+///   the record of the preferences projection the game reads. Servers are
+///   named by server id and their last-known name only. The domain never
+///   stores an address there: a hand-typed address is typed again.
 /// - `known-hosts.json`: the domain's `topiaforge.known-hosts/1` record, which
 ///   holds hashes of typed addresses, never the addresses.
 ///
@@ -126,8 +138,14 @@ final class MultiplayerStore {
 
   final String directory;
   final _StoreFiles _files;
+  final _settingsChanges = StreamController<MultiplayerSettings>.broadcast();
   Future<void> _tail = Future.value();
   var _swept = false;
+
+  /// Every settings value this store has just read or written. Settings that
+  /// cannot be read never arrive here, so nothing that follows them, such as
+  /// link registration, changes to match the stand-ins.
+  Stream<MultiplayerSettings> get settingsChanges => _settingsChanges.stream;
 
   File get _settingsFile => File(p.join(directory, settingsFileName));
   File get _knownHostsFile => File(p.join(directory, knownHostsFileName));
@@ -135,15 +153,21 @@ final class MultiplayerStore {
   /// Reads the settings, recovering from any damage. Never throws: while the
   /// file cannot be read, gives [unreadableSettings] and
   /// [MultiplayerStoreRecovery.unreadable].
-  Future<MultiplayerSettingsLoad> loadSettings() => _serial(_loadSettings);
+  Future<MultiplayerSettingsLoad> loadSettings() => _serial(() async {
+    final load = await _loadSettings();
+    if (load.recovery != MultiplayerStoreRecovery.unreadable) {
+      _settingsChanges.add(load.settings);
+    }
+    return load;
+  });
 
-  /// Writes [settings]. Throws [MultiplayerStoreException] when they cannot
-  /// be written, and while the stored settings cannot be read, which are
-  /// then left as they are.
+  /// Writes [settings], keeping what the file holds beside them. Throws
+  /// [MultiplayerStoreException] when they cannot be written, and while the
+  /// stored settings cannot be read, which are then left as they are.
   Future<MultiplayerSettings> saveSettings(MultiplayerSettings settings) =>
       _serial(() async {
-        await _readableSettings();
-        await _writeSettings(settings);
+        final current = await _readableSettings();
+        await _writeSettings(settings, current.extras);
         return settings;
       });
 
@@ -153,9 +177,42 @@ final class MultiplayerStore {
   Future<MultiplayerSettings> updateSettings(
     MultiplayerSettings Function(MultiplayerSettings current) change,
   ) => _serial(() async {
-    final next = change(await _readableSettings());
-    await _writeSettings(next);
+    final current = await _readableSettings();
+    final next = change(current.settings);
+    await _writeSettings(next, current.extras);
     return next;
+  });
+
+  /// Runs [body] with the stored settings and a [write] that replaces them
+  /// and what the file keeps beside them, with no other read or write of the
+  /// settings in between, as a preferences round needs: it reads the game's
+  /// journal, saves, and writes the game's copy before anything else changes
+  /// the settings. [write] may be called only while [body] runs. Throws
+  /// [MultiplayerStoreException] before [body] runs while the settings
+  /// cannot be read, and from [write] when they cannot be written.
+  Future<T> withSettings<T>(
+    Future<T> Function(
+      MultiplayerSettingsLoad current,
+      Future<void> Function(
+        MultiplayerSettings settings,
+        MultiplayerSettingsExtras extras,
+      )
+      write,
+    )
+    body,
+  ) => _serial(() async {
+    final current = await _readableSettings();
+    var open = true;
+    try {
+      return await body(current, (settings, extras) {
+        if (!open) {
+          throw StateError('The settings were written after the round ended.');
+        }
+        return _writeSettings(settings, extras);
+      });
+    } finally {
+      open = false;
+    }
   });
 
   /// Reads the known-hosts record, recovering from any damage. Throws
@@ -221,11 +278,12 @@ final class MultiplayerStore {
         }
         if (salvaged == null) return _replaceDamaged(file, null, bytes);
         if (salvaged.damaged) {
-          return _replaceDamaged(file, salvaged.settings, bytes);
+          return _replaceDamaged(file, salvaged, bytes);
         }
         return MultiplayerSettingsLoad(
           salvaged.settings,
           MultiplayerStoreRecovery.none,
+          extras: salvaged.extras,
         );
     }
   }
@@ -238,10 +296,11 @@ final class MultiplayerStore {
   /// either still yields usable settings.
   Future<MultiplayerSettingsLoad> _replaceDamaged(
     File file,
-    MultiplayerSettings? kept, [
+    SalvagedMultiplayerSettings? kept, [
     List<int>? read,
   ]) async {
-    final settings = kept ?? MultiplayerSettings();
+    final settings = kept?.settings ?? MultiplayerSettings();
+    final extras = kept?.extras ?? MultiplayerSettingsExtras.none;
     final recovery = kept == null
         ? MultiplayerStoreRecovery.reset
         : MultiplayerStoreRecovery.salvaged;
@@ -250,23 +309,23 @@ final class MultiplayerStore {
         : await _files.keepCopy(file, read);
     if (keptAside) {
       try {
-        await _writeSettings(settings);
+        await _writeSettings(settings, extras);
       } on MultiplayerStoreException {
         // The next read salvages it again; these settings are in use
         // meanwhile.
       }
     }
-    return MultiplayerSettingsLoad(settings, recovery);
+    return MultiplayerSettingsLoad(settings, recovery, extras: extras);
   }
 
   /// The stored settings, recovered from any damage; throws while they
   /// cannot be read, so nothing is written over them.
-  Future<MultiplayerSettings> _readableSettings() async {
+  Future<MultiplayerSettingsLoad> _readableSettings() async {
     final load = await _loadSettings();
     if (load.recovery == MultiplayerStoreRecovery.unreadable) {
       throw _unreadable('multiplayer settings');
     }
-    return load.settings;
+    return load;
   }
 
   static MultiplayerStoreException _unreadable(String label) =>
@@ -305,11 +364,16 @@ final class MultiplayerStore {
     }
   }
 
-  Future<void> _writeSettings(MultiplayerSettings settings) => _files.write(
-    _settingsFile,
-    utf8.encode(
-      '${const JsonEncoder.withIndent('  ').convert(settings.toJson())}\n',
-    ),
-    'multiplayer settings',
-  );
+  Future<void> _writeSettings(
+    MultiplayerSettings settings,
+    MultiplayerSettingsExtras extras,
+  ) async {
+    final document = {...settings.toJson(), ...extras.toJson()};
+    await _files.write(
+      _settingsFile,
+      utf8.encode('${const JsonEncoder.withIndent('  ').convert(document)}\n'),
+      'multiplayer settings',
+    );
+    _settingsChanges.add(settings);
+  }
 }

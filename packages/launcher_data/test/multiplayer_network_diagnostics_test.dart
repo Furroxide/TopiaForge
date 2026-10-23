@@ -168,6 +168,41 @@ void main() {
       expect(report.gamePortUdp.result, PortCheckResult.inUse);
       expect(report.gamePortTcp.result, PortCheckResult.inUse);
       expect(report.gamePortUdp.port, port);
+
+      // The port the player hosts on, given to a run, is the one checked.
+      final hosted =
+          await MultiplayerNetworkDiagnostics(
+            bindAddress: loopback,
+            lanPort: 0,
+          ).run(
+            service: MultiplayerServiceStatus.unconfigured,
+            lan: LanBrowseSnapshot.stopped,
+            checkPorts: true,
+            gamePort: port,
+          );
+      expect(hosted.gamePortUdp.result, PortCheckResult.inUse);
+      expect(hosted.gamePortTcp.result, PortCheckResult.inUse);
+      expect(hosted.gamePortTcp.port, port);
+    },
+  );
+
+  test(
+    'a session hosted on any free port leaves the game port unchecked',
+    () async {
+      final report =
+          await MultiplayerNetworkDiagnostics(
+            bindAddress: loopback,
+            lanPort: 0,
+          ).run(
+            service: MultiplayerServiceStatus.unconfigured,
+            lan: LanBrowseSnapshot.stopped,
+            checkPorts: true,
+            gamePort: 0,
+          );
+      expect(report.gamePortUdp.port, 0);
+      expect(report.gamePortUdp.result, PortCheckResult.notChecked);
+      expect(report.gamePortTcp.result, PortCheckResult.notChecked);
+      expect(report.lanPort.result, PortCheckResult.available);
     },
   );
 

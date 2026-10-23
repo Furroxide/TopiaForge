@@ -66,15 +66,21 @@ class _LauncherUpdateSettings extends StatelessWidget {
           const SizedBox(height: 8),
           DropdownButtonFormField<LauncherUpdateChannel>(
             initialValue: settings.channel,
+            // Fills the pane, so a long name at large text shortens instead
+            // of overflowing.
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Update channel'),
             items: const [
               DropdownMenuItem(
                 value: LauncherUpdateChannel.release,
-                child: Text('Stable'),
+                child: Text('Stable', overflow: TextOverflow.ellipsis),
               ),
               DropdownMenuItem(
                 value: LauncherUpdateChannel.beta,
-                child: Text('Beta (includes stable)'),
+                child: Text(
+                  'Beta (includes stable)',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
             onChanged: settings.enabled

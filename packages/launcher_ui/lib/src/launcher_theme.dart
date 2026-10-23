@@ -153,16 +153,24 @@ ThemeData buildTopiaForgeTheme() {
       selectedColor: TopiaForgePalette.launchDark,
       textColor: TopiaForgePalette.text,
     ),
+    // A switch that cannot be used fades, so a read-only setting does not
+    // look like one the player can change.
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) {
-        return states.contains(WidgetState.selected)
+        final color = states.contains(WidgetState.selected)
             ? TopiaForgePalette.white
             : TopiaForgePalette.faintText;
+        return states.contains(WidgetState.disabled)
+            ? color.withValues(alpha: 0.6)
+            : color;
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
-        return states.contains(WidgetState.selected)
+        final color = states.contains(WidgetState.selected)
             ? TopiaForgePalette.launch
             : TopiaForgePalette.surfaceTint;
+        return states.contains(WidgetState.disabled)
+            ? color.withValues(alpha: 0.38)
+            : color;
       }),
     ),
     dropdownMenuTheme: const DropdownMenuThemeData(

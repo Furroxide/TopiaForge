@@ -75,10 +75,16 @@ final class MultiplayerPreferencesSync {
   /// given the game's [journal] and the launcher's current [source]:
   ///
   /// - the game's changes the launcher has not taken in apply on top of the
-  ///   launcher's current values, since they are the player's latest choices,
-  ///   made in game. From a journal the store or the projection counts, those
-  ///   are the changes after the later of their positions in it; from any
-  ///   other journal, which the game started over, every change;
+  ///   launcher's current values. Nothing records whether an edit made in the
+  ///   launcher came before or after one made in game, so the launcher keeps
+  ///   them apart: while a game that writes the journal runs, it shows the
+  ///   preferences the game can change as read-only, and it takes the
+  ///   journal in only while no such game runs (at its own start, after the
+  ///   game exits, after a change in its settings and before a session
+  ///   launch). No launcher change is then newer than a change in the
+  ///   journal. From a journal the store or the projection counts, those are
+  ///   the changes after the later of their positions in it; from any other
+  ///   journal, which the game started over, every change;
   /// - every write takes the next revision after the later of
   ///   `source.revision` and `previous.revision`, starting from 0, and a
   ///   round that changes nothing writes nothing.
