@@ -316,7 +316,7 @@
     <Compile Include="../../mods/TopiaForge.Worlds/WorldPlayerPlacement.cs" Link="Worlds/WorldPlayerPlacement.cs" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
     <Compile Include="../../mods/TopiaForge.Sandbox/SandboxMod.cs" />
     <Compile Include="../../mods/TopiaForge.Sandbox/SandboxController.cs" />
     <Compile Include="../../mods/TopiaForge.Sandbox/SandboxGamemode.cs" />

@@ -79,3 +79,17 @@ rearm failure diagnostics.
 `ModLeakAssertions` reports active actions, subscriptions, registrations, handles, surfaces,
 scheduled work, and extension providers together. A leak failure therefore points to the resource
 family that remained live instead of merely timing out.
+
+## Checking the testing kit itself
+
+The ModManager test project keeps a Unity-free `TestingKitOnly=true` mode for the testing kit's own SDK contracts
+and fake services. Run its local gate from the repository root:
+
+```bash
+bash tools/verify-testing-kit-only.sh
+```
+
+The gate builds and runs the focused suite with isolated artifacts and an unavailable game-reference folder. It
+needs the pinned .NET SDK, but no game assemblies. Its temporary output is removed when it exits, and the full
+ModManager harness's build output is left intact. The same gate runs at the end of
+`bash tools/verify-csharp-release-surface.sh`, after the seven full C# harnesses.

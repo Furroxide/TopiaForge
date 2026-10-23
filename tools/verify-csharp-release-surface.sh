@@ -122,4 +122,7 @@ for harness in "${harnesses[@]}"; do
   "$dotnet_command" run --project "$harness" -c Release --no-build
 done
 
-echo "Validated 11 SDK packages and all 7 C# release harnesses."
+# This focused build uses isolated artifacts; it must never replace the full harness above.
+bash tools/verify-testing-kit-only.sh
+
+echo "Validated 11 SDK packages, all 7 C# release harnesses and TestingKitOnly."
