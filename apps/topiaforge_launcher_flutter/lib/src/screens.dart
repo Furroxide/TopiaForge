@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
@@ -9,6 +10,7 @@ import 'package:launcher_ui/launcher_ui.dart';
 import 'launcher_bloc.dart';
 import 'launcher_build.dart';
 import 'launcher_event.dart';
+import 'launcher_multiplayer_state.dart';
 import 'launcher_section.dart';
 import 'launcher_state.dart';
 
@@ -17,6 +19,7 @@ part 'screens/developer_screen.dart';
 part 'screens/developer_environment_pane.dart';
 part 'screens/developer_packages_pane.dart';
 part 'screens/developer_reachability_pane.dart';
+part 'screens/diagnostics_network_pane.dart';
 part 'screens/diagnostics_settings_screen.dart';
 part 'screens/home_discovery.dart';
 part 'screens/home_first_run.dart';
@@ -30,6 +33,8 @@ part 'screens/profile_mod_selection.dart';
 part 'screens/setup_screen.dart';
 part 'screens/settings_screen.dart';
 part 'screens/settings_launcher_update_pane.dart';
+part 'screens/settings_multiplayer_pane.dart';
+part 'screens/settings_multiplayer_sections.dart';
 part 'screens/screen_dialog_helpers.dart';
 part 'screens/screen_helpers.dart';
 

@@ -181,10 +181,18 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   could apply (`LaunchStagingStore.RecordPreferenceChange`). A journal keeps its epoch as it grows. A journal file the
   game cannot open is retried briefly and then refused, never replaced, so its changes are not lost to a new journal.
   Both readers refuse a journal without a valid epoch, and a projection whose `journalApplied` names no epoch.
-- **A long session never fills the journal.** The launcher takes the journal in only before a session launch and after
-  the game exits, so every edit of a session lands in it. Each change sets its whole preference, so when the game
-  appends one (`MultiplayerPreferencesJournal.Append`) it drops every earlier change of the same preference; an earlier
-  disclosure goes only when the new one acknowledges at least as much. The launcher's result is the same either way.
+- **A long session never fills the journal.** The launcher takes the journal in only while no game runs from the
+  install: at its own start or when another install is chosen, once a game it found running has closed, and after a
+  change in Settings. Writing the projection before a session launch comes with the join flow. Every edit of a session
+  therefore lands in one journal. Each change sets its whole preference, so when the game appends one
+  (`MultiplayerPreferencesJournal.Append`) it drops every earlier change of the same preference; an earlier disclosure
+  goes only when the new one acknowledges at least as much. The launcher's result is the same either way.
+- **Read-only while the game runs.** Nothing records whether an edit in the launcher came before or after one in game,
+  so the two never overlap. While a game runs from the install, or the launcher cannot tell, Settings → Multiplayer
+  shows what the game can change (display name, privacy, voice, hosting defaults and the network switches) as
+  read-only and says it can be changed once the game is closed. Before it saves such a change, the launcher checks
+  again that the game is closed, and refuses the change otherwise. Link handling is the launcher's own and stays
+  editable.
 - **The launcher's store is the record.** It keeps the projection's `revision` and its journal position, the pair
   `journalEpoch` and `journalApplied`, with the player's settings, and gives them to the round through
   `MultiplayerPreferencesSource`. That is one value more than a store that keeps only `journalApplied`.
@@ -199,8 +207,9 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   drops the changes a projection counting its journal covers.
 - **One journal at a time.** The launcher remembers the latest journal only, so a journal restored from before the
   latest one, say from a backup of staging, counts as started over and applies again.
-- **Hosting defaults.** Until the launcher's store holds hosting defaults, the source gives none, and the projection
-  keeps its own, a change made in game included. The first projection starts from `MultiplayerHostingDefaults.forPlayer`.
+- **Hosting defaults.** The launcher's store holds hosting defaults from the first round that writes the projection, or
+  from the player setting a port in Settings. Until then the source gives none, and the projection keeps its own, a
+  change made in game included. The first projection starts from `MultiplayerHostingDefaults.forPlayer`.
 
 ## 8. The game side today
 

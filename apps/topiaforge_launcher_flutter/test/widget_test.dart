@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:io' show File, InternetAddress, Platform, SocketException;
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:launcher_data/launcher_data.dart'
-    show TransientSessionLinkSetting;
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:launcher_ui/launcher_ui.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_app.dart';
@@ -14,6 +15,7 @@ import 'package:topiaforge_launcher_flutter/src/launcher_event.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_exit.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_multiplayer_state.dart';
 import 'package:topiaforge_launcher_flutter/src/launcher_section.dart';
+import 'package:topiaforge_launcher_flutter/src/launcher_state.dart';
 import 'package:topiaforge_launcher_flutter/src/screens.dart';
 import 'package:topiaforge_launcher_flutter/src/session_link_inbox.dart';
 
@@ -36,6 +38,13 @@ part 'widget_update_test_cases.dart';
 part 'widget_update_test_fakes.dart';
 part 'widget_reachability_test_cases.dart';
 part 'widget_session_link_test_cases.dart';
+part 'widget_multiplayer_fakes.dart';
+part 'widget_multiplayer_bloc_test_cases.dart';
+part 'widget_multiplayer_settings_test_cases.dart';
+part 'widget_multiplayer_network_test_cases.dart';
+part 'widget_multiplayer_layout_test_cases.dart';
+part 'widget_multiplayer_privacy_test_cases.dart';
+part 'widget_multiplayer_golden_test_cases.dart';
 
 Finder _devScrollable() => find
     .descendant(
@@ -54,6 +63,12 @@ void main() {
   registerLauncherUpdateWidgetTests();
   registerReachabilityProbeWidgetTests();
   registerSessionLinkWidgetTests();
+  registerMultiplayerBlocTests();
+  registerMultiplayerSettingsWidgetTests();
+  registerMultiplayerNetworkWidgetTests();
+  registerMultiplayerLayoutTests();
+  registerMultiplayerPrivacyTests();
+  registerMultiplayerGoldenRenders();
 
   // Home's GlowButton pulses on a repeating AnimationController, which would
   // deadlock pumpAndSettle. Running the suite with reduced motion keeps every

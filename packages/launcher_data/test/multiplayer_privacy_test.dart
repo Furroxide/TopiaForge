@@ -12,6 +12,7 @@ import 'package:launcher_data/src/multiplayer/join_descriptor_resolver.dart';
 import 'package:launcher_data/src/multiplayer/lan_datagrams.dart';
 import 'package:launcher_data/src/multiplayer/lan_discovery_client.dart';
 import 'package:launcher_data/src/multiplayer/lan_sockets.dart';
+import 'package:launcher_data/src/multiplayer/multiplayer_preferences_keeper.dart';
 import 'package:launcher_data/src/multiplayer/multiplayer_store_salvage.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -35,6 +36,7 @@ final _covered = <Object>[
   LanBrowseSnapshot,
   LanDatagramSocket,
   LocalMultiplayerRepository,
+  MultiplayerPreferencesKeeper,
   MultiplayerStore,
   salvageMultiplayerSettings,
   MultiplayerNetworkReport,
@@ -86,6 +88,32 @@ Iterable<LibraryMirror> _multiplayerLibraries() => currentMirrorSystem()
     .libraries
     .values
     .where((library) => library.uri.toString().startsWith(_prefix));
+
+/// What the network clients report: LAN discovery's state and the network
+/// report. They live in the domain, so the launcher's screens can hold them,
+/// and are checked here as the folder's own types are.
+const _reportedTypes = {
+  'LanBrowseSnapshot',
+  'LanDiscoveryCounters',
+  'LanDiscoveryProblem',
+  'LanDiscoveryStatus',
+  'MultiplayerNetworkReport',
+  'MultiplayerServiceStatus',
+  'NetworkCheckState',
+  'PortCheck',
+  'PortCheckResult',
+  'PortProtocol',
+};
+
+Map<String, DeclarationMirror> _reportedDeclarations() {
+  final domain = currentMirrorSystem()
+      .libraries[Uri.parse('package:launcher_domain/src/multiplayer.dart')]!;
+  return {
+    for (final declaration in domain.declarations.values)
+      if (_reportedTypes.contains(MirrorSystem.getName(declaration.simpleName)))
+        MirrorSystem.getName(declaration.simpleName): declaration,
+  };
+}
 
 bool _mentionsAddress(TypeMirror type, [Set<TypeMirror>? seen]) {
   final visited = seen ?? <TypeMirror>{};
@@ -159,8 +187,21 @@ void main() {
     expect(loaded, files);
   });
 
+  test('every type the network clients report is checked', () {
+    expect(_reportedDeclarations().keys.toSet(), _reportedTypes);
+  });
+
   test('no public type of the folder exposes an address', () {
     final problems = <String>[];
+    for (final MapEntry(key: name, value: declaration)
+        in _reportedDeclarations().entries) {
+      if (declaration is! ClassMirror) continue;
+      for (final member in declaration.declarations.values) {
+        if (member.isPrivate) continue;
+        final problem = _exposure(name, member);
+        if (problem != null) problems.add(problem);
+      }
+    }
     for (final library in _multiplayerLibraries()) {
       for (final declaration in library.declarations.values) {
         if (declaration.isPrivate) continue;
