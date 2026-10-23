@@ -288,6 +288,7 @@ internal static class Program
             LiveSessionFailureTests.ClosingSavesAKnownHostRecordedOffTheMainThread();
             SaveRetryTests.AFailedSaveIsTriedAgainAfterAPause();
             SaveRetryTests.AFailedSaveIsTriedOnceMoreAtClose();
+            SaveFailureObservationTests.RetriedAndLateSaveFailuresAreObserved();
             KnownHostsFailClosedTests.AnUnreadableRecordRefusesAndWritesNothing();
             KnownHostsFailClosedTests.ATrustGivenUncheckedEndsOnceTheRecordReads();
             KnownHostsFailClosedTests.ClosingWritesNothingOverAnUnreadableRecord();

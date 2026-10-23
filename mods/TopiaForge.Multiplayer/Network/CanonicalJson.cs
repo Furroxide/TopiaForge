@@ -150,7 +150,7 @@ namespace TopiaForge.Multiplayer.Network
         /// so a needless escape reads as its character, but it refuses what <see cref="TryParse"/> refuses before that
         /// comparison: malformed UTF-8, a repeated key, a number that is not an integer in range, nesting past
         /// <see cref="MaximumDepth"/>, anything after the document, and more than <paramref name="maximumBytes"/>. Only
-        /// salvaging the known-hosts record reads this way. A signed or shared document is read with
+        /// this game's identity, ban list and known-hosts record read this way. A signed or shared document is read with
         /// <see cref="TryParse"/>, so a signature still never covers anything but canonical bytes.
         /// </summary>
         internal static bool TryParseAnyLayout(byte[] bytes, int maximumBytes, out JsonNode node, out string error) =>

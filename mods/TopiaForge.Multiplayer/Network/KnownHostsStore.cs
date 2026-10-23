@@ -228,11 +228,16 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             var last = changed ? Queue(previous, Serialized()) : previous;
-            return last.ContinueWith(TryAgainIfFailed, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+            return NetworkSaveTasks.Observe(last.ContinueWith(TryAgainIfFailed, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap());
         }
 
         /// <summary>Writes the record again when <paramref name="saved"/> failed; the record holds every change since.</summary>
-        private Task TryAgainIfFailed(Task saved) => saved.IsFaulted ? WriteAsync(Serialized()) : saved;
+        private Task TryAgainIfFailed(Task saved)
+        {
+            if (!saved.IsFaulted) return saved;
+            _ = saved.Exception;
+            return WriteAsync(Serialized());
+        }
 
         private byte[] Serialized()
         {
@@ -245,7 +250,11 @@ namespace TopiaForge.Multiplayer.Network
         /// Saves are never cancelled, even while closing: a cancelled write would lose the change, and each is small.
         /// </summary>
         private Task Queue(Task previous, byte[] bytes) =>
-            previous.ContinueWith(_ => WriteAsync(bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+            NetworkSaveTasks.Observe(previous.ContinueWith(saved =>
+            {
+                _ = saved.Exception;
+                return WriteAsync(bytes);
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap());
 
         private async Task<bool> ReadAsync()
         {
