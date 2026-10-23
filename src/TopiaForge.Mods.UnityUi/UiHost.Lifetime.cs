@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace TopiaForge.Mods.UnityUi
@@ -9,7 +10,7 @@ namespace TopiaForge.Mods.UnityUi
         /// Raised when a canvas this host made is destroyed outside the kit: by a scene that unloads it, the game or another
         /// mod. By then the host has let go of everything on that canvas, closing its windows, tools and dialogs (a dialog as
         /// a cancellation), and the canvas's sorting slot goes back right after. Not raised for a canvas the host destroys
-        /// itself, nor while the application quits.
+        /// itself, nor while the application quits. Window and tool Closed callbacks run after this notification.
         /// </summary>
         public event Action<GameObject>? LayerLost;
 
@@ -28,12 +29,14 @@ namespace TopiaForge.Mods.UnityUi
                 }
             }
 
+            var closed = new List<Action>();
             foreach (var window in windows.ToArray())
             {
                 if (ReferenceEquals(window.CanvasRoot, root))
                 {
                     windows.Remove(window);
-                    window.Lose();
+                    var notify = window.Lose();
+                    if (notify != null) closed.Add(notify);
                 }
             }
 
@@ -42,7 +45,8 @@ namespace TopiaForge.Mods.UnityUi
                 if (ReferenceEquals(tool.CanvasRoot, root))
                 {
                     fullscreenTools.Remove(tool);
-                    tool.Lose();
+                    var notify = tool.Lose();
+                    if (notify != null) closed.Add(notify);
                 }
             }
 
@@ -73,6 +77,15 @@ namespace TopiaForge.Mods.UnityUi
                 }
             }
 
+            ReportLayerLost(root);
+            foreach (var notify in closed)
+            {
+                TopiaForgeCallbacks.Invoke(notify, "Lost canvas Closed");
+            }
+        }
+
+        private void ReportLayerLost(GameObject root)
+        {
             var handlers = LayerLost;
             if (handlers == null)
             {

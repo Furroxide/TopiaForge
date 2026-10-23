@@ -234,17 +234,16 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>
         /// The window's canvas was destroyed outside the kit, by a scene, the game or another mod: let go of the cursor, the
-        /// Escape stack and the window order as teardown does, and raise <see cref="Closed"/> if the window was showing.
+        /// Escape stack and the window order as teardown does, and return its Closed handlers if it was showing.
         /// </summary>
-        internal void Lose()
+        internal Action? Lose()
         {
             var wasShowing = open && !tornDown;
             var closed = Closed;
             Teardown();
-            if (wasShowing)
-            {
-                TopiaForgeCallbacks.Invoke(closed, "Window Closed");
-            }
+            // The host reports the lost canvas before invoking these captured callbacks. SDK surfaces must already
+            // know they cannot reopen, even when a dismissal handler calls Show or creates a replacement surface.
+            return wasShowing ? closed : null;
         }
 
         private void ThrowIfTornDown()

@@ -29,6 +29,14 @@ namespace TopiaForge.ModManager
             if (host == null) throw new ArgumentNullException(nameof(host));
             if (rect == null) throw new ArgumentNullException(nameof(rect));
             TopiaForgeAnchors.Dock(rect, corner, TopiaForgeTokens.SafeMargin);
+            var reserve = UiHudAnchors.SubtitleReserve(corner);
+            if (reserve > 0f)
+            {
+                // Keep the bottom pivot and safe margin; only the screen-relative anchor moves above the subtitles.
+                var anchor = new Vector2(rect.anchorMin.x, reserve);
+                rect.anchorMin = anchor;
+                rect.anchorMax = anchor;
+            }
             var handle = dock.Add(corner, height, host.EffectiveUiScale);
             panels.Add(new Panel(handle, host, rect));
             return handle;

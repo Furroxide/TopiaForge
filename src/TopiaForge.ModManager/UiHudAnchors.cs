@@ -7,11 +7,17 @@ namespace TopiaForge.ModManager
     internal static class UiHudAnchors
     {
         /// <summary>
-        /// Resolves where a HUD docks: the anchor the request names, or TopiaForge's default, which keeps clear of the
-        /// game's own HUD (the microphone label at the top left, the version at the top, a level's objective at the top
-        /// right, the crosshair and the dialogue subtitles at the bottom). A gameplay HUD docks at the bottom left. A HUD
-        /// shown everywhere docks at the middle of the left edge, which also stays clear of the main menu's buttons.
+        /// The lower HUD stacks leave the bottom 12% of the screen for the game's subtitles. Moving the anchor,
+        /// rather than adding canvas units, keeps that fraction at every resolution and accessibility scale.
+        /// Every panel in a lower stack shares this reserve, including an explicitly anchored always-visible HUD.
         /// </summary>
+        public static float SubtitleReserve(TopiaForgeCorner corner)
+        {
+            return corner == TopiaForgeCorner.BottomLeft || corner == TopiaForgeCorner.Bottom
+                || corner == TopiaForgeCorner.BottomRight ? 0.12f : 0f;
+        }
+
+        /// <summary>Resolves an explicit anchor or the default for the HUD's visibility.</summary>
         public static TopiaForgeCorner CornerOf(UiHudAnchor anchor, UiHudVisibility visibility)
         {
             switch (anchor)

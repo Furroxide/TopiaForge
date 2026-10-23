@@ -27,6 +27,8 @@ namespace TopiaForge.ModManager.Tests
             APlayerClosedWindowIsDismissedOnce();
             DisposalNeverDismisses();
             DefaultAnchorsAvoidTheGamesOwnHud();
+            LowerHudStacksClearSubtitlesAtBothSizesAndScales();
+            ALostWindowCannotReopenFromItsDismissal();
             EveryAnchorDocksSomewhereOtherThanTheCrosshair();
             SettledFramesWithAShownHudAllocateNothing();
             Console.WriteLine("UiSurfaceLifetimeTests passed.");
@@ -187,6 +189,59 @@ namespace TopiaForge.ModManager.Tests
             {
                 Assert(gameplay != taken && everywhere != taken, "no default sits where the game draws " + taken);
             }
+        }
+
+        private static void LowerHudStacksClearSubtitlesAtBothSizesAndScales()
+        {
+            foreach (var height in new[] { 1080f, 1440f })
+            {
+                foreach (var scale in new[] { 1f, 1.5f })
+                {
+                    foreach (var corner in new[] { TopiaForgeCorner.BottomLeft, TopiaForgeCorner.Bottom, TopiaForgeCorner.BottomRight })
+                    {
+                        var reserve = UiHudAnchors.SubtitleReserve(corner) * height;
+                        Assert(Math.Abs(reserve - height * 0.12f) < 0.001f, "subtitles keep the bottom 12% at both resolutions");
+                        var dock = new TopiaForgeHudDock();
+                        var first = dock.Add(corner, 230f, scale);
+                        var second = dock.Add(corner, 130f, 1f);
+                        dock.SetShown(first, true);
+                        dock.SetShown(second, true);
+                        Assert(dock.TryGetPosition(first, out _, out var firstY)
+                            && dock.TryGetPosition(second, out _, out _), "both panels have positions");
+                        dock.TryGetPosition(second, out _, out var secondY);
+                        var screenScale = height / TopiaForgeTokens.ReferenceHeight;
+                        var firstBottom = reserve + firstY * scale * screenScale;
+                        var secondBottom = reserve + secondY * screenScale;
+                        Assert(firstBottom > reserve, "the first panel's bottom stays above subtitles plus the safe margin");
+                        Assert(secondBottom > firstBottom + 230f * scale * screenScale,
+                            "mixed-scale panels keep their gap above the same subtitle reserve");
+                    }
+                }
+            }
+
+            foreach (var corner in new[] { TopiaForgeCorner.TopLeft, TopiaForgeCorner.Top, TopiaForgeCorner.TopRight, TopiaForgeCorner.Left, TopiaForgeCorner.Right })
+            {
+                Assert(UiHudAnchors.SubtitleReserve(corner) == 0f, "other edges keep their anchors");
+            }
+        }
+
+        private static void ALostWindowCannotReopenFromItsDismissal()
+        {
+            var window = new UiSurfacePresence(false, true);
+            var dismissals = 0;
+            void Dismiss(UiPresenceEffects effects)
+            {
+                if ((effects & UiPresenceEffects.Dismissed) == 0) return;
+                dismissals++;
+                Assert(window.Show() == UiPresenceEffects.None, "a dismissal callback cannot touch the lost native view");
+                Assert(window.Hide() == UiPresenceEffects.None, "a callback cannot hide or dismiss it again");
+            }
+
+            // The host releases native state, then reports the lost layer, then invokes the captured Closed callback.
+            Dismiss(window.Lose());
+            Dismiss(window.ClosedByPlayer());
+            Dismiss(window.Lose());
+            Assert(dismissals == 1 && !window.IsVisible, "a lost window dismisses exactly once even when its callback calls Show");
         }
 
         private static void EveryAnchorDocksSomewhereOtherThanTheCrosshair()

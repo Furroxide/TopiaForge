@@ -75,8 +75,11 @@ names it. Create the surface again to show it. A modal on such a canvas complete
 In every level Robotopia draws its microphone label at the top left, a development build's version at
 the top, a level's objective at the top right (above every mod's UI), a crosshair at the centre, and
 dialogue subtitles across the middle of the bottom edge. A HUD docks by default where none of those
-are: at the bottom left for a gameplay HUD, and at the middle of the left edge for a HUD shown
-everywhere, which also keeps clear of the main menu's buttons at the bottom left. `WithHudAnchor`
+are: at the bottom left for a gameplay HUD, above a subtitle reserve covering the bottom 12% of the
+screen, and at the middle of the left edge for a HUD shown
+everywhere, which also keeps clear of the main menu's buttons at the bottom left. All HUD panels docked
+to a bottom corner or edge share the subtitle reserve, so their stack stays together; the reserve follows
+the screen size independently of UI scale. `WithHudAnchor`
 picks another place: any corner, or the middle of any edge (`UiHudAnchor`), never the centre.
 
 HUDs docked at one place stack a small gap apart, the first created nearest the edge, so HUDs from

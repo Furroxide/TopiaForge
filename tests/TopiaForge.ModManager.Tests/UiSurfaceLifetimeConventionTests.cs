@@ -19,6 +19,8 @@ namespace TopiaForge.ModManager.Tests
             SurfacesReportVisibilityFromTheirPresence();
             SlotsGoBackByTheRecordNeverByReadingTheCanvas();
             DestroyedCanvasesReachTheirOwners();
+            LossReachesSurfacesBeforeNativeCloseCallbacks();
+            LowerHudAnchorsReserveScreenSpaceWithoutMovingTheirPivot();
             TheGateIsSampledEveryFrameBeforeModsUpdate();
             ToastsStackFromTheBottomRight();
             AWindowShownDuringItsCloseFadeStaysShown();
@@ -105,6 +107,35 @@ namespace TopiaForge.ModManager.Tests
             Check(lose.Success && lose.Groups["body"].Value.Contains("cursorLease.Release();", StringComparison.Ordinal)
                 && lose.Groups["body"].Value.Contains("RaiseClosed();", StringComparison.Ordinal),
                 "A modal on a lost canvas must free the cursor and end as a cancellation.");
+        }
+
+        private static void LossReachesSurfacesBeforeNativeCloseCallbacks()
+        {
+            var lifetime = Read("src", "TopiaForge.Mods.UnityUi", "UiHost.Lifetime.cs");
+            RequireMatch(lifetime, @"ReportLayerLost\(root\);\s*foreach \(var notify in closed\)\s*\{\s*TopiaForgeCallbacks\.Invoke",
+                "The SDK must learn that its canvas is lost before a captured Closed callback can dismiss and reopen it.");
+            foreach (var file in new[] { "TopiaForgeWindow.cs", "TopiaForgeFullscreenTool.cs" })
+            {
+                var widget = Read("src", "TopiaForge.Mods.UnityUi", "Widgets", file);
+                var lose = Regex.Match(widget, @"internal Action\? Lose\(\)(?<body>[\s\S]*?)private void ThrowIfTornDown", RegexOptions.CultureInvariant);
+                Check(lose.Success, "A lost window or tool must defer its close notification.");
+                var body = lose.Groups["body"].Value;
+                Check(body.Contains("Teardown();", StringComparison.Ordinal)
+                    && body.Contains("return wasShowing ? closed : null;", StringComparison.Ordinal)
+                    && !body.Contains("TopiaForgeCallbacks.Invoke", StringComparison.Ordinal),
+                    "The native view must release its cursor and Escape lease before returning its close callback.");
+            }
+        }
+
+        private static void LowerHudAnchorsReserveScreenSpaceWithoutMovingTheirPivot()
+        {
+            var placement = Read("src", "TopiaForge.ModManager", "UnityUiHudPlacement.cs");
+            RequireMatch(placement, @"TopiaForgeAnchors\.Dock\(rect, corner, TopiaForgeTokens\.SafeMargin\);[\s\S]*?UiHudAnchors\.SubtitleReserve\(corner\)",
+                "Every bottom stack must use the shared subtitle reserve after setting its original pivot.");
+            RequireSource(placement, "var anchor = new Vector2(rect.anchorMin.x, reserve);", "The reserve must keep the horizontal anchor.");
+            RequireSource(placement, "rect.anchorMin = anchor;", "The lower anchor must move by the screen fraction.");
+            RequireSource(placement, "rect.anchorMax = anchor;", "Both anchors must move together, preserving the HUD's height.");
+            Check(!placement.Contains("rect.pivot =", StringComparison.Ordinal), "The bottom pivot must remain on the panel's bottom edge.");
         }
 
         private static void TheGateIsSampledEveryFrameBeforeModsUpdate()
