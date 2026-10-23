@@ -73,14 +73,14 @@ internal static class NetworkLinkTests
         foreach (var (link, typed) in cases)
         {
             kinds.Add(link.Kind);
-            var texts = new[] { link.ToString(), $"{link}", string.Format(CultureInfo.InvariantCulture, "{0}", link), "joining " + link };
+            var texts = new[] { link.ToString(), $"{link}", string.Format(CultureInfo.InvariantCulture, "{0}", link), string.Empty + link };
             foreach (var secret in Secrets(link, typed))
             {
                 That(texts.All(text => text.IndexOf(secret, StringComparison.OrdinalIgnoreCase) < 0),
                     "a link holds no spelling of its code, host or port in its text ('" + secret + "' in '" + link + "')");
             }
 
-            That(link.ToString() == Printed(link.Kind), "a link prints its kind alone, as a join target does: '" + link + "'");
+            That(texts.All(text => text == Printed(link.Kind)), "every formatting form prints the link's kind alone, as a join target does");
             That(SessionLink.TryParse(link.Canonical, out var again) && again!.Kind == link.Kind && again.InviteCode == link.InviteCode &&
                  again.ServerId == link.ServerId && again.Host == link.Host && again.Port == link.Port && again.Canonical == link.Canonical,
                 "the canonical form reads back as the same " + Printed(link.Kind) + " link");

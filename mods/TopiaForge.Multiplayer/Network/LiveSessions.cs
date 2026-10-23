@@ -223,22 +223,23 @@ namespace TopiaForge.Multiplayer.Network
         /// Gets the work running on other threads that lands at a later pump: the identity load, a password key being
         /// derived, the join's resolve and proof, and, with <paramref name="saves"/>, files still being saved. A test rig
         /// waits for it in real time, so it lands at the same point of a run however slow the machine is.
+        /// Operation names are fixed labels for test failures, never task results, paths, addresses or exception text.
         /// </summary>
-        internal List<Task> PendingBackgroundWork(bool saves)
+        internal List<(string Operation, Task Task)> PendingBackgroundWork(bool saves)
         {
-            var work = new List<Task>();
-            if (identity == null && loading != null && !loading.IsCompleted) work.Add(loading);
-            if (hostKey != null && !hostKey.IsCompleted) work.Add(hostKey);
-            if (bansRead != null && !bansRead.IsCompleted) work.Add(bansRead);
+            var work = new List<(string Operation, Task Task)>();
+            if (identity == null && loading != null && !loading.IsCompleted) work.Add(("identity load", loading));
+            if (hostKey != null && !hostKey.IsCompleted) work.Add(("host password derivation", hostKey));
+            if (bansRead != null && !bansRead.IsCompleted) work.Add(("ban-list read", bansRead));
             Host?.Internet?.AddPendingBackgroundWork(work);
             Join?.AddPendingBackgroundWork(work);
             foreach (var ending in endings)
             {
-                if (!ending.IsCompleted) work.Add(ending);
+                if (!ending.IsCompleted) work.Add(("host listing removal", ending));
             }
 
-            if (saves && !bansWrite.IsCompleted) work.Add(bansWrite);
-            if (saves && !knownHostsWrite.IsCompleted) work.Add(knownHostsWrite);
+            if (saves && !bansWrite.IsCompleted) work.Add(("ban-list save", bansWrite));
+            if (saves && !knownHostsWrite.IsCompleted) work.Add(("known-hosts save", knownHostsWrite));
             return work;
         }
 

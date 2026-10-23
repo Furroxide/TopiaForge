@@ -304,7 +304,7 @@ network.
 | Class | Covers |
 | --- | --- |
 | `ControlPlaneClientTests` | Requests and answers byte for byte against the shared recordings in `tests/fixtures/multiplayer/control-plane/`; the wire form; errors read by code and status; strict readers |
-| `ControlPlaneHttpTests` | Oversized, malformed, slow and silent answers; a TLS handshake that never finishes; redirects; certificate names; no proxy; a fuzz of hostile answers that must never throw |
+| `ControlPlaneHttpTests` | Oversized, malformed, slow and silent answers; a TLS handshake that never finishes; immediate plaintext refused as TLS; redirects; certificate names; no proxy; a fuzz of hostile answers that must never throw |
 | `SignalingUpgradeTests` | The signaling socket's upgrade: 301, 302, 307 and 308 never followed; answers of the wrong shape refused, and their connection closed at once; answers spelled any way the RFCs allow opened; the HTTPS client's deadlines, a TLS handshake that never finishes included, and its certificate check; exactly the headers it needs |
 | `ControlPlaneFakeTests` | The fake service answers as the recordings do |
 | `InternetConfigurationTests` | A LAN host contacts nothing; a launch's origin comes first; invite and listing launches go through the service; the signaling socket asks no proxy the system or the environment names |

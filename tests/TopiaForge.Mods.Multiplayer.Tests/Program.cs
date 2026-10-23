@@ -196,6 +196,9 @@ internal static class Program
             NetworkDescriptorTests.SignedValuesCannotBeChangedFromOutside();
             NetworkLinkTests.LinksMatchTheSharedFixtures();
             NetworkLinkTests.ALinkKeepsItsCodeAndAddressOutOfToString();
+            BackgroundWorkWaitTests.LiveTimeoutNamesEveryPeerAndOperation();
+            BackgroundWorkWaitTests.ControlTimeoutNamesThePeerAndOperation();
+            BackgroundWorkWaitTests.InternetTimeoutNamesThePeerAndOperation();
             NetworkLinkTests.IPv6AddressesFollowRfc5952();
             NetworkLinkTests.LanFormatsMatchTheSharedFixtures();
             NetworkIdentityTests.SecretsMatchTheSharedFixtures();
