@@ -305,6 +305,7 @@ internal static class Program
             LiveSessionFailureTests.EveryEndingWipesThePasswordKey();
             HostKeyWipeTests.StoppingWipesTheKeyHoweverHostingEnds();
             HostKeyWipeTests.ALateDerivationWipesOnlyItsOwnKey();
+            HostKeyWipeTests.ClosingWipesTheHostKeyAtEveryStage();
             VoicePacketTests.DatagramsRoundTripOneOrTwoFrames();
             VoicePacketTests.MalformedDatagramsAreRefusedWhole();
             VoicePacketTests.VoiceMessagesRoundTripAndRefuseRepeats();

@@ -97,6 +97,45 @@ internal static class HostKeyWipeTests
         That(PolicyKey(live.Host!.Policy).SequenceEqual(expected), "with the key derived for it, whole");
     }
 
+    /// <summary>Closing releases the attempt's key at every stage, including a derivation that finishes after disposal.</summary>
+    internal static void ClosingWipesTheHostKeyAtEveryStage()
+    {
+        foreach (var late in new[] { false, true })
+        {
+            using var rig = new LiveRig(late ? 209 : 208);
+            LiveRig.SeedIdentity(rig.HostFiles, late ? 2091 : 2081);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (late) rig.HostFiles.BeforeRead = path => path == IdentityStore.IdentityPath ? release.Task : Task.CompletedTask;
+            var live = rig.Host.Live!;
+            live.StartHosting(new HostSettings("Closing") { Port = 0, Password = "closing password" });
+            var pending = KeyTask(live);
+            if (late) That(!pending.IsCompleted, "closing starts while the key is still being derived");
+            else That(pending.GetAwaiter().GetResult()!.Any(value => value != 0), "closing starts with a prepared key");
+            try
+            {
+                rig.Host.Dispose();
+            }
+            finally
+            {
+                release.TrySetResult();
+            }
+
+            var key = pending.GetAwaiter().GetResult()!;
+            That(SpinWait.SpinUntil(() => key.All(value => value == 0), 5_000),
+                late ? "closing wipes a derivation that completes after disposal" : "closing wipes a prepared key");
+            That(live.HostPhase == HostPhase.Idle && live.Host == null && rig.HostFactory.Networks.Count == 0,
+                "closing never opens a prepared or late host");
+        }
+
+        using var opened = new LiveRig(210);
+        opened.StartHosting(new HostSettings("Closing open host") { Port = 0, Password = "closing password" });
+        var host = opened.Host.Live!.Host!;
+        var policyKey = PolicyKey(host.Policy);
+        That(policyKey.Any(value => value != 0), "the open host holds its policy key before closing");
+        opened.Host.Dispose();
+        That(policyKey.All(value => value == 0) && !host.IsRunning, "closing stops the open host and wipes its policy key");
+    }
+
     /// <summary>The password key a hosting attempt is deriving, or has derived, before the host takes its own copy.</summary>
     private static Task<byte[]?> KeyTask(LiveSessions live)
     {
