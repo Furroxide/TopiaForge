@@ -142,14 +142,16 @@ internal sealed class LoopbackHttpServer : IDisposable
     private readonly TcpListener listener = new(IPAddress.Loopback, 0);
     private readonly Func<RecordedHttpRequest, Stream, CancellationToken, Task> handle;
     private readonly X509Certificate2? certificate;
+    private readonly bool answerBeforeRequest;
     private readonly CancellationTokenSource stopping = new();
     private readonly Thread thread;
     private int connections;
 
-    internal LoopbackHttpServer(Func<RecordedHttpRequest, Stream, CancellationToken, Task> handle, X509Certificate2? certificate = null)
+    internal LoopbackHttpServer(Func<RecordedHttpRequest, Stream, CancellationToken, Task> handle, X509Certificate2? certificate = null, bool answerBeforeRequest = false)
     {
         this.handle = handle;
         this.certificate = certificate;
+        this.answerBeforeRequest = answerBeforeRequest;
         listener.Start();
         Port = ((IPEndPoint)listener.LocalEndpoint).Port;
         thread = new Thread(Run) { IsBackground = true, Name = "TopiaForge test control plane" };
@@ -168,6 +170,10 @@ internal sealed class LoopbackHttpServer : IDisposable
 
     internal static LoopbackHttpServer Answering(byte[] answer) =>
         new((_, stream, token) => stream.WriteAsync(answer, 0, answer.Length, token));
+
+    /// <summary>Writes plaintext immediately, before any request, to challenge a client expecting a TLS handshake.</summary>
+    internal static LoopbackHttpServer AnsweringBeforeRequest(string answer) =>
+        new((_, stream, token) => stream.WriteAsync(Encoding.ASCII.GetBytes(answer), token).AsTask(), answerBeforeRequest: true);
 
     internal static string Answer(int status, string? body, string contentType = "application/json; charset=utf-8", string extraHeaders = "")
     {
@@ -220,11 +226,20 @@ internal sealed class LoopbackHttpServer : IDisposable
                     stream = tls;
                 }
 
+                if (answerBeforeRequest)
+                {
+                    await handle(new RecordedHttpRequest(), stream, stopping.Token).ConfigureAwait(false);
+                    await stream.FlushAsync(stopping.Token).ConfigureAwait(false);
+                }
+
                 var request = await ReadRequestAsync(stream).ConfigureAwait(false);
                 if (request == null) return;
                 Requests.Enqueue(request);
-                await handle(request, stream, stopping.Token).ConfigureAwait(false);
-                await stream.FlushAsync().ConfigureAwait(false);
+                if (!answerBeforeRequest)
+                {
+                    await handle(request, stream, stopping.Token).ConfigureAwait(false);
+                    await stream.FlushAsync().ConfigureAwait(false);
+                }
             }
             catch (Exception exception) when (exception is IOException || exception is SocketException || exception is ObjectDisposedException ||
                                               exception is OperationCanceledException || exception is System.Security.Authentication.AuthenticationException)

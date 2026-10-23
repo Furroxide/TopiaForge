@@ -237,11 +237,11 @@ namespace TopiaForge.Multiplayer.ControlPlane
         public void Dispose() => Stop();
 
         /// <summary>Adds the requests still running elsewhere, which land at a later pump.</summary>
-        internal void AddPendingBackgroundWork(List<Task> work)
+        internal void AddPendingBackgroundWork(List<(string Operation, Task Task)> work)
         {
-            if (inFlight != null && !inFlight.IsCompleted) work.Add(inFlight);
-            if (listing != null && !listing.IsCompleted) work.Add(listing);
-            if (Ending != null && !Ending.IsCompleted) work.Add(Ending);
+            if (inFlight != null && !inFlight.IsCompleted) work.Add(("host control-plane request", inFlight));
+            if (listing != null && !listing.IsCompleted) work.Add(("host address discovery", listing));
+            if (Ending != null && !Ending.IsCompleted) work.Add(("host listing removal", Ending));
         }
 
         public override string ToString() => "Internet listing (" + Phase + ")";

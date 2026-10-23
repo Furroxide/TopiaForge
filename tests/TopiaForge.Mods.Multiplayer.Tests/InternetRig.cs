@@ -96,7 +96,8 @@ internal sealed class InternetPeer
 /// </summary>
 internal sealed class InternetRig : IDisposable
 {
-    internal static readonly TimeSpan BackgroundWorkBound = TimeSpan.FromSeconds(30);
+    /// <summary>Gets or sets the cumulative real-time bound for background work in each run.</summary>
+    internal TimeSpan BackgroundWorkBound { get; set; } = TimeSpan.FromSeconds(30);
 
     private readonly string packageRoot = Directory.CreateTempSubdirectory("TopiaForgeInternetRig-").FullName;
     private readonly int seed;
@@ -223,11 +224,10 @@ internal sealed class InternetRig : IDisposable
         {
             while (true)
             {
-                var pending = new List<Task>();
-                foreach (var peer in Peers) pending.AddRange(peer.Provider.Live!.PendingBackgroundWork(saves: true));
+                var pending = new BackgroundWorkWait();
+                foreach (var peer in Peers) pending.Add(peer.Name, peer.Provider.Live!.PendingBackgroundWork(saves: true));
                 if (pending.Count == 0) return waited;
-                if (waiting.Elapsed > BackgroundWorkBound) throw new InvalidOperationException("Assertion failed: work on other threads finishes in time");
-                Task.WaitAny(pending.ToArray(), 10);
+                pending.Wait(waiting, BackgroundWorkBound);
                 waited = true;
             }
         }

@@ -147,10 +147,10 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>Adds the work this join runs on other threads, which lands at a later pump: its resolve and its proof key.</summary>
-        internal void AddPendingBackgroundWork(List<Task> work)
+        internal void AddPendingBackgroundWork(List<(string Operation, Task Task)> work)
         {
-            if (resolving != null && !resolving.IsCompleted) work.Add(resolving);
-            if (deriving != null && !deriving.IsCompleted) work.Add(deriving);
+            if (resolving != null && !resolving.IsCompleted) work.Add(("join target resolution", resolving));
+            if (deriving != null && !deriving.IsCompleted) work.Add(("join password derivation", deriving));
             internet?.AddPendingBackgroundWork(work);
         }
 

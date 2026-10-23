@@ -152,11 +152,11 @@ namespace TopiaForge.Multiplayer.ControlPlane
         private long explainSince;
 
         /// <summary>Adds the requests still running elsewhere, which land at a later pump.</summary>
-        internal void AddPendingBackgroundWork(List<Task> work)
+        internal void AddPendingBackgroundWork(List<(string Operation, Task Task)> work)
         {
-            if (ticketing != null && !ticketing.IsCompleted) work.Add(ticketing);
-            if (minting != null && !minting.IsCompleted) work.Add(minting);
-            if (listing != null && !listing.IsCompleted) work.Add(listing);
+            if (ticketing != null && !ticketing.IsCompleted) work.Add(("join ticket request", ticketing));
+            if (minting != null && !minting.IsCompleted) work.Add(("join relay credentials", minting));
+            if (listing != null && !listing.IsCompleted) work.Add(("join address discovery", listing));
         }
 
         /// <summary>
