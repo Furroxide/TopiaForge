@@ -580,8 +580,7 @@ its signed descriptor and its LAN session info, and the engine enforces it.
   resolve the descriptor first. Only an engine handed a link directly, as the rig and the engine's tests do, has
   nothing but `JoinAccepted` to go by. The rule holds to what the join itself saw, the descriptor it verified and the
   LAN info as it resolved; a screen shown earlier is not tied to the join. A launcher-planned join carries the SHA-256
-  of the descriptor the launcher showed (`LaunchSessionPlan.ExpectedDescriptorSha256`), which the join does not
-  enforce yet.
+  of the descriptor the launcher showed (`LaunchSessionPlan.ExpectedDescriptorSha256`), and refuses a changed descriptor.
 - **What the player sees.** `IInternalVoiceService.TransmitState` reads `NotOffered` while this game hosts, or has
   joined, such a session, ahead of every state but `Failed`, for the transmit indicator. Until the voice slice fills
   VOICE, its placeholder says "This session offers no voice chat." then.

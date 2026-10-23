@@ -116,14 +116,15 @@ internal static class InternalVoiceOfferTests
     {
         // The launcher's hosting defaults say no voice. The provider plans the session from the launch request, and the
         // in-game flows start the plan through live sessions.
-        var ticket = new LaunchSessionTicket("host", "intent-quiet", "Sam", false, 0, false, true, null, null,
-            new LaunchSessionTicketHost("Sam's quiet session", 4, "lan", voice: false, passwordRequired: false, servePackages: false));
-        var plan = LaunchSessionPlan.FromTicket(ticket, out var unsupported);
+        var session = new InternalLaunchSession("intent-quiet", "Sam", false,
+            new InternalLaunchHost("Sam's quiet session", 4, InternalSessionVisibility.Lan, voice: false, passwordRequired: false, servePackages: false));
+        var plan = LaunchSessionPlan.From(session, hasService: false, out var unsupported);
         That(unsupported == LaunchSessionUnsupported.None && plan!.Host is { Voice: false }, "the plan hosts without voice, as the launcher asked");
 
         using var rig = ControlRig.WithVoice(362, Sandbox);
         rig.Host.Runtime.PreferredDisplayName = "Hoster";
-        rig.Host.Provider.Live!.StartHosting(plan!.Host!);
+        var planned = rig.Host.Control.PlanLaunchSession(session);
+        That(planned.Succeeded && rig.Host.Control.StartHosting(planned.Value!.Host!).Succeeded, "the control starts the planned host");
         That(rig.Run(() => rig.Host.Control.GetStatus().HostPhase == InternalHostPhase.Hosting), "the planned session opens");
         That(!rig.Host.Provider.Live!.Host!.Descriptor!.Descriptor.Voice && !rig.Host.Provider.Engine.IsVoiceOffered, "it announces no voice, and offers none");
         var hoster = new ControlVoice(rig.Host, rig.Network);

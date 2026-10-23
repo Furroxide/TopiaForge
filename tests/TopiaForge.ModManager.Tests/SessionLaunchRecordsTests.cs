@@ -64,6 +64,12 @@ namespace TopiaForge.ModManager.Tests
             AFailedCommandIsTheLaunchsOutcome(fixture, Path.Combine(root, "failed"));
             AnUncleanExitEndsTheSessionAsFailed(fixture, Path.Combine(root, "unclean"));
 
+            var noIPv6 = SessionLaunchRecords.Result(new LaunchSessionIdentity(RequestId, "join", IntentId),
+                new InternalLiveStatus { JoinPhase = InternalJoinPhase.Ended, JoinFailure = InternalLiveFailure.NoIPv6 });
+            That(noIPv6?.Status == "failed" && noIPv6.Error?.Code == "unavailable" &&
+                 noIPv6.Error.Message == "This computer has no IPv6, so it cannot reach this address; ask the host for an IPv4 address or an invite.",
+                "a launched join names the local IPv6 limit and an available next step");
+
             // A refusal's words can be the provider's: an address in them never reaches the launcher.
             var refused = SessionLaunchRecords.Refused(new LaunchSessionIdentity(RequestId, "join", IntentId), ModErrorCode.External,
                 "The relay at 203.0.113.9:3478 refused play.example.org.");

@@ -290,6 +290,8 @@ namespace TopiaForge.ModManager
                     return Rejected(identity, status, server, code);
                 case InternalLiveFailure.IdentityUnavailable:
                     return Errored(identity, ModErrorCode.Io, "This game's multiplayer identity could not be read or created.");
+                case InternalLiveFailure.NoIPv6:
+                    return Errored(identity, ModErrorCode.Unavailable, "This computer has no IPv6, so it cannot reach this address; ask the host for an IPv4 address or an invite.");
                 case InternalLiveFailure.ContentUnreadable:
                     return Errored(identity, ModErrorCode.Io, "This game's mods could not be read.");
                 case InternalLiveFailure.ServiceNotConfigured:
