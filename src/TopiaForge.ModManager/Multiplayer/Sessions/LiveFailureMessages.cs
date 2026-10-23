@@ -54,6 +54,10 @@ namespace TopiaForge.ModManager.Sessions
         internal const string UnreadBans =
             "This game could not read its list of the players you banned, so it did not open the session: they could have joined. Close any program that may be using the list and check that TopiaForge can read its data folder, then try again.";
 
+        /// <summary>A host only IPv6 reaches, from a computer whose network runs over IPv4 alone.</summary>
+        internal const string WithoutIPv6 =
+            "This computer has no IPv6, so it cannot reach this address. Ask the host for an IPv4 address or an invite.";
+
         /// <summary>
         /// Reads what the runtime or the provider threw as hosting or a join started as a refusal: a bad setting or state
         /// keeps its words, which the screens redact before they show them, and anything else is named by its type alone.
@@ -122,6 +126,8 @@ namespace TopiaForge.ModManager.Sessions
                     return new FailureMessage("Mods could not be read", UnreadableContent, ConnectingStep.VerifyingMods, true);
                 case InternalLiveFailure.BansUnreadable:
                     return new FailureMessage("Ban list could not be read", UnreadBans, ConnectingStep.Resolving, true);
+                case InternalLiveFailure.NoIPv6:
+                    return new FailureMessage("No IPv6 on this computer", WithoutIPv6, ConnectingStep.Resolving, false);
                 default:
                     return new FailureMessage("Join failed", "The join could not finish. Try again.", ConnectingStep.Resolving, true);
             }

@@ -328,7 +328,14 @@ namespace TopiaForge.Mods.Internal
         /// did not start rather than admit players it banned; nothing was written over the list. Hosting again reads it
         /// again.
         /// </summary>
-        BansUnreadable = 40
+        BansUnreadable = 40,
+
+        /// <summary>
+        /// The host can only be reached over IPv6, and this computer has none, so the join stopped before anything was
+        /// sent. Only a direct target, typed or from a direct link, ends so; the host's IPv4 address, or an invite,
+        /// reaches it.
+        /// </summary>
+        NoIPv6 = 41
     }
 
     /// <summary>The reason code of a host's admission report.</summary>

@@ -41,6 +41,7 @@ namespace TopiaForge.ModManager.Tests
             CancelWorksThroughout();
             RetryTrustAndTheLauncher();
             AnUncheckedServerMayBeTrustedOrTriedAgain();
+            AJoinThatNeedsIPv6SaysThisComputerHasNone();
             CopiedDetailsNeverHoldAnAddress();
             LauncherLinksCarryNoAddressUnlessTyped();
             PlayersShowOnceTheHostListsThem();

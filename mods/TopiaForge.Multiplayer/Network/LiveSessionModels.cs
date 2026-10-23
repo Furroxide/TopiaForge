@@ -290,7 +290,14 @@ namespace TopiaForge.Multiplayer.Network
         /// did not start: a host that took the list for an empty one would admit every player it banned. Nothing was written
         /// over the list, and hosting again reads it again.
         /// </summary>
-        BansUnreadable = 40
+        BansUnreadable = 40,
+
+        /// <summary>
+        /// The host can only be reached over IPv6, and this computer has none: its multiplayer sockets run over IPv4 alone
+        /// (<see cref="UdpSocketDriver.IPv4Only"/>). Only a direct target, typed or from a direct link, ends so, before
+        /// anything is sent; the host's IPv4 address, or an invite, reaches it.
+        /// </summary>
+        NoIPv6 = 41
     }
 
     /// <summary>What a content check found missing or different before a join, for the player to see.</summary>

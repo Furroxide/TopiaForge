@@ -35,6 +35,7 @@ internal sealed class InternetPeer
         {
             Factory = Factory,
             Services = Services,
+            Resolver = rig.Resolver?.Invoke(),
             TransportOptions = new SeededTransportOptions(seed).Next,
             NatOptions = () => new NatAgentOptions()
         };
@@ -119,6 +120,12 @@ internal sealed class InternetRig : IDisposable
     /// answers back; null puts nothing between them.
     /// </summary>
     internal Func<IControlPlaneTransport, IControlPlaneTransport>? WrapTransport { get; set; }
+
+    /// <summary>
+    /// Gets or sets what makes the resolver of the players added next, which takes every target the TopiaForge service
+    /// does not; null resolves over real networks, as the game does.
+    /// </summary>
+    internal Func<IJoinTargetResolver>? Resolver { get; set; }
 
     internal long Now => Scenario.Network.Now;
 

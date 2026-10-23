@@ -119,11 +119,12 @@ internal static class LiveRegressionTests
             NetworkDescriptorTests.Build(fixture.GetProperty("valid")[0].GetProperty("descriptor")),
             NetworkFixtures.Hex(fixture.GetProperty("keys")[0].Text("signingSeed")));
         var contacted = new List<IPEndPoint>();
+        // A system with IPv6, whatever this machine has: without it the IPv6 literal below is refused as NoIPv6 instead.
         var resolver = new NetworkTargetResolver(() => null, new KnownHostsStore(new MemoryDataFiles()), () => 1_000, (endpoint, _, _) =>
         {
             lock (contacted) contacted.Add(endpoint);
             return Task.FromResult(new DescriptorFetch(DescriptorFetchOutcome.Fetched, signed, string.Empty));
-        });
+        }, ipv4Only: () => false);
         ResolvedTarget Resolve(string host, bool allowDirect) =>
             resolver.ResolveAsync(JoinTarget.Direct(host, 27250), allowDirect, null, CancellationToken.None).GetAwaiter().GetResult();
 

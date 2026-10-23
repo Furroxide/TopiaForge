@@ -391,6 +391,19 @@ loopback for a test that names the loopback in either form.
   IPv6 socket, such as running out of sockets, reaches the caller as it is.
 - **Errors** still carry only their socket error code. The descriptor endpoint and its client (section 15) open their
   TCP sockets by the same rule, through `IPSockets`.
+- **A host only IPv6 reaches.** On such a system, a join whose host has no IPv4 address fails at once as `NoIPv6` (41):
+  an IPv6 address typed or in a direct link, at any scope, or a name whose lookup returned IPv6 addresses alone.
+  - It fails before anything is sent, and before relay-only's question, so nobody is asked to show the host their
+    address for a join that cannot work. Its words say that this computer has no IPv6, and to ask the host for an IPv4
+    address or an invite.
+  - The resolver asks the system only about such a target, by opening and closing one socket by the rule above
+    (`IPSockets.RunsIPv4Only`).
+  - A name whose lookup returns nothing ends as it always has, since that proves nothing about IPv6; a name with an IPv4
+    address is fetched there first, as before. Invites, listed servers and LAN sessions never take this path, and where
+    IPv6 exists nothing changes.
+- **The diagnostics say so.** The first time a game socket opens over IPv4 alone, for browsing, hosting or joining, the
+  provider says once, as information: `live.network-ipv4-only`, "The multiplayer network runs over IPv4 only, because
+  this computer has no IPv6." It names no address, and where IPv6 exists it says nothing.
 
 Paths come from `UdpPaths`. A key is a type byte, the 16-byte IPv6 form of the address, the port and the IPv6 scope
 id: 23 bytes that only this layer and the transport see. The scope keeps a link-local address on the interface it was
@@ -556,7 +569,7 @@ host is up, so any failure before that leaves the player's own session untouched
 
 | Phase | What happens |
 | --- | --- |
-| Resolving | The target becomes a path and a verified descriptor, off the main thread. A LAN target comes from the browser. A typed address is looked up, IPv4 first, and trusted on first use (section 8), or refused as `KnownHostsUnreadable` while that record cannot be read. |
+| Resolving | The target becomes a path and a verified descriptor, off the main thread. A LAN target comes from the browser. A typed address is looked up, IPv4 first, and trusted on first use (section 8), or refused as `KnownHostsUnreadable` while that record cannot be read. A host only IPv6 reaches, from a system without IPv6, fails at once as `NoIPv6` (section 13). |
 | Checking | The game build, the protocol's major version, the path against the player's privacy choice, and the content must all agree. Packages of this game's own that cannot be read end the join as `ContentUnreadable`. |
 | AwaitingPassword | A protected session waits for the password, which is typed in game, never staged. |
 | PreparingProof | The password key is derived off the main thread, salted with the host's transport key. |

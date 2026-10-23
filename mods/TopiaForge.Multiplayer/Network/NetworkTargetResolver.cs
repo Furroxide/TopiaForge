@@ -14,31 +14,46 @@ namespace TopiaForge.Multiplayer.Network
     /// served is remembered, and a different one later is reported as a changed identity unless the player trusts it.
     /// While the record of those servers cannot be read, no typed address is trusted unchecked: the resolve fails with
     /// the reason, unless the player trusts the one server the address serves now. A relay-only player's resolve never
-    /// contacts an address beyond the local network, not even for the descriptor.
+    /// contacts an address beyond the local network, not even for the descriptor. Where this system's sockets run over
+    /// IPv4 alone, a direct target whose every address is IPv6 fails at once as <see cref="LiveFailure.NoIPv6"/>, before
+    /// anything is sent and before relay-only's question, since nothing the player could allow would reach it.
     /// </summary>
     internal sealed class NetworkTargetResolver : IJoinTargetResolver
     {
         private static readonly TimeSpan FetchTimeout = TimeSpan.FromSeconds(5);
         private const string DirectNotAllowed = "Joining directly would show the host your address; allow it for this session to continue.";
+        private const string WithoutIPv6 = "This computer has no IPv6, so it cannot reach this address; ask the host for an IPv4 address or an invite.";
 
         private readonly Func<LanBrowser?> browser;
         private readonly KnownHostsStore knownHosts;
         private readonly Func<long> unixSeconds;
         private readonly Func<IPEndPoint, string?, CancellationToken, Task<DescriptorFetch>> fetch;
+        private readonly Func<bool> ipv4Only;
+        private readonly Func<string, Task<IPAddress[]>> lookUp;
 
         /// <param name="browser">Gets the LAN browser, when the player is browsing.</param>
         /// <param name="knownHosts">The trust-on-first-use record and its file, which save what checks record.</param>
         /// <param name="fetch">Fetches a descriptor; tests watch what is contacted. Null uses <see cref="DescriptorClient"/>.</param>
+        /// <param name="ipv4Only">
+        /// Says whether this system's sockets run over IPv4 alone; it is asked only about a direct target with no IPv4
+        /// address. Null asks the system, by the game socket's rule (<see cref="IPSockets.RunsIPv4Only"/>); tests give either
+        /// answer.
+        /// </param>
+        /// <param name="lookUp">Looks a host name up; null asks the system's resolver. Tests say what a name resolves to.</param>
         internal NetworkTargetResolver(
             Func<LanBrowser?> browser,
             KnownHostsStore knownHosts,
             Func<long> unixSeconds,
-            Func<IPEndPoint, string?, CancellationToken, Task<DescriptorFetch>>? fetch = null)
+            Func<IPEndPoint, string?, CancellationToken, Task<DescriptorFetch>>? fetch = null,
+            Func<bool>? ipv4Only = null,
+            Func<string, Task<IPAddress[]>>? lookUp = null)
         {
             this.browser = browser ?? throw new ArgumentNullException(nameof(browser));
             this.knownHosts = knownHosts ?? throw new ArgumentNullException(nameof(knownHosts));
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.fetch = fetch ?? ((endpoint, serverId, token) => DescriptorClient.FetchAsync(endpoint, serverId, FetchTimeout, token));
+            this.ipv4Only = ipv4Only ?? (() => IPSockets.RunsIPv4Only());
+            this.lookUp = lookUp ?? (host => Dns.GetHostAddressesAsync(host));
         }
 
         public async Task<ResolvedTarget> ResolveAsync(JoinTarget target, bool allowDirect, string? trustedServerId, CancellationToken cancellationToken)
@@ -100,12 +115,20 @@ namespace TopiaForge.Multiplayer.Network
             {
                 try
                 {
-                    addresses = await Dns.GetHostAddressesAsync(target.Host!).ConfigureAwait(false);
+                    addresses = await lookUp(target.Host!).ConfigureAwait(false);
                 }
                 catch (SocketException)
                 {
                     return ResolvedTarget.Failed(LiveFailure.Unreachable, "The host name could not be found.");
                 }
+            }
+
+            // A host only IPv6 reaches is out of reach where this system's sockets run over IPv4 alone, so it is refused at
+            // once: before anything is sent, and before relay-only's question, since nothing the player could allow would
+            // reach it. A name that resolved to nothing proves nothing about IPv6 and ends as it always has.
+            if (addresses.Length > 0 && !Array.Exists(addresses, ReachesOverIPv4) && ipv4Only())
+            {
+                return ResolvedTarget.Failed(LiveFailure.NoIPv6, WithoutIPv6);
             }
 
             var ordered = new List<IPAddress>();
@@ -159,6 +182,10 @@ namespace TopiaForge.Multiplayer.Network
 
             return true;
         }
+
+        /// <summary>Whether an IPv4 socket can reach an address: an IPv4 address, or one mapped into IPv6.</summary>
+        private static bool ReachesOverIPv4(IPAddress address) =>
+            address.AddressFamily == AddressFamily.InterNetwork || address.IsIPv4MappedToIPv6;
 
         /// <summary>Whether a name resolves without asking anyone beyond this machine and the local network.</summary>
         private static bool IsLocalName(string host) =>

@@ -146,6 +146,12 @@ internal sealed class SteppedNetworkFactory : INetworkFactory
     public string? SourceOf(TransportPath path) => VirtualDatagramNetwork.SourceOf(path);
 
     public byte[]? NetworkOf(TransportPath path) => VirtualDatagramNetwork.NetworkOf(path);
+
+    /// <summary>
+    /// Gets or sets whether a game socket this factory opened runs over IPv4 alone. The virtual network never falls back,
+    /// so it is false unless a test sets it to stand for the fallback.
+    /// </summary>
+    public bool OpenedIPv4Only { get; set; }
 }
 
 /// <summary>
@@ -188,6 +194,9 @@ internal sealed class SteppedResolver : IJoinTargetResolver
 
     internal ResolvedTarget? Override { get; set; }
 
+    /// <summary>Gets or sets a resolver that takes every target in this one's place, such as the real one over a test's fetch.</summary>
+    internal IJoinTargetResolver? Inner { get; set; }
+
     /// <summary>Gets whether the last join asked to allow direct paths; the join itself refuses one it was not allowed.</summary>
     internal bool? LastAllowDirect { get; private set; }
 
@@ -198,6 +207,7 @@ internal sealed class SteppedResolver : IJoinTargetResolver
     {
         LastAllowDirect = allowDirect;
         LastTrustedServerId = trustedServerId;
+        if (Inner != null) return Inner.ResolveAsync(target, allowDirect, trustedServerId, cancellationToken);
         if (Override != null) return Task.FromResult(Override);
         var host = Host?.Invoke();
         return Task.FromResult(host == null

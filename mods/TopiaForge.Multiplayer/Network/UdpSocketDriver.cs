@@ -242,6 +242,32 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>
+        /// Gets whether this system's sockets run over IPv4 alone, by the rule <see cref="Open(SocketType, ProtocolType, bool)"/>
+        /// follows: it opens one UDP socket that way and closes it at once, binding nothing and sending nothing. A socket the
+        /// system refuses for any other reason says nothing about IPv6, so it reads as false and refuses nothing.
+        /// </summary>
+        /// <param name="withoutIPv6">Takes the IPv4 branch as a system without IPv6 does, on any system; tests use it.</param>
+        internal static bool RunsIPv4Only(bool withoutIPv6 = false) =>
+            RunsIPv4Only(withoutIPv6 ? SocketError.AddressFamilyNotSupported : SocketError.Success);
+
+        /// <summary>
+        /// Gets the same answer with the probe's IPv6 socket refused with <paramref name="refusal"/> on any system unless it is
+        /// <see cref="SocketError.Success"/>, as <see cref="Open(SocketType, ProtocolType, SocketError)"/> refuses it; tests
+        /// use it. Only the refusal a system without IPv6 gives reads as IPv4 only.
+        /// </summary>
+        internal static bool RunsIPv4Only(SocketError refusal)
+        {
+            try
+            {
+                using (var socket = Open(SocketType.Dgram, ProtocolType.Udp, refusal)) return socket.AddressFamily == AddressFamily.InterNetwork;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Gets where <paramref name="socket"/> binds <paramref name="address"/>, every local address when it is null. A
         /// dual-mode socket binds an IPv4 address through its mapped form. An IPv4 socket binds an address's IPv4 form, and
         /// the IPv6 any-address as the IPv4 one; an IPv6-only address, such as the IPv6 loopback, has no IPv4 form, so it

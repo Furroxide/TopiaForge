@@ -97,6 +97,12 @@ namespace TopiaForge.Multiplayer.Network
 
         internal LiveJoin? Join { get; private set; }
 
+        /// <summary>
+        /// Gets whether a game socket these sessions opened, browsing, hosting or joining, runs over IPv4 alone because this
+        /// computer has no IPv6. It names no address.
+        /// </summary>
+        internal bool NetworkRunsIPv4Only => factory.OpenedIPv4Only;
+
         /// <summary>Gets the trust-on-first-use record; every use locks it.</summary>
         internal KnownHosts KnownHosts => knownHosts.Record;
 
