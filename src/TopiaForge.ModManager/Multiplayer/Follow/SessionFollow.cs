@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager
     /// attached; as a listen host it announces what this game is in (<see cref="SessionFollowHost"/>), and as a joined
     /// player it follows the host's announcements (<see cref="SessionFollower"/>). It runs in the frame's step 2, after the
     /// network world's events, so a world that arrives this frame is seen by the follow the same frame. A frame at rest
-    /// allocates nothing. Unity-free; main thread. See docs/internal/MultiplayerRuntimeIntegration.md, section 18.
+    /// allocates nothing. Unity-free; main thread. See docs/internal/MultiplayerRuntimeIntegration.md, section 19.
     /// </summary>
     internal sealed class SessionFollow : IMultiplayerRuntimeObserver, IMultiplayerFrameStage
     {

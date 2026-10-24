@@ -15,7 +15,7 @@ namespace TopiaForge.ModManager
     /// LoadingWorld (the same provider's <c>LoadAsync</c>, after the level an additive arena is built over), Synchronizing
     /// (the host's world arriving), Participant (this player's participant controller alone) and Running. The lifecycle
     /// commits Preparing, LoadingWorld (through Synchronizing too), StartingMode and Running, as a host's session does, so
-    /// every consumer of the world session sees the host's. See docs/internal/MultiplayerRuntimeIntegration.md, section 18.
+    /// every consumer of the world session sees the host's. See docs/internal/MultiplayerRuntimeIntegration.md, section 19.
     /// </summary>
     internal sealed partial class GamemodeSessionOrchestrator
     {
