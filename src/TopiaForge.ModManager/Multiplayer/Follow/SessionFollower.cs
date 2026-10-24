@@ -63,6 +63,7 @@ namespace TopiaForge.ModManager
         private bool leavingForMenu;
         private bool ending;
         private int arrivalShown = -1;
+        private int arrivedScene;
 
         internal SessionFollower(GamemodeSessionOrchestrator sessions, FollowedScene scene, Func<IInternalSystemChannel?> channel,
             Func<IDisposable> grantFollow, Action leave, Func<NetworkWorldProgress> world, Func<CancellationToken, Task>? discover,
@@ -338,9 +339,10 @@ namespace TopiaForge.ModManager
             }
 
             var other = finished.Other!.Result;
+            var toMenu = finished.ToMenu || finished.Target.Kind == HostWorldKind.Menu;
             if (other.Succeeded)
             {
-                if (finished.Target.Kind == HostWorldKind.Level) Arrived(finished.Target, FollowStage.InLevel, "In the host's level");
+                if (!toMenu) Arrived(finished.Target, FollowStage.InLevel, "In the host's level");
                 else if (stranded) Arrived(finished.Target, FollowStage.AtMenu, FollowFailureWords.LevelNotLoaded);
                 else Arrived(finished.Target, FollowStage.AtMenu, "The host is at the main menu");
                 return;
@@ -353,13 +355,13 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            if (finished.Target.Kind == HostWorldKind.Level && !stranded)
+            if (!toMenu && !stranded)
             {
                 // The host's level is not one this game can load: the player waits at the menu, joined, for the host's next world.
                 LogReason("Multiplayer: the host's level could not be loaded here (" + other.ErrorCode + ")", other.ErrorMessage);
                 stranded = true;
                 Status.Notify(FollowFailureWords.LevelNotLoaded);
-                var menu = new Pending(finished.Target);
+                var menu = new Pending(finished.Target) { ToMenu = true };
                 pending = menu;
                 menu.Other = sessions.FollowMainMenuAsync(menu.Cancellation.Token);
                 menu.Completion = menu.Other;
@@ -372,6 +374,7 @@ namespace TopiaForge.ModManager
         private void Arrived(HostWorldState target, FollowStage stage, string detail)
         {
             applied = target;
+            arrivedScene = scene.Version;
             busyTotal = 0f;
             ReleaseHold();
             Status.Move(stage, detail);
@@ -397,7 +400,7 @@ namespace TopiaForge.ModManager
         {
             var target = applied!;
             if (target.Kind == HostWorldKind.Menu || stranded) return;
-            if (scene.IsMainMenu)
+            if (scene.IsMainMenu && scene.Version != arrivedScene)
             {
                 log.Info("Multiplayer: this game returned to the main menu by itself, so it left the session.");
                 Status.Notify(FollowFailureWords.MenuLeft);
@@ -620,6 +623,9 @@ namespace TopiaForge.ModManager
 
             /// <summary>Gets or sets whether this is a look for the game's own worlds, after which the host's world is followed again.</summary>
             internal bool Discovery { get; set; }
+
+            /// <summary>Gets or sets whether this returns the game to the main menu, as the host's level could not be loaded.</summary>
+            internal bool ToMenu { get; set; }
         }
     }
 }

@@ -219,13 +219,18 @@ namespace TopiaForge.ModManager.Sessions
 
         internal void Refollowing() => IsRefollow = true;
 
+        /// <summary>Raised with each stage the follow moves to, even several in one frame, for diagnostics and tests.</summary>
+        internal event Action<FollowStage>? Moved;
+
         internal void Move(FollowStage stage, string detail, int step = 0, int steps = 0)
         {
+            var changed = stage != Stage;
             Stage = stage;
             Detail = detail ?? string.Empty;
             Step = step;
             Steps = steps;
             Version++;
+            if (changed) Moved?.Invoke(stage);
         }
 
         internal void Fail(FollowFailure failure)
