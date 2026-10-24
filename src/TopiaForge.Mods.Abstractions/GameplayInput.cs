@@ -262,7 +262,11 @@ namespace TopiaForge.Mods
         /// <param name="name">A stable name unique inside the current mod.</param>
         /// <param name="displayName">A short user-facing label.</param>
         /// <param name="defaultBindings">One or more default bindings.</param>
-        /// <param name="suppressWhileUiFocused">Whether UI keyboard or pointer focus suppresses the action.</param>
+        /// <param name="suppressWhileUiFocused">
+        /// Whether the action yields to UI that holds its controls: every control while a dialog, a fullscreen tool, the
+        /// manager or a key capture holds the focus or a text field has the keyboard, the keys and buttons an open window
+        /// handles, and mouse controls while the pointer is over UI. Other controls still reach it, over the mod's own window too.
+        /// </param>
         public InputActionDefinition(
             string name,
             string displayName,
@@ -305,7 +309,7 @@ namespace TopiaForge.Mods
         /// <summary>Gets the default physical bindings.</summary>
         public IReadOnlyList<InputBinding> DefaultBindings => defaultBindings;
 
-        /// <summary>Gets whether UI keyboard or pointer focus suppresses the action.</summary>
+        /// <summary>Gets whether the action yields to UI that holds its controls, control by control.</summary>
         public bool SuppressWhileUiFocused { get; }
     }
 

@@ -115,8 +115,10 @@ namespace TopiaForge.Mods.UnityUi
                 return false;
             }
 
+            // A press TopiaForge took from the game never reaches the device, so the kit reads it where it was taken.
             var mapped = ToInputSystemKey(key);
-            return mapped != InputSystemKey.None && keyboard[mapped].wasPressedThisFrame;
+            return mapped != InputSystemKey.None
+                && (keyboard[mapped].wasPressedThisFrame || TopiaForgeInputOwnership.KeyPressedThisFrame(mapped));
         }
 
         private static bool IsAlwaysActive(TopiaForgeKey key)

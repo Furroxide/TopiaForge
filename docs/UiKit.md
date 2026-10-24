@@ -128,7 +128,32 @@ control structure itself changes.
 
 Register a descriptive action through `Context.Input` and let users rebind it. Do not reserve F5,
 F8, or F10: those belong to the shared Creator workbench, UiGallery, and manager respectively.
-Gameplay input is suppressed while text entry or another framework surface owns focus.
+
+Surfaces own the input they handle, with no code in the mod:
+
+- **Back**, Escape or a controller's B, dismisses only the topmost surface. The game sees nothing of
+  that press, and a key still held stays the surface's until it is released. The next press, with
+  no surface left, reaches the game as before, so its pause menu opens.
+- **Menu navigation**, the arrows, Tab, Enter and Space, and a controller's left stick, D-pad, A and
+  B, belongs to a modal, a fullscreen tool and the manager overlay while they show. The menu beneath
+  never moves or presses. The surface's own controls move and submit at the UI module's own repeat
+  delay and rate, and the first press with none of them selected selects the first. A window takes
+  navigation only while one of its controls is selected, so gameplay keeps Space and the stick
+  otherwise.
+- **The keyboard** belongs to a text field while it has focus, and to a key capture while it waits.
+  Typing reaches the field and none of it the game; Escape cancels a capture without closing the
+  window around it.
+- **Everything else passes through unchanged**: the mouse, every key no surface handles, and the
+  game's own controls.
+
+A mod's action yields to the UI the same way, control by control (`suppressWhileUiFocused`, the
+default): to every control while a modal, a fullscreen tool, the manager, a key capture or a text
+field holds the focus; to the keys and buttons an open window handles; to every key and controller
+control while the game's own UI holds the selection, since it may be typing; and, for mouse controls,
+while the pointer is over UI. Its own key still reaches it at the main menu and over its own window.
+
+TopiaForge takes these presses from the Input System, which the game's menus, pause and navigation
+read. Code that reads Unity's legacy input still sees every key.
 
 ## Accessibility
 
@@ -182,6 +207,17 @@ The internal renderer lives in `src/TopiaForge.Mods.UnityUi` and the F8 UI Galle
 QA catalog. Provider work follows the repository's dirty-setter, pooling, virtualization, theme,
 layer-band, and no-steady-state-allocation rules. Those implementation details are intentionally
 absent from the safe consumer contract.
+
+A kit surface says what it takes when it joins the dismiss stack:
+`TopiaForgeDismissStack.Push(surface, claim, root)`. The input filter looks at each keyboard and
+controller event before any Input System action does. It holds a claimed press at rest in that event,
+and in every later one until the control is released, and the kit reads the press itself. It changes
+no action map, UI module or binding of the game's, so nothing has to be restored, and with no claim
+every event passes at once. A surface whose root is destroyed or hidden claims nothing. A taken press
+never reaches the device, so first-party code that reads a key's press through the Input System also
+reads `TopiaForgeInputOwnership.KeyPressedThisFrame(key)`, as hotkeys and key captures do. The
+decisions live in the Unity-free `TopiaForgeInputGate`, `TopiaForgeDismissOrder` and
+`TopiaForgeNavigationDriver`, covered by `UiKitInputOwnershipTests`.
 
 Every kit label comes from one TextMesh Pro factory, which turns on extra padding. Quicksand's
 stems are thin, so without it small text gets glyph quads narrower than a pixel, and the GPU drops

@@ -8,7 +8,8 @@ namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
     /// Rebindable key field: click → "PRESS A KEY…" → next key from either input
-    /// backend is captured (ESC cancels). Pairs with TopiaForgeHotkeys.Rebind.
+    /// backend is captured (ESC cancels the capture only, through the Back stack, and
+    /// the game sees none of the keys pressed meanwhile). Pairs with TopiaForgeHotkeys.Rebind.
     /// </summary>
     public sealed class TopiaForgeKeybindField : TopiaForgeWidget, ITopiaForgeThemeAware
     {
@@ -17,6 +18,7 @@ namespace TopiaForge.Mods.UnityUi
         private readonly TextMeshProUGUI keyLabel;
         private readonly TextMeshProUGUI nameLabel;
         private readonly Action<TopiaForgeKey> onChanged;
+        private readonly TopiaForgeKeyCapture escape;
         private TopiaForgeKey key;
         private bool capturing;
 
@@ -25,6 +27,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             key = initial;
             onChanged = onChangedHandler;
+            escape = new TopiaForgeKeyCapture(() => CompleteCapture(TopiaForgeKey.None));
             TopiaForgeLayout.ApplyRow(Go, TopiaForgeGap.Sm, TopiaForgeGap.None);
             this.FixedHeight(TopiaForgeTokens.ControlSmHeight);
 
@@ -124,12 +127,17 @@ namespace TopiaForge.Mods.UnityUi
 
             capturing = true;
             Go.GetComponent<TopiaForgeKeybindCapture>().enabled = true;
+
+            // Above the window or overlay that shows the field, holding the keyboard: Escape cancels the capture alone, and
+            // the key the player captures never reaches the game.
+            TopiaForgeDismissStack.Push(escape, TopiaForgeInputClaim.Keyboard, Go);
             Repaint();
         }
 
         internal void CompleteCapture(TopiaForgeKey captured)
         {
             capturing = false;
+            TopiaForgeDismissStack.Remove(escape);
             Go.GetComponent<TopiaForgeKeybindCapture>().enabled = false;
             if (captured != TopiaForgeKey.None)
             {
@@ -156,22 +164,28 @@ namespace TopiaForge.Mods.UnityUi
         }
     }
 
-    /// <summary>Enabled only while capturing; polls for the next pressed key.</summary>
+    /// <summary>
+    /// Enabled only while capturing; polls for the next pressed key. Escape is the Back stack's, so whichever of the kit's
+    /// driver and this poll runs first in a frame, one Escape cancels the capture and nothing else.
+    /// </summary>
     internal sealed class TopiaForgeKeybindCapture : MonoBehaviour
     {
         public TopiaForgeKeybindField? Field;
+
+        private void OnDisable()
+        {
+            // Hidden or destroyed mid-capture, as when its window closes: the capture ends, so it never keeps the keyboard.
+            if (Field != null && Field.Capturing)
+            {
+                Field.CompleteCapture(TopiaForgeKey.None);
+            }
+        }
 
         private void Update()
         {
             if (Field == null || !Field.Capturing)
             {
                 enabled = false;
-                return;
-            }
-
-            if (TopiaForgeInput.EscapePressedThisFrame())
-            {
-                Field.CompleteCapture(TopiaForgeKey.None);
                 return;
             }
 

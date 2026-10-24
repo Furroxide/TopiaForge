@@ -92,6 +92,8 @@ namespace TopiaForge.Mods.UnityUi
             // partially initialized or misbehaving consumer cannot survive loader teardown.
             TopiaForgeTween.Reset();
             TopiaForgeDismissStack.Reset();
+            TopiaForgeInputOwnership.Reset();
+            TopiaForgeNavigation.Reset();
             TopiaForgeHotkeys.Reset();
             TopiaForgeIntent.Reset();
             TopiaForgeCursor.Reset();
