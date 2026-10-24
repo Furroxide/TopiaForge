@@ -117,6 +117,12 @@ namespace TopiaForge.ModManager.Sessions
         SessionPhase LocalPhase { get; }
 
         /// <summary>
+        /// Gets where following the host's world stands on a joined player (WS3.8), which the connecting overlay shows; a
+        /// status that never moves where there is no session follower. A frame may read it.
+        /// </summary>
+        SessionFollowStatus Follow { get; }
+
+        /// <summary>
         /// Takes the session this game was launched to host or join, once the provider planned it: once, and null after, or
         /// when there is none. A frame may call it; it allocates nothing.
         /// </summary>

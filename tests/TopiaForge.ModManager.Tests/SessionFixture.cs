@@ -100,6 +100,19 @@ namespace TopiaForge.ModManager.Tests
         }
         public Task<OperationResult<bool>> LoadMainMenuAsync(IInternalSceneTransitionService transitions, CancellationToken cancellationToken)
         { MenuLoads++; return Menu?.Invoke(cancellationToken) ?? Task.FromResult(OperationResult<bool>.Success(true)); }
+
+        /// <summary>Gets the levels session follow loaded by scene name, with the spawn each was given, in order.</summary>
+        internal List<(string Scene, TransformState? Spawn)> Levels { get; } = new List<(string Scene, TransformState? Spawn)>();
+
+        /// <summary>Gets or sets how a level load ends; it succeeds when null.</summary>
+        internal Func<string, CancellationToken, Task<OperationResult<bool>>>? Level;
+
+        public Task<OperationResult<bool>> LoadSceneAsync(IInternalSceneTransitionService transitions, string sceneName, TransformState? spawn,
+            CancellationToken cancellationToken)
+        {
+            Levels.Add((sceneName, spawn));
+            return Level?.Invoke(sceneName, cancellationToken) ?? Task.FromResult(OperationResult<bool>.Success(true));
+        }
         internal void Launch(string request = "request")
         {
             var task = Hosted.StartAsync(Plan.Descriptor, request);

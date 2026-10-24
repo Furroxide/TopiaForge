@@ -33,9 +33,10 @@ namespace TopiaForge.ModManager
             get { lock (gate) return active == null ? Array.Empty<SceneClaimInfo>() : new[] { active.Info }; }
         }
 
-        public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId)
+        public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId,
+            SceneTransitionPriority priority = SceneTransitionPriority.UserInitiated)
         {
-            var request = new SceneTransitionRequest(owner.PackageId, operationId, SceneTransitionPriority.UserInitiated);
+            var request = new SceneTransitionRequest(owner.PackageId, operationId, priority);
             return Reserve(owner, request, lifecycle: true);
         }
 
@@ -190,7 +191,14 @@ namespace TopiaForge.ModManager
     internal enum SceneTransitionPriority
     {
         Automatic = 0,
-        UserInitiated = 1
+        UserInitiated = 1,
+
+        /// <summary>
+        /// A joined player's game following its host's world (WS3.8): only the session follower reserves with it, and the
+        /// multiplayer authority policy allows it only while the follower holds its grant. Every grant borrowed from such a
+        /// reservation acts with it, so the host's world loads on the joined player through the same provider as on the host.
+        /// </summary>
+        SessionFollow = 2
     }
 
     internal sealed class SceneTransitionRequest

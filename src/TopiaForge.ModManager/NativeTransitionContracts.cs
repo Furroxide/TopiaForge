@@ -23,7 +23,14 @@ namespace TopiaForge.ModManager
         bool IsSceneBusy { get; }
         void SetSessionAdmissionGate(Func<bool> isBusy);
         Task<NativeDrainResult> WaitForIdleAsync();
-        OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId);
+
+        /// <summary>
+        /// Reserves native transitions for a lifecycle operation. <paramref name="priority"/> is the request's, and every grant
+        /// borrowed from the reservation acts with it: a session follow's (<see cref="SceneTransitionPriority.SessionFollow"/>)
+        /// is what lets a joined player load its host's world.
+        /// </summary>
+        OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId,
+            SceneTransitionPriority priority = SceneTransitionPriority.UserInitiated);
     }
 
     internal interface INativeTransitionReservation : IDisposable

@@ -21,6 +21,9 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the local session's phase as the realm rules read it; idle before the runtime exists.</summary>
         internal SessionPhase LocalPhase => runtime?.Multiplayer.SessionPhaseSource() ?? SessionPhase.Idle;
 
+        /// <summary>Gets where following the host's world stands on a joined player (WS3.8).</summary>
+        internal SessionFollowStatus FollowStatus => runtime?.SessionFollow?.Follower.Status ?? SessionFollowStatus.None;
+
         /// <summary>Gets the multiplayer provider's session as mods see it, for the participant list; null without the provider.</summary>
         internal IMultiplayerSession? GetMultiplayerSession() => runtime?.GetService<IMultiplayerSession>();
 
