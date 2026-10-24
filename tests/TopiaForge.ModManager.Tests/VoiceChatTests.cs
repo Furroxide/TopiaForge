@@ -29,6 +29,8 @@ namespace TopiaForge.ModManager.Tests
             VoiceYieldsToTheGamesRecording();
             VoiceYieldsToARobotConversationThatYieldsToTheGame();
             AStateThatCannotBeReadKeepsTheMicrophoneClosed();
+            TheGamesRecordingReachesEveryClaimAtOnce();
+            NativeRecordingIsWatchedBeforeAnyModLoads(Program.FindRepoRoot());
             ConsentIsAskedInItsApprovedWording();
             WithdrawingConsentTurnsVoiceOffAndAsksAgain();
             OnlyConsentToTheCurrentWordingCounts();
@@ -39,6 +41,7 @@ namespace TopiaForge.ModManager.Tests
             TheCensusReadsTheGamesBindings();
             BindingsFallBackWhenTheGameUsesThem();
             CaptureRefusesReservedAndTakenControls();
+            EscapeCancelsTheCaptureAlone(Program.FindRepoRoot());
             TheGamesBindingsMoveTheDefaults();
             TheMicrophonesToChooseFrom();
             MutesFollowThePlayerKeyAcrossAJoin();

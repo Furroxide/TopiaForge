@@ -134,8 +134,9 @@ internal sealed class PeerVoiceChat
         this.network = network;
         Microphone = new SignalMicrophone(network);
         Emitters = new ListeningEmitters(network);
+        // An arbiter pointed at no game state: the game never records on its own here.
         Runtime = new VoiceChatRuntime(() => peer.Control, () => peer.Session.Snapshot, new MultiplayerMicrophoneArbiter(), Microphone,
-            new SilentGame(), Input, Emitters);
+            Input, Emitters);
         lastMicros = network.Now;
         peer.ModsUpdate = Frame;
         peer.AfterFrame = Emitters.ReadAudio;
@@ -345,10 +346,4 @@ internal sealed class HeldKeys : IVoiceInput
         pressed = default;
         return false;
     }
-}
-
-/// <summary>A game that never records on its own.</summary>
-internal sealed class SilentGame : IVoiceNativeRecording
-{
-    public bool IsRecording => false;
 }

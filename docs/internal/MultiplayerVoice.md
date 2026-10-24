@@ -913,10 +913,16 @@ Native recording includes both `UIState.Recording` and `UIState.IsDecodingVoice`
 busy. Voice stops reading as soon as another use holds the microphone. Because Unity owns recordings by device,
 it leaves that device running and ends its abandoned recording only once the higher-priority use is done.
 
+The arbiter reads the game's state whenever a use is decided: each claim, each check for preemption and each
+release check reads `UIState` at that moment. The plugin points the arbiter at the game right after it creates the
+runtime, before any mod loads, so the reading does not wait for voice chat's frame, and holds whether or not voice
+chat starts. A mod's update earlier in a frame sees a recording the game started earlier in that frame, and nothing
+voice chat saw is left behind when it stops.
+
 `RobotDialogueMicrophone` takes the runtime's `RobotDialogue` lease around `PlayerDialogueInputService` capture.
-A preempted capture returns `Conflict` and leaves the device alone until native recording finishes. The current
-composition updates native recording in the voice tick after mod updates: RobotKit can therefore see a recording
-that started this frame one frame late. That timing limitation is an open decision, not an accepted guarantee.
+A capture cannot start while the game records, and is refused with `Conflict`. A preempted capture returns
+`Conflict` and leaves the device alone until native recording finishes; the moment the game is done, it may end
+what it left on the device.
 
 ### 4.3 Push-to-talk and controls
 
@@ -924,8 +930,15 @@ that started this frame one frame late. That timing limitation is an open decisi
 Caps Lock and Mouse Forward. `NativeInputCensus` reads every native `PlayerInput` action map's effective bindings,
 including overrides and composite parts. Reserved V, B, Q, E, Z, F5, F8, F10, Esc and primary/secondary mouse
 buttons are always refused. A chosen control the game takes later falls back to a free control of the same kind;
-the page explains the change. A slot can also be cleared. The game input registry does not yet list this action.
-Esc currently cancels binding capture and closes the overlay, matching the kit's keybind control.
+the page explains the change. A slot the settings file leaves empty stays empty; VOICE has no control that clears
+one. Rebinding lives on VOICE alone: the SDK's input registry does not list this action, and nothing reads it there.
+
+Esc cancels a binding capture, and only the capture. While a capture waits it holds the top of the kit's Escape
+stack, in the modal band above the overlay's window, and the capture's own frame leaves Esc to that stack. Esc
+therefore never closes the overlay too, whichever of the kit's driver and voice chat's frame reads the press first.
+Every other end of a capture, binding a control, asking again, leaving VOICE or the game closing, gives Esc back
+to the overlay. The game's own input still sees the key: the kit cannot consume input before the game reads it,
+and native input isolation while the overlay is open is a separate change.
 
 ### 4.4 Consent and preferences
 
@@ -967,14 +980,18 @@ The provider still owns its voice service, so transport-loss counters are not ne
 
 ### 4.6 Verification and limits
 
-The manager's 23 focused tests cover the gate, test mode, priority, unreadable native state, approved consent,
-withdrawal/versioning, journal concurrency and failures, indicator states, reserved/censused controls, rebinding,
-devices, stable and session-scoped mutes, playback, allocation, wait-free callback shape and bounds.
+The manager's 26 focused tests cover the gate, test mode, priority, unreadable native state, the game's recording
+read at every claim and watched from before mods load, approved consent, withdrawal/versioning, journal concurrency
+and failures, indicator states, reserved/censused controls, rebinding, Esc during a capture, devices, stable and
+session-scoped mutes, playback, allocation, wait-free callback shape and bounds.
 Provider tests carry push-to-talk capture through the real SPI and codec to another player's stream, and keep
 player-key mutes across a move to another host and back, on the deterministic virtual network.
 
 The allocation tests require zero bytes across 2,000 idle frames, talking frames and VOICE getter reads, and
 10,000 emitter callback reads. The callback's IL permits only volatile reads, clearing silence and the stream's
-wait-free read. Mutating consent, native priority or reserved-key checks makes its corresponding test fail.
+wait-free read. Mutating consent, native priority or reserved-key checks makes its corresponding test fail, and so
+does reading the game's recording only in voice chat's frame, taking Esc in the capture's own frame, or leaving the
+kit's Escape stack unheld. Where the plugin points the arbiter, the decoding half of the game's state and the capture's
+band on the kit's stack are game-side code no harness runs; their source shape is checked instead.
 Native consent, microphone, meter and real-input checks remain distinct from these Unity-free tests. Two-machine
-audio acceptance belongs to the owner; neither the virtual network nor a local microphone test replaces it.
+audio acceptance runs on two real machines; neither the virtual network nor a local microphone test replaces it.

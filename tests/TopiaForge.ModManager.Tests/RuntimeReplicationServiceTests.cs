@@ -122,11 +122,13 @@ namespace TopiaForge.ModManager.Tests
             That(refused.ErrorCode == ModErrorCode.Conflict && refused.ErrorMessage == "The microphone is in use for robot dialogue.",
                 "and voice chat is refused while dialogue holds it (" + refused.ErrorMessage + ")");
 
-            arbiter.NativeRecording = true;
+            var gameRecords = false;
+            arbiter.ObserveNativeRecording(() => gameRecords);
+            gameRecords = true;
             That(dialogue.IsPreempted && chat.IsPreempted && arbiter.Holder == InternalMicrophoneUse.NativeRecording, "the game's own recording comes before both");
             var blocked = robots.AcquireMicrophone(InternalMicrophoneUse.RobotDialogue, "Talking again");
             That(blocked.ErrorCode == ModErrorCode.Conflict && blocked.ErrorMessage == "The microphone is in use for the game's robot recording.", "dialogue waits for it");
-            arbiter.NativeRecording = false;
+            gameRecords = false;
 
             dialogue.Dispose();
             dialogue.Dispose();

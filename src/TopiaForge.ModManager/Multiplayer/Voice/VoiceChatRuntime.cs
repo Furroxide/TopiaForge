@@ -23,7 +23,6 @@ namespace TopiaForge.ModManager.Voice
         private readonly Func<IInternalMultiplayerControl?> control;
         private readonly Func<MultiplayerSessionSnapshot?> snapshot;
         private readonly MultiplayerMicrophoneArbiter arbiter;
-        private readonly IVoiceNativeRecording native;
         private readonly IVoiceInput input;
         private readonly VoiceCapture capture;
         private readonly InputBinding?[] bindings = { VoicePushToTalk.DefaultKey, VoicePushToTalk.DefaultMouseButton };
@@ -47,14 +46,12 @@ namespace TopiaForge.ModManager.Voice
             Func<MultiplayerSessionSnapshot?> snapshot,
             MultiplayerMicrophoneArbiter arbiter,
             IVoiceMicrophone microphone,
-            IVoiceNativeRecording native,
             IVoiceInput input,
             IVoiceEmitters emitters)
         {
             this.control = control ?? throw new ArgumentNullException(nameof(control));
             this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
             this.arbiter = arbiter ?? throw new ArgumentNullException(nameof(arbiter));
-            this.native = native ?? throw new ArgumentNullException(nameof(native));
             this.input = input ?? throw new ArgumentNullException(nameof(input));
             capture = new VoiceCapture(microphone ?? throw new ArgumentNullException(nameof(microphone)));
             Playback = new VoicePlayback(emitters ?? throw new ArgumentNullException(nameof(emitters)));
@@ -168,22 +165,6 @@ namespace TopiaForge.ModManager.Voice
             var voice = ReadVoice(current);
             var role = ReadRole(current);
             var session = ReadSnapshot();
-
-            // The game's own recording comes first. A state that cannot be read counts as recording, so a game update that
-            // moves it keeps voice chat off rather than talking over the game.
-            var cannotCheck = false;
-            bool nativeRecording;
-            try
-            {
-                nativeRecording = native.IsRecording;
-            }
-            catch (Exception)
-            {
-                nativeRecording = true;
-                cannotCheck = true;
-            }
-
-            arbiter.NativeRecording = nativeRecording;
             if (voice == null)
             {
                 Release();
@@ -205,7 +186,12 @@ namespace TopiaForge.ModManager.Voice
             }
 
             var state = Apply(voice);
+
+            // The game's own recording comes first, then a robot conversation. The arbiter reads the game as it is asked, here
+            // as at every mod's claim, and counts a state it cannot read as recording, so a game update that moves it keeps
+            // voice chat off rather than talking over the game.
             var busy = arbiter.IsHeldAbove(InternalMicrophoneUse.VoiceChat);
+            var cannotCheck = arbiter.NativeUnreadable;
 
             // What the microphone recorded since the last frame goes first, under the state it was recorded in, so a release
             // keeps its last syllable. Nothing is read while another use holds the microphone: that is not voice chat's.

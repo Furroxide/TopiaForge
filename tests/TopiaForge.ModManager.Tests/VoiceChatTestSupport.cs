@@ -243,14 +243,57 @@ namespace TopiaForge.ModManager.Tests
         }
     }
 
-    internal sealed class FakeNativeRecording : IVoiceNativeRecording
+    /// <summary>The game's own robot recording, as the arbiter reads it: what the test sets, or a read that fails.</summary>
+    internal sealed class FakeNativeRecording
     {
         internal bool Recording { get; set; }
 
         /// <summary>Gets or sets whether the game's state cannot be read, as after a game update moved it.</summary>
         internal bool Unreadable { get; set; }
 
-        public bool IsRecording => Unreadable ? throw new MissingFieldException("UIState", "Recording") : Recording;
+        /// <summary>Reads the state, as the arbiter's source does; it throws while the state cannot be read.</summary>
+        internal bool Read() => Unreadable ? throw new MissingFieldException("UIState", "Recording") : Recording;
+    }
+
+    /// <summary>
+    /// The kit's Escape stack as the manager overlay has it: the overlay at the bottom, and a binding capture above it while
+    /// the presenter holds one. A press dismisses the top, the capture's cancel while it is held and the overlay otherwise,
+    /// as the kit's driver does in its own frame, before or after voice chat's.
+    /// </summary>
+    internal sealed class FakeEscapeStack : IVoiceEscape
+    {
+        private Action? capture;
+
+        /// <summary>Gets whether a capture holds the top.</summary>
+        internal bool Held => capture != null;
+
+        /// <summary>Gets how many times a capture took the top.</summary>
+        internal int Holds { get; private set; }
+
+        /// <summary>Gets how many presses closed the overlay.</summary>
+        internal int OverlayCloses { get; private set; }
+
+        public void Hold(Action cancel)
+        {
+            capture = cancel ?? throw new ArgumentNullException(nameof(cancel));
+            Holds++;
+        }
+
+        public void Release() => capture = null;
+
+        /// <summary>The kit's driver reads an Escape press and dismisses the top-most surface.</summary>
+        internal void Press()
+        {
+            var top = capture;
+            if (top == null)
+            {
+                OverlayCloses++;
+                return;
+            }
+
+            capture = null;
+            top();
+        }
     }
 
     internal sealed class FakeVoiceInput : IVoiceInput
@@ -420,8 +463,9 @@ namespace TopiaForge.ModManager.Tests
 
     /// <summary>
     /// Voice chat over fakes: the presenter and the runtime as the overlay ticks them, a control whose role and voice service
-    /// the test sets, the runtime's real microphone arbiter, and the session the test lists. The background queue runs its
-    /// work inline, so what it read or wrote arrives at the next frame.
+    /// the test sets, the runtime's real microphone arbiter reading the game's state the test sets, the kit's Escape stack,
+    /// and the session the test lists. The background queue runs its work inline, so what it read or wrote arrives at the
+    /// next frame.
     /// </summary>
     internal sealed class VoiceRig
     {
@@ -430,10 +474,11 @@ namespace TopiaForge.ModManager.Tests
         internal VoiceRig(InternalSessionRole role = InternalSessionRole.Client)
         {
             Control = new RecordingSessionControl { Role = role, Voice = Voice };
-            Runtime = new VoiceChatRuntime(() => Control, () => Snapshot, Arbiter, Microphone, Native, Input, Emitters);
+            Arbiter.ObserveNativeRecording(Native.Read);
+            Runtime = new VoiceChatRuntime(() => Control, () => Snapshot, Arbiter, Microphone, Input, Emitters);
             Queue = new MultiplayerBackgroundQueue(MultiplayerWorkSchedulers.Inline);
             Preferences = new VoicePreferences(Queue, Store, Channel);
-            Presenter = new VoicePresenter(Runtime, Preferences, Queue, Microphone, Input, Bindings, () => Control, () => Snapshot);
+            Presenter = new VoicePresenter(Runtime, Preferences, Queue, Microphone, Input, Bindings, Escape, () => Control, () => Snapshot);
         }
 
         internal FakeVoiceService Voice { get; } = new FakeVoiceService();
@@ -447,6 +492,8 @@ namespace TopiaForge.ModManager.Tests
         internal FakeEmitters Emitters { get; } = new FakeEmitters();
 
         internal FakeNativeBindings Bindings { get; } = new FakeNativeBindings();
+
+        internal FakeEscapeStack Escape { get; } = new FakeEscapeStack();
 
         internal MemoryVoiceSettingsStore Store { get; } = new MemoryVoiceSettingsStore();
 

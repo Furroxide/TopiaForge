@@ -10,7 +10,8 @@ namespace TopiaForge.ModManager.Voice
     /// <summary>
     /// VOICE's push-to-talk binding and the microphones to choose from. The binding resolves against the census of the
     /// game's own bindings whenever either changes, and the runtime reads what it resolved to; a capture suspends
-    /// push-to-talk until the new control is let go, so the press that binds it never talks.
+    /// push-to-talk until the new control is let go, so the press that binds it never talks. While a capture waits it
+    /// holds the top of the kit's Escape stack, so Esc cancels the capture and nothing under it.
     /// </summary>
     internal sealed partial class VoicePresenter
     {
@@ -25,6 +26,8 @@ namespace TopiaForge.ModManager.Voice
         private readonly IVoiceMicrophone microphone;
         private readonly IVoiceInput input;
         private readonly IVoiceNativeBindings nativeBindings;
+        private readonly IVoiceEscape escape;
+        private readonly Action cancelCapture;
         private readonly List<string> nativePaths = new List<string>(64);
         private readonly InputBinding?[] resolved = new InputBinding?[VoicePushToTalk.SlotCount];
         private NativeInputCensus census = NativeInputCensus.Fallback;
@@ -80,6 +83,7 @@ namespace TopiaForge.ModManager.Voice
                 return;
             }
 
+            var starts = capturingSlot < 0;
             capturingSlot = slot;
             captureArmed = false;
             captureNote = VoiceText.CaptureNote;
@@ -87,6 +91,9 @@ namespace TopiaForge.ModManager.Voice
 
             // Push-to-talk waits while the player picks its control, so the press that binds it never talks.
             runtime.PushToTalkSuspended = true;
+
+            // Esc now cancels the capture alone: it holds the top of the kit's Escape stack, above the overlay.
+            if (starts) escape.Hold(cancelCapture);
             RefreshCensus();
         }
 
@@ -224,11 +231,11 @@ namespace TopiaForge.ModManager.Voice
             }
 
             if (input.IsTyping || !input.TryTakePressed(out var pressed)) return;
-            if (pressed.Kind == InputBindingKind.Key && string.Equals(pressed.Control, EscapeKey, StringComparison.Ordinal))
-            {
-                CancelCapture();
-                return;
-            }
+
+            // Esc is the Escape stack's, which cancels the capture whichever reads the press first this frame. Cancelled here
+            // as well, the capture would leave the stack before the kit read the press, and the same Esc would close the
+            // overlay.
+            if (pressed.Kind == InputBindingKind.Key && string.Equals(pressed.Control, EscapeKey, StringComparison.Ordinal)) return;
 
             var slot = capturingSlot;
             var problem = VoicePushToTalk.Check(pressed, slot, census, resolved);
@@ -257,6 +264,7 @@ namespace TopiaForge.ModManager.Voice
             capturingSlot = -1;
             captureArmed = false;
             captureNote = string.Empty;
+            escape.Release();
             if (!releaseFirst.HasValue) runtime.PushToTalkSuspended = false;
         }
 
