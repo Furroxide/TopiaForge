@@ -8,7 +8,7 @@ description: Build accessible Robotopia HUDs, windows, and fullscreen tools thro
 `TopiaForge.Mods.UnityUi` is the in-game UI framework for TopiaForge mods running in Robotopia and
 for the mod manager. Ordinary mods create every HUD, window, fullscreen tool, modal, and toast
 through `Context.Ui`. The service is always present, owner-scoped, rendered by TopiaForgeUi, and
-automatically tied to the mod lifetime.
+tied to the lifetime of the mod, or the scope, that uses it: scene loads never end a surface.
 Do not create an independent canvas, event system, sorting order, cursor controller, or global
 hotkey.
 
@@ -41,6 +41,54 @@ Feature-detect `IUiSurfaceDismissalSource` when a tool needs to distinguish a hi
 an ended session. Its `Dismissed` event fires when a visible surface is hidden by the user or
 through `Hide()`, but not when the surface is disposed. Keep teardown on the owning lifetime rather
 than treating every dismissal as disposal.
+
+### Lifetime and visibility
+
+Every surface and modal lives as long as the mod, or the scope, that created it. Scene loads never
+end one, so a HUD can be made once in `OnLoad`, before the game's first scene, and a window made in a
+world is still there after the next world loads, open or closed as the mod left it. A surface that a
+gamemode session's scope creates ends with that session. No SDK surface ends with a scene: a mod
+cannot see a scene change coming, and every flow it builds, a world session included, already has a
+lifetime of its own. A modal stays open across scene loads until it is answered or closed, or its mod
+or scope ends, which counts as cancelling.
+
+A HUD shows only in gameplay by default (`UiHudVisibility.Gameplay`). TopiaForge hides it at the main
+menu and while any scene loads, and shows it again in the next world, so the mod handles no scenes.
+`IsVisible` reports what the player sees: it is false while TopiaForge keeps the HUD hidden, and a
+`Show()` then makes it appear with gameplay. TopiaForge's hiding never raises `Dismissed`. A HUD that
+should also show at the main menu opts out:
+
+```csharp
+var help = Context.Ui.CreateSurface(new UiSurfaceRequest(
+    "help", "My mod", "Press K in a world.", UiSurfaceKind.Hud, 260f, 96f)
+    .WithHudVisibility(UiHudVisibility.Always));
+```
+
+Windows and fullscreen tools show exactly while the mod shows them.
+
+If the game or another mod destroys a surface's canvas anyway, the surface says so: it is never
+visible again, a visible one raises `Dismissed`, its id is free for a new surface, and the mod's log
+names it. Create the surface again to show it. A modal on such a canvas completes as cancelled.
+
+### Where HUDs dock
+
+In every level Robotopia draws its microphone label at the top left, a development build's version at
+the top, a level's objective at the top right (above every mod's UI), a crosshair at the centre, and
+dialogue subtitles across the middle of the bottom edge. A HUD docks by default where none of those
+are: at the bottom left for a gameplay HUD, above a subtitle reserve covering the bottom 12% of the
+screen, and at the middle of the left edge for a HUD shown
+everywhere, which also keeps clear of the main menu's buttons at the bottom left. All HUD panels docked
+to a bottom corner or edge share the subtitle reserve, so their stack stays together; the reserve follows
+the screen size independently of UI scale. `WithHudAnchor`
+picks another place: any corner, or the middle of any edge (`UiHudAnchor`), never the centre.
+
+HUDs docked at one place stack a small gap apart, the first created nearest the edge, so HUDs from
+different mods never overlap, and a hidden HUD gives its space up. A HUD keeps its requested size.
+Its title stays on one line, and its body fills the panel inside its padding, wrapping only past the
+panel's inner width: a 260-unit HUD wraps body text at 224 units, whatever the UI scale.
+
+Toasts stack upwards from the bottom-right corner, clear of the level objective, above every HUD,
+window and dialog.
 
 Destructive actions require a destructive modal and explicit confirmation. Long content belongs in
 a scrollable or virtualized provider surface. Gameplay overlays should avoid steady-state allocation;
@@ -111,7 +159,8 @@ their own values for fills, rings, badges and display type, so a `Warning` label
 a warning badge.
 
 Toasts reuse a few pooled views. Each toast is placed and brought in afresh, whatever its view
-showed before and under reduced motion too, and shows above every window and dialog.
+showed before and under reduced motion too, and shows above every window and dialog, stacked up from
+the bottom-right corner.
 
 ## Testing UI without running Robotopia
 
@@ -121,6 +170,11 @@ graph edges; change the graph viewport; inspect captured values; and report isol
 failures. It also implements `IUiSurfaceDismissalSource`, so hide/reopen session behavior is
 deterministic without Robotopia. Disposing the test context removes every surface and gates further
 callbacks; finish UI tests with `context.AssertNoLeaks()`.
+
+`FakeUiSurface.IsVisible` follows the fake scenes as the game does: a gameplay HUD is visible only
+while a gameplay scene is active and no scene load is pending. `FakeModContext` starts at the main
+menu, so load a world (`context.Scenes.Load(...)`) before expecting a gameplay HUD on screen.
+`IsShown` says whether the mod shows the surface, whatever TopiaForge does with it.
 
 ## Provider implementation contributors
 
@@ -146,7 +200,19 @@ position and finishes its screen clamp on the first frame the canvas has a size;
 once collapsed the UI Gallery to nothing at 1920x1080. Forcing a canvas update is no substitute: the
 CanvasScaler writes its factor only when it differs from the last one, which starts at 1, so at
 1920x1080 and UI scale 1 the canvas is still 0x0 after `Canvas.ForceUpdateCanvases()`. The clamp
-caps a window from its designed size, so a cap taken on a smaller canvas does not stick.
+caps a window from its designed size, so a cap taken on a smaller canvas does not stick. A window also
+re-places itself on the first frame after its canvas changes size, as a new resolution or UI scale
+does, so its title bar never stays off screen. Shown again during its close fade, a window stays
+shown, as a fullscreen tool does.
+
+Every kit canvas holds its sorting slot through one ledger, `TopiaForgeLayerLedger`, and gives it
+back by what was allocated, never by reading the canvas: a canvas that a scene destroyed can no
+longer say which order it held, and a HUD made in each world used to move one slot up the 800-slot
+HUD band with every world change. A component on each canvas releases its slot whenever anything
+destroys it. The host then lets go of what was on that canvas, closing a dialog as a cancellation,
+and raises `UiHost.LayerLost` for the canvas's owner. Kit layers made directly stay scene-owned
+unless created with `persistent: true`, which suits UI built for one scene's objects; the SDK's
+surfaces and modals are always persistent.
 
 ## Multiplayer kit widgets
 

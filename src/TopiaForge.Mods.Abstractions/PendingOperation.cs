@@ -64,12 +64,12 @@ namespace TopiaForge.Mods
     ///     load.Begin(
     ///         token =&gt; Context.Assets.LoadBundleAsync("content/level.bundle", token),
     ///         Context.Lifetime.StoppingToken,
-    ///         Context.Time.Frame.UnscaledTime);
+    ///         (float)Context.Time.Frame.ElapsedTime);
     /// }
     ///
     /// private void OnUpdate(float deltaTime)
     /// {
-    ///     switch (load.Poll(Context.Time.Frame.UnscaledTime, timeoutSeconds: 30f, out var result))
+    ///     switch (load.Poll((float)Context.Time.Frame.ElapsedTime, timeoutSeconds: 30f, out var result))
     ///     {
     ///         case PendingOperationState.Completed when result.TryGetValue(out var bundle):
     ///             Use(bundle);

@@ -1,15 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
+using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
     internal sealed partial class OwnerUiService
     {
-        private sealed class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource
+        private sealed partial class UnityUiSurface : IUiSurface, IUiSurfaceDismissalSource
         {
             private TopiaForgeWidget? widget;
             private TopiaForgeWindow? window;
@@ -20,32 +19,40 @@ namespace TopiaForge.ModManager
             private IReadOnlyDictionary<string, TopiaForgeGraphCanvas> retainedGraphs =
                 new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
             private readonly IModLifetime lifetime;
+            private readonly IModLogger logger;
             private readonly UiCallbackGate callbacks;
-            private Action<string>? releaseId;
+            private readonly UiSurfacePresence presence;
+            private Action<UnityUiSurface>? release;
             private Action? nativeClosed;
             private IDisposable? lifetimeLease;
-            private int visible;
+            private UnityUiHudPlacement? placement;
+            private int dockHandle;
             private int disposed;
 
             private UnityUiSurface(
                 string id,
+                GameObject canvasRoot,
                 TopiaForgeWidget widget,
                 TopiaForgeWindow? window,
                 TopiaForgeFullscreenTool? fullscreen,
                 TopiaForgeLabel body,
                 TopiaForgeContainer compositionParent,
+                UiSurfacePresence presence,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
                 Id = id;
+                CanvasRoot = canvasRoot;
                 this.widget = widget;
                 this.window = window;
                 this.fullscreen = fullscreen;
                 this.body = body;
                 this.compositionParent = compositionParent;
+                this.presence = presence;
                 this.lifetime = lifetime;
-                this.releaseId = releaseId;
+                this.logger = logger;
+                this.release = release;
                 callbacks = new UiCallbackGate(lifetime, logger);
                 if (window != null)
                 {
@@ -60,7 +67,14 @@ namespace TopiaForge.ModManager
             }
 
             public string Id { get; }
-            public bool IsVisible => Volatile.Read(ref visible) != 0 && widget != null;
+
+            /// <summary>Gets the kit canvas the surface draws on, by which a canvas destroyed outside TopiaForge is matched.</summary>
+            internal GameObject CanvasRoot { get; }
+
+            /// <summary>Gets whether the surface is a HUD that hides outside gameplay.</summary>
+            internal bool FollowsGameplay => presence.FollowsGameplay;
+
+            public bool IsVisible => presence.IsVisible;
 
             public event Action? Dismissed;
 
@@ -71,9 +85,10 @@ namespace TopiaForge.ModManager
                 TopiaForgeContainer compositionParent,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
-                return new UnityUiSurface(id, window, window, null, body, compositionParent, lifetime, logger, releaseId);
+                return new UnityUiSurface(id, window.CanvasRoot, window, window, null, body, compositionParent,
+                    new UiSurfacePresence(followsGameplay: false, gameplay: true), lifetime, logger, release);
             }
 
             public static UnityUiSurface ForFullscreen(
@@ -83,30 +98,25 @@ namespace TopiaForge.ModManager
                 TopiaForgeContainer compositionParent,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
-                return new UnityUiSurface(
-                    id,
-                    fullscreen,
-                    null,
-                    fullscreen,
-                    body,
-                    compositionParent,
-                    lifetime,
-                    logger,
-                    releaseId);
+                return new UnityUiSurface(id, fullscreen.CanvasRoot, fullscreen, null, fullscreen, body, compositionParent,
+                    new UiSurfacePresence(followsGameplay: false, gameplay: true), lifetime, logger, release);
             }
 
-            public static UnityUiSurface ForWidget(
+            public static UnityUiSurface ForHud(
                 string id,
-                TopiaForgeWidget widget,
+                TopiaForgeHudLayer layer,
                 TopiaForgeLabel body,
                 TopiaForgeContainer compositionParent,
+                bool followsGameplay,
+                bool gameplay,
                 IModLifetime lifetime,
                 IModLogger logger,
-                Action<string> releaseId)
+                Action<UnityUiSurface> release)
             {
-                return new UnityUiSurface(id, widget, null, null, body, compositionParent, lifetime, logger, releaseId);
+                return new UnityUiSurface(id, layer.Go, layer, null, null, body, compositionParent,
+                    new UiSurfacePresence(followsGameplay, gameplay), lifetime, logger, release);
             }
 
             public void AttachLifetimeLease(IDisposable lease)
@@ -114,58 +124,22 @@ namespace TopiaForge.ModManager
                 lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
             }
 
-            public void Show()
+            /// <summary>Docks the HUD's panel through the process-wide placement, which stacks HUDs sharing a corner.</summary>
+            public void AttachDock(UnityUiHudPlacement hudPlacement, int handle)
             {
-                UnityMainThreadGuard.AssertCurrent();
-                var current = widget ?? throw new ObjectDisposedException(nameof(UnityUiSurface));
-                if (Interlocked.Exchange(ref visible, 1) != 0)
-                {
-                    return;
-                }
-
-                if (window != null)
-                {
-                    window.Show();
-                }
-                else if (fullscreen != null)
-                {
-                    fullscreen.Show();
-                }
-                else
-                {
-                    current.SetVisible(true);
-                }
-            }
-
-            public void Hide()
-            {
-                UnityMainThreadGuard.AssertCurrent();
-                var current = widget ?? throw new ObjectDisposedException(nameof(UnityUiSurface));
-                if (Interlocked.Exchange(ref visible, 0) == 0)
-                {
-                    return;
-                }
-
-                if (window != null)
-                {
-                    window.Close();
-                }
-                else if (fullscreen != null)
-                {
-                    fullscreen.Close();
-                }
-                else
-                {
-                    current.SetVisible(false);
-                }
-
-                RaiseDismissed();
+                placement = hudPlacement;
+                dockHandle = handle;
             }
 
             public void SetBody(string value)
             {
                 UnityMainThreadGuard.AssertCurrent();
                 var label = body ?? throw new ObjectDisposedException(nameof(UnityUiSurface));
+                if (presence.IsLost)
+                {
+                    return;
+                }
+
                 label.SetText(value ?? string.Empty);
             }
 
@@ -179,6 +153,11 @@ namespace TopiaForge.ModManager
                     return OperationResult<bool>.Failure(
                         ModErrorCode.Cancelled,
                         "The mod UI surface is stopping.");
+                }
+
+                if (presence.IsLost)
+                {
+                    return OperationResult<bool>.Failure(ModErrorCode.InvalidState, LostMessage);
                 }
 
                 if (parent == null || widget == null)
@@ -228,72 +207,6 @@ namespace TopiaForge.ModManager
                 }
 
                 return OperationResult<bool>.Success(true);
-            }
-
-            public void Dispose()
-            {
-                UnityMainThreadGuard.AssertCurrent();
-                if (Interlocked.Exchange(ref disposed, 1) != 0)
-                {
-                    return;
-                }
-
-                Interlocked.Exchange(ref visible, 0);
-                callbacks.Close();
-                compositionRoot = null;
-                compositionParent = null;
-                retainedGraphs = new Dictionary<string, TopiaForgeGraphCanvas>(StringComparer.Ordinal);
-                body = null;
-                var currentWindow = window;
-                var currentFullscreen = fullscreen;
-                var closed = Interlocked.Exchange(ref nativeClosed, null);
-                if (currentWindow != null && closed != null)
-                {
-                    currentWindow.Closed -= closed;
-                }
-                else if (currentFullscreen != null && closed != null)
-                {
-                    currentFullscreen.Closed -= closed;
-                }
-
-                window = null;
-                fullscreen = null;
-                Dismissed = null;
-                var currentWidget = Interlocked.Exchange(ref widget, null);
-                var release = Interlocked.Exchange(ref releaseId, null);
-                var lease = Interlocked.Exchange(ref lifetimeLease, null);
-                try
-                {
-                    currentWidget?.Destroy();
-                }
-                finally
-                {
-                    try
-                    {
-                        release?.Invoke(Id);
-                    }
-                    finally
-                    {
-                        lease?.Dispose();
-                    }
-                }
-            }
-
-            private void HandleNativeClosed()
-            {
-                if (Interlocked.Exchange(ref visible, 0) != 0)
-                {
-                    RaiseDismissed();
-                }
-            }
-
-            private void RaiseDismissed()
-            {
-                var handlers = Dismissed;
-                if (handlers != null)
-                {
-                    callbacks.Invoke(handlers, "surface '" + Id + "' dismissal");
-                }
             }
 
             private static string RollbackFailedRender(

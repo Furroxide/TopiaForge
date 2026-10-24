@@ -109,6 +109,7 @@ namespace TopiaForge.Mods.UnityUi
             deferredClamp = Go.AddComponent<TopiaForgeWindowDeferredClamp>();
             deferredClamp.Window = this;
             deferredClamp.enabled = false;
+            canvasRoot.AddComponent<TopiaForgeWindowCanvasResize>().Window = this;
 
             RestoreRect();
             TopiaForgeWindowRegistry.Register(this);
@@ -143,12 +144,14 @@ namespace TopiaForge.Mods.UnityUi
         public void Show()
         {
             ThrowIfTornDown();
-            if (open)
+            if (open && !closing)
             {
                 BringToFront();
                 return;
             }
 
+            // Shown again during its close fade, the window stays: stopping the fade keeps its end from hiding it.
+            if (closing) TopiaForgeTween.Cancel(this);
             open = true;
             closing = false;
             Go.SetActive(true);
@@ -229,6 +232,20 @@ namespace TopiaForge.Mods.UnityUi
             Closed = null;
         }
 
+        /// <summary>
+        /// The window's canvas was destroyed outside the kit, by a scene, the game or another mod: let go of the cursor, the
+        /// Escape stack and the window order as teardown does, and return its Closed handlers if it was showing.
+        /// </summary>
+        internal Action? Lose()
+        {
+            var wasShowing = open && !tornDown;
+            var closed = Closed;
+            Teardown();
+            // The host reports the lost canvas before invoking these captured callbacks. SDK surfaces must already
+            // know they cannot reopen, even when a dismissal handler calls Show or creates a replacement surface.
+            return wasShowing ? closed : null;
+        }
+
         private void ThrowIfTornDown()
         {
             if (tornDown)
@@ -279,6 +296,12 @@ namespace TopiaForge.Mods.UnityUi
         internal bool FinishDeferredClamp()
         {
             return tornDown || !open || closing || TryClampToScreen();
+        }
+
+        /// <summary>Its canvas changed size, as a new resolution or UI scale does: re-places an open window next frame.</summary>
+        internal void ArmClamp()
+        {
+            if (!tornDown && open && !closing) deferredClamp.enabled = true;
         }
 
         private bool TryClampToScreen()

@@ -4,26 +4,39 @@ using System.Linq;
 using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Mods.UnityUi;
+using UnityEngine;
 
 namespace TopiaForge.ModManager
 {
+    /// <summary>
+    /// One mod's (or one scope's) <see cref="IUiService"/>. Every surface and modal it makes lives as long as that mod or
+    /// scope: their canvases survive scene loads, and the lifetime ends them. A gameplay HUD hides by itself outside
+    /// gameplay; a surface whose canvas the game or another mod destroys reports itself hidden for good.
+    /// </summary>
     internal sealed partial class OwnerUiService : IUiService
     {
         private readonly IModLifetime lifetime;
         private readonly IModLogger logger;
         private readonly UiHost host;
+        private readonly UiGameplayGate gameplay;
+        private readonly UnityUiHudPlacement hudPlacement;
         private readonly HashSet<string> surfaceIds = new HashSet<string>(StringComparer.Ordinal);
+        private readonly List<UnityUiSurface> surfaces = new List<UnityUiSurface>();
         private UiAccessibilityPreferences accessibility = UiAccessibilityPreferences.Default;
 
         public OwnerUiService(
             string ownerModId,
             string dataPath,
             IModLifetime lifetime,
-            IModLogger logger)
+            IModLogger logger,
+            UiGameplayGate gameplay,
+            UnityUiHudPlacement hudPlacement)
         {
             UnityMainThreadGuard.AssertCurrent();
             this.lifetime = lifetime;
             this.logger = logger;
+            this.gameplay = gameplay ?? throw new ArgumentNullException(nameof(gameplay));
+            this.hudPlacement = hudPlacement ?? throw new ArgumentNullException(nameof(hudPlacement));
             host = TopiaForgeUi.Create(new TopiaForgeUiOptions
             {
                 OwnerId = ownerModId,
@@ -33,6 +46,8 @@ namespace TopiaForge.ModManager
                 LogError = logger.Error
             });
             lifetime.Track(host);
+            host.LayerLost += OnLayerLost;
+            lifetime.Track(gameplay.Subscribe(OnGameplayChanged));
         }
 
         public UiAccessibilityPreferences Accessibility => accessibility;
@@ -56,6 +71,7 @@ namespace TopiaForge.ModManager
                     preferences.ReducedMotion,
                     preferences.MotionIntensity));
                 accessibility = preferences;
+                hudPlacement.Refresh();
                 return OperationResult<UiAccessibilityPreferences>.Success(preferences);
             }
             catch (Exception exception)
@@ -92,6 +108,7 @@ namespace TopiaForge.ModManager
             TopiaForgeWidget? nativeRoot = null;
             try
             {
+                // Every surface's canvas is persistent: it lives as long as this mod or scope, never as long as a scene.
                 if (request.Kind == UiSurfaceKind.Window)
                 {
                     var window = host.Window(
@@ -99,7 +116,8 @@ namespace TopiaForge.ModManager
                         request.Title,
                         request.Width,
                         request.Height,
-                        TopiaForgeScheme.Paper);
+                        TopiaForgeScheme.Paper,
+                        persistent: true);
                     nativeRoot = window;
                     var scroll = window.Content.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.Md);
                     var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
@@ -110,12 +128,12 @@ namespace TopiaForge.ModManager
                         scroll.Content,
                         lifetime,
                         logger,
-                        ReleaseSurfaceId);
+                        ReleaseSurface);
                     nativeRoot = null;
                 }
                 else if (request.Kind == UiSurfaceKind.FullscreenTool)
                 {
-                    var tool = host.FullscreenTool(request.Id, request.Title, TopiaForgeScheme.Paper);
+                    var tool = host.FullscreenTool(request.Id, request.Title, TopiaForgeScheme.Paper, persistent: true);
                     nativeRoot = tool;
                     var scroll = tool.Content.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None).Flex(1f, 1f);
                     var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
@@ -126,28 +144,12 @@ namespace TopiaForge.ModManager
                         scroll.Content,
                         lifetime,
                         logger,
-                        ReleaseSurfaceId);
+                        ReleaseSurface);
                     nativeRoot = null;
                 }
                 else
                 {
-                    var layer = host.HudLayer(request.Id);
-                    nativeRoot = layer;
-                    var panel = layer.Panel(TopiaForgePanelStyle.HudPanel)
-                        .Dock(TopiaForgeCorner.TopLeft)
-                        .Size(request.Width, request.Height);
-                    var column = panel.Column(TopiaForgeGap.Sm, TopiaForgeGap.Md);
-                    column.Label(request.Title, TopiaForgeTextStyle.Heading);
-                    var scroll = column.Scroll(TopiaForgeGap.Sm, TopiaForgeGap.None);
-                    var body = scroll.Content.Label(request.Body, TopiaForgeTextStyle.Body);
-                    surface = UnityUiSurface.ForWidget(
-                        request.Id,
-                        layer,
-                        body,
-                        scroll.Content,
-                        lifetime,
-                        logger,
-                        ReleaseSurfaceId);
+                    surface = CreateHud(request, ref nativeRoot);
                     nativeRoot = null;
                 }
 
@@ -164,7 +166,8 @@ namespace TopiaForge.ModManager
                 }
 
                 surface.AttachLifetimeLease(lifetime.Track(surface));
-                surface.Show();
+                surfaces.Add(surface);
+                surface.Present();
                 return OperationResult<IUiSurface>.Success(surface);
             }
             catch (Exception exception)
@@ -202,7 +205,9 @@ namespace TopiaForge.ModManager
             {
                 // The confirmation presets are fire-and-forget; the safe SDK contract needs a retained handle
                 // that can distinguish confirmation, cancellation, native close, and lifetime shutdown.
-                modal = host.Modal.Custom(request.Title, TopiaForgeScheme.Paper, 520f);
+                // Persistent, as surfaces are: the question stays open across scene loads until it is answered or closed,
+                // or the mod or scope that asked it ends.
+                modal = host.Modal.Custom(request.Title, TopiaForgeScheme.Paper, 520f, persistent: true);
                 state = new UnityUiModal(modal, completed, logger);
                 modal.Content.Label(request.Body, TopiaForgeTextStyle.Body);
                 var row = modal.Content.Row(TopiaForgeGap.Sm);
@@ -291,7 +296,42 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private void ReleaseSurfaceId(string id) => surfaceIds.Remove(id);
+        private void ReleaseSurface(UnityUiSurface surface)
+        {
+            surfaceIds.Remove(surface.Id);
+            surfaces.Remove(surface);
+        }
+
+        private void OnGameplayChanged(bool isGameplay)
+        {
+            for (var index = surfaces.Count - 1; index >= 0; index--)
+            {
+                if (index >= surfaces.Count || !surfaces[index].FollowsGameplay)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    surfaces[index].ApplyGameplay(isGameplay);
+                }
+                catch (Exception exception)
+                {
+                    ReportCleanupFailure(isGameplay ? "showing a gameplay HUD" : "hiding a gameplay HUD", exception);
+                }
+            }
+        }
+
+        private void OnLayerLost(GameObject root)
+        {
+            foreach (var surface in surfaces.ToArray())
+            {
+                if (ReferenceEquals(surface.CanvasRoot, root))
+                {
+                    surface.HandleLost();
+                }
+            }
+        }
 
         private void AbortSurfaceCreation(
             UnityUiSurface? surface,

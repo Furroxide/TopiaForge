@@ -26,7 +26,7 @@ namespace TopiaForge.ModManager.Tests
         {
             "Window Closed", "Fullscreen tool Closed", "Modal Closed", "Modal confirmation", "Modal cancellation", "Tab selection",
             "List selection", "Table selection", "Keybind change", "Shop Purchased", "Shop PurchaseFailed", "Card hover",
-            "Theme Changed", "Accessibility profile changed", "List row binding", "List row created"
+            "Theme Changed", "Accessibility profile changed", "List row binding", "List row created", "Lost canvas Closed"
         };
 
         // Listeners that run no mod code of their own, with why.

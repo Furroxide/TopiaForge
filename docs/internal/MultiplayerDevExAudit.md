@@ -58,7 +58,7 @@ bug rather than a friction, and the one item here that held the release, until #
 | F3 | A session's `SubscribeChanged` runs at every network tick | about 33 and 55 lines of comparison code, or an allocation every tick | WS3 3.11 | No, if 3.11 lands it |
 | F4 | Per-player state is built by hand | about 45 lines in each mod that keeps a value per player | WS3 3.11, WS5 scoreboard | No |
 | F5 | The host must prune players who left, and learn that a dropped player stays listed for 30 seconds | about 28 lines | WS3 3.11 | No |
-| F6 | A HUD is rebuilt for every world | about 28 lines and a field per mod with a HUD | UI surface lifetime slice | No |
+| F6 | A HUD was rebuilt for every world | about 28 lines and a field per mod with a HUD | Fixed in #252 | No |
 | F7 | `mod add multiplayer` broke the tests of the single-project templates | a CS0103 build failure, 1 line to fix by hand | Fixed in #243 | No |
 | F8 | Tests bound the contract and registered the session by hand, before the mod had a context | 6 to 11 lines per test harness | Fixed in #246 | No |
 | F9 | Each refusal needs a toast rate limit and a text per error code | about 20 lines per mod | WS3 3.12, WS5 | No |
@@ -138,13 +138,14 @@ version.
 - **Automatic version.** Per-player state that forgets a player who leaves for good.
 - **Owner.** WS3 3.11.
 
-### F6: the HUD is rebuilt for every world
+### F6: the HUD was rebuilt for every world (fixed in #252)
 
-- **What it took.** As the template does: create the HUD on each world replacement, dispose it on the next, and keep a
-  field for it, because a surface dies with its scene.
+- **What it took.** As the template did: create the HUD on each world replacement, dispose it on the next, and keep a
+  field for it, because a surface died with its scene.
 - **Cost.** About 28 lines and a field.
-- **Automatic version.** UI surfaces that follow the world.
-- **Owner.** The UI surface lifetime slice, already queued.
+- **Automatic version, in #252.** A surface lives as long as the mod or scope that made it, so the template makes its
+  HUD once in `OnLoad`. TopiaForge shows a gameplay HUD in each world and hides it at the main menu and while a scene
+  loads, and a window stays open or closed across scene loads, as the mod left it.
 
 ### F7: the single-project templates' tests broke after `mod add multiplayer` (fixed in #243)
 

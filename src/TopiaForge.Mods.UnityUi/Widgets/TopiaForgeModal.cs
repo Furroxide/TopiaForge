@@ -258,6 +258,27 @@ namespace TopiaForge.Mods.UnityUi
             Closed = null;
         }
 
+        /// <summary>
+        /// The modal's canvas was destroyed outside the kit, by a scene, the game or another mod: let go of the cursor and the
+        /// Escape stack, and end the dialog as a cancellation, raising <see cref="Closed"/> once.
+        /// </summary>
+        internal void Lose()
+        {
+            if (tornDown)
+            {
+                return;
+            }
+
+            tornDown = true;
+            TopiaForgeTween.Cancel(dialog);
+            cursorLease.Release();
+            TopiaForgeDismissStack.Remove(this);
+            open = false;
+            closing = false;
+            host.UnregisterModal(this);
+            RaiseClosed();
+        }
+
         private void CompleteClose()
         {
             if (tornDown)

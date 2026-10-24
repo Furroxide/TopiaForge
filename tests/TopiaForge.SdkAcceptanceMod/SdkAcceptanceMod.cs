@@ -268,6 +268,9 @@ namespace TopiaForge.SdkAcceptance
         {
             var accessibility = Context.Ui.ApplyAccessibility(
                 new UiAccessibilityPreferences(true, 1.15f, true, 0f));
+
+            // Made once, here, before the game's first scene: it lives as long as the mod. It shows everywhere, because
+            // its last step is taken at the main menu.
             var surface = Context.Ui.CreateSurface(new UiSurfaceRequest(
                 "live-acceptance",
                 "TOPIAFORGE SDK ACCEPTANCE",
@@ -277,7 +280,7 @@ namespace TopiaForge.SdkAcceptance
                     + "and select the SDK Acceptance World launch target in the manager.",
                 UiSurfaceKind.Hud,
                 520f,
-                180f));
+                180f).WithHudVisibility(UiHudVisibility.Always));
             var toast = Context.Ui.ShowToast(
                 "SDK live acceptance started: " + acceptanceChallenge,
                 UiTone.Warning);

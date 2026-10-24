@@ -112,12 +112,12 @@ protected override void OnLoad()
     load.Begin(
         token => Context.Assets.LoadBundleAsync("content/level.bundle", token),
         Context.Lifetime.StoppingToken,
-        Context.Time.Frame.UnscaledTime);
+        (float)Context.Time.Frame.ElapsedTime);
 }
 
 private void OnUpdate(float deltaTime)
 {
-    switch (load.Poll(Context.Time.Frame.UnscaledTime, timeoutSeconds: 30f, out var result))
+    switch (load.Poll((float)Context.Time.Frame.ElapsedTime, timeoutSeconds: 30f, out var result))
     {
         case PendingOperationState.Completed when result.TryGetValue(out var bundle):
             Use(bundle);
@@ -131,6 +131,9 @@ private void OnUpdate(float deltaTime)
     }
 }
 ```
+
+`Context.Time.Frame.ElapsedTime` counts unscaled seconds since TopiaForge's gameplay services started, so a
+paused or slowed game still times out; it is a `double`, and the operation's clock is a `float`.
 
 A hand-rolled `IsCompleted` poll is still accepted by this rule, but `PendingOperation<T>` is the
 supported shape: cancellation, timeout, late-result release, and restart-while-draining are all

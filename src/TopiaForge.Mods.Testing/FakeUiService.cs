@@ -13,8 +13,12 @@ namespace TopiaForge.Mods.Testing
         private readonly Dictionary<string, ContentFailure> pendingContentFailures =
             new Dictionary<string, ContentFailure>(StringComparer.Ordinal);
         private UiAccessibilityPreferences accessibility = UiAccessibilityPreferences.Default;
+        private FakeSceneService? scenes;
 
-        /// <summary>Creates a fake UI service.</summary>
+        /// <summary>
+        /// Creates a fake UI service. Its gameplay HUDs show whenever they are shown, until <see cref="FakeModContext"/>
+        /// connects it to its fake scenes, after which they show only in gameplay, as in the game.
+        /// </summary>
         public FakeUiService(FakeModLifetime lifetime)
         {
             this.lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
@@ -103,7 +107,11 @@ namespace TopiaForge.Mods.Testing
                 }
             }
 
-            var surface = new FakeUiSurface(request, value => surfaces.Remove(value));
+            var scenesNow = scenes;
+            var surface = new FakeUiSurface(
+                request,
+                value => surfaces.Remove(value),
+                scenesNow == null ? (Func<bool>?)null : () => scenesNow.IsGameplay);
             if (pendingContentFailures.TryGetValue(request.Id, out var contentFailure))
             {
                 pendingContentFailures.Remove(request.Id);
@@ -185,6 +193,12 @@ namespace TopiaForge.Mods.Testing
 
             toasts.Add(new FakeToast(message, tone));
             return OperationResult<bool>.Success(true);
+        }
+
+        /// <summary>Makes gameplay HUDs follow these fake scenes: shown only while they are in gameplay.</summary>
+        internal void FollowScenes(FakeSceneService fakeScenes)
+        {
+            scenes = fakeScenes ?? throw new ArgumentNullException(nameof(fakeScenes));
         }
 
         private readonly struct ContentFailure

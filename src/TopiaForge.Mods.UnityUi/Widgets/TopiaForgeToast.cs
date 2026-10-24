@@ -6,10 +6,12 @@ using UImage = UnityEngine.UI.Image;
 namespace TopiaForge.Mods.UnityUi
 {
     /// <summary>
-    /// Toast notifications: queued, max 4 visible, pooled views stacked top-right on a
-    /// shared toast-band canvas, slide+fade motion, auto-dismiss. Dark chip styling so
-    /// toasts read over both gameplay and paper surfaces. A longer text wraps to three lines
-    /// and its toast grows to hold them. The bookkeeping, which view shows which toast and
+    /// Toast notifications: queued, max 4 visible, pooled views stacked up from the bottom-right
+    /// corner on a shared toast-band canvas, slide+fade motion, auto-dismiss. The game shows a
+    /// level's objective at the top-right, drawn above every kit canvas, and nothing of its own
+    /// at the bottom-right. Dark chip styling so toasts read over both gameplay and paper
+    /// surfaces. A longer text wraps to three lines and its toast grows to hold them, pushing
+    /// the toasts above it up. The bookkeeping, which view shows which toast and
     /// where it rests, is <see cref="TopiaForgeToastStack{T}"/>: a view that takes a new
     /// toast is always placed and brought in afresh, whatever it showed before.
     /// </summary>
@@ -158,9 +160,9 @@ namespace TopiaForge.Mods.UnityUi
             if (view.Root == null)
             {
                 var root = layer!.Stack("Toast");
-                root.Rect.anchorMin = new Vector2(1f, 1f);
-                root.Rect.anchorMax = new Vector2(1f, 1f);
-                root.Rect.pivot = new Vector2(1f, 1f);
+                root.Rect.anchorMin = new Vector2(1f, 0f);
+                root.Rect.anchorMax = new Vector2(1f, 0f);
+                root.Rect.pivot = new Vector2(1f, 0f);
                 root.Rect.sizeDelta = new Vector2(ToastWidth, ToastHeight);
 
                 view.Fill = CreateImage(root.Go.transform, "Fill", TopiaForgeSprites.Fill(TopiaForgeRadius.Control));
@@ -245,7 +247,8 @@ namespace TopiaForge.Mods.UnityUi
                     continue;
                 }
 
-                var targetY = -TopiaForgeTokens.SafeMargin - top;
+                // The first toast rests at the bottom margin and each later one above the toasts before it.
+                var targetY = TopiaForgeTokens.SafeMargin + top;
                 if (fresh)
                 {
                     // A new toast, in a new view or in one whose last exit left it faded out and slid aside: place it and

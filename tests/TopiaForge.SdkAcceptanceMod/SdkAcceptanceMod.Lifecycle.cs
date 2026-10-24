@@ -276,13 +276,14 @@ namespace TopiaForge.SdkAcceptance
 
             private IUiSurface RegisterCycleUiSurface(Stack<IDisposable> resources, int cycle)
             {
+                // Shown everywhere, so the check sees the mod's own show and hide even if a load is under way.
                 var request = new UiSurfaceRequest(
                     LifecycleSurfaceId,
                     "LIFECYCLE",
                     "Cycle " + (cycle + 1),
                     UiSurfaceKind.Hud,
                     160f,
-                    90f);
+                    90f).WithHudVisibility(UiHudVisibility.Always);
                 var surface = RequireValue(CycleContext.Ui.CreateSurface(request), "create lifecycle UI surface");
                 resources.Push(surface);
                 Require(CycleContext.Ui.CreateSurface(request).ErrorCode == ModErrorCode.Conflict,

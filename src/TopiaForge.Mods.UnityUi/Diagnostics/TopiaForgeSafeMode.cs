@@ -25,9 +25,7 @@ namespace TopiaForge.Mods.UnityUi
                 Object.DontDestroyOnLoad(root);
                 var canvas = root.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                TopiaForgeLayers.AssignAllocatedOrder(
-                    canvas,
-                    TopiaForgeLayers.Allocate(TopiaForgeLayerBand.Debug, "TopiaForgeSafeModeBanner"));
+                TopiaForgeLayers.Claim(root, canvas, TopiaForgeLayerBand.Debug, "TopiaForgeSafeModeBanner");
 
                 var panel = new GameObject("Panel", typeof(RectTransform));
                 panel.transform.SetParent(root.transform, false);
@@ -63,10 +61,13 @@ namespace TopiaForge.Mods.UnityUi
 
         internal static void Reset()
         {
-            if (banner != null)
+            if (!(banner is null))
             {
                 TopiaForgeLayers.Release(banner);
-                Object.Destroy(banner);
+                if (banner != null)
+                {
+                    Object.Destroy(banner);
+                }
             }
 
             banner = null;

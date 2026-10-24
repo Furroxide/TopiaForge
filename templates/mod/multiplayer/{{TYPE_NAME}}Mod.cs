@@ -43,9 +43,6 @@ namespace {{ASSEMBLY_NAME}}
         [ReplicatedState("count")]
         private ReplicatedState<CounterState> count = new ReplicatedState<CounterState>(new CounterState());
 
-        // The HUD of the world being played. There is none at the main menu, or before the first world loads.
-        private IUiSurface? hud;
-
         // When, in unscaled seconds, the last refusal was shown to the player.
         private double lastRefusalShownAt = double.NegativeInfinity;
 
@@ -67,17 +64,31 @@ namespace {{ASSEMBLY_NAME}}
                 return;
             }
 
+            // One HUD for the mod's whole life. It lives as long as the mod, so it survives every scene load, and as a
+            // gameplay HUD TopiaForge shows it in each world and hides it at the main menu and during loads by itself.
+            var created = Context.Ui.CreateSurface(new UiSurfaceRequest(
+                "count",
+                "{{DISPLAY_NAME}}",
+                Describe(count.Value),
+                UiSurfaceKind.Hud,
+                width: 260f,
+                height: 96f));
+            if (!created.TryGetValue(out var hud))
+            {
+                Context.Logger.Error("HUD creation failed (" + created.ErrorCode + "): " + created.ErrorMessage);
+                return;
+            }
+
             // The HUD shows the value this process holds, which every player converges on: the presser's prediction at
             // once, the host's canonical value as it arrives, and the declared default when a new session starts.
-            Context.Lifetime.Track(count.SubscribeChanged(state => hud?.SetBody(Describe(state))));
-            Context.Events.SubscribeSceneLoaded(ShowHudForWorld);
+            Context.Lifetime.Track(count.SubscribeChanged(state => hud.SetBody(Describe(state))));
             Context.Events.SubscribeUpdate(_ =>
             {
                 // A press counts only where the player can see its result: in a world, with the HUD up. The host's
                 // answer comes back to ShowRefusal on this thread: at once for the host's own player, solo play
                 // included, and a round trip later for anyone else. Nothing waits for it, so the frame never stalls
                 // (TF1008), and it never runs once this mod has stopped.
-                if (hud != null && pressAction.WasPressed)
+                if (hud.IsVisible && pressAction.WasPressed)
                 {
                     SubmitIncrement(new IncrementRequest(), ShowRefusal);
                 }
@@ -86,43 +97,6 @@ namespace {{ASSEMBLY_NAME}}
             Context.Logger.Info(
                 "{{DISPLAY_NAME}} loaded. In a world, press " + DefaultPressKey
                 + " to add one to the count every player shares.");
-        }
-
-        /// <summary>Gives each gameplay world a HUD of its own, and the main menu none.</summary>
-        /// <remarks>
-        /// Robotopia loads its main menu and each world as a scene, and replaces the scene, with everything shown in
-        /// it, when the player moves on. So the HUD is made when a world loads and released when the next one replaces
-        /// it. Making it in <see cref="OnLoad"/> instead would show nothing: mods load before the game's first scene,
-        /// and loading that scene replaces everything shown before it.
-        /// </remarks>
-        private void ShowHudForWorld(SceneLoadEvent scene)
-        {
-            if (!scene.IsWorldReplacement)
-            {
-                return;
-            }
-
-            hud?.Dispose();
-            hud = null;
-            if (GameScenes.IsNonGameplayScene(scene.SceneName))
-            {
-                return;
-            }
-
-            var created = Context.Ui.CreateSurface(new UiSurfaceRequest(
-                "count",
-                "{{DISPLAY_NAME}}",
-                Describe(count.Value),
-                UiSurfaceKind.Hud,
-                width: 260f,
-                height: 96f));
-            if (!created.TryGetValue(out var surface))
-            {
-                Context.Logger.Error("HUD creation failed (" + created.ErrorCode + "): " + created.ErrorMessage);
-                return;
-            }
-
-            hud = surface;
         }
 
         /// <summary>Adds one to the shared count for the player who pressed.</summary>

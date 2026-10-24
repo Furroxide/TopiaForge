@@ -158,6 +158,7 @@ namespace TopiaForge.Mods.UnityUi
             ThrowIfDisposed();
             ReportInitOnce();
             var root = TopiaForgeLayers.CreateCanvas(OwnerId + ":" + name, band, interactive, persistent);
+            TopiaForgeLayers.WatchLoss(root, HandleLayerLost);
             layerRoots.Add(root);
             var scaler = root.GetComponent<CanvasScaler>();
             TopiaForgeLayers.ApplyScaler(scaler, EffectiveUiScale);
@@ -250,9 +251,8 @@ namespace TopiaForge.Mods.UnityUi
             themeAware.Clear();
             foreach (var root in layerRoots.ToArray())
             {
-                if (root == null) continue;
                 AttemptCleanup(() => TopiaForgeLayers.Release(root), failures);
-                AttemptCleanup(() => UnityEngine.Object.Destroy(root), failures);
+                if (root != null) AttemptCleanup(() => UnityEngine.Object.Destroy(root), failures);
             }
             layerRoots.Clear();
             scalers.Clear();

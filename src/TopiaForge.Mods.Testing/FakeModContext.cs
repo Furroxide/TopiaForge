@@ -42,6 +42,7 @@ namespace TopiaForge.Mods.Testing
             Diagnostics = new FakeDiagnosticsService();
             Extensions = new FakeExtensionService(Lifetime);
             Scenes = new FakeSceneService(Events, Lifetime);
+            Ui.FollowScenes(Scenes);
         }
 
         /// <inheritdoc/>

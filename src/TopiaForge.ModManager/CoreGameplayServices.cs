@@ -3,6 +3,7 @@ using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace TopiaForge.ModManager
 {
@@ -23,6 +24,11 @@ namespace TopiaForge.ModManager
         private readonly UnityPhysicsBackend physics;
         private readonly UnityNetworkWorldBackend networkWorldBackend;
         private readonly GameObject loopObject;
+        private readonly UiGameplayGate uiGameplay = new UiGameplayGate();
+        private readonly UnityUiHudPlacement hudPlacement = new UnityUiHudPlacement();
+        private bool activeSceneSampled;
+        private int sampledActiveScene;
+        private bool sampledActiveIsGameplay;
         private bool disposed;
 
         public CoreGameplayServices(NativeTransitionHost nativeHost, string runtimeOwnershipId)
@@ -102,7 +108,7 @@ namespace TopiaForge.ModManager
                 new OwnerItemService(lifetime, entities, logger),
                 new OwnerAssetService(packagePath, lifetime, entities),
                 new OwnerAudioService(lifetime),
-                new OwnerUiService(ownerModId, dataPath, lifetime, logger),
+                new OwnerUiService(ownerModId, dataPath, lifetime, logger, uiGameplay, hudPlacement),
                 new OwnerUnityInteropService(ownerModId, lifetime, entities),
                 sceneTransitions,
                 new OwnerWorldRuntimeService(lifetime, sceneTransitions, worlds, new WorldRuntimeClock(ownerScheduler), dispatcher));
@@ -139,9 +145,38 @@ namespace TopiaForge.ModManager
                 UnityEngine.Time.realtimeSinceStartupAsDouble,
                 UnityEngine.Time.frameCount);
             input.Sample();
+            SampleUiGameplay();
             scenes.SampleCheckpoint();
             scheduler.Tick(sample.ElapsedTime, sample.FrameIndex);
             return sample;
+        }
+
+        /// <summary>
+        /// Tells the gameplay gate, before mods update, whether the active scene is a loaded gameplay scene and whether a
+        /// scene is loading, so gameplay HUDs hide at the main menu and during loads and show again in a world. The scene's
+        /// name is read only when the active scene changes, so a frame that changes nothing allocates nothing.
+        /// </summary>
+        private void SampleUiGameplay()
+        {
+            var active = SceneManager.GetActiveScene();
+            var valid = active.IsValid();
+            if (!valid)
+            {
+                activeSceneSampled = false;
+                sampledActiveIsGameplay = false;
+            }
+            else if (!activeSceneSampled || active.handle != sampledActiveScene)
+            {
+                activeSceneSampled = true;
+                sampledActiveScene = active.handle;
+                sampledActiveIsGameplay = UiGameplayGate.IsGameplayScene(active.name);
+            }
+
+            uiGameplay.Observe(
+                sampledActiveIsGameplay,
+                valid && active.isLoaded,
+                SceneManager.sceneCount,
+                SceneManager.loadedSceneCount);
         }
 
         private void BeginFixedUpdate()
@@ -187,6 +222,7 @@ namespace TopiaForge.ModManager
             }
 
             disposed = true;
+            hudPlacement.Dispose();
             input.Dispose();
             scheduler.Dispose();
             sceneCoordinator.RevokeOwnership(runtimeOwnershipId);
