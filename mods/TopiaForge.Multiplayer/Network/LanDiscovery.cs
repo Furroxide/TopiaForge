@@ -176,6 +176,9 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Socket socket;
         private readonly Dictionary<string, Entry> entries = new Dictionary<string, Entry>(StringComparer.Ordinal);
         private readonly byte[] buffer = new byte[LanBeacon.Size + 1];
+
+        /// <summary>Where each beacon came from: one endpoint, reused, so a turn with nothing to read allocates nothing.</summary>
+        private EndPoint source = new IPEndPoint(IPAddress.Any, 0);
         private readonly long expiryMicros;
         private readonly LanQueryBudget budget = new LanQueryBudget();
         private IReadOnlyList<LanServer> servers = Array.Empty<LanServer>();
@@ -228,11 +231,12 @@ namespace TopiaForge.Multiplayer.Network
             var changed = false;
             for (var count = 0; count < MaximumBeaconsPerTurn; count++)
             {
-                EndPoint from = new IPEndPoint(IPAddress.Any, 0);
+                // Asked first, a socket with nothing waiting ends the turn without a read, which would throw.
+                if (!SocketReadiness.CanRead(socket)) break;
                 int length;
                 try
                 {
-                    length = socket.ReceiveFrom(buffer, 0, buffer.Length, SocketFlags.None, ref from);
+                    length = socket.ReceiveFrom(buffer, 0, buffer.Length, SocketFlags.None, ref source);
                 }
                 catch (SocketException exception) when (exception.SocketErrorCode == SocketError.WouldBlock)
                 {
@@ -244,7 +248,7 @@ namespace TopiaForge.Multiplayer.Network
                 }
 
                 if (!LanBeacon.TryDecode(buffer, 0, length, out var beacon)) continue;
-                changed |= Heard(stack, beacon, ((IPEndPoint)from).Address, now);
+                changed |= Heard(stack, beacon, ((IPEndPoint)source).Address, now);
             }
 
             if (now >= nextExpiry) changed |= Expire(now);

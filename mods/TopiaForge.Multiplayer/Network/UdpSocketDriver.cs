@@ -124,6 +124,10 @@ namespace TopiaForge.Multiplayer.Network
             count = 0;
             path = null;
             if (disposed || buffer == null) return false;
+
+            // The network thread reads until a read finds nothing, so every turn ends with one more call. Asked first, an
+            // empty socket answers it without a read, which would throw and allocate the source's address.
+            if (!SocketReadiness.CanRead(socket)) return false;
             try
             {
                 // Every datagram lands in scratch space first. Windows reports the whole queue as available, and Linux
