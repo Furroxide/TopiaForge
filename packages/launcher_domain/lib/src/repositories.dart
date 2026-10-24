@@ -193,12 +193,15 @@ abstract interface class MultiplayerContentHost {
   /// started is closed only when [JoinSessionState.closeOwnedGameAcknowledged]
   /// says the consent covered it, and only once every package is staged and
   /// the install can no longer be cancelled, so a join that is refused or
-  /// cancelled leaves it running. Today the launcher stops it outright, which
-  /// loses progress not saved there and makes the game's next start its
-  /// one-shot safe mode, which refuses the session, so a consent should not
-  /// cover closing until the launcher can ask the game to quit. Otherwise a
-  /// running game, or one this launcher did not start, ends the join as
-  /// [JoinFailureCode.gameRunning].
+  /// cancelled leaves it running. The launcher asks it to quit, as its Quit
+  /// button would, and stops it only if it does not. The join goes on only
+  /// when the game's next start loads its mods, read from the startup
+  /// journal the game left: a game that recorded no clean exit, because it
+  /// was stopped, or quit before its mods finished unloading, or had
+  /// crashed, opens in safe mode, where a session is refused, so the install
+  /// ends as [JoinFailureCode.installFailed] with nothing installed and says
+  /// what to do. Otherwise a running game, or one this launcher did not
+  /// start, ends the join as [JoinFailureCode.gameRunning].
   Future<JoinEvent?> installJoinContent(
     GameInstall install,
     JoinSessionState state, {

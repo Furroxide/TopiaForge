@@ -170,6 +170,12 @@ void main() {
           LaunchTransport.readPreferencesJournal(text),
         ),
       ),
+      (
+        'quit',
+        (text) => LaunchTransport.writeLauncherQuit(
+          LaunchTransport.readLauncherQuit(text),
+        ),
+      ),
     ]) {
       group(name, () {
         final section = asObject(fixture[name]);

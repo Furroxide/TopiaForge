@@ -106,8 +106,10 @@ enum JoinFailureCode {
 enum JoinGameOwnership {
   /// The launcher started it, so it can restart it into the join. An install
   /// closes it when the consent covered that
-  /// ([JoinConsentGiven.closeOwnedGameAcknowledged]); it blocks when it did
-  /// not, or when closing it failed.
+  /// ([JoinConsentGiven.closeOwnedGameAcknowledged]), asking it to quit as
+  /// its Quit button would; it blocks when the consent did not, when the
+  /// process cannot be verified, or when the game neither quit nor could be
+  /// stopped.
   owned,
 
   /// Something else started it; the player must close it.

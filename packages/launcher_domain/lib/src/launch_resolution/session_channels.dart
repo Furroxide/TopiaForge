@@ -197,3 +197,39 @@ final class SessionJoinRequest {
           })!
           as Map<String, Object?>;
 }
+
+/// The launcher asks a game it started to quit, as the game's own Quit button
+/// would, before it restarts the game (`launcher-quit-<request key>.json`,
+/// launcher to game). Only the process launched as [requestId] acts on it, so
+/// a launcher can never ask a game it did not start to quit. [quitId] names
+/// this request, so the launcher withdraws exactly the one it wrote.
+final class LauncherQuitRequest {
+  LauncherQuitRequest({required String requestId, required String quitId})
+    : requestId = _token(requestId),
+      quitId = _token(quitId);
+
+  static const schemaVersion = 1;
+
+  factory LauncherQuitRequest.fromJson(Object? value) {
+    const members = {'quitId', 'requestId', 'schemaVersion'};
+    final json = _object(value, members, members);
+    if (_integer(json['schemaVersion']) != schemaVersion) {
+      throw const FormatException('Unsupported launcher quit version.');
+    }
+    return LauncherQuitRequest(
+      requestId: _token(json['requestId']),
+      quitId: _token(json['quitId']),
+    );
+  }
+
+  final String requestId;
+  final String quitId;
+
+  Map<String, Object?> toJson() =>
+      _sorted({
+            'quitId': quitId,
+            'requestId': requestId,
+            'schemaVersion': schemaVersion,
+          })!
+          as Map<String, Object?>;
+}

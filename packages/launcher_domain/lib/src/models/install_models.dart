@@ -363,6 +363,7 @@ class LaunchResult {
     this.issues = const [],
     this.blocks = const [],
     this.latestActivity,
+    this.replacedGame,
   });
 
   final bool started;
@@ -374,6 +375,25 @@ class LaunchResult {
   final List<LauncherIssue> issues;
   final List<LaunchBlock> blocks;
   final LaunchActivity? latestActivity;
+
+  /// How the running game this launch replaced ended, and whether that leaves
+  /// this start in safe mode; null when it replaced none.
+  final ReplacedGame? replacedGame;
+
+  /// This result, saying how the running game it replaced ended.
+  LaunchResult replacing(ReplacedGame? replaced) => LaunchResult(
+    started: started,
+    message: replaced == null
+        ? message
+        : '${replaced.message(started: started)} $message',
+    processId: processId,
+    requestId: requestId,
+    process: process,
+    issues: issues,
+    blocks: blocks,
+    latestActivity: latestActivity,
+    replacedGame: replaced,
+  );
 }
 
 class LauncherSnapshot {

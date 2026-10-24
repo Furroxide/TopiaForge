@@ -374,6 +374,9 @@ Future<(LocalLauncherRepository, GameInstall)> _prepareProfileLaunchRepository({
   GameProcessIdentityReader? identityReader,
   GameProcessLiveness? liveness,
   GameProcessStopper? stopper,
+  // A restart asks the owned game to quit and waits; these fakes never quit,
+  // so the waits are instant.
+  OwnedGameQuitPolicy quit = const OwnedGameQuitPolicy(pause: _noPause),
 }) async {
   final repository = LocalLauncherRepository(
     dataRoot: dataRoot.path,
@@ -385,6 +388,7 @@ Future<(LocalLauncherRepository, GameInstall)> _prepareProfileLaunchRepository({
     gameProcessIdentityReader: identityReader,
     gameProcessLiveness: liveness,
     gameProcessStopper: stopper,
+    ownedGameQuit: quit,
     packageMetadataValidator: _acceptPackageMetadata,
   );
   addTearDown(repository.dispose);

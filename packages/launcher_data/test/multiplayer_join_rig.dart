@@ -42,13 +42,16 @@ final class JoinRig {
   late GameInstall install;
 
   /// A rig with no game running. [withRuntime] repairs a runtime into the
-  /// game, so profiles can launch.
+  /// game, so profiles can launch. [ownedGameQuit] is how an install closes
+  /// a game the repository started; tests pass one whose pause returns at
+  /// once.
   static Future<JoinRig> create({
     JoinInstallHook? hook,
     GameRunningProbe? probe,
     GameProcessCreator? creator,
     GameProcessLiveness? liveness,
     GameProcessStopper? stopper,
+    OwnedGameQuitPolicy? ownedGameQuit,
     bool withRuntime = false,
   }) async {
     final root = Directory(
@@ -72,6 +75,7 @@ final class JoinRig {
       creator: creator,
       liveness: liveness,
       stopper: stopper,
+      ownedGameQuit: ownedGameQuit,
     );
     rig.install = await rig.repository.selectGameDirectory(rig.game.path);
     if (withRuntime) {
@@ -95,6 +99,7 @@ final class JoinRig {
     GameProcessCreator? creator,
     GameProcessLiveness? liveness,
     GameProcessStopper? stopper,
+    OwnedGameQuitPolicy? ownedGameQuit,
   }) {
     final opened = LocalLauncherRepository(
       dataRoot: dataRoot,
@@ -104,6 +109,7 @@ final class JoinRig {
       gameProcessCreator: creator,
       gameProcessLiveness: liveness,
       gameProcessStopper: stopper,
+      ownedGameQuit: ownedGameQuit ?? const OwnedGameQuitPolicy(),
       joinInstallHook: hook,
     );
     addTearDown(opened.dispose);

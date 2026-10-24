@@ -37,6 +37,53 @@ extension _LaunchAdmission on LocalLauncherRepository {
     ].join(' '),
   );
 
+  /// [LocalLauncherRepository.launchSession]: refuses before anything
+  /// happens what launch request V5 cannot carry, and starts a join at the
+  /// main menu.
+  Future<LaunchResult> _launchSession(
+    GameInstall install,
+    LauncherProfile profile,
+    LaunchSessionRequest session, {
+    required LaunchSelection? selectionOverride,
+    required bool restart,
+  }) {
+    if (session.role == LaunchSessionRole.join &&
+        selectionOverride != null &&
+        selectionOverride.kind != LaunchSelectionKind.mainMenu) {
+      throw ArgumentError(
+        'A join starts at the main menu.',
+        'selectionOverride',
+      );
+    }
+    final refusal = _acceptanceIsolation != null
+        ? 'Acceptance runs never host or join a session.'
+        : profile.launchSettings.safeMode
+        ? 'Safe Mode never hosts or joins a session. Turn Safe Mode off for '
+              'this profile, then try again.'
+        : session.role == LaunchSessionRole.join &&
+              profile.inheritManagerModState
+        ? "A join runs exactly the packages it planned, so its profile cannot "
+              "inherit the manager's mod state."
+        : null;
+    if (refusal != null) {
+      return Future.value(
+        LaunchResult(
+          started: false,
+          message: '$refusal No process was stopped.',
+        ),
+      );
+    }
+    return _launchProfile(
+      install,
+      profile,
+      selectionOverride: session.role == LaunchSessionRole.join
+          ? const LaunchSelection.mainMenu()
+          : selectionOverride,
+      restart: restart,
+      session: session,
+    );
+  }
+
   Future<LaunchResult> _launchProfile(
     GameInstall install,
     LauncherProfile source, {
@@ -59,6 +106,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
       );
     }
     LaunchStagingLease? lease;
+    ReplacedGame? replaced;
     try {
       final profile = _requireValidLauncherProfile(
         LauncherProfile.fromJson(
@@ -136,9 +184,22 @@ extension _LaunchAdmission on LocalLauncherRepository {
             message: 'The launcher repository is closed.',
           );
         }
-        await _gameProcessStopper(process);
+        // Asked to quit, as its own Quit button would, and stopped only if
+        // it does not, so the replacement is not forced into safe mode.
+        replaced = await _closeOwnedGame(current, process);
+        if (replaced == null) {
+          return const LaunchResult(
+            started: false,
+            message:
+                'The launcher repository closed while the running game was '
+                'asked to quit. No process was stopped.',
+          );
+        }
       }
-      _ownedLaunchProcesses.remove(identity);
+      // The game may have exited on its own since it was started, so its
+      // receipt and the request it was started with go together.
+      final dropped = _ownedLaunchProcesses.remove(identity);
+      if (dropped != null) _ownedLaunchRequests.remove(dropped);
       final retired = _launchMonitors.entries
           .where((entry) => entry.value.current.installIdentity == identity)
           .toList();
@@ -146,7 +207,7 @@ extension _LaunchAdmission on LocalLauncherRepository {
         await entry.value.dispose();
         _launchMonitors.remove(entry.key);
       }
-      return await _startGame(
+      final started = await _startGame(
         current,
         profile,
         selectionOverride: selectionOverride,
@@ -157,11 +218,12 @@ extension _LaunchAdmission on LocalLauncherRepository {
             ? 'Started replacement TopiaForge process.'
             : 'Started TopiaForge process.',
       );
+      return started.replacing(replaced);
     } on Object catch (error) {
       return LaunchResult(
         started: false,
         message: 'Launch could not proceed: $error',
-      );
+      ).replacing(replaced);
     } finally {
       try {
         await lease?.release();

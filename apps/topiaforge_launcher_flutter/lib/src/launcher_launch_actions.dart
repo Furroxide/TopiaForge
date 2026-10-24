@@ -199,6 +199,15 @@ extension LauncherLaunchActions on LauncherBloc {
           install,
         );
         if (launchInstall == null) return;
+        if (restart) {
+          // The running game has up to 30 s to quit before it is stopped.
+          emit(
+            state.copyWith(
+              statusMessage: _askingToQuitMessage,
+              statusSeverity: IssueSeverity.info,
+            ),
+          );
+        }
         final result = restart
             ? await _repository.restart(launchInstall, profile)
             : await _repository.launch(launchInstall, profile);
@@ -212,6 +221,7 @@ extension LauncherLaunchActions on LauncherBloc {
             ? receipt
             : null;
         _activeLaunchRequest = _launchReceipt?.requestId;
+        _replacedGame = result.processStarted ? result.replacedGame : null;
         emit(_launchResultState(result));
         final latest = result.latestActivity;
         if (latest != null) {
@@ -229,7 +239,9 @@ extension LauncherLaunchActions on LauncherBloc {
       ...result.blocks.map((block) => block.message),
     ];
     final message = result.processStarted
-        ? 'Game process started; session start is unconfirmed.'
+        ? _withReplacedGame(
+            'Game process started; session start is unconfirmed.',
+          )
         : [
             result.message,
             ...failures,
@@ -244,6 +256,11 @@ extension LauncherLaunchActions on LauncherBloc {
       errorMessage: result.processStarted ? null : message,
       clearError: result.processStarted,
     );
+  }
+
+  String _withReplacedGame(String message) {
+    final replaced = _replacedGame;
+    return replaced == null ? message : '${replaced.message()} $message';
   }
 
   Future<void> _onLaunchActivityUpdated(
@@ -299,7 +316,7 @@ extension LauncherLaunchActions on LauncherBloc {
     final outcome = accepted.sessionOutcome ?? accepted.launchOutcome;
     final failed =
         outcome?.status == 'failed' || outcome?.status == 'cancelled';
-    final message = _launchActivityMessage(accepted);
+    final message = _withReplacedGame(_launchActivityMessage(accepted));
     emit(
       state.copyWith(
         launchActivity: accepted,
@@ -307,6 +324,8 @@ extension LauncherLaunchActions on LauncherBloc {
         statusSeverity: failed
             ? IssueSeverity.error
             : accepted.unconfirmed ||
+                  // The game it replaced left this start in safe mode.
+                  _replacedGame?.safeMode == true ||
                   (accepted.processExited &&
                       accepted.command == 'launch-target' &&
                       accepted.sessionOutcome == null)
@@ -331,6 +350,11 @@ extension LauncherLaunchActions on LauncherBloc {
     );
   }
 }
+
+/// The status while a restart waits for the running game to quit.
+const _askingToQuitMessage =
+    'Asking the running game to quit, as its QUIT button would, before it '
+    'restarts…';
 
 String _launchActivityMessage(LaunchActivity activity) {
   final outcome = activity.sessionOutcome ?? activity.launchOutcome;

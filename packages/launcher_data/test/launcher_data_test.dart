@@ -28,6 +28,7 @@ part 'restart_requirement_test_part.dart';
 part 'world_catalog_test_part.dart';
 part 'launch_v5_integration_test_part.dart';
 part 'registry_history_test_part.dart';
+part 'owned_game_quit_test_part.dart';
 
 void main() {
   late Directory root;
@@ -157,6 +158,11 @@ void main() {
   _registerRegistryHistoryTests(
     root: () => root,
     repository: () => repository,
+    gameRoot: () => gameRoot,
+  );
+  _registerOwnedGameQuitTests(
+    dataRoot: () => dataRoot,
+    repositoryRoot: () => repoRoot,
     gameRoot: () => gameRoot,
   );
 

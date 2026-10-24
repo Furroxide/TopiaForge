@@ -16,6 +16,37 @@ namespace TopiaForge.ModManager
         private ProfileLaunchConfigurationV5? launchSession;
         private LaunchSessionOffering? launchSessionOffering;
         private string? launchSessionRefusal;
+        // Twice a second: a restart waits for the game to take the request, and a look is one file check.
+        private static readonly TimeSpan LauncherQuitInterval = TimeSpan.FromMilliseconds(500);
+        private LauncherQuitWatcher? launcherQuit;
+
+        /// <summary>
+        /// Watches for a quit request from the launcher that started this process, rejected command or safe mode included. A game
+        /// started any other way has no request id, so nothing can ask it to quit.
+        /// </summary>
+        private void WatchForLauncherQuit()
+        {
+            var requestId = launchProfile?.RequestId ?? rejectedCorrelation?.RequestId;
+            if (requestId == null) return;
+            try
+            {
+                var path = launchStaging.LauncherQuitPath(requestId);
+                launcherQuit = new LauncherQuitWatcher(() => System.IO.File.Exists(path), () => launchStaging.TakeLauncherQuit(requestId),
+                    () => quitClock.Elapsed, LauncherQuitInterval,
+                    error => managerLogger.Error(error, "The launcher's quit request could not be read."));
+            }
+            catch (Exception error) { managerLogger.Error(error, "The launcher's quit requests cannot be watched; a restart stops this game instead."); }
+        }
+
+        /// <summary>Quits as the game's own Quit button would, once the launcher that started this game asks.</summary>
+        private bool QuitIfLauncherAsks()
+        {
+            if (launcherQuit?.Poll() != true) return false;
+            try { managerLogger.Info("The launcher that started this game asked it to quit."); }
+            catch { /* The quit goes ahead even when logging has stopped. */ }
+            UnityEngine.Application.Quit();
+            return true;
+        }
 
         private void AdmitStartup()
         {

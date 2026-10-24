@@ -3,13 +3,24 @@ using System.Linq;
 namespace TopiaForge.ModManager.Core
 {
     /// <summary>
-    /// The session channels in manager staging: session-handoff (game to launcher), session-join (launcher to game), and the
-    /// multiplayer preferences projection (launcher to game) with its change journal (game to launcher). Sorted JSON, at
-    /// most 64 KiB each. None carries an address.
+    /// The session channels in manager staging: session-handoff (game to launcher), session-join (launcher to game), the
+    /// multiplayer preferences projection (launcher to game) with its change journal (game to launcher), and the launcher's
+    /// quit request (launcher to game). Sorted JSON, at most 64 KiB each. None carries an address.
     /// </summary>
     public static partial class LaunchTransportJson
     {
         public const int MaxChannelBytes = 64 * 1024;
+
+        public static string WriteLauncherQuit(LauncherQuitRequest quit) => Bounded(Sorted(
+            ("quitId", Text(quit.QuitId)), ("requestId", Text(quit.RequestId)),
+            ("schemaVersion", Number(LauncherQuitRequest.SchemaVersion))), MaxChannelBytes);
+
+        public static LauncherQuitRequest ReadLauncherQuit(string json) => Read(json, MaxChannelBytes, text =>
+        {
+            var value = new Fields(text, "quitId", "requestId", "schemaVersion");
+            value.Version(LauncherQuitRequest.SchemaVersion);
+            return new LauncherQuitRequest(value.String("requestId"), value.String("quitId"));
+        });
 
         public static string WriteSessionHandoff(SessionHandoff handoff) => Bounded(Sorted(
             ("handoffId", Text(handoff.HandoffId)), ("requestId", Text(handoff.RequestId)),

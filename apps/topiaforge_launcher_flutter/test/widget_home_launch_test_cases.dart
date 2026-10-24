@@ -81,4 +81,58 @@ void _registerHomeLaunchTests(_PumpHome pumpHome) {
     expect(repository.restartCount, 1);
     expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
   });
+  testWidgets('a restart that had to stop the game says this start is in '
+      'safe mode', (tester) async {
+    const replaced = ReplacedGame(ReplacedGameExit.stopped, safeMode: true);
+    final repository =
+        _FakeLauncherRepository(snapshot: _updateSnapshot(needsRepair: true))
+          ..restartResult = const LaunchResult(
+            started: true,
+            message: 'Restarted TopiaForge.',
+            replacedGame: replaced,
+          );
+    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mods'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Restart').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
+    await tester.pumpAndSettle();
+
+    expect(repository.restartCount, 1);
+    expect(find.textContaining(replaced.message()), findsOneWidget);
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
+  });
+  testWidgets('a restart says the running game is asked to quit while it '
+      'waits for it', (tester) async {
+    final gate = Completer<void>();
+    final repository = _FakeLauncherRepository(
+      snapshot: _updateSnapshot(needsRepair: true),
+    )..restartGate = gate;
+    await tester.pumpWidget(TopiaForgeLauncherApp(repository: repository));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mods'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Restart').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restart'));
+    // Busy work animates its progress bar, so the frames are pumped by hand.
+    for (var frame = 0; frame < 5; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(repository.restartCount, 1);
+    expect(
+      find.textContaining('Asking the running game to quit'),
+      findsWidgets,
+    );
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Asking the running game to quit'),
+      findsNothing,
+    );
+    expect(find.textContaining('session start is unconfirmed'), findsOneWidget);
+  });
 }

@@ -485,6 +485,7 @@ namespace TopiaForge.ModManager.Tests
                 LaunchSessionStagingTests.Run(FindRepoRoot());
                 PluginQuitCoordinatorTests.Run(root);
                 PluginQuitHandlerTests.Run(root);
+                LauncherQuitTests.Run();
                 Console.WriteLine("All TopiaForge tests passed.");
                 return 0;
             }

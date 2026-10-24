@@ -62,6 +62,12 @@ abstract final class LaunchTransport {
       );
   static String writePreferencesJournal(MultiplayerPreferencesJournal value) =>
       _encodeContract(value.toJson(), maxChannelBytes);
+
+  // The launcher's quit request, for a game it started, before a restart.
+  static LauncherQuitRequest readLauncherQuit(String json) =>
+      LauncherQuitRequest.fromJson(_decodeContract(json, maxChannelBytes));
+  static String writeLauncherQuit(LauncherQuitRequest value) =>
+      _encodeContract(value.toJson(), maxChannelBytes);
 }
 
 Object? _decodeContract(String source, int limit) {

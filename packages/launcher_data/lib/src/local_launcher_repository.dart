@@ -61,6 +61,7 @@ part 'local_launcher_repository/launch_preview.dart';
 part 'local_launcher_repository/launch_admission.dart';
 part 'local_launcher_repository/profile_persistence.dart';
 part 'local_launcher_repository/process_helpers.dart';
+part 'local_launcher_repository/owned_game_quit.dart';
 part 'local_launcher_repository/acceptance_launch_helpers.dart';
 part 'local_launcher_repository/registry_source_helpers.dart';
 part 'local_launcher_repository/registry_source_models.dart';
@@ -103,6 +104,7 @@ class LocalLauncherRepository
     GameProcessLiveness? gameProcessLiveness,
     GameProcessStopper? gameProcessStopper,
     JoinInstallHook? joinInstallHook,
+    OwnedGameQuitPolicy ownedGameQuit = const OwnedGameQuitPolicy(),
   }) : _joinInstallHook = joinInstallHook,
        _acceptanceIsolation = acceptanceIsolation,
        _acceptanceChallenge = acceptanceChallenge,
@@ -128,7 +130,8 @@ class LocalLauncherRepository
        _gameProcessIdentityReader =
            gameProcessIdentityReader ?? _unverifiedInjectedProcess,
        _gameProcessLiveness = gameProcessLiveness ?? isLaunchProcessAlive,
-       _gameProcessStopper = gameProcessStopper ?? stopLaunchProcess {
+       _gameProcessStopper = gameProcessStopper ?? stopLaunchProcess,
+       _ownedGameQuit = ownedGameQuit {
     if (acceptanceIsolation == null && acceptanceChallenge != null) {
       throw ArgumentError('Acceptance requires both isolation and challenge.');
     }
@@ -170,8 +173,14 @@ class LocalLauncherRepository
   final GameProcessIdentityReader _gameProcessIdentityReader;
   final GameProcessLiveness _gameProcessLiveness;
   final GameProcessStopper _gameProcessStopper;
+  final OwnedGameQuitPolicy _ownedGameQuit;
   final Set<String> _launchAdmissions = {};
   final Map<String, LaunchProcessIdentity> _ownedLaunchProcesses = {};
+
+  /// The launch request each owned process was started with, by the very
+  /// receipt object [_ownedLaunchProcesses] holds.
+  final Map<LaunchProcessIdentity, String> _ownedLaunchRequests =
+      Map.identity();
   final Map<String, LaunchActivityMonitor> _launchMonitors = {};
   Future<void> _settingsMutationTail = Future<void>.value();
   Future<void> _launcherLogMutationTail = Future<void>.value();
@@ -421,43 +430,13 @@ class LocalLauncherRepository
     LaunchSessionRequest session, {
     LaunchSelection? selectionOverride,
     bool restart = false,
-  }) {
-    if (session.role == LaunchSessionRole.join &&
-        selectionOverride != null &&
-        selectionOverride.kind != LaunchSelectionKind.mainMenu) {
-      throw ArgumentError(
-        'A join starts at the main menu.',
-        'selectionOverride',
-      );
-    }
-    final refusal = _acceptanceIsolation != null
-        ? 'Acceptance runs never host or join a session.'
-        : profile.launchSettings.safeMode
-        ? 'Safe Mode never hosts or joins a session. Turn Safe Mode off for '
-              'this profile, then try again.'
-        : session.role == LaunchSessionRole.join &&
-              profile.inheritManagerModState
-        ? "A join runs exactly the packages it planned, so its profile cannot "
-              "inherit the manager's mod state."
-        : null;
-    if (refusal != null) {
-      return Future.value(
-        LaunchResult(
-          started: false,
-          message: '$refusal No process was stopped.',
-        ),
-      );
-    }
-    return _launchProfile(
-      install,
-      profile,
-      selectionOverride: session.role == LaunchSessionRole.join
-          ? const LaunchSelection.mainMenu()
-          : selectionOverride,
-      restart: restart,
-      session: session,
-    );
-  }
+  }) => _launchSession(
+    install,
+    profile,
+    session,
+    selectionOverride: selectionOverride,
+    restart: restart,
+  );
 
   /// The exact archives installed in [install] and offered by the player's
   /// package sources, history included, for planning a join

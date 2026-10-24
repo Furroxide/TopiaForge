@@ -22,12 +22,15 @@ namespace TopiaForge.ModManager.Core
         /// <summary>How old a claim must be before a sweep removes it. A live take holds its claim for milliseconds.</summary>
         internal static readonly TimeSpan StaleClaimAge = TimeSpan.FromHours(1);
 
-        // This game's own claims: a join claimed under its claim time (Unix milliseconds) and a random nonce.
-        private static readonly Regex JoinClaim = new Regex("^session-join-[0-9a-f]{64}\\.json\\.taking-([0-9]{13})-[0-9a-f]{32}$",
-            RegexOptions.CultureInvariant);
+        // This game's own claims: a join or a quit request claimed under its claim time (Unix milliseconds) and a random nonce.
+        private static readonly Regex JoinClaim = new Regex(
+            "^(?:session-join|launcher-quit)-[0-9a-f]{64}\\.json\\.taking-([0-9]{13})-[0-9a-f]{32}$", RegexOptions.CultureInvariant);
 
         public string SessionHandoffPath(string requestId) => Child("session-handoff-" + LaunchStorageKeys.Request(requestId) + ".json");
         public string SessionJoinPath(string requestId) => Child("session-join-" + LaunchStorageKeys.Request(requestId) + ".json");
+
+        /// <summary>The launcher's quit request for the process launched as <paramref name="requestId"/>.</summary>
+        public string LauncherQuitPath(string requestId) => Child("launcher-quit-" + LaunchStorageKeys.Request(requestId) + ".json");
         public string PreferencesPath => Child(PreferencesFileName);
         public string PreferencesJournalPath => Child(PreferencesJournalFileName);
 
@@ -61,9 +64,19 @@ namespace TopiaForge.ModManager.Core
         /// name again and is never removed unread. A foreign or malformed join is removed without being acted on. Claims a
         /// crashed take left behind are swept first (<see cref="SweepStaleClaims()"/>).
         /// </summary>
-        public SessionJoinRequest? TakeSessionJoin(string requestId)
+        public SessionJoinRequest? TakeSessionJoin(string requestId) =>
+            TakeChannel(SessionJoinPath(requestId), LaunchTransportJson.ReadSessionJoin, join => join.RequestId == requestId);
+
+        /// <summary>
+        /// Takes the quit request the launcher staged for the process launched as <paramref name="requestId"/>, once, as
+        /// <see cref="TakeSessionJoin"/> takes a join. A foreign or malformed request is removed without being acted on, so only
+        /// the process the launcher started, which alone knows its request id, ever quits on one.
+        /// </summary>
+        public LauncherQuitRequest? TakeLauncherQuit(string requestId) =>
+            TakeChannel(LauncherQuitPath(requestId), LaunchTransportJson.ReadLauncherQuit, quit => quit.RequestId == requestId);
+
+        private T? TakeChannel<T>(string path, Func<string, T> parse, Func<T, bool> forThisProcess) where T : class
         {
-            var path = SessionJoinPath(requestId);
             string claimed;
             try
             {
@@ -84,8 +97,8 @@ namespace TopiaForge.ModManager.Core
             try
             {
                 afterClaim?.Invoke();
-                var join = LaunchTransportJson.ReadSessionJoin(Read(claimed, LaunchTransportJson.MaxChannelBytes));
-                return join.RequestId == requestId ? join : null;
+                var value = parse(Read(claimed, LaunchTransportJson.MaxChannelBytes));
+                return forThisProcess(value) ? value : null;
             }
             catch (Exception error) when (error is IOException || error is InvalidDataException || error is UnauthorizedAccessException
                 || error is ArgumentException)
@@ -128,8 +141,9 @@ namespace TopiaForge.ModManager.Core
         }
 
         /// <summary>
-        /// Removes this game's join claims that a crashed take left behind, and returns how many. Only its own claim pattern
-        /// (<c>session-join-&lt;key&gt;.json.taking-&lt;milliseconds&gt;-&lt;nonce&gt;</c>) is touched; a rename keeps a file's
+        /// Removes this game's join and quit-request claims that a crashed take left behind, and returns how many. Only its own
+        /// claim patterns (<c>session-join-&lt;key&gt;.json.taking-&lt;milliseconds&gt;-&lt;nonce&gt;</c>, and the same for
+        /// <c>launcher-quit-</c>) are touched; a rename keeps a file's
         /// timestamps, so a claim is dated by the claim time in its name, and only one more than an hour old is stale. A claim
         /// another process holds open is left: the sweep removes a file only through a handle that no other one shares. It
         /// never throws.
