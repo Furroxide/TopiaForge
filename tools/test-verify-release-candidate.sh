@@ -3,6 +3,7 @@ set -euo pipefail
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 verifier="$script_dir/verify-release-candidate.sh"
+python3 "$script_dir/test-release-repository-identity.py"
 temp_root=$(mktemp -d)
 trap 'rm -rf "$temp_root"' EXIT
 
