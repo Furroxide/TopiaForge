@@ -114,6 +114,12 @@ namespace TopiaForge.ModManager.Tests
             var lifetime = Read("src", "TopiaForge.Mods.UnityUi", "UiHost.Lifetime.cs");
             RequireMatch(lifetime, @"ReportLayerLost\(root\);\s*foreach \(var notify in closed\)\s*\{\s*TopiaForgeCallbacks\.Invoke",
                 "The SDK must learn that its canvas is lost before a captured Closed callback can dismiss and reopen it.");
+            foreach (var kind in new[] { "window", "tool" })
+            {
+                RequireMatch(lifetime, @"var notify = " + kind + @"\.Lose\(\);\s*if \(notify != null\) closed\.Add\(notify\);",
+                    "A lost canvas must still run every " + kind + "'s Closed callbacks once it has reported the loss.");
+            }
+
             foreach (var file in new[] { "TopiaForgeWindow.cs", "TopiaForgeFullscreenTool.cs" })
             {
                 var widget = Read("src", "TopiaForge.Mods.UnityUi", "Widgets", file);
@@ -124,6 +130,9 @@ namespace TopiaForge.ModManager.Tests
                     && body.Contains("return wasShowing ? closed : null;", StringComparison.Ordinal)
                     && !body.Contains("TopiaForgeCallbacks.Invoke", StringComparison.Ordinal),
                     "The native view must release its cursor and Escape lease before returning its close callback.");
+                var captured = body.IndexOf("var closed = Closed;", StringComparison.Ordinal);
+                Check(captured >= 0 && captured < body.IndexOf("Teardown();", StringComparison.Ordinal),
+                    "A lost window or tool must take its Closed handlers before teardown clears them, or none of them runs.");
             }
         }
 
