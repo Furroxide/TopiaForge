@@ -10,12 +10,13 @@ import 'control_plane.dart';
 import 'descriptor_client.dart';
 import 'join_descriptor_resolver.dart';
 import 'lan_discovery_client.dart';
-import 'lan_discovery_state.dart';
+import 'multiplayer_preferences_keeper.dart';
 import 'multiplayer_store.dart';
 import 'network_diagnostics.dart';
 
 /// What the launcher's bloc asks of multiplayer: the player's settings,
-/// favorites and history; LAN and Internet browsing; the join stages these
+/// favorites and history; their preferences and the game's copy of them
+/// ([MultiplayerGateway]); LAN and Internet browsing; the join stages these
 /// clients answer; and network diagnostics.
 ///
 /// Nothing it returns names an address. Listings, bookmarks, events and
@@ -26,10 +27,7 @@ import 'network_diagnostics.dart';
 /// Every change to the settings, favorites or history throws
 /// [MultiplayerStoreException] when it cannot be written, and while the
 /// stored settings cannot be read, which are then left as they are.
-abstract interface class MultiplayerRepository {
-  /// Whether this build names a multiplayer service.
-  MultiplayerServiceStatus get serviceStatus;
-
+abstract interface class MultiplayerRepository implements MultiplayerGateway {
   /// Reads the settings, recovering from damage. Never throws. While they
   /// cannot be read, [MultiplayerStore.unreadableSettings] stand in.
   Future<MultiplayerSettingsLoad> loadSettings();
@@ -57,18 +55,6 @@ abstract interface class MultiplayerRepository {
   Future<MultiplayerSettings> removeFromHistory(String serverId);
 
   Future<MultiplayerSettings> clearHistory();
-
-  LanBrowseSnapshot get lanSnapshot;
-
-  /// Every change to LAN browsing.
-  Stream<LanBrowseSnapshot> get lanSnapshots;
-
-  /// Starts LAN browsing unless the player turned it off. While the settings
-  /// cannot be read it stays off, as [LanDiscoveryProblem.settingsUnreadable].
-  /// Never throws.
-  Future<LanBrowseSnapshot> startLanBrowsing();
-
-  Future<LanBrowseSnapshot> stopLanBrowsing();
 
   /// What the multiplayer service offers right now, read afresh: which
   /// features are on, whether the relay is available and why not, so the
@@ -128,25 +114,18 @@ abstract interface class MultiplayerRepository {
     JoinDescriptorRequest request, {
     CancellationToken? cancellation,
   });
-
-  /// Reports on the service, the ports and LAN discovery. Port checks bind
-  /// sockets, so they run only with [checkPorts].
-  Future<MultiplayerNetworkReport> checkNetwork({
-    bool checkPorts = false,
-    bool developerMode = false,
-  });
-
-  Future<void> dispose();
 }
 
 /// [MultiplayerRepository] over the launcher's data folder and real sockets.
 ///
-/// The store lives in `<dataRoot>/multiplayer/`. The service is whatever
-/// this build was compiled with: a build that names one talks to it over
-/// HTTPS ([openControlPlane]), and a build without one contacts no service
-/// at all ([UnavailableControlPlane]). [content] answers the stages that need
-/// the game's files; the launcher passes its own launcher repository, which
-/// is a [MultiplayerContentHost].
+/// The store lives in `<dataRoot>/multiplayer/`; pass [store] so everything
+/// in the launcher that uses the folder shares one, and with it one lane of
+/// reads and writes. The service is whatever this build was compiled with:
+/// a build that names one talks to it over HTTPS ([openControlPlane]), and a
+/// build without one contacts no service at all ([UnavailableControlPlane]).
+/// [content] answers the stages that need the game's files; the launcher
+/// passes its own launcher repository, which is a [MultiplayerContentHost].
+/// [gameProbe] tells whether the game runs; tests pass their own.
 final class LocalMultiplayerRepository implements MultiplayerRepository {
   LocalMultiplayerRepository({
     required String dataRoot,
@@ -159,11 +138,10 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     MultiplayerNetworkDiagnostics? diagnostics,
     DateTime Function()? clock,
     MultiplayerContentHost? content,
+    GameProcessProbe? gameProbe,
   }) : this._(
-         controlPlane ??
-             openControlPlane(
-               service ?? MultiplayerServiceConfiguration.fromEnvironment(),
-             ),
+         service ?? MultiplayerServiceConfiguration.fromEnvironment(),
+         controlPlane,
          store ?? MultiplayerStore(p.join(dataRoot, folderName), clock: clock),
          descriptors ?? DescriptorClient(),
          lan,
@@ -171,10 +149,12 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
          diagnostics ?? MultiplayerNetworkDiagnostics(),
          clock ?? DateTime.now,
          content,
+         gameProbe,
        );
 
   LocalMultiplayerRepository._(
-    this._controlPlane,
+    MultiplayerServiceConfiguration service,
+    ControlPlaneClient? controlPlane,
     this._store,
     DescriptorClient descriptors,
     LanDiscoveryClient? lan,
@@ -182,7 +162,14 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
     this._diagnostics,
     this._clock,
     this._content,
-  ) : _lan = lan ?? LanDiscoveryClient(descriptors: descriptors) {
+    GameProcessProbe? gameProbe,
+  ) : _controlPlane = controlPlane ?? openControlPlane(service),
+      _lan = lan ?? LanDiscoveryClient(descriptors: descriptors),
+      _preferences = MultiplayerPreferencesKeeper(
+        _store,
+        serviceOrigin: service.origin?.toString(),
+        probe: gameProbe,
+      ) {
     _resolver = JoinDescriptorResolver(
       descriptors: descriptors,
       store: _store,
@@ -202,6 +189,7 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   final MultiplayerNetworkDiagnostics _diagnostics;
   final DateTime Function() _clock;
   final MultiplayerContentHost? _content;
+  final MultiplayerPreferencesKeeper _preferences;
   late final JoinDescriptorResolver _resolver;
 
   /// Counts the calls that decide whether LAN browsing runs, so a start still
@@ -269,6 +257,44 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
 
   ServerBookmark _bookmark(String serverId, String name) =>
       ServerBookmark(serverId: serverId, name: name, savedAt: _clock());
+
+  @override
+  Future<MultiplayerPreferences> loadPreferences() => _preferences.load();
+
+  @override
+  Future<MultiplayerPreferences> changePreferences(
+    MultiplayerPreferencesChange change,
+  ) {
+    // Queued before anything else runs, as a save is, so a LAN start called
+    // after this reads the change.
+    final changing = _preferences.change(change);
+    if (change.lanDiscovery == false) {
+      _lanDecisions++;
+      // Stopping takes effect before this returns, even when the save fails.
+      unawaited(_lan.stop(disabled: true));
+    }
+    return changing;
+  }
+
+  @override
+  Future<MultiplayerPreferencesRound> syncWithGame(
+    GameInstall install, {
+    CancellationToken? cancellation,
+  }) async {
+    final round = await _preferences.sync(install, cancellation: cancellation);
+    final preferences = round.preferences;
+    // A round can take in LAN discovery turned off in game. Once it is in the
+    // settings, browsing stops, as it does when the player turns it off here.
+    if (preferences.readable && !preferences.settings.lanDiscoveryEnabled) {
+      _lanDecisions++;
+      await _lan.stop(disabled: true);
+    }
+    return round;
+  }
+
+  @override
+  Future<GameRunState> gameRunState(GameInstall install) =>
+      _preferences.gameRunState(install);
 
   @override
   LanBrowseSnapshot get lanSnapshot => _lan.snapshot;
@@ -382,12 +408,16 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   @override
   Future<MultiplayerNetworkReport> checkNetwork({
     bool checkPorts = false,
+    int? gamePort,
     bool developerMode = false,
+    CancellationToken? cancellation,
   }) => _diagnostics.run(
     service: serviceStatus,
     lan: _lan.snapshot,
     checkPorts: checkPorts,
+    gamePort: gamePort,
     developerMode: developerMode,
+    cancellation: cancellation,
   );
 
   @override

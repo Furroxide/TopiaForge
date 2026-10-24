@@ -13,21 +13,11 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'control_plane_results.dart';
 
+export 'package:launcher_domain/launcher_domain.dart'
+    show MultiplayerServiceStatus;
+
 export 'control_plane_client.dart' show ControlPlaneLog, openControlPlane;
 export 'control_plane_results.dart';
-
-/// Whether this build names a multiplayer service.
-enum MultiplayerServiceStatus {
-  /// No origin was configured; nothing is ever contacted.
-  unconfigured,
-
-  /// The configured origin is not an absolute HTTPS origin, so it is
-  /// ignored and nothing is contacted.
-  invalid,
-
-  /// An origin is configured.
-  configured,
-}
 
 /// The multiplayer service this build uses.
 final class MultiplayerServiceConfiguration {

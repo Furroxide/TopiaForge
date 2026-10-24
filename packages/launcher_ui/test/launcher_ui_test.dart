@@ -31,6 +31,19 @@ void main() {
     expect(asset.package, TopiaForgeBrandAssets.package);
   });
 
+  test('a switch that cannot be used looks faded', () {
+    final theme = buildTopiaForgeTheme().switchTheme;
+    for (final selected in [true, false]) {
+      final states = {if (selected) WidgetState.selected};
+      for (final color in [theme.trackColor!, theme.thumbColor!]) {
+        final usable = color.resolve(states)!;
+        final locked = color.resolve({...states, WidgetState.disabled})!;
+        expect(locked.a, lessThan(usable.a), reason: 'selected: $selected');
+        expect(locked.withValues(alpha: usable.a), usable);
+      }
+    }
+  });
+
   testWidgets('StatusPill renders label', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

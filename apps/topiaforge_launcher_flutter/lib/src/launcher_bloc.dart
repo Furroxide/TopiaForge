@@ -23,6 +23,9 @@ part 'launcher_update_actions.dart';
 part 'launcher_reachability_actions.dart';
 part 'launcher_bloc_helpers.dart';
 part 'launcher_session_link_actions.dart';
+part 'launcher_multiplayer_settings_actions.dart';
+part 'launcher_multiplayer_network_actions.dart';
+part 'launcher_multiplayer_work.dart';
 
 class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   LauncherBloc(
@@ -32,10 +35,12 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     ReachabilityProbeGateway? reachabilityProbe,
     Stream<SessionLinkArrival>? sessionLinks,
     SessionLinkHandlingGateway? sessionLinkHandling,
+    MultiplayerGateway? multiplayer,
   }) : _developerRepository = developerRepository,
        _updateRepository = updateRepository,
        _reachabilityProbe = reachabilityProbe,
        _sessionLinkHandling = sessionLinkHandling,
+       _multiplayer = multiplayer,
        super(LauncherState.initial()) {
     on<LauncherEvent>(_dispatchEvent, transformer: sequential());
     _launchActivitySub = _repository.launchActivities.listen(
@@ -61,6 +66,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     _linkHandlingSub = sessionLinkHandling?.statuses.listen((status) {
       if (!isClosed) add(SessionLinkHandlingUpdated(status));
     });
+    _lanSnapshotSub = multiplayer?.lanSnapshots.listen((snapshot) {
+      if (!isClosed) add(MultiplayerLanSnapshotChanged(snapshot));
+    });
   }
 
   final LauncherRepository _repository;
@@ -68,12 +76,15 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   final LauncherUpdateRepository? _updateRepository;
   final ReachabilityProbeGateway? _reachabilityProbe;
   final SessionLinkHandlingGateway? _sessionLinkHandling;
+  final MultiplayerGateway? _multiplayer;
+  final _multiplayerWork = _MultiplayerWork();
   final DependencyPlanner _dependencyPlanner = const DependencyPlanner();
 
   StreamSubscription<LauncherUpdateStatus>? _updateStatusSub;
   StreamSubscription<LaunchActivity>? _launchActivitySub;
   StreamSubscription<SessionLinkArrival>? _sessionLinkSub;
   StreamSubscription<SessionLinkHandlingStatus>? _linkHandlingSub;
+  StreamSubscription<LanBrowseSnapshot>? _lanSnapshotSub;
   int _launchPreviewGeneration = 0;
   String? _activeLaunchRequest;
   LaunchActivity? _launchReceipt;
@@ -81,6 +92,18 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   ReplacedGame? _replacedGame;
 
   String get dataRoot => _repository.dataRoot;
+
+  /// Whether the launcher has multiplayer settings and network diagnostics.
+  bool get hasMultiplayer => _multiplayer != null;
+
+  /// Whether the launcher handles `topiaforge://` links here.
+  bool get hasLinkHandling => _sessionLinkHandling != null;
+
+  @override
+  void onChange(Change<LauncherState> change) {
+    super.onChange(change);
+    _multiplayerStateChanged(change.currentState, change.nextState);
+  }
 
   @override
   Future<void> close() {
@@ -94,6 +117,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
     _sessionLinkSub = null;
     final handlingClose = _linkHandlingSub?.cancel();
     _linkHandlingSub = null;
+    final lanClose = _lanSnapshotSub?.cancel();
+    _lanSnapshotSub = null;
+    _multiplayerWork.cancelAll();
     _launchPreviewGeneration++;
     final blocClose = super.close();
     return Future.wait<void>([
@@ -101,9 +127,11 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
       ?launchClose,
       ?linkClose,
       ?handlingClose,
+      ?lanClose,
       blocClose,
     ]).whenComplete(() async {
       await _updateRepository?.dispose();
+      await _multiplayer?.dispose();
       await _repository.dispose();
     });
   }
@@ -111,6 +139,9 @@ class LauncherBloc extends Bloc<LauncherEvent, LauncherState> {
   Future<void> _onLoad(LauncherEvent event, Emitter<LauncherState> emit) async {
     if (event is LauncherStarted && _sessionLinkHandling != null) {
       add(const SessionLinkHandlingStarted());
+    }
+    if (event is LauncherStarted && _multiplayer != null) {
+      add(const MultiplayerPreferencesRefreshRequested(checkGame: false));
     }
     await _guard(emit, 'Refreshed launcher state.', () async {
       final snapshot = await _repository.loadSnapshot();

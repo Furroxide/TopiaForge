@@ -224,7 +224,8 @@ has loaded, a native scene change, any other operation that holds the session, a
 - **Launcher channels.** Launch request V5's channels (`ILauncherChannels`, over `LaunchStagingStore`) can wait for a
   shared file for about 310 ms while they retry, so the interface never calls them on the main thread: preference reads
   and journal writes, handoffs and live joins' records run on `MultiplayerBackgroundQueue`, and live joins are looked for
-  once a second on a pool thread. The views show a pending write as they show the settings'.
+  once a second on a pool thread. The views show a pending write as they show the settings'. The launcher applies the
+  journal while the game is closed (`MultiplayerLaunchContract.md`, section 7), and takes no handoff yet.
 
 ## 9. Sessions the launcher asks for
 

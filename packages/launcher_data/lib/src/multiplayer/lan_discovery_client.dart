@@ -11,7 +11,6 @@ import 'package:launcher_domain/launcher_domain.dart';
 
 import 'descriptor_client.dart';
 import 'lan_datagrams.dart';
-import 'lan_discovery_state.dart';
 import 'lan_sockets.dart';
 
 part 'lan_discovery_entries.dart';
