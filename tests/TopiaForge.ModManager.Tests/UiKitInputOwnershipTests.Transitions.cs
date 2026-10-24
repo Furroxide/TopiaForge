@@ -69,6 +69,26 @@ namespace TopiaForge.ModManager.Tests
             AssertEqual(rig.Claims, TopiaForgeInputClaim.Back, "no hidden surface strands a navigation claim");
         }
 
+        private static void NothingBeneathAModalNavigates()
+        {
+            var rig = new Rig();
+            var overlayRoot = new Root();
+            rig.Order.Push(new Surface(TopiaForgeLayerBand.Window), TopiaForgeInputClaim.Navigation, overlayRoot);
+
+            // A mod's own dialog, pushed with the public one-argument Push: it claims Back alone and has no root.
+            var dialog = new Surface(TopiaForgeLayerBand.Modal);
+            rig.Order.Push(dialog, TopiaForgeInputClaim.Back, null);
+            AssertSame(rig.Order.Top(), dialog, "Back dismisses the dialog first");
+            Assert(!rig.Key(Enter, true), "the overlay beneath still keeps Enter from the game");
+            AssertSame(rig.Order.FocusRoot(), null, "and the kit moves and presses nothing beneath a modal, the overlay included");
+            rig.Key(Enter, false);
+            rig.Order.Push(new Surface(TopiaForgeLayerBand.Window), TopiaForgeInputClaim.Back, null);
+            AssertSame(rig.Order.FocusRoot(), null, "a window opened later is still beneath the dialog");
+
+            rig.Order.Remove(dialog);
+            AssertSame(rig.Order.FocusRoot(), overlayRoot, "once the dialog closes, a Back-only window leaves the overlay its navigation");
+        }
+
         private static void DeviceAndControlBoundsDoNotStealOtherInput()
         {
             var gate = new TopiaForgeInputGate();
