@@ -11,6 +11,7 @@ internal static class Program
                 HostPackageTests.Run();
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--in-session-chat") { InSessionChatProviderTests.Run(); return 0; }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -19,6 +20,7 @@ internal static class Program
             }
 
             HostPackageTests.Run();
+            InSessionChatProviderTests.Run();
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
             SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
             SdkContractCompletionTests.PresentationTargetsSelectExactRecipients();

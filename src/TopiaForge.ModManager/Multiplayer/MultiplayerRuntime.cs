@@ -70,6 +70,9 @@ namespace TopiaForge.ModManager
         /// <summary>Gets this process's role as of the last pump.</summary>
         internal InternalSessionRole Role => role;
 
+        /// <summary>Local chat focus for presence (3.10). Never carries the draft or requires author bookkeeping.</summary>
+        internal bool IsLocalPlayerTyping { get; set; }
+
         /// <summary>Step 2, online only: world events and the follower's hooks (WS3.6 network world, WS3.8 session follow).</summary>
         internal IMultiplayerFrameStage? WorldEvents { get; set; }
 

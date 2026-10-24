@@ -176,7 +176,7 @@ namespace TopiaForge.Multiplayer
                 Participants = snapshot.Participants.Count,
                 ConnectedPlayers = CountConnected(snapshot),
                 ReadinessHolds = engine.ReadinessHolds,
-                ServerMutes = engine.IsVoiceEnabled ? engine.ServerMuteCount : 0,
+                ServerMutes = engine.IsVoiceEnabled ? engine.ServerMuteCount : ChatMuteCount(),
                 SystemChannels = channels.AsReadOnly(),
                 Voice = voice?.GetStatistics()
             };
@@ -187,7 +187,7 @@ namespace TopiaForge.Multiplayer
         /// drops by: a mute by hand, or one the relay made for abusing voice chat.
         /// </summary>
         private bool AdmitChat(ParticipantId sender) =>
-            engine.Role != EngineRole.Host || !engine.IsVoiceEnabled || !engine.IsServerMuted(sender);
+            engine.Role != EngineRole.Host || !IsServerMuted(sender);
 
         private static int CountConnected(MultiplayerSessionSnapshot snapshot)
         {

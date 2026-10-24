@@ -201,8 +201,11 @@ namespace TopiaForge.ModManager.Tests
 
         public OperationResult<bool> ReplaceSession() => OperationResult<bool>.Success(true);
 
+        internal IInternalSystemChannel? ChatChannel { get; set; }
         public OperationResult<IInternalSystemChannel> OpenSystemChannel(InternalSystemChannelKind kind) =>
-            OperationResult<IInternalSystemChannel>.Failure(ModErrorCode.Unavailable, "Not in this fake.");
+            kind == InternalSystemChannelKind.Chat && ChatChannel != null
+                ? OperationResult<IInternalSystemChannel>.Success(ChatChannel)
+                : OperationResult<IInternalSystemChannel>.Failure(ModErrorCode.Unavailable, "Not in this fake.");
 
         public IInternalReadinessHold HoldReadiness(string reason) => throw new NotSupportedException();
 

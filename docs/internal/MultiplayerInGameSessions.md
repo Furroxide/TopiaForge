@@ -368,3 +368,51 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
   channels called only on the background queue or the live-join poll (read the same way), the overlay's multiplayer
   stages running through the guard, no logging, and the 400-line cap on every file of the interface and the overlay.
 - **Tabs** (`ManagerTabLookupTests`): name-based lookup and the entry points that use it.
+
+## 12. In-session chat, connection status and pause
+
+The gameplay HUD uses `ChatOverlay` over the kit's `TopiaForgeChatLog`, with `ConnectionIndicator` above it. It docks
+with the other gameplay HUDs above the subtitle reserve, uses the HUD theme, and follows global accessibility settings.
+The log retains at most 128 lines; while closed its newest eight fade through the kit's normal timing. Opening it gives
+scrollback and a kit text field. T opens chat. Return also opens it when no registered mod action or enabled native
+action uses Return. Both are named input actions. Other focused tools keep their keys.
+
+- Messages contain 1 to 256 UTF-16 characters, with valid surrogate pairs. The sender permits a burst of three, then
+  one message every two seconds. The host applies that limit independently per authenticated player key, including
+  across a reconnect. Its bounded rate table evicts only an allowance that has fully refilled.
+- The existing reliable Chat system channel carries version 1 frames. A request contains only text; a relay contains
+  the participant id assigned by the host and text. Clients cannot supply an attribution, target list or command flag.
+  The host checks the connected roster and server mute again when relaying, so a queued message cannot pass a new mute
+  or a removal. The provider's ingress also drops server-muted chat; bans end the authenticated connection and refuse
+  re-entry. Chat moderation works even when a provider has no voice codec.
+- The log marks the host and prefixes a guest's name with their provider-assigned participant id, so choosing another
+  player's name cannot copy that player's attribution. Moderation commands also accept that id when names collide.
+- Clients accept only their host's relays for a known participant, bound and rate-limit them again, and redact addresses
+  before showing anything. Names, messages, command replies and toasts render as plain text. Chat text is never logged
+  or persisted. Network messages are never executed as commands.
+- `/help` describes local commands. Host-only `/kick`, `/ban` and `/mute` take a player name, quoted when it contains
+  spaces; ambiguous names direct the player to PLAYERS. Kick and ban reuse SESSION's destructive confirmations and
+  recheck the selected player's key after confirmation. Mute toggles the shared server mute. `/mod:command arguments`
+  runs an `ICommandService` registration through the runtime's local player-intent dispatcher; double quotes group an
+  argument and a backslash escapes a quote or backslash. Replies are local and redacted.
+- A kit text field owns typing through input ownership; chat never disables a native action map or `PlayerInput`.
+  Close, submit, leave, session replacement, scene hiding and teardown release typing. Closing by click also clears
+  a selected button inside the composer, so the next open key works. Other surfaces keep their selection.
+- `MultiplayerRuntime.IsLocalPlayerTyping` is the named seam for presence (3.10). It carries only a boolean, needs no
+  author code, and becomes false when the composer loses focus or closes. Scoreboard and nametag work can consume the
+  eventual replicated flag. Chat currently has one global group; future team or spectator groups need a host-owned
+  recipient policy, with no client-supplied recipient list.
+- A lost client link shows `Reconnecting...` after 1.5 seconds of unscaled time; recovery hides it immediately. Join and
+  leave toasts share a three-message burst and one-per-two-second refill; excess changes are combined into a summary.
+  A reconnecting player keeps their place and does not produce a false leave/join pair.
+- `IWorldPauseMenuService` owns INVITE, PLAYERS and DISCONNECT or END SESSION. The first two open SESSION; guests are
+  told to ask their host for an invite. Leaving and ending reuse the existing realm-aware flow and destructive prompt.
+  Registrations retire with the world or network role, and stale callbacks do nothing. Session follow supplies the
+  guest's return to the main menu.
+
+F8's SESSIONS page includes the actual chat and connection views with open, fading, message, rate-limit, connected,
+hosting, reconnecting and left-session states. `InSessionChatTests` covers parsing, abuse, lifecycle, pause actions,
+notices and idle allocation; `ChatViewContractTests` compiles the production views and focus helper over UI doubles.
+`InSessionChatProviderTests` runs real hosts and clients over the virtual network, with and without voice, and exercises
+hostile clients and hosts. Actual glyph rendering, key delivery and layout at both window sizes and UI scales remain
+in-game checks.

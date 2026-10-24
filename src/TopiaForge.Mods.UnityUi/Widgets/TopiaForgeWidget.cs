@@ -84,6 +84,12 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
+        /// <summary>Clears selection only when it belongs to this subtree, before hiding an interactive composition.</summary>
+        public void ReleaseFocus()
+        {
+            TopiaForgeFocus.Release(Go);
+        }
+
         /// <summary>Destroys the widget's GameObject and unregisters it from theming.</summary>
         public void Destroy()
         {

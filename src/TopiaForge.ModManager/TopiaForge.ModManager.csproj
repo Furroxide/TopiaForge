@@ -69,6 +69,7 @@
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="Unity.InputSystem" HintPath="$(RobotopiaManagedDir)\Unity.InputSystem.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(RobotopiaManagedDir)\UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(RobotopiaManagedDir)\UnityEngine.UI.dll" Private="false" />

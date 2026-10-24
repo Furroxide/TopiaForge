@@ -387,6 +387,9 @@ the safe `Context.Ui` contract.
   it back. It is dirty-checked: a call that changes nothing rebuilds no layout. `SetVisible` keeps a
   hidden widget's space, which suits a momentary change.
 - `inputField.Password()` masks what is typed; the text itself is unchanged.
+- `inputField.PlainText()` renders a draft literally. `Focus()` begins kit text entry and `Blur()` ends it. Before
+  hiding a composer, call its container's `ReleaseFocus()` too: that clears a selected child button as well as a field,
+  while preserving selection in another surface. No native input component needs disabling or restoring.
 
 See [Core services](CoreServices.md#ui-accessibility) for the surrounding context and
 [Test a mod](TestingMods.md) for `FakeUiService` assertions.

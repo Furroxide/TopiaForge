@@ -38,6 +38,7 @@ namespace TopiaForge.ModManager.Tests
             PresentersCarryNoAddress();
             ViewsUseTheKitOnly(root);
             OtherPlayersTextRendersPlain(root);
+            ChatUsesPlainTextAndReleasesFocus(root);
             ModalsSurviveSceneLoadsAndRowsKeepTheirHeight(root);
             PresentersGoOnlineThroughTheRealm(root);
             LauncherChannelsAreCalledOffTheFrame();
@@ -58,6 +59,21 @@ namespace TopiaForge.ModManager.Tests
             yield return Path.Combine(root, "src", "TopiaForge.ModManager", "Overlay", "Multiplayer");
         }
 
+        private static void ChatUsesPlainTextAndReleasesFocus(string root)
+        {
+            string Read(string path) => File.ReadAllText(Path.Combine(root, path));
+            var chat = Read("src/TopiaForge.ModManager/Overlay/Multiplayer/ChatOverlay.cs");
+            var chrome = Read("src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeChatLog.Chrome.cs");
+            var field = Read("src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeInputField.cs");
+            var widget = Read("src/TopiaForge.Mods.UnityUi/Widgets/TopiaForgeWidget.cs");
+            That(chrome.Contains("text.richText = false;", StringComparison.Ordinal), "chat messages render literally, never markup");
+            That(field.Contains("textComponent.richText = false;", StringComparison.Ordinal) && chat.Contains(".PlainText()", StringComparison.Ordinal), "the draft is plain too");
+            That(widget.Contains("TopiaForgeFocus.Release(Go);", StringComparison.Ordinal), "kit widgets release only their own selection");
+            var adapter = Read("src/TopiaForge.ModManager/Overlay/InSessionOverlay.cs");
+            That(!chat.Contains("PlayerInput", StringComparison.Ordinal) && !adapter.Contains("PlayerInput", StringComparison.Ordinal), "chat never disables or restores native input");
+            That(adapter.Contains("IsLocalPlayerTyping = screen.IsTyping", StringComparison.Ordinal), "presence reads the named typing seam");
+        }
+
         /// <summary>Every source file of the interface: its folders, its overlay adapters and its gallery page.</summary>
         internal static IReadOnlyList<string> SourceFiles(string root)
         {
@@ -67,6 +83,7 @@ namespace TopiaForge.ModManager.Tests
             files.Add(Path.Combine(overlay, "MultiplayerTab.cs"));
             files.Add(Path.Combine(overlay, "PluginMultiplayerEnvironment.cs"));
             files.Add(Path.Combine(overlay, "ManagerTabLookup.cs"));
+            files.Add(Path.Combine(overlay, "InSessionOverlay.cs"));
             files.AddRange(Directory.EnumerateFiles(Path.Combine(root, "mods", "TopiaForge.UiGallery", "Pages"), "SessionsPage*.cs"));
             That(files.Count >= 30 && files.All(File.Exists), "the scan covers the whole interface (" + files.Count + " files)");
             return files;

@@ -86,6 +86,29 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets whether the text field currently has input focus.</summary>
         public bool IsFocused => input.isFocused;
 
+        /// <summary>Focuses this kit text field; input ownership then claims the keyboard for typing.</summary>
+        public void Focus()
+        {
+            input.Select();
+            input.ActivateInputField();
+        }
+
+        /// <summary>Ends text entry before the owning composer hides or is destroyed.</summary>
+        public void Blur()
+        {
+            if (input != null) input.DeactivateInputField();
+            ReleaseFocus();
+        }
+
+        /// <summary>Shows entered text literally, including markup-like characters.</summary>
+        public TopiaForgeInputField PlainText()
+        {
+            input.richText = false;
+            textComponent.richText = false;
+            placeholderComponent.richText = false;
+            return this;
+        }
+
         /// <summary>Enter-to-submit hook (Packages path field, conversation send).</summary>
         public TopiaForgeInputField OnSubmit(Action<string> onSubmit)
         {
