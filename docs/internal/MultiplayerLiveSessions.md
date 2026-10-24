@@ -652,9 +652,11 @@ Each provider keeps its live-session files in its own data folder, read on the f
 - **A save that fails**, its copy's or its file's, for the bans and the known hosts alike, leaves its change unsaved, so
   it is tried again: by the first frame once five seconds have passed, never every frame, so a disk that keeps failing
   costs a frame nothing; and once more, at once, as the game closes.
-- **Closing.** Saves are never cancelled. Closing starts any save still due, tries a save that failed once more, and
-  waits up to two seconds for the saves to land, so a ban made just before quitting survives. Bans and known hosts
-  never read are not saved.
+- **Closing.** Saves are never cancelled. As the game closes, the provider starts any save still due, tries a save that
+  failed once more, and waits up to two seconds for the saves to land, so a ban made just before quitting survives. It
+  does so when TopiaForge's runtime detaches, as shutdown begins and before any mod stops, because a stopping mod's
+  files refuse every operation: nothing written once the provider itself closes can land. Bans and known hosts never
+  read are not saved.
 - **Merging.** Known hosts read from disk are merged in as older than those this process recorded, in their own order,
   so the cap drops the oldest first.
 

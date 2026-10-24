@@ -488,6 +488,8 @@ host's world and applies its baseline (WS3.6, WS3.8).
 `MultiplayerRuntime` is created in `ModRuntime`'s constructor with its `MultiplayerRuntimeHost`. ModRuntime records each
 package that loads in the host's inventory, and attaches at the end of `Load`, once the provider has published its
 control. `UnloadAll` detaches first, before any mod stops, so the provider closes its sessions on its own as it unloads.
+The provider saves its bans and known hosts as it is detached: a stopping mod's files refuse every operation, so a save
+made as the provider closes could never land.
 
 The frame:
 
