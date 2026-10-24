@@ -123,7 +123,11 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         InternalTimeAuthority TimeAuthority { get; }
 
-        /// <summary>Gets whether the game's own pause freezes the world: in single player only, since online the shared world never freezes.</summary>
+        /// <summary>
+        /// Gets whether the game's own pause freezes the world: in single player only, since online the shared world never
+        /// freezes. Online the runtime's pause guard keeps the world at <see cref="SessionTime"/> while a player's pause menu is
+        /// open, and Chronos stops yielding the clock to it.
+        /// </summary>
         bool NativePauseFreezesWorld { get; }
 
         /// <summary>
@@ -150,6 +154,31 @@ namespace TopiaForge.Mods.Internal
         /// <see cref="CurrentIntent"/>'s source. It allocates nothing.
         /// </summary>
         InternalRoute RouteCurrentIntent();
+
+        /// <summary>
+        /// Gets the game's clock, which Chronos drives the world's time scale through, so that Chronos and the runtime's
+        /// pause guard act on one clock (WS3.13). It is Unity's time in the game, and null where the runtime has no clock of
+        /// the game, as in a test host without one.
+        /// </summary>
+        IInternalGameClock? GameClock { get; }
+
+        /// <summary>
+        /// Gets the session's time as this process runs it (WS3.13): offline and on a listen host, what this process's time
+        /// authority published last, real time until it publishes; on a joined player, the host's, real time until the
+        /// host's first arrives. It allocates nothing.
+        /// </summary>
+        InternalSessionTime SessionTime { get; }
+
+        /// <summary>
+        /// Publishes the session's time as this process's time authority derives it: Chronos does, whenever its derived
+        /// scale or mode changes. Offline it is kept, so that a game opened to other players starts from it. On a listen host
+        /// every joined player follows it, at most ten updates a second with the newest winning, and a player that joins,
+        /// rejoins or moves to a replaced session receives it at once. A joined player follows its host's time and never
+        /// publishes: it is refused with <see cref="ModErrorCode.NotAuthoritative"/>, and a stopping context with
+        /// <see cref="ModErrorCode.Cancelled"/>. It allocates nothing.
+        /// </summary>
+        /// <returns>True when the session's time changed, false when it already was <paramref name="time"/>.</returns>
+        OperationResult<bool> PublishSessionTime(InternalSessionTime time);
     }
 
     /// <summary>

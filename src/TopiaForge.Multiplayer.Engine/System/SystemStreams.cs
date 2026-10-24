@@ -111,7 +111,7 @@ namespace TopiaForge.Multiplayer.Engine
     /// </summary>
     internal sealed class SystemStreamSet
     {
-        internal const int Slots = 5;
+        internal const int Slots = 6;
         private readonly SystemStream?[] streams = new SystemStream?[Slots];
         private List<SystemStream>? unknown;
 

@@ -16,7 +16,13 @@ namespace TopiaForge.Mods.Internal
         Chat = 3,
 
         /// <summary>The host's scene and gamemode, which joined players follow.</summary>
-        SceneFollow = 4
+        SceneFollow = 4,
+
+        /// <summary>
+        /// The session's time, which joined players follow and only the host sends: a joined player's send is refused, and a
+        /// message a player sends the host anyway ends its connection as a protocol violation.
+        /// </summary>
+        Time = 5
     }
 
     /// <summary>Who a system message goes to.</summary>

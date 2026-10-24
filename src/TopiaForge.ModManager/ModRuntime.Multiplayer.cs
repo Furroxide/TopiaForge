@@ -51,6 +51,17 @@ namespace TopiaForge.ModManager
 
         private long ReadNetworkClock() => networkClock != null ? networkClock() : ReadWorldClock();
 
+        /// <summary>
+        /// Gives the session's time (WS3.13) the network world's clock, which its send rate is measured by, and the game's
+        /// clock from the gameplay host, which Chronos drives time through and the pause guard keeps running online. A host
+        /// without a clock leaves nothing to guard.
+        /// </summary>
+        private void InstallSessionTime()
+        {
+            multiplayer.SessionTime.Clock = ReadNetworkClock;
+            multiplayer.GameClock = (coreGameplayServices as IGameClockSource)?.GameClock;
+        }
+
         private long ReadWorldClock() => worldClock.Elapsed.Ticks / 10;
 
         /// <summary>Gets the asset service the gameplay host made for a loaded mod's package context, beneath its network seam.</summary>

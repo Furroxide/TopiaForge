@@ -56,6 +56,7 @@ namespace TopiaForge.ModRuntime.Tests
                 TestGeneratedMultiplayerAutoBinding();
                 TestMultiplayerRuntime(root);
                 TestMultiplayerIntent(root);
+                TestPauseAndTime(root);
                 Console.WriteLine("ModRuntime synthetic-assembly integration tests passed.");
                 return 0;
             }

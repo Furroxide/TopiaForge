@@ -15,11 +15,13 @@ namespace TopiaForge.ModManager
     /// ModManager's multiplayer composition root. It finds the provider's internal control in the service registry,
     /// attaches its <see cref="MultiplayerRuntimeHost"/> to it, and drives the multiplayer frame around the mods:
     /// <list type="number">
-    /// <item><see cref="BeforeModsUpdate"/>: the provider's pump, which receives on the main thread, then world events and
-    /// the session follower.</item>
+    /// <item><see cref="BeforeModsUpdate"/>: the provider's pump, which receives on the main thread, then the host's time on
+    /// a joined player, world events and the session follower.</item>
     /// <item>The mods' Update.</item>
-    /// <item><see cref="AfterModsUpdate"/>: pose and voice send and the host's snapshots, then the provider's flush.</item>
-    /// <item><see cref="BeforeModsLateUpdate"/>: replica interpolation, before the mods' LateUpdate.</item>
+    /// <item><see cref="AfterModsUpdate"/>: pose and voice send and the host's snapshots and time, then the provider's
+    /// flush.</item>
+    /// <item><see cref="BeforeModsLateUpdate"/>: the pause guard online, then replica interpolation, before the mods'
+    /// LateUpdate.</item>
     /// </list>
     /// The stages are named seams that later slices fill; an empty one costs a field read. With no provider attached,
     /// each hook costs one field read and allocates nothing. The realm and its rules live in the other part of this class.
@@ -50,6 +52,8 @@ namespace TopiaForge.ModManager
             this.findControl = findControl ?? throw new ArgumentNullException(nameof(findControl));
             Host = host ?? throw new ArgumentNullException(nameof(host));
             this.log = log ?? throw new ArgumentNullException(nameof(log));
+            SessionTime = new MultiplayerSessionClock(log);
+            observers.Add(SessionTime);
         }
 
         internal MultiplayerRuntimeHost Host { get; }
@@ -176,6 +180,7 @@ namespace TopiaForge.ModManager
 
             FollowRealm();
             if (role == InternalSessionRole.Solo) return;
+            ReceiveSessionTime();
             Run(WorldEvents, ref worldFailureLogged, deltaTime);
         }
 
@@ -187,6 +192,7 @@ namespace TopiaForge.ModManager
             if (current == null) return;
             Run(PresenceSend, ref presenceFailureLogged, deltaTime);
             if (role == InternalSessionRole.ListenHost) Run(HostSnapshots, ref snapshotFailureLogged, deltaTime);
+            SendSessionTime();
             try
             {
                 current.Flush();
@@ -199,9 +205,13 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>LateUpdate, before the mods: replicas move to where the joined player should see them.</summary>
+        /// <summary>
+        /// LateUpdate, before the mods: online, the shared world keeps running behind this player's own pause menu; then
+        /// replicas move to where the joined player should see them.
+        /// </summary>
         internal void BeforeModsLateUpdate(GameTimeSample sample)
         {
+            if (SessionTime.PauseGuard.IsArmed) GuardNativePause();
             if (role != InternalSessionRole.Client) return;
             Run(ReplicaInterpolation, ref replicaFailureLogged, sample.DeltaTime);
         }

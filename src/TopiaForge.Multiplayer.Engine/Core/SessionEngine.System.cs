@@ -19,6 +19,9 @@ namespace TopiaForge.Multiplayer.Engine
         /// <summary>The steady rate a host allows one player: twice what an honest player keeps to, so arrival bunching never trips it.</summary>
         internal const int SystemIngressPerSecond = 2 * InternalSystemLimits.PlayerMessagesPerSecond;
 
+        /// <summary>The session time channel's kind: it carries the host's messages only.</summary>
+        private const byte TimeKind = (byte)InternalSystemChannelKind.Time;
+
         private readonly SystemChannelEndpoint?[] systemChannels = new SystemChannelEndpoint?[SystemStreamSet.Slots];
         private long systemMessagesUnclaimed;
         private long systemMessagesDiscarded;
@@ -190,6 +193,11 @@ namespace TopiaForge.Multiplayer.Engine
                     : null;
             }
 
+            if (kind == TimeKind)
+            {
+                return OperationResult<int>.Failure(ModErrorCode.NotAuthoritative, "Only the host sends the session's time; a joined player follows it.");
+            }
+
             if (target.Kind != InternalSystemTargetKind.Host)
             {
                 return OperationResult<int>.Failure(ModErrorCode.NotAuthoritative, "A joined player sends system messages to the host only.");
@@ -247,6 +255,10 @@ namespace TopiaForge.Multiplayer.Engine
         private void HandleSystemFromClient(HostConnection connection, ProtocolReader body)
         {
             SystemMessages.ReadHeader(body, out var sentEpoch, out var generation, out var kind);
+
+            // The session's time flows from the host only, in every session and on every stream: an honest player never
+            // sends it, so one that does breaks the protocol, whatever it stamped its message with.
+            if (kind == TimeKind) throw new ProtocolException("A player sent the session's time, which only the host sends.");
             var participant = connection.Participant;
             if (!connection.IsJoined || participant == null)
             {

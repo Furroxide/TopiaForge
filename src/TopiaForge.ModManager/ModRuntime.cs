@@ -127,6 +127,7 @@ namespace TopiaForge.ModManager
                 SessionPhaseSource = CurrentSessionPhase
             };
             networkWorld = InstallNetworkWorld();
+            InstallSessionTime();
             this.coreGameplayServices.FixedUpdate += DispatchFixedUpdate;
             this.coreGameplayServices.LateUpdate += DispatchLateUpdate;
             pluginAssemblyPath = Path.GetDirectoryName(typeof(ModRuntime).Assembly.Location) ?? string.Empty;

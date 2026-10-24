@@ -58,6 +58,12 @@
     <Compile Include="..\..\src\TopiaForge.Mods.UnityUi\Core\TopiaForgePlainText.cs" Link="Runtime\Kit\TopiaForgePlainText.cs" />
   </ItemGroup>
 
+  <!-- The session's time and the pause guard (WS3.13), which the composition root drives and the replication seam answers
+       from; the game's own clock over Unity lives in Time/Unity/. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\TopiaForge.ModManager\Multiplayer\Time\*.cs" Link="Runtime\Time\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <!-- The composition root's intent tracking (WS3.4), which its realm reports each change to, and the replication seam's
        half that answers it. -->
   <ItemGroup>

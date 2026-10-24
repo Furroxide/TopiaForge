@@ -27,7 +27,15 @@ namespace TopiaForge.Mods
     /// never last-writer-wins. Releasing a lease restores the prior derived state, and the service resets native
     /// timing plus the player on scene change, on owner teardown, on dispose, and even if
     /// a frame throws — so a held scale can never leak into a menu or the next gamemode (the failure that got the
-    /// studio's own slow-mo cut). It also yields to a native pause it did not request instead of fighting it.
+    /// studio's own slow-mo cut). In single player it also yields to a native pause it did not request instead of
+    /// fighting it.
+    /// </para>
+    /// <para>
+    /// <b>In a multiplayer session</b> time is the shared world's. Only the gamemode's server controller on the host
+    /// may freeze, slow, step, set a driver or begin turn-based play; anywhere else, a participant controller and every
+    /// part of a joined player included, those calls return <see cref="ModErrorCode.NotAuthoritative"/>. A joined
+    /// player runs at the host's time, leases that lose their authority when the session starts end, and Robotopia's
+    /// own pause menu no longer pauses the shared world. <see cref="ExemptPlayer"/> always works.
     /// </para>
     /// </remarks>
     public interface ITimeControlService

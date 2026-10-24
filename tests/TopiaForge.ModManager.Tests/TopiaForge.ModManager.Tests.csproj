@@ -378,6 +378,15 @@
     <Compile Include="../../src/TopiaForge.ModManager/Overlay/ManagerTabLookup.cs" Link="Runtime/ManagerTabLookup.cs" />
   </ItemGroup>
 
+  <!-- Pause and time (WS3.13) are Unity-free too: the session's time, its wire and the pause guard, beside Chronos' rules
+       and bridge, which the owner facade compiled above uses. The game's own clock over Unity lives in Time/Unity/. -->
+  <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
+    <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/Time/*.cs" Link="Runtime/Multiplayer/Time/%(Filename)%(Extension)" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\ChronosNetBridge.cs" />
+    <Compile Include="..\..\mods\TopiaForge.Chronos\ChronosNetRules.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/FakeGameClock.cs" Link="Multiplayer/FakeGameClock.cs" />
+  </ItemGroup>
+
   <!-- Intent tracking (WS3.4) is Unity-free too: the runtime's tracker, the decorators that feed it, the frame dispatch in
        ModContext, and both halves of the UI kit's hook. -->
   <ItemGroup Condition="'$(TestingKitOnly)' != 'true'">
