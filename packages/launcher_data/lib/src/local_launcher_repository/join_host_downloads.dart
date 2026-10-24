@@ -6,8 +6,10 @@ part of '../local_launcher_repository.dart';
 ///
 /// - **Gates, checked here and not only in the domain.** Developer mode, as
 ///   the launcher's settings say now, and the player's acknowledgement
-///   ([JoinSessionState.hostServedAcknowledged]), before anything is fetched;
-///   then whether the host can be reached at all.
+///   ([JoinSessionState.hostServedAcknowledged]), before anything is fetched,
+///   and again before each of the host's packages, so turning developer mode
+///   off asks the host for nothing more; then whether the host can be
+///   reached at all.
 /// - **Integrity.** The SHA-256 computed as the archive streamed must be the
 ///   one the server's signed descriptor pins. No source vouches for these
 ///   archives' manifests, so each must name exactly the mod and version the
@@ -81,6 +83,7 @@ extension _JoinHostDownloads on LocalLauncherRepository {
   /// is there; the failure otherwise. Throws [OperationCancelledException]
   /// when cancelled.
   Future<JoinFailed?> _obtainHostArchive(
+    JoinSessionState state,
     JoinPlanPackage item,
     JoinHostPackageSource source,
     SecureHttpProgress onProgress,
@@ -88,6 +91,15 @@ extension _JoinHostDownloads on LocalLauncherRepository {
   ) async {
     final package = item.package;
     final name = _joinModName(item);
+    // Developer mode can be turned off while the stage runs: from then on,
+    // nothing more is taken from the host.
+    final refusal = await _hostServedRefusal(state, name);
+    if (refusal != null) {
+      return JoinFailed(
+        JoinFailureCode.hostDownloadUnsupported,
+        detail: refusal,
+      );
+    }
     final cached = _joinCacheFile(package.sha256);
     final kept = await _cachedArchiveLength(cached, package.sha256, null);
     if (kept != null) {
@@ -184,8 +196,9 @@ JoinFailed _hostDownloadFailure(
       detail:
           'Only the host has $names, and a host shares mods only over a '
           'direct or local-network connection, while this join reaches it '
-          'through the TopiaForge service. Join it on your local network, or '
-          'ask the host to publish them to a mod source you use.$nothing',
+          'through the TopiaForge service. Join it on your local network or '
+          'by an address the host gives you, or ask the host to publish them '
+          'to a mod source you use.$nothing',
     ),
     JoinHostPackageProblem.directNotAllowed => JoinFailed(
       JoinFailureCode.directNotAllowed,

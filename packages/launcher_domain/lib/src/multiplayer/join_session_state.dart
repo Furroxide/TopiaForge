@@ -104,15 +104,14 @@ final class JoinSessionState {
 
   bool get isEnded => stage == JoinStage.ended;
 
-  /// Whether the join may contact the host itself rather than only the
-  /// control plane: always with direct paths allowed, and under relay-only
-  /// only when the host is on the local network. That holds for every
-  /// direct link, typed address or LAN listing that got past [JoinSession.start]
-  /// and the [JoinContactRules]; the host of an invite, server link or
-  /// Internet listing could be anywhere.
-  bool get mayContactHost =>
-      privacy == MultiplayerAddressPrivacy.direct ||
-      !target.resolvesThroughService;
+  /// Whether the launcher may contact the host itself rather than only the
+  /// control plane, as it does for the descriptor of a direct link, a typed
+  /// address or a LAN listing that got past [JoinSession.start] and the
+  /// [JoinContactRules]. The host of an invite, server link or Internet
+  /// listing was found by the service and could be anywhere: the launcher
+  /// never contacts it, whatever the session's privacy, so nothing comes
+  /// from that host itself.
+  bool get mayContactHost => !target.resolvesThroughService;
 
   /// What to fetch, and whom the fetch may contact, while fetching the
   /// descriptor; null in every other stage.

@@ -57,6 +57,7 @@ extension _JoinContentDownloads on LocalLauncherRepository {
         final failure = index < items.length
             ? await _obtainJoinArchive(items[index], update, cancellation)
             : await _obtainHostArchive(
+                state,
                 all[index],
                 hostPackages!,
                 update,

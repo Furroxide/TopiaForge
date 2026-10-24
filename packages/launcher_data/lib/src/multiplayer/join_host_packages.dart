@@ -11,12 +11,13 @@ final class _HostContact {
 }
 
 /// The packages one join takes from its host in developer mode
-/// ([JoinHostPackageSource]), from where its descriptor came and nowhere
+/// ([JoinHostPackageSource]), reached as its descriptor was and nowhere
 /// else:
 ///
-/// - a LAN listing, from its beacon's entry, which [prepare] keeps alive
-///   until [release], starting browsing again when it had stopped and the
-///   player's settings allow it;
+/// - a LAN listing, from its beacon's entry as it stands for each package,
+///   so from wherever the server's beacons come then, as its descriptor
+///   came; [prepare] keeps the entry alive until [release], starting
+///   browsing again when it had stopped and the player's settings allow it;
 /// - a direct link or typed address, from the address that served the
 ///   descriptor the join verified;
 /// - an invite, server link or Internet listing, from nowhere: the service
@@ -39,6 +40,8 @@ final class JoinHostPackages implements JoinHostPackageSource {
     CancellationToken? cancellation,
   }) async {
     final target = _request.target;
+    // Such a join ends while checking and never plans a package from its
+    // host ([JoinSessionState.mayContactHost]); this keeps the rule here too.
     if (target.resolvesThroughService) {
       return JoinHostPackageProblem.hostUnknown;
     }

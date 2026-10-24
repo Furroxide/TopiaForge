@@ -19,13 +19,14 @@ part of '../multiplayer.dart';
 ///     is left, report [JoinFailureCode.directNotAllowed];
 ///   - a LAN listing's host is contacted only when
 ///     [NetworkHost.pathKindOfAddress] puts the beacon's sender on the local
-///     network; otherwise report [JoinFailureCode.directNotAllowed];
-///   - for invite, server-link and Internet-listing targets the descriptor
-///     comes from the control plane, never from the host, and nothing is
-///     downloaded from the host: its location is unknown
-///     ([JoinSessionState.mayContactHost]). The service is not a peer.
+///     network; otherwise report [JoinFailureCode.directNotAllowed].
 /// - Under [MultiplayerAddressPrivacy.direct], any resolved address may be
 ///   contacted, IPv4 first.
+/// - **A host the service found is never contacted**, whatever the privacy:
+///   for invite, server-link and Internet-listing targets the descriptor
+///   comes from the control plane, never from the host, and nothing is
+///   downloaded from the host, whose location is unknown
+///   ([JoinSessionState.mayContactHost]). The service is not a peer.
 /// - Nothing logged or reported names [JoinTarget.directHost] or a resolved
 ///   address.
 sealed class JoinContactRules {

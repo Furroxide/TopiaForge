@@ -11,8 +11,12 @@ part of '../multiplayer.dart';
 ///   host claims, so a host-only package can never pass as optional. The one
 ///   exception is developer mode: when the descriptor says the host serves
 ///   packages, such a package is downloaded from the host and flagged for
-///   separate consent, but only if the join may contact the host. Otherwise
-///   it blocks as [JoinBlockerCode.directNotAllowed].
+///   separate consent, but only if the launcher may contact the host
+///   ([JoinSessionState.mayContactHost]). A host the service found is never
+///   contacted, whatever the session's privacy, so there it blocks as
+///   [JoinBlockerCode.contentUnavailable], naming the mod and the ways that
+///   work: joining the host on the local network or by an address it gives,
+///   or the host publishing the mod to a source.
 /// - Implicitly shared and required session packages must be used at the
 ///   exact archive: installed, or downloaded from an enabled source.
 /// - Packages whose trusted manifest makes them optional session packages
@@ -138,23 +142,8 @@ final class JoinPlanner {
     if (manifest == null) {
       if (resolution.availability == JoinPackageAvailability.hostOffered &&
           environment.developerMode &&
-          descriptor.hostServesPackages) {
-        if (!mayContactHost) {
-          const message =
-              'Only the host serves it, and reaching the host directly would '
-              'show it your address. Allow a direct path for this session, or '
-              'join on the local network.';
-          blockers.add(
-            JoinPlanBlocker(
-              JoinBlockerCode.directNotAllowed,
-              message,
-              modId: package.id,
-            ),
-          );
-          return _Decision(
-            decided(JoinPackageDisposition.blocked, note: message),
-          );
-        }
+          descriptor.hostServesPackages &&
+          mayContactHost) {
         return _Decision(
           decided(
             JoinPackageDisposition.downloadFromHost,
@@ -169,7 +158,8 @@ final class JoinPlanner {
         resolution,
         environment,
         descriptor,
-        package.role,
+        package,
+        mayContactHost: mayContactHost,
       );
       blockers.add(
         JoinPlanBlocker(
