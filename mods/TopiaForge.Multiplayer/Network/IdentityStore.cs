@@ -21,10 +21,21 @@ namespace TopiaForge.Multiplayer.Network
     /// unreadable file is kept beside a fresh identity as <c>multiplayer/identity.unreadable.json</c>, so a damaged file
     /// is never silently lost; nothing about the keys is ever logged.
     /// </summary>
+    /// <remarks>
+    /// A file in another layout, with white space, a byte-order mark or its members in another order, is the same identity:
+    /// it reads whole, through every check this game's own bytes pass, and is used as it is. Its bytes are then kept at
+    /// <see cref="DamagedPath"/> and the file is rewritten in this game's canonical form, the same keys. The copy holds
+    /// the keys too, so it is one place only and never written over: once it holds a file, a later file in another layout
+    /// is rewritten without a copy, since the rewrite keeps every key. While the copy cannot be written the file stays as
+    /// it is, still readable, to be kept and rewritten at a later load. Neither step is reported.
+    /// </remarks>
     internal sealed class IdentityStore
     {
         internal const string IdentityPath = "multiplayer/identity.json";
         internal const string UnreadablePath = "multiplayer/identity.unreadable.json";
+
+        /// <summary>Where the bytes of an identity file in another layout are kept before it is rewritten.</summary>
+        internal const string DamagedPath = "multiplayer/identity.damaged.json";
 
         private readonly INetworkDataFiles files;
         private readonly Func<long> unixSeconds;
@@ -46,7 +57,12 @@ namespace TopiaForge.Multiplayer.Network
                 // The file holds every secret, so the buffer read from it is zeroed whatever happens next.
                 try
                 {
-                    if (LocalIdentity.TryParse(bytes, out var identity, out var error)) return identity!;
+                    if (LocalIdentity.TryParse(bytes, out var identity, out var canonical, out var error))
+                    {
+                        if (!canonical) await RewriteAsync(identity!, bytes, cancellationToken).ConfigureAwait(false);
+                        return identity!;
+                    }
+
                     await files.WriteAsync(UnreadablePath, bytes, cancellationToken).ConfigureAwait(false);
                     IdentityReplaced?.Invoke("The multiplayer identity file was unreadable (" + error + "), so a new identity was created.");
                 }
@@ -57,6 +73,57 @@ namespace TopiaForge.Multiplayer.Network
             }
 
             return await CreateAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Keeps the bytes of a file in another layout at <see cref="DamagedPath"/>, unless that place holds a file already,
+        /// then rewrites the file as this game writes <paramref name="identity"/>. It is best effort: whatever stops it, the
+        /// identity read whole is used, and the file stays readable as it was.
+        /// </summary>
+        private async Task RewriteAsync(LocalIdentity identity, byte[] bytes, CancellationToken cancellationToken)
+        {
+            byte[]? canonical = null;
+            try
+            {
+                if (!await TryKeepCopyAsync(bytes, cancellationToken).ConfigureAwait(false)) return;
+                canonical = identity.Serialize();
+                await files.WriteAsync(IdentityPath, canonical, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // The copy or the rewrite could not be written: the file still reads as it is, and a later load tries again.
+            }
+            finally
+            {
+                if (canonical != null) Array.Clear(canonical, 0, canonical.Length);
+            }
+        }
+
+        /// <summary>
+        /// Writes <paramref name="bytes"/> to <see cref="DamagedPath"/> when it holds no file; true once the place holds a
+        /// copy, this one or one kept before, and false when it could not be read just now, since it may hold one. A write
+        /// that fails throws. A copy kept before holds keys, so the buffer read from it is zeroed.
+        /// </summary>
+        private async Task<bool> TryKeepCopyAsync(byte[] bytes, CancellationToken cancellationToken)
+        {
+            byte[]? kept;
+            try
+            {
+                kept = await files.ReadAsync(DamagedPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            if (kept != null)
+            {
+                Array.Clear(kept, 0, kept.Length);
+                return true;
+            }
+
+            await files.WriteAsync(DamagedPath, bytes, cancellationToken).ConfigureAwait(false);
+            return true;
         }
 
         /// <summary>Replaces the identity with a new one. Hosts that knew the old one see a new player.</summary>

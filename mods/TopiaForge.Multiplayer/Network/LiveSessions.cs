@@ -79,8 +79,8 @@ namespace TopiaForge.Multiplayer.Network
             this.providerModId = providerModId ?? throw new ArgumentNullException(nameof(providerModId));
             this.transportOptions = transportOptions ?? (() => new Transport.TransportOptions());
             this.natOptions = natOptions ?? (() => new NatAgentOptions());
-            bans = new BanStore(files);
-            knownHosts = new KnownHostsStore(files);
+            bans = new BanStore(files, clock);
+            knownHosts = new KnownHostsStore(files, clock);
 
             // Invites and listed servers go to the TopiaForge service, while one is configured; every other target to the network.
             this.resolver = new ServiceAwareResolver(resolver ?? new NetworkTargetResolver(() => browser, knownHosts, unixSeconds), () => Services);
@@ -320,8 +320,10 @@ namespace TopiaForge.Multiplayer.Network
             StopBrowsing();
             if (ReferenceEquals(engine.Options.AfterClientSessionEnds, endHook)) engine.Options.AfterClientSessionEnds = null;
 
-            // Whatever changed is saved before the game closes, and the saves, and the listing's deletion, get a moment to land.
-            Persist();
+            // Whatever changed is saved before the game closes, a save that failed is tried once more, and the saves, and
+            // the listing's deletion, get a moment to land.
+            bansWrite = bans.SaveOnClose(bansWrite);
+            knownHostsWrite = knownHosts.SaveOnClose(knownHostsWrite);
             try
             {
                 var waits = new List<Task> { bansWrite, knownHostsWrite };

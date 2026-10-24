@@ -205,6 +205,8 @@ internal static class Program
             KnownHostsLayoutTests.ASecondDamageKeepsTheFirstCopy();
             KnownHostsLayoutTests.SignedAndSharedDocumentsStayCanonical();
             KnownHostsLayoutTests.ASaveQueuedBehindAFailedCopyKeepsTheDamagedRecord();
+            LocalRecordsLayoutTests.ABanListInAnyLayoutKeepsEveryBan();
+            LocalRecordsLayoutTests.AnIdentityInAnyLayoutKeepsTheSameIdentity();
             OpusVoiceCodecTests.RoundTripKeepsSyntheticSpeech();
             OpusVoiceCodecTests.PacketsStayWithinTheirBounds();
             OpusVoiceCodecTests.ForwardErrorCorrectionBeatsConcealment();
@@ -284,6 +286,9 @@ internal static class Program
             LiveSessionFailureTests.ClosingSavesWhatChangedWhileKnownHostsStayUnread();
             LiveSessionFailureTests.ASaveSlowerThanClosingStillLands();
             LiveSessionFailureTests.ClosingSavesAKnownHostRecordedOffTheMainThread();
+            SaveRetryTests.AFailedSaveIsTriedAgainAfterAPause();
+            SaveRetryTests.AFailedSaveIsTriedOnceMoreAtClose();
+            SaveFailureObservationTests.RetriedAndLateSaveFailuresAreObserved();
             KnownHostsFailClosedTests.AnUnreadableRecordRefusesAndWritesNothing();
             KnownHostsFailClosedTests.ATrustGivenUncheckedEndsOnceTheRecordReads();
             KnownHostsFailClosedTests.ClosingWritesNothingOverAnUnreadableRecord();

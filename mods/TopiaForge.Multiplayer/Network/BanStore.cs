@@ -22,9 +22,14 @@ namespace TopiaForge.Multiplayer.Network
     /// A file that reads but is damaged is salvaged: the bans that read are kept, and the rest are dropped. Before anything
     /// replaces it, its bytes are copied to the first of <see cref="DamagedPaths"/> that holds no file, so a list the game
     /// could not use is never lost silently, and while that copy cannot be written the damaged file stays where it is, to
-    /// be salvaged again. A copy is never written over. Anything that does not read back exactly as this game writes it
-    /// counts as damaged: a file of another schema, a ban that does not read, a name that is not display text, a banned key
-    /// listed twice, more bans than the list keeps, or bytes that are not canonical.
+    /// be salvaged again. A copy is never written over. A list in another layout, with white space, a byte-order mark or its
+    /// members in another order, reads whole, so it keeps every ban. Anything that does not read back exactly as this game
+    /// writes it counts as damaged: a file of another schema, a ban that does not read, a name that is not display text, a
+    /// banned key listed twice, more bans than the list keeps, or bytes that are not canonical, such as another layout.
+    /// </para>
+    /// <para>
+    /// A save that fails, its copy's or the list's, leaves the change unsaved, so it is tried again: by the first frame once
+    /// <see cref="RetryMicros"/> have passed, never every frame, and once more, at once, as the game closes.
     /// </para>
     /// </remarks>
     internal sealed class BanStore
@@ -41,16 +46,32 @@ namespace TopiaForge.Multiplayer.Network
             "multiplayer/bans.damaged-3.json"
         };
 
+        /// <summary>
+        /// How long a save that failed waits before a frame tries it again, so a disk that keeps failing is tried every few
+        /// seconds rather than every frame. Closing tries once more without waiting.
+        /// </summary>
+        internal const long RetryMicros = 5_000_000;
+
+        /// <summary>The value of <see cref="retryAt"/> while no failed save waits to be tried again.</summary>
+        private const long NoRetry = long.MinValue;
+
         private readonly INetworkDataFiles files;
+        private readonly Func<long> clock;
         private readonly object gate = new object();
         private Task<bool>? reading;
         private bool read;
         private bool dirty;
         private byte[]? damaged;
 
-        internal BanStore(INetworkDataFiles files)
+        /// <summary>When a failed save is next tried, or <see cref="NoRetry"/>.</summary>
+        private long retryAt = NoRetry;
+
+        /// <param name="files">The provider's data files.</param>
+        /// <param name="clock">The time in microseconds that paces a failed save's next try; the provider's clock by default.</param>
+        internal BanStore(INetworkDataFiles files, Func<long>? clock = null)
         {
             this.files = files ?? throw new ArgumentNullException(nameof(files));
+            this.clock = clock ?? MultiplayerProvider.MonotonicMicros;
         }
 
         /// <summary>Gets the bans this host keeps: once the file was read, its bans and every one since; before, those held.</summary>
@@ -87,21 +108,68 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>
-        /// Queues a save behind <paramref name="previous"/> when the list changed since the last one, and returns it, or
-        /// returns <paramref name="previous"/> when there is nothing to save. Nothing is saved until a read succeeded, so a
-        /// file this process could not read is never written over, and a change made meanwhile is saved once it reads. A
-        /// damaged file's copy is written first, and the list only once the copy landed.
+        /// Queues a save behind <paramref name="previous"/> when the list changed since the last one, or when the last save
+        /// failed and its pause is over, and returns it, or returns <paramref name="previous"/> when there is nothing to save.
+        /// Nothing is saved until a read succeeded, so a file this process could not read is never written over, and a change
+        /// made meanwhile is saved once it reads. A damaged file's copy is written first, and the list only once the copy
+        /// landed. With nothing to save, it allocates nothing, a failed save waiting for its next try included.
         /// </summary>
         internal Task SaveAfter(Task previous)
         {
             if (previous == null) throw new ArgumentNullException(nameof(previous));
             lock (gate)
             {
-                if (!dirty || !read) return previous;
+                if (!read) return previous;
+                if (!dirty)
+                {
+                    // A save that failed left the change unsaved: it is tried again once its pause is over, and not before.
+                    if (!previous.IsFaulted) return previous;
+                    var now = clock();
+                    if (retryAt == NoRetry)
+                    {
+                        // Its exception is observed here, once, so a failure that is tried again is never reported later
+                        // as one nobody saw; its text goes nowhere.
+                        _ = previous.Exception;
+                        retryAt = now + RetryMicros;
+                    }
+
+                    if (now < retryAt) return previous;
+                }
+
                 dirty = false;
+                retryAt = NoRetry;
             }
 
             return Queue(previous, Record.Serialize());
+        }
+
+        /// <summary>
+        /// Saves for the last time as the game closes, behind <paramref name="previous"/>: a change not yet saved now, and a
+        /// save that failed, or that fails while closing waits for it, once more at once, without waiting out the pause.
+        /// Nothing is saved until a read succeeded.
+        /// </summary>
+        internal Task SaveOnClose(Task previous)
+        {
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            bool changed;
+            lock (gate)
+            {
+                if (!read) return previous;
+                changed = dirty;
+                dirty = false;
+                retryAt = NoRetry;
+            }
+
+            var last = changed ? Queue(previous, Record.Serialize()) : previous;
+            return NetworkSaveTasks.Observe(last.ContinueWith(TryAgainIfFailed, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap());
+        }
+
+        /// <summary>Writes the list again when <paramref name="saved"/> failed; the list holds every change since.</summary>
+        private Task TryAgainIfFailed(Task saved)
+        {
+            if (!saved.IsFaulted) return saved;
+            _ = saved.Exception;
+            return WriteAsync(Record.Serialize());
         }
 
         /// <summary>
@@ -110,7 +178,11 @@ namespace TopiaForge.Multiplayer.Network
         /// Saves are never cancelled, even while closing: a cancelled write would lose the change, and each is small.
         /// </summary>
         private Task Queue(Task previous, byte[] bytes) =>
-            previous.ContinueWith(_ => WriteAsync(bytes), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+            NetworkSaveTasks.Observe(previous.ContinueWith(saved =>
+            {
+                _ = saved.Exception;
+                return WriteAsync(bytes);
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap());
 
         private async Task<bool> ReadAsync()
         {

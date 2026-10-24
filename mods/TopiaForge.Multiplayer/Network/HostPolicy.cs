@@ -113,14 +113,16 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         /// <summary>
-        /// Reads the list's bytes: anything that does not read as the list yields an empty one, and a ban that does not read
-        /// is skipped. A file that could not be read at all never comes here; <see cref="BanStore"/> keeps the list unread
-        /// instead, and copies a damaged file aside before replacing it.
+        /// Reads the list's bytes in any layout another program may have left them in: white space, a byte-order mark and
+        /// members in any order read as this game's canonical bytes do, so every ban in them is kept. Anything that does not
+        /// read as the list yields an empty one, and a ban that does not read is skipped. A file that could not be read at all
+        /// never comes here; <see cref="BanStore"/> keeps the list unread instead, and copies a file that is not canonical
+        /// aside before replacing it.
         /// </summary>
         internal static BanList Parse(byte[]? bytes)
         {
             var result = new BanList();
-            if (bytes == null || !CanonicalJson.TryParse(bytes, MaximumBytes, out var node, out _)) return result;
+            if (bytes == null || !CanonicalJson.TryParseAnyLayout(bytes, MaximumBytes, out var node, out _)) return result;
             if (!(node is JsonObjectNode value) || !value.HasExactly("schema", "bans") ||
                 !value.TryGet("schema", out var schema) || !(schema is JsonStringNode text) || text.Value != Schema ||
                 !value.TryGet("bans", out var list) || !(list is JsonArrayNode array))
