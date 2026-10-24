@@ -17,17 +17,18 @@ namespace TopiaForge.Mods.UnityUi
     /// </summary>
     public static class TopiaForgeEventSystems
     {
-        // Frames between checks for another event system while the kit's own exists: about a second.
-        private const int OwnedRecheckFrames = 60;
+        private const double OwnedRecheckSeconds = 1d;
 
         // Checks after a scene load, so an event system the scene's objects make in Start is seen too.
         private const int SceneLoadRechecks = 2;
 
-        private static readonly List<GraphicRaycaster> KitRaycasters = new List<GraphicRaycaster>();
+        private static readonly List<TrackedRaycaster> KitRaycasters = new List<TrackedRaycaster>();
+        private static readonly List<GameObject> SceneRoots = new List<GameObject>();
+        private static readonly List<EventSystem> SceneEventSystems = new List<EventSystem>();
         private static GameObject? ownedEventSystem;
         private static bool watchingScenes;
         private static int pendingRechecks;
-        private static int framesSinceCheck;
+        private static double nextCheckAt;
 
         /// <summary>Ensures that a compatible Unity event system is available, the game's own when it has one.</summary>
         public static void EnsureEventSystem()
@@ -41,9 +42,10 @@ namespace TopiaForge.Mods.UnityUi
 
         /// <summary>
         /// Follows a kit canvas's raycaster: while it is enabled on an active canvas the kit takes input, and the next
-        /// frame finds an event system for it if none is active. A HUD's disabled raycaster asks for none.
+        /// frame finds an event system for it if none is active. A HUD's disabled raycaster asks for none. Windows and
+        /// tools supply their content root because hiding that child does not disable the canvas's own raycaster.
         /// </summary>
-        internal static void Track(GraphicRaycaster raycaster)
+        internal static void Track(GraphicRaycaster raycaster, GameObject? inputRoot = null)
         {
             if (raycaster == null)
             {
@@ -52,10 +54,17 @@ namespace TopiaForge.Mods.UnityUi
 
             WatchScenes();
             DropDestroyed();
-            if (!KitRaycasters.Contains(raycaster))
+            var tracked = new TrackedRaycaster(raycaster, inputRoot != null ? inputRoot : raycaster.gameObject);
+            for (var index = 0; index < KitRaycasters.Count; index++)
             {
-                KitRaycasters.Add(raycaster);
+                if (KitRaycasters[index].Raycaster == raycaster)
+                {
+                    KitRaycasters[index] = tracked;
+                    return;
+                }
             }
+
+            KitRaycasters.Add(tracked);
         }
 
         /// <summary>
@@ -72,7 +81,7 @@ namespace TopiaForge.Mods.UnityUi
 
             if (ownedEventSystem != null)
             {
-                if (sceneRecheck || ++framesSinceCheck >= OwnedRecheckFrames)
+                if (sceneRecheck || Time.unscaledTimeAsDouble >= nextCheckAt)
                 {
                     Reconcile();
                 }
@@ -94,12 +103,14 @@ namespace TopiaForge.Mods.UnityUi
             RetireOwn();
             KitRaycasters.Clear();
             pendingRechecks = 0;
-            framesSinceCheck = 0;
+            nextCheckAt = 0;
+            SceneRoots.Clear();
+            SceneEventSystems.Clear();
         }
 
         private static void Reconcile()
         {
-            framesSinceCheck = 0;
+            nextCheckAt = Time.unscaledTimeAsDouble + OwnedRecheckSeconds;
             var action = TopiaForgeEventSystemPolicy.Decide(KitTakesInput(), ownedEventSystem != null, FindOtherActive() != null);
             if (action == TopiaForgeEventSystemAction.CreateOwn)
             {
@@ -135,9 +146,9 @@ namespace TopiaForge.Mods.UnityUi
         private static bool KitTakesInput()
         {
             DropDestroyed();
-            foreach (var raycaster in KitRaycasters)
+            foreach (var tracked in KitRaycasters)
             {
-                if (raycaster.isActiveAndEnabled)
+                if (tracked.Raycaster.isActiveAndEnabled && tracked.InputRoot.activeInHierarchy)
                 {
                     return true;
                 }
@@ -151,7 +162,7 @@ namespace TopiaForge.Mods.UnityUi
         {
             for (var index = KitRaycasters.Count - 1; index >= 0; index--)
             {
-                if (KitRaycasters[index] == null)
+                if (KitRaycasters[index].Raycaster == null || KitRaycasters[index].InputRoot == null)
                 {
                     KitRaycasters.RemoveAt(index);
                 }
@@ -161,15 +172,57 @@ namespace TopiaForge.Mods.UnityUi
         // An active event system the kit did not make: the game's own, or another mod's.
         private static EventSystem? FindOtherActive()
         {
-            foreach (var candidate in Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            var current = EventSystem.current;
+            if (current != null && current.isActiveAndEnabled && current.gameObject != ownedEventSystem)
             {
-                if (candidate != null && candidate.isActiveAndEnabled && candidate.gameObject != ownedEventSystem)
+                return current;
+            }
+
+            // Unity's array-returning global search allocates on every poll. Reuse the list overloads instead;
+            // capacity grows only when the scene changes. The persistent scene is not in SceneManager's list.
+            for (var index = 0; index < SceneManager.sceneCount; index++)
+            {
+                var candidate = FindOtherActive(SceneManager.GetSceneAt(index));
+                if (candidate != null)
                 {
                     return candidate;
                 }
             }
 
-            return null;
+            return ownedEventSystem != null ? FindOtherActive(ownedEventSystem.scene) : null;
+        }
+
+        private static EventSystem? FindOtherActive(Scene scene)
+        {
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                return null;
+            }
+
+            try
+            {
+                scene.GetRootGameObjects(SceneRoots);
+                foreach (var root in SceneRoots)
+                {
+                    if (root == null) continue;
+                    root.GetComponentsInChildren(false, SceneEventSystems);
+                    foreach (var candidate in SceneEventSystems)
+                    {
+                        if (candidate != null && candidate.isActiveAndEnabled && candidate.gameObject != ownedEventSystem)
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+
+                return null;
+            }
+            finally
+            {
+                // Do not retain another scene's roots or components between checks, including on an early return.
+                SceneRoots.Clear();
+                SceneEventSystems.Clear();
+            }
         }
 
         private static void CreateOwn()
@@ -178,7 +231,7 @@ namespace TopiaForge.Mods.UnityUi
             Object.DontDestroyOnLoad(go);
             go.AddComponent<EventSystem>();
             ownedEventSystem = go;
-            framesSinceCheck = 0;
+            nextCheckAt = Time.unscaledTimeAsDouble + OwnedRecheckSeconds;
 
             if (TopiaForgeInput.LegacyAvailable)
             {
@@ -203,6 +256,19 @@ namespace TopiaForge.Mods.UnityUi
                 owned.SetActive(false);
                 Object.Destroy(owned);
             }
+        }
+
+        private readonly struct TrackedRaycaster
+        {
+            public TrackedRaycaster(GraphicRaycaster raycaster, GameObject inputRoot)
+            {
+                Raycaster = raycaster;
+                InputRoot = inputRoot;
+            }
+
+            public GraphicRaycaster Raycaster { get; }
+
+            public GameObject InputRoot { get; }
         }
     }
 }

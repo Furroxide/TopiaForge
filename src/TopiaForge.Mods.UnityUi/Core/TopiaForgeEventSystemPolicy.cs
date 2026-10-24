@@ -14,9 +14,9 @@ namespace TopiaForge.Mods.UnityUi
     }
 
     /// <summary>
-    /// When the kit makes or removes its own event system. Unity runs only the first event system enabled, so one the kit
-    /// made before the game's first scene took the input of the main menu's own, and START DEMO did nothing. So the game's
-    /// event system always comes first: the kit makes its own only while one of its canvases takes input and no event
+    /// When the kit makes or removes its own event system. Unity runs only the first event system enabled, so a passive
+    /// HUD must not install one before the game's first scene. The game's event system always comes first:
+    /// the kit makes its own only while one of its canvases takes input and no event
     /// system is active, and removes it as soon as another is active. It never touches an event system it did not make.
     /// A canvas that takes no input, such as a HUD or a toast, needs none. Unity-free and unit-tested.
     /// </summary>

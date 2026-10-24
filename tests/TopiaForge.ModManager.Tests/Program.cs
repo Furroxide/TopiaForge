@@ -14,6 +14,11 @@ namespace TopiaForge.ModManager.Tests
         private static int Main(string[] args)
         {
             UnityMainThreadGuard.CaptureCurrentThread();
+            if (args.Length == 1 && args[0] == "--ui-kit-event-systems")
+            {
+                try { UiKitEventSystemTests.Run(); return 0; }
+                catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
+            }
             if (args.Length == 1 && args[0] == "--robo-api-client")
             {
                 var owned = Directory.CreateTempSubdirectory("TopiaForgeRoboApi-");

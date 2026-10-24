@@ -7,12 +7,11 @@ using TopiaForge.Mods.UnityUi;
 namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
-    /// The kit's own event system never takes the game's input. Unity runs only the first event system enabled, and a HUD
-    /// the multiplayer template made in <c>OnLoad</c>, before the game's first scene, made the kit's own event system first:
-    /// the main menu's own never ran, and START DEMO did nothing by click, Space or Enter. The policy is tested here on a
-    /// model of Unity's list of enabled event systems; the Unity wiring, which no offline test can run, is pinned by its shape.
+    /// The policy runs against an enabled-system model, and the production adapter runs against Unity contract doubles.
+    /// Source checks pin the remaining canvas and driver wiring. These tests do not prove UI Toolkit input routing or
+    /// START DEMO behavior in the game; those require the in-game regression check.
     /// </summary>
-    internal static class UiKitEventSystemTests
+    internal static partial class UiKitEventSystemTests
     {
         public static void Run()
         {
@@ -24,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             OnlyCanvasesThatTakeInputAskForAnEventSystem();
             TheKitRemovesOnlyItsOwnEventSystem();
             TheDriverChecksEveryFrameAndOnEverySceneLoad();
+            TheProductionAdapterMeetsItsContract();
             Console.WriteLine("UiKitEventSystemTests passed.");
         }
 
@@ -56,7 +56,7 @@ namespace TopiaForge.ModManager.Tests
             var menu = unity.LoadScene(withEventSystem: true);
             unity.Frame();
             Assert(ReferenceEquals(unity.Current, menu) && unity.Enabled.Count == 1,
-                "the main menu's own event system runs, so START DEMO takes the click, Space and Enter");
+                "the main menu's own event system remains current");
         }
 
         private static void AWindowMadeBeforeTheFirstSceneStepsAsideForTheMenu()
@@ -143,6 +143,13 @@ namespace TopiaForge.ModManager.Tests
             var chat = Read("src", "TopiaForge.Mods.UnityUi", "Widgets", "TopiaForgeChatLog.Chrome.cs");
             RequireMatch(chat, @"raycaster = TopiaForgeComponents\.GetOrAdd<GraphicRaycaster>\(Go\);\s*TopiaForgeEventSystems\.Track\(raycaster\);",
                 "The chat log's own raycaster takes input while it is open, so it must be followed too.");
+
+            foreach (var file in new[] { "TopiaForgeWindow.cs", "TopiaForgeFullscreenTool.cs" })
+            {
+                RequireSource(Read("src", "TopiaForge.Mods.UnityUi", "Widgets", file),
+                    "TopiaForgeEventSystems.Track(canvasRoot.GetComponent<GraphicRaycaster>(), Go);",
+                    "A hidden window or fullscreen tool must tie its canvas raycaster to its visible content root.");
+            }
         }
 
         private static void TheKitRemovesOnlyItsOwnEventSystem()
@@ -175,7 +182,7 @@ namespace TopiaForge.ModManager.Tests
             RequireSource(systems, "SceneManager.sceneLoaded -= OnSceneLoaded;", "The kit must stop watching scenes when it shuts down.");
             RequireMatch(systems, @"else if \(EventSystem\.current == null && KitTakesInput\(\)\)\s*\{\s*Reconcile\(\);",
                 "With no event system active, a kit canvas that takes input must get one.");
-            RequireMatch(systems, @"if \(sceneRecheck \|\| \+\+framesSinceCheck >= OwnedRecheckFrames\)\s*\{\s*Reconcile\(\);",
+            RequireMatch(systems, @"if \(sceneRecheck \|\| Time\.unscaledTimeAsDouble >= nextCheckAt\)\s*\{\s*Reconcile\(\);",
                 "While the kit's own exists, it must look for another after each scene load and at least once a second.");
         }
 
