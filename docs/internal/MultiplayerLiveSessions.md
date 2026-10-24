@@ -458,6 +458,10 @@ Every line ends in a single newline (`\n`).
 - **The client** (`DescriptorClient`) connects with a deadline, bounds the response to 256 KiB, and verifies the
   descriptor before returning it, against the server id it expects when it has one. Its failures name a reason:
   unreachable, timed out, refused or invalid. They never name an address.
+- **Packages, in the launcher.** A joining player in developer mode downloads a package only the host has with
+  `TFD1 package <sha256>`, read as this endpoint writes it: the status line within 64 bytes, the 64-bit length, then
+  the archive, streamed to disk up to that length, within the two minutes a transfer gets. The launcher checks it as
+  every join download (`MultiplayerLaunchContract.md`, section 11).
 - **Without IPv6** the endpoint listens and the client connects over IPv4, by the game socket's rule (section 13). The
   client takes a host in either form the stack holds, plain as a typed address resolves or mapped as a LAN path names
   it, and reports an IPv6 host as unreachable without contacting it.

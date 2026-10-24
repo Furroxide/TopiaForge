@@ -73,6 +73,7 @@ part 'local_launcher_repository/runtime_repair_helpers.dart';
 part 'local_launcher_repository/storage_helpers.dart';
 part 'local_launcher_repository/multiplayer_content_host.dart';
 part 'local_launcher_repository/join_content_downloads.dart';
+part 'local_launcher_repository/join_host_downloads.dart';
 part 'local_launcher_repository/join_content_install.dart';
 part 'local_launcher_repository/join_install_journal.dart';
 part 'local_launcher_repository/join_install_preflight.dart';
@@ -462,9 +463,8 @@ class LocalLauncherRepository
       _openPath(File(path).absolute.parent.path);
 
   @override
-  Future<void> ensureDirectory(String path) async {
-    await Directory(path).create(recursive: true);
-  }
+  Future<void> ensureDirectory(String path) =>
+      Directory(path).create(recursive: true);
 
   @override
   Future<void> dispose() async {

@@ -60,16 +60,11 @@ final class Tfd1Malformed extends Tfd1Response {
 /// arrive with its end or later, so the outcome never depends on how the
 /// network split them. Bytes are hostile input, so nothing here throws.
 ///
-/// It reads descriptors only. A `TFD1 package <sha256>` archive does not fit
-/// it: the length here is at most seven digits and the body is held in
-/// memory, while the game writes an archive's length as a 64-bit integer.
-/// The slice that downloads host-served packages needs:
-///
-/// - a streaming reader with a wider length, writing to disk as it reads;
-/// - the contact rules checked again at download time, as
-///   `DescriptorClient.fetchFrom` checks them before it connects;
-/// - LAN browsing kept running through the join, since a LAN host is reached
-///   only through the entry its beacon made, and stopping browsing forgets it.
+/// It reads descriptors only: the length here is at most seven digits and
+/// the body is held in memory. A `TFD1 package <sha256>` archive, whose
+/// length the game writes as a 64-bit integer, is read by
+/// `Tfd1PackageReader`, which streams it to disk (`package_response.dart`,
+/// through `HostPackageClient`).
 final class Tfd1ResponseReader {
   Tfd1ResponseReader({
     this.maximumBodyBytes = SignedServerDescriptorV1.maximumBytes,

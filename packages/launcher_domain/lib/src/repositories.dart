@@ -1,5 +1,6 @@
 import 'cancellation.dart';
 import 'dependency_planner.dart';
+import 'join_host_packages.dart';
 import 'models.dart';
 import 'multiplayer.dart';
 
@@ -171,13 +172,21 @@ abstract interface class MultiplayerContentHost {
   /// [ModRegistryFormat.maxPackageBytes] and the size the source states,
   /// checks its SHA-256 as it streams and its manifest against the trusted
   /// one, and keeps it in the package cache. Reports progress to
-  /// [onProgress]. Packages only the host serves end the join as
+  /// [onProgress], in bytes across every package.
+  ///
+  /// Packages only the host serves come last, from [hostPackages], checked
+  /// the same way, with a manifest that must name the mod and version the
+  /// descriptor claims. They need developer mode, which this checks itself,
+  /// and the player's acknowledgement
+  /// ([JoinSessionState.hostServedAcknowledged]); without either, or without
+  /// [hostPackages], the join ends as
   /// [JoinFailureCode.hostDownloadUnsupported] before anything is fetched.
   Future<JoinEvent?> downloadJoinContent(
     GameInstall install,
     JoinSessionState state, {
     void Function(JoinDownloadProgressed progress)? onProgress,
     CancellationToken? cancellation,
+    JoinHostPackageSource? hostPackages,
   });
 
   /// Answers a join in [JoinStage.installing]: installs every downloaded
@@ -187,6 +196,10 @@ abstract interface class MultiplayerContentHost {
   /// ([JoinInstallUndone]). Reports to [onProgress] how many of the packages
   /// it installs are prepared: none once it has counted them, then one more
   /// as each is staged. A listener that throws never stops the install.
+  /// Packages the host served install as registry ones do, from the
+  /// manifest their archive holds, once it names the mod and version the
+  /// descriptor claims, and only while developer mode is on and the player's
+  /// acknowledgement stands.
   ///
   /// Nothing installs beside a running game: it writes its manager state
   /// when it quits, over what an install changed. A game this launcher

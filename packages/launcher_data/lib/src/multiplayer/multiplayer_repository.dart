@@ -104,7 +104,10 @@ abstract interface class MultiplayerRepository {
   /// - with a [MultiplayerContentHost], downloading, installing into
   ///   [install], and preparing the server profile. Download and install
   ///   progress go to [onProgress] as the events the reducer takes for them,
-  ///   [JoinDownloadProgressed] and [JoinInstallProgressed].
+  ///   [JoinDownloadProgressed] and [JoinInstallProgressed]. Packages only
+  ///   the host serves download from the host as the descriptor fetch
+  ///   reached it (`JoinHostPackages`), and a LAN host's browsing entry
+  ///   stays alive until the downloading stage ends.
   ///
   /// Null for any other stage, for a content stage when there is no content
   /// host, and when [cancellation] stopped the work. The content stages need
@@ -339,13 +342,13 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
         state.descriptorRequest!,
         cancellation: cancellation,
       ),
-      JoinStage.downloading when content != null =>
-        await content.downloadJoinContent(
-          requireInstall(),
-          state,
-          onProgress: onProgress,
-          cancellation: cancellation,
-        ),
+      JoinStage.downloading when content != null => await _download(
+        content,
+        requireInstall(),
+        state,
+        onProgress,
+        cancellation,
+      ),
       JoinStage.installing when content != null =>
         await content.installJoinContent(
           requireInstall(),
@@ -357,6 +360,43 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
         await content.prepareJoinProfile(requireInstall(), state),
       _ => null,
     };
+  }
+
+  /// Answers the downloading stage through [content], with the packages
+  /// only the host serves taken from the host as the descriptor fetch
+  /// reached it (`JoinHostPackages`). A LAN host stays heard until the
+  /// stage ends, however it ends: a stop asked for meanwhile waits for it,
+  /// and browsing it had to start stops after it.
+  Future<JoinEvent?> _download(
+    MultiplayerContentHost content,
+    GameInstall install,
+    JoinSessionState state,
+    void Function(JoinEvent progress)? onProgress,
+    CancellationToken? cancellation,
+  ) async {
+    final request = state.downloadRequest;
+    final host = request == null || request.hostDownloads.isEmpty
+        ? null
+        : _resolver.hostPackagesFor(request, mayBrowse: _lanAllowed);
+    try {
+      return await content.downloadJoinContent(
+        install,
+        state,
+        onProgress: onProgress,
+        cancellation: cancellation,
+        hostPackages: host,
+      );
+    } finally {
+      host?.release();
+    }
+  }
+
+  /// Whether the stored settings let LAN browsing run: readable, with
+  /// discovery on, as [startLanBrowsing] reads them.
+  Future<bool> _lanAllowed() async {
+    final load = await _store.loadSettings();
+    return load.recovery != MultiplayerStoreRecovery.unreadable &&
+        load.settings.lanDiscoveryEnabled;
   }
 
   @override

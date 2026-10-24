@@ -11,9 +11,8 @@ part of '../multiplayer.dart';
 ///   fetching the descriptor. Under relay-only, a target whose host is an IP
 ///   literal beyond the local network, or a name other than `localhost`,
 ///   `.localhost` and `.local` names, ends at once, before anything is
-///   contacted or looked up. A plan that would download from a host whose
-///   location is unknown ends the join while checking, and a download that
-///   finds the host off the local network ends it while downloading.
+///   contacted or looked up. A download that finds the host off the local
+///   network ends the join while downloading.
 /// - Only a typed address can change identity, since only it learns its
 ///   server. Once that server is known, because the join learned it or the
 ///   player trusted it, another server answering ends the join as an
@@ -39,9 +38,15 @@ part of '../multiplayer.dart';
 ///   [JoinFailureCode.installFailed] with nothing installed, and says what
 ///   to do. Otherwise it, and any game the launcher did not start, ends
 ///   the install as [JoinFailureCode.gameRunning], as it ends a launch.
-/// - Packages only the host serves are not downloaded by this launcher: a
-///   plan that needs one ends while downloading as
-///   [JoinFailureCode.hostDownloadUnsupported], before anything is fetched.
+/// - Packages only the host serves (developer mode) come only from a host
+///   the launcher may contact ([JoinSessionState.mayContactHost]): a plan
+///   that would take them from a host the service found ends the join while
+///   checking, as [JoinFailureCode.contentUnavailable], whatever the
+///   session's privacy. They need the player's acknowledgement at consent,
+///   which the state keeps ([JoinSessionState.hostServedAcknowledged]), and
+///   download from the host's own endpoint after every other package; a
+///   host that can no longer be reached ends the join while downloading as
+///   [JoinFailureCode.unreachable].
 /// - A game that exits ends the join from launching onwards, and ends the
 ///   session once it began.
 /// - When admission changes while connecting, the join fetches the
@@ -85,12 +90,15 @@ abstract final class JoinSession {
       JoinFailureCode.directNotAllowed,
     },
     JoinStage.awaitingConsent: {},
+    // A host that serves its own packages can be gone, or stop answering, by
+    // the time they download.
     JoinStage.downloading: {
       JoinFailureCode.downloadFailed,
       JoinFailureCode.hostDownloadUnsupported,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
       JoinFailureCode.directNotAllowed,
+      JoinFailureCode.unreachable,
     },
     JoinStage.installing: {
       JoinFailureCode.installFailed,
@@ -385,13 +393,26 @@ abstract final class JoinSession {
       );
     }
     // Host-served archives come from the host itself, so a plan made as if
-    // the host could be contacted cannot pass when it cannot.
+    // the host could be contacted cannot pass when it cannot: a join the
+    // service resolved never offers them, whatever its privacy.
     if (plan.hasUnverifiedPackages && !state.mayContactHost) {
+      String named(DescriptorPackage package) =>
+          '${package.id} ${package.version}';
+      final hosted = plan.hostServedPackages;
       return state._failed(
-        JoinFailureCode.directNotAllowed,
-        detail:
-            'Only the host serves some packages, and reaching it directly '
-            'would show it your address.',
+        JoinFailureCode.contentUnavailable,
+        detail: _hostSharesOnlyDirectly(
+          hosted.map(named).join(', '),
+          hosted.length == 1 ? 'it' : 'them',
+        ),
+        blockers: [
+          for (final package in hosted)
+            JoinPlanBlocker(
+              JoinBlockerCode.contentUnavailable,
+              _hostSharesOnlyDirectly(named(package), 'it'),
+              modId: package.id,
+            ),
+        ]..sort(),
       );
     }
     final planned = state._copy(plan: plan);
@@ -412,6 +433,7 @@ abstract final class JoinSession {
     return _afterConsent(
       state._copy(
         consentKey: plan.consentKey,
+        hostServedAcknowledged: plan.hasUnverifiedPackages,
         closeOwnedGameAcknowledged: event.closeOwnedGameAcknowledged,
       ),
     );
@@ -436,7 +458,6 @@ abstract final class JoinSession {
     JoinBlockerCode.runtimeOutdated => JoinFailureCode.runtimeOutdated,
     JoinBlockerCode.standaloneOnServer => JoinFailureCode.standaloneOnServer,
     JoinBlockerCode.contentUnavailable => JoinFailureCode.contentUnavailable,
-    JoinBlockerCode.directNotAllowed => JoinFailureCode.directNotAllowed,
     JoinBlockerCode.admissionBlocked => JoinFailureCode.admissionBlocked,
   };
 }

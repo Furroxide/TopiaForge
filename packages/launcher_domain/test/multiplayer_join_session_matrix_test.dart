@@ -48,12 +48,15 @@ void main() {
     JoinStage.awaitingConsent: {},
     JoinStage.downloading: {
       JoinFailureCode.downloadFailed,
-      // Packages only the host serves are never downloaded by the launcher.
+      // Packages only the host serves, when developer mode is off, they were
+      // not acknowledged, or the service found the host.
       JoinFailureCode.hostDownloadUnsupported,
       JoinFailureCode.integrityFailed,
       JoinFailureCode.manifestMismatch,
       // A host download the contact rules forbid once names are resolved.
       JoinFailureCode.directNotAllowed,
+      // A host that serves its own packages and is gone, or stops answering.
+      JoinFailureCode.unreachable,
     },
     JoinStage.installing: {
       JoinFailureCode.installFailed,

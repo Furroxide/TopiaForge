@@ -16,3 +16,4 @@ export 'src/json_duplicate_properties.dart';
 export 'src/multiplayer.dart';
 export 'src/session_link_handling.dart';
 export 'src/cancellation.dart';
+export 'src/join_host_packages.dart';

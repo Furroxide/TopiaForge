@@ -10,11 +10,13 @@ import 'dart:typed_data';
 import 'package:launcher_domain/launcher_domain.dart';
 
 import 'descriptor_client.dart';
+import 'host_package_client.dart';
 import 'lan_datagrams.dart';
 import 'lan_discovery_state.dart';
 import 'lan_sockets.dart';
 
 part 'lan_discovery_entries.dart';
+part 'lan_discovery_holds.dart';
 part 'lan_discovery_recovery.dart';
 
 /// Monotonic time in microseconds.
@@ -54,6 +56,7 @@ final class LanDiscoveryClient {
     InternetAddress? queryAddress,
     LanSocketBinder? bind,
     DescriptorClient? descriptors,
+    HostPackageClient? packages,
     Random? random,
     LanClock? clock,
     LanTicker? ticker,
@@ -61,6 +64,7 @@ final class LanDiscoveryClient {
        _queryAddress = queryAddress ?? InternetAddress.anyIPv4,
        _bind = bind ?? bindLanDatagramSocket,
        _descriptors = descriptors ?? DescriptorClient(),
+       _packages = packages ?? HostPackageClient(),
        _random = random ?? Random.secure(),
        _clock = clock ?? _monotonicClock(),
        _ticker = ticker ?? _periodic;
@@ -93,6 +97,7 @@ final class LanDiscoveryClient {
   final InternetAddress _queryAddress;
   final LanSocketBinder _bind;
   final DescriptorClient _descriptors;
+  final HostPackageClient _packages;
   final Random _random;
   final LanClock _clock;
   final LanTicker _ticker;
@@ -110,6 +115,12 @@ final class LanDiscoveryClient {
   var _replacingQuerier = false;
   LanBrowseSnapshot _snapshot = LanBrowseSnapshot.stopped;
 
+  /// Joins whose downloads hold browsing ([hold]), whether a stop waits for
+  /// them, and the downloads waiting for a server's beacon ([hearsServer]).
+  var _holds = 0;
+  var _stopWhenReleased = false;
+  final Map<String, List<_Arrival>> _arrivals = {};
+
   /// The latest state, with current counters.
   LanBrowseSnapshot get snapshot =>
       _snapshot.withCounters(_counters.toCounters());
@@ -124,8 +135,14 @@ final class LanDiscoveryClient {
   int? get listeningPort => _listener?.port;
 
   /// Starts listening. Never throws: a port that cannot be opened gives an
-  /// [LanDiscoveryStatus.unavailable] snapshot.
+  /// [LanDiscoveryStatus.unavailable] snapshot. A stop that waits for a
+  /// [hold] no longer stops browsing once it is released.
   Future<LanBrowseSnapshot> start() {
+    _stopWhenReleased = false;
+    return _startListening();
+  }
+
+  Future<LanBrowseSnapshot> _startListening() {
     if (_disposed) return Future.value(snapshot);
     if (_listener != null) return Future.value(snapshot);
     return _starting ??= _start(_generation);
@@ -140,6 +157,7 @@ final class LanDiscoveryClient {
     } on Object catch (error) {
       listener?.close();
       if (generation == _generation) _starting = null;
+      _wakeArrivals();
       if (generation != _generation || _disposed) return snapshot;
       return _publish(
         LanBrowseSnapshot(
@@ -164,11 +182,18 @@ final class LanDiscoveryClient {
 
   /// Stops listening and forgets every session. Harmless when stopped.
   /// [disabled] reports that the player turned discovery off, and
-  /// [unavailable] why it cannot run just now.
+  /// [unavailable] why it cannot run just now; either stops at once. A plain
+  /// stop while a join's downloads [hold] browsing waits until they release
+  /// it.
   Future<LanBrowseSnapshot> stop({
     bool disabled = false,
     LanDiscoveryProblem? unavailable,
   }) async {
+    if (_holds > 0 && !disabled && unavailable == null) {
+      _stopWhenReleased = true;
+      return snapshot;
+    }
+    _stopWhenReleased = false;
     _generation++;
     _starting = null;
     _replacingQuerier = false;
@@ -181,6 +206,7 @@ final class LanDiscoveryClient {
     _entries.clear();
     _queries.clear();
     _budget.clear();
+    _wakeArrivals();
     if (_disposed) return snapshot;
     if (unavailable != null) {
       return _publish(
@@ -197,6 +223,7 @@ final class LanDiscoveryClient {
 
   Future<void> dispose() async {
     if (_disposed) return;
+    _holds = 0;
     await stop();
     _disposed = true;
     await _changes.close();
@@ -240,6 +267,36 @@ final class LanDiscoveryClient {
     );
   }
 
+  /// Keeps browsing running for a join's downloads, so the entry that
+  /// reaches its LAN host stays alive until [LanBrowseHold.release]. A plain
+  /// [stop] meanwhile waits for the release; turning discovery off, a port
+  /// that becomes unavailable and [dispose] still stop at once. When browsing
+  /// is stopped, it starts again if [mayStart] says the player's settings
+  /// allow it, and stops again on release unless [start] was called since.
+  Future<LanBrowseHold> hold({Future<bool> Function()? mayStart}) =>
+      _hold(mayStart);
+
+  /// Whether [serverId]'s beacon is heard: at once when its entry is there,
+  /// otherwise once a beacon arrives while browsing runs, giving up at the
+  /// first sweep after [expiry]. Never throws.
+  Future<bool> hearsServer(
+    String serverId, {
+    CancellationToken? cancellation,
+  }) async => await _awaitEntry(serverId, cancellation) != null;
+
+  /// Downloads the archive with [sha256] into [target] from the host of the
+  /// LAN listing [request] names, from where its beacon comes now, waiting
+  /// for one as [hearsServer] does. The session's privacy is applied to that
+  /// sender again, so under relay-only one beyond the local network is never
+  /// contacted.
+  Future<JoinHostPackageResult> fetchPackage(
+    JoinDownloadRequest request,
+    String sha256,
+    File target, {
+    void Function(int bytesReceived, int bytesTotal)? onProgress,
+    CancellationToken? cancellation,
+  }) => _fetchPackage(request, sha256, target, onProgress, cancellation);
+
   void _onBeacon(Datagram datagram) {
     try {
       _counters.datagramsHeard++;
@@ -278,6 +335,7 @@ final class LanDiscoveryClient {
     final moved = !fresh && !entry.isAt(sender, beacon.gamePort);
     if (moved) entry.moveTo(sender, beacon.gamePort);
     entry.lastSeen = now;
+    _wakeArrivals(beacon.serverId);
     final queriedAt = entry.queriedAt;
     if (entry.local &&
         (queriedAt == null || now - queriedAt >= requery.inMicroseconds)) {
@@ -383,6 +441,7 @@ final class LanDiscoveryClient {
         (_, entry) => now - entry.lastSeen >= expiry.inMicroseconds,
       );
       _budget.forgetIdle(now);
+      _expireArrivals(now);
       if (_entries.length != before) _publish(_listing());
     } on Object {
       _counters.faults++;
@@ -405,60 +464,11 @@ final class LanDiscoveryClient {
     _queries.remove(oldest);
   }
 
-  LanBrowseSnapshot _listing() {
-    final listings = <ServerListing>[];
-    final incompatible = <String>[];
-    var pending = 0;
-    var beyond = 0;
-    final ids = _entries.keys.toList()..sort();
-    for (final id in ids) {
-      final entry = _entries[id]!;
-      final info = entry.info;
-      if (!entry.local) {
-        beyond++;
-      } else if (entry.incompatible) {
-        incompatible.add(id);
-      } else if (info == null) {
-        pending++;
-      } else {
-        listings.add(
-          ServerListing.fromSessionInfo(
-            info,
-            pingMilliseconds: (entry.roundTripMicros ~/ 1000).clamp(
-              0,
-              ServerListing.maximumPingMilliseconds,
-            ),
-          ),
-        );
-      }
-    }
-    return LanBrowseSnapshot(
-      status: LanDiscoveryStatus.listening,
-      listings: listings,
-      pending: pending,
-      incompatibleServerIds: incompatible,
-      beyondLocalNetwork: beyond,
-    );
-  }
-
   LanBrowseSnapshot _publish(LanBrowseSnapshot next) {
     _snapshot = next;
     final current = snapshot;
     if (!_changes.isClosed) _changes.add(current);
     return current;
-  }
-
-  /// The IPv4 address an IPv4-mapped IPv6 address stands for, so both
-  /// spellings of one host compare and classify alike.
-  static InternetAddress _unmapped(InternetAddress address) {
-    final raw = address.rawAddress;
-    if (raw.length != 16 || raw[10] != 0xFF || raw[11] != 0xFF) {
-      return address;
-    }
-    for (var index = 0; index < 10; index++) {
-      if (raw[index] != 0) return address;
-    }
-    return InternetAddress.fromRawAddress(Uint8List.sublistView(raw, 12));
   }
 
   /// Address-in-use and access-denied codes on Windows, Linux and macOS. On

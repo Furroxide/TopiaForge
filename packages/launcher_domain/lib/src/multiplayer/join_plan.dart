@@ -66,12 +66,10 @@ enum JoinBlockerCode {
   /// A host package refuses multiplayer sessions.
   standaloneOnServer,
 
-  /// A required package has no trusted, compatible copy for this install.
+  /// A required package has no trusted, compatible copy for this install,
+  /// including one only the host has when the launcher may not take it from
+  /// the host ([JoinSessionState.mayContactHost]).
   contentUnavailable,
-
-  /// Only the host serves a package, and the session may not contact the
-  /// host directly ([JoinSessionState.mayContactHost]).
-  directNotAllowed,
 
   /// The admission planner refuses the session for another reason.
   admissionBlocked,
