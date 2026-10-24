@@ -287,6 +287,7 @@ namespace TopiaForge.ModManager
                         return;
                     }
 
+                    loaded = true;
                     var menu = new Pending(target);
                     pending = menu;
                     Status.Move(FollowStage.ReturningToMenu, "The host went to the main menu");
@@ -305,7 +306,8 @@ namespace TopiaForge.ModManager
         private void Verify()
         {
             var target = applied!;
-            if (target.Kind == HostWorldKind.Menu || stranded) return;
+            var waitingAtMenu = target.Kind == HostWorldKind.Menu || stranded;
+            if (waitingAtMenu && !scene.IsGameplay) return;
             if (scene.IsMainMenu && scene.Version != arrivedScene)
             {
                 log.Info("Multiplayer: this game returned to the main menu by itself, so it left the session.");
@@ -316,9 +318,9 @@ namespace TopiaForge.ModManager
                 return;
             }
 
-            var inWorld = target.Kind == HostWorldKind.World
+            var inWorld = !waitingAtMenu && (target.Kind == HostWorldKind.World
                 ? string.Equals(sessions.FollowedSessionId, target.SessionId, StringComparison.Ordinal) && sessions.Current.Phase == SessionPhase.Running
-                : !scene.IsGameplay || string.Equals(scene.Name, target.Scene, StringComparison.OrdinalIgnoreCase);
+                : !scene.IsGameplay || (string.Equals(scene.Name, target.Scene, StringComparison.OrdinalIgnoreCase) && scene.Version == arrivedScene));
             if (inWorld) return;
             if (++refollows > MaximumRefollows)
             {
@@ -327,8 +329,18 @@ namespace TopiaForge.ModManager
             }
 
             log.Info("Multiplayer: this game left the host's world by itself, so it follows the host again.");
-            applied = null;
             Status.Refollowing();
+            if (stranded)
+            {
+                // Correct a local load back to the waiting menu without retrying
+                // the unavailable level. A new host announcement still replaces it.
+                var waiting = new Pending(target) { ToMenu = true };
+                pending = waiting;
+                Status.Move(FollowStage.ReturningToMenu, FollowFailureWords.LevelNotLoaded);
+                waiting.Other = sessions.FollowMainMenuAsync(waiting.Cancellation.Token);
+                waiting.Completion = waiting.Other;
+            }
+            else applied = null;
         }
 
         /// <summary>Ends the join with the failure's own words; the game returns to the main menu once it has left.</summary>

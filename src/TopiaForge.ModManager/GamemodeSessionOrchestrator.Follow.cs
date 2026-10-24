@@ -176,7 +176,7 @@ namespace TopiaForge.ModManager
                 {
                     Follow = plan
                 };
-                RunDriver(() => FollowCoreAsync(record, plan, reached, token, completion));
+                RunDriver(() => FollowCoreAsync(record, plan, reached, token, completion), followed: true);
             }
             catch (Exception error)
             {
@@ -363,7 +363,7 @@ namespace TopiaForge.ModManager
         private void Reach(Action<SessionFollowStage, int, int> reached, SessionFollowStage stage, int step, int steps)
         {
             try { reached(stage, step, steps); }
-            catch (Exception error) { Report(error); }
+            catch (Exception error) { Report(error, followed: true); }
         }
 
         /// <summary>A follow's own stop at a stage, with the reason the runtime or a provider gave for the log.</summary>

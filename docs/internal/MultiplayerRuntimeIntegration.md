@@ -2213,6 +2213,10 @@ the host's: a player resolves its ids against its own packages and never shows a
   elsewhere, such as a level exit or the game's own load buttons, follows the host again, eight times in a join at most;
   the next one ends the join as "Your game keeps leaving the host's world". A return to the main menu by itself leaves
   the session, with "You returned to the main menu, so you left the session."
+  A followed world uses this rule even when its gamemode keeps its controller across scene changes. Native levels
+  are tracked by scene instance as well as name, so a restart into the same named level is a correction too; duplicate
+  events for the same instance are ignored. A native load while waiting at the host's menu, or at the fallback menu
+  for an unavailable level, returns to that menu under the same eight-correction bound without retrying the missing level.
 - **Busy.** A follow the orchestrator turns away while another operation or native change runs is tried again every
   quarter second, for 30 seconds at most.
 - **A world not found.** A host's world among the game's own levels that this game has not listed yet (`WorldNotFound`)
@@ -2244,6 +2248,9 @@ cancelled.
 - **Failures** end the join with their own kind (`FollowFailureKind`) and stage. The reason the runtime, a provider or a
   mod gave reaches the manager log alone, scrubbed: a word with a path separator becomes `[path]`, the diagnostic
   redactor takes out addresses, and the result stops at 300 characters.
+  The session lifecycle diagnostic sink and a followed world's terminal error use the same scrubber, including cleanup
+  and native-menu failures. Diagnostics keep a new exception containing only the scrubbed message, with no original
+  exception, inner exception or stack attached.
 - **A joined player's own commands.** `StopAsync` and `RestartAsync` answer `NotAuthoritative`: "Only the host can stop
   this session's world. Leave the session to stop playing." and "Only the host can restart this session's world." A local
   launch is refused the same way: "You are in another player's session, so its world is the host's to choose. Leave the

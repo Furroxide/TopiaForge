@@ -281,6 +281,10 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   with the host's world session, as `join-started` shows. A followed world's own end is withheld, since the join's end
   is the provider's, and that terminal record names the host's world session it was in. A follow never writes a launch
   outcome. A follow of a join the player started in game, or of RETRY after a launched join failed, writes nothing.
+  The launcher's `LaunchActivity` correlates these V2 join records by request and join intent across changing world
+  session ids. It retains a delayed acknowledgement for the first world beside progress and the terminal record for a
+  newer world. Other commands still require one world session id; foreign requests, intents, stale progress and
+  post-terminal progress remain ignored.
 - **Handoffs.** When the launcher owns this game, INSTALL & JOIN IN LAUNCHER and the failure view's Open launcher write
   a `session-handoff` naming the invite, the listing or the current session, on the background queue; a write that
   fails opens the link instead. A game no launcher started, and a server typed by address, open the

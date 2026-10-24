@@ -39,6 +39,10 @@ namespace TopiaForge.ModManager.Tests
             ALaunchedJoinsFollowsReportUnderItsRequest(root + "-launched");
             ABusyGameIsTriedAgainThenGivenUp(root + "-busy");
             AWorldNotFoundIsLookedForOnce(root + "-not-found");
+            NativeLoadsWhileWaitingAtTheMenuAreCorrected(root + "-waiting-native");
+            KeepControllerWorldsStillFollowNativeLoads(root + "-keep-native");
+            NativeReloadsOfTheSameLevelAreCorrected(root + "-same-native");
+            FollowCleanupDiagnosticsAreScrubbed(root + "-cleanup-diagnostics");
             FollowFailureWordsAreThisGamesOwn();
             SessionFollowWireTests.Run();
             Console.WriteLine("SessionFollowerTests passed.");
@@ -143,6 +147,8 @@ namespace TopiaForge.ModManager.Tests
         private static void AFailureEndsTheJoinInItsOwnWords(string root)
         {
             using var rig = new FollowRig(root);
+            var diagnostics = new List<Exception>();
+            rig.Test.Hosted.DiagnosticFailure += diagnostics.Add;
             SessionFixture.Load = (_, _) =>
             {
                 // The world's scene arrived, and then its provider failed.
@@ -165,6 +171,8 @@ namespace TopiaForge.ModManager.Tests
                 "the reason goes to the manager log without a path or an address: " + logged);
             That(!failure.Message.Contains("Caller") && !failure.Title.Contains("Caller") && !failure.Message.Contains("Gone"),
                 "and none of it reaches the player's words");
+            That(diagnostics.Count > 0 && diagnostics.All(error => !error.ToString().Contains("192.0.2.4") && !error.ToString().Contains("Gone.unity")),
+                "the session lifecycle diagnostic sink also scrubs follow failures");
         }
 
         private static void AGameStartedWhileJoiningIsNeverReplaced(string root)

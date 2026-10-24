@@ -50,7 +50,25 @@ final class LaunchActivity {
       if (launchOutcome?.sessionId != null) launchOutcome!.sessionId,
       if (sessionOutcome?.sessionId != null) sessionOutcome!.sessionId,
     };
-    if (sessions.length > 1) {
+    // A joined live session spans several host worlds. Its request and intent
+    // stay fixed while each world has its own sessionId, including outcomes
+    // that arrive after progress for the next world.
+    final followsWorlds =
+        command == 'join-session' &&
+        (progress == null ||
+            progress!.session?.role == LaunchSessionRole.join) &&
+        (launchOutcome == null ||
+            launchOutcome!.multiplayer?.role == LaunchSessionRole.join) &&
+        (sessionOutcome == null ||
+            sessionOutcome!.multiplayer?.role == LaunchSessionRole.join);
+    final intents = {
+      if (progress?.session != null) progress!.session!.intentId,
+      if (launchOutcome?.multiplayer != null)
+        launchOutcome!.multiplayer!.intentId,
+      if (sessionOutcome?.multiplayer != null)
+        sessionOutcome!.multiplayer!.intentId,
+    };
+    if ((sessions.length > 1 && !followsWorlds) || intents.length > 1) {
       throw const FormatException('Activity session correlation mismatch.');
     }
   }
@@ -110,11 +128,24 @@ final class LaunchActivity {
 
   /// Foreign, stale and post-terminal progress never changes the current view.
   LaunchActivity applyProgress(LaunchProgress next) {
+    if (progress?.session != null &&
+        progress!.session!.intentId != next.session?.intentId) {
+      return this;
+    }
     final sessionId = progress?.sessionId ?? launchOutcome?.sessionId;
-    if ((sessionId != null &&
-            next.sessionId != null &&
-            next.sessionId != sessionId) ||
-        (launchOutcome != null && launchOutcome!.status != 'succeeded')) {
+    final followsWorlds =
+        command == 'join-session' &&
+        next.session?.role == LaunchSessionRole.join &&
+        (progress == null ||
+            (progress!.session?.role == LaunchSessionRole.join &&
+                progress!.session!.intentId == next.session!.intentId));
+    if (sessionId != null &&
+        next.sessionId != null &&
+        next.sessionId != sessionId &&
+        !followsWorlds) {
+      return this;
+    }
+    if (launchOutcome != null && launchOutcome!.status != 'succeeded') {
       return this;
     }
     if (next.requestId != requestId ||

@@ -85,7 +85,7 @@ namespace TopiaForge.ModManager
 
         private void PublishSessionSceneLifecycle(SceneLifecycleEvent scene)
         {
-            if (scene.IsActive && scene.Phase != SceneLifecyclePhase.Unloaded) followedScene.Activated(scene.SceneName);
+            if (scene.IsActive && scene.Phase != SceneLifecyclePhase.Unloaded) followedScene.Activated(scene.SceneName, scene.SceneInstanceId);
             if (!(sessionShutdown is IRuntimeSessionSceneObserver observer)) return;
             try { observer.OnSceneLifecycle(scene); }
             catch (Exception exception)

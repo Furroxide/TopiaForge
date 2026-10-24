@@ -137,13 +137,13 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private void RunDriver(Func<Task<bool>> callback, bool ownsOperation = true)
+        private void RunDriver(Func<Task<bool>> callback, bool ownsOperation = true, bool followed = false)
         {
             var work = dispatcher.InvokeCallbackAsync(callback);
             if (ownsOperation) activeWork = work;
             work.ContinueWith(task =>
             {
-                if (task.Exception != null) dispatcher.Post(() => Report(task.Exception.Flatten()));
+                if (task.Exception != null) dispatcher.Post(() => Report(task.Exception.Flatten(), followed));
             }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
@@ -190,9 +190,12 @@ namespace TopiaForge.ModManager
             }
             finally { publishing--; }
         }
-        private void Report(Exception error)
+        private void Report(Exception error, bool followed = false)
         {
             if (DiagnosticFailure == null) return;
+            // Follow failures may include host-selected content. Keep neither the
+            // original exception nor its inner exceptions/stack in a diagnostic.
+            if (followed) error = new InvalidOperationException(SessionFollower.Scrub(string.Join("; ", CleanupMessages(error))));
             foreach (var handler in DiagnosticFailure.GetInvocationList()) try { ((Action<Exception>)handler)(error); } catch { }
         }
         private int NextSequence() => checked(++sequence);

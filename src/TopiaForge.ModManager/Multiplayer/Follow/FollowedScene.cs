@@ -9,6 +9,7 @@ namespace TopiaForge.ModManager
     /// </summary>
     internal sealed class FollowedScene
     {
+        private int? instanceId;
         /// <summary>Gets the active scene's name, or null before any scene was active.</summary>
         internal string? Name { get; private set; }
 
@@ -22,9 +23,10 @@ namespace TopiaForge.ModManager
         internal int Version { get; private set; }
 
         /// <summary>Records the scene that became active; the same scene again changes nothing.</summary>
-        internal void Activated(string sceneName)
+        internal void Activated(string sceneName, int? sceneInstanceId = null)
         {
-            if (string.IsNullOrWhiteSpace(sceneName) || string.Equals(sceneName, Name, StringComparison.Ordinal)) return;
+            if (string.IsNullOrWhiteSpace(sceneName) || (string.Equals(sceneName, Name, StringComparison.Ordinal) && instanceId == sceneInstanceId)) return;
+            instanceId = sceneInstanceId;
             Name = sceneName;
             IsMainMenu = GameScenes.IsMainMenuScene(sceneName);
             IsGameplay = !GameScenes.IsNonGameplayScene(sceneName);

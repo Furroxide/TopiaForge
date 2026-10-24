@@ -156,6 +156,9 @@ of an earlier join never ends this one. After the join, when the host changes wo
 world after straying, the overlay shows "Following the host" with the first four steps done, says "Back in the host's
 world." once it runs, and its Cancel leaves the session. The follow's notices, such as "You returned to the main menu,
 so you left the session.", show once each. "Leave server?" says "You leave the session and return to the main menu."
+This also covers native-level follows after joining. A later follow failure shows its own words and RETRY where it
+helps, including a failure that happens between two frames after the original join overlay closed. Dismissing it
+keeps it closed, and a late failure from a cancelled follow does not reopen the overlay.
 
 Verifying mods is done once the host admits the player. A failure stops at its own step or at the step the join reached,
 whichever is later, and steps it never ran show skipped: mods that do not match this game's check fail at Verifying

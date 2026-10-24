@@ -133,12 +133,47 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             That(rig.Control.Calls.Count(call => call == "Leave") == leaves + 1 && !overlay.IsVisible && rig.Noticed(ConnectingPresenter.LeftWhileFollowing),
                 "Cancel on it leaves the session, which is never refused");
+            follow.Fail(FollowFailureWords.For(FollowFailureKind.SynchronizeFailed, ModErrorCode.TimedOut));
+            rig.Frame();
+            That(!overlay.IsVisible, "a late failure of the cancelled follow stays closed");
 
             var notices = rig.Notices.Count(notice => notice.Text == FollowFailureWords.MenuLeft);
             follow.Notify(FollowFailureWords.MenuLeft);
             rig.Frame(5);
             That(rig.Notices.Count(notice => notice.Text == FollowFailureWords.MenuLeft) == notices + 1, "each of the follow's notices shows once");
             That(SessionPresenter.LeaveBody == "You leave the session and return to the main menu.", "\"Leave server?\" says the game returns to the main menu");
+        }
+
+        private static void ARefollowFailureShowsItsOwnWords()
+        {
+            foreach (var betweenFrames in new[] { false, true })
+                foreach (var loading in new[] { FollowStage.LoadingWorld, FollowStage.LoadingLevel })
+                {
+                    var rig = JoiningRig();
+                    var follow = rig.Environment.Follow;
+                    follow.Joined();
+                    follow.Move(FollowStage.Running, "In the host's world");
+                    rig.Status(InternalSessionRole.Client, InternalJoinPhase.InSession);
+                    rig.Environment.SessionSnapshot = SessionsRig.ClientSnapshot(MultiplayerSessionState.Ready, "s-ready", "p1");
+                    rig.Frame(40);
+                    follow.Refollowing();
+                    follow.Move(loading, "Loading the host's world");
+                    if (!betweenFrames)
+                    {
+                        rig.Frame();
+                        That(rig.Presenter.Connecting.IsVisible, "a world or native level re-follow shows its progress");
+                    }
+                    var words = FollowFailureWords.For(FollowFailureKind.SynchronizeFailed, ModErrorCode.TimedOut);
+                    follow.Fail(words);
+                    rig.Status(InternalSessionRole.Solo, InternalJoinPhase.Ended, InternalLiveFailure.Left);
+                    rig.Frame();
+                    var overlay = rig.Presenter.Connecting;
+                    That(overlay.IsVisible && overlay.HasFailed && overlay.FailureTitle == words.Title && overlay.CanRetry,
+                        "a failed re-follow explains what happened and offers RETRY, including between frames");
+                    overlay.Dismiss();
+                    rig.Frame(3);
+                    That(!overlay.IsVisible, "a dismissed re-follow failure stays closed");
+                }
         }
 
         /// <summary>A rig whose join to the LAN session '1' has linked up and synchronizes, held, as a follow begins.</summary>

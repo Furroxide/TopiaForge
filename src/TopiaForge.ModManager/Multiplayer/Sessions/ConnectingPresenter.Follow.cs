@@ -22,9 +22,10 @@ namespace TopiaForge.ModManager.Sessions
         private int followSerial;
         private int followShown = -1;
         private int noticeShown;
+        private int failedFollowShown = -1;
 
         // Cancel leaves the session; until the follow it cancelled has ended, the overlay does not show it again.
-        private bool followCancelled;
+        private int cancelledFollowJoin = -1;
 
         private SessionFollowStatus FollowStatus => context.Environment.Follow;
 
@@ -110,10 +111,10 @@ namespace TopiaForge.ModManager.Sessions
                 if (follow.Notice.Length > 0) context.Notify(follow.Notice);
             }
 
-            var following = follow.IsRefollow && follow.Stage >= FollowStage.Preparing && follow.Stage <= FollowStage.Participant;
-            if (!following) followCancelled = false;
+            var following = follow.IsRefollow && ((follow.Stage >= FollowStage.Preparing && follow.Stage <= FollowStage.Participant)
+                || follow.Stage == FollowStage.LoadingLevel || (follow.Stage == FollowStage.Failed && follow.Version != failedFollowShown));
             if (stage != Stage.Hidden && stage != Stage.Succeeded) return;
-            if (!following || followCancelled) return;
+            if (!following || cancelledFollowJoin == follow.JoinSerial) return;
             ShowFollowing();
         }
 
@@ -143,6 +144,10 @@ namespace TopiaForge.ModManager.Sessions
             var follow = FollowStatus;
             switch (follow.Stage)
             {
+                case FollowStage.Failed:
+                    failedFollowShown = follow.Version;
+                    if (!FollowEnded(context.Status.Status)) Hide();
+                    return;
                 case FollowStage.Running:
                 case FollowStage.InLevel:
                 case FollowStage.AtMenu:
@@ -160,7 +165,7 @@ namespace TopiaForge.ModManager.Sessions
                 case FollowStage.Participant:
                     break;
                 default:
-                    // Left, failed or back at the menu: the join's own views and notices say so.
+                    // Left or returning to the menu: the join's views and notices say so.
                     Hide();
                     return;
             }
@@ -182,7 +187,7 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Cancel on a follow after the join leaves the session; leaving is never refused.</summary>
         private void CancelFollowing()
         {
-            followCancelled = true;
+            cancelledFollowJoin = FollowStatus.JoinSerial;
             context.Environment.Leave();
             context.Status.RequestRefresh();
             Hide();

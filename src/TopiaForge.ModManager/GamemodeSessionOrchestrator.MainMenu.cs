@@ -65,7 +65,7 @@ namespace TopiaForge.ModManager
                 if (!followed)
                     Publish(Progress, new LaunchProgress(requestId, NextSequence(), current == null ? "idle" : "stopping",
                         current?.Identity.SessionId, nativeBusy: true));
-                RunDriver(() => MainMenuAsync(current, lease!, reservation, owner, requestId, cancellationToken, completion, followed, load));
+                RunDriver(() => MainMenuAsync(current, lease!, reservation, owner, requestId, cancellationToken, completion, followed, load), followed: follow);
             });
             return completion.Task;
         }
@@ -112,7 +112,9 @@ namespace TopiaForge.ModManager
                 result = OperationResult<bool>.Failure(ModErrorCode.External,
                     Message(string.Join("; ", new[] { result.ErrorMessage }.Concat(failures.SelectMany(CleanupMessages))
                         .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal))));
-                foreach (var error in failures) Report(error);
+                var isFollow = followed || previous?.Follow != null;
+                if (isFollow) result = OperationResult<bool>.Failure(result.ErrorCode, SessionFollower.Scrub(result.ErrorMessage));
+                foreach (var error in failures) Report(error, isFollow);
             }
             if (!followed)
                 Publish(Progress, new LaunchProgress(requestId, NextSequence(), PhaseName(lifecycle.Current.Phase),
@@ -138,7 +140,7 @@ namespace TopiaForge.ModManager
             {
                 var record = current;
                 if (record == null || !ReferenceEquals(record.Identity, owner) || lifecycle.Current.Phase != SessionPhase.Running
-                    || record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy) return;
+                    || (record.Follow == null && record.Plan.Gamemode.SceneChangePolicy != ModGamemodeDeclaration.EndSessionPolicy)) return;
                 var owned = record.Readiness!.Scene;
                 var sameInstance = scene.SceneInstanceId == owned.InstanceId;
                 if ((sameInstance && scene.Phase == SceneLifecyclePhase.Unloaded)

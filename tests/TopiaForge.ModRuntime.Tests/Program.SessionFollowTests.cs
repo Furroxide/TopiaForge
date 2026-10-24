@@ -73,6 +73,7 @@ namespace TopiaForge.ModRuntime.Tests
         /// </summary>
         private static void TestSessionFollowAcrossRuntimes(string root)
         {
+            TestFollowSceneDistinguishesNativeReloads(root);
             var fixture = NewFixture(root, "follow", "TopiaForge.BindingTestMod.BindingMod", BindingAssembly);
             var manifest = fixture.Manifest;
             manifest.SchemaVersion = 6;
@@ -180,6 +181,21 @@ namespace TopiaForge.ModRuntime.Tests
             {
                 foreach (var game in games) game.Runtime.UnloadAll();
             }
+        }
+
+        private static void TestFollowSceneDistinguishesNativeReloads(string root)
+        {
+            var fixture = NewFixture(root, "follow-scene-reload", "TopiaForge.ValidTestMod.RuntimeSceneLifecycleMod");
+            var runtime = fixture.CreateRuntimeInstance();
+            try
+            {
+                Assert(runtime.DispatchInitialScene(401, "Downtown", isValid: true), "the first native level arrives");
+                var before = runtime.FollowedScene.Version;
+                Assert(runtime.DispatchSceneUnloaded(401, "Downtown", isValid: true, SceneLoadMode.Single), "the old instance leaves");
+                Assert(runtime.DispatchSceneLoaded(402, "Downtown", isValid: true), "a new instance of the same level arrives");
+                Assert(runtime.FollowedScene.Version > before, "session follow distinguishes a native reload from a duplicate scene event");
+            }
+            finally { runtime.UnloadAll(); }
         }
 
         /// <summary>One frame of every game, with what each one's dispatcher holds run, as the game's own loop runs it; the clock moves 16 ms.</summary>
