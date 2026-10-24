@@ -18,15 +18,16 @@ namespace TopiaForge.ModManager
             private readonly UnityEntityRegistry entities;
             private readonly NativeWorldLoadRequest request;
             private readonly string scenePath;
+            private readonly string loaderScene;
             private readonly object? checkpoint;
             private readonly List<Scene> arrivals = new List<Scene>();
             private Scene? captured;
             private bool started;
             private bool disposed;
             private bool sceneLost;
-            internal NativeLoad(UnityEntityRegistry entities, NativeWorldLoadRequest request, string scenePath, object? checkpoint)
+            internal NativeLoad(UnityEntityRegistry entities, NativeWorldLoadRequest request, string scenePath, string loaderScene, object? checkpoint)
             {
-                this.entities = entities; this.request = request; this.scenePath = scenePath; this.checkpoint = checkpoint;
+                this.entities = entities; this.request = request; this.scenePath = scenePath; this.loaderScene = loaderScene; this.checkpoint = checkpoint;
                 ExpectedSceneName = scenePath.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(scenePath) : scenePath;
                 if (RequiresDispatch) SceneManager.sceneLoaded += OnSceneLoaded;
                 else
@@ -90,7 +91,7 @@ namespace TopiaForge.ModManager
                 var returned = false;
                 try
                 {
-                    var task = loader.Invoke(null, checkpoint != null ? new[] { (object)false, checkpoint } : new object[] { scenePath, CancellationToken.None });
+                    var task = loader.Invoke(null, checkpoint != null ? new[] { (object)false, checkpoint } : new object[] { loaderScene, CancellationToken.None });
                     returned = true;
                     Observe(task, observer, completion);
                     return NativeSceneDispatchStatus.Dispatched;

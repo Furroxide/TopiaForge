@@ -54,6 +54,7 @@ namespace TopiaForge.ModManager
                     checkpoint = matches[0].Checkpoint; scenePath = matches[0].Descriptor.SceneName;
                 }
                 else scenePath = request.Kind == NativeWorldLoadKind.OpenSandbox ? "UgcPlay" : request.Key!;
+                var loaderScene = scenePath;
                 if (request.Transition == WorldLoadTransition.AdditiveArena)
                 {
                     var active = SceneManager.GetActiveScene();
@@ -71,20 +72,34 @@ namespace TopiaForge.ModManager
                         var names = BuildEntries().Where(entry => entry.SceneName == scenePath).ToArray();
                         if (names.Length > 1) return Failure<IWorldNativeLoad>(ModErrorCode.Conflict, "The native scene name identifies multiple build scenes.");
                     }
+                    if (checkpoint == null)
+                    {
+                        // The game's loader finds the scene it loaded by the name it was given, so a build path would load
+                        // the scene and then fail; it is given the chosen scene's own name instead.
+                        var named = NativeSceneNames.ForGameLoader(scenePath, BuildScenePaths());
+                        if (!named.TryGetValue(out var name)) return Failure<IWorldNativeLoad>(named.ErrorCode, named.ErrorMessage);
+                        loaderScene = name;
+                    }
                 }
-                return OperationResult<IWorldNativeLoad>.Success(new NativeLoad(entities, request, scenePath, checkpoint));
+                return OperationResult<IWorldNativeLoad>.Success(new NativeLoad(entities, request, scenePath, loaderScene, checkpoint));
             }
             catch (Exception error) { return Failure<IWorldNativeLoad>(ModErrorCode.Unavailable, Unwrap(error).Message); }
         }
 
-        private static List<NativeWorldEntry> BuildEntries()
+        private static List<string> BuildScenePaths()
         {
             var count = SceneManager.sceneCountInBuildSettings;
             if (count > DiscoveryLimit) throw new InvalidOperationException("Native build-scene discovery exceeds its inspection limit.");
+            var paths = new List<string>(count);
+            for (var index = 0; index < count; index++) paths.Add(SceneUtility.GetScenePathByBuildIndex(index));
+            return paths;
+        }
+
+        private static List<NativeWorldEntry> BuildEntries()
+        {
             var found = new List<NativeWorldEntry>();
-            for (var index = 0; index < count; index++)
+            foreach (var path in BuildScenePaths())
             {
-                var path = SceneUtility.GetScenePathByBuildIndex(index);
                 var name = Path.GetFileNameWithoutExtension(path);
                 if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(name) || GameScenes.IsNonGameplayScene(name)) continue;
                 found.Add(new NativeWorldEntry(NativeWorldSource.BuildScenes, path, name, "First-party Robotopia scene.", name));
