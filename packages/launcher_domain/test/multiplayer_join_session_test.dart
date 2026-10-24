@@ -293,13 +293,19 @@ void main() {
     });
 
     test('host-served packages need the developer-mode acknowledgement', () {
-      // A server link's host can be reached only on a direct path.
+      // Only a host the launcher reached for the descriptor serves them,
+      // never one the service found: here, a direct link on the local
+      // network.
       final direct = startJoin(
-        target,
-        privacy: MultiplayerAddressPrivacy.direct,
+        JoinLinkTarget(
+          SessionLink.direct(
+            serverId: hostAServerId,
+            host: '192.168.1.20',
+            port: 27250,
+          ),
+        ),
       );
       final waiting = run(direct, [
-        JoinTargetResolved(hostAServerId),
         JoinDescriptorVerified(hostServedServer),
         JoinPlanReady(hostServedPlan),
       ]);

@@ -108,7 +108,8 @@ void main() {
       expect(host.packageRequests, 0);
     });
 
-    test('never contacts a host the service found', () async {
+    test('never asks a host the service found: the join ends at checking, '
+        'before consent, whatever its privacy', () async {
       final host = await ServingHost.start([hosted]);
       final join = await HostJoin.create(host);
       // The same server is heard on the local network, but this join found
@@ -118,12 +119,18 @@ void main() {
         Ed25519DescriptorSignatureVerifier(),
       ).verify(host.descriptor);
       final server = (verified as ServerDescriptorAccepted).descriptor;
-      final privacy = MultiplayerSettings()
+      final direct = MultiplayerSettings()
           .acknowledgePrivacyDisclosure()
           .privacyForSession(allowDirect: true);
-      final plan = planJoin(server, {
-        hosted.sha256Hex: JoinPackageResolution.hostOffered(),
-      }, developerMode: true);
+      JoinPlan planWith({required bool mayContactHost}) => planJoin(
+        server,
+        {hosted.sha256Hex: JoinPackageResolution.hostOffered()},
+        developerMode: true,
+        mayContactHost: mayContactHost,
+      );
+      // As a planner told the host is reachable plans, wrongly.
+      final wrong = planWith(mayContactHost: true);
+      expect(wrong.hasUnverifiedPackages, isTrue);
       for (final target in <JoinTarget>[
         JoinLinkTarget(SessionLink.server(join.serverId)),
         JoinListingTarget(
@@ -131,23 +138,42 @@ void main() {
           source: ServerListingSource.internet,
         ),
       ]) {
-        var state = JoinSession.start(target, privacy: privacy);
-        state = [
-          JoinTargetResolved(join.serverId),
-          JoinDescriptorVerified(server),
-          JoinPlanReady(plan),
-          const JoinConsentGiven(hostServedAcknowledged: true),
-        ].fold(state, JoinSession.reduce);
-        expect(state.stage, JoinStage.downloading, reason: '$target');
-        final (ended, attempts) = await noConnections(() => join.drive(state));
-        final failure = failureOf(ended);
-        expect(failure.code, JoinFailureCode.hostDownloadUnsupported);
-        expect(failure.detail, contains('direct or local-network connection'));
-        expect(failure.detail, contains(hostedName));
-        expect(attempts, 0, reason: '$target');
-        expectNoAddress(failure.detail);
-        expect(host.packageRequests, 0, reason: '$target');
+        for (final privacy in [SessionPrivacy.relayOnly, direct]) {
+          final start = JoinSession.start(target, privacy: privacy);
+          final checking = [
+            JoinTargetResolved(join.serverId),
+            JoinDescriptorVerified(server),
+          ].fold(start, JoinSession.reduce);
+          expect(checking.stage, JoinStage.checking);
+          // As the launcher plans.
+          final planned = planWith(mayContactHost: checking.mayContactHost);
+          expect(planned.hasUnverifiedPackages, isFalse);
+          for (final plan in [planned, wrong]) {
+            final reason = '$target, ${privacy.allowsDirect}';
+            final ended = JoinSession.reduce(checking, JoinPlanReady(plan));
+            final failure = failureOf(ended);
+            expect(failure.code, JoinFailureCode.contentUnavailable);
+            expect(failure.stage, JoinStage.checking, reason: reason);
+            expect(failure.detail, contains('Only the host has $hostedName'));
+            expect(
+              failure.detail,
+              contains('on your local network or by an address the host'),
+            );
+            expectNoAddress(failure.detail);
+            // Nothing is left for the data layer to answer, and nothing to
+            // fetch from the host.
+            expect(ended.downloadRequest, isNull);
+            final (event, attempts) = await noConnections(
+              () =>
+                  join.multiplayer.answerJoin(ended, install: join.rig.install),
+            );
+            expect(event, isNull);
+            expect(attempts, 0, reason: reason);
+          }
+        }
       }
+      expect(host.packageRequests, 0);
+      expect(join.cacheFiles(), isEmpty);
     });
   });
 

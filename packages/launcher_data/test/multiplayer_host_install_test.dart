@@ -149,6 +149,34 @@ void main() {
     });
   });
 
+  test('developer mode turned off while the host serves one package asks it '
+      'for no more', () async {
+    final first = TestArchive('example.alpha', '1.0.0');
+    final second = TestArchive('example.beta', '1.0.0');
+    final host = await ServingHost.start([first, second]);
+    final join = await HostJoin.create(host);
+    await join.hearHost();
+    final state = await join.downloading();
+    expect(state.downloadRequest!.hostDownloads, hasLength(2));
+    host.answerPackages = (socket, archive) async {
+      // The player turns developer mode off during the first download.
+      await join.rig.repository.setDeveloperMode(false);
+      await ServingHost.serveArchive(socket, archive!.bytes);
+    };
+    final failure = (await join.drive(state)).outcome!.failure!;
+    expect(host.requests.where((line) => line.contains('package')), [
+      'TFD1 package ${first.sha256Hex}\n',
+    ]);
+    expect(failure.code, JoinFailureCode.hostDownloadUnsupported);
+    expect(failure.stage, JoinStage.downloading);
+    expect(failure.detail, contains('example.beta 1.0.0'));
+    expect(failure.detail, contains('developer mode, which is off'));
+    for (final address in addressTexts) {
+      expect(failure.detail, isNot(contains(address)));
+      expect(join.launcherLog(), isNot(contains(address)));
+    }
+  });
+
   test(
     'a host that stalls mid-archive is given up on, keeping nothing',
     () async {

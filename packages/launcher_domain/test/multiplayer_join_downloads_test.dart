@@ -52,43 +52,117 @@ void main() {
     JoinDescriptorVerified(server),
   ].fold(state, JoinSession.reduce);
 
-  test('relay-only never downloads from a host it cannot place', () {
+  /// Says, for the player, which mod only the host has, and the ways that
+  /// work: the local network or the host's address, or a mod source.
+  void expectHostOnlyWords(String text, {String refersBack = 'it'}) {
+    expect(text, contains('Only the host has example.local 1.0.0'));
+    expect(text, contains('through the TopiaForge service'));
+    expect(
+      text,
+      contains('on your local network or by an address the host gives you'),
+    );
+    expect(text, contains('publish $refersBack to a mod source you use'));
+  }
+
+  test('a join the service resolved never takes packages from its host, '
+      'whatever its privacy', () {
     for (final target in [serverLink, listing]) {
-      final state = checking(startJoin(target));
-      expect(state.mayContactHost, isFalse);
-      final plan = planFor(state);
-      expect(plan.isJoinable, isFalse);
-      final blocker = plan.blockers.single;
-      expect(blocker.code, JoinBlockerCode.directNotAllowed);
-      expect(blocker.modId, 'example.local');
-      final ended = JoinSession.reduce(state, JoinPlanReady(plan));
-      expect(ended.outcome!.failure!.code, JoinFailureCode.directNotAllowed);
-      expect(ended.outcome!.failure!.stage, JoinStage.checking);
+      for (final privacy in MultiplayerAddressPrivacy.values) {
+        final reason = '$target, ${privacy.name}';
+        final state = checking(startJoin(target, privacy: privacy));
+        expect(state.stage, JoinStage.checking, reason: reason);
+        expect(state.mayContactHost, isFalse, reason: reason);
+        final plan = planFor(state);
+        expect(plan.isJoinable, isFalse, reason: reason);
+        // Never offered, so the consent never shows it.
+        expect(plan.hasUnverifiedPackages, isFalse, reason: reason);
+        expect(plan.hostServedPackages, isEmpty, reason: reason);
+        final local = packageIn(plan, 'example.local');
+        expect(local.disposition, JoinPackageDisposition.blocked);
+        final blocker = plan.blockers.single;
+        expect(blocker.code, JoinBlockerCode.contentUnavailable);
+        expect(blocker.modId, 'example.local');
+        expectHostOnlyWords(blocker.message);
+        expect(local.note, blocker.message);
+        final ended = JoinSession.reduce(state, JoinPlanReady(plan));
+        final failure = ended.outcome!.failure!;
+        expect(failure.code, JoinFailureCode.contentUnavailable);
+        expect(failure.stage, JoinStage.checking);
+        expect(failure.detail, blocker.message);
+        expect(failure.blockers, [blocker]);
+        expect(ended.downloadRequest, isNull);
+      }
     }
   });
 
   test('a plan made as if the host could be reached cannot pass', () {
-    // The probe: relay-only, a server link, a host that serves packages,
-    // and a plan that wrongly offers its archive.
-    final state = checking(startJoin(serverLink));
+    // The probe: a server link, a host that serves packages, and a plan
+    // that wrongly offers its archive, under either privacy.
+    for (final privacy in MultiplayerAddressPrivacy.values) {
+      final state = checking(startJoin(serverLink, privacy: privacy));
+      final wrong = const JoinPlanner().plan(
+        server: server,
+        resolutions: {
+          testSha('example.local'): JoinPackageResolution.hostOffered(),
+          testSha('example.sandbox'): availableOf(sandbox),
+        },
+        environment: environment,
+        mayContactHost: true,
+      );
+      expect(wrong.hasUnverifiedPackages, isTrue);
+      final ended = JoinSession.reduce(state, JoinPlanReady(wrong));
+      expect(ended.stage, JoinStage.ended, reason: privacy.name);
+      final failure = ended.outcome!.failure!;
+      expect(failure.code, JoinFailureCode.contentUnavailable);
+      expect(failure.stage, JoinStage.checking);
+      expectHostOnlyWords(failure.detail);
+      final blocker = failure.blockers.single;
+      expect(blocker.code, JoinBlockerCode.contentUnavailable);
+      expect(blocker.modId, 'example.local');
+      expect(blocker.message, failure.detail);
+      expect(ended.downloadRequest, isNull);
+    }
+  });
+
+  test('a plan made as if the host could be reached names each mod', () async {
+    final several = await verifiedForTest(
+      testDescriptor(
+        packages: [testPackage('example.local'), testPackage('example.more')],
+        hostServesPackages: true,
+      ),
+    );
+    final state = [
+      JoinTargetResolved(hostAServerId),
+      JoinDescriptorVerified(several),
+    ].fold(startJoin(serverLink), JoinSession.reduce);
     final wrong = const JoinPlanner().plan(
-      server: server,
+      server: several,
       resolutions: {
         testSha('example.local'): JoinPackageResolution.hostOffered(),
-        testSha('example.sandbox'): availableOf(sandbox),
+        testSha('example.more'): JoinPackageResolution.hostOffered(),
       },
       environment: environment,
       mayContactHost: true,
     );
-    expect(wrong.hasUnverifiedPackages, isTrue);
-    final ended = JoinSession.reduce(state, JoinPlanReady(wrong));
-    expect(ended.stage, JoinStage.ended);
-    expect(ended.outcome!.failure!.code, JoinFailureCode.directNotAllowed);
-    expect(ended.outcome!.failure!.stage, JoinStage.checking);
-    expect(ended.downloadRequest, isNull);
+    final failure = JoinSession.reduce(
+      state,
+      JoinPlanReady(wrong),
+    ).outcome!.failure!;
+    expect(failure.detail, contains('example.local 1.0.0, example.more 1.0.0'));
+    expectHostOnlyWords(failure.detail, refersBack: 'them');
+    // Each mod has its own blocker, as the planner gives it.
+    expect(failure.blockers.map((item) => (item.code, item.modId)), [
+      (JoinBlockerCode.contentUnavailable, 'example.local'),
+      (JoinBlockerCode.contentUnavailable, 'example.more'),
+    ]);
+    expect(
+      failure.blockers.last.message,
+      startsWith('Only the host has example.more 1.0.0, and'),
+    );
   });
 
-  test('a host on the local network, or a direct session, may serve them', () {
+  test('a host on the local network, or at an address a direct session '
+      'reaches, may serve them', () {
     for (final (target, privacy) in [
       (lanLink, MultiplayerAddressPrivacy.relayOnly),
       (
@@ -98,7 +172,16 @@ void main() {
         ),
         MultiplayerAddressPrivacy.relayOnly,
       ),
-      (serverLink, MultiplayerAddressPrivacy.direct),
+      (
+        JoinLinkTarget(
+          SessionLink.direct(
+            serverId: hostAServerId,
+            host: '203.0.113.5',
+            port: 27250,
+          ),
+        ),
+        MultiplayerAddressPrivacy.direct,
+      ),
     ]) {
       final state = checking(startJoin(target, privacy: privacy));
       expect(state.mayContactHost, isTrue, reason: '$target');

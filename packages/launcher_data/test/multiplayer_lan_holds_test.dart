@@ -228,47 +228,6 @@ void main() {
       lan: client,
     );
 
-    test('come from nowhere for a join the service resolved, even when its '
-        'server is heard on the local network', () async {
-      await client.start();
-      rig.beacon(hostAServerId, lanHost);
-      expect(await client.hearsServer(hostAServerId), isTrue);
-      final routes = resolver();
-      for (final target in <JoinTarget>[
-        JoinListingTarget(
-          serverId: hostAServerId,
-          source: ServerListingSource.internet,
-        ),
-        JoinLinkTarget(SessionLink.server(hostAServerId)),
-      ]) {
-        final request = await _downloadRequest(
-          target,
-          privacy: MultiplayerSettings()
-              .acknowledgePrivacyDisclosure()
-              .privacyForSession(allowDirect: true),
-        );
-        final packages = routes.hostPackagesFor(request);
-        final ((prepared, downloaded), attempts) = await _countingConnections(
-          () async => (
-            await packages.prepare(),
-            await packages.download(
-              request.hostDownloads.single,
-              '${root.path}/never-written.tmp',
-            ),
-          ),
-        );
-        packages.release();
-        expect(prepared, JoinHostPackageProblem.hostUnknown, reason: '$target');
-        expect(
-          (downloaded as JoinHostPackageFailed).problem,
-          JoinHostPackageProblem.hostUnknown,
-          reason: '$target',
-        );
-        expect(attempts, 0, reason: '$target');
-      }
-      expect(File('${root.path}/never-written.tmp').existsSync(), isFalse);
-    });
-
     test('come from nowhere for a direct link whose descriptor this launcher '
         'never fetched', () async {
       final request = await _downloadRequest(
@@ -303,7 +262,8 @@ void main() {
 }
 
 /// A join of [target], relay-only unless [privacy] says otherwise, at the
-/// download of a package only its host, host A, serves.
+/// download of a package only its host, host A, serves. A join the service
+/// resolved never gets there: it ends while checking.
 Future<JoinDownloadRequest> _downloadRequest(
   JoinTarget target, {
   SessionPrivacy privacy = SessionPrivacy.relayOnly,
@@ -316,7 +276,6 @@ Future<JoinDownloadRequest> _downloadRequest(
     hosted.sha256Hex: JoinPackageResolution.hostOffered(),
   }, developerMode: true);
   final state = [
-    if (target.resolvesThroughService) JoinTargetResolved(server.serverId),
     JoinDescriptorVerified(server),
     JoinPlanReady(plan),
     const JoinConsentGiven(hostServedAcknowledged: true),

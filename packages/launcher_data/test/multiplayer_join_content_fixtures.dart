@@ -158,10 +158,12 @@ Future<VerifiedServerDescriptor> verifiedServer(
 }
 
 /// Plans joining [server] with what the launcher found for each package.
+/// [mayContactHost] is the join's [JoinSessionState.mayContactHost].
 JoinPlan planJoin(
   VerifiedServerDescriptor server,
   Map<String, JoinPackageResolution> resolutions, {
   bool developerMode = false,
+  bool mayContactHost = true,
 }) => const JoinPlanner().plan(
   server: server,
   resolutions: resolutions,
@@ -176,7 +178,7 @@ JoinPlan planJoin(
           developerMode: true,
         )
       : testJoinEnvironment,
-  mayContactHost: true,
+  mayContactHost: mayContactHost,
 );
 
 /// A join of [server] after consent to [plan]: downloading, or preparing the

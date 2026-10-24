@@ -367,13 +367,17 @@ launcher log, and neither ever names a URL or an address.
   - **Gates the data layer checks itself.** Developer mode, as the launcher's settings say at that moment, and the
     acknowledgement, before anything is fetched, sources included, and again before the install; without either the
     join ends as `hostDownloadUnsupported`.
-  - **Where the host is.** Only where the descriptor fetch contacted it: a LAN listing through its beacon's entry, and
-    a direct link or typed address through the address that served the descriptor the join verified, which the
+  - **Where the host is.** Only as the descriptor fetch reached it: a LAN listing through its beacon's entry, looked
+    up again for each package, so wherever the server's beacons come from at that moment, as for its descriptor; and a
+    direct link or typed address only through the address that served the descriptor the join verified, which the
     facade keeps privately for that join. A join the service resolved (an invite, a server link or an Internet
-    listing) never contacts its host, whose address the launcher does not know: it ends as `hostDownloadUnsupported`,
-    since a host shares packages only over a direct or local-network connection. The session's privacy is applied to
-    the host's address again before every package, so under relay-only nothing beyond the local network is contacted
-    (`directNotAllowed`), and a LAN host no longer heard is `unreachable`.
+    listing) never contacts its host, whose address the launcher does not know, whatever the session's privacy: its
+    plan never takes a package from the host (`JoinSessionState.mayContactHost`), so the consent never offers one. A
+    package only that host has blocks the join while checking (`contentUnavailable`), in words that name it and the
+    ways that work: joining the host on the local network or by an address it gives, or the host publishing it to a
+    source. The data layer refuses such a join's host as well (`hostDownloadUnsupported`). The session's privacy is
+    applied to the host's address again before every package, so under relay-only nothing beyond the local network is
+    contacted (`directNotAllowed`), and a LAN host no longer heard is `unreachable`.
   - **The LAN entry.** A LAN host is reached only through the entry its beacons keep alive, so the downloading stage
     holds LAN browsing (`LanDiscoveryClient.hold`): a stop asked for meanwhile, as when the player leaves the browser,
     waits until the stage ends, however it ends, a cancel included. Turning LAN discovery off still stops it at once.
