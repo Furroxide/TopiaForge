@@ -112,6 +112,8 @@ namespace TopiaForge.ModManager
             return true;
         }
 
+        internal bool HasNativeNetworkIdentity(IEntity entity) => world.Backend.TryGetNetworkId(entity, out _);
+
         private NetEntityMotion Start(RuntimeReplication? context, INetworkMotionBody body, IEntityMotion? engine,
             MotionTarget target, uint epoch, NetVector3 position, bool originalKinematic)
         {

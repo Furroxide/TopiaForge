@@ -2079,7 +2079,8 @@ without waiting for the world's first-motion scan. A prediction waiting for adop
   holder's suppression. Scene unload, scope shutdown, role changes and stream generations retire local leases.
 - `HeldItemOwnershipTracker` observes `PlayerController.HeldItem` once per online frame and uses the same protocol.
   A denied native pickup drops; native release retains the same throw window. An item that is no network body, such
-  as one the game or an item grant made after its scene loaded, stays the game's alone, as offline. A session, realm
+  as one the game or an item grant made after its scene loaded, stays the game's alone, as offline. If a held prediction
+  is adopted, its new network identity starts ownership without another pickup. A session, realm
   or stream that ends forgets ownership but drops nothing the player holds; on a new stream the next poll asks again.
   Proxy cleanup calls motion's `Disconnect` before reusing its participant slot, clearing ownership and cooldown
   history.

@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager.Tests
             SilenceDisconnectAndScopeStopReclaim();
             NativePickupUsesTheSameProtocol();
             NativePickupLeavesWhatIsNoNetworkBody();
+            MotionNativeAdoptionTests.Run();
             TheHostHearsWhyItCannotHold();
             AnOvertakenGrabIsToldEvenWhenThrown();
             OfflineAndClientLocalPassThrough();

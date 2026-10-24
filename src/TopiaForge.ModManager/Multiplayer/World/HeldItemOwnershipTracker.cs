@@ -34,7 +34,9 @@ namespace TopiaForge.ModManager
             }
 
             if (current == null) return;
-            if (held == null)
+            // A prediction can be picked up before adoption. Once it is marked, ask for ownership even though the
+            // native hold never changed. Unmarked items need only an identity lookup, not another scene-index scan.
+            if (held == null || (!owned && motion.HasNativeNetworkIdentity(current)))
             {
                 held = current;
                 owned = motion.TryAcquireNative(current, out lease);
