@@ -264,6 +264,20 @@ Push-Location apps/topiaforge_launcher_flutter; flutter test; flutter analyze; f
 On macOS and Linux the same commands apply with `flutter build macos --debug` or
 `flutter build linux --debug` in the last step.
 
+### The testing kit's focused mode
+
+The ModManager test project also builds in a Unity-free `TestingKitOnly=true` mode: the testing kit's own SDK
+contract and fake-service checks, compiled against the SDK projects alone, with no game assemblies. Its gate builds
+and runs that mode with isolated artifacts and an unavailable game-reference folder, and leaves the full harness's
+build output intact:
+
+```bash
+bash tools/verify-testing-kit-only.sh
+```
+
+`bash tools/verify-csharp-release-surface.sh` runs the same gate after the seven full C# harnesses, so CI's C# job
+and the release package dry run check it too.
+
 ## Optional Unity authoring
 
 Unity is not required for the normal runtime, CLI, launcher, or mod build. World and UI AssetBundles must use
