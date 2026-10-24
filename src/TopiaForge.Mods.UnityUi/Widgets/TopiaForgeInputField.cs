@@ -49,6 +49,8 @@ namespace TopiaForge.Mods.UnityUi
             textComponent = CreateTmp(areaGo.transform, "Text", string.Empty);
 
             input = Go.AddComponent<TMP_InputField>();
+            // While the field has the keyboard, the game sees none of the typing.
+            Go.AddComponent<TopiaForgeTextEntry>();
             input.targetGraphic = fill;
             input.textViewport = areaRect;
             input.textComponent = textComponent;

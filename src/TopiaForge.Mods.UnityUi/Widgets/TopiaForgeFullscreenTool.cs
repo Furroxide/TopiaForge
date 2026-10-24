@@ -114,7 +114,7 @@ namespace TopiaForge.Mods.UnityUi
             backdrop.gameObject.SetActive(true);
             Go.SetActive(true);
             cursorLease.Acquire();
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Navigation, Go);
             focusScope.Activate();
             TopiaForgeMotion.WindowIn(this);
         }

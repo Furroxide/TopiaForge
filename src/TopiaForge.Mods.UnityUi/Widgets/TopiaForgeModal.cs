@@ -215,7 +215,7 @@ namespace TopiaForge.Mods.UnityUi
             open = true;
             canvasRoot.SetActive(true);
             cursorLease.Acquire();
-            TopiaForgeDismissStack.Push(this);
+            TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Navigation, canvasRoot);
             TopiaForgeMotion.ModalIn(dialog);
         }
 
