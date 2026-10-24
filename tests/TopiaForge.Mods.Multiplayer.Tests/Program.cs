@@ -303,6 +303,9 @@ internal static class Program
             LiveSessionFailureTests.JoinsEndCleanlyWhenTheNetworkFails();
             LiveSessionFailureTests.AHostWhoseNetworkStopsEndsEveryoneAndPlaysOn();
             LiveSessionFailureTests.EveryEndingWipesThePasswordKey();
+            HostKeyWipeTests.StoppingWipesTheKeyHoweverHostingEnds();
+            HostKeyWipeTests.ALateDerivationWipesOnlyItsOwnKey();
+            HostKeyWipeTests.ClosingWipesTheHostKeyAtEveryStage();
             VoicePacketTests.DatagramsRoundTripOneOrTwoFrames();
             VoicePacketTests.MalformedDatagramsAreRefusedWhole();
             VoicePacketTests.VoiceMessagesRoundTripAndRefuseRepeats();

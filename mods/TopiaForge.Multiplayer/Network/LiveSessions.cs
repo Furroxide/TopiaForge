@@ -145,7 +145,7 @@ namespace TopiaForge.Multiplayer.Network
         internal void StopHosting()
         {
             pendingHost = null;
-            hostKey = null;
+            ReleaseHostKey();
             bansRead = null;
             var internet = Host?.Internet;
             Host?.Stop();
@@ -474,6 +474,26 @@ namespace TopiaForge.Multiplayer.Network
         }
 
         private static bool Done(Task? task) => task != null && task.IsCompleted;
+
+        /// <summary>
+        /// Lets go of the password key this hosting attempt derived, wiped: at once when it is done, and the moment it is
+        /// done when it is still being derived. A derivation that completes after hosting stopped, or after a newer attempt
+        /// began, so wipes its own result and starts nothing, since only the key of the attempt in hand ever opens a host.
+        /// The wipe is bound to this attempt's own task, so it never reaches a newer attempt's key.
+        /// </summary>
+        private void ReleaseHostKey()
+        {
+            var pending = hostKey;
+            hostKey = null;
+            pending?.ContinueWith(
+                task =>
+                {
+                    if (task.Status == TaskStatus.RanToCompletion && task.Result != null) Array.Clear(task.Result, 0, task.Result.Length);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
 
         /// <summary>The browser accepts no peers and claims its own replies, so anything else it reports is let go.</summary>
         private void DrainBrowserEvents()
