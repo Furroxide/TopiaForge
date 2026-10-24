@@ -23,6 +23,7 @@ namespace TopiaForge.ModRuntime.Tests
             TestMultiplayerFrameOrder(root);
             TestMultiplayerOfflineFrameAllocatesNothing(root);
             TestMultiplayerFollowsTheRuntimeLifecycle(root);
+            TestMultiplayerDetachesBeforeAnyModStops(root);
             TestMultiplayerRealmAndFactorySeam(root);
             TestTheRealmWaitsForTheMainMenu(root);
             TestNetworkWorldAcrossRuntimes(root);
@@ -112,6 +113,23 @@ namespace TopiaForge.ModRuntime.Tests
             Assert(control.Detaches == 1 && control.Runtime == null && !host.RunInBackground,
                 "shutdown detaches multiplayer and gives the game its own background setting back");
             AssertTrace(fixture.TracePath, "load", "update-after-failure", "update-after-failure", "unload", "cleanup-second", "cleanup-first");
+        }
+
+        /// <summary>
+        /// Shutdown detaches multiplayer before any mod stops. A stopping mod's files refuse every operation, so the provider
+        /// saves its bans and known hosts as it is detached; a detach after the stop would lose them.
+        /// </summary>
+        private static void TestMultiplayerDetachesBeforeAnyModStops(string root)
+        {
+            var fixture = NewFixture(root, "multiplayer-detach-order", "TopiaForge.ValidTestMod.RuntimeShutdownOrderingMod");
+            var host = new MultiplayerFrameHost();
+            var runtime = CreateMultiplayerRuntime(fixture, host);
+            runtime.Load(new[] { fixture.Package });
+            void Trace(string line) => File.AppendAllText(fixture.TracePath, line + Environment.NewLine);
+            var control = new FakeMultiplayerControl(Trace);
+            Assert(runtime.Multiplayer.Attach(control), "a provider attaches");
+            runtime.UnloadAll();
+            AssertTrace(fixture.TracePath, "load", "mp-attach", "mp-detach", "stopping", "unload:stopping", "cleanup");
         }
 
         private static RuntimeUnderTest CreateMultiplayerRuntime(Fixture fixture, MultiplayerFrameHost host) =>

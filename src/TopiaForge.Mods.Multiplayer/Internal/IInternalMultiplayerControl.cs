@@ -44,7 +44,11 @@ namespace TopiaForge.Mods.Internal
         /// </summary>
         bool AttachRuntime(IInternalMultiplayerRuntimeHost runtime);
 
-        /// <summary>Detaches <paramref name="runtime"/> if it is the attached one; the provider then pumps itself again.</summary>
+        /// <summary>
+        /// Detaches <paramref name="runtime"/> if it is the attached one; the provider then pumps itself again. The runtime
+        /// detaches as shutdown begins, before any mod stops, so the provider saves its own records here, while its files
+        /// still take writes.
+        /// </summary>
         void DetachRuntime(IInternalMultiplayerRuntimeHost runtime);
 
         /// <summary>Frame step 1: takes what the network received and pumps the session engine.</summary>
