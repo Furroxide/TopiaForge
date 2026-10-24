@@ -64,7 +64,10 @@ namespace TopiaForge.ModManager.Tests
                 // Authority routing (WS3.7): a joined player's requests, the host's scopes for its players, and their wire.
                 typeof(IMultiplayerAuthority), typeof(NetworkWorldProxies), typeof(ProxyParticipant), typeof(ProxySpawn), typeof(ProxyVerdict),
                 typeof(LocalSpawn), typeof(ClientPrediction), typeof(ClientShadow), typeof(AuthorityMessages), typeof(AuthorityWire), typeof(AuthorityTarget),
-                typeof(AuthoritySpawnRequest), typeof(ModAssetLoads), typeof(WorldAssetLoad<>), typeof(SpawnAuthorityRules), typeof(ShadowKeyNumbering)
+                typeof(AuthoritySpawnRequest), typeof(ModAssetLoads), typeof(WorldAssetLoad<>), typeof(SpawnAuthorityRules), typeof(ShadowKeyNumbering),
+                typeof(IMultiplayerMotion), typeof(INetworkMotionBody), typeof(INetworkMotionBackend), typeof(MotionTarget), typeof(MotionRules),
+                typeof(MotionMessages), typeof(MotionMessage), typeof(MotionWire), typeof(NetEntityMotion), typeof(NetworkWorldMotion),
+                typeof(HostedMotion), typeof(HeldItemOwnershipTracker)
             };
             var offenders = new List<string>();
             foreach (var type in spi.Concat(runtime).Concat(runtime.SelectMany(type => type.GetNestedTypes(All))))

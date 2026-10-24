@@ -12,7 +12,7 @@ namespace TopiaForge.ModManager.TestDoubles
     /// systems, network marks, poses, and an asset service that spawns into them. The ModRuntime and ModManager harnesses
     /// both compile it.
     /// </summary>
-    internal sealed class FakeWorldScene : INetworkWorldBackend
+    internal sealed class FakeWorldScene : INetworkWorldBackend, INetworkMotionBackend
     {
         private readonly List<FakeSceneData> scenes = new List<FakeSceneData>();
         private int nextHandle = 100;
@@ -29,6 +29,20 @@ namespace TopiaForge.ModManager.TestDoubles
         internal int? FailNativeCensusAfter { get; set; }
 
         internal int Prepared { get; private set; }
+
+        internal NetVector3 LocalPosition { get; set; }
+        internal IEntity? Held { get; set; }
+        internal int Drops { get; private set; }
+        public IEntity? MotionRoot(IEntity entity)
+        {
+            FakeWorldObject? root = null;
+            for (var current = ObjectOf(entity); current != null; current = current.Parent)
+                if (current.HasRigidbody) root = current;
+            return root?.Entity;
+        }
+        public bool TryGetLocalPosition(out NetVector3 position) { position = LocalPosition; return true; }
+        public bool TryGetHeldEntity(out IEntity? entity) { entity = Held; return Held?.IsAlive == true; }
+        public void DropHeldEntity(IEntity entity) { if (Held?.Id == entity.Id) { Held = null; Drops++; } }
 
         internal FakeSceneData AddScene(string name)
         {
@@ -205,7 +219,7 @@ namespace TopiaForge.ModManager.TestDoubles
     }
 
     /// <summary>One object in a fake scene: a network root candidate when it carries a rigidbody.</summary>
-    internal sealed class FakeWorldObject : INetworkWorldObject
+    internal sealed class FakeWorldObject : INetworkMotionBody
     {
         private readonly FakeWorldScene world;
 
@@ -235,6 +249,21 @@ namespace TopiaForge.ModManager.TestDoubles
         internal bool HasRigidbody { get; }
 
         internal bool Kinematic { get; set; }
+
+        public bool IsKinematic { get => Kinematic; set => Kinematic = value; }
+        internal NetVector3 AngularVelocity { get; set; }
+        public bool TryReadMotion(out NetPose pose, out NetVector3 angularVelocity)
+        {
+            TryReadPose(out pose);
+            angularVelocity = AngularVelocity;
+            return HasRigidbody && IsAlive;
+        }
+        public void WriteMotion(in NetPose pose, NetVector3 angularVelocity)
+        {
+            WritePose(pose);
+            Velocity = pose.Velocity;
+            AngularVelocity = angularVelocity;
+        }
 
         internal bool Active { get; set; } = true;
 

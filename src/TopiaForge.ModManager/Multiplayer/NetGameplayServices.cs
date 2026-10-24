@@ -13,8 +13,8 @@ namespace TopiaForge.ModManager
     /// included. On a joined player, <c>SetTransform</c> and <c>Destroy</c> are routed (WS3.7): a change to an object of
     /// the player's own is a request the host validates, one on the player's intent to anything else the network world
     /// holds is refused, and a scripted one leaves the host's objects to the host's own run of the same script. An entity
-    /// the network world does not hold is the game's, as offline. Motion ownership (<c>AcquireMotion</c>) comes with the
-    /// next part of authority routing.
+    /// the network world does not hold is the game's, as offline. Online <c>AcquireMotion</c> wraps a known body in an
+    /// optimistic ownership lease; the runtime streams it and retains a thrown body's simulation tail after disposal.
     /// </summary>
     internal sealed class NetEntityService : IEntityService
     {
@@ -54,12 +54,13 @@ namespace TopiaForge.ModManager
             return authority.RouteDestroy(entity, route == InternalRoute.Shadow) ?? inner.Destroy(entity);
         }
 
-        public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => inner.AcquireMotion(entity);
+        public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) =>
+            Replication.Services.Motion?.Acquire(Replication, entity, inner) ?? inner.AcquireMotion(entity);
     }
 
     /// <summary>
     /// The network seam's item service. It changes no behaviour yet: every member forwards to the service the gameplay host
-    /// made and returns exactly what that returns. Authority routing (WS3.7) tracks native held-item ownership here.
+    /// made and returns exactly what that returns. The network world's held-item tracker observes native pickup edges.
     /// </summary>
     internal sealed class NetItemService : IItemService
     {

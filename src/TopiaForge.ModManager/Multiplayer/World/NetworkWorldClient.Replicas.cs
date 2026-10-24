@@ -241,10 +241,11 @@ namespace TopiaForge.ModManager
         {
             mirrored.Object = present;
             mirrored.Binding = binding;
+            mirrored.SimulatedHere = IsSimulating?.Invoke(present.Entity) == true;
             try
             {
                 present.SetNetworkIdentity(mirrored.Id);
-                if (binding != ClientEntityBinding.SceneObject && binding != ClientEntityBinding.Content) backend.PrepareReplica(present);
+                if (!mirrored.SimulatedHere && binding != ClientEntityBinding.SceneObject && binding != ClientEntityBinding.Content) backend.PrepareReplica(present);
             }
             catch (Exception)
             {
@@ -256,6 +257,7 @@ namespace TopiaForge.ModManager
 
         private void Place(ClientWorldEntity mirrored)
         {
+            if (mirrored.SimulatedHere) return;
             try
             {
                 mirrored.Object?.WritePose(mirrored.EntryPose);
@@ -335,7 +337,7 @@ namespace TopiaForge.ModManager
             }
 
             // An object bound since follows its entity's samples instead.
-            if (slot.IsBound) return;
+            if (slot.IsBound || IsSimulating?.Invoke(slot.Object.Entity) == true) return;
             try
             {
                 slot.Object.WritePose(pose);

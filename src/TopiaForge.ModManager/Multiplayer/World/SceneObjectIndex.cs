@@ -238,6 +238,22 @@ namespace TopiaForge.ModManager
 
         internal bool IsExcluded(SceneObjectKey key) => excluded.ContainsKey(key);
 
+        internal bool TryFind(TopiaForge.Mods.IEntity entity, out SceneObjectSlot found)
+        {
+            foreach (var slot in slots.Values)
+            {
+                if (!slot.Ambiguous && !slot.Removed && slot.Object.IsAlive &&
+                    !excluded.ContainsKey(slot.Key) && slot.Object.Entity.Id == entity.Id)
+                {
+                    found = slot;
+                    return true;
+                }
+            }
+
+            found = null!;
+            return false;
+        }
+
         /// <summary>
         /// Host: checks at most <paramref name="maximum"/> unbound objects, taking turns, and reports those that moved away
         /// from their census pose and those that are gone. Nothing is bound here: the caller allocates the ids.

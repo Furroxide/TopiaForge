@@ -22,6 +22,10 @@ namespace TopiaForge.ModManager.Tests
             SpawnAbuseTests.Run();
             ProxyParticipantTests.Run();
             AuthorityCostTests.Run();
+            MotionTests.Run();
+            MotionWireTests.Run();
+            MotionAbuseTests.Run();
+            MotionCostTests.Run();
             Console.WriteLine("Authority routing tests passed.");
         }
     }
@@ -120,7 +124,7 @@ namespace TopiaForge.ModManager.Tests
             return OperationResult<bool>.Success(true);
         }
 
-        public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => OperationResult<IEntityMotion>.Failure(ModErrorCode.Unavailable, "No motion here.");
+        public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => FakeEntityMotion.Acquire(entity);
 
         internal static FakeWorldObject? ObjectOf(IEntity entity) =>
             entity is FakeSpawnedEntity spawned ? spawned.Object : entity is FakeWorldEntity fake ? fake.Object : null;
