@@ -189,6 +189,9 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public void Pump()
         {
+            // As the provider's control does, a change of role tells the runtime whether the game must keep running in the
+            // background: online it must, and in single player the game's own setting comes back.
+            if (Role != NextRole) Runtime?.SetRunInBackground(NextRole != InternalSessionRole.Solo);
             Role = NextRole;
             if (Stalled) return;
             foreach (var channel in channels.Values) channel.Deliver();

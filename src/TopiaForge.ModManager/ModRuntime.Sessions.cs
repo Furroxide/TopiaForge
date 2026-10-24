@@ -21,9 +21,11 @@ namespace TopiaForge.ModManager
             ConfigureSessionSelection(profile);
             sessionSelectionRejections = Array.AsReadOnly((rejectedSelections ?? Array.Empty<RejectedRuntimeSelection>()).ToArray());
             activeSessions = new GamemodeSessionOrchestrator(nativeDispatcher, sceneCoordinator,
-                new BoundSessionEnvironment(sessionBindings!, mainMenu ?? LoadSessionMainMenuAsync, sessionSelectionRejections), runtimeOwnershipId);
+                new BoundSessionEnvironment(sessionBindings!, mainMenu ?? LoadSessionMainMenuAsync, LoadSessionLevelAsync, sessionSelectionRejections),
+                runtimeOwnershipId);
             AttachSessionLifecycle(activeSessions, nativeDispatcher);
             activeSessions.DiagnosticFailure += error => logger.Error(error, "Session lifecycle failure.");
+            InstallSessionFollow(activeSessions);
 
             // A world session that starts numbers its mods' shadowable spawns afresh, as a joined player following it does (WS3.7).
             activeSessions.StateChanged += state =>
@@ -32,6 +34,14 @@ namespace TopiaForge.ModManager
             };
             return activeSessions;
         }
+
+        /// <summary>
+        /// Hands <paramref name="progress"/> the session orchestrator's progress under <paramref name="requestId"/> until the
+        /// handle is disposed (<see cref="GamemodeSessionOrchestrator.SubscribeProgress"/>); before session authority is
+        /// active there is none to hand.
+        /// </summary>
+        internal IDisposable SubscribeSessionProgress(string requestId, Action<LaunchProgress> progress) =>
+            activeSessions?.SubscribeProgress(requestId, progress) ?? GamemodeSessionOrchestrator.NoProgress;
         internal RuntimeSessionSnapshot CaptureSessionRuntime() => sessionBindings?.Capture()
             ?? throw new InvalidOperationException("The selected runtime declarations are unavailable.");
         internal IReadOnlyList<ModLaunchTargetDeclaration> LaunchTargets
@@ -91,21 +101,30 @@ namespace TopiaForge.ModManager
             return result.Succeeded ? OperationResult<bool>.Success(true)
                 : OperationResult<bool>.Failure(result.ErrorCode, result.ErrorMessage);
         }
+        /// <summary>Loads a level by its scene name for session follow, through the gameplay host's level loader when it has one.</summary>
+        private Task<OperationResult<bool>> LoadSessionLevelAsync(IInternalSceneTransitionService transitions, string sceneName,
+            TransformState? spawn, CancellationToken token) =>
+            coreGameplayServices is ISessionLevelLoader levels ? levels.LoadLevelAsync(transitions, sceneName, spawn, token)
+                : Task.FromResult(OperationResult<bool>.Failure(ModErrorCode.Unavailable, "The native level loader is unavailable."));
         private sealed class BoundSessionEnvironment : IRuntimeSessionEnvironment
         {
             private readonly RuntimeBindingRegistry registry;
             private readonly Func<IInternalSceneTransitionService, CancellationToken, Task<OperationResult<bool>>> mainMenu;
+            private readonly Func<IInternalSceneTransitionService, string, TransformState?, CancellationToken, Task<OperationResult<bool>>> level;
             private readonly IReadOnlyList<RejectedRuntimeSelection> rejections;
             internal BoundSessionEnvironment(RuntimeBindingRegistry registry,
                 Func<IInternalSceneTransitionService, CancellationToken, Task<OperationResult<bool>>> mainMenu,
+                Func<IInternalSceneTransitionService, string, TransformState?, CancellationToken, Task<OperationResult<bool>>> level,
                 IReadOnlyList<RejectedRuntimeSelection> rejections)
-            { this.registry = registry; this.mainMenu = mainMenu; this.rejections = rejections; }
+            { this.registry = registry; this.mainMenu = mainMenu; this.level = level; this.rejections = rejections; }
             public RuntimeSessionSnapshot Capture()
             {
                 InvalidRuntimeSelectionException.ThrowIfAny(rejections);
                 return registry.Capture();
             }
             public Task<OperationResult<bool>> LoadMainMenuAsync(IInternalSceneTransitionService transitions, CancellationToken token) => mainMenu(transitions, token);
+            public Task<OperationResult<bool>> LoadSceneAsync(IInternalSceneTransitionService transitions, string sceneName, TransformState? spawn,
+                CancellationToken token) => level(transitions, sceneName, spawn, token);
         }
     }
 }

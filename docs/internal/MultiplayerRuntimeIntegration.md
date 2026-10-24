@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.9 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-22 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.8, WS3.9 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-24 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -17,9 +17,10 @@ The work lands in three steps:
 
 All three have landed, and so have the voice service behind the SPI (section 2, "Voice"), intent tracking (WS3.4,
 section 14), the participant realm (WS3.9, section 15), the first part of authority routing (WS3.7, section 16):
-spawn adoption, shadows, and validated transform changes and destroys; and pause and time (WS3.13, section 17).
-Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where motion ownership (WS3.7's
-second part) and session follow (WS3.8) attach to the network world.
+spawn adoption, shadows, and validated transform changes and destroys; pause and time (WS3.13, section 17); and session
+follow (WS3.8, section 18), which runs the host's world on every joined player. Section 8 says what each later WS3
+slice plugs in where, and section 13 says exactly where motion ownership (WS3.7's second part) attaches to the network
+world.
 
 ## 1. Shape
 
@@ -33,6 +34,7 @@ second part) and session follow (WS3.8) attach to the network world.
 | The realm, the spawn ledger, the replication seam and the network decorators | `src/TopiaForge.ModManager/Multiplayer/` |
 | The network world (section 13) | `src/TopiaForge.ModManager/Multiplayer/World/`, Unity-free; its engine side in `World/Unity/` |
 | Pause and time (section 17) | `src/TopiaForge.ModManager/Multiplayer/Time/`, Unity-free; the game's clock over Unity in `Time/Unity/`; Chronos' side in `mods/TopiaForge.Chronos/` |
+| Session follow (section 18) | `src/TopiaForge.ModManager/Multiplayer/Follow/`, Unity-free; the orchestrator's side in `GamemodeSessionOrchestrator.Follow.cs`; the level loader over Unity in `CoreGameplayServices.Levels.cs` |
 
 - **Visibility.** Every SPI type is internal. The multiplayer SDK assembly grants its internals to the provider,
   ModManager, the test rig and the three test harnesses that use them. The replication SPI lives in the core SDK
@@ -494,7 +496,7 @@ The frame:
 | Step | Where | What runs | When |
 | --- | --- | --- | --- |
 | 1 | `DispatchUpdate`, before the mods | The provider's `Pump`: network receive and the session engine | Whenever a provider is attached |
-| 2 | `DispatchUpdate`, before the mods | The host's time on a joined player (section 17), then `WorldEvents`: world events and the session follower | Online |
+| 2 | `DispatchUpdate`, before the mods | The host's time on a joined player (section 17), then `WorldEvents`: world events, then `SessionFollow`: the host's announcements and the joined player's follow (section 18) | Online |
 | 3 | `DispatchUpdate` | The mods' Update | Always |
 | 4 | `DispatchUpdate`, after the mods | `PresenceSend` (pose and voice), `HostSnapshots` and the session's time (host only), then the provider's `Flush` | Online |
 | Late | `DispatchLateUpdate`, before the mods | The pause guard (section 17), then `ReplicaInterpolation` | The guard online, and after leaving until it has handed the clock back; interpolation on joined players |
@@ -520,7 +522,7 @@ plug in here:
 | WS3.5 core replication model | Landed in Core (`MultiplayerReplicationModel.md`); the slices below drive it |
 | WS3.6 network world | Landed (section 13): `PromotionCensus`, `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`, an observer of the realm, the spawn ledger's observer, the `WorldReplication` channel, `SetEntityIdentitySource`, `MultiplayerReplication.References` and `LocalContent`, and replicas through `TryGetReplicaFactory` |
 | WS3.7 authority routing | First part landed (section 16): `NetAssetService` and `NetEntityService` route a joined player's spawns, transform changes and destroys by `ExecutionRouting.Route(realm, profile, intent)`, and the SPI's `RequestSpawn` and `RegisterCanonical` do so for providers: spawn adoption under a host's per-player `ProxyParticipant` scope, shadows bound by `NetSpawnOrigin`, and requests the host validates through `PermissionPolicy` and `TokenBucket`, over message types 64 to 66 and 96 and 97. Still to come: `NetEntityMotion` behind `AcquireMotion` and `HeldItemOwnershipTracker` behind `NetItemService`, whose hooks into the network world are listed in section 13, and forwarded commands naming their sender in `InternalCommand.Sender` |
-| WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu. The network world's scene hooks, hold and progress it works beside are listed in section 13 |
+| WS3.8 session follow | Landed (section 18): the `SessionFollow` stage after `WorldEvents`; the `SceneFollow` channel, announced again on its generation changes like world replication; `HoldReadiness` from link-up until the host's world runs, with `ReportProgress` while it loads; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `SceneTransitionPriority.SessionFollow` with the authority policy's `FollowGrant`; `Leave` from a joined player's main menu; and the network world's progress and hold beside its own (section 13). A change of worlds does not use `ReplaceSession` (section 18, "Choices") |
 | WS3.9 participant realm | Landed (section 15): `IGamemodeParticipantFactory`, the participant's scope through `CreateChildScopeAsync(..., ModExecutionContext.Participant)`, and the orchestrator's start by realm, which session follow (WS3.8) calls on a joined player |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
 | WS3.11 Players API | Player references (`InternalNetRefKind.Player`) through `MultiplayerReplication.References`, beside the network world's entity references |
@@ -642,6 +644,7 @@ answers no and is reported.
   failures they report carry. Other internal contracts in the namespace are held to their own rules.
 - **Intent tracking** (section 14 lists its suites).
 - **Pause and time** (section 17 lists its suites).
+- **Session follow** (section 18 lists its suites).
 
 ## 10. The realm
 
@@ -657,7 +660,7 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | Request | Realm rule | Then, when the rule allows it |
   | --- | --- | --- |
   | `OpenToMultiplayer(settings)` | to `ListenHost` | The control's `StartHosting` |
-  | `Join(target, settings)` | to `Client` | The control's `Join` |
+  | `Join(target, settings[, launch request])` | to `Client` | The control's `Join`; a launcher-planned join's request is kept as `LaunchedJoin`, for session follow (section 18) |
   | `Leave()` | to `Offline`, never refused | `StopHosting` while hosting, or while hosting starts, then `Leave`, which also stops a join on its way |
 
   Each answers a `MultiplayerRealmChange`: the rule's verdict and effect, and the control's own result, or the refusal.
@@ -687,7 +690,10 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   The provider never hears of a refusal. A refusal of the provider's own, such as a join already in progress, comes back
   as it is, under the rule's `Allowed`.
 - **Joining needs Idle.** Joining replaces the local session, so while a game runs the runtime refuses with
-  `RequiresLeave`. The interface asks "Leave current game?", stops the local session, and asks again from the menu.
+  `RequiresLeave`. The interface asks "Leave current game?", stops the local session, and asks again from the menu. A
+  level the game's own menus loaded runs no world session, so the session reads Idle there, but for a join the rule
+  counts it as running (`NativeWorldSource`, from the active scene): joining from it asks "Leave current game?" too
+  (#224, section 18).
 - **Leaving is never refused**, whatever the realm, the phase or the loaded mods. A host stops hosting and plays on alone
   in the same session. Stopping hosting only when it runs or starts keeps an earlier hosting failure on record for the
   interface. A provider that throws while leaving is reported once, redacted, as a failure of its own, never as a
@@ -1160,18 +1166,19 @@ despawns and snapshots. The second part attaches here:
   hand-back is one of authority routing's own messages. A player's own adopted object is already simulated nowhere
   but the host; a grab of one goes through the same ownership protocol as any other body.
 
-Session follow (WS3.8):
+Session follow (WS3.8) has landed (section 18). Beside the network world:
 
-- **Its own channel.** `SceneFollow`, re-baselined on its generation changes, as world replication is.
-- **Scenes.** The network world already hears every scene load and unload from ModRuntime's dispatch, in every realm,
-  and keys each scene as it loads. A follower loads the host's world after joining, so it keys those scenes as the host
-  did, and what the world's baseline names waits for them.
-- **Readiness.** The network world's hold covers its baseline and replicas only; follow holds readiness around
-  LoadingWorld with its own hold and `ReportProgress`, and the player is Ready once both are released.
+- **Its own channel.** `SceneFollow`, announced again on its generation changes, as world replication baselines again.
+- **Scenes.** The network world hears every scene load and unload from ModRuntime's dispatch, in every realm, and keys
+  each scene as it loads. A follower loads the host's world after joining, so it keys those scenes as the host did, and
+  what the world's baseline names waits for them.
+- **Readiness.** The network world's hold covers its baseline and replicas only; follow holds readiness with its own
+  hold from link-up until the host's world runs, with `ReportProgress` while it loads, and the player is Ready once both
+  are released.
 - **Progress.** `NetworkWorld.Progress` (`NetworkWorldProgress`: phase, entries received and expected, replicas loading,
-  and a fraction) feeds the connecting overlay beside follow's own.
-- **A new world.** `ReplaceSession` restarts every stream, so every player starts again from a baseline; the host's
-  scene unload ends its bound objects and the new scene is keyed at its load.
+  and a fraction) ends follow's Synchronizing state, and its n/m reaches the connecting overlay through follow's status.
+- **A new world.** A host's change of worlds needs no `ReplaceSession`: the host's scene unload ends its bound objects,
+  the new scene is keyed at its load and announced, and each player follows it from `SceneFollow`.
 
 ### Limits, stated plainly
 
@@ -1188,8 +1195,8 @@ Session follow (WS3.8):
 - **Keys stay while their scene does**: 72 bytes an object, 72.5 KiB for City Streets, offline as much as online.
 - **Objects that never move** are never entities. A joined player keeps them where its scene put them, or where the
   baseline placed them.
-- **A scene a joined player reloads on its own**, which follow's authority policy prevents, keeps its unbound objects at
-  the scene's poses.
+- **A scene a joined player reloads on its own**, through the game's own buttons, keeps its unbound objects at the
+  scene's poses until session follow takes the player back to the host's world (section 18).
 - **One snapshot schedule for every player.** Relevancy (`RelevancySet`) needs each player's position, which arrives
   with presence (WS3.10), so every player gets the same snapshots, 800 bytes a tick at most. Measured over the real
   provider with eight players in a City Streets of 1,031 keyed objects: up to about 50 bodies moving at once, each
@@ -1531,9 +1538,9 @@ participant controller in it, so follow makes no participant scope in Preparing.
 follow commits its Participant state before it and Running once it returns. Cleanup is the same as a host's,
 participant first.
 
-Follow also decides what this slice leaves alone on a joined player: a local launch there still runs the host's startup
-steps in the `Client` realm (the scene authority policy refuses its native world changes), and the session's bound
-`StopAsync` and `RestartAsync` act locally until follow answers `NotAuthoritative`.
+Follow also decides what this slice left alone on a joined player (section 18): a local launch there is refused with
+`NotAuthoritative` while the game follows a host, and the session's bound `StopAsync` and `RestartAsync` answer
+`NotAuthoritative` too, since the host's world is the host's to stop or restart.
 
 ### Scopes that resolve the session (DevEx audit B1)
 
@@ -2055,3 +2062,249 @@ Chronos (`TimeControlService`) reaches the runtime through its package context's
   harness on a clock the test reads; in the game both are Unity's, so nothing changes there.
 - **Nothing public changes.** Every new type and member is internal, so the SDK API baselines stay as they are, and a
   mod sees only `NotAuthoritative` where single player would have changed time.
+
+## 18. Session follow
+
+WS3.8 makes a joined player's game run its host's world. After JOIN the game loads the world the host is in,
+synchronizes it, starts its own player's controls and runs it under the host's session id, with nothing for the player
+to press and no code in any mod. When the host changes worlds it follows; when its own game strays from the host's
+world it comes back; when it leaves the session it returns to the main menu. The runtime's side is in
+`src/TopiaForge.ModManager/Multiplayer/Follow/`, Unity-free, the orchestrator's in `GamemodeSessionOrchestrator.Follow.cs`
+and `SessionFollowPlan.cs`, and the level loader over Unity in `CoreGameplayServices.Levels.cs`.
+
+| Part | What it does |
+| --- | --- |
+| `SessionFollow` | Owns the `SceneFollow` channel while a provider is attached, runs in the frame's step 2 after the world events, and hands each change of realm to the host's side or the follower |
+| `SessionFollowHost` | A listen host: tells every player what its game is in |
+| `SessionFollower`, `.Finish` | A joined player: follows the host's newest announcement, holds readiness and the follow grant, follows again, leaves, and reports to the connecting overlay |
+| `SessionFollowWire`, `HostWorldState` | The channel's messages, read strictly |
+| `FollowedScene` | The active scene as follow reads it, told by ModRuntime's scene dispatch |
+| `GamemodeSessionOrchestrator.Follow` | The follow's states in the orchestrator, and what a host announces of its session |
+| `SessionFollowStatus`, `ConnectingPresenter.Follow` | Where the follow stands, and the connecting overlay over it |
+
+### The host's announcement
+
+- **What it says.** A listen host tells every player what its game is in: its world session once it runs (`World`: the
+  session id, the launch it made, what that resolved to, and for an additive arena the level it is built over and where
+  its player stood as the arena was built); the level it is in outside a session (`Level`, by its scene name); or the
+  main menu (`Menu`). While a session starts or stops, what it announced last stands.
+- **When.** To everyone whenever that changes, and whenever a stream starts, restarts or ends, so a player that joins,
+  rejoins or comes back to a replaced session hears it at once. A player a full window skipped gets the newest
+  announcement alone once `CanSend` to it says there is room (section 8's broadcast rule).
+- **One way.** Only the host sends on `SceneFollow`. What a player sends is taken and dropped, so no window stays full.
+- **At rest** a frame compares a few fields: the host describes its session once, and the same instance comes back
+  while nothing changes, so it sends and allocates nothing.
+
+### The wire
+
+`[version 1][type]`, then the type's body, in world replication's primitives:
+
+| Type | Body |
+| --- | --- |
+| 1 `World` | session id; target, world override and transition override (each override a flag byte, then the id); gamemode; world; world family (flag, then the id); transition; the base level (flag, then its scene name and, with a second flag, the spawn: position, rotation and scale as ten little-endian singles) |
+| 2 `Level` | scene name |
+| 3 `Menu` | nothing |
+
+A player reads every field as the runtime checks its own: ids by the declaration rule, the session id as exactly 32
+lowercase hexadecimal characters, the transition as a known one, a scene name as a gameplay scene's of at most 128
+characters with no control character and no path separator, and a spawn within 1,000,000 units of the origin, with a
+rotation of about unit length and a non-zero scale of at most 10,000. A message is at most 2 KiB and ends exactly where
+its last field does. Anything else is refused whole and counted, and changes nothing. Every text in an announcement is
+the host's: a player resolves its ids against its own packages and never shows any of it.
+
+### The follower
+
+- **Link-up.** When the realm becomes `Client`, the follower takes a readiness hold ("session follow") and the follow
+  grant, and waits for the host's announcement.
+- **A world.** It runs the orchestrator's follow (below) and keeps its hold until that runs, reporting progress at each
+  stage and once a second while it loads, but never while it only waits for the host's world to arrive, so the hold's
+  60-second idle bound still ends a join whose host withholds its baseline (section 6).
+- **A level.** It loads the host's level by its scene name, with no session, as the host has none. A level this game
+  cannot load leaves it at the main menu, still joined and Ready there, and says "Your game could not load the level the
+  host is in. You stay in the session and join the host's next world."
+- **The main menu.** A host at its menu leaves the player at its own, joined and Ready; a player in another world returns
+  to the menu.
+- **The host moving on.** A follow on its way when a newer announcement arrives is cancelled, and the newest followed. A
+  world the host left behind is disposed before the next one loads. After the join, the host's next world replaces the
+  one followed, as a launch replaces a session, and the player is told "Back in the host's world." once it runs.
+- **Straying.** At rest the follower checks that the game is still in the host's world. A native load that took it
+  elsewhere, such as a level exit or the game's own load buttons, follows the host again, eight times in a join at most;
+  the next one ends the join as "Your game keeps leaving the host's world". A return to the main menu by itself leaves
+  the session, with "You returned to the main menu, so you left the session."
+- **Busy.** A follow the orchestrator turns away while another operation or native change runs is tried again every
+  quarter second, for 30 seconds at most.
+- **A world not found.** A host's world among the game's own levels that this game has not listed yet (`WorldNotFound`)
+  has the game look for its worlds once (`DiscoverWorldsAsync`), then follows again.
+- **Leaving.** When the realm leaves `Client`, by the player's leave, the overlay's Cancel, the host ending the session,
+  a kick or a ban, the follow on its way is cancelled, the hold and the grant are released, and a game that followed the
+  host returns to the main menu once that follow has ended. The player's own return to the menu loads no second one,
+  and neither does shutdown.
+
+### The orchestrator's follow
+
+`FollowAsync` runs on a joined player only: once the realm has left `Client` there is nothing to follow, and it ends as
+cancelled.
+
+| State | What runs | Phase committed |
+| --- | --- | --- |
+| Preparing | The session's scopes, each a world owner (`ScopeContextFor(..., NetRealm.Client)`), and the world provider | Preparing |
+| LoadingWorld | The same provider's `LoadAsync` as on the host, under a `SessionFollow` reservation; for an additive arena, first the level it is built over, then the arena: steps 1 and 2 of 2 | LoadingWorld |
+| Synchronizing | A wait until the network world has the host's world in place: its baseline applied and its replicas built | (LoadingWorld still) |
+| Participant | `StartGamemodeAsync`: on a joined player, this player's participant controller alone (section 15) | StartingMode |
+| Running | | Running |
+
+- **The host's session id.** The session takes the host's world session id, so every consumer of `IWorldSessionService`
+  sees the host's session, through the phases a host's session commits.
+- **This game's own resolution.** The host's launch is resolved against this game's packages (`LaunchResolver`), and the
+  result must start what the host started: the same target, gamemode, world, family and transition.
+- **Cancellation** ends the follow at any state, as a stop does: every scope closes, what loaded is disposed, and the next
+  follow runs cleanly.
+- **Failures** end the join with their own kind (`FollowFailureKind`) and stage. The reason the runtime, a provider or a
+  mod gave reaches the manager log alone, scrubbed: a word with a path separator becomes `[path]`, the diagnostic
+  redactor takes out addresses, and the result stops at 300 characters.
+- **A joined player's own commands.** `StopAsync` and `RestartAsync` answer `NotAuthoritative`: "Only the host can stop
+  this session's world. Leave the session to stop playing." and "Only the host can restart this session's world." A local
+  launch is refused the same way: "You are in another player's session, so its world is the host's to choose. Leave the
+  session to start your own game." The player's own return to the main menu leaves the session first, then loads the
+  menu.
+
+### Each kind of host world
+
+| The host is in | The follower loads |
+| --- | --- |
+| A Build Scenes world, such as Free Play on SampleScene or City Streets | The same world through the same Worlds provider, which loads it by its scene name |
+| A curated checkpoint level | The same level through the same provider, which uses the checkpoint's own loader |
+| An additive arena, such as Open Sandbox | The host's base level first, by its scene name through the game's own loader, with the player stood where the host's stood as the arena was built, so the arena lands where the host's did; then the provider builds the arena over it |
+| A level outside a session | That level, by its scene name, with no session |
+| The main menu | The main menu |
+
+### Scene authority
+
+A joined player is never the canonical server, so `MultiplayerSceneTransitionAuthorityPolicy` refuses every scene change
+it makes, its own return to the menu included. Session follow's are the exception. The follower holds a `FollowGrant`
+from link-up until it leaves, and a request with the new `SceneTransitionPriority.SessionFollow` passes while a grant is
+held, ahead of the session's readiness and authority checks. Only the follow reserves with that priority: its
+reservation carries it and every grant borrowed from it dispatches with it, so the world provider's own loads pass, and
+the follower's return to the menu uses it too. Without a grant, a `SessionFollow` request is decided as every other, so
+a follow that outlives its session is a single player's again. No mod can ask for the priority.
+
+### Readiness
+
+The player is Ready only once both holds are released: the network world's, over its baseline and replicas, and the
+follow's, which lasts until the session runs, the host's level is loaded, or the host is at its menu. A host's change of
+worlds takes the follow's hold again until the next world runs.
+
+### The launcher
+
+A follow reports to the launcher only when it belongs to a join the launcher planned, and then under that join's
+request.
+
+- **Which joins.** The session this game was launched to join (launch request V5), and a live join, each while its
+  launch still waits for its result. The connecting overlay hands the realm the launch's request with the join
+  (`Join(target, settings, launchRequestId)`), the realm keeps it as `LaunchedJoin` until this game leaves or the joined
+  session ends, and the follower takes it at link-up. A join the player started in game hands none, and neither does
+  RETRY after a launched join failed: the launcher keeps the result it has.
+- **What goes out.** The follow's session takes that request as its own, so each phase it commits is published as
+  progress under it, and each followed session's end as a terminal `session` outcome. A follow never publishes a
+  `launch` outcome: that is the launch command's alone.
+- **Where it lands.** For the launched join, the runtime's publisher moves the records' phase under the join's block:
+  while the join synchronizes, its own phase stands; once it is in session, the launch succeeds at Running with the
+  host's world session; the host's next world moves the phase on; and a followed world's end is withheld, since the
+  join's end is the provider's ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), sections 4, 5 and 8). A
+  live join's records take the same progress under its join id, through
+  `IMultiplayerSessionEnvironment.SubscribeSessionProgress`, by the same rules, until they end.
+- **Nothing else.** A follow of a join started in game publishes nothing to the launcher, neither progress nor an end,
+  from its start to its end.
+
+### #224's two rules
+
+- **A game started while joining is never replaced.** A join asked for from Idle can link up after the player started a
+  game of their own while it resolved. At link-up the follower checks: a session that is not Idle, or a native level,
+  ends the join in its own words ("You started a game while joining": "Your game kept running, so the join stopped.
+  Choose RETRY to leave your game and join."), and the game the player started runs on untouched. RETRY asks "Leave
+  current game?".
+- **A native level reads as a game when joining.** A level the game's own menus loaded runs no world session, so the
+  session reads Idle there. For a join, the realm's rule counts it as running (`NativeWorldSource`), so joining from it
+  asks "Leave current game?" first. Hosting from it is unchanged.
+
+### The connecting overlay
+
+While a join synchronizes, the follow's stages fill the stepper's last three steps with this game's own lines: Loading
+world ("Getting your mods ready", "Loading the host's world", or for an arena "Loading the host's level (1/2)" and then
+"Building the host's arena (2/2)"), Synchronizing ("Receiving the world", then n/m as the network world reports it) and
+Spawning ("Starting your controls"). A join the follow ends shows the follow's failure, with RETRY where joining again
+can help. After the join, a change of worlds or a return to the host's world shows "Following the host", with the first
+four steps done, and its Cancel leaves the session. [MultiplayerInGameSessions.md](MultiplayerInGameSessions.md),
+section 5, has the rest.
+
+### Privacy and cost
+
+- **Privacy.** Nothing a host announces is shown, and its ids resolve against the player's own packages. A scene name
+  is a name, never a path. The follow logs fixed texts and scrubbed reasons, which hold no address and no path.
+- **Cost.** Offline the stage never runs. At rest a host's frame and a joined player's compare a few fields and allocate
+  nothing, measured through the composition root and through two real runtimes (below).
+- **In the background.** `Application.runInBackground` is on while online and restored exactly on leaving, by the
+  runtime host (section 4, "Running in the background"); a joined player keeps it on while it follows.
+
+### Tests
+
+- **ModManager harness** (`--session-follow`, and the full run):
+  - `SessionFollowTests`: every state in order, with the host's session id and the lifecycle's phases; an additive
+    arena loading its level first, with its spawn, each load with its own step; each failure with its own kind, stage
+    and code, and nothing left behind; cancellation at each state, a late world and participant disposed; the host
+    changing worlds, also while a follow loads; a joined player's Stop, Restart and launch refused, and its own way to
+    the menu leaving first; the follow grant letting the follow's transitions through and nothing else; a followed
+    level; and only a launched join's follow reporting to the launcher, under its request.
+  - `SessionFollowerTests`, over the loopback network with a real composition root and orchestrator: a join followed
+    into the host's world with its hold, its grant and its progress, at rest allocating nothing; Ready only once both
+    holds release, with no progress for a world that does not arrive; the host moving on mid-follow and after the join;
+    leaving while the world loads; a failure in its own words with a scrubbed log; both of #224's rules; levels and the
+    menu, and a level this game cannot load; straying, the eight re-follows and the menu; the player's own way out;
+    shutdown; unreadable announcements; the failure words; a launched join's follows reporting under its request, an
+    in-game join's nothing; a busy game tried again and given up on after 30 seconds; and a world not found looked for
+    once before the join ends. `SessionFollowWireTests`: round trips and every refusal.
+  - `SessionFollowHostTests`: what a host announces, an arena's level and spawn, a full window caught up, and at rest
+    sending and allocating nothing.
+  - `MultiplayerSessionsTests`: the overlay's follow steps and failures, "Following the host", a launched join handing
+    the realm its request and RETRY none, and a live join's records taking its follow's progress.
+    `SessionLaunchRecordsTests`: a launched join's records over the real orchestrator and publisher, with its follow
+    under its request.
+- **ModRuntime harness** (`--follow-case follow`, in a fresh process): two real runtimes over the loopback network,
+  loading the one installed package, whose gamemode gives every player a participant. The host opens its game to other
+  players and starts the package's target; the player joins from its menu, runs the host's world under the host's
+  session id once the network world has it in place, starts its participant, and never its server controller; a join
+  started in game publishes nothing to the launcher; both games run in the background while online; the host starts its
+  world again and the player follows it there; offline before the session, and at rest in it, the two allocate nothing
+  over 10,000 frames; and the player leaves, its main menu loads, and its background setting comes back exactly.
+- **Mutation checks**, each applied, run and reverted byte for byte. The follower suites fail when the follower never
+  takes the follow grant, when the policy ignores it, when a joined player's `RestartAsync` runs (caught by its own
+  words: the launch guard behind it still refuses the restart), when the follow takes no readiness hold of its own, when
+  the manager log keeps paths, when either of #224's rules is removed, when a busy game is tried again for ever, and when
+  a world not found is never looked for. The launcher's suites fail when an in-game join's follow reports, when a
+  launched join's follow reports under an id of its own or the follower drops the join's request, when RETRY hands the
+  realm the failed launch's request, when a live join's records ignore the follow's progress, and when leaving, or the
+  joined session's end, keeps the launched join. The two-runtime case fails when leaving keeps the game in the
+  background, when a joined player runs the server controller, and when the follow's session takes an id of its own.
+- **In the game.** Loading a level by its scene name (`CoreGameplayServices.LoadLevelAsync`, an arena's base level and a
+  level outside a session) and the Worlds provider's loads run over Unity, so the game checks them.
+
+### Limits, stated plainly
+
+- **A level outside a session** is loaded by its scene name with no session, as the host has none, so only what the
+  network world replicates is shared there.
+- **Eight re-follows in a join.** A game that keeps leaving the host's world more often than that leaves the session.
+- **The level loader is the game's.** `CoreGameplayServices.LoadLevelAsync` is checked only in the game.
+
+### Choices
+
+- **No `ReplaceSession` at a change of worlds.** Players follow again from `SceneFollow`, world replication already
+  handles the host's new scene, and the engine's session stays, so the mods' replicated values behave as in single
+  player, where a new world session keeps them.
+- **The follow's hold lasts until Running**, not only through LoadingWorld, so the overlay's Spawning step and the
+  player's Ready agree.
+- **Fixed words.** Every failure is a fixed sentence, chosen by its kind and, where that helps the player, its code. No
+  reason text is ever put in it.
+- **Only a launcher-planned join reports.** The launcher waits on its own joins only. A join the player started in game
+  has no launch for its records to settle, so its follow publishes nothing rather than writing progress under an id no
+  one reads; a launched join's follow writes under the join's request, so the records the launcher already reads show
+  the host's world and its session.

@@ -424,7 +424,8 @@ namespace TopiaForge.ModManager.Tests
 
         public MultiplayerRealmChange OpenToMultiplayer(InternalHostSettings settings) => Runtime.OpenToMultiplayer(settings);
 
-        public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings) => Runtime.Join(target, settings);
+        public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings, string? launchRequestId = null) =>
+            Runtime.Join(target, settings, launchRequestId);
 
         public MultiplayerRealmChange Leave() => Runtime.Leave();
 
@@ -458,6 +459,9 @@ namespace TopiaForge.ModManager.Tests
 
         public SessionPhase LocalPhase => Phase;
 
+        /// <summary>Gets the follow status the connecting overlay reads, which a test moves as a session follower would.</summary>
+        public SessionFollowStatus Follow { get; } = new SessionFollowStatus();
+
         /// <summary>Gets or sets the session this game was launched to host or join, which the screens take once.</summary>
         internal ILaunchedSession? Launched { get; set; }
 
@@ -466,6 +470,40 @@ namespace TopiaForge.ModManager.Tests
             var launched = Launched;
             Launched = null;
             return launched;
+        }
+
+        /// <summary>Gets the subscriptions to the session orchestrator's progress that are open now, by request.</summary>
+        internal List<(string RequestId, Action<LaunchProgress> Progress)> ProgressSubscribers { get; } = new List<(string, Action<LaunchProgress>)>();
+
+        public IDisposable SubscribeSessionProgress(string requestId, Action<LaunchProgress> progress)
+        {
+            var subscriber = (requestId, progress);
+            ProgressSubscribers.Add(subscriber);
+            return new Unsubscriber(() => ProgressSubscribers.Remove(subscriber));
+        }
+
+        /// <summary>Publishes <paramref name="progress"/> as the session orchestrator does, to each open subscription under its request.</summary>
+        internal void ReportSessionProgress(LaunchProgress progress)
+        {
+            foreach (var (requestId, handler) in ProgressSubscribers.ToArray())
+                if (string.Equals(requestId, progress.RequestId, StringComparison.Ordinal)) handler(progress);
+        }
+
+        private sealed class Unsubscriber : IDisposable
+        {
+            private Action? release;
+
+            internal Unsubscriber(Action release)
+            {
+                this.release = release;
+            }
+
+            public void Dispose()
+            {
+                var current = release;
+                release = null;
+                current?.Invoke();
+            }
         }
     }
 

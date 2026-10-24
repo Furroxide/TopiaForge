@@ -75,6 +75,13 @@ namespace TopiaForge.ModManager
                     OperationResult<bool>.Failure(ModErrorCode.Cancelled, "The launch was cancelled before preparation."));
                 return;
             }
+            // A joined player's world is the host's to choose (WS3.8): its session follower loads it, and nothing else may.
+            if (Follower?.IsFollowing == true)
+            {
+                CompleteCommand(completion, requestId, "launch-target", null,
+                    OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, FollowerCannotLaunch));
+                return;
+            }
             var admission = lifecycle.TryAcquire(native.IsSceneBusy, expectedSessionId, out var lease);
             if (admission != SessionAdmission.Accepted)
             {
@@ -146,9 +153,17 @@ namespace TopiaForge.ModManager
             publicState = CapturePublicState(state, record);
             Publish(StateChanged, state);
             Publish(publicStateChanged, publicState);
-            Publish(Progress, new LaunchProgress(record.Identity.RequestId, NextSequence(), PhaseName(phase),
-                phase == SessionPhase.Idle ? null : record.Identity.SessionId, native.IsSceneBusy));
+            if (ReportsToLauncher(record))
+                Publish(Progress, new LaunchProgress(record.Identity.RequestId, NextSequence(), PhaseName(phase),
+                    phase == SessionPhase.Idle ? null : record.Identity.SessionId, native.IsSceneBusy));
         }
+
+        /// <summary>
+        /// Gets whether a session's progress and terminal outcome go to the launcher: every session this game starts, under its
+        /// own request, and a follow of the host's world only when it belongs to a launcher-planned join, under that join's
+        /// request (WS3.8). A follow of a join started in game publishes nothing to the launcher.
+        /// </summary>
+        private static bool ReportsToLauncher(SessionRecord record) => record.Follow == null || record.Follow.LaunchRequestId != null;
 
         private void CompleteCommand(TaskCompletionSource<OperationResult<bool>> completion, string requestId, string command,
             string? sessionId, OperationResult<bool> result, IEnumerable<LaunchBlock>? blocks = null)
@@ -211,7 +226,10 @@ namespace TopiaForge.ModManager
             Message(error.GetBaseException().Message));
         private static OperationResult<bool> AdmissionFailure(SessionAdmission admission) => OperationResult<bool>.Failure(
             admission == SessionAdmission.StaleSession ? ModErrorCode.InvalidState : ModErrorCode.Conflict,
-            admission == SessionAdmission.StaleSession ? "This session handle no longer owns the current session." : "A session or native transition is busy.");
+            admission == SessionAdmission.StaleSession ? "This session handle no longer owns the current session." : BusyMessage);
+
+        /// <summary>Why a command was not admitted while another session operation or native transition runs; it may be tried again.</summary>
+        internal const string BusyMessage = "A session or native transition is busy.";
         private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         private static PackageIdentity Owner(LaunchPlan plan, string id) => plan.Packages.OrderByDescending(package => package.Id.Length)
             .First(package => id.StartsWith(package.Id + ".", StringComparison.OrdinalIgnoreCase));
@@ -233,6 +251,10 @@ namespace TopiaForge.ModManager
             internal SessionOperationLease Lease;
             internal INativeTransitionReservation? Reservation;
             internal readonly TaskCompletionSource<OperationResult<bool>> Start;
+            /// <summary>Gets the host's world this session follows on a joined player (WS3.8); null for a session this game started.</summary>
+            internal SessionFollowPlan? Follow;
+            /// <summary>Gets this session as a listen host announces it to its players, once described (WS3.8).</summary>
+            internal HostWorldState? Announced;
             internal readonly TaskCompletionSource<OperationResult<bool>> Stopped = Completion();
             internal readonly CancellationTokenSource Cancellation = new CancellationTokenSource();
             internal readonly Dictionary<string, ModContextScope> Scopes = new Dictionary<string, ModContextScope>(StringComparer.OrdinalIgnoreCase);

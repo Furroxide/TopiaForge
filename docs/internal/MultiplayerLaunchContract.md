@@ -250,6 +250,13 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   once a newer launch has begun, or as the process exits with it still running (`host-ended` or `left`, failed with an
   `external` error when the runtime did not stop cleanly). A failed command settles the launch with the runtime's
   outcome, on whichever frame it fails, and a rejected V5 request is correlated by its intent and reported the same way.
+- **The host's world in a join's records.** A joined player's game runs the host's world through session follow
+  (`MultiplayerRuntimeIntegration.md`, section 18). A follow reports to the launcher only when it belongs to a join the
+  launcher planned, and then under that join's request: its session takes the request as its own, so the phases it
+  commits move the records' phase under the join's block, and a launched join that is in session succeeds at `running`
+  with the host's world session, as `join-started` shows. A followed world's own end is withheld, since the join's end
+  is the provider's, and that terminal record names the host's world session it was in. A follow never writes a launch
+  outcome. A follow of a join the player started in game, or of RETRY after a launched join failed, writes nothing.
 - **Handoffs.** When the launcher owns this game, INSTALL & JOIN IN LAUNCHER and the failure view's Open launcher write
   a `session-handoff` naming the invite, the listing or the current session, on the background queue; a write that
   fails opens the link instead. A game no launcher started, and a server typed by address, open the
@@ -258,8 +265,9 @@ and the launcher's position in the journal: `journalEpoch`, present once the lau
   (`LiveJoinIntake`); the store's take refuses a join for another request and one it cannot read. A join whose
   package-set digest is not this game's fails as `admission-changed`, one through another service is refused as
   `unavailable`, and a join id seen before is ignored. The rest are planned and started as a launched join is, and report
-  under their join id; a success stands at `idle`. A live join whose session still runs as the game closes ends in its
-  records as `left`.
+  under their join id, with session follow's progress under that id too: a success stands at `running` with the host's
+  world session once the follow runs it, and at `idle` otherwise, as at a host still at its menu. A live join whose
+  session still runs as the game closes ends in its records as `left`.
 - **Preferences.** The game reads the projection and its journal once at start, applying the journal's changes the
   projection does not count yet, as the launcher applies them (section 7). The display name and the hosting defaults
   are the launcher's: a change in game takes effect at once and is recorded with `RecordPreferenceChange`, one write at

@@ -40,6 +40,7 @@ namespace TopiaForge.ModManager
 
         // One flag per stage, so a healthy stage never re-arms the report of a failing one.
         private bool worldFailureLogged;
+        private bool followFailureLogged;
         private bool presenceFailureLogged;
         private bool snapshotFailureLogged;
         private bool replicaFailureLogged;
@@ -69,6 +70,9 @@ namespace TopiaForge.ModManager
 
         /// <summary>Step 2, online only: world events and the follower's hooks (WS3.6 network world, WS3.8 session follow).</summary>
         internal IMultiplayerFrameStage? WorldEvents { get; set; }
+
+        /// <summary>Step 2, online only, after the world events: a host announces its world, a joined player follows it (WS3.8).</summary>
+        internal IMultiplayerFrameStage? SessionFollow { get; set; }
 
         /// <summary>Step 4, online only: the local player's pose and voice (WS3.10 presence, WS5 voice capture).</summary>
         internal IMultiplayerFrameStage? PresenceSend { get; set; }
@@ -182,6 +186,7 @@ namespace TopiaForge.ModManager
             if (role == InternalSessionRole.Solo) return;
             ReceiveSessionTime();
             Run(WorldEvents, ref worldFailureLogged, deltaTime);
+            Run(SessionFollow, ref followFailureLogged, deltaTime);
         }
 
         /// <summary>Step 4, after the mods' Update: what the frame sends, then the provider's flush. Nothing runs offline.</summary>

@@ -19,7 +19,8 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>
         /// A live join the launcher staged for this running game: checked against the packages this game runs and the service it
         /// reaches, planned by the provider, and started as a launch. A join id seen before is never acted on twice. Anything
-        /// that stops it is reported under its join id, as a launch's is under its request.
+        /// that stops it is reported under its join id, as a launch's is under its request, and so is the progress of the
+        /// session follow that runs the host's world for it (WS3.8).
         /// </summary>
         internal void Offer(SessionJoinRequest join)
         {
@@ -27,7 +28,7 @@ namespace TopiaForge.ModManager.Sessions
             var channels = context.Environment.Launcher;
             if (channels == null || Handled(join.JoinId)) return;
             var identity = new LaunchSessionIdentity(join.JoinId, "join", join.Session.IntentId);
-            var records = new LiveJoinRecords(channels, queue, identity, () => context.Environment.LocalPhase);
+            var records = new LiveJoinRecords(channels, queue, identity, () => context.Environment.LocalPhase, context.Environment.SubscribeSessionProgress);
             if (!string.Equals(join.PackageSetDigest, channels.PackageSetDigest, StringComparison.Ordinal))
             {
                 records.Result(SessionLaunchRecords.Failure(identity, "admission-changed", WrongMods), null);

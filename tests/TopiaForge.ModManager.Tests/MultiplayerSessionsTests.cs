@@ -36,6 +36,9 @@ namespace TopiaForge.ModManager.Tests
             AJoinDuringAMainMenuLoadWaits(root);
             LeavingIsNeverRefused();
             ConnectingWalksThePhases();
+            ConnectingShowsTheFollow();
+            AFollowFailureShowsItsOwnWords();
+            AFollowAfterTheJoinShowsFollowing();
             EveryFailureHasAClearMessage();
             FailuresStopAtTheirStep();
             CancelWorksThroughout();
@@ -70,6 +73,7 @@ namespace TopiaForge.ModManager.Tests
             LaunchedSessionsStart();
             LiveJoinsAndTheLauncher(root);
             LaunchesEndOnTheirOwnRecords();
+            LaunchedJoinsReportTheirFollows();
             SettledFramesAllocateNothing();
             VoiceSaysWhenTheSessionOffersNone();
             Console.WriteLine("MultiplayerSessionsTests passed.");

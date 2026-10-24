@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.Sessions;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -63,6 +64,7 @@ namespace TopiaForge.ModManager.Tests
             TheRuntimeAndTheProviderShareOneSequence(fixture, Path.Combine(root, "shared"));
             AFailedCommandIsTheLaunchsOutcome(fixture, Path.Combine(root, "failed"));
             AnUncleanExitEndsTheSessionAsFailed(fixture, Path.Combine(root, "unclean"));
+            ALaunchedJoinsFollowWritesItsRecords(Path.Combine(root, "follow"));
 
             var noIPv6 = SessionLaunchRecords.Result(new LaunchSessionIdentity(RequestId, "join", IntentId),
                 new InternalLiveStatus { JoinPhase = InternalJoinPhase.Ended, JoinFailure = InternalLiveFailure.NoIPv6 });
@@ -259,6 +261,64 @@ namespace TopiaForge.ModManager.Tests
             That(end.Status == "failed" && end.Error!.Code == "external" && end.Multiplayer!.EndReason == "left" && end.Multiplayer.ServerId == JoinServer,
                 "a runtime that did not stop cleanly ends the session as failed, the player having left it");
             That(errors.Count == 0, "the end is published without failures");
+        }
+
+        /// <summary>
+        /// A launched join's records over the real orchestrator, with session follow (WS3.8) running the host's world under the
+        /// join's request: while the join synchronizes its own phase stands; in session, the launch succeeds at Running with the
+        /// host's world session; the host's next world moves the phase on, and the end of the world before is not the join's;
+        /// the provider's end of the join is its terminal record. A later join started in game writes nothing more.
+        /// </summary>
+        private static void ALaunchedJoinsFollowWritesItsRecords(string root)
+        {
+            const string request = "launched-join";
+            using var test = GamemodeParticipantRealmTests.InRealm(Path.Combine(root, "runtime"), NetRealm.Client);
+            var store = Store(Path.Combine(root, "staging"));
+            var errors = new List<Exception>();
+            var identity = new LaunchSessionIdentity(request, "join", IntentId);
+            using var publisher = new RuntimeLaunchPublisher(test.Hosted, store, request, errors.Add, session: identity);
+            var launch = new LaunchedSession(identity, Plan("join"), publisher, () => LaunchedGame.Ready);
+            LaunchProgress Progress() => LaunchTransportJson.ReadProgress(File.ReadAllText(store.ProgressPath(request)));
+            SessionFollowResult Follow(string session) => SessionFollowTests.Follow(test, SessionFollowTests.Plan(test, session, launchRequestId: request));
+
+            launch.Started(0);
+            launch.Follow(new InternalLiveStatus { IsLiveAvailable = true, JoinPhase = InternalJoinPhase.Synchronizing, Server = Server(JoinServer) }, 1, 1);
+            var host = SessionFollowTests.NewSessionId();
+            That(Follow(host).Succeeded, "the launched join follows the host's world");
+            var synchronizing = Progress();
+            That(synchronizing.Phase == "synchronizing" && synchronizing.SessionId == null && synchronizing.Session!.State == "synchronizing",
+                "while the join synchronizes, its own phase stands over the follow's (" + synchronizing.Phase + ")");
+
+            launch.Follow(new InternalLiveStatus { IsLiveAvailable = true, JoinPhase = InternalJoinPhase.InSession, Server = Server(JoinServer) }, 2, 2);
+            var started = LaunchTransportJson.ReadOutcome(File.ReadAllText(store.OutcomePath(request)));
+            var inSession = Progress();
+            That(started.Status == "succeeded" && started.Phase == "running" && started.SessionId == host,
+                "in session in the host's world, the launch succeeds at Running with the host's world session (" + started.Phase + ", " + started.SessionId + ")");
+            That(inSession.Phase == "running" && inSession.SessionId == host && inSession.Session!.State == "in-session", "and its progress says so");
+
+            var next = SessionFollowTests.NewSessionId();
+            That(Follow(next).Succeeded, "the host's next world is followed");
+            var moved = Progress();
+            That(moved.Phase == "running" && moved.SessionId == next && moved.Session!.State == "in-session" && moved.Sequence > inSession.Sequence,
+                "its phases move on under the join's block, to the host's next world");
+            That(!File.Exists(store.OutcomePath(request, true)), "the end of the world before is not the join's end");
+
+            var hostEnded = new InternalLiveStatus { IsLiveAvailable = true, JoinPhase = InternalJoinPhase.Ended, JoinFailure = InternalLiveFailure.HostEnded };
+            hostEnded.Server = Server(JoinServer);
+            launch.Follow(hostEnded, 3, 3);
+            var end = LaunchTransportJson.ReadOutcome(File.ReadAllText(store.OutcomePath(request, true)));
+            That(end.Multiplayer!.EndReason == "host-ended" && end.SessionId == next && end.Status == "succeeded",
+                "the provider's end of the join is its terminal record, naming the host's world it was in");
+
+            // The game returns to the main menu as the follower takes it there once the join has ended, which ends the host's world
+            // here; then a join started in game, whose follow writes nothing to the launched join's records.
+            var menu = test.Hosted.FollowMainMenuAsync();
+            test.Wait(menu);
+            test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+            var written = File.ReadAllText(store.ProgressPath(request));
+            That(SessionFollowTests.Follow(test, SessionFollowTests.Plan(test, SessionFollowTests.NewSessionId())).Succeeded, "an in-game join's follow runs");
+            That(File.ReadAllText(store.ProgressPath(request)) == written, "and the launched join's records stay as they were");
+            That(errors.Count == 0, "the launched join's records are published without failures");
         }
 
         private static Scenario Host(Action<Script> run, int hostPort = 0) => new Scenario("host", run, hostPort);
