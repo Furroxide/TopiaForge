@@ -21,6 +21,7 @@ namespace TopiaForge.ModManager
         private static readonly ContextCallback InvokeAction = state => ((Action)state!)();
         private readonly Dictionary<string, IntentRecord> controls = new Dictionary<string, IntentRecord>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, IntentRecord> inputFrameControls = new Dictionary<string, IntentRecord>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, IntentRecord> motionLeases = new Dictionary<string, IntentRecord>(StringComparer.Ordinal);
         private NetRealm realm;
         private bool recording;
         private long epoch;
@@ -75,6 +76,7 @@ namespace TopiaForge.ModManager
             Volatile.Write(ref recording, IntentFlowRules.Records(next));
             controls.Clear();
             inputFrameControls.Clear();
+            motionLeases.Clear();
         }
 
         /// <summary>What <paramref name="modId"/>'s code observes now: its own intent, on the main thread, from this epoch; else null.</summary>
@@ -201,13 +203,20 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// The motion lease seam (WS3.7): opens the local player's motion-lease intent for <paramref name="modId"/> around the
-        /// code driving a lease that player holds. Nothing calls it until authority routing lands.
+        /// code driving a lease that player holds; motion ownership calls it on every step of a held body. Each mod's record
+        /// is kept for the epoch, as a UI owner's is, so steady motion makes none.
         /// </summary>
         internal IntentScope.Token EnterMotionLease(string modId)
         {
             if (modId == null) throw new ArgumentNullException(nameof(modId));
             if (!recording) return default;
-            return Scope.Enter(new IntentRecord(IntentEntryRules.SourceOf(IntentEntryPoint.MotionLease), modId, null, epoch));
+            if (!motionLeases.TryGetValue(modId, out var record))
+            {
+                record = new IntentRecord(IntentEntryRules.SourceOf(IntentEntryPoint.MotionLease), modId, null, epoch);
+                if (motionLeases.Count < MaximumCachedControlOwners) motionLeases.Add(modId, record);
+            }
+
+            return Scope.Enter(record);
         }
 
         /// <summary>

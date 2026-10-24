@@ -51,6 +51,7 @@ namespace TopiaForge.ModRuntime.Tests
                 second.Game.Motion.Hold("grab", true);
                 WorldFrames(games, clock, 10);
                 Assert(first.World.Motion.LocalCount == 0 && second.World.Motion.LocalCount == 1, "the controller catches a released body and retires the previous owner");
+                Assert(first.Game.Toasts.Count == 0, "the thrower whose throw another player caught is shown no refusal");
                 second.Game.Motion.Hold("throw", true);
                 WorldFrames(games, clock, 75);
                 Assert(second.World.Motion.LocalCount == 0 && !MotionBox(host, 0).Kinematic && MotionBox(host, 0).Velocity!.Value.LengthSquared > 1,

@@ -87,33 +87,42 @@ namespace TopiaForge.ModManager
             }
         }
 
-        private void SendState(HostedMotion state, long now)
+        /// <summary>
+        /// Sends one body's state when it is due, naming the body's latest change of owner, so a player who lost the body
+        /// hears why. False when the shared budget refused what was due.
+        /// </summary>
+        private bool SendState(HostedMotion state, long now)
         {
             if (state.Dirty && now >= state.NextBroadcast)
             {
-                Describe(state, write, OwnershipResult.NoChange);
+                Describe(state, write, state.Change);
                 write.Request = 0;
                 MotionWire.Write(writer, MotionMessages.State, write);
-                if (!outgoing.TryTake(now, writer.Length)) return;
+                if (!outgoing.TryTake(now, writer.Length)) return false;
                 state.Skipped.Clear();
                 world.Channel.Broadcast(writer, state.Skipped);
                 BytesSent += writer.Length;
+                state.Broadcasts++;
                 state.Dirty = false;
                 state.NextBroadcast = MotionRules.NextSample(state.NextBroadcast, now);
+                return true;
             }
-            else if (state.Skipped.Count > 0)
+
+            if (state.Skipped.Count == 0) return true;
+            Describe(state, write, state.Change);
+            write.Request = 0;
+            MotionWire.Write(writer, MotionMessages.State, write);
+            var refused = false;
+            for (var index = state.Skipped.Count - 1; index >= 0; index--)
             {
-                Describe(state, write, OwnershipResult.NoChange);
-                write.Request = 0;
-                MotionWire.Write(writer, MotionMessages.State, write);
-                for (var index = state.Skipped.Count - 1; index >= 0; index--)
-                {
-                    var participant = state.Skipped[index];
-                    if (world.Channel.GetGeneration(participant) == 0) { state.Skipped.RemoveAt(index); continue; }
-                    if (!world.Channel.CanSendTo(participant, writer.Length) || !outgoing.TryTake(now, writer.Length)) continue;
-                    if (world.Channel.TrySendTo(participant, writer, writer.Length)) state.Skipped.RemoveAt(index);
-                }
+                var participant = state.Skipped[index];
+                if (world.Channel.GetGeneration(participant) == 0) { state.Skipped.RemoveAt(index); continue; }
+                if (!world.Channel.CanSendTo(participant, writer.Length)) continue;
+                if (!outgoing.TryTake(now, writer.Length)) { refused = true; continue; }
+                if (world.Channel.TrySendTo(participant, writer, writer.Length)) state.Skipped.RemoveAt(index);
             }
+
+            return !refused;
         }
 
         private readonly struct MotionReply

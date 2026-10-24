@@ -15,28 +15,30 @@ namespace TopiaForge.ModManager
             return state;
         }
 
-        private bool GrabHere(MotionTarget target, uint epoch, NetVector3 position, out uint grantedEpoch)
+        /// <summary>The host's own grab: the rules' answer, or NoChange when the body cannot be tracked.</summary>
+        private OwnershipResult GrabHere(MotionTarget target, uint epoch, NetVector3 position, out uint grantedEpoch)
         {
             grantedEpoch = epoch;
             var state = FindHost(target);
-            if (state == null || !state.Body.TryReadMotion(out var pose, out var angular)) return false;
+            if (state == null || !state.Body.TryReadMotion(out var pose, out var angular)) return OwnershipResult.NoChange;
             var wasFree = state.Rules.State == OwnershipState.Server;
             var result = state.Rules.Request(MotionRules.HostSlot, epoch, NetQuantization.QuantizePosition(pose.Position),
                 NetQuantization.QuantizePosition(position), Now);
-            if (result.Result != OwnershipResult.Granted && result.Result != OwnershipResult.AlreadyOwned) return false;
+            if (!IsGranted(result.Result)) return result.Result;
             if (wasFree) state.ResumeKinematic = state.Body.IsKinematic;
+            if (result.EpochChanged) state.Change = OwnershipResult.Granted;
             state.Pose = pose;
             state.AngularVelocity = angular;
             grantedEpoch = result.Epoch;
             state.Dirty = true;
-            return true;
+            return result.Result;
         }
 
         private void CancelHostGrab(MotionTarget target)
         {
             var state = FindHost(target);
             if (state == null) return;
-            state.Rules.Reclaim();
+            if (state.Rules.Reclaim().EpochChanged) state.Change = OwnershipResult.Reclaimed;
             state.Restore();
             state.Dirty = true;
         }
@@ -60,9 +62,10 @@ namespace TopiaForge.ModManager
                     var outcome = state.Rules.Request(proxy.Slot, message.Epoch, NetQuantization.QuantizePosition(pose.Position),
                         NetQuantization.QuantizePosition(position), Now);
                     result = outcome.Result;
-                    if (result == OwnershipResult.Granted || result == OwnershipResult.AlreadyOwned)
+                    if (IsGranted(result))
                     {
                         if (wasFree) state.ResumeKinematic = state.Body.IsKinematic;
+                        if (outcome.EpochChanged) state.Change = OwnershipResult.Granted;
                         state.Participant = sender;
                         state.Generation = world.Channel.GetGeneration(sender);
                         state.Pose = pose;
@@ -124,6 +127,7 @@ namespace TopiaForge.ModManager
             if (outcome.Result == OwnershipResult.Rejected) SamplesRefused++;
             if (outcome.EpochChanged)
             {
+                state.Change = outcome.Result;
                 state.Restore();
                 state.Dirty = true;
             }
@@ -154,16 +158,45 @@ namespace TopiaForge.ModManager
                     ? state.Rules.LinkClosed(slot, now) : state.Rules.Poll(now);
                 if (result.EpochChanged)
                 {
+                    state.Change = result.Result;
                     state.Restore();
                     state.Dirty = true;
                 }
-
-                SendState(state, now);
             }
 
             foreach (var id in ended) hosted.Remove(id);
             ended.Clear();
+            SendStates(now);
             FlushReplies();
+        }
+
+        /// <summary>
+        /// Sends each body's state as its interval and the shared budget allow, starting where the last frame's budget
+        /// ran out. When more bodies move than the budget covers, they take turns, rather than the bodies tracked first
+        /// taking the whole budget every frame and starving the rest.
+        /// </summary>
+        private void SendStates(long now)
+        {
+            var count = hosted.Count;
+            if (count == 0) return;
+            var first = broadcastStart < count ? broadcastStart : 0;
+            var starved = -1;
+            var index = 0;
+            foreach (var state in hosted.Values)
+            {
+                if (index >= first && !SendState(state, now) && starved < 0) starved = index;
+                index++;
+            }
+
+            index = 0;
+            foreach (var state in hosted.Values)
+            {
+                if (index >= first) break;
+                if (!SendState(state, now) && starved < 0) starved = index;
+                index++;
+            }
+
+            broadcastStart = starved >= 0 ? starved : first;
         }
 
         internal void Disconnect(int slot)
@@ -172,6 +205,7 @@ namespace TopiaForge.ModManager
             foreach (var state in hosted.Values)
             {
                 if (!state.Rules.Disconnect(slot).EpochChanged) continue;
+                state.Change = OwnershipResult.Reclaimed;
                 state.Restore();
                 state.Dirty = true;
             }

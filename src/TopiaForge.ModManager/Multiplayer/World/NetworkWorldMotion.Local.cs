@@ -50,10 +50,15 @@ namespace TopiaForge.ModManager
                 write.AngularVelocity = angular;
                 if (world.Host.IsActive)
                 {
-                    if (!hosted.TryGetValue(lease.Target.Id.Value, out var state) ||
-                        state.Rules.Owner.Participant != MotionRules.HostSlot || state.Rules.Epoch != lease.Epoch)
+                    if (!hosted.TryGetValue(lease.Target.Id.Value, out var state))
                     {
-                        Refused(lease, OwnershipResult.Denied);
+                        Refused(lease, OwnershipResult.NoChange);
+                        continue;
+                    }
+
+                    if (state.Rules.Owner.Participant != MotionRules.HostSlot || state.Rules.Epoch != lease.Epoch)
+                    {
+                        Superseded(lease, state.Change);
                         continue;
                     }
 
@@ -75,10 +80,13 @@ namespace TopiaForge.ModManager
 
         private void ReceiveState(byte type, MotionMessage message)
         {
+            // A message older than the epoch this player knows changes nothing, except that an answer always settles its
+            // request: a grab the host refused before looking at the body names no epoch at all.
+            var stale = false;
             if (message.Target.Id.IsValid)
             {
-                if (epochs.TryGetValue(message.Target.Id.Value, out var epoch) && unchecked((int)(message.Epoch - epoch)) < 0) return;
-                if (epochs.Count < NetworkWorldClient.MaximumEntities || epochs.ContainsKey(message.Target.Id.Value))
+                stale = epochs.TryGetValue(message.Target.Id.Value, out var epoch) && unchecked((int)(message.Epoch - epoch)) < 0;
+                if (!stale && (epochs.Count < NetworkWorldClient.MaximumEntities || epochs.ContainsKey(message.Target.Id.Value)))
                     epochs[message.Target.Id.Value] = message.Epoch;
             }
 
@@ -86,30 +94,40 @@ namespace TopiaForge.ModManager
             {
                 if (type == MotionMessages.Verdict && lease.Request == message.Request)
                 {
-                    if (message.Result == OwnershipResult.Granted || message.Result == OwnershipResult.AlreadyOwned)
+                    if (!IsGranted(message.Result)) Refused(lease, message.Result);
+                    else if (stale) Refused(lease, OwnershipResult.NoChange);
+                    else
                     {
                         lease.Target = message.Target;
                         lease.Epoch = message.Epoch;
                         lease.Granted = true;
                         world.Client.SetSimulated(lease.Entity, true);
                     }
-                    else Refused(lease, message.Result);
                 }
-                else if (lease.Target.Id.IsValid && lease.Target.Id.Equals(message.Target.Id) &&
-                    unchecked((int)(message.Epoch - lease.Epoch)) > 0) Refused(lease, message.Result);
+                else if (!stale && lease.Target.Id.IsValid && lease.Target.Id.Equals(message.Target.Id) &&
+                    unchecked((int)(message.Epoch - lease.Epoch)) > 0) Superseded(lease, message.Result);
             }
 
-            world.Client.ApplyMotion(message);
+            if (!stale) world.Client.ApplyMotion(message);
         }
 
-        private void Refused(NetEntityMotion lease, OwnershipResult result)
+        /// <summary>
+        /// Ends a lease a later change of owner overtook, telling the player why. A body the player held and already threw
+        /// or dropped ends quietly, however it went back, unless the host refused its motion: another player catching it
+        /// is no failure. A grab still waiting for its answer was never the player's, so it is told.
+        /// </summary>
+        private void Superseded(NetEntityMotion lease, OwnershipResult change)
+        {
+            if (lease.Granted && lease.Releasing && change != OwnershipResult.Rejected) Refused(lease, change, tell: false);
+            else Refused(lease, change == OwnershipResult.Granted ? OwnershipResult.Denied : change);
+        }
+
+        private void Refused(NetEntityMotion lease, OwnershipResult result, bool tell = true)
         {
             if (lease.Ended) return;
             EndLocal(lease);
             if (lease.Target.IsScene && lease.Body.IsAlive) lease.Body.WriteMotion(lease.InitialPose, lease.InitialAngular);
-            if (lease.Context?.Ui == null || Now < nextToast) return;
-            nextToast = Now + SpawnAuthorityRules.RefusalToastIntervalMicros;
-            lease.Context.Ui.ShowToast(MotionRules.Refusal(result), UiTone.Warning);
+            if (tell) Tell(lease.Context?.Ui, MotionRules.Refusal(result));
         }
     }
 }

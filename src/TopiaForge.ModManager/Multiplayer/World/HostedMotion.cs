@@ -23,6 +23,15 @@ namespace TopiaForge.ModManager
         internal bool ResumeKinematic;
         internal bool Dirty;
         internal long NextBroadcast;
+
+        /// <summary>How many state broadcasts this body has had, so tests can see the shared budget taken in turns.</summary>
+        internal long Broadcasts;
+
+        /// <summary>
+        /// The latest change of owner (granted, rejected, handed back or reclaimed). Every state broadcast names it, so a
+        /// player whose hold it ended is told why.
+        /// </summary>
+        internal OwnershipResult Change;
         internal NetPose Pose;
         internal NetVector3 AngularVelocity;
 

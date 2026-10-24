@@ -2,13 +2,18 @@ using TopiaForge.Mods;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>Observes native pickup edges once a frame; the game remains responsible for its hold and throw physics.</summary>
+    /// <summary>
+    /// Observes native pickup edges once a frame; the game remains responsible for its hold and throw physics. Only a
+    /// pickup the protocol refuses is dropped: an item that is no network body, such as one the game or an item grant
+    /// made after its scene loaded, stays the game's alone, as offline.
+    /// </summary>
     internal sealed class HeldItemOwnershipTracker
     {
         private readonly NetworkWorldMotion motion;
         private readonly INetworkMotionBackend? backend;
         private IEntity? held;
         private NetEntityMotion? lease;
+        private bool owned;
 
         internal HeldItemOwnershipTracker(NetworkWorldMotion motion, INetworkMotionBackend? backend)
         {
@@ -32,10 +37,10 @@ namespace TopiaForge.ModManager
             if (held == null)
             {
                 held = current;
-                lease = motion.AcquireNative(current);
+                owned = motion.TryAcquireNative(current, out lease);
             }
 
-            if (lease == null || lease.Ended)
+            if (owned && (lease == null || lease.Ended))
             {
                 backend.DropHeldEntity(current);
                 held = null;
@@ -43,9 +48,12 @@ namespace TopiaForge.ModManager
             }
         }
 
+        /// <summary>
+        /// Forgets the hold when the session, the realm or the stream ends. The player keeps what it holds: offline the
+        /// item is the game's again, and on a new stream the next poll asks the host for it afresh.
+        /// </summary>
         internal void Reset()
         {
-            if (held != null) backend?.DropHeldEntity(held);
             held = null;
             lease = null;
         }

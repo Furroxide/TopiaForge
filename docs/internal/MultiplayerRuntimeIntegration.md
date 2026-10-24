@@ -2067,17 +2067,29 @@ without waiting for the world's first-motion scan. A prediction waiting for adop
 - Motion sends at 30 Hz with phase preserved across frames; a stalled frame drops missed samples. Each sender has
   an independent 8 KiB/s bucket with a 16 KiB burst. At most four bodies per player and 4,096 retained body histories
   are allowed. Histories retain cooldowns until the body ends or the session ends. The host has the same outgoing
-  motion budget, so many simultaneous holders share its downstream allowance.
+  motion budget for its state broadcasts, and the bodies take turns at it: each frame's broadcasts start where the
+  last frame's budget ran out. Eight bodies at 30 Hz need about 13 KB/s, so each gets about 19 Hz of state, where
+  before the bodies tracked first kept 30 Hz and the eighth got under 1 Hz.
 - `Throw` retains local simulation for one second even when the controller immediately disposes its lease. Handback
   includes position, rotation, linear velocity and angular velocity. The host clamps velocity to the rules' limits
-  and resumes physics. A stolen throw stops its previous owner. A normal release restores the original kinematic
-  state; a thrown body resumes dynamically, including on silence or link loss.
+  and resumes physics. A stolen throw stops its previous owner, quietly: a catch is no failure. A normal release
+  restores the original kinematic state; a thrown body resumes dynamically, including on silence or link loss.
 - Joined bodies stay kinematic except while locally simulated. Baseline placement and interpolation skip a local
   holder. The host is kinematic while a remote holder simulates. Ending the host's own throw cannot undo a new remote
   holder's suppression. Scene unload, scope shutdown, role changes and stream generations retire local leases.
 - `HeldItemOwnershipTracker` observes `PlayerController.HeldItem` once per online frame and uses the same protocol.
-  A denied native pickup drops; native release retains the same throw window. Proxy cleanup calls motion's
-  `Disconnect` before reusing its participant slot, clearing ownership and cooldown history.
+  A denied native pickup drops; native release retains the same throw window. An item that is no network body, such
+  as one the game or an item grant made after its scene loaded, stays the game's alone, as offline. A session, realm
+  or stream that ends forgets ownership but drops nothing the player holds; on a new stream the next poll asks again.
+  Proxy cleanup calls motion's `Disconnect` before reusing its participant slot, clearing ownership and cooldown
+  history.
+- A refused grab ends its local simulation and shows one toast through the context's own UI service: on a joined
+  player when the verdict arrives, and on the host at once, where the failed result carries the same text. Every
+  state broadcast names the body's latest change of owner, so a player whose hold ended hears why: another player
+  took it, it moved too far or too fast, or its motion stopped arriving. A body the player held and already threw or
+  dropped ends without a toast unless the host refused its motion. Toasts come at most once every 3.5 seconds. A verdict
+  always settles its request, also one that names no epoch, as for a grab refused for the player's grab budget before
+  the host looked at the body.
 
 ### Validation and the presence dependency
 
@@ -2099,12 +2111,19 @@ lease. This change does not add an analyzer or a public ownership API.
 ### Verification and cost
 
 The Unity-free motion tests cover contention, catches, handback velocities, host catches, speed and range rejection,
-silence, scope stop, native pickups, stream restarts, stale epochs, forged senders, floods and wire truncations.
+silence, scope stop, native pickups, stream restarts, stale epochs, forged senders, floods and wire truncations, and
+what a player is told: no toast for a caught throw, the reason when the host takes a body back, the host's own
+refusals, and a grab refused for its budget answered at once. They also cover held items that are no network body,
+hosting that stops while an item is held, and eight holders sharing the host's state budget in turns.
 `Program.MotionTests` loads the shipping GravityGun assembly into three real ModRuntime instances over loopback,
 then drives its actual input and fixed-update controller through grant, denial, catch, handback and disconnect.
 
 In the deterministic loopback measurement, host and player together allocate 129.3 bytes per moving frame; 600 frames
 of 16 ms accept 288 samples and send 16,128 motion payload bytes from the player (26.9 bytes/frame). Channel copies
-are included; transport framing and Unity physics are not. Offline frames and online motion history at rest allocate
-zero. The real-runtime host also allocates zero over 10,000 resting frames. These are harness measurements, not
-in-game performance claims; native pickup/throw ordering and two-instance physics still need the queued game checks.
+are included; transport framing and Unity physics are not. Driven through `MoveToward`, as GravityGun drives it, the
+same motion allocates 253.1 bytes a frame, the fake engine lease's own result and .NET's async-local copy for each
+step's intent scope included. Each step opens the motion lease's intent from a record kept per mod for the realm
+epoch, so in the game's logical call context that scope allocates nothing. Offline frames and online motion history
+at rest allocate zero. The real-runtime host also allocates zero over 10,000 resting frames. These are harness
+measurements, not in-game performance claims; native pickup/throw ordering and two-instance physics still need the
+queued game checks.

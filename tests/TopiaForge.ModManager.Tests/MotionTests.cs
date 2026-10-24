@@ -2,6 +2,7 @@ using System;
 using TopiaForge.ModManager.Core.Multiplayer;
 using TopiaForge.ModManager.TestDoubles;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 using static TopiaForge.ModManager.Tests.WorldAssert;
 
 namespace TopiaForge.ModManager.Tests
@@ -18,6 +19,9 @@ namespace TopiaForge.ModManager.Tests
             HostRejectsSpeedAndRange();
             SilenceDisconnectAndScopeStopReclaim();
             NativePickupUsesTheSameProtocol();
+            NativePickupLeavesWhatIsNoNetworkBody();
+            TheHostHearsWhyItCannotHold();
+            AnOvertakenGrabIsToldEvenWhenThrown();
             OfflineAndClientLocalPassThrough();
             Console.WriteLine("Motion ownership tests passed.");
         }
@@ -31,6 +35,13 @@ namespace TopiaForge.ModManager.Tests
             That(result.Succeeded, "a grab starts optimistically: " + result.ErrorMessage);
             return (NetEntityMotion)result.Value!;
         }
+
+        /// <summary>
+        /// Whether the host simulates a lease's body itself again. The test boxes are kinematic while a player holds them
+        /// and after, so their kinematic flag alone cannot show that the host took a body back.
+        /// </summary>
+        internal static bool HostHas(WorldRig rig, NetEntityMotion lease) =>
+            rig.Host.World.Motion.TryGetHosted(lease.Target.Id, out var state) && state.Rules.State == OwnershipState.Server;
 
         private static void FirstGrabWinsAndTheDriverYields()
         {
@@ -57,7 +68,8 @@ namespace TopiaForge.ModManager.Tests
         private static void ThrowCanBeStolenAndHandsBackVelocity()
         {
             var rig = AuthorityRig.Create(boxes: 2);
-            var first = Grab(rig.Players[0]);
+            var thrower = new AuthorityMod(rig.Players[0]);
+            var first = Grab(rig.Players[0], mod: thrower);
             rig.Frames(8);
             That(first.Throw(new Vec3(1, 0, 0), 12).Succeeded, "throw succeeds through the unchanged SDK lease");
             first.Dispose();
@@ -66,6 +78,7 @@ namespace TopiaForge.ModManager.Tests
             var second = Grab(rig.Players[1]);
             rig.Frames(8);
             That(second.Granted && second.IsAlive && first.Ended, "another player may catch a released body and the old owner stops");
+            That(thrower.Ui.Toasts.Count == 0, "a thrower whose throw another player catches is told nothing: it was no failure");
             var thrown = Grab(rig.Players[0], 1);
             rig.Frames(8);
             thrown.Throw(new Vec3(1, 0, 0), 12);
@@ -97,12 +110,15 @@ namespace TopiaForge.ModManager.Tests
         {
             var rig = AuthorityRig.Create(players: 1, boxes: 2);
             var player = rig.Players[0];
-            var lease = Grab(player);
+            var mod = new AuthorityMod(player);
+            var lease = Grab(player, mod: mod);
             rig.Frames(8);
             Box(player).Position = new NetVector3(80, 0, 0);
             rig.Frames(10);
             That(lease.Ended && rig.Host.World.Motion.SamplesRefused > 0 && Box(rig.Host).Position.X < 1,
                 "a teleport within hold range still fails the host's speed budget and restores the last accepted pose");
+            That(mod.Ui.Toasts.Count == 1 && mod.Ui.Toasts[0].Message == MotionRules.Refusal(OwnershipResult.Rejected),
+                "the player hears that the host took the body back for moving it too far or too fast");
             rig.Host.World.Motion.ParticipantPosition = _ => new NetVector3(1000, 0, 0);
             var far = Grab(player, 1);
             rig.Frames(8);
@@ -116,7 +132,8 @@ namespace TopiaForge.ModManager.Tests
         private static void HostThrowYieldsPhysicsToACatcher()
         {
             var rig = AuthorityRig.Create(players: 1, boxes: 1);
-            var thrown = Grab(rig.Host);
+            var thrower = new AuthorityMod(rig.Host);
+            var thrown = Grab(rig.Host, mod: thrower);
             rig.Frames(8);
             thrown.Throw(new Vec3(1, 0, 0), 12);
             thrown.Dispose();
@@ -125,6 +142,7 @@ namespace TopiaForge.ModManager.Tests
             rig.Frames(8);
             That(caught.Granted && thrown.Ended && Box(rig.Host).Kinematic,
                 "a host's retired throw lease cannot re-enable host physics after a remote player catches it");
+            That(thrower.Ui.Toasts.Count == 0, "the host's player is told nothing when another player catches its throw");
             caught.Throw(new Vec3(1, 0, 0), 12);
             caught.Dispose();
             rig.Frames(8);
@@ -138,11 +156,11 @@ namespace TopiaForge.ModManager.Tests
         {
             var rig = AuthorityRig.Create(players: 1, boxes: 3);
             var player = rig.Players[0];
-            Grab(player);
+            var silent = Grab(player);
             rig.Frames(8);
             player.Paused = true;
             rig.Frames(80);
-            That(Box(rig.Host).Kinematic, "a silent holder is reclaimed by the host");
+            That(Box(rig.Host).Kinematic && HostHas(rig, silent), "a silent holder is reclaimed by the host");
             player.Paused = false;
             rig.Frames(8);
             var mod = new AuthorityMod(player);
@@ -150,12 +168,12 @@ namespace TopiaForge.ModManager.Tests
             rig.Frames(8);
             mod.Lifetime.Dispose();
             rig.Frames(8);
-            That(scoped.Ended && Box(rig.Host, 1).Kinematic, "stopping a context hands back its own body promptly");
-            Grab(player, 2);
+            That(scoped.Ended && Box(rig.Host, 1).Kinematic && HostHas(rig, scoped), "stopping a context hands back its own body promptly");
+            var linked = Grab(player, 2);
             rig.Frames(8);
             rig.Network.Leave(player.Control);
             rig.Frames(2);
-            That(Box(rig.Host, 2).Kinematic, "a closed link reclaims motion immediately, before the proxy grace expires");
+            That(Box(rig.Host, 2).Kinematic && HostHas(rig, linked), "a closed link reclaims motion immediately, before the proxy grace expires");
             rig.Clock.Advance(31_000_000);
             rig.Frame();
             That(rig.Host.World.Proxies.ProxyCount == 0, "a departed participant's proxy and motion slot are cleaned up");
@@ -175,6 +193,82 @@ namespace TopiaForge.ModManager.Tests
             first.Scene.Held = null;
             rig.Frames(72);
             That(first.World.Motion.LocalCount == 0 && !Box(rig.Host).Kinematic, "a native drop finishes its release window on the server");
+        }
+
+        private static void NativePickupLeavesWhatIsNoNetworkBody()
+        {
+            var rig = AuthorityRig.Create(players: 1, boxes: 1);
+            foreach (var peer in new[] { rig.Host, rig.Players[0] })
+            {
+                // Made after its scene loaded, as the game's own items and an SDK item grant are: no scene key, no network id.
+                var wrench = peer.Scene.Add(peer.Scene.ActiveScene!, "Wrench", null, rigidbody: true, position: new NetVector3(1, 0, 0));
+                peer.Scene.Held = wrench.Entity;
+                rig.Frames(8);
+                That(peer.Scene.Held != null && peer.Scene.Drops == 0 && peer.World.Motion.LocalCount == 0,
+                    "a held item that is no network body stays in the hand, as offline (" + peer.Name + ")");
+                peer.Scene.Held = null;
+                rig.Frames(2);
+            }
+
+            rig.Host.Scene.Held = Box(rig.Host).Entity;
+            rig.Frames(8);
+            That(rig.Host.World.Motion.LocalCount == 1, "the host owns the body it picked up natively");
+            That(rig.Host.Runtime.Leave().Succeeded, "hosting stops");
+            rig.Frames(4);
+            That(rig.Host.Scene.Held != null && rig.Host.Scene.Drops == 0, "stopping hosting ends ownership but keeps what the player holds");
+        }
+
+        private static void TheHostHearsWhyItCannotHold()
+        {
+            var rig = AuthorityRig.Create(players: 1, boxes: 2);
+            Grab(rig.Players[0]);
+            rig.Frames(8);
+            var refused = new AuthorityMod(rig.Host);
+            var result = refused.AsPlayer(() => refused.Entities.AcquireMotion(Box(rig.Host).Entity));
+            var denied = MotionRules.Refusal(OwnershipResult.Denied);
+            That(!result.Succeeded && result.ErrorMessage == denied && refused.Ui.Toasts.Count == 1 && refused.Ui.Toasts[0].Message == denied,
+                "the host's own refused grab shows one toast, as a joined player's does, saying another player holds the body");
+
+            // Past the toast interval, the host's own lease that its speed check took back says so.
+            rig.Frames(230);
+            var mod = new AuthorityMod(rig.Host);
+            var lease = Grab(rig.Host, 1, mod);
+            rig.Frames(8);
+            Box(rig.Host, 1).Position = new NetVector3(82, 0, 0);
+            rig.Frames(10);
+            That(lease.Ended && mod.Ui.Toasts.Count == 1 && mod.Ui.Toasts[0].Message == MotionRules.Refusal(OwnershipResult.Rejected),
+                "the host's own lease its speed check took back says why, not that another player holds the body");
+        }
+
+        private static void AnOvertakenGrabIsToldEvenWhenThrown()
+        {
+            var rig = AuthorityRig.Create(players: 1, boxes: 1);
+            var player = rig.Players[0];
+            Box(rig.Host).Position = new NetVector3(0.5f, 0, 0);
+            rig.Frames(30);
+            var mod = new AuthorityMod(player);
+            var lease = Grab(player, mod: mod);
+            That(lease.Target.Id.IsValid && !lease.Granted, "the grab of a bound body waits for its answer");
+            lease.Throw(new Vec3(1, 0, 0), 12);
+            lease.Dispose();
+
+            // The host granted the body to another player first, and that state overtakes this grab's answer, as on a slow link.
+            var overtaking = new MotionMessage
+            {
+                Target = lease.Target,
+                Epoch = lease.Epoch + 1,
+                Slot = 2,
+                State = OwnershipState.Owned,
+                Result = OwnershipResult.Granted,
+                Pose = new NetPose(new NetVector3(0.5f, 0, 0), NetQuaternion.Identity),
+                TimeMicros = rig.Clock.Now
+            };
+            var writer = new WorldWireWriter();
+            MotionWire.Write(writer, MotionMessages.State, overtaking);
+            player.Control.Channel(InternalSystemChannelKind.WorldReplication)!.Inject(rig.Host.Control.Id, writer.Segment.ToArray());
+            rig.Frame();
+            That(lease.Ended && mod.Ui.Toasts.Count == 1 && mod.Ui.Toasts[0].Message == MotionRules.Refusal(OwnershipResult.Denied),
+                "a grab another player's grant overtook before its answer is told so, though its throw had already let go");
         }
 
         private static void OfflineAndClientLocalPassThrough()

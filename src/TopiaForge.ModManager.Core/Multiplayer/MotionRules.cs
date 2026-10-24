@@ -35,6 +35,7 @@ namespace TopiaForge.ModManager.Core.Multiplayer
             OwnershipResult.OutOfRange => "That object is too far away. Move closer, then try again.",
             OwnershipResult.Yielding => "Let another player take a turn with that object, then try again.",
             OwnershipResult.Rejected => "The object moved too far or too fast, so the host took it back. Try grabbing it again.",
+            OwnershipResult.Reclaimed => "The object went back to the host because its motion stopped arriving. Try grabbing it again.",
             _ => "The object could not be held in this session. Wait a moment, then try again."
         };
     }

@@ -26,6 +26,7 @@ namespace TopiaForge.ModManager
         private ulong generation;
         private uint nextRequest;
         private long nextToast;
+        private int broadcastStart;
 
         internal NetworkWorldMotion(NetworkWorld world, MultiplayerRuntime runtime, Func<long> clock)
         {
@@ -48,6 +49,9 @@ namespace TopiaForge.ModManager
         internal long BytesSent { get; private set; }
         internal long GrabsGranted { get; private set; }
         internal long GrabsRefused { get; private set; }
+
+        /// <summary>Gets the host's ownership of one body, if it tracks one, for tests and diagnostics.</summary>
+        internal bool TryGetHosted(NetworkEntityId id, out HostedMotion state) => hosted.TryGetValue(id.Value, out state!);
 
         /// <summary>Presence supplies the host's validated position when available. No network address crosses this seam.</summary>
         internal Func<ParticipantId, NetVector3?>? ParticipantPosition { get; set; }
@@ -74,8 +78,13 @@ namespace TopiaForge.ModManager
             if (!CanAcquire(body.Entity)) return Failure("This player is already moving that object or too many others. Release one, then try again.");
             if (!TryLocalPosition(out var position)) return Failure("The player is not in the world yet. Try again after it loads.");
             var epoch = EpochOf(target);
-            if (world.Host.IsActive && !GrabHere(target, epoch, position, out epoch))
-                return Failure("Another player is holding that object, or it is too far away. Move closer and try again after they let go.");
+            if (world.Host.IsActive)
+            {
+                // The host's own player hears a refusal as a joined player does: one toast that says why.
+                var answer = GrabHere(target, epoch, position, out epoch);
+                if (!IsGranted(answer)) return Refuse(context, answer);
+            }
+
             var originalKinematic = body.IsKinematic;
             var result = inner.AcquireMotion(body.Entity);
             if (!result.TryGetValue(out var engine))
@@ -88,12 +97,19 @@ namespace TopiaForge.ModManager
             return OperationResult<IEntityMotion>.Success(lease);
         }
 
-        internal NetEntityMotion? AcquireNative(IEntity entity)
+        /// <summary>
+        /// Starts ownership of a native pickup. False when the item is no network body, which stays the game's alone;
+        /// otherwise true, with the lease, or with null when the pickup is refused and the item must drop.
+        /// </summary>
+        internal bool TryAcquireNative(IEntity entity, out NetEntityMotion? lease)
         {
-            if (!TryTarget(entity, out var target, out var body) || !CanAcquire(body.Entity) || !TryLocalPosition(out var position)) return null;
+            lease = null;
+            if (!TryTarget(entity, out var target, out var body)) return false;
+            if (!CanAcquire(body.Entity) || !TryLocalPosition(out var position)) return true;
             var epoch = EpochOf(target);
-            if (world.Host.IsActive && !GrabHere(target, epoch, position, out epoch)) return null;
-            return Start(null, body, null, target, epoch, position, body.IsKinematic);
+            if (world.Host.IsActive && !IsGranted(GrabHere(target, epoch, position, out epoch))) return true;
+            lease = Start(null, body, null, target, epoch, position, body.IsKinematic);
+            return true;
         }
 
         private NetEntityMotion Start(RuntimeReplication? context, INetworkMotionBody body, IEntityMotion? engine,
@@ -206,6 +222,7 @@ namespace TopiaForge.ModManager
             foreach (var state in hosted.Values)
                 if (state.Rules.State != OwnershipState.Server) state.Restore();
             hosted.Clear();
+            broadcastStart = 0;
             replies.Clear();
             incoming.Clear();
             epochs.Clear();
@@ -231,5 +248,23 @@ namespace TopiaForge.ModManager
 
         private static OperationResult<IEntityMotion> Failure(string message) =>
             OperationResult<IEntityMotion>.Failure(ModErrorCode.NotAuthoritative, message);
+
+        private static bool IsGranted(OwnershipResult result) =>
+            result == OwnershipResult.Granted || result == OwnershipResult.AlreadyOwned;
+
+        private OperationResult<IEntityMotion> Refuse(RuntimeReplication context, OwnershipResult result)
+        {
+            var message = MotionRules.Refusal(result);
+            Tell(context.Ui, message);
+            return Failure(message);
+        }
+
+        /// <summary>Shows a refusal through the context's own UI service, at most one every few seconds across leases.</summary>
+        private void Tell(IUiService? ui, string message)
+        {
+            if (ui == null || Now < nextToast) return;
+            nextToast = Now + SpawnAuthorityRules.RefusalToastIntervalMicros;
+            ui.ShowToast(message, UiTone.Warning);
+        }
     }
 }
