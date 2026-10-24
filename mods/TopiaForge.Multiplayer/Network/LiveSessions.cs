@@ -375,6 +375,10 @@ namespace TopiaForge.Multiplayer.Network
                     if (!handedOver) loaded.Dispose();
                 }
             });
+
+            // A failed load is let go once a frame sees it, or at closing. It is observed here, so the file service's
+            // text, which can name a local file, never reaches the global unobserved-exception event.
+            NetworkSaveTasks.Observe(loading);
         }
 
         private void Loaded()
@@ -397,11 +401,16 @@ namespace TopiaForge.Multiplayer.Network
             // The host's proof key is salted with its own transport key, which the identity holds.
             EnsureIdentity();
             var identityTask = loading!;
-            return Task.Run(async () =>
+            var derived = Task.Run(async () =>
             {
                 var loaded = await identityTask.ConfigureAwait(false);
                 return (byte[]?)PasswordProof.DeriveKey(password, loaded.TransportPublicKey);
             });
+
+            // A failed load fails the key with the same text, and hosting that fails, stops or closes lets the key go,
+            // so it is observed as the load is.
+            NetworkSaveTasks.Observe(derived);
+            return derived;
         }
 
         private void BeginHosting()
