@@ -256,15 +256,28 @@ namespace TopiaForge.ModManager.Tests
     }
 
     /// <summary>
-    /// The kit's Escape stack as the manager overlay has it: the overlay at the bottom, and a binding capture above it while
-    /// the presenter holds one. A press dismisses the top, the capture's cancel while it is held and the overlay otherwise,
-    /// as the kit's driver does in its own frame, before or after voice chat's.
+    /// The kit's Escape stack as the manager overlay has it: the overlay at the bottom, in the window band, and above it, in
+    /// the modal band, whatever was pushed since, the latest on top: a binding capture while the presenter holds one, and a
+    /// kit modal such as the consent. A press dismisses the top, as the kit's driver does in its own frame, before or after
+    /// voice chat's; a capture leaves the stack before its cancel runs, as the Unity adapter does.
     /// </summary>
     internal sealed class FakeEscapeStack : IVoiceEscape
     {
+        private readonly List<Action> modalBand = new List<Action>();
+        private readonly Action dismissCapture;
         private Action? capture;
 
-        /// <summary>Gets whether a capture holds the top.</summary>
+        internal FakeEscapeStack()
+        {
+            dismissCapture = () =>
+            {
+                var cancel = capture;
+                Release();
+                cancel?.Invoke();
+            };
+        }
+
+        /// <summary>Gets whether a capture is on the stack.</summary>
         internal bool Held => capture != null;
 
         /// <summary>Gets how many times a capture took the top.</summary>
@@ -277,21 +290,29 @@ namespace TopiaForge.ModManager.Tests
         {
             capture = cancel ?? throw new ArgumentNullException(nameof(cancel));
             Holds++;
+            if (!modalBand.Contains(dismissCapture)) modalBand.Add(dismissCapture);
         }
 
-        public void Release() => capture = null;
+        public void Release()
+        {
+            capture = null;
+            modalBand.Remove(dismissCapture);
+        }
+
+        /// <summary>A kit modal shows, as the consent does: it joins the modal band on top, and the Esc that dismisses it runs <paramref name="dismiss"/>.</summary>
+        internal void Show(Action dismiss) => modalBand.Add(dismiss ?? throw new ArgumentNullException(nameof(dismiss)));
 
         /// <summary>The kit's driver reads an Escape press and dismisses the top-most surface.</summary>
         internal void Press()
         {
-            var top = capture;
-            if (top == null)
+            if (modalBand.Count == 0)
             {
                 OverlayCloses++;
                 return;
             }
 
-            capture = null;
+            var top = modalBand[modalBand.Count - 1];
+            modalBand.RemoveAt(modalBand.Count - 1);
             top();
         }
     }
