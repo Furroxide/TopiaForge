@@ -8,8 +8,8 @@ namespace TopiaForge.ModManager.Tests
 {
     /// <summary>
     /// The policy runs against an enabled-system model, and the production adapter runs against Unity contract doubles.
-    /// Source checks pin the remaining canvas and driver wiring. These tests do not prove UI Toolkit input routing or
-    /// START DEMO behavior in the game; those require the in-game regression check.
+    /// Source checks pin the remaining canvas, driver and focus wiring. These tests do not prove UI Toolkit input routing
+    /// or START DEMO behavior in the game; those require the in-game regression check.
     /// </summary>
     internal static partial class UiKitEventSystemTests
     {
@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             OnlyCanvasesThatTakeInputAskForAnEventSystem();
             TheKitRemovesOnlyItsOwnEventSystem();
             TheDriverChecksEveryFrameAndOnEverySceneLoad();
+            AFocusedButtonGetsAnEventSystemAtOnce();
             TheProductionAdapterMeetsItsContract();
             Console.WriteLine("UiKitEventSystemTests passed.");
         }
@@ -184,6 +185,15 @@ namespace TopiaForge.ModManager.Tests
                 "With no event system active, a kit canvas that takes input must get one.");
             RequireMatch(systems, @"if \(sceneRecheck \|\| Time\.unscaledTimeAsDouble >= nextCheckAt\)\s*\{\s*Reconcile\(\);",
                 "While the kit's own exists, it must look for another after each scene load and at least once a second.");
+        }
+
+        // A dialog focuses its default button in the frame it appears, the multiplayer prompts' CANCEL among them. Unity
+        // drops a selection made while no event system is active, so Focus cannot wait for the driver's next frame.
+        private static void AFocusedButtonGetsAnEventSystemAtOnce()
+        {
+            var button = Read("src", "TopiaForge.Mods.UnityUi", "Widgets", "TopiaForgeButton.cs");
+            RequireMatch(button, @"public void Focus\(\)\s*\{\s*TopiaForgeEventSystems\.EnsureEventSystem\(\);\s*button\.Select\(\);",
+                "TopiaForgeButton.Focus must make an event system active before it selects, or a dialog opens with nothing focused.");
         }
 
         private static TopiaForgeEventSystemAction Decide(bool kitTakesInput, bool kitOwnsOne, bool otherIsActive) =>

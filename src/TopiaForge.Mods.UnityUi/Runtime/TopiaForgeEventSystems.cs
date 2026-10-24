@@ -13,7 +13,8 @@ namespace TopiaForge.Mods.UnityUi
     /// input is disabled) only while a kit canvas takes input and no event system is active, and removes it as soon as the
     /// game's, or another mod's, is active again: after a scene load, a few frames later, and at least once a second while
     /// the kit's own exists. A canvas that takes no input, such as a HUD made before the game's first scene, makes none.
-    /// The kit never disables or destroys an event system it did not make (<see cref="TopiaForgeEventSystemPolicy"/>).
+    /// The kit never disables or destroys an event system it did not make (<see cref="TopiaForgeEventSystemPolicy"/>), and
+    /// removing its own leaves what Unity parented under it, such as a UI Toolkit panel's input handler.
     /// </summary>
     public static class TopiaForgeEventSystems
     {
@@ -30,11 +31,14 @@ namespace TopiaForge.Mods.UnityUi
         private static int pendingRechecks;
         private static double nextCheckAt;
 
-        /// <summary>Ensures that a compatible Unity event system is available, the game's own when it has one.</summary>
+        /// <summary>
+        /// Ensures that a compatible Unity event system is active now, the game's own when it has one. Focus calls it, so a
+        /// control selected in the frame its surface appears keeps its selection rather than waiting for the next frame.
+        /// </summary>
         public static void EnsureEventSystem()
         {
             WatchScenes();
-            if (FindOtherActive() == null && ownedEventSystem == null)
+            if (ownedEventSystem == null && FindOtherActive() == null)
             {
                 CreateOwn();
             }
@@ -245,14 +249,23 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        // Only the kit's own event system is ever removed. Deactivating it first takes it out of Unity's list at once, so
-        // the game's own runs from this frame rather than from the next.
+        // Only the kit's own event system is ever removed, and it takes nothing else with it. Unity parents a UI Toolkit
+        // panel's input handler under the event system that made it, which is the kit's own when a panel comes up while
+        // the kit's is the only one: those children become roots of the persistent scene first, so their panels keep
+        // working with the event system that takes over. Deactivating the kit's own then takes it out of Unity's list at
+        // once, so the game's own runs from this frame rather than from the next.
         private static void RetireOwn()
         {
             var owned = ownedEventSystem;
             ownedEventSystem = null;
             if (owned != null)
             {
+                var children = owned.transform;
+                for (var index = children.childCount - 1; index >= 0; index--)
+                {
+                    children.GetChild(index).SetParent(null);
+                }
+
                 owned.SetActive(false);
                 Object.Destroy(owned);
             }

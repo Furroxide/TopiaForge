@@ -2,8 +2,9 @@ namespace TopiaForge.ModManager.Tests
 {
     internal static partial class UiKitEventSystemTests
     {
-        // A contract double, not Unity implementation code: enabled-system ordering, scene roots, object lifetime,
-        // and caller-owned list overloads only. The array-returning search deliberately allocates like its API requires.
+        // A contract double, not Unity implementation code: enabled-system ordering, scene roots, parenting, object
+        // lifetime, caller-owned list overloads, and a selection that needs a current event system only. The array-returning
+        // search deliberately allocates like its API requires.
         private const string EventSystemUnityContract = """
             using System;
             using System.Collections.Generic;
@@ -22,15 +23,16 @@ namespace TopiaForge.ModManager.Tests
                     public static bool operator !=(Object? a, Object? b) => !(a == b);
                     public override bool Equals(object? other) => ReferenceEquals(this, other);
                     public override int GetHashCode() => base.GetHashCode();
+                    // As in Unity, destroying an object destroys its children with it.
                     public static void Destroy(GameObject target)
                     {
-                        target.Destroyed = true;
-                        target.scene.Data.Roots.Remove(target);
+                        target.transform.Detach();
+                        target.MarkDestroyed();
                     }
                     public static void DontDestroyOnLoad(GameObject target)
                     {
-                        target.scene.Data.Roots.Remove(target);
-                        target.scene = SceneManager.Persistent;
+                        target.transform.Detach();
+                        target.MoveTo(SceneManager.Persistent);
                         target.scene.Data.Roots.Add(target);
                     }
                     public static T[] FindObjectsByType<T>(FindObjectsInactive inactive, FindObjectsSortMode sort) where T : Object
@@ -44,23 +46,58 @@ namespace TopiaForge.ModManager.Tests
                 public class Component : Object
                 {
                     public GameObject gameObject = null!;
+                    public Transform transform => gameObject.transform;
                 }
                 public class Behaviour : Component
                 {
                     public bool enabled = true;
                     public bool isActiveAndEnabled => this != null && enabled && gameObject.activeInHierarchy;
                 }
+                // Parenting as in Unity: a child is in its parent's scene and active only while its parent is, and once
+                // unparented it is a root again in the same scene.
+                public class Transform : Component
+                {
+                    internal readonly List<Transform> Children = new List<Transform>();
+                    public Transform? parent { get; private set; }
+                    public int childCount => Children.Count;
+                    public Transform GetChild(int index) => Children[index];
+                    public void SetParent(Transform? value)
+                    {
+                        Detach();
+                        parent = value;
+                        if (value == null)
+                        {
+                            gameObject.scene.Data.Roots.Add(gameObject);
+                        }
+                        else
+                        {
+                            value.Children.Add(this);
+                            gameObject.MoveTo(value.gameObject.scene);
+                        }
+                    }
+                    internal void Detach()
+                    {
+                        if (parent != null) parent.Children.Remove(this);
+                        else gameObject.scene.Data.Roots.Remove(gameObject);
+                        parent = null;
+                    }
+                }
                 public class GameObject : Object
                 {
                     private readonly List<Component> components = new List<Component>();
                     private bool active = true;
                     public Scene scene;
+                    public string name;
                     public GameObject(string name)
                     {
+                        this.name = name;
+                        transform = new Transform { gameObject = this };
                         scene = SceneManager.GetSceneAt(0);
                         scene.Data.Roots.Add(this);
                     }
-                    public bool activeInHierarchy => !Destroyed && active;
+                    public Transform transform { get; }
+                    public bool activeInHierarchy =>
+                        !Destroyed && active && (transform.parent == null || transform.parent.gameObject.activeInHierarchy);
                     public void SetActive(bool value) => active = value;
                     public T AddComponent<T>() where T : Component, new()
                     {
@@ -72,8 +109,23 @@ namespace TopiaForge.ModManager.Tests
                     public void GetComponentsInChildren<T>(bool includeInactive, List<T> into) where T : Component
                     {
                         into.Clear();
+                        Collect(includeInactive, into);
+                    }
+                    private void Collect<T>(bool includeInactive, List<T> into) where T : Component
+                    {
                         if (!includeInactive && !activeInHierarchy) return;
                         foreach (var component in components) if (component is T item) into.Add(item);
+                        foreach (var child in transform.Children) child.gameObject.Collect(includeInactive, into);
+                    }
+                    internal void MoveTo(Scene value)
+                    {
+                        scene = value;
+                        foreach (var child in transform.Children) child.gameObject.MoveTo(value);
+                    }
+                    internal void MarkDestroyed()
+                    {
+                        Destroyed = true;
+                        foreach (var child in transform.Children) child.gameObject.MarkDestroyed();
                     }
                 }
                 public static class Time { public static double unscaledTimeAsDouble; }
@@ -91,11 +143,25 @@ namespace TopiaForge.ModManager.Tests
                             return null;
                         }
                     }
+                    public GameObject? currentSelectedGameObject { get; private set; }
+                    public void SetSelectedGameObject(GameObject? selected) => currentSelectedGameObject = selected;
                 }
                 public class StandaloneInputModule : Behaviour { }
             }
             namespace UnityEngine.InputSystem.UI { public class InputSystemUIInputModule : Behaviour { } }
-            namespace UnityEngine.UI { public class GraphicRaycaster : Behaviour { } }
+            namespace UnityEngine.UI
+            {
+                public class GraphicRaycaster : Behaviour { }
+                // As in Unity, selecting does nothing while no event system is current.
+                public class Selectable : Behaviour
+                {
+                    public void Select()
+                    {
+                        var current = EventSystems.EventSystem.current;
+                        if (current != null) current.SetSelectedGameObject(gameObject);
+                    }
+                }
+            }
             namespace UnityEngine.SceneManagement
             {
                 public enum LoadSceneMode { Single }
