@@ -27,7 +27,9 @@ internal static class SaveOnCloseTests
                 using var rig = new ControlRig(seed++);
                 var host = rig.Host;
                 var live = host.Provider.Live!;
-                record.Seed(host.Files);
+
+                // The runtime attached as the rig was made, and that already started reading the records: a file seeded now
+                // could land before or after that read, so every case starts from no records on disk.
                 live.PrepareAsync();
                 That(rig.Run(() => live.IsReady && live.BansFile.IsRead && live.KnownHostsFile.IsRead), label + ": the records read");
                 var attempts = CountAttempts(host.Files, record.Path);
@@ -43,7 +45,7 @@ internal static class SaveOnCloseTests
                 else
                 {
                     // A change no frame has saved yet, as a pin recorded off the main thread just before quitting.
-                    record.ChangeUnsaved(live);
+                    record.Change(live);
                 }
 
                 // TopiaForge's shutdown: the runtime detaches; every mod stops, and its files refuse every operation, as the
@@ -76,29 +78,19 @@ internal static class SaveOnCloseTests
         yield return new SavedRecord(
             "the ban list",
             BanList.FilePath,
-            files =>
-            {
-                var list = new BanList();
-                list.Add(Key(1), "First", 100);
-                list.Add(Key(2), "Second", 101);
-                files.Contents[BanList.FilePath] = list.Serialize();
-            },
-            live => That(live.Unban(Key(1)), "a ban is lifted"),
             live =>
             {
-                // Lifting a ban saves at once; a change marked and not yet saved is one only closing can save.
-                That(live.BansFile.Record.Remove(Key(1)), "a ban is lifted");
+                // A ban as the host's policy records it, marked for saving; the next frame saves it.
+                That(live.BansFile.Record.Add(Key(1), "First", 100), "a player is banned");
                 live.BansFile.MarkChanged();
             },
             files =>
             {
-                lock (files.Contents) return files.Contents.TryGetValue(BanList.FilePath, out var bytes) && !BanList.Parse(bytes).IsBanned(Key(1));
+                lock (files.Contents) return files.Contents.TryGetValue(BanList.FilePath, out var bytes) && BanList.Parse(bytes).IsBanned(Key(1));
             });
         yield return new SavedRecord(
             "the known-hosts record",
             KnownHosts.FilePath,
-            _ => { },
-            Remember,
             Remember,
             files =>
             {
@@ -119,12 +111,10 @@ internal static class SaveOnCloseTests
     /// <summary>A transport key in hexadecimal, made from <paramref name="seed"/>.</summary>
     private static string Key(int seed) => seed.ToString("x8", System.Globalization.CultureInfo.InvariantCulture).PadLeft(64, 'a');
 
-    /// <summary>One of the provider's records: how a test seeds it, changes it with or without a frame's save, and sees it on disk.</summary>
+    /// <summary>One of the provider's records: how a test changes it, for the next frame or closing to save, and sees it on disk.</summary>
     private sealed record SavedRecord(
         string Name,
         string Path,
-        Action<MemoryDataFiles> Seed,
         Action<LiveSessions> Change,
-        Action<LiveSessions> ChangeUnsaved,
         Func<MemoryDataFiles, bool> Landed);
 }
