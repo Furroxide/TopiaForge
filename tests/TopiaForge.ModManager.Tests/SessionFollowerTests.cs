@@ -19,7 +19,7 @@ namespace TopiaForge.ModManager.Tests
     /// game leaves the host's world by itself, never replaces a game the player started (#224), and ends every failure in
     /// this game's own words at the main menu.
     /// </summary>
-    internal static class SessionFollowerTests
+    internal static partial class SessionFollowerTests
     {
         internal static void Run(string root)
         {
@@ -37,6 +37,8 @@ namespace TopiaForge.ModManager.Tests
             ShuttingDownLoadsNoMenu(root + "-shutdown");
             UnreadableAnnouncementsChangeNothing(root + "-unreadable");
             ALaunchedJoinsFollowsReportUnderItsRequest(root + "-launched");
+            ABusyGameIsTriedAgainThenGivenUp(root + "-busy");
+            AWorldNotFoundIsLookedForOnce(root + "-not-found");
             FollowFailureWordsAreThisGamesOwn();
             SessionFollowWireTests.Run();
             Console.WriteLine("SessionFollowerTests passed.");
@@ -434,11 +436,14 @@ namespace TopiaForge.ModManager.Tests
         {
             private readonly WorldWireWriter writer = new WorldWireWriter(SessionFollowWire.MaximumMessageBytes);
 
-            internal FollowRig(string root, bool endOnScene = false)
+            internal FollowRig(string root, bool endOnScene = false, Action<ModManifest>? configure = null)
             {
                 Guest = Net.AddPlayer("guest");
                 Runtime = new MultiplayerRuntime(() => Guest, new MultiplayerRuntimeHost("2545", "0.2.0", Log), Log);
-                Test = new SessionFixture(root, endOnScene, replication: new MultiplayerReplication(Runtime)) { FactoryType = typeof(SessionTestParticipantFactory) };
+                Test = new SessionFixture(root, endOnScene, replication: new MultiplayerReplication(Runtime), configure: configure)
+                {
+                    FactoryType = typeof(SessionTestParticipantFactory)
+                };
                 Runtime.SessionPhaseSource = () => Test.Hosted.RealmPhase;
 
                 // A world's scene becomes the active one as it loads, as in the game.

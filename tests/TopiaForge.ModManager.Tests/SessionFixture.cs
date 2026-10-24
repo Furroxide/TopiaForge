@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -89,10 +90,13 @@ namespace TopiaForge.ModManager.Tests
 
         /// <summary>Gets the network profile each session scope's gameplay services were made for, in order.</summary>
         internal List<ModNetProfile> ScopeProfiles { get; } = new List<ModNetProfile>();
+
+        /// <summary>Gets the other world declarations bound beside the plan's world, such as a discovered family a test adds.</summary>
+        internal List<string> BoundWorlds { get; } = new List<string>();
         public RuntimeSessionSnapshot Capture()
         {
             var bindings = new RuntimeBindingSnapshot(Profile.ProfileId, Profile.Revision, Plan.Digest,
-                InvalidBindings ? Array.Empty<string>() : new[] { Plan.WorldId },
+                InvalidBindings ? Array.Empty<string>() : new[] { Plan.WorldId }.Concat(BoundWorlds),
                 InvalidBindings ? Array.Empty<string>() : new[] { Plan.GamemodeId });
             return new RuntimeSessionSnapshot(Profile, bindings, new Dictionary<string, ModContext> { [Parent.Identity.Id] = Parent },
                 new[] { new SessionImplementation<IGamemodeFactory>(Plan.Packages[0], Plan.GamemodeId, FactoryType) },
