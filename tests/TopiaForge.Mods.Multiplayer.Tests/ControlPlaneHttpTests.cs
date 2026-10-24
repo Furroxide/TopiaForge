@@ -195,8 +195,18 @@ internal static class ControlPlaneHttpTests
         // A plain-http server where TLS is expected never hears a request.
         using var plain = LoopbackHttpServer.Answering(LoopbackHttpServer.Answer(200, "{}"));
         That(ControlPlaneOrigin.TryParse("https://localhost:" + plain.Port, out var plainOrigin), "the origin parses");
-        var downgrade = new HttpsControlPlaneTransport(plainOrigin, Loopback).SendAsync(Status, CancellationToken.None).GetAwaiter().GetResult();
-        That(!downgrade.Succeeded && plain.Requests.IsEmpty, "a service that does not speak TLS gets nothing (" + downgrade + ")");
+        var waiting = new HttpsControlPlaneTransport(plainOrigin, Loopback) { TotalTimeout = TimeSpan.FromSeconds(1) };
+        var downgrade = waiting.SendAsync(Status, CancellationToken.None).GetAwaiter().GetResult();
+        That(downgrade.Failure == ControlPlaneTransportFailure.TimedOut && plain.Requests.IsEmpty,
+            "a plain server waiting for HTTP never receives a request from a TLS client (" + downgrade + ")");
+
+        // Unlike the waiting server, this one actually sends plaintext during the handshake.
+        using var immediate = LoopbackHttpServer.AnsweringBeforeRequest(LoopbackHttpServer.Answer(200, "{}"));
+        That(ControlPlaneOrigin.TryParse("https://localhost:" + immediate.Port, out var immediateOrigin), "the origin parses");
+        var challenged = new HttpsControlPlaneTransport(immediateOrigin, Loopback) { TotalTimeout = TimeSpan.FromSeconds(1) };
+        var refused = challenged.SendAsync(Status, CancellationToken.None).GetAwaiter().GetResult();
+        That(refused.Failure == ControlPlaneTransportFailure.Tls && immediate.Requests.IsEmpty && immediate.Connections == 1,
+            "plaintext sent during the handshake is refused as TLS, never read as an answer (" + refused + ")");
     }
 
     internal static void NoProxyIsEverAsked()
