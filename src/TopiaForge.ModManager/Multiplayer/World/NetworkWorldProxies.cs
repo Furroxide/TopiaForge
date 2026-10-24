@@ -73,6 +73,11 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the limiter that holds each player's request budgets, so tests can see what was spent.</summary>
         internal PlayerRequestLimiter Limiter => limiter;
 
+        internal Action<int>? ParticipantReleased { get; set; }
+
+        internal ProxyParticipant? MotionProxy(ParticipantId participant) =>
+            IsActive && channel.GetGeneration(participant) != 0 ? ProxyFor(participant) : null;
+
         /// <summary>Gets a player's scope, if the host keeps one.</summary>
         internal bool TryGetProxy(ParticipantId participant, out ProxyParticipant proxy) => byParticipant.TryGetValue(participant, out proxy!);
 
@@ -421,6 +426,7 @@ namespace TopiaForge.ModManager
         /// </summary>
         private void CleanUp(ProxyParticipant proxy)
         {
+            ParticipantReleased?.Invoke(proxy.Slot);
             spawnScratch.Clear();
             spawnScratch.AddRange(proxy.Spawns.Values);
             foreach (var spawn in spawnScratch)

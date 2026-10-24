@@ -14,7 +14,7 @@ namespace TopiaForge.ModManager
     /// roots are the root game objects the runtime's entity registry resolves. The local player's hierarchy is never
     /// touched. Main thread only.
     /// </summary>
-    internal sealed partial class UnityNetworkWorldBackend : INetworkWorldBackend
+    internal sealed partial class UnityNetworkWorldBackend : INetworkWorldBackend, INetworkMotionBackend
     {
         /// <summary>The primary component every rigidbody root is keyed by.</summary>
         internal const string RigidbodyComponent = "UnityEngine.Rigidbody";
@@ -90,7 +90,7 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>A network root over a Unity game object: its pose, its entity and its mark.</summary>
-    internal sealed class UnityNetworkWorldObject : INetworkWorldObject
+    internal sealed class UnityNetworkWorldObject : INetworkMotionBody
     {
         private readonly UnityEntityRegistry entities;
         private readonly Rigidbody? body;
@@ -118,6 +118,29 @@ namespace TopiaForge.ModManager
         }
 
         public IEntity Entity => entity != null && entity.IsAlive ? entity : entity = entities.GetOrCreate(GameObject);
+
+        public bool IsKinematic
+        {
+            get => body == null || body.isKinematic;
+            set { if (body != null) body.isKinematic = value; }
+        }
+
+        public bool TryReadMotion(out NetPose pose, out NetVector3 angularVelocity)
+        {
+            angularVelocity = default;
+            if (!TryReadPose(out pose) || body == null) return false;
+            var angular = body.angularVelocity;
+            angularVelocity = new NetVector3(angular.x, angular.y, angular.z);
+            return true;
+        }
+
+        public void WriteMotion(in NetPose pose, NetVector3 angularVelocity)
+        {
+            WritePose(pose);
+            if (body == null || body.isKinematic) return;
+            body.linearVelocity = new Vector3(pose.Velocity.X, pose.Velocity.Y, pose.Velocity.Z);
+            body.angularVelocity = new Vector3(angularVelocity.X, angularVelocity.Y, angularVelocity.Z);
+        }
 
         public bool TryReadPose(out NetPose pose)
         {

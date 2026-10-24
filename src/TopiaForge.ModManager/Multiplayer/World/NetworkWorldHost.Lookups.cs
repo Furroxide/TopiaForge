@@ -11,6 +11,19 @@ namespace TopiaForge.ModManager
     /// </summary>
     internal sealed partial class NetworkWorldHost
     {
+        internal bool TryBindMotion(MotionTarget target, out HostWorldEntity hosted)
+        {
+            if (!target.IsScene) return TryGetHosted(target.Id, out hosted);
+            if (index.TryGetBindable(target.SceneKey, out var slot) && slot.Object.IsAlive)
+            {
+                if (!slot.IsBound) Bind(slot);
+                if (slot.IsBound) return TryGetHosted(slot.Bound, out hosted);
+            }
+
+            hosted = null!;
+            return false;
+        }
+
         /// <summary>Gets the entity a network id names here, if it is alive.</summary>
         internal bool TryGetEntity(NetworkEntityId id, out IEntity entity)
         {

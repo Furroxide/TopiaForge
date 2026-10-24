@@ -69,7 +69,7 @@ namespace TopiaForge.ModManager
                 var replica = driven[index];
                 var target = replica.Object;
                 var buffer = replica.Buffer;
-                if (target == null || buffer == null || buffer.Count == 0 || !target.IsAlive) continue;
+                if (replica.SimulatedHere || target == null || buffer == null || buffer.Count == 0 || !target.IsAlive) continue;
                 if (!buffer.TrySample(localNowMicros, out var rendered)) continue;
                 target.WritePose(new NetPose(rendered.Position, rendered.Rotation));
                 moved++;

@@ -365,6 +365,7 @@
     <Compile Include="../TopiaForge.ModRuntime.Tests/LoopbackNetPair.cs" Link="Multiplayer/LoopbackNetPair.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/LoopbackChannel.cs" Link="Multiplayer/LoopbackChannel.cs" />
     <Compile Include="../TopiaForge.ModRuntime.Tests/FakeWorldScene.cs" Link="Multiplayer/FakeWorldScene.cs" />
+    <Compile Include="../TopiaForge.ModRuntime.Tests/FakeEntityMotion.cs" Link="Multiplayer/FakeEntityMotion.cs" />
     <!-- The network world's World/ folder is Unity-free by construction: compiling all of it here would fail the build the
          moment a file there took a UnityEngine dependency. Its Unity side lives in World/Unity/. -->
     <Compile Include="../../src/TopiaForge.ModManager/Multiplayer/World/*.cs" Link="Runtime/Multiplayer/World/%(Filename)%(Extension)" />

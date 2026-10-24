@@ -52,6 +52,8 @@ namespace TopiaForge.ModManager
                 IsSharedMod = modId => runtime.TryGetNetworkClass(modId, out var networkClass) && networkClass == ModNetworkClass.Shared
             };
             Backend = backend;
+            Motion = new NetworkWorldMotion(this, runtime, clock);
+            Proxies.ParticipantReleased = Motion.Disconnect;
             WorldEvents = new Stage(this, StageKind.WorldEvents);
             HostSnapshots = new Stage(this, StageKind.HostSnapshots);
             ReplicaInterpolation = new Stage(this, StageKind.ReplicaInterpolation);
@@ -70,6 +72,8 @@ namespace TopiaForge.ModManager
         internal SceneKeyRegistry SceneKeys { get; }
 
         internal INetworkWorldBackend Backend { get; }
+
+        internal NetworkWorldMotion Motion { get; }
 
         /// <summary>Gets the channel's end, so authority routing (WS3.7) can register its message types on it.</summary>
         internal NetworkWorldChannel Channel => channel;
@@ -111,6 +115,8 @@ namespace TopiaForge.ModManager
             replication.References = world;
             replication.LocalContent = world;
             replication.Authority = world;
+            replication.Motion = world.Motion;
+            runtime.MotionSend = world.Motion;
             return world;
         }
 
@@ -133,6 +139,7 @@ namespace TopiaForge.ModManager
 
         public void RealmChanged(NetRealm previous, NetRealm next)
         {
+            Motion.Reset();
             if (previous == NetRealm.ListenHost)
             {
                 Proxies.Deactivate();
@@ -168,6 +175,7 @@ namespace TopiaForge.ModManager
 
         public void Detaching(IInternalMultiplayerControl detaching)
         {
+            Motion.Reset();
             Proxies.Deactivate();
             Host.Deactivate();
             LogRestore(Client.Deactivate());
@@ -384,6 +392,7 @@ namespace TopiaForge.ModManager
                 switch (kind)
                 {
                     case StageKind.WorldEvents:
+                        world.Motion.BeforeReceive();
                         world.Host.Receive();
                         world.Proxies.Pump();
                         world.Client.Receive();
