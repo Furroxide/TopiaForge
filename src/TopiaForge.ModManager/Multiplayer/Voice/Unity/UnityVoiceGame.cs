@@ -5,17 +5,19 @@ using UnityEngine.InputSystem;
 namespace TopiaForge.ModManager.Voice
 {
     /// <summary>
-    /// The game's own robot recording as voice chat observes it: from the push-to-record key going down, when the game
-    /// starts its microphone, until it has decoded what it heard and ended its microphone. A game update that moves this
-    /// state makes the read throw, which voice chat counts as recording, so it keeps the microphone closed. Main thread only.
+    /// The game's own robot recording, as the runtime's microphone arbiter reads it whenever a use of the microphone is
+    /// decided: from the push-to-record key going down, when the game starts its microphone, until it has decoded what it
+    /// heard and ended its microphone. A game update that moves this state makes the read throw, which the arbiter counts
+    /// as recording, so voice chat and robot conversations keep off the microphone. Main thread only.
     /// </summary>
-    internal sealed class UnityVoiceNativeRecording : IVoiceNativeRecording
+    internal static class UnityVoiceNativeRecording
     {
-        public bool IsRecording => Read();
+        /// <summary>Reads whether the game records now; it throws when the game's state cannot be read.</summary>
+        internal static bool Read() => ReadState();
 
-        // Kept out of line, so a game whose state moved fails here, inside the caller's guard, and not where it is called.
+        // Kept out of line, so a game whose state moved fails here, inside the arbiter's guard, and not where it is called.
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static bool Read() => UIState.Recording.Value || UIState.IsDecodingVoice.Value;
+        private static bool ReadState() => UIState.Recording.Value || UIState.IsDecodingVoice.Value;
     }
 
     /// <summary>

@@ -38,6 +38,7 @@ namespace TopiaForge.ModManager.Voice
         /// <param name="microphone">The microphone, which lists the devices to choose from.</param>
         /// <param name="input">The keyboard and mouse, for rebinding push-to-talk.</param>
         /// <param name="nativeBindings">The game's own bindings, for the census.</param>
+        /// <param name="escape">The kit's Escape stack, which a binding capture holds while it waits.</param>
         /// <param name="control">The multiplayer control, for this game's role.</param>
         /// <param name="snapshot">The session as mods see it, for the players.</param>
         internal VoicePresenter(
@@ -47,6 +48,7 @@ namespace TopiaForge.ModManager.Voice
             IVoiceMicrophone microphone,
             IVoiceInput input,
             IVoiceNativeBindings nativeBindings,
+            IVoiceEscape escape,
             Func<IInternalMultiplayerControl?> control,
             Func<MultiplayerSessionSnapshot?> snapshot)
         {
@@ -56,8 +58,10 @@ namespace TopiaForge.ModManager.Voice
             this.microphone = microphone ?? throw new ArgumentNullException(nameof(microphone));
             this.input = input ?? throw new ArgumentNullException(nameof(input));
             this.nativeBindings = nativeBindings ?? throw new ArgumentNullException(nameof(nativeBindings));
+            this.escape = escape ?? throw new ArgumentNullException(nameof(escape));
             this.control = control ?? throw new ArgumentNullException(nameof(control));
             this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+            cancelCapture = CancelCapture;
         }
 
         /// <summary>Gets the runtime, for tests.</summary>

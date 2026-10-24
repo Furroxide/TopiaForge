@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TopiaForge.Mods;
 using TopiaForge.Mods.Internal;
@@ -57,16 +58,6 @@ namespace TopiaForge.ModManager.Voice
         void EndAbandoned();
     }
 
-    /// <summary>
-    /// Whether the game's own robot recording holds the microphone: from the push-to-record key going down until the game
-    /// has decoded what it recorded and ended its recording. Main thread only.
-    /// </summary>
-    internal interface IVoiceNativeRecording
-    {
-        /// <summary>Gets whether the game records now. It throws when the game's state cannot be read, which counts as recording.</summary>
-        bool IsRecording { get; }
-    }
-
     /// <summary>The keyboard and mouse as push-to-talk reads them. Main thread only.</summary>
     internal interface IVoiceInput
     {
@@ -77,10 +68,24 @@ namespace TopiaForge.ModManager.Voice
         bool IsTyping { get; }
 
         /// <summary>
-        /// Takes the key or mouse button pressed this frame, for rebinding push-to-talk; Esc comes back as itself, so a
-        /// capture can be cancelled. False when nothing was pressed.
+        /// Takes the key or mouse button pressed this frame, for rebinding push-to-talk; Esc comes back as itself, which a
+        /// capture leaves to <see cref="IVoiceEscape"/>. False when nothing was pressed.
         /// </summary>
         bool TryTakePressed(out InputBinding pressed);
+    }
+
+    /// <summary>
+    /// Escape while push-to-talk waits for its new control. The kit's Escape stack dismisses the top-most of its surfaces,
+    /// and the manager overlay is one of them; while a capture waits it holds the top, so the press that cancels the
+    /// capture is the capture's alone and never closes the overlay too. Main thread only.
+    /// </summary>
+    internal interface IVoiceEscape
+    {
+        /// <summary>Puts the capture on top of the Escape stack: the next Escape press runs <paramref name="cancel"/> and closes nothing else.</summary>
+        void Hold(Action cancel);
+
+        /// <summary>Takes the capture off the Escape stack as it ends; nothing when it is not there.</summary>
+        void Release();
     }
 
     /// <summary>The game's own input bindings, for <see cref="NativeInputCensus"/>. Main thread only.</summary>

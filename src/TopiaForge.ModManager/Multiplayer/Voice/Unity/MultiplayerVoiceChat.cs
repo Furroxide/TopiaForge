@@ -8,10 +8,11 @@ namespace TopiaForge.ModManager.Voice
 {
     /// <summary>
     /// Voice chat in the game, put together over Unity and the plugin: the VOICE page's presenter and the runtime behind it,
-    /// the microphone, push-to-talk's keyboard and mouse, the game's own recording and bindings, and the emitters. It ticks
-    /// every frame, overlay open or not, in the overlay's guarded frame after the sessions presenter, so push-to-talk works
-    /// while the player plays. The switch and the consent are the launcher's preferences, read from manager staging and
-    /// changed through its journal; the other settings are kept in manager data. Main thread only.
+    /// the microphone, push-to-talk's keyboard and mouse, the game's bindings, the kit's Escape stack, and the emitters. It
+    /// ticks every frame, overlay open or not, in the overlay's guarded frame after the sessions presenter, so push-to-talk
+    /// works while the player plays. The game's own recording reaches it through the runtime's microphone arbiter, which the
+    /// plugin points at the game before any mod loads. The switch and the consent are the launcher's preferences, read from
+    /// manager staging and changed through its journal; the other settings are kept in manager data. Main thread only.
     /// </summary>
     internal sealed class MultiplayerVoiceChat : IDisposable
     {
@@ -29,11 +30,12 @@ namespace TopiaForge.ModManager.Voice
             var arbiter = plugin.MicrophoneArbiter ?? throw new InvalidOperationException("The runtime's microphone arbiter is not ready.");
             var microphone = new UnityVoiceMicrophone();
             var input = new UnityVoiceInput();
-            runtime = new VoiceChatRuntime(Control, Snapshot, arbiter, microphone, new UnityVoiceNativeRecording(), input, emitters);
+            runtime = new VoiceChatRuntime(Control, Snapshot, arbiter, microphone, input, emitters);
             var queue = new MultiplayerBackgroundQueue(MultiplayerWorkSchedulers.Background);
             var staging = plugin.LaunchStaging;
             var preferences = new VoicePreferences(queue, new FileVoiceSettingsStore(plugin.Paths.Data), staging == null ? null : new StagingVoiceChannel(staging));
-            presenter = new VoicePresenter(runtime, preferences, queue, microphone, input, new UnityVoiceNativeBindings(), Control, Snapshot);
+            presenter = new VoicePresenter(runtime, preferences, queue, microphone, input, new UnityVoiceNativeBindings(), new UnityVoiceEscape(), Control,
+                Snapshot);
         }
 
         /// <summary>Gets what the VOICE page shows.</summary>

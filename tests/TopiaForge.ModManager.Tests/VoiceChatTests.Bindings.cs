@@ -139,12 +139,10 @@ namespace TopiaForge.ModManager.Tests
             rig.Frame();
             That(rig.Presenter.StatusText == "Hold G or Mouse Forward to talk.", "the state names the new key");
 
-            // Esc cancels; so does asking again, or leaving VOICE.
+            // Esc cancels, through the kit's Escape stack (EscapeCancelsTheCaptureAlone); so does asking again, or leaving VOICE.
             rig.Presenter.CaptureBinding(1);
             rig.Frame();
-            rig.Input.Press(InputBinding.Key("Escape"));
-            rig.Frame();
-            rig.Input.Release(InputBinding.Key("Escape"));
+            rig.Escape.Press();
             That(rig.Presenter.CapturingSlot == -1 && rig.Presenter.BindingText(1) == "Mouse Forward" && !rig.Runtime.PushToTalkSuspended, "Esc cancels the capture");
             rig.Presenter.CaptureBinding(1);
             rig.Presenter.CaptureBinding(1);

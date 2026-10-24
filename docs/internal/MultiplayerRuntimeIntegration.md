@@ -813,7 +813,7 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | `TryCreateRef`, `TryResolveRef` | The network world names its entities, `world-` and the network id | WS3.11 names players |
   | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | — |
   | `GameClock`, `SessionTime`, `PublishSessionTime` | The game's clock, and the session's time: what this process publishes, the host's on a joined player (section 17) | — |
-  | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | WS5c feeds native recording and decoding, holds voice leases, and RobotKit holds a dialogue lease around capture; the current tick order can expose a one-frame native-state delay to RobotKit |
+  | `AcquireMicrophone` | The arbiter: the game's recording, then robot dialogue, then voice chat | The plugin points the arbiter at the game's recording and decoding before mods load, and every claim and check reads it then; WS5c holds voice leases, and RobotKit holds a dialogue lease around capture |
 
 - **Bounds.** Replica and command kinds are lowercase tokens of at most 64 characters, the same rule as the entity
   table's, and kinds that start with `asset.` are the runtime's own. Descriptions and command payloads are at most
@@ -823,7 +823,8 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
 - **Microphone.** The game's own recording comes first and is observed, never taken; robot dialogue comes next, and voice
   chat last. A use is refused with `Conflict` while one that comes before it holds the microphone, naming the holder,
   and a lease is preempted, and must not capture, while one that comes before it takes the microphone later. Leases of
-  one use coexist.
+  one use coexist. The game's recording is read from the game at every claim and check, and a state that cannot be
+  read counts as recording.
 - **Privacy.** No member of the replication SPI carries an address: entities and players are named by runtime ids, and
   every text the realm and the seam write or answer is this game's own, with failures redacted. The architecture test of
   section 9 holds the SPI and the runtime types behind it to that.
