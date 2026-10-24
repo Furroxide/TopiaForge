@@ -23,6 +23,9 @@ namespace TopiaForge.ModManager.Sessions
         private int followShown = -1;
         private int noticeShown;
 
+        // Cancel leaves the session; until the follow it cancelled has ended, the overlay does not show it again.
+        private bool followCancelled;
+
         private SessionFollowStatus FollowStatus => context.Environment.Follow;
 
         /// <summary>Remembers which join the follow speaks for from now: the next link-up's.</summary>
@@ -99,8 +102,10 @@ namespace TopiaForge.ModManager.Sessions
                 if (follow.Notice.Length > 0) context.Notify(follow.Notice);
             }
 
+            var following = follow.IsRefollow && follow.Stage >= FollowStage.Preparing && follow.Stage <= FollowStage.Participant;
+            if (!following) followCancelled = false;
             if (stage != Stage.Hidden && stage != Stage.Succeeded) return;
-            if (!follow.IsRefollow || follow.Stage < FollowStage.Preparing || follow.Stage > FollowStage.Participant) return;
+            if (!following || followCancelled) return;
             ShowFollowing();
         }
 
@@ -169,6 +174,7 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Cancel on a follow after the join leaves the session; leaving is never refused.</summary>
         private void CancelFollowing()
         {
+            followCancelled = true;
             context.Environment.Leave();
             context.Status.RequestRefresh();
             Hide();

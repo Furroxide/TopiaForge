@@ -36,6 +36,9 @@ namespace TopiaForge.ModManager.Tests
             AJoinDuringAMainMenuLoadWaits(root);
             LeavingIsNeverRefused();
             ConnectingWalksThePhases();
+            ConnectingShowsTheFollow();
+            AFollowFailureShowsItsOwnWords();
+            AFollowAfterTheJoinShowsFollowing();
             EveryFailureHasAClearMessage();
             FailuresStopAtTheirStep();
             CancelWorksThroughout();
