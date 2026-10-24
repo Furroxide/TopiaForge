@@ -13,7 +13,7 @@ namespace TopiaForge.ModManager.Sessions
 
         private readonly UiHost host;
         private readonly IMultiplayerScreens screens;
-        private readonly IMultiplayerVoiceSlot? voice;
+        private readonly IVoiceScreen? voice;
         private TopiaForgeLabel? status;
         private TopiaForgeLabel? unavailable;
         private TopiaForgeLabel? settingsNote;
@@ -24,11 +24,15 @@ namespace TopiaForge.ModManager.Sessions
         private TopiaForgeTabs? tabs;
         private TopiaForgeContainer? body;
         private IMultiplayerSubView? current;
+        private MultiplayerVoiceView? voiceView;
         private MultiplayerSubTab shownTab;
         private bool shownAvailable;
         private bool built;
 
-        internal MultiplayerTabView(UiHost host, IMultiplayerScreens screens, IMultiplayerVoiceSlot? voice = null)
+        /// <param name="host">The kit host.</param>
+        /// <param name="screens">The multiplayer screens.</param>
+        /// <param name="voice">VOICE's screen; null when voice chat could not start, which VOICE then says.</param>
+        internal MultiplayerTabView(UiHost host, IMultiplayerScreens screens, IVoiceScreen? voice)
         {
             this.host = host;
             this.screens = screens;
@@ -94,10 +98,18 @@ namespace TopiaForge.ModManager.Sessions
             current?.Tick();
         }
 
+        /// <summary>Says the tab stopped showing, as when the overlay closes: VOICE stops a microphone test and a capture.</summary>
+        internal void OnHidden()
+        {
+            voiceView?.Hide();
+            voiceView = null;
+        }
+
         private void ShowSubTab(MultiplayerSubTab tab)
         {
             shownTab = tab;
             shownAvailable = screens.IsAvailable;
+            OnHidden();
             host.Clear(body!);
             current = null;
             if (!shownAvailable) return;
@@ -113,40 +125,13 @@ namespace TopiaForge.ModManager.Sessions
                     current = new MultiplayerConnectView(body!, screens.Connect);
                     break;
                 case MultiplayerSubTab.Voice:
-                    current = voice != null ? voice.Build(body!) : new MultiplayerVoicePlaceholder(body!, screens);
+                    voiceView = new MultiplayerVoiceView(host, body!, screens, voice);
+                    current = voiceView;
                     break;
                 default:
                     current = new MultiplayerSessionView(host, body!, screens.Session);
                     break;
             }
-        }
-    }
-
-    /// <summary>
-    /// The VOICE sub-tab until the voice slice fills its slot: what is still to come, and one plain line while this game
-    /// hosts, or has joined, a session that offers no voice chat.
-    /// </summary>
-    internal sealed class MultiplayerVoicePlaceholder : IMultiplayerSubView
-    {
-        internal const string Text = "Voice chat settings arrive with voice chat.";
-
-        private readonly IMultiplayerScreens screens;
-        private readonly TopiaForgeLabel session;
-
-        internal MultiplayerVoicePlaceholder(TopiaForgeContainer parent, IMultiplayerScreens screens)
-        {
-            this.screens = screens;
-            parent.SectionHeader("VOICE");
-            MultiplayerViewKit.Note(parent, Text);
-            session = MultiplayerViewKit.Note(parent);
-            Tick();
-        }
-
-        public void Tick()
-        {
-            var note = screens.VoiceNote;
-            session.SetText(note);
-            session.SetShown(note.Length != 0);
         }
     }
 }

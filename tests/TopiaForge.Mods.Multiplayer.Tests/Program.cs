@@ -683,6 +683,8 @@ internal static class Program
             InternalVoiceOfferTests.ALauncherPlannedHostWithoutVoiceHostsWithoutIt();
             InternalVoiceOfferTests.AJoinShownWithoutVoiceStaysWithoutItWhateverTheHostSays();
             InternalVoiceOfferTests.TheLanListingShownBeforeJoiningCounts();
+            VoiceChatProviderTests.PushToTalkReachesAnotherPlayersStream();
+            VoiceChatProviderTests.MutesByPlayerKeyHoldAcrossAMoveAndBack();
             Console.WriteLine("All TopiaForge multiplayer test-rig tests passed.");
             return 0;
         }

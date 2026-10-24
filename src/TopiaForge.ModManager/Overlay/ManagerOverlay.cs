@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.ModManager.Sessions;
+using TopiaForge.ModManager.Voice;
 using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 
@@ -11,7 +12,8 @@ namespace TopiaForge.ModManager
     /// for action results, a destructive-confirm modal for removal, ESC-close via the
     /// kit dismiss stack, and cursor handling via the kit lease.
     /// Tabs are found by name (<see cref="ManagerTabLookup"/>), never by their place in the rail.
-    /// The multiplayer presenter ticks every frame, overlay open or not, so a join is followed while the player plays.
+    /// The multiplayer presenter ticks every frame, overlay open or not, so a join is followed while the player plays, and
+    /// voice chat after it, so push-to-talk works while the overlay is closed.
     /// </summary>
     internal sealed class ManagerOverlay : ITopiaForgeDismissable
     {
@@ -29,6 +31,7 @@ namespace TopiaForge.ModManager
         private TopiaForgeLabel? statusLabel;
         private TopiaForgeContainer? content;
         private MultiplayerSessionsUi? multiplayerUi;
+        private MultiplayerVoiceChat? voiceChat;
         private IManagerTab[] tabs = Array.Empty<IManagerTab>();
         private string[] titles = Array.Empty<string>();
         private int selectedTab;
@@ -47,8 +50,11 @@ namespace TopiaForge.ModManager
                 new PluginMultiplayerEnvironment(plugin, multiplayerGuard),
                 new FileMultiplayerSettingsStore(plugin.Paths.Data),
                 MultiplayerWorkSchedulers.Background);
-            multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab);
+            multiplayerFrame = new MultiplayerOverlayFrame(multiplayerGuard, multiplayer, TickMultiplayerOutside, TickLiveTab, TickVoiceChat);
             multiplayerGuard.Run(MultiplayerOverlayFrame.StartStage, multiplayer.Start);
+
+            // Voice chat that cannot start leaves VOICE saying so; the rest of the overlay runs on without it.
+            multiplayerGuard.Run(MultiplayerOverlayFrame.VoiceStartStage, StartVoiceChat);
         }
 
         /// <summary>Gets whether the multiplayer provider is loaded, so the main menu offers MULTIPLAYER.</summary>
@@ -99,6 +105,7 @@ namespace TopiaForge.ModManager
 
         public void Dispose()
         {
+            multiplayerGuard.Run(MultiplayerOverlayFrame.VoiceTeardownStage, StopVoiceChat);
             multiplayerGuard.Run(MultiplayerOverlayFrame.TeardownStage, () =>
             {
                 multiplayerUi?.Close();
@@ -155,6 +162,22 @@ namespace TopiaForge.ModManager
             if (selectedTab < tabs.Length && tabs[selectedTab] is IManagerLiveTab live) live.OnHidden();
         }
 
+        private void StartVoiceChat()
+        {
+            var created = new MultiplayerVoiceChat(plugin);
+            voiceChat = created;
+            created.Start();
+        }
+
+        private void TickVoiceChat(float deltaTime) => voiceChat?.Tick(deltaTime);
+
+        private void StopVoiceChat()
+        {
+            var stopping = voiceChat;
+            voiceChat = null;
+            stopping?.Dispose();
+        }
+
         private void Build()
         {
             host = TopiaForgeUi.Create(new TopiaForgeUiOptions
@@ -195,7 +218,7 @@ namespace TopiaForge.ModManager
             tabs = new IManagerTab[]
             {
                 new GamemodesTab(),
-                new MultiplayerTab(multiplayer, multiplayerGuard),
+                new MultiplayerTab(multiplayer, multiplayerGuard, voiceChat?.Screen),
                 new InstalledTab(uiState),
                 new PackagesTab(uiState),
                 new SettingsTab(),

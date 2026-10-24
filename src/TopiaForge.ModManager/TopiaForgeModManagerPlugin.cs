@@ -161,6 +161,8 @@ namespace TopiaForge.ModManager
                     managerLogger,
                     validationContext,
                     startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
+                // The game's own recording reaches the microphone arbiter before any mod can claim the microphone.
+                ObserveNativeRecording();
                 // The TopiaForge service a session launch names comes first, then the manager's multiplayer configuration.
                 runtime.Multiplayer.Host.ConfigureServiceOrigin(launchServiceOrigin, launchStaging.ReadPreferences()?.ServiceOrigin);
                 OpenLauncherChannels();

@@ -21,6 +21,11 @@ namespace TopiaForge.RobotKit
     // control over; they may restrict or withdraw it at any time. Off by default, capture requires an explicit
     // push-to-talk action, and failure must always fall back to typed input. See the warning on RoboApiClient and
     // the P0-PRIV-01 gate.
+    //
+    // Each capture claims the microphone through the runtime's arbiter first (RobotDialogueMicrophone): it cannot start
+    // while the game's own robot recording has the microphone, and voice chat yields to it while it records. A capture the
+    // game's recording overtakes stops at once without ending the device, which the game is then using, and ends its own
+    // recording only once the game is done.
     internal sealed class PlayerDialogueInputService : IPlayerDialogueInputService,
         IOwnerBoundExtensionFactory, IDisposable
     {
@@ -36,13 +41,15 @@ namespace TopiaForge.RobotKit
         private readonly CancellationTokenSource serviceCts = new CancellationTokenSource();
         private readonly List<VoiceCapture> active = new List<VoiceCapture>();
         private readonly IModLogger logger;
+        private readonly RobotDialogueMicrophone microphone;
 
         private bool disposed;
         private bool loggedAvailability;
 
-        public PlayerDialogueInputService(IModLogger logger)
+        public PlayerDialogueInputService(IModLogger logger, RobotDialogueMicrophone microphone)
         {
             this.logger = logger;
+            this.microphone = microphone ?? throw new ArgumentNullException(nameof(microphone));
             client = new RoboApiClient(
                 Application.persistentDataPath, Guid.NewGuid().ToString("N"), logger);
         }
@@ -71,17 +78,36 @@ namespace TopiaForge.RobotKit
                 }
             }
 
+            // A capture the game's recording overtook ends its own recording first, now that it may, so it never ends this one's.
+            SettleAbandoned();
+            var claimed = microphone.TryClaim();
+            if (!claimed.TryGetValue(out var claim))
+            {
+                return OperationResult<IVoiceCapture>.Failure(claimed.ErrorCode, claimed.ErrorMessage);
+            }
+
             var device = PickDevice();
-            var clip = Microphone.Start(device, true, ClipSeconds, SampleRate);
+            AudioClip? clip;
+            try
+            {
+                clip = Microphone.Start(device, true, ClipSeconds, SampleRate);
+            }
+            catch (Exception)
+            {
+                claim.Release();
+                throw;
+            }
+
             if (clip == null)
             {
+                claim.Release();
                 return OperationResult<IVoiceCapture>.Failure(
                     ModErrorCode.External,
                     "The microphone could not begin recording.");
             }
 
             LogAvailabilityOnce(device);
-            var capture = new VoiceCapture(client, logger, serviceCts.Token, device, clip);
+            var capture = new VoiceCapture(client, logger, serviceCts.Token, device, clip, claim);
             active.Add(capture);
             return OperationResult<IVoiceCapture>.Success(capture);
         }
@@ -111,7 +137,7 @@ namespace TopiaForge.RobotKit
             {
                 var capture = active[index];
                 capture.Pump();
-                if (capture.IsComplete)
+                if (capture.IsComplete && capture.IsSettled)
                 {
                     active.RemoveAt(index);
                 }
@@ -121,12 +147,11 @@ namespace TopiaForge.RobotKit
         public void OnSceneChanged()
         {
             client.InvalidateToken();
-            for (var index = 0; index < active.Count; index++)
+            for (var index = active.Count - 1; index >= 0; index--)
             {
                 active[index].Cancel();
+                if (active[index].IsSettled) active.RemoveAt(index);
             }
-
-            active.Clear();
         }
 
         public void Dispose()
@@ -149,6 +174,7 @@ namespace TopiaForge.RobotKit
             for (var index = 0; index < active.Count; index++)
             {
                 active[index].Cancel();
+                active[index].LetGo();
             }
 
             active.Clear();
@@ -156,6 +182,17 @@ namespace TopiaForge.RobotKit
             // Mono never unloads the assembly, so a cached player token would otherwise stay resident for the
             // rest of the process after the mod is unloaded.
             client.InvalidateToken();
+        }
+
+        private void SettleAbandoned()
+        {
+            for (var index = active.Count - 1; index >= 0; index--)
+            {
+                var capture = active[index];
+                if (!capture.IsComplete) continue;
+                capture.Pump();
+                if (capture.IsSettled) active.RemoveAt(index);
+            }
         }
 
         private static bool HasMicrophone()
@@ -279,6 +316,7 @@ namespace TopiaForge.RobotKit
             private readonly string? device;
             private readonly AudioClip? clip;
             private readonly CancellationToken serviceToken;
+            private readonly RobotDialogueMicrophone.Claim claim;
 
             private CancellationTokenSource? cts;
             private Task<string?>? sttTask;
@@ -289,19 +327,24 @@ namespace TopiaForge.RobotKit
                 new TaskCompletionSource<OperationResult<VoiceTranscriptResult>>(
                     TaskCreationOptions.RunContinuationsAsynchronously);
 
-            public VoiceCapture(RoboApiClient client, IModLogger logger, CancellationToken serviceToken, string? device, AudioClip clip)
+            public VoiceCapture(RoboApiClient client, IModLogger logger, CancellationToken serviceToken, string? device, AudioClip clip,
+                RobotDialogueMicrophone.Claim claim)
             {
                 this.client = client;
                 this.logger = logger;
                 this.serviceToken = serviceToken;
                 this.device = device;
                 this.clip = clip;
+                this.claim = claim;
                 recording = true;
                 recordStartTime = Time.realtimeSinceStartup;
             }
 
             public bool IsRecording => recording;
             internal bool IsComplete => complete;
+
+            // Whether the capture's claim on the microphone was given back: its recording is ended, or never its to end.
+            internal bool IsSettled => claim.IsReleased;
 
             public async Task<OperationResult<VoiceTranscriptResult>> StopAsync(
                 CancellationToken cancellationToken = default)
@@ -334,7 +377,10 @@ namespace TopiaForge.RobotKit
             internal void Cancel()
             {
                 recording = false;
-                StopMic();
+
+                // A recording already ended is not ended again: the device may record the game by now.
+                if (claim.IsAbandoned || claim.IsPreempted) claim.Abandon();
+                else if (!claim.IsReleased) StopMic();
                 try
                 {
                     cts?.Cancel();
@@ -362,9 +408,34 @@ namespace TopiaForge.RobotKit
 
             public void Dispose() => Cancel();
 
+            // As the mod unloads: a recording the game overtook is ended if the game is done, and the claim goes back either way.
+            internal void LetGo()
+            {
+                if (claim.MayEndAbandoned) EndDevice();
+                claim.Release();
+            }
+
             // Poll the in-flight transcription; called by the service tick.
             public void Pump()
             {
+                if (claim.IsAbandoned)
+                {
+                    // The game overtook this capture. Once it is done, the recording left on the device is this one's to end.
+                    if (claim.MayEndAbandoned)
+                    {
+                        EndDevice();
+                        claim.Release();
+                    }
+
+                    return;
+                }
+
+                if (recording && claim.IsPreempted)
+                {
+                    Overtaken();
+                    return;
+                }
+
                 if (recording && Time.realtimeSinceStartup - recordStartTime >= MaxRecordSeconds)
                 {
                     Stop();
@@ -407,6 +478,13 @@ namespace TopiaForge.RobotKit
 
             private void FinalizeAndTranscribe()
             {
+                if (claim.IsPreempted)
+                {
+                    // The device now records the game: what it holds is not this capture's to read or end.
+                    Overtaken();
+                    return;
+                }
+
                 if (clip == null || client == null)
                 {
                     // Release the device on this path too. The capture is marked complete below and dropped
@@ -451,6 +529,12 @@ namespace TopiaForge.RobotKit
 
             private void StopMic()
             {
+                EndDevice();
+                claim.Release();
+            }
+
+            private void EndDevice()
+            {
                 try
                 {
                     if (Microphone.IsRecording(device))
@@ -462,6 +546,17 @@ namespace TopiaForge.RobotKit
                 {
                     logger?.Debug("Voice microphone cleanup failed: " + ex.Message);
                 }
+            }
+
+            // The game's own recording took the microphone: the capture stops without a transcript and leaves the device be.
+            private void Overtaken()
+            {
+                recording = false;
+                claim.Abandon();
+                complete = true;
+                completion.TrySetResult(OperationResult<VoiceTranscriptResult>.Failure(
+                    ModErrorCode.Conflict,
+                    "The game's own recording took the microphone."));
             }
 
             private void CompleteEmpty(string reason)

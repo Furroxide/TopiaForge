@@ -46,7 +46,7 @@ developer switch until the release enables them: with them off, the tab says so 
 | BROWSE | LAN, Internet, Favorites and History, in a sortable, virtualized table: lock, name, gamemode, world, players, ping and mods (Ready, Needs N, Incompatible). JOIN, INSTALL & JOIN IN LAUNCHER, and favorites |
 | HOST | The game to host (chosen at the menu from the games it can start, the running one otherwise), name (1 to 48 characters), players (2 to 16, 8 by default), password (optional, never kept), visibility (Public, Invite or LAN), and the host policy |
 | CONNECT | An invite code or the invite's link, or an invite or server link pasted as the address, which need the TopiaForge service; or an address and password the player types |
-| VOICE | A slot the voice slice fills (`IMultiplayerVoiceSlot`). Until then a placeholder, which says "This session offers no voice chat." while this game hosts, or has joined, a session without it |
+| VOICE | Consent, transmit state, mode and bindings, microphone and test meter, volumes, Hear nobody and per-player mutes through `IVoiceScreen`. It retains "This session offers no voice chat." when applicable; see [MultiplayerVoice.md](MultiplayerVoice.md#part-4-voice-in-the-game) |
 | SESSION | The invite, with COPY INVITE CODE for the host; the players with kick, ban and mute for the host; and "End session for everyone" or "Leave server" |
 
 - **Searching** the local network starts only when the player presses SEARCH LAN, and stops when they leave BROWSE or
@@ -261,7 +261,7 @@ flows start sessions (MultiplayerLaunchContract.md, section 8).
 
 | Seam | Filled by |
 | --- | --- |
-| `IMultiplayerVoiceSlot` in the VOICE sub-tab | The voice slice |
+| `IVoiceScreen` in the VOICE sub-tab | Filled by `VoicePresenter`; positional playback waits for avatars and HUD indicators for the kit lifetime slice |
 | `HostPresenter.PendingPolicies` | The Sandbox host policy |
 | `ConnectingPresenter.ReportSynchronization(done, total)` | The network world's baseline: WS3.6 reports it as `NetworkWorld.Progress`, which nothing reads into the stepper yet |
 | The launcher's side of the handoff, live-join and journal channels this game writes and reads | The launcher's join and preference flows (WS6) |
