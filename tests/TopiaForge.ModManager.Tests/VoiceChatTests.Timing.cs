@@ -51,6 +51,14 @@ namespace TopiaForge.ModManager.Tests
             That(claims.TryClaim().TryGetValue(out var readable) && !arbiter.NativeUnreadable, "readable again, a conversation may start");
             readable!.Release();
 
+            // A claim reads the game once and names the use that refused it, whatever a second read would say.
+            var reads = 0;
+            var flaky = new MultiplayerMicrophoneArbiter();
+            flaky.ObserveNativeRecording(() => reads++ == 0 ? throw new MissingFieldException("UIState", "Recording") : false);
+            var once = flaky.TryAcquire(InternalMicrophoneUse.RobotDialogue, RobotDialogueMicrophone.Reason);
+            That(!once.Succeeded && once.ErrorCode == ModErrorCode.Conflict && once.ErrorMessage == "The microphone is in use for the game's robot recording." &&
+                 reads == 1, "a claim reads the game once, and names what refused it even when the next read would differ (" + reads + " reads)");
+
             // With voice chat: the mods' update runs before voice chat's tick in the plugin's frame, and its claim sees the game.
             var rig = VoiceRig.On();
             var robot = new RobotDialogueMicrophone((use, reason) => Lease(rig.Arbiter, use, reason));

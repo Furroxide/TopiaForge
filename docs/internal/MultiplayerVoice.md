@@ -981,17 +981,19 @@ The provider still owns its voice service, so transport-loss counters are not ne
 ### 4.6 Verification and limits
 
 The manager's 26 focused tests cover the gate, test mode, priority, unreadable native state, the game's recording
-read at every claim and watched from before mods load, approved consent, withdrawal/versioning, journal concurrency
-and failures, indicator states, reserved/censused controls, rebinding, Esc during a capture, devices, stable and
-session-scoped mutes, playback, allocation, wait-free callback shape and bounds.
+read once at every claim and watched from before mods load, approved consent, withdrawal/versioning, journal
+concurrency and failures, indicator states, reserved/censused controls, rebinding, Esc during a capture with the
+consent opened over it, devices, stable and session-scoped mutes, playback, allocation, wait-free callback shape and
+bounds.
 Provider tests carry push-to-talk capture through the real SPI and codec to another player's stream, and keep
 player-key mutes across a move to another host and back, on the deterministic virtual network.
 
 The allocation tests require zero bytes across 2,000 idle frames, talking frames and VOICE getter reads, and
 10,000 emitter callback reads. The callback's IL permits only volatile reads, clearing silence and the stream's
 wait-free read. Mutating consent, native priority or reserved-key checks makes its corresponding test fail, and so
-does reading the game's recording only in voice chat's frame, taking Esc in the capture's own frame, or leaving the
-kit's Escape stack unheld. Where the plugin points the arbiter, the decoding half of the game's state and the capture's
-band on the kit's stack are game-side code no harness runs; their source shape is checked instead.
+does reading the game's recording only in voice chat's frame or twice in one claim, taking Esc in the capture's own
+frame, or leaving the kit's Escape stack unheld. Where the plugin points the arbiter, the decoding half of the game's
+state, the capture's band on the kit's stack and the consent's place above it are game-side code no harness runs;
+their source shape is checked instead.
 Native consent, microphone, meter and real-input checks remain distinct from these Unity-free tests. Two-machine
 audio acceptance runs on two real machines; neither the virtual network nor a local microphone test replaces it.
