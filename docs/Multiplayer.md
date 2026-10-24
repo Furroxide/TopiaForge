@@ -41,8 +41,9 @@ path unchanged. Throwing keeps a one-second simulation window after disposal, th
 velocities to the host; another player may catch it during that window. Native held-item pickups use the same rules.
 
 Offline behavior stays local. Raw Unity writes outside the SDK lease cannot be attributed automatically to a player.
-Remote range currently uses a client-reported avatar position until presence supplies validated positions; see the
-[internal motion contract](internal/MultiplayerRuntimeIntegration.md#18-motion-ownership) for limits and integration.
+Remote range currently uses a client-reported avatar position until presence supplies validated positions. The motion
+limits and integration notes are maintainer-internal, in the "Motion ownership" section of
+`docs/internal/MultiplayerRuntimeIntegration.md`.
 
 ## Add the module
 
