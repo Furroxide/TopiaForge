@@ -34,6 +34,14 @@ namespace TopiaForge.ModManager
             };
             return activeSessions;
         }
+
+        /// <summary>
+        /// Hands <paramref name="progress"/> the session orchestrator's progress under <paramref name="requestId"/> until the
+        /// handle is disposed (<see cref="GamemodeSessionOrchestrator.SubscribeProgress"/>); before session authority is
+        /// active there is none to hand.
+        /// </summary>
+        internal IDisposable SubscribeSessionProgress(string requestId, Action<LaunchProgress> progress) =>
+            activeSessions?.SubscribeProgress(requestId, progress) ?? GamemodeSessionOrchestrator.NoProgress;
         internal RuntimeSessionSnapshot CaptureSessionRuntime() => sessionBindings?.Capture()
             ?? throw new InvalidOperationException("The selected runtime declarations are unavailable.");
         internal IReadOnlyList<ModLaunchTargetDeclaration> LaunchTargets

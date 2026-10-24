@@ -153,9 +153,17 @@ namespace TopiaForge.ModManager
             publicState = CapturePublicState(state, record);
             Publish(StateChanged, state);
             Publish(publicStateChanged, publicState);
-            Publish(Progress, new LaunchProgress(record.Identity.RequestId, NextSequence(), PhaseName(phase),
-                phase == SessionPhase.Idle ? null : record.Identity.SessionId, native.IsSceneBusy));
+            if (ReportsToLauncher(record))
+                Publish(Progress, new LaunchProgress(record.Identity.RequestId, NextSequence(), PhaseName(phase),
+                    phase == SessionPhase.Idle ? null : record.Identity.SessionId, native.IsSceneBusy));
         }
+
+        /// <summary>
+        /// Gets whether a session's progress and terminal outcome go to the launcher: every session this game starts, under its
+        /// own request, and a follow of the host's world only when it belongs to a launcher-planned join, under that join's
+        /// request (WS3.8). A follow of a join started in game publishes nothing to the launcher.
+        /// </summary>
+        private static bool ReportsToLauncher(SessionRecord record) => record.Follow == null || record.Follow.LaunchRequestId != null;
 
         private void CompleteCommand(TaskCompletionSource<OperationResult<bool>> completion, string requestId, string command,
             string? sessionId, OperationResult<bool> result, IEnumerable<LaunchBlock>? blocks = null)

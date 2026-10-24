@@ -74,14 +74,15 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Installs session follow over the session orchestrator (WS3.8): it announces this game's world when it hosts, and
-        /// follows the host's when it joins, in the frame's step 2. A level the game's own menus loaded counts as a game the
-        /// player is in when joining (#224). A provider already attached is told at once, as it would have been.
+        /// follows the host's when it joins, in the frame's step 2, reporting to the launcher only for a join the launcher
+        /// planned. A level the game's own menus loaded counts as a game the player is in when joining (#224). A provider
+        /// already attached is told at once, as it would have been.
         /// </summary>
         private void InstallSessionFollow(GamemodeSessionOrchestrator sessions)
         {
             if (sessionFollow != null) return;
             var follow = new SessionFollow(sessions, followedScene, sceneAuthority.GrantFollow, LeaveForFollow, () => networkWorld.Progress,
-                DiscoverWorldsAsync, () => multiplayer.Control == null, nativeDispatcher, multiplayer.Log);
+                DiscoverWorldsAsync, () => multiplayer.Control == null, () => multiplayer.LaunchedJoin, nativeDispatcher, multiplayer.Log);
             sessionFollow = follow;
             multiplayer.NativeWorldSource = () => followedScene.IsGameplay;
             multiplayer.AddObserver(follow);

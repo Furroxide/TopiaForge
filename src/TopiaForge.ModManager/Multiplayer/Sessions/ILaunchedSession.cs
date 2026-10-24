@@ -25,6 +25,12 @@ namespace TopiaForge.ModManager.Sessions
     {
         bool IsHost { get; }
 
+        /// <summary>
+        /// Gets the request this launch's records go under: the launch request's, or a live join's own id. Session follow
+        /// reports the host's world under it while the launch it carries out still waits for its result (WS3.8).
+        /// </summary>
+        string RequestId { get; }
+
         /// <summary>Gets whether this is a live join of the running game, which waits for no game of its own.</summary>
         bool IsLiveJoin { get; }
 

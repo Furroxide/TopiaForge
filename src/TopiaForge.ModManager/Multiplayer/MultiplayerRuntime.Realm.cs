@@ -64,6 +64,13 @@ namespace TopiaForge.ModManager
         }
 
         /// <summary>
+        /// Gets the request the launcher-planned join this game went online with last reports under, its launch request's id
+        /// or a live join's own: session follow reports the host's world to the launcher under it, and under nothing else
+        /// (WS3.8). Null for a join the player started in game, once this game leaves, and once a joined session ends.
+        /// </summary>
+        internal string? LaunchedJoin { get; private set; }
+
+        /// <summary>
         /// The census seam: the network world (WS3.6) keys the scene and baselines the recorded spawns whenever this process
         /// becomes a host. Until a slice fills it, promotions take no census and the records stay.
         /// </summary>
@@ -139,15 +146,21 @@ namespace TopiaForge.ModManager
         /// Joins another player's session. Joining replaces the local session, so it needs an idle one: while a game runs the
         /// runtime refuses with <see cref="NetRealmTransitionVerdict.RequiresLeave"/>, and the interface asks "Leave current
         /// game?" before it tries again from the menu. A host must stop hosting first, and a loaded standalone mod refuses it.
+        /// <paramref name="launchRequestId"/> names the launcher-planned join this is, by the request its records go under, so
+        /// session follow reports the host's world under it (<see cref="LaunchedJoin"/>); null for a join started in game.
         /// </summary>
-        internal MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings)
+        internal MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings, string? launchRequestId = null)
         {
             if (target == null) throw new ArgumentNullException(nameof(target));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
+            if (launchRequestId != null) LaunchContractValues.Token(launchRequestId, nameof(launchRequestId));
             var current = control;
             var transition = EvaluateRealmChange(NetRealm.Client);
             var refused = Unavailable(current, transition) ?? Refuse(transition, NetRealm.Client);
-            return refused ?? new MultiplayerRealmChange(transition, current!.Join(target, settings));
+            if (refused != null) return refused;
+            var change = new MultiplayerRealmChange(transition, current!.Join(target, settings));
+            if (change.Succeeded) LaunchedJoin = launchRequestId;
+            return change;
         }
 
         /// <summary>
@@ -156,6 +169,7 @@ namespace TopiaForge.ModManager
         /// </summary>
         internal MultiplayerRealmChange Leave()
         {
+            LaunchedJoin = null;
             var transition = NetRealms.EvaluateTransition(Realm, NetRealm.Offline, ReadSessionPhase(), false);
             var current = control;
             if (current == null) return new MultiplayerRealmChange(transition, OperationResult<bool>.Success(true));
@@ -204,6 +218,7 @@ namespace TopiaForge.ModManager
 
             // Observers end what the old realm held, and a joined player starts, before a new host takes its census.
             for (var index = 0; index < observers.Count; index++) Tell(observers[index], ObserverEvent.RealmChanged, null, RealmOf(previous), RealmOf(next));
+            if (previous == InternalSessionRole.Client) LaunchedJoin = null;
             if (previous == InternalSessionRole.Solo && next == InternalSessionRole.ListenHost) TakeCensus();
         }
 

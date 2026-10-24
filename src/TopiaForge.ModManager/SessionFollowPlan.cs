@@ -27,13 +27,20 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>
-    /// What a follow needs: the host's world as it announced it, which this game resolves against its own packages, and how
-    /// to wait for the host's world to arrive. Its ids were checked as the runtime checks its own before it was made.
+    /// What a follow needs: the host's world as it announced it, which this game resolves against its own packages, how to
+    /// wait for the host's world to arrive, and the launcher-planned join it belongs to, if any. Its ids were checked as the
+    /// runtime checks its own before it was made.
     /// </summary>
     internal sealed class SessionFollowPlan
     {
+        /// <param name="launchRequestId">
+        /// The request the launcher-planned join this follow belongs to reports under, which the follow's session takes as its
+        /// own, so its progress and its end reach that join's records; null for a join started in game, whose follow reports
+        /// nothing to the launcher.
+        /// </param>
         internal SessionFollowPlan(string hostSessionId, LaunchRequest request, string gamemodeId, string worldId, string? worldFamilyId,
-            string transition, string? baseScene, TransformState? baseSpawn, Func<CancellationToken, Task<OperationResult<bool>>> synchronize)
+            string transition, string? baseScene, TransformState? baseSpawn, Func<CancellationToken, Task<OperationResult<bool>>> synchronize,
+            string? launchRequestId = null)
         {
             HostSessionId = LaunchContractValues.Token(hostSessionId, nameof(hostSessionId));
             Request = request ?? throw new ArgumentNullException(nameof(request));
@@ -46,7 +53,14 @@ namespace TopiaForge.ModManager
             BaseScene = baseScene;
             BaseSpawn = baseSpawn;
             Synchronize = synchronize ?? throw new ArgumentNullException(nameof(synchronize));
+            LaunchRequestId = launchRequestId == null ? null : LaunchContractValues.Token(launchRequestId, nameof(launchRequestId));
         }
+
+        /// <summary>
+        /// Gets the request the launcher-planned join this follow belongs to reports under, or null: only then does the follow
+        /// publish its progress and its session's end to the launcher, under that request (WS3.8).
+        /// </summary>
+        internal string? LaunchRequestId { get; }
 
         /// <summary>Gets the host's world session id, which this game's session takes, so every consumer of the world session sees the host's.</summary>
         internal string HostSessionId { get; }

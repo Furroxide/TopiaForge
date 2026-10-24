@@ -61,9 +61,10 @@ namespace TopiaForge.ModManager
             foreach (var error in record.Errors) Report(error);
             var result = record.Errors.Count == 0 ? OperationResult<bool>.Success(true)
                 : OperationResult<bool>.Failure(ModErrorCode.External, Message(string.Join("; ", record.Errors.SelectMany(CleanupMessages).Distinct(StringComparer.Ordinal))));
-            Publish(Outcome, new LaunchOutcome("session", record.Identity.RequestId, NextSequence(), "idle",
-                result.Succeeded ? (record.ReachedRunning ? "succeeded" : "cancelled") : "failed", Array.Empty<LaunchBlock>(), record.Identity.SessionId,
-                error: result.Succeeded ? null : new LaunchExecutionError("external", result.ErrorMessage)));
+            if (ReportsToLauncher(record))
+                Publish(Outcome, new LaunchOutcome("session", record.Identity.RequestId, NextSequence(), "idle",
+                    result.Succeeded ? (record.ReachedRunning ? "succeeded" : "cancelled") : "failed", Array.Empty<LaunchBlock>(), record.Identity.SessionId,
+                    error: result.Succeeded ? null : new LaunchExecutionError("external", result.ErrorMessage)));
             if (!retainLease) lifecycle.Release(record.Lease);
             record.Stopped.TrySetResult(result);
         }
