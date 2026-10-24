@@ -106,5 +106,20 @@ namespace TopiaForge.ModManager.Sessions
 
         /// <summary>Gets the current time, for bookmarks.</summary>
         long UnixSeconds { get; }
+
+        /// <summary>
+        /// Gets the files this game shares with the TopiaForge launcher: its preferences, the session handoff and live joins.
+        /// Null where there is no manager staging to share them through.
+        /// </summary>
+        ILauncherChannels? Launcher { get; }
+
+        /// <summary>Gets the local session's phase, as the realm rules read it; a frame may read it.</summary>
+        SessionPhase LocalPhase { get; }
+
+        /// <summary>
+        /// Takes the session this game was launched to host or join, once the provider planned it: once, and null after, or
+        /// when there is none. A frame may call it; it allocates nothing.
+        /// </summary>
+        ILaunchedSession? TakeLaunchedSession();
     }
 }

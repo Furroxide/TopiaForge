@@ -36,7 +36,7 @@ namespace TopiaForge.ModManager.Tests
             {
                 ("v4-untouched", V4Untouched), ("hosts", () => Hosts(repositoryRoot)), ("session-rules", SessionRules),
                 ("consume", Consume), ("correlation", Correlation), ("publication", Publication), ("channels", Channels),
-                ("journal-append", JournalAppend), ("privacy", Privacy), ("ticket", Ticket)
+                ("journal-append", JournalAppend), ("privacy", Privacy), ("offer", Offer)
             })
             {
                 try { test.Run(); Console.WriteLine("Launch session contract " + test.Name + ": PASS"); }
@@ -358,28 +358,35 @@ namespace TopiaForge.ModManager.Tests
             }
         }
 
-        private static void Ticket()
+        /// <summary>
+        /// The session the runtime offers the provider: the request's session as the internal launch session, with direct play
+        /// only under the player's consent for this session, and its target pinned by the server and descriptor the launcher
+        /// verified. Neither the session nor its target prints the address.
+        /// </summary>
+        private static void Offer()
         {
             var session = new LaunchSessionRequest("join", "intent-1", "Sam",
                 new LaunchSessionTransport("direct", new LaunchDirectConsent("intent-1", 1), 0, false, true), "https://mp.topiaforge.dev",
                 Direct(PublicHost), devInstance: new LaunchDevInstance(1, 2));
-            var ticket = ModManager.LaunchSessionOffer.ToTicket(session);
-            Assert(ticket.Role == "join" && ticket.AllowDirect && ticket.DisplayName == "Sam" && ticket.ServiceOrigin == "https://mp.topiaforge.dev"
-                && ticket.Target!.Kind == "direct" && ticket.Target.ServerId == ServerId && ticket.Target.Host == PublicHost
-                && ticket.Target.Port == PublicPort && ticket.Target.DescriptorSha256 == new string('a', 64) && ticket.Host == null
-                && ticket.DevInstanceIndex == 1 && ticket.DevInstanceCount == 2,
-                "The ticket carries the session, its target pinned by the verified server.");
-            Assert(!ticket.ToString().Contains(PublicHost, StringComparison.Ordinal) && !ticket.Target!.ToString().Contains(PublicHost, StringComparison.Ordinal),
-                "A ticket never shows its address.");
-            ModManager.LaunchSessionOffer.Offer(session);
-            var taken = TopiaForge.Mods.Internal.LaunchSessionTickets.Take();
-            Assert(taken != null && taken.IntentId == "intent-1" && TopiaForge.Mods.Internal.LaunchSessionTickets.Take() == null,
-                "The provider takes the offered ticket once.");
-            var host = ModManager.LaunchSessionOffer.ToTicket(new LaunchSessionRequest("host", "intent-3", "Sam",
-                new LaunchSessionTransport("relay-only", null, 27250, true, true),
+            var offered = ModManager.LaunchSessionOffer.ToSession(session);
+            Assert(offered.IntentId == "intent-1" && offered.AllowDirect && offered.DisplayName == "Sam" && offered.Host == null
+                && offered.Target!.Kind == TopiaForge.Mods.Internal.InternalJoinTargetKind.Direct && offered.Target.ServerId == ServerId
+                && offered.Target.Host == PublicHost && offered.Target.Port == PublicPort && offered.Target.DescriptorSha256 == new string('a', 64),
+                "The offered session carries the launch, its target pinned by the verified server and descriptor.");
+            Assert(!offered.ToString().Contains(PublicHost, StringComparison.Ordinal) && !offered.Target!.ToString().Contains(PublicHost, StringComparison.Ordinal)
+                && !offered.ToString().Contains(PublicPort.ToString(), StringComparison.Ordinal),
+                "A launch session never shows its address.");
+            var relayOnly = ModManager.LaunchSessionOffer.ToSession(new LaunchSessionRequest("join", "intent-2", "Sam",
+                new LaunchSessionTransport("relay-only", null, 0, false, true), "https://mp.topiaforge.dev",
+                LaunchSessionTarget.Invite("ABCDE12345", ServerId, new string('a', 64), new string('b', 64))));
+            Assert(!relayOnly.AllowDirect && relayOnly.Target!.Kind == TopiaForge.Mods.Internal.InternalJoinTargetKind.Invite && relayOnly.Target.InviteCode == "ABCDE12345"
+                && relayOnly.Target.Host == null, "A relay-only launch is relay-only: nothing turns direct play on.");
+            var host = ModManager.LaunchSessionOffer.ToSession(new LaunchSessionRequest("host", "intent-3", "Sam",
+                new LaunchSessionTransport("relay-only", null, 27260, true, true),
                 host: new LaunchHostOptions("Sam's Sandbox", 6, "lan", true, true, false)));
-            Assert(host.Host!.MaxPlayers == 6 && host.Host.PasswordRequired && host.Target == null && host.Upnp && host.DevInstanceIndex == -1,
-                "A host's ticket carries its options; its password is typed in game.");
+            Assert(host.Host!.MaxPlayers == 6 && host.Host.PasswordRequired && host.Host.Visibility == TopiaForge.Mods.Internal.InternalSessionVisibility.Lan
+                && host.Target == null && host.Port == 27260 && host.RouterForwarding && !host.AllowDirect,
+                "A host's session carries its options and its game port; its password is typed in game.");
         }
 
         private static void Rejects(Action operation, string message)

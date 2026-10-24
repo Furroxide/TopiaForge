@@ -162,7 +162,8 @@ namespace TopiaForge.ModManager
                     validationContext,
                     startupJournal == null ? null : new StartupJournalLoadObserver(startupJournal, managerLogger));
                 // The TopiaForge service a session launch names comes first, then the manager's multiplayer configuration.
-                runtime.Multiplayer.Host.ConfigureServiceOrigin(launchSession?.Session.ServiceOrigin, launchStaging.ReadPreferences()?.ServiceOrigin);
+                runtime.Multiplayer.Host.ConfigureServiceOrigin(launchServiceOrigin, launchStaging.ReadPreferences()?.ServiceOrigin);
+                OpenLauncherChannels();
                 var selection = RuntimeSessionSelection.Create(launchProfile?.ProfileId ?? "direct-game", launchProfile?.ProfileRevision ?? 0,
                     packages, loadOrder, validationContext);
                 runtime.ActivateSessionRuntime(selection.Profile, rejectedSelections: selection.RejectedSelections);
@@ -171,10 +172,12 @@ namespace TopiaForge.ModManager
                     error => managerLogger.Error(error, "Runtime launch publication failed; launcher acknowledgement may remain unconfirmed."),
                     session: LaunchSessionIdentityForPublication(), sessionRefusal: launchSessionRefusal);
                 initializationLifetime.InitializeUi(() => runtime.Load(selection.Packages));
+                // The provider published its control as it loaded, and ModRuntime attached to it: the provider takes the session now.
+                TakeLaunchSession();
                 PublishRuntimeObservations();
                 // Every selected package now has a binding result, including failed owners.
                 ArmWorldLaunch();
-                // The provider takes its session ticket while mods load; no one takes it later.
+                // A session no provider took while mods loaded is withdrawn; no one takes it later.
                 WithdrawLaunchSession();
                 RecordStartupStage("mod-loading", stageStart);
                 if (!hasLauncherCommand)
@@ -346,7 +349,8 @@ namespace TopiaForge.ModManager
         private void FinishPluginTeardown(OperationResult<bool> shutdown)
         {
             PublishRuntimeObservations();
-            launchPublisher?.Dispose();
+            // A launched session still running ends as the game closes, and its terminal record says how cleanly.
+            launchPublisher?.Dispose(shutdown.Succeeded);
             if (!shutdown.Succeeded)
                 LogCleanupFailure(new InvalidOperationException(shutdown.ErrorMessage), "Mod runtime teardown completed with failures.");
             if (runtime != null)

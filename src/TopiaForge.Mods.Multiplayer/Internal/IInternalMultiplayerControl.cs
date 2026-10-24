@@ -172,6 +172,17 @@ namespace TopiaForge.Mods.Internal
         /// lose their relay when its credential next renews, within ten minutes, as the service ends their tickets. Host only.
         /// </summary>
         OperationResult<bool> RevokeInvite(string code);
+
+        /// <summary>
+        /// Takes the session a launch asked for and plans it: host settings, or a join target pinned by the server and
+        /// descriptor the launcher verified. It starts nothing; the runtime opens or joins the plan through the realm. A join
+        /// to a planned target, and hosting with a plan's settings, keep the launch's own privacy whatever settings they are
+        /// started with. Refused as <see cref="ModErrorCode.Unavailable"/> while live sessions are off, without an attached
+        /// runtime, or when the session needs the TopiaForge service and none is configured, and as
+        /// <see cref="ModErrorCode.InvalidArgument"/> for a target the network layer cannot read. The provider keeps nothing of
+        /// <paramref name="session"/> but what the plan's own handles need.
+        /// </summary>
+        OperationResult<IInternalLaunchPlan> PlanLaunchSession(InternalLaunchSession session);
     }
 
     /// <summary>One readiness hold. Disposing it releases the hold; disposing it again does nothing.</summary>

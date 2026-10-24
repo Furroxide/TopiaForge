@@ -141,22 +141,21 @@ namespace TopiaForge.ModManager.Sessions
             if (!CanJoin) return;
             var listing = SelectedListing()!;
             var name = HostText.ForDisplay(listing.Name);
-            var link = LauncherJoinLink.ForServer(listing.ServerId);
+            var launcher = LauncherHandoff.ForLan(listing.ServerId);
 
             // A LAN session is on the local network by nature, so it never needs the direct prompt; the disclosure still
             // comes before this player's first join.
             context.Privacy.EnsureDisclosure(
-                () => joins.Begin(new JoinRequest(listing.Target, name.Length == 0 ? "LAN session" : name, allowDirect: false, launcherLink: link)),
+                () => joins.Begin(new JoinRequest(listing.Target, name.Length == 0 ? "LAN session" : name, allowDirect: false, launcher: launcher)),
                 () => context.Notify("Nothing was joined.", ScreenTone.Neutral));
         }
 
         public void InstallInLauncher()
         {
             if (!CanInstallInLauncher) return;
-            var link = LauncherJoinLink.ForServer(selectedKey);
-            if (link == null) return;
-            context.Environment.OpenUrl(link);
-            context.Notify("Opened the TopiaForge launcher to install this session's mods.", ScreenTone.Success);
+            var handoff = LauncherHandoff.ForLan(selectedKey);
+            if (handoff == null) return;
+            context.Handoffs.HandOff(handoff, "Opened the TopiaForge launcher to install this session's mods.");
         }
 
         public void ToggleFavorite()

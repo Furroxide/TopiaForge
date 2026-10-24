@@ -288,35 +288,42 @@ namespace TopiaForge.ModManager.Tests
             document.HostedTarget = null;
             document.HostedWorld = null;
             That(MultiplayerSettings.FromDocument(document).HostedTarget == null, "and settings written before this remember no game");
-            That(stored.WithHideMyIp(false).HostedTarget == "io.example.freeplay" && stored.WithHosting("Night", 4, InternalSessionVisibility.Lan, false).HostedWorld == "io.example.sandbox",
+            That(stored.WithHideMyIp(false).HostedTarget == "io.example.freeplay" && stored.AcknowledgeDisclosure().HostedWorld == "io.example.sandbox",
                 "every other change keeps the game remembered");
         }
 
         /// <summary>
         /// The settings file keeps schema 1 because a reader ignores the members it does not know. A game from before the game
         /// last hosted was remembered reads a newer game's file, schema and all, and this game reads what that older game
-        /// writes back, remembering no game. Nothing tested the file both ways before, though the schema version rests on it.
+        /// writes back, remembering no game. The display name and the hosting defaults are the launcher's preferences now: this
+        /// game writes neither to the file, and ignores what an older game wrote there, so neither has a second writable copy.
         /// </summary>
         private static void TheSettingsFileReadsAcrossVersions(string root)
         {
             var directory = Path.Combine(root, "settings-across-versions");
             Directory.CreateDirectory(directory);
             var store = new FileMultiplayerSettingsStore(directory);
-            store.Save(MultiplayerSettings.Default.WithDisplayName("Sam").WithHideMyIp(false)
-                .WithHosting("Night", 4, InternalSessionVisibility.Invite, true).WithHostedGame("io.example.freeplay", "io.example.sandbox"));
+            store.Save(MultiplayerSettings.Default.AcknowledgeDisclosure().WithHideMyIp(false).WithHostedGame("io.example.freeplay", "io.example.sandbox"));
             var path = Path.Combine(directory, FileMultiplayerSettingsStore.FileName);
-            That(File.ReadAllText(path).IndexOf("\"hostedTarget\"", StringComparison.Ordinal) > 0, "the game last hosted is written to the file");
+            var written = File.ReadAllText(path);
+            That(written.IndexOf("\"hostedTarget\"", StringComparison.Ordinal) > 0, "the game last hosted is written to the file");
+            That(written.IndexOf("\"displayName\"", StringComparison.Ordinal) < 0 && written.IndexOf("\"serverName\"", StringComparison.Ordinal) < 0 &&
+                 written.IndexOf("\"hostVisibility\"", StringComparison.Ordinal) < 0, "and neither the name nor the hosting defaults, which the launcher keeps");
 
             var older = JsonUtil.LoadPersistentFile<SettingsBeforeTheHostedGame?>(path, null);
-            That(older != null && older.SchemaVersion == 1 && older.DisplayName == "Sam" && older.HideMyIp == false && older.ServerName == "Night" &&
-                 older.HostMaxPlayers == 4 && older.HostVisibility == "invite" && older.HostVoice,
+            That(older != null && older.SchemaVersion == 1 && older.HideMyIp == false && older.AcknowledgedPrivacyDisclosure == 1,
                 "a game from before the game last hosted reads the newer file as schema 1, keeping everything it knows");
 
-            JsonUtil.SaveFile(path, older!);
+            older!.DisplayName = "Sam";
+            older.ServerName = "Night";
+            older.HostVisibility = "invite";
+            JsonUtil.SaveFile(path, older);
             var reread = store.Load();
-            That(reread.DisplayName == "Sam" && !reread.HideMyIp && reread.ServerName == "Night" && reread.HostVisibility == InternalSessionVisibility.Invite &&
-                 reread.HostedTarget == null && reread.HostedWorld == null,
+            That(!reread.HideMyIp && reread.AcknowledgedDisclosure == 1 && reread.HostedTarget == null && reread.HostedWorld == null,
                 "and this game reads what that older game writes back, remembering no game");
+            store.Save(reread.WithHideMyIp(true));
+            That(File.ReadAllText(path).IndexOf("Night", StringComparison.Ordinal) < 0,
+                "and what an older game kept there of the launcher's preferences is not carried forward");
         }
 
         /// <summary>The settings file as a game wrote it before it remembered the game last hosted.</summary>

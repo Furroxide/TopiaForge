@@ -90,10 +90,14 @@ namespace TopiaForge.ModManager.Tests
         /// <summary>Gets or sets what joining throws, as a failing provider might; null to answer <see cref="JoinResult"/>.</summary>
         internal Exception? ThrowOnJoin { get; set; }
 
+        /// <summary>Gets the password hosting started with, as the provider read it then; the settings themselves keep none after.</summary>
+        internal string? LastHostPassword { get; private set; }
+
         public OperationResult<bool> StartHosting(InternalHostSettings settings)
         {
             Calls.Add("StartHosting");
             LastHost = settings;
+            LastHostPassword = settings.Password;
             if (ThrowOnStartHosting != null) throw ThrowOnStartHosting;
             return HostResult;
         }
@@ -210,6 +214,52 @@ namespace TopiaForge.ModManager.Tests
             Calls.Add("RevokeInvite");
             return OperationResult<bool>.Success(true);
         }
+
+        /// <summary>Gets the launch sessions the screens or the runtime asked to plan, in order.</summary>
+        internal List<InternalLaunchSession> Planned { get; } = new List<InternalLaunchSession>();
+
+        /// <summary>Gets or sets what planning answers; null plans every session as <see cref="ScriptedLaunchPlan"/> does.</summary>
+        internal OperationResult<IInternalLaunchPlan>? PlanResult { get; set; }
+
+        public OperationResult<IInternalLaunchPlan> PlanLaunchSession(InternalLaunchSession session)
+        {
+            Calls.Add("PlanLaunchSession:" + (session.Host != null ? "host" : "join"));
+            Planned.Add(session);
+            return PlanResult ?? OperationResult<IInternalLaunchPlan>.Success(new ScriptedLaunchPlan(session));
+        }
+    }
+
+    /// <summary>A launch plan as a provider makes one: the launch's host settings, or a target named by its kind.</summary>
+    internal sealed class ScriptedLaunchPlan : IInternalLaunchPlan
+    {
+        internal ScriptedLaunchPlan(InternalLaunchSession session)
+        {
+            IntentId = session.IntentId;
+            DisplayName = session.DisplayName;
+            AllowDirect = session.AllowDirect;
+            var host = session.Host;
+            if (host != null)
+            {
+                Host = new InternalHostSettings(host.Name, host.MaxPlayers, host.Visibility) { AllowDirect = session.AllowDirect, Voice = host.Voice };
+                PasswordRequired = host.PasswordRequired;
+            }
+            else
+            {
+                Target = new ScriptedJoinTarget(session.Target!.Kind, ConnectPresenter.UnnamedTitle(session.Target.Kind), session.Target.ServerId);
+            }
+        }
+
+        public string IntentId { get; }
+
+        public string DisplayName { get; }
+
+        public bool AllowDirect { get; }
+
+        public InternalHostSettings? Host { get; }
+
+        public bool PasswordRequired { get; }
+
+        public IInternalJoinTarget? Target { get; }
     }
 
     /// <summary>A voice service whose transmit state the test sets, or makes throw; the screens read nothing else of it.</summary>
@@ -402,6 +452,122 @@ namespace TopiaForge.ModManager.Tests
             if (CopyFailure != null) throw CopyFailure;
             Copied.Add(text);
         }
+
+        /// <summary>Gets or sets the launcher's channels; null for a game with no staging to share them through.</summary>
+        public ILauncherChannels? Launcher { get; set; }
+
+        public SessionPhase LocalPhase => Phase;
+
+        /// <summary>Gets or sets the session this game was launched to host or join, which the screens take once.</summary>
+        internal ILaunchedSession? Launched { get; set; }
+
+        public ILaunchedSession? TakeLaunchedSession()
+        {
+            var launched = Launched;
+            Launched = null;
+            return launched;
+        }
+    }
+
+    /// <summary>
+    /// The launcher's channels in memory, recording what the game writes the way the staging store does: a recorded change
+    /// appends to the journal under its epoch, dropping what a projection counting it applied and what it supersedes. A test
+    /// sets the projection, stages live joins, or makes a write fail; every call notes the thread it ran on.
+    /// </summary>
+    internal sealed class MemoryLauncherChannels : ILauncherChannels
+    {
+        internal MemoryLauncherChannels(string? requestId = null, string? packageSetDigest = null, string? serviceOrigin = null)
+        {
+            RequestId = requestId;
+            PackageSetDigest = packageSetDigest;
+            ServiceOrigin = serviceOrigin;
+        }
+
+        public string? RequestId { get; set; }
+
+        public string? PackageSetDigest { get; set; }
+
+        public string? ServiceOrigin { get; set; }
+
+        internal MultiplayerPreferencesProjection? Projection { get; set; }
+
+        internal MultiplayerPreferencesJournal? Journal { get; set; }
+
+        internal List<SessionHandoff> Handoffs { get; } = new List<SessionHandoff>();
+
+        internal Queue<SessionJoinRequest> Joins { get; } = new Queue<SessionJoinRequest>();
+
+        internal List<LaunchProgress> Progress { get; } = new List<LaunchProgress>();
+
+        internal List<LaunchOutcome> Outcomes { get; } = new List<LaunchOutcome>();
+
+        /// <summary>Gets how many changes were recorded.</summary>
+        internal int Records { get; private set; }
+
+        internal bool FailRecord { get; set; }
+
+        internal bool FailHandoff { get; set; }
+
+        /// <summary>Gets the managed thread every call ran on, in order.</summary>
+        internal List<int> Threads { get; } = new List<int>();
+
+        public MultiplayerPreferencesProjection? ReadPreferences()
+        {
+            Note();
+            return Projection;
+        }
+
+        public MultiplayerPreferencesJournal? ReadPreferencesJournal()
+        {
+            Note();
+            return Journal;
+        }
+
+        public MultiplayerPreferencesJournal RecordPreferenceChange(Func<int, MultiplayerPreferenceChange> change)
+        {
+            Note();
+            if (FailRecord) throw new System.IO.IOException("The journal is locked.");
+            var journal = Journal ?? MultiplayerPreferencesJournal.Start();
+            Journal = journal.Append(change(journal.NextSequence(Projection)), Projection);
+            Records++;
+            return Journal;
+        }
+
+        public void WriteHandoff(SessionHandoff handoff)
+        {
+            Note();
+            if (FailHandoff) throw new System.IO.IOException("The launcher is reading the handoff.");
+            Handoffs.Add(handoff);
+        }
+
+        /// <summary>Stages a live join, as the launcher writes one; the intake's timer may take it on its own thread.</summary>
+        internal void Stage(SessionJoinRequest join)
+        {
+            lock (Joins) Joins.Enqueue(join);
+        }
+
+        public SessionJoinRequest? TakeJoin()
+        {
+            Note();
+            lock (Joins) return Joins.Count == 0 ? null : Joins.Dequeue();
+        }
+
+        public void WriteProgress(LaunchProgress progress)
+        {
+            Note();
+            Progress.Add(progress);
+        }
+
+        public void WriteOutcome(LaunchOutcome outcome)
+        {
+            Note();
+            Outcomes.Add(outcome);
+        }
+
+        private void Note()
+        {
+            lock (Threads) Threads.Add(System.Environment.CurrentManagedThreadId);
+        }
     }
 
     /// <summary>Settings kept in memory, written through the background queue as the file store is.</summary>
@@ -433,11 +599,16 @@ namespace TopiaForge.ModManager.Tests
     internal sealed class SessionsRig
     {
         /// <param name="settings">What the settings file holds as the game starts, as an earlier run left it; null for defaults.</param>
-        internal SessionsRig(bool acknowledged = true, bool liveAvailable = true, bool withControl = true, bool service = false, MultiplayerSettings? settings = null)
+        /// <param name="launcher">The launcher's channels, shared with an earlier rig to start where it left off; null for new ones.</param>
+        /// <param name="channels">Other channels the game uses in place of <paramref name="launcher"/>, such as the staging store's.</param>
+        internal SessionsRig(bool acknowledged = true, bool liveAvailable = true, bool withControl = true, bool service = false, MultiplayerSettings? settings = null,
+            MemoryLauncherChannels? launcher = null, ILauncherChannels? channels = null)
         {
             Control = new RecordingSessionControl { IsLiveAvailable = liveAvailable, ServiceConfigured = service };
             Control.Status.IsLiveAvailable = liveAvailable;
             Environment = new FakeSessionEnvironment(withControl ? Control : null);
+            Launcher = launcher ?? new MemoryLauncherChannels();
+            Environment.Launcher = channels ?? Launcher;
             Store = new MemorySettingsStore { Stored = settings ?? (acknowledged ? MultiplayerSettings.Default.AcknowledgeDisclosure() : MultiplayerSettings.Default) };
             Presenter = new MultiplayerSessionsPresenter(Environment, Store, Work);
             Presenter.Start();
@@ -449,6 +620,9 @@ namespace TopiaForge.ModManager.Tests
         internal RecordingSessionControl Control { get; }
 
         internal FakeSessionEnvironment Environment { get; }
+
+        /// <summary>Gets the launcher's channels the presenter writes its preferences and handoffs to.</summary>
+        internal MemoryLauncherChannels Launcher { get; }
 
         internal MemorySettingsStore Store { get; }
 

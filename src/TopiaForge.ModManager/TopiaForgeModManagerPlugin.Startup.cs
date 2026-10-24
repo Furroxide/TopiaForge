@@ -1,5 +1,6 @@
 using System;
 using TopiaForge.ModManager.Core;
+using TopiaForge.ModManager.Sessions;
 
 namespace TopiaForge.ModManager
 {
@@ -13,8 +14,14 @@ namespace TopiaForge.ModManager
         private bool rejectedLauncherCommand;
         private LaunchRequestCorrelation? rejectedCorrelation;
         private string rejectionReason = string.Empty;
+
+        // A V5 request's session until it is offered: its target can be an address, so from then on only the offer holds it,
+        // and the provider's plan after the offer is taken.
         private ProfileLaunchConfigurationV5? launchSession;
-        private LaunchSessionOffering? launchSessionOffering;
+        private LaunchSessionIdentity? launchSessionIdentity;
+        private string? launchServiceOrigin;
+        private SessionLaunch? sessionLaunch;
+        private ILaunchedSession? launchedSession;
         private string? launchSessionRefusal;
         // Twice a second: a restart waits for the game to take the request, and a look is one file check.
         private static readonly TimeSpan LauncherQuitInterval = TimeSpan.FromMilliseconds(500);
@@ -74,6 +81,12 @@ namespace TopiaForge.ModManager
                 var consumed = launchStaging.ConsumeLaunchRequest(configuredPath!);
                 var request = consumed.Profile;
                 launchSession = consumed.SessionRequest;
+                if (launchSession != null)
+                {
+                    launchSessionIdentity = LaunchSessionIdentity.Of(launchSession);
+                    launchServiceOrigin = launchSession.Session.ServiceOrigin;
+                }
+
                 // The session's target is never logged: a direct target is an address.
                 managerLogger.Info(consumed.Describe());
                 return request;
@@ -88,36 +101,70 @@ namespace TopiaForge.ModManager
             }
         }
 
-        /// <summary>Hands a V5 request's session to the multiplayer provider, unless the command was rejected or recovery runs.</summary>
+        /// <summary>
+        /// Offers a V5 request's session to the multiplayer provider, before mods load, unless the command was rejected or
+        /// recovery runs. From here only the offer holds the session's target.
+        /// </summary>
         private void OfferLaunchSession()
         {
-            if (launchSession == null) return;
+            var request = launchSession;
+            launchSession = null;
+            if (request == null) return;
             if (rejectedLauncherCommand || startupSelection.SafeMode)
             {
                 managerLogger.Warn("The session launch was not offered to the multiplayer provider: this process starts in recovery.");
                 // A rejected command is reported as rejected; crash recovery would otherwise report nothing at all.
                 if (!rejectedLauncherCommand)
-                    launchSessionRefusal = "The game started in recovery after a crash, so it did not " + launchSession.Session.Role
+                    launchSessionRefusal = "The game started in recovery after a crash, so it did not " + request.Session.Role
                         + " the session.";
                 return;
             }
 
-            launchSessionOffering = LaunchSessionOffer.Offer(launchSession.Session);
-            managerLogger.Info("Offered the " + launchSession.Session.Role + " session to the multiplayer provider.");
+            sessionLaunch = new SessionLaunch(LaunchSessionIdentity.Of(request), LaunchSessionOffer.ToSession(request.Session), request.Plan != null);
+            managerLogger.Info("Offered the " + request.Session.Role + " session to the multiplayer provider.");
         }
 
-        /// <summary>Withdraws a session ticket the provider did not take while mods loaded.</summary>
+        /// <summary>
+        /// The provider takes the offered session as mods finish loading: ModRuntime attaches to its internal control at the
+        /// end of the load, and the control plans the session. The plan waits for the in-game flows, which start it.
+        /// </summary>
+        private void TakeLaunchSession()
+        {
+            var launch = sessionLaunch;
+            if (launch == null || !launch.IsOffered) return;
+            if (!launch.Take(runtime.Multiplayer.Control))
+            {
+                RefuseLaunchSession(launch);
+                return;
+            }
+
+            var publisher = launchPublisher!;
+            launchedSession = new LaunchedSession(launch.Identity, launch.Plan!, publisher, () => GameOf(publisher.CommandState),
+                startsGame: launch.StartsGame, handoff: launch.IsHost ? null : LauncherHandoff.Current(), hostPort: launch.HostPort);
+            managerLogger.Info("The multiplayer provider planned the " + launch.Identity.Role + " session.");
+        }
+
+        /// <summary>Withdraws a session no provider took while mods loaded: its launch fails at once, as unavailable.</summary>
         private void WithdrawLaunchSession()
         {
-            var offering = launchSessionOffering;
-            launchSessionOffering = null;
-            if (offering != null && offering.Withdraw())
-                managerLogger.Info("The multiplayer provider did not take the session launch during startup; it was withdrawn.");
+            var launch = sessionLaunch;
+            if (launch == null || !launch.Withdraw()) return;
+            managerLogger.Info("The multiplayer provider did not take the session launch during startup; it was withdrawn.");
+            RefuseLaunchSession(launch);
         }
 
+        private void RefuseLaunchSession(SessionLaunch launch)
+        {
+            // The refusal is this game's own words, redacted; the target is never named.
+            managerLogger.Warn("The " + launch.Identity.Role + " session cannot start: " + launch.Refusal);
+            launchPublisher?.Result(SessionLaunchRecords.Refused(launch.Identity, launch.RefusalCode, launch.Refusal), null);
+        }
+
+        private static LaunchedGame GameOf(LaunchCommandState state) =>
+            state == LaunchCommandState.Succeeded ? LaunchedGame.Ready : state == LaunchCommandState.Failed ? LaunchedGame.Failed : LaunchedGame.Starting;
+
         /// <summary>The identity a session launch's records are published under, from its request or its rejected correlation.</summary>
-        private LaunchSessionIdentity? LaunchSessionIdentityForPublication() =>
-            launchSession != null ? LaunchSessionIdentity.Of(launchSession) : rejectedCorrelation?.Session;
+        private LaunchSessionIdentity? LaunchSessionIdentityForPublication() => launchSessionIdentity ?? rejectedCorrelation?.Session;
 
         private void ApplyStartupRecovery()
         {

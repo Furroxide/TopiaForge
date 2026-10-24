@@ -3,7 +3,10 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Sessions
 {
-    /// <summary>What the Multiplayer tab's presenters share: the environment, settings, status, content readiness and prompts.</summary>
+    /// <summary>
+    /// What the Multiplayer tab's presenters share: the environment, the settings and the launcher's preferences, status,
+    /// content readiness, prompts, and the way joins reach the launcher.
+    /// </summary>
     internal sealed class MultiplayerScreensContext
     {
         private readonly Action<ScreenPrompt> ask;
@@ -12,18 +15,22 @@ namespace TopiaForge.ModManager.Sessions
         internal MultiplayerScreensContext(
             IMultiplayerSessionEnvironment environment,
             MultiplayerSettingsService settings,
+            MultiplayerPreferencesService preferences,
             MultiplayerStatusTracker status,
             ContentReadinessPresenter content,
+            MultiplayerBackgroundQueue queue,
             Action<ScreenPrompt> ask,
             Action<string, ScreenTone> notify)
         {
             Environment = environment ?? throw new ArgumentNullException(nameof(environment));
             Settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            Preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
             Status = status ?? throw new ArgumentNullException(nameof(status));
             Content = content ?? throw new ArgumentNullException(nameof(content));
             this.ask = ask ?? throw new ArgumentNullException(nameof(ask));
             this.notify = notify ?? throw new ArgumentNullException(nameof(notify));
             Privacy = new PrivacyGate(settings, ask);
+            Handoffs = new LauncherHandoffs(environment, queue ?? throw new ArgumentNullException(nameof(queue)), notify);
             IsHosting = () => Status.Role == InternalSessionRole.ListenHost;
             IsJoined = () => Status.Role == InternalSessionRole.Client;
         }
@@ -31,6 +38,12 @@ namespace TopiaForge.ModManager.Sessions
         internal IMultiplayerSessionEnvironment Environment { get; }
 
         internal MultiplayerSettingsService Settings { get; }
+
+        /// <summary>Gets the launcher's preferences this game shows and changes: the display name and the hosting defaults.</summary>
+        internal MultiplayerPreferencesService Preferences { get; }
+
+        /// <summary>Gets how joins reach the TopiaForge launcher: a handoff when it owns this game, a link otherwise.</summary>
+        internal LauncherHandoffs Handoffs { get; }
 
         internal MultiplayerStatusTracker Status { get; }
 
@@ -50,8 +63,8 @@ namespace TopiaForge.ModManager.Sessions
         /// </summary>
         internal bool HasService => Status.Status.Internet.ServiceConfigured;
 
-        /// <summary>Gets whether the player may start anything: live sessions are on and the settings have loaded.</summary>
-        internal bool CanAct => Status.IsLiveAvailable && Settings.IsLoaded;
+        /// <summary>Gets whether the player may start anything: live sessions are on, and the settings and preferences have loaded.</summary>
+        internal bool CanAct => Status.IsLiveAvailable && Settings.IsLoaded && Preferences.IsLoaded;
 
         /// <summary>Gets whether hosting or joining may start: as <see cref="CanAct"/>, with this game's mods identified.</summary>
         internal bool CanStartSession => CanAct && Content.IsReady;

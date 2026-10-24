@@ -322,6 +322,8 @@ namespace TopiaForge.ModManager.TestDoubles
 
         public OperationResult<bool> RevokeInvite(string code) => Unsupported<bool>();
 
+        public OperationResult<IInternalLaunchPlan> PlanLaunchSession(InternalLaunchSession session) => Unsupported<IInternalLaunchPlan>();
+
         internal LoopbackControl? Peer(ParticipantId id) => network.Find(id);
 
         private static OperationResult<T> Unsupported<T>() where T : notnull =>

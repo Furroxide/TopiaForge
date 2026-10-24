@@ -103,6 +103,12 @@ namespace TopiaForge.ModManager
 
         public string RuntimeVersion => plugin.Multiplayer?.Host.RuntimeVersion ?? TopiaForgeVersions.LoaderVersion;
 
+        public ILauncherChannels? Launcher => plugin.LauncherChannels;
+
+        public SessionPhase LocalPhase => plugin.LocalPhase;
+
+        public ILaunchedSession? TakeLaunchedSession() => plugin.TakeLaunchedSession();
+
         public long UnixSeconds => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
         public IReadOnlyList<HostTargetChoice> ReadHostTargets() => HostTargets.AtTheMenu(plugin.GetLaunchPreviews(), plugin.GetWorldNames());

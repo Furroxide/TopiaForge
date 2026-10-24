@@ -31,22 +31,37 @@ namespace TopiaForge.ModManager.Sessions
                 case RealmDecision.ConfirmLeaveGame:
                     if (fromWait) Hide();
                     // The question is about the game running now: once it ends by itself, or another join starts, it is withdrawn.
-                    context.Ask(PrivacyPrompts.Destructive(LeaveTitle, LeaveBody, LeaveConfirm, confirmed =>
+                    ScreenPrompt? asked = null;
+                    asked = PrivacyPrompts.Destructive(LeaveTitle, LeaveBody, LeaveConfirm, confirmed =>
                     {
                         if (confirmed) LeaveThenJoin(join);
-                    }, leaveStillAsked));
+                        else if (join.Launch != null) Declined(join, asked!.IsWithdrawn);
+                    }, leaveStillAsked);
+                    context.Ask(asked);
                     return;
                 case RealmDecision.StandaloneRefused:
                     if (fromWait) Hide();
-                    context.Notify(MultiplayerRuntime.StandaloneRefusal(environment.StandaloneMods, "join"), ScreenTone.Warning);
+                    var standalone = MultiplayerRuntime.StandaloneRefusal(environment.StandaloneMods, "join");
+                    context.Notify(standalone, ScreenTone.Warning);
+                    join.Launch?.Refuse(ModErrorCode.InvalidState, standalone);
                     return;
                 default:
                     if (fromWait) Hide();
-                    context.Notify(realm == NetRealm.ListenHost
-                        ? "Stop hosting before you join another session."
-                        : "Leave this session before you join another.", ScreenTone.Warning);
+                    var leaveFirst = realm == NetRealm.ListenHost ? "Stop hosting before you join another session." : "Leave this session before you join another.";
+                    context.Notify(leaveFirst, ScreenTone.Warning);
+                    join.Launch?.Refuse(ModErrorCode.InvalidState, leaveFirst);
                     return;
             }
+        }
+
+        /// <summary>
+        /// A launch's "Leave current game?" answered no. Withdrawn because the game ended by itself, the join is decided again;
+        /// turned down by the player, the launch is cancelled and the game runs on.
+        /// </summary>
+        private void Declined(JoinRequest join, bool withdrawn)
+        {
+            if (withdrawn) Begin(join);
+            else join.Launch!.Refuse(ModErrorCode.Cancelled, KeptGame);
         }
 
         /// <summary>
@@ -78,7 +93,8 @@ namespace TopiaForge.ModManager.Sessions
         {
             if (IsBusy)
             {
-                context.Notify("A join is already running.", ScreenTone.Warning);
+                context.Notify(AlreadyJoining, ScreenTone.Warning);
+                join.Launch?.Refuse(ModErrorCode.Conflict, AlreadyJoining);
                 return;
             }
 
@@ -95,7 +111,9 @@ namespace TopiaForge.ModManager.Sessions
                     return;
                 }
 
-                FailLocal("Your game did not close", HostText.ForDisplay(message, HostText.LineChars));
+                var said = HostText.ForDisplay(message, HostText.LineChars);
+                FailLocal("Your game did not close", said);
+                join.Launch?.Refuse(ModErrorCode.External, said);
             });
         }
 
@@ -104,7 +122,14 @@ namespace TopiaForge.ModManager.Sessions
             OperationResult<bool> result;
             try
             {
-                var settings = new InternalJoinSettings { Password = join.Password, AllowDirect = join.AllowDirect, TrustedServerId = join.TrustedServerId };
+                // A launch joins under its own name; any other join under the runtime's.
+                var settings = new InternalJoinSettings
+                {
+                    DisplayName = join.Launch?.Plan.DisplayName,
+                    Password = join.Password,
+                    AllowDirect = join.AllowDirect,
+                    TrustedServerId = join.TrustedServerId
+                };
 
                 // The runtime asks the realm rules again before the provider hears of the join; a game that began to change
                 // meanwhile is waited for, never joined.
@@ -128,10 +153,12 @@ namespace TopiaForge.ModManager.Sessions
             if (!result.Succeeded)
             {
                 FailLocal("Join refused", HostText.ForDisplay(result.ErrorMessage, HostText.LineChars));
+                join.Launch?.Refuse(result.ErrorCode, result.ErrorMessage);
                 return;
             }
 
             readsAtStart = context.Status.Reads;
+            join.Launch?.Started(readsAtStart);
             details[(int)ConnectingStep.Resolving] = ConnectingStepMap.FindingHost;
             statusText = "Joining " + title + "...";
             context.Status.RequestRefresh();
@@ -231,7 +258,8 @@ namespace TopiaForge.ModManager.Sessions
                 case InternalLiveFailure.ServerNotListed:
                     ForgetUnlisted(request!.Target.ServerId);
                     break;
-                case InternalLiveFailure.RelayUnavailable when status.Internet.HostAllowsDirect && !request!.AllowDirect:
+                // A launch keeps the privacy the launcher planned: the launcher, told why the join failed, asks the player there.
+                case InternalLiveFailure.RelayUnavailable when status.Internet.HostAllowsDirect && !request!.AllowDirect && request.Launch == null:
                     OfferDirect(request!);
                     break;
             }

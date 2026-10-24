@@ -34,10 +34,7 @@ internal static class InternetConfigurationTests
         That(host.Internet.ListingPhase == InternalListingPhase.Off && host.Internet.Invite == null, "and has no listing or invite to show");
     }
 
-    /// <summary>
-    /// The runtime host names the service the provider reaches: a session launch's origin before the manager's. The
-    /// launch ticket stays untaken, so the runtime still withdraws it once mods load and a direct target's address goes.
-    /// </summary>
+    /// <summary>The runtime host names the service the provider reaches: a session launch's origin before the manager's.</summary>
     internal static void ASessionLaunchsOriginComesFirst()
     {
         var content = new provider::TopiaForge.Multiplayer.RuntimeContent("2545", "0.2.0");
@@ -52,42 +49,34 @@ internal static class InternetConfigurationTests
         };
         foreach (var (launch, configured, reached) in cases)
         {
-            var ticket = new LaunchSessionTicket("join", "intent-7", "Sam", false, 0, false, true, launch,
-                new LaunchSessionTicketTarget("invite", ServerId, DescriptorSha256, PackageDigest, "ABCDE12345", null, null, 0), null);
-            LaunchSessionTickets.Offer(ticket);
-            try
-            {
-                using var provider = new provider::TopiaForge.Multiplayer.MultiplayerProvider(LiveRig.ProviderId, diagnostics, () => network.Now,
-                    new LiveSessionsSetup(new MemoryDataFiles(), content) { Factory = new SteppedNetworkFactory(network, "launch") });
-                using var control = new provider::TopiaForge.Multiplayer.InternalControl(provider, content, diagnostics);
-                var runtime = new TopiaForge.ModManager.MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog());
-                runtime.ConfigureServiceOrigin(launch, configured);
-                That(control.AttachRuntime(runtime), "the runtime attaches");
-                That(provider.Live!.Services?.Origin?.Text == reached, "a launch naming " + (launch ?? "no service") + " and a configuration naming " +
-                                                                        (configured ?? "none") + " reach " + (reached ?? "nothing"));
-                That(LaunchSessionTickets.Withdraw(ticket), "and the launch's ticket is still there for the runtime to withdraw");
-            }
-            finally
-            {
-                LaunchSessionTickets.Withdraw(ticket);
-            }
+            using var provider = new provider::TopiaForge.Multiplayer.MultiplayerProvider(LiveRig.ProviderId, diagnostics, () => network.Now,
+                new LiveSessionsSetup(new MemoryDataFiles(), content) { Factory = new SteppedNetworkFactory(network, "launch") });
+            using var control = new provider::TopiaForge.Multiplayer.InternalControl(provider, content, diagnostics);
+            var runtime = new TopiaForge.ModManager.MultiplayerRuntimeHost("2545", "0.2.0", new RecordingMultiplayerLog());
+            runtime.ConfigureServiceOrigin(launch, configured);
+            That(control.AttachRuntime(runtime), "the runtime attaches");
+            That(provider.Live!.Services?.Origin?.Text == reached, "a launch naming " + (launch ?? "no service") + " and a configuration naming " +
+                                                                    (configured ?? "none") + " reach " + (reached ?? "nothing"));
+            var invite = control.PlanLaunchSession(new InternalLaunchSession("intent-7", "Sam", false,
+                target: InternalLaunchTarget.Invite("ABCDE12345", ServerId, DescriptorSha256)));
+            That(invite.Succeeded == (reached != null), "and a launched invite is planned exactly when a service is reached");
         }
     }
 
     internal static void ALaunchToAnInviteOrAListingGoesThroughTheService()
     {
-        LaunchSessionTicket Join(string kind, string? origin, string? invite = null, string? source = null) =>
-            new("join", "intent-8", "Sam", false, 0, false, true, origin, new LaunchSessionTicketTarget(kind, ServerId, DescriptorSha256, PackageDigest, invite, source, null, 0), null);
+        InternalLaunchSession Join(InternalLaunchTarget target) => new("intent-8", "Sam", false, target: target);
 
-        var invite = LaunchSessionPlan.FromTicket(Join("invite", "https://mp.example.org", invite: "ABCDE12345"), out var unsupported);
-        That(unsupported == LaunchSessionUnsupported.None && invite!.Target!.Kind == JoinTargetKind.Invite && invite.Target.InviteCode == "ABCDE12345" &&
-             invite.Target.ServerId == ServerId && invite.ServiceOrigin == "https://mp.example.org" && invite.Target.ToString() == "invite",
-            "an invite is planned through the service, pinned to the server the launcher verified, and never printed");
-        var listing = LaunchSessionPlan.FromTicket(Join("listing", "https://mp.example.org", source: "internet"), out unsupported);
-        That(unsupported == LaunchSessionUnsupported.None && listing!.Target!.Kind == JoinTargetKind.Listed && listing.Target.ServerId == ServerId,
+        var invite = LaunchSessionPlan.From(Join(InternalLaunchTarget.Invite("ABCDE12345", ServerId, DescriptorSha256)), true, out var unsupported);
+        var target = invite!.Target!.NetworkTarget;
+        That(unsupported == LaunchSessionUnsupported.None && target.Kind == JoinTargetKind.Invite && target.InviteCode == "ABCDE12345" &&
+             target.ServerId == ServerId && target.ToString() == "invite" && invite.ExpectedDescriptorSha256 == DescriptorSha256,
+            "an invite is planned through the service, pinned to the server and descriptor the launcher verified, and never printed");
+        var listing = LaunchSessionPlan.From(Join(InternalLaunchTarget.Listing(ServerId, DescriptorSha256, lan: false)), true, out unsupported);
+        That(unsupported == LaunchSessionUnsupported.None && listing!.Target!.NetworkTarget.Kind == JoinTargetKind.Listed && listing.Target.ServerId == ServerId,
             "an Internet listing is found again by its server id");
-        That(LaunchSessionPlan.FromTicket(Join("invite", null, invite: "ABCDE12345"), out unsupported) == null && unsupported == LaunchSessionUnsupported.NeedsService,
-            "without a service origin an invite still cannot be planned");
+        That(LaunchSessionPlan.From(Join(InternalLaunchTarget.Invite("ABCDE12345", ServerId, DescriptorSha256)), false, out unsupported) == null &&
+             unsupported == LaunchSessionUnsupported.NeedsService, "without a service an invite still cannot be planned");
     }
 
     /// <summary>

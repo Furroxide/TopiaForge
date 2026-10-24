@@ -26,10 +26,11 @@ namespace TopiaForge.ModManager.Sessions
     }
 
     /// <summary>
-    /// The player's multiplayer preferences in this game, kept in manager data: the acknowledged disclosure version, Hide my
-    /// IP, the display name, the last hosting settings (never a password) and the game last hosted, and favorite and recent
-    /// servers by server id. Immutable; every change returns a new value. Nothing here can make a direct connection the
-    /// default without the player turning Hide my IP off themselves.
+    /// The player's multiplayer choices that only this game keeps, in manager data: the acknowledged disclosure version, Hide
+    /// my IP, the game last hosted, and favorite and recent servers by server id. The display name and the hosting defaults
+    /// are the launcher's preferences, which this game reads from the launcher's projection and changes through its journal
+    /// (<see cref="MultiplayerPreferencesService"/>), so neither is kept here as well. Immutable; every change returns a new
+    /// value. Nothing here can make a direct connection the default without the player turning Hide my IP off themselves.
     /// </summary>
     internal sealed class MultiplayerSettings
     {
@@ -42,17 +43,11 @@ namespace TopiaForge.ModManager.Sessions
         internal const int DefaultMaxPlayers = 8;
 
         internal static readonly MultiplayerSettings Default = new MultiplayerSettings(
-            0, true, DefaultDisplayName, null, DefaultMaxPlayers, InternalSessionVisibility.Lan, false, null, null,
-            Array.Empty<ServerBookmark>(), Array.Empty<ServerBookmark>());
+            0, true, null, null, Array.Empty<ServerBookmark>(), Array.Empty<ServerBookmark>());
 
         private MultiplayerSettings(
             int acknowledgedDisclosure,
             bool hideMyIp,
-            string displayName,
-            string? serverName,
-            int hostMaxPlayers,
-            InternalSessionVisibility hostVisibility,
-            bool hostVoice,
             string? hostedTarget,
             string? hostedWorld,
             IReadOnlyList<ServerBookmark> favorites,
@@ -60,11 +55,6 @@ namespace TopiaForge.ModManager.Sessions
         {
             AcknowledgedDisclosure = acknowledgedDisclosure < 0 ? 0 : acknowledgedDisclosure;
             HideMyIp = hideMyIp;
-            DisplayName = IsValidDisplayName(displayName) ? displayName : DefaultDisplayName;
-            ServerName = InternalText.IsDisplayText(serverName, InternalHostSettings.MaximumNameLength) ? serverName : null;
-            HostMaxPlayers = hostMaxPlayers < InternalHostSettings.MinimumPlayers || hostMaxPlayers > InternalHostSettings.MaximumPlayers ? DefaultMaxPlayers : hostMaxPlayers;
-            HostVisibility = Enum.IsDefined(typeof(InternalSessionVisibility), hostVisibility) ? hostVisibility : InternalSessionVisibility.Lan;
-            HostVoice = hostVoice;
 
             // A game is remembered by its launch target and world, both declaration ids; anything else is forgotten.
             var target = IsDeclarationId(hostedTarget) ? hostedTarget : null;
@@ -74,21 +64,10 @@ namespace TopiaForge.ModManager.Sessions
             History = history;
         }
 
-        /// <summary>Gets the newest disclosure version the player acknowledged; 0 when never.</summary>
+        /// <summary>Gets the newest disclosure version the player acknowledged in this game; 0 when never.</summary>
         internal int AcknowledgedDisclosure { get; }
 
         internal bool HideMyIp { get; }
-
-        internal string DisplayName { get; }
-
-        /// <summary>Gets the server name last hosted with, or null to derive one from the display name.</summary>
-        internal string? ServerName { get; }
-
-        internal int HostMaxPlayers { get; }
-
-        internal InternalSessionVisibility HostVisibility { get; }
-
-        internal bool HostVoice { get; }
 
         /// <summary>Gets the launch target of the game last hosted, which HOST offers first at the menu; null when none.</summary>
         internal string? HostedTarget { get; }
@@ -114,18 +93,9 @@ namespace TopiaForge.ModManager.Sessions
 
         internal MultiplayerSettings WithHideMyIp(bool on) => Copy(hideMyIp: on);
 
-        internal MultiplayerSettings WithDisplayName(string name)
-        {
-            if (!IsValidDisplayName(name)) throw new ArgumentException("A display name is 2 to 24 printable characters.", nameof(name));
-            return Copy(displayName: name);
-        }
-
-        internal MultiplayerSettings WithHosting(string? name, int maxPlayers, InternalSessionVisibility visibility, bool voice) =>
-            new MultiplayerSettings(AcknowledgedDisclosure, HideMyIp, DisplayName, name, maxPlayers, visibility, voice, HostedTarget, HostedWorld, Favorites, History);
-
         /// <summary>Remembers the game just hosted, by its launch target and world, so HOST offers it first next time.</summary>
         internal MultiplayerSettings WithHostedGame(string targetId, string? worldId) =>
-            new MultiplayerSettings(AcknowledgedDisclosure, HideMyIp, DisplayName, ServerName, HostMaxPlayers, HostVisibility, HostVoice, targetId, worldId, Favorites, History);
+            new MultiplayerSettings(AcknowledgedDisclosure, HideMyIp, targetId, worldId, Favorites, History);
 
         internal bool IsFavorite(string serverId)
         {
@@ -169,11 +139,6 @@ namespace TopiaForge.ModManager.Sessions
                 SchemaVersionValue = SchemaVersion,
                 AcknowledgedPrivacyDisclosure = AcknowledgedDisclosure,
                 HideMyIp = HideMyIp,
-                DisplayName = DisplayName,
-                ServerName = ServerName,
-                HostMaxPlayers = HostMaxPlayers,
-                HostVisibility = HostVisibility.ToString().ToLowerInvariant(),
-                HostVoice = HostVoice,
                 HostedTarget = HostedTarget,
                 HostedWorld = HostedWorld,
                 Favorites = Documents(Favorites),
@@ -183,7 +148,8 @@ namespace TopiaForge.ModManager.Sessions
 
         /// <summary>
         /// Reads a stored document forgivingly: a missing or invalid member takes its default, and a repeated or invalid
-        /// bookmark is dropped. Hide my IP reads as on unless it was stored off. A document of another schema version is
+        /// bookmark is dropped. Hide my IP reads as on unless it was stored off. A display name or hosting settings an earlier
+        /// game stored here are not read: the launcher's preferences hold them. A document of another schema version is
         /// refused, so a newer game's settings are never overwritten with an older reading of them.
         /// </summary>
         internal static MultiplayerSettings FromDocument(MultiplayerSettingsDocument? document)
@@ -194,17 +160,9 @@ namespace TopiaForge.ModManager.Sessions
                 throw new SerializationException("Unsupported multiplayer settings schemaVersion " + document.SchemaVersionValue + ".");
             }
 
-            var visibility = InternalSessionVisibility.Lan;
-            if (string.Equals(document.HostVisibility, "public", StringComparison.Ordinal)) visibility = InternalSessionVisibility.Public;
-            else if (string.Equals(document.HostVisibility, "invite", StringComparison.Ordinal)) visibility = InternalSessionVisibility.Invite;
             return new MultiplayerSettings(
                 document.AcknowledgedPrivacyDisclosure,
                 document.HideMyIp ?? true,
-                document.DisplayName ?? DefaultDisplayName,
-                document.ServerName,
-                document.HostMaxPlayers,
-                visibility,
-                document.HostVoice,
                 document.HostedTarget,
                 document.HostedWorld,
                 Bookmarks(document.Favorites, MaximumFavorites),
@@ -214,17 +172,11 @@ namespace TopiaForge.ModManager.Sessions
         private MultiplayerSettings Copy(
             int? acknowledgedDisclosure = null,
             bool? hideMyIp = null,
-            string? displayName = null,
             IReadOnlyList<ServerBookmark>? favorites = null,
             IReadOnlyList<ServerBookmark>? history = null) =>
             new MultiplayerSettings(
                 acknowledgedDisclosure ?? AcknowledgedDisclosure,
                 hideMyIp ?? HideMyIp,
-                displayName ?? DisplayName,
-                ServerName,
-                HostMaxPlayers,
-                HostVisibility,
-                HostVoice,
                 HostedTarget,
                 HostedWorld,
                 favorites ?? Favorites,
@@ -266,7 +218,10 @@ namespace TopiaForge.ModManager.Sessions
         }
     }
 
-    /// <summary>The stored form of <see cref="MultiplayerSettings"/>, at <c>data/multiplayer-settings.json</c>.</summary>
+    /// <summary>
+    /// The stored form of <see cref="MultiplayerSettings"/>, at <c>data/multiplayer-settings.json</c>. A member a reader does not
+    /// know is ignored, so a file an earlier game wrote, with a display name and hosting settings, reads as schema 1 still.
+    /// </summary>
     [DataContract]
     internal sealed class MultiplayerSettingsDocument
     {
@@ -278,21 +233,6 @@ namespace TopiaForge.ModManager.Sessions
 
         [DataMember(Name = "hideMyIp", EmitDefaultValue = false)]
         public bool? HideMyIp { get; set; }
-
-        [DataMember(Name = "displayName", EmitDefaultValue = false)]
-        public string? DisplayName { get; set; }
-
-        [DataMember(Name = "serverName", EmitDefaultValue = false)]
-        public string? ServerName { get; set; }
-
-        [DataMember(Name = "hostMaxPlayers")]
-        public int HostMaxPlayers { get; set; }
-
-        [DataMember(Name = "hostVisibility", EmitDefaultValue = false)]
-        public string? HostVisibility { get; set; }
-
-        [DataMember(Name = "hostVoice")]
-        public bool HostVoice { get; set; }
 
         // Optional, and ignored by a reader that predates it, so the schema version stays 1.
         [DataMember(Name = "hostedTarget", EmitDefaultValue = false)]

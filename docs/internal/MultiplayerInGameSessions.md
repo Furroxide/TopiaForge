@@ -122,9 +122,13 @@ interface reads readiness only once the player opened the tab, since the first r
 - **Copy details** holds the failure's name and step, this game's words, the host's admission code and lines, what the
   host said, and the game and TopiaForge versions. Every line is redacted; the target and anything typed are not part of
   it.
-- **INSTALL & JOIN IN LAUNCHER** hands a `topiaforge://join/…` link to the system with `Application.OpenURL`. A LAN or
-  listed server's link names its server id; an invite's names its code; a direct link carries only the host and port the
-  player typed, pinned by the server id the check found. The launcher's consent flow takes it from there.
+- **INSTALL & JOIN IN LAUNCHER** hands the join to the TopiaForge launcher. When the launcher owns this game, it
+  writes a `session-handoff` naming the server's listing or invite, on the background queue, and the launcher joins
+  through its owned restart; a write that fails opens the link instead. Otherwise it hands a `topiaforge://join/…` link
+  to the system with `Application.OpenURL`. A LAN or listed server's link names its server id; an invite's names its
+  code; a direct link carries only the host and port the player typed, pinned by the server id the check found, and a
+  server typed by address always goes as its link, since a handoff never carries an address. The launcher's consent
+  flow takes it from there.
 
 ## 5. The connecting overlay
 
@@ -205,30 +209,64 @@ has loaded, a native scene change, any other operation that holds the session, a
 
 ## 8. Work off the main thread
 
-- **Settings** live in `data/multiplayer-settings.json`: the acknowledged disclosure version, Hide my IP, the display
-  name (2 to 24 characters), the last hosting settings without the password, the game last hosted by launch target
-  and world, and favorites and history by server id. A member a reader does not know is ignored, so an older game
-  reads the file as before.
+- **Settings** live in `data/multiplayer-settings.json`: the acknowledged disclosure version, Hide my IP, the game
+  last hosted by launch target and world, and favorites and history by server id. A member a reader does not know is
+  ignored, so an older game reads the file as before, and a newer one ignores the display name and hosting settings an
+  older game wrote there.
   They load and save on `MultiplayerBackgroundQueue`, one write at a time, coalesced; the tab notes a pending write and
   stays responsive. Settings that cannot be read are kept for the session only, so the file is never overwritten with
   defaults.
-- **Launcher channels.** Launch request V5's C# channels, `LaunchStagingStore.WriteSessionHandoff` and
-  `RecordPreferenceChange`, can wait for a shared file for about 310 ms while they retry, so the interface never calls
-  them on the main thread. Nothing in the game calls them yet, and the launcher neither takes a handoff nor applies the
-  journal yet. Once both sides are wired, a handoff from a launcher-owned game and every journal write go through
-  `MultiplayerBackgroundQueue`, as the settings do, and the views show them pending the same way. Until then the
-  hand-off is the `Application.OpenURL` link above, and preferences stay in manager data.
+- **Launcher preferences.** The display name (2 to 24 characters) and the hosting defaults (server name, players,
+  visibility and voice) are the launcher's (MultiplayerLaunchContract.md, section 7). The game reads the projection and
+  its journal once at start, on `MultiplayerBackgroundQueue`; a change made in game takes effect at once and is recorded
+  with `RecordPreferenceChange`, one write at a time, the newest of each preference only, and never kept in manager data
+  as well. Without the launcher's channels the values last for the session.
+- **Launcher channels.** Launch request V5's channels (`ILauncherChannels`, over `LaunchStagingStore`) can wait for a
+  shared file for about 310 ms while they retry, so the interface never calls them on the main thread: preference reads
+  and journal writes, handoffs and live joins' records run on `MultiplayerBackgroundQueue`, and live joins are looked for
+  once a second on a pool thread. The views show a pending write as they show the settings'.
 
-## 9. Seams for later slices
+## 9. Sessions the launcher asks for
+
+`LaunchSessionPresenter` starts what the TopiaForge launcher asks of this game, through the realm as the screens' own
+flows start sessions (MultiplayerLaunchContract.md, section 8).
+
+- **A launched session.** The session this game was launched to host or join waits, once the provider planned it, for
+  the launch's own game: until its target runs, or its menu loaded. A host then opens in place when its game runs, or
+  at the menu when the launch had no game; one whose game stopped before it opened opens nothing. A host whose session
+  needs a password asks for it in game, in a masked field; the launcher never stages one, and nothing keeps it. A join
+  goes through the connecting overlay, with "Leave current game?" while a game runs, and a LAN session is listened for
+  first, for up to 15 seconds.
+- **Shown before TopiaForge opens.** A launch reaches the screens before the player opened TopiaForge's overlay, so
+  the overlay is built, closed, as soon as a question or a join needs the screen: the password question, "Leave
+  current game?" and the connecting overlay show over the game or the menu, as the toasts already do.
+- **Its own privacy.** A launched session keeps the privacy the launcher planned for it: neither asks the disclosure
+  again, and a launched join never offers the per-session prompt, since only the launcher plans a change to it. Its own
+  name and settings stand, and a running game opened in place is named for browsing players as HOST names it.
+- **Live joins.** A game the launcher started takes the joins the launcher stages for it. Each is checked against the
+  packages this game runs and the service it reaches, planned by the provider, and started as a launched join is; a join
+  id seen before is ignored, and one launch starts at a time.
+- **Records.** A launched session reports into the runtime's publisher, a live join under its own id: its progress as
+  the provider's status moves, its one result, and its session's end. Only a status read after the session began
+  speaks for it, as on the connecting overlay; a session still running when a newer launch begins is followed to its
+  end; and a live join whose session runs as the game closes ends as the player leaving it.
+- **Said in game too.** The player is looking at the game, not the launcher: a launch this game cannot start says why
+  in a toast, a launched host whose hosting fails before it opens says so in HOST's words, and a LAN session that is
+  looked for says so, and what to do next when it is never heard.
+- **Back to the launcher.** A failure the launcher can fix, mods that differ or a server that changed since the launcher
+  checked it ("Server no longer matches"), offers the launcher. A launched join goes back as the current session, which
+  the launcher plans again.
+
+## 10. Seams for later slices
 
 | Seam | Filled by |
 | --- | --- |
 | `IMultiplayerVoiceSlot` in the VOICE sub-tab | The voice slice |
 | `HostPresenter.PendingPolicies` | The Sandbox host policy |
 | `ConnectingPresenter.ReportSynchronization(done, total)` | The network world's baseline: WS3.6 reports it as `NetworkWorld.Progress`, which nothing reads into the stepper yet |
-| The session-handoff channel and the preference journal, through `MultiplayerBackgroundQueue` | The launcher's handoff and preference flows (WS6) |
+| The launcher's side of the handoff, live-join and journal channels this game writes and reads | The launcher's join and preference flows (WS6) |
 
-## 10. Tests
+## 11. Tests
 
 - **Presenters** (`MultiplayerSessionsTests`, over the real `MultiplayerRuntime`): every sub-tab's states and
   transitions, the name, server name, player and password bounds, the disclosure's versioning and Hide my IP, the direct
@@ -247,13 +285,28 @@ has loaded, a native scene change, any other operation that holds the session, a
   toast repeating it, a named delay waited out at any frame rate and then joined again by itself, every failure saying
   what to do next, an invite's link pasted as its code, the game last hosted offered first, and settled frames, a
   waiting question's included, allocating nothing with mods loaded.
+- **Launched sessions** (`MultiplayerSessionsTests`, over the recording control): a launched host waiting for its game,
+  opened in place or at the menu, its password typed in game, and a stopped game or a missing provider failing at once;
+  a launched join under its own privacy and name with no direct prompt, leaving a running game only when told, a LAN
+  session listened for, and one launch at a time; live joins checked and acted on once, through the staging store too;
+  handoffs to the launcher that owns the game; the preferences as the launcher's journal apply makes them; frames
+  with a launch at rest allocating nothing; and each launch's records its own: a join started after a wait settled by
+  its own status, a running session followed past a newer launch, a command failing while its launch waits, a live
+  join's end as the game closes, and a launch that cannot start saying so in game. Over the real runtime and provider
+  (`LaunchedSessionTests`, in the multiplayer harness): a hosted launch on its own port and privacy, a join pinned to
+  the descriptor the launcher checked and refused when it differs, re-signed, another server's, or replayed from
+  another endpoint, relay-only never going direct, a live join from a running game, a join after an earlier session,
+  the handoff, and a preference change reaching the journal, with no channel touched on the frame's thread and no
+  address in any record, handoff, toast or log.
+- **Records** (`SessionLaunchRecordsTests`): every progress and outcome V2 fixture written byte for byte through the
+  runtime's publisher and the staging store.
 - **The frame boundary** (`MultiplayerFrameGuardTests`): a throwing presenter, prompt stage or tab neither breaks the
   frame nor logs an address, in its words or its stack; each failure is logged once, and the log is bounded.
 - **Wording** (`MultiplayerPrivacyTextTests`): the constants against the approved document, parsed.
 - **Architecture** (`MultiplayerUiArchitectureTests`): no address-shaped member or network type beyond the typed address,
   kit-only views, Unity-free presenters, plain text for every label of screen text, every toast and every destructive
   confirmation, persistent modals, spacers that never stretch a row's height, going online and leaving only through the
-  runtime's realm (read from the presenters' compiled code, so no spelling hides a call to the control), the overlay's
-  multiplayer stages running through the guard, no logging, and the 400-line cap on every file of the interface and the
-  overlay.
+  runtime's realm (read from the presenters' compiled code, so no spelling hides a call to the control), the launcher's
+  channels called only on the background queue or the live-join poll (read the same way), the overlay's multiplayer
+  stages running through the guard, no logging, and the 400-line cap on every file of the interface and the overlay.
 - **Tabs** (`ManagerTabLookupTests`): name-based lookup and the entry points that use it.

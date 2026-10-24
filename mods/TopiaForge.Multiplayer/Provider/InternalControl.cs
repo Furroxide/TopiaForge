@@ -165,6 +165,8 @@ namespace TopiaForge.Multiplayer
                 return Fail(ModErrorCode.InvalidArgument, exception.Message);
             }
 
+            // A session launch's own settings open with its game port and its privacy, whatever was set on them since.
+            ApplyLaunchPlan(settings, host);
             try
             {
                 live!.StartHosting(host);
@@ -214,7 +216,7 @@ namespace TopiaForge.Multiplayer
                 return Fail(ModErrorCode.InvalidArgument, "A password is 1 to 64 characters with no control characters.");
             }
 
-            var join = new JoinSettings(name) { Password = settings.Password, AllowDirect = settings.AllowDirect, TrustedServerId = settings.TrustedServerId };
+            var join = JoinSettingsFor(providerTarget, settings, name);
             pendingJoinFailure = InternalLiveFailure.None;
             pendingJoin = new PendingJoin(providerTarget.NetworkTarget, join);
 

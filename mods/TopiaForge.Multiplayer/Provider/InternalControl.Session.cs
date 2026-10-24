@@ -45,7 +45,12 @@ namespace TopiaForge.Multiplayer
             status.HostPhase = ToPhase(live.HostPhase);
             status.HostFailure = ToFailure(live.HostFailure);
             status.IsBrowsing = live.IsBrowsing;
-            if (live.Host != null) status.MaxPlayers = engine.Options.MaximumParticipants;
+            if (live.Host != null)
+            {
+                status.MaxPlayers = engine.Options.MaximumParticipants;
+                status.HostServerId = live.Host.Descriptor?.Descriptor.ServerId;
+            }
+
             var join = live.Join;
             if (pendingJoin != null)
             {

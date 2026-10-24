@@ -72,7 +72,10 @@ namespace TopiaForge.ModManager.Sessions
         DirectConnection = 1,
 
         /// <summary>A destructive confirmation, shown through the kit's destructive modal.</summary>
-        Destructive = 2
+        Destructive = 2,
+
+        /// <summary>A session password typed in game, in a masked field; the answer carries it once and nothing keeps it.</summary>
+        Password = 3
     }
 
     /// <summary>One row of a server list. Every text is display-ready: host-authored words are redacted and bounded.</summary>
@@ -192,8 +195,8 @@ namespace TopiaForge.ModManager.Sessions
     }
 
     /// <summary>
-    /// A question a screen asks before it acts. The view shows it as a modal and calls <see cref="Answer"/> once: yes for the
-    /// confirming button, no for cancel, closing or dismissing. Nothing the question guards has happened before the answer.
+    /// A question a screen asks before it acts. The view shows it as a modal and calls <see cref="Answer(bool)"/> once: yes for
+    /// the confirming button, no for cancel, closing or dismissing. Nothing the question guards has happened before the answer.
     /// A question about a game or a session holds only while that game or session does: once it does not, the screens
     /// withdraw it, which answers no, and the view closes its modal. Prompts persist across scene loads, so without that a
     /// question would outlive its game and act on the next one.
@@ -204,6 +207,7 @@ namespace TopiaForge.ModManager.Sessions
         private readonly Func<bool>? holds;
         private bool answered;
         private bool withdrawalTaken;
+        private string value = string.Empty;
 
         /// <param name="holds">Whether the question still applies, asked every frame it waits; null for one that always does. It must not allocate.</param>
         internal ScreenPrompt(ScreenPromptKind kind, string title, IReadOnlyList<string> paragraphs, string confirmLabel, string cancelLabel, Action<bool> answer, Func<bool>? holds = null)
@@ -269,6 +273,26 @@ namespace TopiaForge.ModManager.Sessions
 
             answered = true;
             answer(confirmed);
+        }
+
+        /// <summary>
+        /// Answers a prompt that asks for text, as <see cref="ScreenPromptKind.Password"/> does, with what the player typed. The
+        /// text reaches the question once, through <see cref="TakeValue"/>; a no carries none.
+        /// </summary>
+        internal void Answer(bool confirmed, string typed)
+        {
+            if (answered) return;
+            value = confirmed ? typed ?? string.Empty : string.Empty;
+            Answer(confirmed);
+            value = string.Empty;
+        }
+
+        /// <summary>Takes what the player typed, once, while the answer runs; nothing keeps it after.</summary>
+        internal string TakeValue()
+        {
+            var typed = value;
+            value = string.Empty;
+            return typed;
         }
 
         /// <summary>Withdraws the question unanswered: it counts as no, so nothing it guards happens. False when it was answered.</summary>

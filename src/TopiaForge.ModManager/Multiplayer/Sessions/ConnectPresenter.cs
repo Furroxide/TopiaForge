@@ -185,8 +185,9 @@ namespace TopiaForge.ModManager.Sessions
         public void InstallInLauncher()
         {
             if (!CanInstallInLauncher) return;
-            context.Environment.OpenUrl(launcherLink!);
-            context.Notify("Opened the TopiaForge launcher to install this session's mods.", ScreenTone.Success);
+            var handoff = LauncherHandoff.ForLink(launcherLink);
+            if (handoff == null) return;
+            context.Handoffs.HandOff(handoff, "Opened the TopiaForge launcher to install this session's mods.");
         }
 
         /// <summary>Main thread, every frame: completes a running check.</summary>

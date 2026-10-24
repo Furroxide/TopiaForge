@@ -11,13 +11,16 @@ namespace TopiaForge.Multiplayer
     /// </summary>
     internal sealed class ProviderJoinTarget : IInternalJoinTarget
     {
-        private ProviderJoinTarget(InternalJoinTargetKind kind, JoinTarget network, string description, string? serverId, string? inviteCode)
+        private ProviderJoinTarget(InternalJoinTargetKind kind, JoinTarget network, string description, string? serverId, string? inviteCode,
+            string? expectedDescriptorSha256 = null, bool? plannedAllowDirect = null)
         {
             Kind = kind;
             NetworkTarget = network;
             Description = description;
             ServerId = serverId;
             InviteCode = inviteCode;
+            ExpectedDescriptorSha256 = expectedDescriptorSha256;
+            PlannedAllowDirect = plannedAllowDirect;
         }
 
         public InternalJoinTargetKind Kind { get; }
@@ -32,8 +35,31 @@ namespace TopiaForge.Multiplayer
         /// <summary>Gets the canonical invite code of an invite target.</summary>
         internal string? InviteCode { get; }
 
+        /// <summary>Gets the SHA-256 of the descriptor a session launch planned this target from; null for a target made in game.</summary>
+        internal string? ExpectedDescriptorSha256 { get; }
+
+        /// <summary>
+        /// Gets a session launch's own choice of direct paths for a planned target, which a join to it keeps whatever its
+        /// settings say; null for a target made in game, whose join settings decide.
+        /// </summary>
+        internal bool? PlannedAllowDirect { get; }
+
         internal static ProviderJoinTarget ForLan(string serverId) =>
             new ProviderJoinTarget(InternalJoinTargetKind.Lan, JoinTarget.Lan(serverId), "LAN session", serverId, null);
+
+        /// <summary>
+        /// The target a session launch planned: <paramref name="network"/>, pinned by the server the launcher verified and by
+        /// the SHA-256 of the descriptor it planned from, joined with the launch's own choice of direct paths.
+        /// </summary>
+        internal static ProviderJoinTarget ForLaunch(InternalJoinTargetKind kind, JoinTarget network, string serverId, string descriptorSha256,
+            bool allowDirect)
+        {
+            var description = kind == InternalJoinTargetKind.Invite ? "invite " + Network.InviteCode.Display(network.InviteCode!)
+                : kind == InternalJoinTargetKind.Lan ? "LAN session"
+                : kind == InternalJoinTargetKind.ListedServer ? "listed server"
+                : "direct session";
+            return new ProviderJoinTarget(kind, network, description, serverId, network.InviteCode, descriptorSha256, allowDirect);
+        }
 
         /// <summary>
         /// Reads what the player typed or followed, ignoring surrounding spaces: a <c>topiaforge://join/</c> link, an invite

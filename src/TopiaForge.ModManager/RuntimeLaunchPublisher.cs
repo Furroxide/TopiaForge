@@ -5,8 +5,22 @@ using TopiaForge.ModManager.Core;
 
 namespace TopiaForge.ModManager
 {
-    /// <summary>Publishes one owned request's evidence without changing session admission or outcomes.</summary>
-    internal sealed class RuntimeLaunchPublisher : IDisposable
+    /// <summary>Whether the runtime's command for a launch request has finished: its target runs, or its menu loaded.</summary>
+    internal enum LaunchCommandState
+    {
+        Pending = 0,
+        Succeeded = 1,
+
+        /// <summary>The command failed, was refused or was cancelled; its outcome is the launch's.</summary>
+        Failed = 2
+    }
+
+    /// <summary>
+    /// Publishes one owned request's evidence without changing session admission or outcomes. For a session launch it is
+    /// also the request's one writer of progress and outcomes V2: the runtime's command and the provider's session report
+    /// into the same files under one sequence, so their records never go out of order (<see cref="ISessionLaunchSink"/>).
+    /// </summary>
+    internal sealed partial class RuntimeLaunchPublisher : IDisposable
     {
         private readonly object gate = new object();
         private readonly GamemodeSessionOrchestrator sessions;
@@ -50,19 +64,30 @@ namespace TopiaForge.ModManager
                 pendingOutcomes.Add("launch", new LaunchOutcome("launch", session.RequestId, 0, "idle", "failed", Array.Empty<LaunchBlock>(),
                     command: session.Command, error: new LaunchExecutionError("unavailable", sessionRefusal),
                     multiplayer: new LaunchOutcomeMultiplayer(session.Role, session.IntentId)));
+                sequence = 0;
                 WritePendingOutcome("launch");
             }
 
             sessions.Progress += Progress;
             sessions.Outcome += Outcome;
         }
+
+        /// <summary>Gets how the runtime's command for the request went, which a session launch waits for before it opens.</summary>
+        internal LaunchCommandState CommandState { get; private set; }
+
         private void Progress(LaunchProgress progress)
         {
             lock (gate)
             {
-                if (disposed || requestId == null || progress.RequestId != requestId || progress.Sequence <= progressSequence
-                    || (pendingProgress != null && progress.Sequence <= pendingProgress.Sequence)) return;
-                pendingProgress = session == null ? progress : LaunchSessionPublication.ToSessionProgress(progress, session);
+                if (disposed || requestId == null || progress.RequestId != requestId) return;
+                if (session != null)
+                {
+                    RuntimeProgress(progress);
+                    return;
+                }
+
+                if (progress.Sequence <= progressSequence || (pendingProgress != null && progress.Sequence <= pendingProgress.Sequence)) return;
+                pendingProgress = progress;
                 WritePendingProgress();
             }
         }
@@ -70,13 +95,15 @@ namespace TopiaForge.ModManager
         {
             lock (gate)
             {
-                if (disposed || requestId == null || outcome.RequestId != requestId || outcomes.Contains(outcome.Kind)
-                    || pendingOutcomes.ContainsKey(outcome.Kind)) return;
+                if (disposed || requestId == null || outcome.RequestId != requestId) return;
+                if (outcome.Kind == "launch" && CommandState == LaunchCommandState.Pending)
+                    CommandState = outcome.Status == "succeeded" ? LaunchCommandState.Succeeded : LaunchCommandState.Failed;
+                if (outcomes.Contains(outcome.Kind) || pendingOutcomes.ContainsKey(outcome.Kind)) return;
                 if (session != null)
                 {
                     var published = LaunchSessionPublication.ToSessionOutcome(outcome, session);
                     if (published == null) return;
-                    outcome = published;
+                    outcome = Renumbered(published, NextSequence(published.Sequence));
                 }
 
                 pendingOutcomes.Add(outcome.Kind, outcome);
@@ -135,12 +162,26 @@ namespace TopiaForge.ModManager
                 return completed;
             }
         }
+
+        /// <param name="clean">Whether the runtime tore down without failures; a session launch's terminal record says so.</param>
+        internal void Dispose(bool clean)
+        {
+            lock (gate)
+            {
+                if (disposed) return;
+                EndAtExit(clean);
+            }
+
+            Dispose();
+        }
+
         public void Dispose()
         {
             lock (gate)
             {
                 if (disposed) return;
                 // Update has stopped during teardown. Attempt each pending file once, without waiting or emitting events.
+                EndAtExit(true);
                 FlushPending();
                 if (lastBindings != null)
                     try { PublishSnapshot(lastBindings); } catch (Exception error) { Report(error); }

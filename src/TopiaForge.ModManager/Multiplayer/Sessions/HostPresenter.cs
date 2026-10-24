@@ -222,16 +222,16 @@ namespace TopiaForge.ModManager.Sessions
             SelectGame();
         }
 
-        /// <summary>Takes the remembered hosting settings once the multiplayer settings load.</summary>
-        internal void ApplyDefaults(MultiplayerSettings settings)
+        /// <summary>Takes the hosting defaults, the launcher's preferences, once they and this game's settings have loaded.</summary>
+        internal void ApplyDefaults(MultiplayerPreferenceValues preferences)
         {
             if (defaultsApplied) return;
             defaultsApplied = true;
-            SetName(settings.ServerName ?? DefaultName(settings.DisplayName));
-            SetMaxPlayers(settings.HostMaxPlayers);
-            visibility = Array.IndexOf(VisibilityValues, settings.HostVisibility);
+            SetName(preferences.HostingName ?? DefaultName(preferences.DisplayName));
+            SetMaxPlayers(preferences.MaxPlayers);
+            visibility = Array.IndexOf(VisibilityValues, preferences.Visibility);
             if (visibility < 0) visibility = 2;
-            voice = settings.HostVoice;
+            voice = preferences.Voice;
             SelectGame();
         }
 
@@ -278,7 +278,7 @@ namespace TopiaForge.ModManager.Sessions
         private RealmDecision Decision() => SessionRealmGate.ForHost(context.Environment.EvaluateRealmChange(NetRealm.ListenHost));
 
         /// <summary>Bounds a gamemode or world name to what a session announces, or null when there is none.</summary>
-        private static string? Announced(string? value)
+        internal static string? Announced(string? value)
         {
             var bounded = TopiaForgePlainText.Sanitize(value, InternalHostSettings.MaximumNameLength);
             return InternalText.IsDisplayText(bounded, InternalHostSettings.MaximumNameLength) ? bounded : null;

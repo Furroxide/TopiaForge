@@ -98,7 +98,8 @@ namespace TopiaForge.ModManager
 
         /// <summary>
         /// Sets <see cref="ServiceOrigin"/> at startup from the session launch's origin (launch request V5) and the
-        /// manager's configured one: the launch's comes first. The launch ticket itself stays the provider's to take.
+        /// manager's configured one: the launch's comes first. The launch's session goes to the provider separately, as a
+        /// call on its internal control once mods have loaded.
         /// </summary>
         internal void ConfigureServiceOrigin(string? launch, string? configured) => ServiceOrigin = launch ?? configured;
 

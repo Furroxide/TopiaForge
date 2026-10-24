@@ -42,9 +42,10 @@ network world.
   reaches it through the runtime.
 - **Threads.** Every member runs on the main thread, which owns the session engine. The one exception is a voice
   playback stream's `Read`, which belongs to the audio thread.
-- **Privacy.** No SPI member carries or exposes a network address. A join target is an opaque handle (section 3), and
-  failures name a reason. An architecture test scans every SPI type's members and parameters for address-shaped names
-  and network types (section 9).
+- **Privacy.** No SPI member exposes a network address, and only the launch session carries one, inward
+  ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), section 8). A join target is an opaque handle (section
+  3), and failures name a reason. An architecture test scans every SPI type's members and parameters for address-shaped
+  names and network types, and proves the launch session only goes in (section 9).
 - **Unity.** The composition root and the runtime host are Unity-free, so the ModManager and multiplayer harnesses
   compile and run them. The one Unity call, `Application.runInBackground`, sits behind `IMultiplayerPlatform`, which
   `CoreGameplayServices` implements.
@@ -63,6 +64,7 @@ network world.
 | Session | `ReplaceSession`, `OpenSystemChannel`, `HoldReadiness`, `IsReadinessHeld`, `IsParticipantReady` | Sections 5 and 6. |
 | Sources | `SetEntityIdentitySource`, `SetAvatarSource` | Shape only for now; section 8. |
 | Voice and counters | `Voice`, `GetStatistics`, `GetStatus` | `Voice` is the provider's voice service, or null without one; see "Voice" below. |
+| Launches | `PlanLaunchSession` | Plans the session the launcher asked for; the in-game screens start the plan through the realm ([MultiplayerLaunchContract.md](MultiplayerLaunchContract.md), section 8). |
 | Internet | `CreateInvite`, `RevokeInvite` | Host only, once the session is registered with the TopiaForge service: `MultiplayerInternetSessions.md`. |
 
 - **Results.** Commands answer with `OperationResult<bool>`: `NotAuthoritative` for a host-only action on a joined
@@ -599,7 +601,8 @@ answers no and is reported.
   pumps the provider, attach and detach, stages by role, failure isolation, the frame order around real mods, and the
   zero-allocation offline frame.
 - **Privacy** (`RuntimePrivacyTests`): no SPI member, parameter or type is shaped like an address or names a network
-  type; typed hosts stay inside the handle; what the runtime logs and keeps is redacted, every address form above
+  type, beyond the launch session's inbound ports, which nothing in the SPI returns or keeps; typed hosts stay inside
+  the handle; what the runtime logs and keeps is redacted, every address form above
   included, and the provider's own log gets the same redacted lines with no runtime attached and behind one that throws;
   and the host's words reach neither a log, through the developer switch or the runtime, nor a mod. For voice
   (`InternalVoiceStreamTests.TheVoiceSpiCarriesNoAddress`): the voice SPI with every SDK type it names, transitively,
@@ -634,8 +637,7 @@ answers no and is reported.
 - **Its privacy** (`ReplicationSpiPrivacyTests`): no member, parameter or type of the replication SPI (its interfaces, its
   limits and every internal type they name, transitively), or of the runtime types behind it, is shaped like an address
   or names a network type, and nothing the realm and the seam log or answer holds one, however many addresses the
-  failures they report carry. Other internal contracts in the namespace, such as the launch contract's session ticket,
-  are held to their own rules.
+  failures they report carry. Other internal contracts in the namespace are held to their own rules.
 - **Intent tracking** (section 14 lists its suites).
 
 ## 10. The realm
