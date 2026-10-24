@@ -3,14 +3,18 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TopiaForge.Mods;
+using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager
 {
     /// <summary>
-    /// The network seam's entity service. It changes no behaviour yet: every member forwards its arguments to the service
-    /// the gameplay host made and returns exactly what that returns, failures and exceptions included. Authority routing
-    /// (WS3.7) makes <c>SetTransform</c> and <c>Destroy</c> validated requests on joined players here, and
-    /// <c>AcquireMotion</c> the motion lease GravityGun holds.
+    /// The network seam's entity service. Offline and on a listen host it changes no behaviour: every member forwards its
+    /// arguments to the service the gameplay host made and returns exactly what that returns, failures and exceptions
+    /// included. On a joined player, <c>SetTransform</c> and <c>Destroy</c> are routed (WS3.7): a change to an object of
+    /// the player's own is a request the host validates, one on the player's intent to anything else the network world
+    /// holds is refused, and a scripted one leaves the host's objects to the host's own run of the same script. An entity
+    /// the network world does not hold is the game's, as offline. Motion ownership (<c>AcquireMotion</c>) comes with the
+    /// next part of authority routing.
     /// </summary>
     internal sealed class NetEntityService : IEntityService
     {
@@ -30,11 +34,25 @@ namespace TopiaForge.ModManager
 
         public bool TryGetTransform(IEntity entity, out TransformState transform) => inner.TryGetTransform(entity, out transform);
 
-        public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform) => inner.SetTransform(entity, transform);
+        public OperationResult<TransformState> SetTransform(IEntity entity, TransformState transform)
+        {
+            var authority = Replication.JoinedAuthority;
+            if (authority == null) return inner.SetTransform(entity, transform);
+            var route = Replication.RouteCurrentIntent();
+            if (route != InternalRoute.Forwarded && route != InternalRoute.Shadow) return inner.SetTransform(entity, transform);
+            return authority.RouteTransform(entity, transform, inner, route == InternalRoute.Shadow) ?? inner.SetTransform(entity, transform);
+        }
 
         public IReadOnlyList<IEntity> Query(EntityQuery query) => inner.Query(query);
 
-        public OperationResult<bool> Destroy(IEntity entity) => inner.Destroy(entity);
+        public OperationResult<bool> Destroy(IEntity entity)
+        {
+            var authority = Replication.JoinedAuthority;
+            if (authority == null) return inner.Destroy(entity);
+            var route = Replication.RouteCurrentIntent();
+            if (route != InternalRoute.Forwarded && route != InternalRoute.Shadow) return inner.Destroy(entity);
+            return authority.RouteDestroy(entity, route == InternalRoute.Shadow) ?? inner.Destroy(entity);
+        }
 
         public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => inner.AcquireMotion(entity);
     }

@@ -14,11 +14,12 @@ namespace TopiaForge.Mods.Internal
     /// failure names a reason.
     /// </para>
     /// <para>
-    /// Some members are stubs until the WS3 slice that owns their behaviour lands, and each says so. Until then a spawn
-    /// request and a command run here, as single player always has, and no player reference resolves. The realm, the
-    /// route, the time authority and the microphone already answer by the execution model's rules, and the network world
-    /// (WS3.6) builds replicas, announces what is registered and names entities. A context whose profile does not
-    /// run in the current realm, such as a gamemode server on a joined player, is refused with
+    /// Some members are stubs until the WS3 slice that owns their behaviour lands, and each says so. Until then a command
+    /// runs here, as single player always has, and no player reference resolves. The realm, the route, the time authority
+    /// and the microphone already answer by the execution model's rules, the network world (WS3.6) builds replicas,
+    /// announces what is registered and names entities, and authority routing (WS3.7) forwards a joined player's spawns on
+    /// its player's intent and binds its scripted ones as shadows of the host's. A context whose profile does not run in
+    /// the current realm, such as a gamemode server on a joined player, is refused with
     /// <see cref="ModErrorCode.NotAuthoritative"/>, and a stopping one with <see cref="ModErrorCode.Cancelled"/>.
     /// </para>
     /// </remarks>
@@ -55,19 +56,42 @@ namespace TopiaForge.Mods.Internal
         /// description peers build it from. Offline and on a listen host the runtime records it at once, so that opening this
         /// session to other players later can baseline it, and a listen host announces it to its players. Registering a
         /// recorded entity again replaces its description, and the record ends when the entity does, or when this context
-        /// ends. A client-local mod's registration is kept local: nothing it does is networked. On a joined player nothing is
-        /// recorded: world content waits to bind, by its content key, to the host's entity of that key.
+        /// ends. A client-local mod's registration is kept local: nothing it does is networked.
         /// </summary>
-        /// <remarks>Stub: from WS3.7 a joined player's other registrations bind as shadows of the host's.</remarks>
+        /// <remarks>
+        /// On a joined player nothing is ever recorded as canonical (WS3.7). World content waits to bind, by its content key,
+        /// to the host's entity of that key. A scripted registration is a shadow: the entity stays frozen here and binds in
+        /// place to the host's spawn of the same mod and shadow key, and ends through the kind's spawn handler if the host's
+        /// never comes or comes for another kind. A registration on the player's intent is a prediction, which the host
+        /// makes again through the kind's spawn handler (<see cref="RegisterSpawnHandler"/>); without one on this player it is
+        /// refused with <see cref="ModErrorCode.NotAuthoritative"/>.
+        /// </remarks>
         OperationResult<bool> RegisterCanonical(IEntity entity, InternalSpawnDescriptor descriptor);
 
         /// <summary>Spawns through <paramref name="spawn"/> and registers what it returns as canonical; a failed spawn is returned as it is.</summary>
         /// <remarks>
-        /// Stub: until authority routing (WS3.7) the spawn runs here in every realm, as in single player, and a joined
-        /// player's is recorded as nothing. From then a joined player forwards it to the host, predicts it locally and is
-        /// told whether the host adopted it.
+        /// Offline and on a listen host the spawn runs here and is recorded. On a joined player it routes as
+        /// <see cref="RegisterCanonical"/> does (WS3.7): a scripted spawn runs here as a shadow of the host's, and one on the
+        /// player's intent runs here as a frozen prediction while the host makes it again through the kind's spawn handler;
+        /// the host's verdict adopts it in place, under the same handle, or ends it through the handler with a toast. Without
+        /// a spawn handler for the kind on this player, a spawn on the player's intent is refused with
+        /// <see cref="ModErrorCode.NotAuthoritative"/> before anything runs.
         /// </remarks>
         OperationResult<IEntity> RequestSpawn(InternalSpawnDescriptor descriptor, Func<OperationResult<IEntity>> spawn);
+
+        /// <summary>
+        /// Registers how this process makes and ends this mod's entities of <paramref name="kind"/> for authority routing
+        /// (WS3.7). A kind has one handler in the process; disposing the lease removes it.
+        /// </summary>
+        /// <remarks>
+        /// On a listen host, a joined player's spawn of the kind on its player's intent is made through
+        /// <see cref="IInternalSpawnHandler.Spawn"/>, inside that player's intent (<see cref="CurrentIntent"/> names them),
+        /// and what it returns is recorded as that player's: announced to everyone, and ended through
+        /// <see cref="IInternalSpawnHandler.Despawn"/> when they destroy it or leave. On a joined player the handler ends a
+        /// prediction the host refused and a shadow that never bound. Every peer runs the same mod, so each registers the
+        /// same handler.
+        /// </remarks>
+        OperationResult<IDisposable> RegisterSpawnHandler(string kind, IInternalSpawnHandler handler);
 
         /// <summary>
         /// Registers the handler that runs this mod's commands of <paramref name="kind"/>. A mod has one handler per kind;
@@ -142,6 +166,28 @@ namespace TopiaForge.Mods.Internal
         /// process left the session. It is called once per replica and must not throw.
         /// </summary>
         void ReleaseReplica(IEntity replica);
+    }
+
+    /// <summary>
+    /// Makes and ends one provider kind's entities for authority routing (WS3.7): a listen host makes a joined player's
+    /// requested entity through it, and every peer ends what it made through it. Main thread.
+    /// </summary>
+    internal interface IInternalSpawnHandler
+    {
+        /// <summary>
+        /// Makes the canonical entity <paramref name="descriptor"/> describes, for the player the calling context's
+        /// <see cref="IRuntimeReplication.CurrentIntent"/> names, or says why it cannot. A participant context's own code
+        /// forwards no intent, so for its spawns <see cref="IRuntimeReplication.CurrentIntent"/> names no player; the runtime
+        /// records the entity as that player's all the same. The runtime records what it returns; the handler must not
+        /// register it itself.
+        /// </summary>
+        OperationResult<IEntity> Spawn(InternalSpawnDescriptor descriptor);
+
+        /// <summary>
+        /// Ends an entity this kind's spawn made: a player's object they destroyed or left behind, a joined player's
+        /// prediction the host refused, or a shadow that never bound. It is called once per entity and must not throw.
+        /// </summary>
+        void Despawn(IEntity entity);
     }
 
     /// <summary>A hold on the microphone. Disposing it gives the microphone back; disposing it again does nothing.</summary>

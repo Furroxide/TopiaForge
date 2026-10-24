@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.4, WS3.6 and WS3.9 of the live-multiplayer plan) · Date: 2026-10-18 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4, WS3.6, WS3.9 and part of WS3.7 of the live-multiplayer plan) · Date: 2026-10-22 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -16,8 +16,10 @@ The work lands in three steps:
    every player.
 
 All three have landed, and so have the voice service behind the SPI (section 2, "Voice"), intent tracking (WS3.4,
-section 14) and the participant realm (WS3.9, section 15). Section 8 says what each later WS3 slice plugs in where, and
-section 13 says exactly where authority routing (WS3.7) and session follow (WS3.8) attach to the network world.
+section 14), the participant realm (WS3.9, section 15) and the first part of authority routing (WS3.7, section 16):
+spawn adoption, shadows, and validated transform changes and destroys. Section 8 says what each later WS3 slice plugs in
+where, and section 13 says exactly where motion ownership (WS3.7's second part) and session follow (WS3.8) attach to the
+network world.
 
 ## 1. Shape
 
@@ -513,7 +515,7 @@ plug in here:
 | WS3.4 intent tracking | Landed (section 14): `IntentScope`, fed by input-active frames, the UI kit's controls and the SDK UI service, commands and interaction handlers, and read through `IRuntimeReplication.CurrentIntent` and `RouteCurrentIntent()` and the decorators' `RuntimeReplication.VisibleIntent` |
 | WS3.5 core replication model | Landed in Core (`MultiplayerReplicationModel.md`); the slices below drive it |
 | WS3.6 network world | Landed (section 13): `PromotionCensus`, `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`, an observer of the realm, the spawn ledger's observer, the `WorldReplication` channel, `SetEntityIdentitySource`, `MultiplayerReplication.References` and `LocalContent`, and replicas through `TryGetReplicaFactory` |
-| WS3.7 authority routing | The `Net*Service` decorators and the SPI's spawn and command stubs, each call routed by `ExecutionRouting.Route(realm, profile, intent)`: spawn adoption, and shadows bound by `NetSpawnOrigin`; `NetEntityMotion` behind `AcquireMotion`; `HeldItemOwnershipTracker` behind `NetItemService`; forwarded commands naming their sender in `InternalCommand.Sender`. Its traffic is message types 64 to 127 on the network world's channel, and its hooks into the network world are listed in section 13 |
+| WS3.7 authority routing | First part landed (section 16): `NetAssetService` and `NetEntityService` route a joined player's spawns, transform changes and destroys by `ExecutionRouting.Route(realm, profile, intent)`, and the SPI's `RequestSpawn` and `RegisterCanonical` do so for providers: spawn adoption under a host's per-player `ProxyParticipant` scope, shadows bound by `NetSpawnOrigin`, and requests the host validates through `PermissionPolicy` and `TokenBucket`, over message types 64 to 66 and 96 and 97. Still to come: `NetEntityMotion` behind `AcquireMotion` and `HeldItemOwnershipTracker` behind `NetItemService`, whose hooks into the network world are listed in section 13, and forwarded commands naming their sender in `InternalCommand.Sender` |
 | WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu. The network world's scene hooks, hold and progress it works beside are listed in section 13 |
 | WS3.9 participant realm | Landed (section 15): `IGamemodeParticipantFactory`, the participant's scope through `CreateChildScopeAsync(..., ModExecutionContext.Participant)`, and the orchestrator's start by realm, which session follow (WS3.8) calls on a joined player |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
@@ -703,10 +705,11 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | `RegisterCanonical` and `RequestSpawn`, from first-party providers | The provider's own | Its `InternalSpawnDescriptor`, world content with its content key |
 
   Each record keeps a sequence that is never reused, the owning mod, the network profile of the context that made it,
-  what it is, its transform when it was made, its description, the entity, and the seam that recorded it. Only what a
-  listen host would baseline is recorded: a client-local mod's spawns, which are never networked, and a standalone
-  mod's, which never go online, are not, and cost nothing. Nor is anything a joined player spawns or registers: its
-  spawns are predictions and shadows of the host's, never canonical (section 13). Registering a recorded entity again
+  what it is, its transform when it was made, its description, the entity, the seam that recorded it, its shadow key,
+  and the slot of the player whose object it is, zero for the host's world (section 16). Only what a listen host would
+  baseline is recorded: a client-local mod's spawns, which are never networked, and a standalone mod's, which never go
+  online, are not, and cost nothing. Nor is anything a joined player spawns or registers: its
+  spawns are predictions and shadows of the host's, never canonical (section 16). Registering a recorded entity again
   describes it in place, keeping its place in the order. A record ends when its entity does: dead records are swept as
   recording goes on, whenever the ledger reaches twice what was alive at the last sweep, or 64, so it never holds more
   than that. It also ends, at once, when the context whose seam recorded it ends: the seam tracks one release in its
@@ -759,8 +762,9 @@ model's realm rules, `NetRealms.EvaluateTransition`, to every request to go onli
   | `Route(intent)` | `ExecutionRouting.Route` for the realm, the profile and the given intent | — |
   | `CurrentIntent`, `RouteCurrentIntent()` | The intent the calling code acts on, as the context's mod sees it, and the route for it (section 14) | WS3.7 routes spawns, transform changes and destroys by it |
   | `RegisterReplicaFactory` | Kept, one per kind in the process; a joined player builds the host's entities of that kind through it, and releases them through `ReleaseReplica` | — |
-  | `RegisterCanonical` | Offline and on a host, records at once, and a host announces it. On a joined player records nothing: world content waits to bind by key to the host's | WS3.7 binds a joined player's other registrations as shadows |
-  | `RequestSpawn` | Runs the spawn here in every realm (stub), and records it offline and on a host | WS3.7 forwards from a joined player, predicts, then adopts or rolls back |
+  | `RegisterCanonical` | Offline and on a host, records at once, and a host announces it, a scripted SDK spawn with its mod's next shadow key. On a joined player records nothing: world content waits to bind by key to the host's, a scripted SDK spawn is a shadow, and one for the player is a prediction its kind's spawn handler makes again on the host (section 16) | — |
+  | `RequestSpawn` | Offline and on a host, runs the spawn here and records it. On a joined player runs it here and records nothing: scripted, a shadow; for the player, a prediction the host adopts or refuses, refused here when the kind has no spawn handler (section 16) | — |
+  | `RegisterSpawnHandler` | Kept, one per kind in the process: how the host makes the mod's kind for a player, inside that player's forwarded intent, and how it ends one | — |
   | `RegisterCommand`, `SubmitCommand` | Runs the mod's own handler here at once, in every realm (stub) | WS3.7 forwards from a joined player; the host checks the sender |
   | `TryCreateRef`, `TryResolveRef` | The network world names its entities, `world-` and the network id | WS3.11 names players |
   | `TimeAuthority`, `NativePauseFreezesWorld` | `ExecutionRouting.TimeControl` and `NativePause` | WS3.13 publishes and applies the host's scale |
@@ -881,7 +885,8 @@ implements over the loaded scenes and the runtime's entity registry, and the tes
 ### The host
 
 - **Promotion.** The promotion's live records are registered in the order they were made, each a network entity with
-  its origin, `{owning mod, record sequence}`, and marked through `Adopt`. Then the loaded scenes' objects are indexed
+  its origin, `{owning mod, shadow key}` for a spawn a joined player's own run of the same script shadows (section 16)
+  and none otherwise, and its owner slot, and marked through `Adopt`. Then the loaded scenes' objects are indexed
   by the keys each took as its scene loaded, and the world becomes the spawn ledger's observer, so every later record
   and description is announced.
 - **Scene keys.** As each scene loads, in single player as much as online, its candidates are keyed: the topmost
@@ -1012,14 +1017,20 @@ stops at its first bad field: items before it in a list still apply, as the host
 | 7 `SceneRemoved` | Host | count, scene keys |
 | 32 `BaselineRequest` | Player | reason: 0 when a stream starts, 1 to resynchronize |
 | 33 `BaselineProgress` | Player | baseline number, chunks read |
-| 64 to 127 | Either | Authority routing's (WS3.7) |
+| 64 `SpawnRequest` | Player | authority routing (section 16): provisional id, mod, kind, intent, input frame, scale, transform, description |
+| 65 `TransformRequest` | Player | target (network id, or the player's provisional id), scale, transform |
+| 66 `DestroyRequest` | Player | target |
+| 96 `SpawnAdopted` | Host | provisional id, network id |
+| 97 `SpawnRefused` | Host | provisional id, reason |
+| 67 to 95, 98 to 127 | Either | Kept for authority routing's second part (WS3.7) |
 
 An entry starts with its source: a scene object (id, key, pose), an SDK spawn (id, kind, owning mod, origin sequence,
 owner slot, scale, pose, description), world content (id, kind, content key, owning mod, owner slot, scale, pose,
 description), a removed scene object (key), or an unbound scene object's pose (key, pose). A joined player checks every
-field as the runtime checks its own: kinds and mod ids by their token rules, a sequence of at least 1, an owner slot up
-to 255, finite non-zero scales up to 10,000, content keys as world content's, descriptions up to 16 KiB, and transform
-records exact in their flags, length and spare bits. A message is at most 24 KiB and lists at most 4,096 items.
+field as the runtime checks its own: kinds and mod ids by their token rules, an origin sequence of 0, for none, or a
+shadow key from 1 (section 16), an owner slot up to 255, finite non-zero scales up to 10,000, content keys as world
+content's, descriptions up to 16 KiB, and transform records exact in their flags, length and spare bits. A message is
+at most 24 KiB and lists at most 4,096 items.
 
 ### Privacy and cost
 
@@ -1126,24 +1137,21 @@ records exact in their flags, length and spare bits. A message is at most 24 KiB
 
 ### Where WS3.7 and WS3.8 attach
 
-Authority routing (WS3.7):
+Authority routing (WS3.7). Its first part has landed (section 16): its messages are types 64 to 66 and 96 and 97 on
+`NetworkWorld.Channel`; a host's adopted spawn is a ledger record announced with its player's owner slot; a joined
+player's `NetworkWorldClient.Build` binds a prediction or a shadow in place of a new replica before `Attach` marks it;
+and `SetTransform` and `Destroy` on a joined player are requests whose results reach the player as announcements,
+despawns and snapshots. The second part attaches here:
 
-- **Messages.** Types 64 to 127 on `NetworkWorld.Channel`, through `NetworkWorldChannel.Register`, beside world
-  replication's own on the same ordered stream. `TrySendTo`, `TrySendToHost` and `Broadcast` keep this section's window
-  and skip rules.
-- **Spawn adoption.** A host's adopted spawn is a ledger record like any other, so it is announced with its origin. The
-  entries already carry an owner slot, zero today, for the participant whose proxy scope owns it. A joined player's
-  `NetworkWorldClient.Build` is where a predicted instance binds in place of a new replica, by whatever provisional id
-  the prediction and the host's announcement share, before `Attach` marks it.
-- **Shadows.** `RegisterCanonical` on a joined player records nothing today; authority routing binds its shadows by
-  `NetSpawnOrigin` at the same point.
+- **Messages.** Types 67 to 95 and 98 to 127 on `NetworkWorld.Channel`, through `NetworkWorldChannel.Register`, beside
+  world replication's own on the same ordered stream. `TrySendTo`, `TrySendToHost` and `Broadcast` keep this section's
+  window and skip rules.
 - **Motion.** A body a player holds is simulated there: `ReplicaTransformDriver.Drive` must skip it, its kinematic
   switch must be handed back to the game for the hold and suppressed again after, and the host must bind an unbound
   scene object at once when a player acquires it, since today binding waits for first motion (`NetworkWorldHost.Bind`).
   A hand-back carries `{position, linear velocity, angular velocity}`, and snapshots carry no angular velocity, so the
-  hand-back is one of authority routing's own messages.
-- **Requests.** `SetTransform` and `Destroy` on a joined player become requests; the host's results reach the player as
-  announcements, despawns and snapshots, as now.
+  hand-back is one of authority routing's own messages. A player's own adopted object is already simulated nowhere
+  but the host; a grab of one goes through the same ownership protocol as any other body.
 
 Session follow (WS3.8):
 
@@ -1577,3 +1585,287 @@ player's game until the mod unloads.
 - **The realm comes from the contexts' replication services**, the same composition root every scope's seam reports,
   so the orchestrator and the participant's services can never disagree about where the session runs.
 - **Retire per facade, with the mod's last facade retiring the mod**, for the reason above.
+
+## 16. Authority routing
+
+WS3.7's first part: spawn adoption, shadows, and validated `SetTransform` and `Destroy`. Scripts run on the host and a
+player's own actions run where that player is (the execution model), so a joined player's call goes one of three
+ways. What the player does is made at once where the player is, asked of the host, and kept or ended by the host's
+answer; what scripts do is the host's to do, and the player's own run of the same script only stands in for it; and
+nothing a player makes is ever recorded as canonical there. Offline and on a listen host every call is canonical, as
+before. Motion ownership (`NetEntityMotion`, `HeldItemOwnershipTracker`) is the second part.
+
+| Part | Where | What it does |
+| --- | --- | --- |
+| `SpawnAuthorityRules`, `ShadowKeyNumbering`, `SpawnRefusal` | `Core/Multiplayer/SpawnAuthority.cs` | The rules, Unity-free: relations, refusals and their texts, which spawns are shadowed, an honest player's pace, safe bundle paths, the prediction and shadow state machines, and each mod's shadow numbering |
+| `RuntimeReplication.Authority` | `MM/Multiplayer/` | Where a context's spawns and registrations go, and the shadow key a canonical spawn takes |
+| `NetAssetService`, `NetEntityService` | `MM/Multiplayer/` | Route a joined player's spawns, transform changes and destroys, and list the mod's own loads |
+| `NetworkWorldClient` `.Predictions`, `.Shadows`, `.Requests`; `LocalSpawn`, `ClientPrediction`, `ClientShadow` | `MM/Multiplayer/World/` | A joined player's side |
+| `NetworkWorldProxies` (with `.Builds` and `.Requests`), `ProxyParticipant`, `ProxySpawn` | `MM/Multiplayer/World/` | The listen host's side: validation, the per-player scopes, and the builds |
+| `AuthorityWire`, `AuthorityMessages` | `MM/Multiplayer/World/AuthorityWire.cs` | The messages, and their strict reading |
+| `ModAssetLoads` | `MM/Multiplayer/World/ModAssetLoads.cs` | Each mod's own bundle and prefab loads, which builds use first |
+| `IRuntimeReplication.RegisterSpawnHandler`, `IInternalSpawnHandler` | `src/TopiaForge.Mods.Abstractions/Internal/` | How a provider's kind is made, and ended, for a player |
+
+### Routing
+
+On a joined player, by `ExecutionRouting.Route(Client, profile, intent)` for the calling context:
+
+| Route | Spawn | `SetTransform`, `Destroy` |
+| --- | --- | --- |
+| `Forwarded`: the player's intent, or any call of a participant context, such as a gamemode's participant controller (section 15), which acts for its player | A prediction (below) | On the player's own object, a request; on anything else the network world holds, refused here with `NotAuthoritative`, as the host's default rules would |
+| `Shadow`: scripted code in a process or world-owner context of a shared mod | A shadow (below) | On the player's own object, a request; on a shadow still waiting, here, since it is the player's alone until it binds; on anything else, a no-op that succeeds, since the host's own run of the same script makes the change there |
+| `LocalOnly`: a client-local mod | Here, as offline | Here, as offline |
+| `NotRun`: a gamemode server | Refused, as before | Refused, as before |
+
+An entity the network world does not hold, such as a scene object that has never moved, is the game's, as offline. A
+change to an object of the player's own is a request whatever code makes it, since the host's own run of the mod never
+held it.
+
+### Spawn adoption
+
+1. **A prediction.** The spawn runs here through the host's asset service, or the provider's own spawn, and the
+   mod gets its handle at once. The instance is frozen as a replica is (`PrepareReplica`), kinematic and unmarked, and
+   takes the player's next provisional id, from 1, never one still in use. Its request carries the mod, the kind, the
+   intent and whether an input frame made it, the scale and transform, and a description: an asset's bundle path and
+   name, as world entries carry them, or the provider's payload. A prediction is refused here, before the spawn runs,
+   when the player already has as many objects and waiting predictions as the host's quota (64), and an asset whose
+   prefab does not say which bundle it comes from, or names it by a path the host would refuse, such as one with a
+   `./` part or a name that ends in a dot, is refused as unshareable, with a message that says how to name the bundle.
+2. **The host validates.** Every request spends from the player's spawn bucket first (`PlayerRequestLimiter` over
+   `PermissionPolicy.Default`: a burst of 8, then 4 a second), so a flood is throttled whatever it asks for; then the
+   rules, then the quota of 64 live objects. Then what it asks for: an asset of a mod the host shares, named by a plain
+   path inside the package (`IsSafeBundlePath`: relative, no `.` or `..` segment, no drive, scheme or control
+   character, at most 512 characters, which the asset service checks against the package's folder again), or a
+   provider's kind, made by the spawn handler the same mod registered. A plain path has no segment that ends in a
+   period or a space, and none shaped like a short name such as `WORLD~1.BUN`: the game's platform reads each as
+   another name of a file the mod knows by its plain one, and no reading of a name alone sees a short name, so a
+   player's spellings of one file differ only by case and separators. Nor has it a segment that Windows keeps for a
+   device, `CON`, `PRN`, `AUX`, `NUL`, or `COM` or `LPT` and a digit, in any case and with any extension (`con`,
+   `Nul.bundle`, `lpt1.tar.gz`): opening one opens the device, not a file, and Windows reserves these names in every
+   folder. The runtime's own `asset.` kinds are never made for a player. Nothing is loaded and no mod code runs before
+   all of that passes.
+3. **The host makes it canonically,** as an object of the player's `ProxyParticipant` scope: an asset through the mod's
+   own handles first, a prefab its code loaded, else a prefab loaded from a bundle it holds, waiting while its own load
+   of the bundle runs, since the game refuses a second load of a bundle that is loaded already; only a bundle the mod
+   does not hold is loaded through its package, and let go of after 2 seconds unused, or at once when the mod starts its
+   own load of the same file, however a player spelled its path, so the mod's own load is never refused. One file is one
+   load, on the host as on a joined player, and a player's spelling of it finds the mod's own loads of it
+   (`SpawnAuthorityRules.BundleFileKey`) whichever way the mod named it: the mod's own path need not be plain, and is
+   read as the platform resolves it, so a mod that loads `./assets/world.bundle` holds the file a player names
+   `assets/world.bundle`. A prefab loaded off a bundle the mod has let go of since is loaded again from what holds the
+   bundle then. A provider's kind is made by its handler inside the player's forwarded intent
+   (`EnterForwarded`), so the provider reads whose object it makes from `CurrentIntent`. A build that takes over 30
+   seconds is refused as unbuildable. The object is recorded like any other spawn, with the player's slot as its owner
+   and no shadow key, and announced to everyone.
+4. **The verdict.** The host owes the player its verdict, sent as the player's window allows. Adopted, the instance
+   stands in place of a replica when the entry arrives, under the same handle and `IEntity.Id`, and a lookup by its
+   network id finds the mod's own handle; if the entry came first, the replica built for it gives way. Refused, the
+   instance ends, through the provider's handler for a provider's kind, so the handle is dead, and the player sees a
+   warning toast through the context's own UI service, which renders through the kit's toasts. Refusals closer together
+   than 3.5 seconds are counted, not shown. A spawn its mod removed before the verdict is not shown as refused.
+
+A request asked again for a provisional id the host already tracks, as after a restarted stream, is answered with the
+verdict it has and never made twice. A prediction whose verdict has not come 60 seconds after its request left ends
+with a toast, and the host is asked to end what it may make of it late. A restarted stream sends every request still
+waiting again, oldest first. Leaving ends every prediction with the host's world.
+
+### Shadows
+
+Each mod's shadowable spawns are numbered 1, 2, 3 and so on (`ShadowKeyNumbering`): scripted spawns of a process or
+world-owner context of a shared mod, the spawns a joined player's own run of the same code makes too. A listen host
+stamps each such spawn with its number as the entry's origin sequence, 0 meaning none; a player's adopted spawns, a
+gamemode's and a participant's take none. A joined player numbers its own run alike, and its spawn becomes a shadow: made
+here, frozen, never sent and never recorded, waiting for the host's entity with the same `(mod, number)`.
+
+- **The host's spawn arrives,** first or after: the shadow stands for it in place of a replica, under the mod's own
+  handle, and follows the host's snapshots; the host's despawn ends it.
+- **It comes for another asset or kind,** or another copy already stands for it: the shadow ends at once and the host's
+  replica is built. A provider's kind matches by kind alone, since its description may change between runs.
+- **It never comes:** the shadow ends 10 seconds after it was made, counted only while the player's world is
+  synchronized, so a baseline still arriving is never mistaken for an absence.
+
+The numbering starts over on a host when its world session starts (the orchestrator's `Preparing`), and on a player when
+it joins and when its host's world is replaced. A number a live entity from an earlier session still holds is never
+announced twice: the newer spawn goes without one (`ShadowKeysReused`). A player may still hold an earlier session's
+entity under a number the host has given again, when that entity's despawn went with a restarted stream or a skipped
+broadcast; the baseline that follows ends it as it lists the new one, which takes the number.
+
+### Requests
+
+A transform change or destroy names its target by network id, or the player's own spawn by provisional id, before or
+after the host adopted it. The host takes the sender from the channel, never from the request, spends from the player's
+bucket for the kind first, and decides by how the player relates to the target: its own, the world's (owner slot zero:
+the host's spawns, scene objects and world content), or another player's. By default a player moves and destroys only
+its own objects. A move of a spawn still being made changes where it is made; a destroy of one cancels it. A player the
+host made nothing for owns nothing, and gets no scope by asking. On a joined player, moves to one object coalesce, the
+newest winning, a destroy outdates the moves waiting before it, and each kind keeps to an honest pace
+(`ClientPace`): half the host's burst and its full rate, so requests that arrive bunched by up to about a second never
+meet the host's limit. A link that stalls for longer can deliver more at once than the host's burst; the host refuses
+the excess, a spawn among it with a toast. A change before the verdict applies here at once and travels with, or after, the request; a destroy before it ends the
+instance here at once, and one still queued behind the pace was never asked for at all. When the mod disposes an object
+of its own, the host is asked to destroy it.
+
+### The proxy scope
+
+The host keeps one `ProxyParticipant` per player it made anything for, in the player's participant slot (1 to 255),
+created at its first spawn request. It is the runtime's own scope: no mod code runs in it, and it opens no session of
+its own, so retiring it retires only the records it owns (`MultiplayerSpawnLedger.ReleaseOwner(proxy)`), never a mod's
+contract objects or its lifetime. When the player's stream ends, the scope keeps everything for 30 seconds, the time the
+session engine keeps a departed player's place; a player back in that window finds its objects. Past it, every object
+the scope made or was making ends, its records with it, and the slot's budgets are forgotten (`PlayerRequestLimiter
+.Forget`) before anyone else may take the slot. When hosting stops, every scope is cleaned up at once.
+
+Section 15's retirement per facade concerns the session engine's contract objects and commands; the world's objects a
+mod's scope made end with that scope's lifetime as before. On the host, a scope's records end with its seam and its
+spawns with its asset service. On a joined player, a scope that ends disposes the handles of its predictions, and each
+disposal asks the host to destroy what it made of it, so a participant controller's objects end with it on every peer.
+
+### The wire
+
+| Type | From | Body |
+| --- | --- | --- |
+| 64 `SpawnRequest` | Player | provisional id (from 1), mod, kind, intent (0 to 5), input frame (0 or 1), scale (3 x f32), transform, description |
+| 65 `TransformRequest` | Player | target, scale (3 x f32), transform |
+| 66 `DestroyRequest` | Player | target |
+| 96 `SpawnAdopted` | Host | provisional id, network id |
+| 97 `SpawnRefused` | Host | provisional id, reason (1 to 6; another reads as unbuildable) |
+
+A target is `[0][network id]` or `[1][provisional id]`, from 1. Every field is checked as world entries' are: mod ids by
+the manifest rule, kinds by the token rule, scales finite, non-zero and at most 10,000, transform records exact, and
+descriptions up to 16 KiB, with nothing after the last field. A request names no owner and no origin, and a player's
+message in the host's voice, a verdict or an announcement, is discarded on the host.
+
+### Bounds
+
+| What | Bound |
+| --- | --- |
+| A player's predictions waiting, with its adopted objects | 64, the host's quota |
+| A player's shadows waiting | 4,096 |
+| Verdicts a host owes one player | 128; past it they are dropped and counted (`VerdictsDropped`) |
+| Spawns a host tracks for one player, live and being made | 128 |
+| Bundles and prefabs a host loads itself at once | 256 and 4,096, as a joined player's replicas, each bundle one load however its path is spelled |
+| A host's build; a player's wait for a verdict; a shadow's wait | 30 seconds; 60 seconds; 10 seconds while synchronized |
+
+### Privacy and cost
+
+Nothing in a request or a verdict is shaped like an address, and the host never reads a sender from a request. A
+refusal's toast names no mod, player or object, so it carries nothing another player wrote, and the counters
+(`NetworkWorldCounters`) are numbers only. At rest nothing is sent and nothing allocates: the zero-allocation tests below
+run a host keeping two players' scopes, and players holding adopted objects and bound shadows, through hundreds of
+frames, and a frame of all three then takes about 10 microseconds in the harness. A player dragging its own object every
+frame sends 30 requests a second, its pace, of 30 bytes each, about 0.9 KB a second, and the host applies each with one
+pose write; the host and that player together allocate about 270 bytes a frame in the harness, the loopback channel's
+copy of each message and the SDK's result for each call included.
+
+### Tests
+
+- **Rules** (`MultiplayerAuthorityRulesTests`): relations by owner slot, limiter answers as refusals, verdicts read from
+  the wire, which profiles and intents are shadowed, an honest pace against the host's limit under jitter of up to
+  0.9 seconds in order, safe and unsafe bundle paths, other names the game's platform reads for one file, the names
+  Windows keeps for devices in every case and with any extension, beside ordinary names that only start like them, one
+  file's spellings as one load, a mod's own spellings that are not plain among them, refusal texts, both state machines
+  for every state and event, and the numbering, which allocates nothing once a mod has a number.
+- **Wire** (`AuthorityWireTests`): every message round trips, sits in its range, and is refused whole when a field is
+  bent, a byte follows its last field, or it is cut anywhere.
+- **Adoption** (`SpawnAdoptionTests`): adoption in place under the same handle and id, a lookup by network id finding
+  the mod's handle, the other player's replica; the host's builds from the mod's prefab, from its bundle while its own
+  load runs, and from a load of its own let go of when idle; a refusal killing the handle with one coalesced warning
+  toast; a verdict lost with its stream asked for again and never made twice, and an entry before its verdict swapping
+  the replica out; a verdict that never comes; a provider's kind made by its handler inside the player's intent; a
+  joined player recording nothing; and a joined player's replicas built from its mod's own handles.
+- **Asset loads** (`AuthorityAssetLoadTests`): the host's own load of a bundle, kept alive by a player who spawns from it
+  every second, giving way to the host's mod's lazy load of it, and to a load of the same file a hostile player spelled
+  another way; a joined player's replica load giving way to its mod's lazy load, so the player's own drop is adopted,
+  also when another player spelled the file another way; a replica built through a mod context's handles, its prefab
+  or a prefab loaded off its bundle, built again when that context ends, as is one whose build failed through them as
+  it ended; a hostile player's spellings that the game's platform reads as the mod's file refused before anything
+  loads; crates spelled three ways built from one load, and a spawn spelled another way waiting for the mod's own load;
+  the host's next build for a player outliving the mod context whose bundle it used; and a mod that names its bundle
+  `./assets/world.bundle` never refused its lazy load by a hostile player who names the plain path, on the host or a
+  joined player, whose world builds the host's scripted crate and that player's from one load.
+- **Requests** (`SpawnChangeTests`): moving and destroying the player's own object through the host, by its action,
+  by script and by disposing its handle; changes before the verdict; another player's, the host's and a scene object
+  refused here with nothing sent, and left to the host's script when scripted; an entity outside the world passing
+  through; and twenty spawns, a hundred moves of each and twenty destroys in one go never refused.
+- **Shadows** (`SpawnShadowTests`): binding when the host's spawn is here and when it comes later, ending for another
+  asset either way, ending when it never comes and only while synchronized, the numbering skipping the host player's,
+  a gamemode's and a player's spawns, starting over on joining and at a world session, a number given again reaching a
+  player that missed the old entity's despawn while a number a live entity holds is given to no other, a provider's
+  spawns and registrations, and scripted changes left to the host.
+- **Abuse** (`SpawnAbuseTests`): a raw flood throttled to the burst and the rate and bounded by the quota without
+  touching another player; what a flood leaves bounded when the player stops reading; assets of an unshared mod, from
+  outside the package or a rooted or drive path, undescribed assets, the runtime's kinds, unknown kinds and another
+  mod's kind refused before anything loads or runs; bundles named by a device's name refused before the host opens
+  anything, while names that only start like one are made; a provisional id reused or another player's, origins
+  appended and messages in the host's voice; every change of another player's, the host's, a scene object, a destroyed
+  and an unknown entity refused, by a player with a scope or without one; and a player past the 255 slots told the
+  host is busy, then given a leaver's slot once its grace is over.
+- **The scope** (`ProxyParticipantTests`): a leaving player's objects ending after its grace and nothing else, a mod's
+  spawn, record, lifetime and another player's object untouched; coming back within the grace, and a link that drops
+  and returns keeping the handles bound; hosting stopping; and a slot given again starting with whole budgets.
+- **Cost** (`AuthorityCostTests`): the decorators add nothing offline, nothing allocates online at rest, and the cost
+  of a player dragging its object every frame is measured and printed.
+- **The real runtime** (the ModRuntime harness, `TestAuthorityRoutingAcrossRuntimes`): three runtimes over the loopback
+  network load one mod; its scene script's crate is shadowed on both players, so each sees one; a player's dropped crate
+  is adopted under the same handle, moved and removed for everyone by its commands; a crate from outside the package is
+  refused on the player at once, with a message to the mod, and one from a bundle the host lacks with the mod's own
+  toast; a leaving player's crates end after its grace and nothing else; and frames allocate nothing offline or online
+  at rest.
+
+### Limits, stated plainly
+
+- **A scale set after a spawn is not replicated**: snapshots carry poses, so a transform request moves and turns its
+  target, and the scale stays as the spawn made it.
+- **A scene object that has never moved is no entity**, so a joined player's change to it applies to its own copy only,
+  as offline, until the host moves it. Binding one at once when a player acts on it comes with motion ownership.
+- **Leaving ends a player's copies of the host's world**, its predictions and shadows with its replicas, so a mod's
+  handles to them die. A player back within its grace finds its objects on the host as the host's, still counted
+  against its quota until it leaves for good, since its handles to them ended when it left. A link that drops and comes
+  back without leaving keeps everything.
+- **Transform changes and destroys in flight when a stream restarts are lost**, as world replication's are; the player
+  asks again only for spawns.
+- **Shadows bind by order.** A script that spawns differently on two machines, by chance or by time, numbers its spawns
+  differently, so its shadows end after their wait and the player sees the host's.
+- **A participant context's preview spawn is forwarded** like any other of its calls; a local-only preview needs a
+  client-local mod until a context can say so.
+- **A gamemode package that also provides its world** runs as the gamemode server on the host and as a world owner on a
+  joined player (section 15), so its world's scripted SDK spawns take no shadow key on the host: a joined player's own
+  run of them ends after its wait, and the host's are built as replicas. World content registered by its key binds as
+  before.
+- **A load the network world made gives way to the mod's, but not while it is still loading.** Replicas and the host's
+  builds use the mod's own handles when it holds the bundle; a bundle the network world loaded first is let go of when
+  the mod starts its own load of the same file, and what was built from it stands on. A load the network world still
+  has under way then is cancelled, and the engine may refuse the mod's load for that moment.
+- **A mod's own bundle path is read without its package's folder name.** A path that leaves the package folder and
+  comes back into it, such as `../1.0.0/assets/world.bundle` in a package whose folder is `1.0.0`, names the file
+  `assets/world.bundle` names, but is read as one outside the package, so it is not one load with the plain path, and a
+  load the network world made of that file does not give way to the mod's own load of it. No mod needs to name its
+  bundle so, and a player cannot make one do it.
+- **A replica built through a mod context's own handles ends with that context**, as everything spawned through it does,
+  and is built again on the next frame from whatever holds the bundle then, as is one whose build failed through those
+  handles as the context ended. A shadow whose context ends takes its instance with it, as the host's run of the same
+  context would.
+- **A player's object the host made through a mod context's own handles ends with that context** too, since it was
+  spawned through that context's asset service: on a listen host that is the end of the world session or gamemode the
+  context ran for, which ends that context's own objects as well. The player hears the host's despawn, its handle dies
+  and its quota frees; what the host makes for it next comes from what holds the bundle then.
+- **A player's spawn while the mod context that holds its bundle is stopping is refused**, with the host's toast: that
+  context's handles take no new load or spawn while it stops, and the game would refuse the host a load of its own of a
+  file that is still loaded. It is the moment a world session or a gamemode takes to close; the player's next spawn,
+  once the context has gone, is made from a load of the host's own.
+- **Commands are not forwarded yet**: `SubmitCommand` still runs the mod's handler here in every realm.
+
+### Choices
+
+- **Predict everything the player does, refuse little here.** The player sees its action at once, and the host is the
+  only judge; the player refuses here only what the host would refuse for certain (its quota, or another's object),
+  which saves a round trip and a toast for something it knows.
+- **Shadows by number, not by position or name.** A position or a name can repeat; a mod's run of a script makes the same
+  spawns in the same order on every peer that runs it, which is what the context table says shadowable code is.
+- **The scope is the runtime's.** A proxy that opened a mod session for each player would run mod code for players the
+  mod never saw, and retiring it would reach the mod's own contract objects. The runtime's own scope owns records only.
+- **A grace before cleanup**, matching the session engine's 30 seconds, so a reconnect does not cost a player its
+  objects, and only a player gone for good does.
+- **The mod's own handles first**, on the host and for replicas: the game loads a bundle once per process, so sharing
+  the mod's handle is the only way both can use it. For the same reason a load of the network world's own yields to the
+  mod's: a mod that loads lazily, on its player's first action, never finds its bundle taken.

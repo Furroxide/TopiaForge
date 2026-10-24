@@ -32,6 +32,48 @@ namespace TopiaForge.ModManager
     }
 
     /// <summary>
+    /// Authority routing's side of the network world (WS3.7), through which a joined player's mod contexts route their
+    /// spawns, transform changes and destroys. Main thread only.
+    /// </summary>
+    internal interface IMultiplayerAuthority
+    {
+        /// <summary>Gets whether this process mirrors a host's world, so a joined player's calls route through it.</summary>
+        bool IsJoined { get; }
+
+        /// <summary>Says whether a spawn on the player's intent may be predicted now, before its mod's spawn runs here.</summary>
+        SpawnRefusal CheckPrediction();
+
+        /// <summary>
+        /// Takes a spawn a mod made here for its player as a prediction: frozen here and asked of the host, and adopted in place
+        /// under the same handle or ended with a toast through <paramref name="ui"/>. <paramref name="source"/> is the intent
+        /// it acts on, or none for a participant context's own code, which acts for its player regardless.
+        /// </summary>
+        void Predict(string modId, string kind, byte[] description, IEntity entity, IDisposable? owned, IInternalSpawnHandler? handler, IntentSource source,
+            bool fromInputFrame, TransformState transform, IUiService? ui);
+
+        /// <summary>Gets whether a scripted spawn may be shadowed now.</summary>
+        bool CanShadow { get; }
+
+        /// <summary>Gets whether <paramref name="entity"/> is already a prediction or a shadow of this player's.</summary>
+        bool IsLocal(IEntity entity);
+
+        /// <summary>Takes a scripted spawn a mod made here as a shadow of the host's spawn with its mod's next shadow key.</summary>
+        void Shadow(string modId, string kind, byte[] description, IEntity entity, IDisposable? owned, IInternalSpawnHandler? handler);
+
+        /// <summary>Routes a transform change; null when the entity is none of the network world's, so the call goes on as offline.</summary>
+        OperationResult<TransformState>? RouteTransform(IEntity entity, TransformState transform, IEntityService inner, bool scripted);
+
+        /// <summary>Routes a destroy; null when the entity is none of the network world's.</summary>
+        OperationResult<bool>? RouteDestroy(IEntity entity, bool scripted);
+
+        /// <summary>
+        /// A mod starts loading one of its bundles itself: a load of it the network world made, for a joined player's spawn on
+        /// a listen host or for a joined player's replicas, gives way first, so the game does not refuse the mod's load.
+        /// </summary>
+        void YieldBundle(string modId, string bundlePath);
+    }
+
+    /// <summary>
     /// The process's replication services behind every mod context's <see cref="IRuntimeReplication"/>: the realm and the
     /// spawn ledger of the composition root, the replica factories and command handlers providers register, the reference
     /// seam and the microphone arbiter. Each mod context binds a <see cref="RuntimeReplication"/> to it with its own
@@ -43,8 +85,11 @@ namespace TopiaForge.ModManager
             new Dictionary<string, Registration<IInternalReplicaFactory>>(StringComparer.Ordinal);
         private readonly Dictionary<string, Registration<Func<InternalCommand, OperationResult<bool>>>> commands =
             new Dictionary<string, Registration<Func<InternalCommand, OperationResult<bool>>>>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Registration<IInternalSpawnHandler>> spawnHandlers =
+            new Dictionary<string, Registration<IInternalSpawnHandler>>(StringComparer.Ordinal);
         private bool recordFailureLogged;
         private bool referenceFailureLogged;
+        private int makingForPlayer;
 
         internal MultiplayerReplication(MultiplayerRuntime runtime)
         {
@@ -68,6 +113,36 @@ namespace TopiaForge.ModManager
         /// one is set, a joined player's world content binds to nothing.
         /// </summary>
         internal IMultiplayerLocalContent? LocalContent { get; set; }
+
+        /// <summary>
+        /// Gets or sets authority routing (WS3.7): the network world. Until one is set, a joined player's spawns, transform
+        /// changes and destroys run here and are recorded as nothing, as they did before authority routing.
+        /// </summary>
+        internal IMultiplayerAuthority? Authority { get; set; }
+
+        /// <summary>Gets the bundles and prefabs each mod's own code loaded, which a listen host makes a player's asset spawns from first.</summary>
+        internal ModAssetLoads AssetLoads { get; } = new ModAssetLoads();
+
+        /// <summary>
+        /// Gets whether a listen host is making an object for a joined player now, through its kind's spawn handler: what the
+        /// handler records is the player's, so it takes no shadow key, whatever intent the handler's code sees (WS3.7).
+        /// </summary>
+        internal bool MakingForPlayer => makingForPlayer > 0;
+
+        /// <summary>Runs <paramref name="make"/> as the host making an object for a joined player (<see cref="MakingForPlayer"/>).</summary>
+        internal T MakeForPlayer<T>(Func<T> make)
+        {
+            if (make == null) throw new ArgumentNullException(nameof(make));
+            makingForPlayer++;
+            try
+            {
+                return make();
+            }
+            finally
+            {
+                makingForPlayer--;
+            }
+        }
 
         /// <summary>Creates the services of a process with no multiplayer provider: single player, as a mod context made outside ModRuntime has it.</summary>
         internal static MultiplayerReplication Offline()
@@ -103,6 +178,24 @@ namespace TopiaForge.ModManager
             return found;
         }
 
+        /// <summary>Gets the spawn handler registered for <paramref name="kind"/>, and the mod that registered it.</summary>
+        internal bool TryGetSpawnHandler(string kind, out IInternalSpawnHandler? handler, out string? ownerModId)
+        {
+            if (kind == null) throw new ArgumentNullException(nameof(kind));
+            var found = spawnHandlers.TryGetValue(kind, out var registration);
+            handler = found ? registration!.Value : null;
+            ownerModId = found ? registration!.OwnerModId : null;
+            return found;
+        }
+
+        internal Registration<IInternalSpawnHandler>? AddSpawnHandler(string ownerModId, string kind, IInternalSpawnHandler handler)
+        {
+            if (spawnHandlers.ContainsKey(kind)) return null;
+            var registration = new Registration<IInternalSpawnHandler>(spawnHandlers, kind, ownerModId, handler);
+            spawnHandlers.Add(kind, registration);
+            return registration;
+        }
+
         internal Registration<IInternalReplicaFactory>? AddFactory(string ownerModId, string kind, IInternalReplicaFactory factory)
         {
             if (factories.ContainsKey(kind)) return null;
@@ -127,12 +220,12 @@ namespace TopiaForge.ModManager
         /// Records a spawn <paramref name="owner"/>'s context made, without letting a failure reach the mod whose spawn
         /// already succeeded; a failure is reported once until a spawn records again. The record ends with the context.
         /// </summary>
-        internal void RecordQuietly(IEntity entity, MultiplayerSpawnDescription description, RuntimeReplication owner)
+        internal void RecordQuietly(IEntity entity, MultiplayerSpawnDescription description, RuntimeReplication owner, long shadowKey = 0)
         {
             try
             {
                 if (!owner.TrackRelease()) return;
-                Runtime.Spawns.Record(entity, description, owner);
+                Runtime.Spawns.Record(entity, description, owner, shadowKey, 0);
                 recordFailureLogged = false;
             }
             catch (Exception exception)

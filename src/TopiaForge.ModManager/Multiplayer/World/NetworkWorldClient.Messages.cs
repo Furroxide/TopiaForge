@@ -36,6 +36,14 @@ namespace TopiaForge.ModManager
                 case WorldMessages.SceneRemoved:
                     read = ReadRemovals(reader);
                     break;
+                case AuthorityMessages.SpawnAdopted:
+                    read = AuthorityWire.TryReadAdopted(reader, out var adopted, out var id);
+                    if (read) Adopted(adopted, id);
+                    break;
+                case AuthorityMessages.SpawnRefused:
+                    read = AuthorityWire.TryReadRefused(reader, out var refused, out var reason);
+                    if (read) Refused(refused, reason);
+                    break;
                 default:
                     return false;
             }
@@ -58,6 +66,9 @@ namespace TopiaForge.ModManager
 
             // A rejoin or a replacement takes the player out of Ready until the new snapshot; the hold applies from there.
             TakeHold();
+
+            // Requests in flight on the old stream are lost: every spawn still waiting for its verdict is asked again (WS3.7).
+            PredictionsRestarted();
         }
 
         private void SendRequest(long now)
@@ -126,8 +137,12 @@ namespace TopiaForge.ModManager
 
             foreach (var mirrored in scratch) Remove(mirrored, true);
             scratch.Clear();
+
+            // An adoption whose entity the baseline did not list names nothing the host has any more (WS3.7).
+            EndUnlistedAdoptions();
             receiving = -1;
             synchronized = true;
+            synchronizedSince = clock();
             counters.BaselinesApplied++;
             return true;
         }
@@ -165,7 +180,13 @@ namespace TopiaForge.ModManager
             for (var item = 0; item < count; item++)
             {
                 if (!reader.TryReadUInt32(uint.MaxValue, out var value) || value == 0) return false;
-                if (!entities.TryGetValue(value, out var mirrored)) continue;
+                if (!entities.TryGetValue(value, out var mirrored))
+                {
+                    // An entity this player was adopted into ended before its entry arrived (WS3.7).
+                    AdoptionEnded(value);
+                    continue;
+                }
+
                 if (mirrored.Source == WorldEntrySource.SceneObject && mirrored.Slot != null)
                 {
                     // The host's scene object is gone: this player's copy is hidden until it leaves.

@@ -83,17 +83,20 @@ namespace TopiaForge.ModManager
             if (services.Runtime.Realm == NetRealm.Client)
             {
                 // A joined player records nothing as canonical: its world content binds by key to the host's, and its SDK
-                // spawns are shadows that authority routing (WS3.7) binds by origin.
-                if (descriptor.Source == InternalSpawnSource.WorldContent && TrackRelease())
+                // spawns are shadows or predictions that authority routing (WS3.7) binds in place of the host's replicas.
+                if (descriptor.Source == InternalSpawnSource.WorldContent)
                 {
-                    services.LocalContent?.RegisterLocalContent(this, descriptor.ContentKey!, entity);
+                    if (TrackRelease()) services.LocalContent?.RegisterLocalContent(this, descriptor.ContentKey!, entity);
+                    return OperationResult<bool>.Success(true);
                 }
 
-                return OperationResult<bool>.Success(true);
+                return RouteRegistration(entity, descriptor);
             }
 
             if (!TrackRelease()) return OperationResult<bool>.Failure(ModErrorCode.Cancelled, Stopping);
-            services.Runtime.Spawns.Record(entity, Describe(descriptor), this);
+            // Describing a recorded entity again keeps its key, so it takes none of its mod's numbering.
+            var shadowKey = services.Runtime.Spawns.Find(entity) == null ? CanonicalShadowKey() : 0;
+            services.Runtime.Spawns.Record(entity, Describe(descriptor), this, shadowKey, 0);
             return OperationResult<bool>.Success(true);
         }
 
@@ -105,15 +108,31 @@ namespace TopiaForge.ModManager
             var refused = Admit<IEntity>() ?? CheckReserved<IEntity>(descriptor.Kind);
             if (refused != null) return refused;
 
-            // Stub until authority routing (WS3.7): the spawn runs here in every realm, exactly as single player does. A
-            // joined player's spawn is a prediction, never recorded as canonical; authority routing forwards it.
+            // A joined player's spawn is a prediction or a shadow, never recorded as canonical (WS3.7).
+            if (services.Runtime.Realm == NetRealm.Client) return RouteSpawnRequest(descriptor, spawn);
             var spawned = spawn() ?? throw new InvalidOperationException("The spawn returned no result.");
-            if (services.Runtime.Realm != NetRealm.Client && spawned.TryGetValue(out var entity) && entity.IsAlive)
+            if (spawned.TryGetValue(out var entity) && entity.IsAlive)
             {
-                services.RecordQuietly(entity, Describe(descriptor), this);
+                services.RecordQuietly(entity, Describe(descriptor), this, CanonicalShadowKey());
             }
 
             return spawned;
+        }
+
+        public OperationResult<IDisposable> RegisterSpawnHandler(string kind, IInternalSpawnHandler handler)
+        {
+            if (kind == null) throw new ArgumentNullException(nameof(kind));
+            if (handler == null) throw new ArgumentNullException(nameof(handler));
+            UnityMainThreadGuard.AssertCurrent();
+            var refused = Admit<IDisposable>() ?? CheckKind<IDisposable>(kind, "spawn");
+            if (refused != null) return refused;
+            var registration = services.AddSpawnHandler(OwnerModId, kind, handler);
+            if (registration == null)
+            {
+                return OperationResult<IDisposable>.Failure(ModErrorCode.Conflict, "Another provider already makes objects of that kind for players.");
+            }
+
+            return TrackRegistration(registration);
         }
 
         public OperationResult<IDisposable> RegisterCommand(string kind, Func<InternalCommand, OperationResult<bool>> handler)
@@ -207,10 +226,10 @@ namespace TopiaForge.ModManager
             // Client-local and standalone mods are never baselined, so their spawns cost nothing more than before.
             if (!MultiplayerSpawnLedger.Records(Profile)) return;
 
-            // A joined player's spawn is never canonical: authority routing (WS3.7) forwards it to the host.
+            // A joined player's spawn is never canonical: authority routing (WS3.7) forwards it to the host, or shadows the host's.
             if (services.Runtime.Realm == NetRealm.Client) return;
             services.RecordQuietly(spawned, new MultiplayerSpawnDescription(OwnerModId, Profile, MultiplayerSpawnSource.SdkSpawn,
-                MultiplayerSpawnKinds.AssetPrefab, null, request.Transform, MultiplayerAssetDescriptor.Of(request.Prefab)), this);
+                MultiplayerSpawnKinds.AssetPrefab, null, request.Transform, MultiplayerAssetDescriptor.Of(request.Prefab)), this, CanonicalShadowKey());
         }
 
         /// <summary>
@@ -290,6 +309,7 @@ namespace TopiaForge.ModManager
                 seam = null;
                 services.Runtime.Spawns.ReleaseOwner(ending);
                 services.LocalContent?.ReleaseOwner(ending);
+                services.AssetLoads.ReleaseOwner(ending);
             }
         }
 

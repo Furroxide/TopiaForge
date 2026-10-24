@@ -8,7 +8,7 @@ using TopiaForge.Mods.Internal;
 
 namespace TopiaForge.ModManager.Tests
 {
-    /// <summary>Runs the network world suites (WS3.6).</summary>
+    /// <summary>Runs the network world suites (WS3.6), and authority routing's over it (WS3.7).</summary>
     internal static class NetworkWorldTests
     {
         internal static void Run()
@@ -23,6 +23,7 @@ namespace TopiaForge.ModManager.Tests
             ReplicaTransformDriverTests.Run();
             NetworkWorldLifecycleTests.Run();
             NetworkWorldPrivacyTests.Run();
+            AuthorityTests.Run();
             Console.WriteLine("Network world tests passed.");
         }
     }

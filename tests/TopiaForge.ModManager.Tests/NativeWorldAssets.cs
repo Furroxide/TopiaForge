@@ -19,7 +19,8 @@ namespace TopiaForge.ModManager.Tests
         private readonly IModLifetime lifetime;
         private readonly int gameThread = Thread.CurrentThread.ManagedThreadId;
         private readonly List<IHeldLoad> waiting = new List<IHeldLoad>();
-        private readonly HashSet<string> loadedFiles = new HashSet<string>(StringComparer.Ordinal);
+        // The game's platform names a file ignoring case, so one file loads once however it is spelled (see FileOf).
+        private readonly HashSet<string> loadedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private int offThreadReleases;
 
         internal NativeWorldAssets(FakeWorldScene scene, IModLifetime lifetime)
@@ -66,7 +67,7 @@ namespace TopiaForge.ModManager.Tests
             BundleLoads++;
             var load = new HeldLoad<IAssetBundle>(() =>
             {
-                if (!loadedFiles.Add(relativePath))
+                if (!loadedFiles.Add(FileOf(relativePath)))
                 {
                     RefusedLoads++;
                     return OperationResult<IAssetBundle>.Failure(ModErrorCode.External, "Another bundle of the same file is loaded.");
@@ -84,13 +85,41 @@ namespace TopiaForge.ModManager.Tests
             var load = new HeldLoad<IPrefabAsset>(() =>
             {
                 LivePrefabs++;
-                return OperationResult<IPrefabAsset>.Success(new Prefab(this, assetName));
+                return OperationResult<IPrefabAsset>.Success(new Prefab(this, bundle.RelativePath, assetName));
             });
             waiting.Add(load);
             return AssetNativeOperation<IPrefabAsset>.Start(lifetime, "Prefab '" + assetName + "'", () => load, cancellationToken);
         }
 
         public OperationResult<ISpawnedEntity> Spawn(AssetSpawnRequest request) => spawner.Spawn(request);
+
+        /// <summary>
+        /// The file a path names on the game's platform, as the asset service resolves it there: either separator, an
+        /// empty or <c>.</c> segment naming nothing and <c>..</c> taking back the one before it, as
+        /// <c>Path.GetFullPath</c> reads them, whitespace or a period that ends a name dropped, and the short name the
+        /// platform gives a long one, as WORLD~1.BUN for the test mod's world.bundle.
+        /// </summary>
+        private static string FileOf(string relativePath)
+        {
+            var names = new List<string>();
+            foreach (var segment in relativePath.Replace('\\', '/').Split('/'))
+            {
+                var name = segment.TrimEnd();
+                if (name.Length == 0 || name == ".") continue;
+                if (name == "..")
+                {
+                    if (names.Count > 0) names.RemoveAt(names.Count - 1);
+                    continue;
+                }
+
+                var end = name.Length;
+                while (end > 0 && (name[end - 1] == '.' || char.IsWhiteSpace(name[end - 1]))) end--;
+                name = name.Substring(0, end);
+                names.Add(string.Equals(name, "WORLD~1.BUN", StringComparison.OrdinalIgnoreCase) ? "world.bundle" : name);
+            }
+
+            return string.Join("/", names);
+        }
 
         /// <summary>Lets a handle go as the engine does: on the game thread only, refused anywhere else.</summary>
         private void Release(Action release)
@@ -141,21 +170,27 @@ namespace TopiaForge.ModManager.Tests
             {
                 if (!IsAlive) return;
                 IsAlive = false;
-                owner.loadedFiles.Remove(RelativePath);
+                owner.loadedFiles.Remove(FileOf(RelativePath));
             });
         }
 
-        private sealed class Prefab : IPrefabAsset
+        /// <summary>A prefab that knows its bundle and its name, as the runtime's own does, so a joined player can share it.</summary>
+        private sealed class Prefab : IPrefabAsset, IPrefabAssetProvenance
         {
             private readonly NativeWorldAssets owner;
 
-            internal Prefab(NativeWorldAssets owner, string name)
+            internal Prefab(NativeWorldAssets owner, string bundlePath, string name)
             {
                 this.owner = owner;
+                BundlePath = bundlePath;
                 Name = name;
             }
 
             public string Name { get; }
+
+            public string BundlePath { get; }
+
+            public string AssetName => Name;
 
             public bool IsAlive { get; private set; } = true;
 

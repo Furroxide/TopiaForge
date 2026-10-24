@@ -37,7 +37,8 @@ namespace TopiaForge.ModManager.Tests
                          typeof(IInternalReplicationContext), typeof(IRuntimeReplication), typeof(IInternalReplicaFactory), typeof(IInternalMicrophoneLease),
                          typeof(InternalSpawnDescriptor), typeof(InternalCommand), typeof(InternalNetRef), typeof(InternalReplicationLimits),
                          typeof(InternalNetRealm), typeof(InternalNetworkClass), typeof(InternalExecutionContext), typeof(InternalIntent), typeof(InternalRoute),
-                         typeof(InternalTimeAuthority), typeof(InternalMicrophoneUse), typeof(InternalSpawnSource), typeof(InternalNetRefKind)
+                         typeof(InternalTimeAuthority), typeof(InternalMicrophoneUse), typeof(InternalSpawnSource), typeof(InternalNetRefKind),
+                         typeof(IInternalSpawnHandler)
                      })
             {
                 That(spi.Contains(expected), "the scan covers " + expected.Name);
@@ -58,7 +59,12 @@ namespace TopiaForge.ModManager.Tests
                 typeof(ReplicaTransformDriver), typeof(WorldWireWriter), typeof(WorldWireReader), typeof(WorldEntry), typeof(WorldEntryCodec),
                 typeof(WorldMessages), typeof(NetworkWorldProgress), typeof(NetworkWorldCounters), typeof(INetworkWorldBackend),
                 typeof(INetworkWorldObject), typeof(INativeAuthoritySwitch), typeof(NetworkSceneObject), typeof(NativeAuthorityTarget), typeof(NetPose),
-                typeof(MultiplayerAssetDescriptor), typeof(IPrefabAssetProvenance), typeof(NetworkWorldIds), typeof(INetworkWorldBackendSource)
+                typeof(MultiplayerAssetDescriptor), typeof(IPrefabAssetProvenance), typeof(NetworkWorldIds), typeof(INetworkWorldBackendSource),
+
+                // Authority routing (WS3.7): a joined player's requests, the host's scopes for its players, and their wire.
+                typeof(IMultiplayerAuthority), typeof(NetworkWorldProxies), typeof(ProxyParticipant), typeof(ProxySpawn), typeof(ProxyVerdict),
+                typeof(LocalSpawn), typeof(ClientPrediction), typeof(ClientShadow), typeof(AuthorityMessages), typeof(AuthorityWire), typeof(AuthorityTarget),
+                typeof(AuthoritySpawnRequest), typeof(ModAssetLoads), typeof(WorldAssetLoad<>), typeof(SpawnAuthorityRules), typeof(ShadowKeyNumbering)
             };
             var offenders = new List<string>();
             foreach (var type in spi.Concat(runtime).Concat(runtime.SelectMany(type => type.GetNestedTypes(All))))

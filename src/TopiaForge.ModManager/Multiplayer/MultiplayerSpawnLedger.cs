@@ -43,16 +43,45 @@ namespace TopiaForge.ModManager
         private bool removed;
 
         internal MultiplayerSpawnRecord(long sequence, string entityKey, MultiplayerSpawnDescription description, IEntity entity, object? owner)
+            : this(sequence, entityKey, description, entity, owner, 0, 0)
         {
+        }
+
+        internal MultiplayerSpawnRecord(
+            long sequence,
+            string entityKey,
+            MultiplayerSpawnDescription description,
+            IEntity entity,
+            object? owner,
+            long shadowKey,
+            int ownerSlot)
+        {
+            if (shadowKey < 0) throw new ArgumentOutOfRangeException(nameof(shadowKey));
+            if (ownerSlot < 0) throw new ArgumentOutOfRangeException(nameof(ownerSlot));
             Sequence = sequence;
             EntityKey = entityKey;
             Description = description;
             this.entity = entity;
             Owner = owner;
+            ShadowKey = shadowKey;
+            OwnerSlot = ownerSlot;
         }
 
         /// <summary>Gets the order this process recorded the spawn in, from 1. A sequence is never reused.</summary>
         internal long Sequence { get; }
+
+        /// <summary>
+        /// Gets the spawn's number in its mod's shadowable spawns (<see cref="ShadowKeyNumbering"/>), which a joined
+        /// player's own run of the same script binds its shadow by, or zero when no joined player shadows it: a player's own
+        /// action, a participant's or the gamemode server's code, or a spawn the host made for a player (WS3.7).
+        /// </summary>
+        internal long ShadowKey { get; private set; }
+
+        /// <summary>
+        /// Gets the participant slot of the player whose objects this spawn counts among, or zero for the host's world: a
+        /// listen host makes a joined player's adopted spawn under that player's slot, and ends it when they leave (WS3.7).
+        /// </summary>
+        internal int OwnerSlot { get; private set; }
 
         /// <summary>Gets the entity's process-local id when it was recorded.</summary>
         internal string EntityKey { get; }
@@ -70,6 +99,14 @@ namespace TopiaForge.ModManager
         internal bool IsLive => !removed && entity != null && entity.IsAlive;
 
         internal void Redescribe(MultiplayerSpawnDescription description) => Description = description;
+
+        /// <summary>Makes the spawn a player's: it counts among their objects from now, and no shadow binds to it.</summary>
+        internal void AssignOwner(int ownerSlot)
+        {
+            if (ownerSlot < 1) throw new ArgumentOutOfRangeException(nameof(ownerSlot));
+            OwnerSlot = ownerSlot;
+            ShadowKey = 0;
+        }
 
         /// <summary>Ends the record and lets go of its entity.</summary>
         internal void MarkRemoved()
@@ -186,6 +223,19 @@ namespace TopiaForge.ModManager
         internal int Count => records.Count;
 
         /// <summary>
+        /// Gets each mod's numbering of its shadowable spawns: a listen host's scripted spawns take their keys from it as
+        /// they are recorded, and a joined player's shadows theirs as they are made (WS3.7). It starts over when this
+        /// process's world session starts (<see cref="BeginWorldSession"/>) and when it joins a session.
+        /// </summary>
+        internal ShadowKeyNumbering ShadowKeys { get; } = new ShadowKeyNumbering();
+
+        /// <summary>
+        /// This process's world session started: every mod's shadow numbering starts over, as a joined player's does when it
+        /// follows the host's session. Records already made keep their keys.
+        /// </summary>
+        internal void BeginWorldSession() => ShadowKeys.Restart();
+
+        /// <summary>
         /// Gets or sets who hears about later records: the network world, while this process hosts. Null by default, so an
         /// offline spawn reports to nobody.
         /// </summary>
@@ -208,22 +258,34 @@ namespace TopiaForge.ModManager
         /// <see cref="ReleaseOwner"/> ends its records when its scope ends.
         /// </summary>
         /// <exception cref="ArgumentException">The entity has no id.</exception>
-        internal MultiplayerSpawnRecord? Record(IEntity entity, MultiplayerSpawnDescription description, object? owner = null)
+        internal MultiplayerSpawnRecord? Record(IEntity entity, MultiplayerSpawnDescription description, object? owner = null) =>
+            Record(entity, description, owner, 0, 0);
+
+        /// <summary>
+        /// Records a spawn as <see cref="Record(IEntity, MultiplayerSpawnDescription, object)"/> does, with its shadow key
+        /// and the participant slot it belongs to. Describing a recorded entity again under a player's slot makes it that
+        /// player's (<see cref="MultiplayerSpawnRecord.AssignOwner"/>); otherwise it keeps the key and slot it was recorded
+        /// with.
+        /// </summary>
+        internal MultiplayerSpawnRecord? Record(IEntity entity, MultiplayerSpawnDescription description, object? owner, long shadowKey, int ownerSlot)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             if (description == null) throw new ArgumentNullException(nameof(description));
+            if (shadowKey < 0) throw new ArgumentOutOfRangeException(nameof(shadowKey));
+            if (ownerSlot < 0) throw new ArgumentOutOfRangeException(nameof(ownerSlot));
             if (!Records(description.Profile)) return null;
             var key = entity.Id;
             if (string.IsNullOrEmpty(key)) throw new ArgumentException("A recorded entity needs its process-local id.", nameof(entity));
             if (byEntity.TryGetValue(key, out var existing) && existing.IsLive)
             {
                 existing.Redescribe(description);
+                if (ownerSlot > 0) existing.AssignOwner(ownerSlot);
                 Notify(existing, true);
                 return existing;
             }
 
             if (records.Count >= sweepThreshold) Sweep();
-            var record = new MultiplayerSpawnRecord(nextSequence++, key, description, entity, owner);
+            var record = new MultiplayerSpawnRecord(nextSequence++, key, description, entity, owner, ownerSlot > 0 ? 0 : shadowKey, ownerSlot);
             records.Add(record);
             byEntity[key] = record;
             Notify(record, false);

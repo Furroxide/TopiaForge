@@ -314,8 +314,9 @@ namespace TopiaForge.ModRuntime.Tests
         }
 
         /// <summary>
-        /// A gameplay host over a fake engine: its scenes are the network world's engine side, and each context's asset
-        /// service loads fake bundles and spawns into them, as the Unity host's does.
+        /// A gameplay host over a fake engine: its scenes are the network world's engine side, each context's asset service
+        /// loads fake bundles and spawns into them, as the Unity host's does, its entity service moves and destroys them, and
+        /// its UI service records each toast.
         /// </summary>
         private sealed class WorldGameHost : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource
         {
@@ -326,6 +327,9 @@ namespace TopiaForge.ModRuntime.Tests
             internal FakeWorldScene Scene { get; } = new FakeWorldScene();
 
             internal List<(string Owner, bool Scoped, FakeWorldAssets Assets)> Assets { get; } = new List<(string, bool, FakeWorldAssets)>();
+
+            /// <summary>Gets the toasts each mod showed, as the kit would render them.</summary>
+            internal List<(string Owner, string Message, UiTone Tone)> Toasts { get; } = new List<(string, string, UiTone)>();
 
             public bool RunInBackground { get; set; }
 
@@ -343,8 +347,8 @@ namespace TopiaForge.ModRuntime.Tests
                 var assets = new FakeWorldAssets(Scene, lifetime);
                 Assets.Add((ownerModId, transitionAccess != null, assets));
                 var other = GameplayContextServices.Unavailable(lifetime);
-                return new GameplayContextServices(other.Input, other.LocalPlayer, other.Entities, other.Physics, other.Time, other.Scheduler,
-                    other.Scenes, other.Interactions, other.Items, assets, other.Audio, other.Ui, other.UnityInterop, other.SceneTransitions);
+                return new GameplayContextServices(other.Input, other.LocalPlayer, new WorldEntities(), other.Physics, other.Time, other.Scheduler,
+                    other.Scenes, other.Interactions, other.Items, assets, other.Audio, new WorldToasts(this, ownerModId, other.Ui), other.UnityInterop, other.SceneTransitions);
             }
 
             public GameTimeSample BeginFrame(float deltaTime) => new GameTimeSample(GameLoopPhase.Frame, deltaTime, deltaTime, 0d, 0);

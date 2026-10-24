@@ -19,7 +19,8 @@ namespace TopiaForge.ModManager
         IMultiplayerPromotionCensus,
         IInternalEntityIdentitySource,
         IMultiplayerReferenceSource,
-        IMultiplayerLocalContent
+        IMultiplayerLocalContent,
+        IMultiplayerAuthority
     {
         private readonly MultiplayerRuntime runtime;
         private readonly NetworkWorldChannel channel = new NetworkWorldChannel();
@@ -44,7 +45,12 @@ namespace TopiaForge.ModManager
             Counters = new NetworkWorldCounters();
             SceneKeys = new SceneKeyRegistry(backend);
             Host = new NetworkWorldHost(channel, backend, SceneKeys, clock, Counters);
-            Client = new NetworkWorldClient(channel, backend, SceneKeys, clock, Counters, kind => replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets);
+            Client = new NetworkWorldClient(channel, backend, SceneKeys, clock, Counters, kind => replication.TryGetReplicaFactory(kind, out var factory) ? factory : null, findAssets,
+                runtime.Spawns.ShadowKeys, replication.AssetLoads);
+            Proxies = new NetworkWorldProxies(channel, Host, runtime.Spawns, runtime.Intents, replication, findAssets, clock, Counters)
+            {
+                IsSharedMod = modId => runtime.TryGetNetworkClass(modId, out var networkClass) && networkClass == ModNetworkClass.Shared
+            };
             Backend = backend;
             WorldEvents = new Stage(this, StageKind.WorldEvents);
             HostSnapshots = new Stage(this, StageKind.HostSnapshots);
@@ -54,6 +60,9 @@ namespace TopiaForge.ModManager
         internal NetworkWorldHost Host { get; }
 
         internal NetworkWorldClient Client { get; }
+
+        /// <summary>Gets the listen host's side of authority routing (WS3.7): its players' requests and the scopes that own their objects.</summary>
+        internal NetworkWorldProxies Proxies { get; }
 
         internal NetworkWorldCounters Counters { get; }
 
@@ -101,6 +110,7 @@ namespace TopiaForge.ModManager
             runtime.AddObserver(world);
             replication.References = world;
             replication.LocalContent = world;
+            replication.Authority = world;
             return world;
         }
 
@@ -123,7 +133,12 @@ namespace TopiaForge.ModManager
 
         public void RealmChanged(NetRealm previous, NetRealm next)
         {
-            if (previous == NetRealm.ListenHost) Host.Deactivate();
+            if (previous == NetRealm.ListenHost)
+            {
+                Proxies.Deactivate();
+                Host.Deactivate();
+            }
+
             if (previous == NetRealm.Client) LogRestore(Client.Deactivate());
             if (next != NetRealm.Client) return;
             var joined = control;
@@ -148,10 +163,12 @@ namespace TopiaForge.ModManager
             }
 
             Host.Activate(promotion, runtime.Spawns);
+            Proxies.Activate();
         }
 
         public void Detaching(IInternalMultiplayerControl detaching)
         {
+            Proxies.Deactivate();
             Host.Deactivate();
             LogRestore(Client.Deactivate());
             channel.Close();
@@ -243,6 +260,32 @@ namespace TopiaForge.ModManager
         public void RegisterLocalContent(object owner, string contentKey, IEntity entity) => Client.RegisterLocalContent(owner, contentKey, entity);
 
         public void ReleaseOwner(object owner) => Client.ReleaseOwner(owner);
+
+        public bool IsJoined => Client.IsActive;
+
+        public bool CanShadow => Client.CanShadow;
+
+        public bool IsLocal(IEntity entity) => Client.IsLocal(entity);
+
+        public SpawnRefusal CheckPrediction() => Client.CheckPrediction();
+
+        public void Predict(string modId, string kind, byte[] description, IEntity entity, IDisposable? owned, IInternalSpawnHandler? handler, IntentSource source,
+            bool fromInputFrame, TransformState transform, IUiService? ui) =>
+            Client.Predict(modId, kind, description, entity, owned, handler, source, fromInputFrame, transform, ui);
+
+        public void Shadow(string modId, string kind, byte[] description, IEntity entity, IDisposable? owned, IInternalSpawnHandler? handler) =>
+            Client.Shadow(modId, kind, description, entity, owned, handler);
+
+        public OperationResult<TransformState>? RouteTransform(IEntity entity, TransformState transform, IEntityService inner, bool scripted) =>
+            Client.RouteTransform(entity, transform, inner, scripted);
+
+        public OperationResult<bool>? RouteDestroy(IEntity entity, bool scripted) => Client.RouteDestroy(entity, scripted);
+
+        public void YieldBundle(string modId, string bundlePath)
+        {
+            Proxies.YieldBundle(modId, bundlePath);
+            Client.YieldBundle(modId, bundlePath);
+        }
 
         private bool TryGetId(IEntity entity, out NetworkEntityId networkId)
         {
@@ -342,6 +385,7 @@ namespace TopiaForge.ModManager
                 {
                     case StageKind.WorldEvents:
                         world.Host.Receive();
+                        world.Proxies.Pump();
                         world.Client.Receive();
                         break;
                     case StageKind.HostSnapshots:

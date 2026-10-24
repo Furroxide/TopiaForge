@@ -107,6 +107,7 @@ namespace TopiaForge.ModManager
                 Assets = new NetAssetService(gameplay.Assets, replication);
                 Audio = gameplay.Audio;
                 Ui = new NetUiService(gameplay.Ui, replication);
+                replication.Ui = gameplay.Ui;
                 SceneTransitions = gameplay.SceneTransitions;
                 WorldRuntime = gameplay.WorldRuntime;
                 unityInterop = allowUnityInterop ? gameplay.UnityInterop : null;

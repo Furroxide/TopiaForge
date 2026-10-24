@@ -31,7 +31,11 @@ namespace TopiaForge.ModManager
 
         internal string OwnerModId { get; set; } = string.Empty;
 
+        /// <summary>Gets the spawn's shadow key in its mod's numbering, which its entry names; zero when nothing shadows it.</summary>
         internal long OriginSequence { get; set; }
+
+        /// <summary>Gets the participant slot of the player whose objects the entity counts among, or zero for the host's world.</summary>
+        internal int OwnerSlot { get; set; }
 
         internal string? ContentKey { get; set; }
 
@@ -226,32 +230,6 @@ namespace TopiaForge.ModManager
             unloaded.Clear();
         }
 
-        /// <summary>Gets the entity a network id names here, if it is alive.</summary>
-        internal bool TryGetEntity(NetworkEntityId id, out IEntity entity)
-        {
-            if (entities.TryGetValue(id.Value, out var hosted) && hosted.IsAlive)
-            {
-                entity = hosted.Object?.Entity ?? hosted.Record!.Entity;
-                return true;
-            }
-
-            entity = null!;
-            return false;
-        }
-
-        /// <summary>Whether this host replicates the entity of <paramref name="id"/>.</summary>
-        internal bool Knows(NetworkEntityId id) => entities.ContainsKey(id.Value);
-
-        /// <summary>Appends the ids of the live entities this host replicates, in ascending order.</summary>
-        internal void CollectIds(List<uint> into)
-        {
-            if (into == null) throw new ArgumentNullException(nameof(into));
-            foreach (var hosted in ordered)
-            {
-                if (hosted.IsAlive) into.Add(hosted.Id.Value);
-            }
-        }
-
         public void Recorded(MultiplayerSpawnRecord record, bool redescribed)
         {
             if (!IsActive) return;
@@ -311,11 +289,22 @@ namespace TopiaForge.ModManager
             if (!record.IsLive) return null;
             var description = record.Description;
             var source = description.Source == MultiplayerSpawnSource.WorldContent ? WorldEntrySource.WorldContent : WorldEntrySource.SdkSpawn;
-            var origin = source == WorldEntrySource.SdkSpawn ? new NetSpawnOrigin(description.OwnerModId, record.Sequence) : default;
+
+            // An SDK spawn a joined player's own scripts make too carries its shadow key as its origin, so their shadow binds
+            // to it (WS3.7). A key still live from an earlier world session is never given twice: that spawn goes keyless.
+            var shadowKey = source == WorldEntrySource.SdkSpawn ? record.ShadowKey : 0;
+            var origin = shadowKey > 0 ? new NetSpawnOrigin(description.OwnerModId, shadowKey) : default;
+            if (origin.IsSpecified && table.TryFindByOrigin(origin, out _))
+            {
+                origin = default;
+                shadowKey = 0;
+                counters.ShadowKeysReused++;
+            }
+
             NetworkEntityId id;
             try
             {
-                id = table.Allocate(description.Kind, NetOwner.Server, origin);
+                id = table.Allocate(description.Kind, OwnerOf(record.OwnerSlot), origin);
             }
             catch (InvalidOperationException)
             {
@@ -325,6 +314,7 @@ namespace TopiaForge.ModManager
 
             var hosted = new HostWorldEntity(id, source, description.Kind) { Record = record };
             Describe(hosted, record);
+            hosted.OriginSequence = shadowKey;
             try
             {
                 hosted.Object = backend.Adopt(record.Entity);
@@ -341,13 +331,21 @@ namespace TopiaForge.ModManager
             return hosted;
         }
 
-        private static void Describe(HostWorldEntity hosted, MultiplayerSpawnRecord record)
+        private void Describe(HostWorldEntity hosted, MultiplayerSpawnRecord record)
         {
             var description = record.Description;
             hosted.Source = description.Source == MultiplayerSpawnSource.WorldContent ? WorldEntrySource.WorldContent : WorldEntrySource.SdkSpawn;
             hosted.Kind = description.Kind;
             hosted.OwnerModId = description.OwnerModId;
-            hosted.OriginSequence = record.Sequence;
+
+            // A spawn described again as a player's keeps its id, and loses its shadow key: no shadow stands for a player's object.
+            if (hosted.OwnerSlot != record.OwnerSlot)
+            {
+                hosted.OwnerSlot = record.OwnerSlot;
+                table.TrySetOwner(hosted.Id, OwnerOf(record.OwnerSlot));
+            }
+
+            if (record.ShadowKey == 0) hosted.OriginSequence = 0;
             hosted.ContentKey = description.ContentKey;
             hosted.Scale = ToNet(description.Transform.Scale);
             hosted.SpawnPose = new NetPose(ToNet(description.Transform.Position), ToNet(description.Transform.Rotation));
@@ -553,10 +551,10 @@ namespace TopiaForge.ModManager
                     WorldEntryCodec.WriteSceneObject(writer, hosted.Id, hosted.Slot!.Key, pose);
                     break;
                 case WorldEntrySource.WorldContent:
-                    WorldEntryCodec.WriteContent(writer, hosted.Id, hosted.Kind, hosted.ContentKey!, hosted.OwnerModId, 0, hosted.Scale, pose, hosted.Payload.Span);
+                    WorldEntryCodec.WriteContent(writer, hosted.Id, hosted.Kind, hosted.ContentKey!, hosted.OwnerModId, hosted.OwnerSlot, hosted.Scale, pose, hosted.Payload.Span);
                     break;
                 default:
-                    WorldEntryCodec.WriteSpawn(writer, hosted.Id, hosted.Kind, hosted.OwnerModId, hosted.OriginSequence, 0, hosted.Scale, pose, hosted.Payload.Span);
+                    WorldEntryCodec.WriteSpawn(writer, hosted.Id, hosted.Kind, hosted.OwnerModId, hosted.OriginSequence, hosted.OwnerSlot, hosted.Scale, pose, hosted.Payload.Span);
                     break;
             }
         }
@@ -572,6 +570,8 @@ namespace TopiaForge.ModManager
 
             return bytes;
         }
+
+        private static NetOwner OwnerOf(int slot) => slot > 0 ? NetOwner.ForParticipant(slot) : NetOwner.Server;
 
         internal static NetVector3 ToNet(Vec3 value) => new NetVector3(value.X, value.Y, value.Z);
 

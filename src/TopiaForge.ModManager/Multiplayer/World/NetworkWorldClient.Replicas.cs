@@ -34,6 +34,7 @@ namespace TopiaForge.ModManager
         public void ReleaseOwner(object owner)
         {
             if (owner == null) throw new ArgumentNullException(nameof(owner));
+            if (IsActive) QueueRebuilds(owner);
             List<string>? gone = null;
             foreach (var pair in localContent)
             {
@@ -72,12 +73,22 @@ namespace TopiaForge.ModManager
                 if (baseline) known.Buffer?.Reset();
                 if (known.Source != update.Source || known.DescriptionHash != hash)
                 {
+                    // This player's own instance keeps standing for the entity while it is the same kind of thing (WS3.7).
+                    if (KeepsLocalBinding(known, update))
+                    {
+                        Describe(known, update, hash);
+                        return;
+                    }
+
                     Release(known);
                     Describe(known, update, hash);
                     known.Unbuildable = false;
                     Build(known);
                     return;
                 }
+
+                known.ShadowKey = update.Source == WorldEntrySource.SdkSpawn ? update.OriginSequence : 0;
+                known.OwnerSlot = update.OwnerSlot;
 
                 known.EntryPose = update.Pose;
                 if (known.Binding == ClientEntityBinding.None && known.Build == null && !known.Unbuildable) Build(known);
@@ -96,6 +107,7 @@ namespace TopiaForge.ModManager
             NetOwner.TryFromSlot(update.OwnerSlot, out var owner);
             var kind = update.Source == WorldEntrySource.SceneObject ? MultiplayerSpawnKinds.SceneObject : update.Kind;
             var added = table.TryAdd(update.Id, kind, owner, origin);
+            if (added == NetworkEntityAddResult.DuplicateOrigin && EndStaleHolder(origin)) added = table.TryAdd(update.Id, kind, owner, origin);
             if (added != NetworkEntityAddResult.Added)
             {
                 if (added == NetworkEntityAddResult.Tombstoned) counters.StaleMessages++;
@@ -110,6 +122,19 @@ namespace TopiaForge.ModManager
             Build(mirrored);
         }
 
+        /// <summary>
+        /// Ends the entity here that holds <paramref name="origin"/> when the baseline under way has not listed it. Shadow keys
+        /// start over with each of the host's world sessions (WS3.7), and an honest host never holds two live entities with one
+        /// key, so that entity is one the host ended while its despawn went with an earlier stream; keeping it would refuse
+        /// the entity that holds the key now.
+        /// </summary>
+        private bool EndStaleHolder(NetSpawnOrigin origin)
+        {
+            if (!table.TryFindByOrigin(origin, out var holder) || !entities.TryGetValue(holder.Value, out var stale) || !stale.Stale) return false;
+            Remove(stale, true);
+            return true;
+        }
+
         private static void Describe(ClientWorldEntity mirrored, WorldEntry update, ulong hash)
         {
             mirrored.Source = update.Source;
@@ -121,6 +146,8 @@ namespace TopiaForge.ModManager
             mirrored.Scale = update.Source == WorldEntrySource.SceneObject ? new NetVector3(1f, 1f, 1f) : update.Scale;
             mirrored.EntryPose = update.Pose;
             mirrored.DescriptionHash = hash;
+            mirrored.ShadowKey = update.Source == WorldEntrySource.SdkSpawn ? update.OriginSequence : 0;
+            mirrored.OwnerSlot = update.OwnerSlot;
         }
 
         /// <summary>Makes the entity present here: binds its scene object or world content, or builds its replica.</summary>
@@ -154,6 +181,8 @@ namespace TopiaForge.ModManager
 
                     break;
                 default:
+                    // This player's own prediction or shadow stands for the entity in place of a replica (WS3.7).
+                    if (TryBindLocal(mirrored)) break;
                     if (mirrored.Kind == MultiplayerSpawnKinds.AssetPrefab) StartAssetBuild(mirrored);
                     else BuildWithFactory(mirrored);
                     break;
@@ -215,7 +244,7 @@ namespace TopiaForge.ModManager
             try
             {
                 present.SetNetworkIdentity(mirrored.Id);
-                if (binding == ClientEntityBinding.Asset || binding == ClientEntityBinding.Factory) backend.PrepareReplica(present);
+                if (binding != ClientEntityBinding.SceneObject && binding != ClientEntityBinding.Content) backend.PrepareReplica(present);
             }
             catch (Exception)
             {
@@ -268,6 +297,11 @@ namespace TopiaForge.ModManager
                         if (mirrored.FactoryReplica != null) mirrored.Factory?.ReleaseReplica(mirrored.FactoryReplica);
                         counters.ReplicasReleased++;
                         break;
+                    case ClientEntityBinding.Own:
+                    case ClientEntityBinding.Shadow:
+                        // The entity ended, or this player's world did: the instance that stood for it ends, and its handle dies.
+                        EndLocal(mirrored.Local);
+                        break;
                 }
             }
             catch (Exception)
@@ -275,10 +309,12 @@ namespace TopiaForge.ModManager
                 counters.ReleaseFailures++;
             }
 
+            mirrored.Local = null;
             mirrored.Binding = ClientEntityBinding.None;
             mirrored.Object = null;
             mirrored.Slot = null;
             mirrored.AssetReplica = null;
+            mirrored.ReplicaOwner = null;
             mirrored.Factory = null;
             mirrored.FactoryReplica = null;
         }
