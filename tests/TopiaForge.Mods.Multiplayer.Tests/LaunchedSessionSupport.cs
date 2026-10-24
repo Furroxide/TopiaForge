@@ -92,6 +92,8 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
 
     public SessionPhase LocalPhase => Phase;
 
+    public SessionFollowStatus Follow => SessionFollowStatus.None;
+
     internal static PeerScreens Of(ControlPeer peer, string? requestId = null, string? packageSetDigest = null, string? serviceOrigin = null) =>
         new(peer.Control, peer.Composition, peer.Runtime, peer.Session, requestId, packageSetDigest, serviceOrigin);
 

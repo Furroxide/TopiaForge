@@ -28,6 +28,7 @@ namespace TopiaForge.ModManager
             {
                 if (cancellationToken.IsCancellationRequested) completion.TrySetResult(ExceptionFailure(new OperationCanceledException()));
                 else if (current == null || current.Identity.SessionId != sessionId) completion.TrySetResult(AdmissionFailure(SessionAdmission.StaleSession));
+                else if (current.Follow != null) completion.TrySetResult(OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, FollowerCannotStop));
                 else
                 {
                     var record = current;
@@ -46,6 +47,8 @@ namespace TopiaForge.ModManager
             {
                 if (current == null || current.Identity.SessionId != sessionId)
                     completion.TrySetResult(AdmissionFailure(SessionAdmission.StaleSession));
+                else if (current.Follow != null)
+                    completion.TrySetResult(OperationResult<bool>.Failure(ModErrorCode.NotAuthoritative, FollowerCannotRestart));
                 else BeginLaunch(current.Identity.Selection, Guid.NewGuid().ToString("N"), cancellationToken, completion, sessionId);
             });
             return completion.Task;

@@ -8,8 +8,16 @@ namespace TopiaForge.ModManager
     public sealed partial class ModRuntime
     {
         private readonly Stopwatch worldClock = Stopwatch.StartNew();
+        private readonly FollowedScene followedScene = new FollowedScene();
         private Func<long>? networkClock;
         private MultiplayerReplication? replication;
+        private SessionFollow? sessionFollow;
+
+        /// <summary>Gets session follow (WS3.8), once the session runtime is active: a host's announcements and a joined player's follow.</summary>
+        internal SessionFollow? SessionFollow => sessionFollow;
+
+        /// <summary>Gets the active scene as session follow reads it.</summary>
+        internal FollowedScene FollowedScene => followedScene;
 
         /// <summary>
         /// Gets the replication services every mod context's network seam binds to: the composition root's realm and spawn
@@ -63,6 +71,28 @@ namespace TopiaForge.ModManager
         }
 
         private long ReadWorldClock() => worldClock.Elapsed.Ticks / 10;
+
+        /// <summary>
+        /// Installs session follow over the session orchestrator (WS3.8): it announces this game's world when it hosts, and
+        /// follows the host's when it joins, in the frame's step 2. A level the game's own menus loaded counts as a game the
+        /// player is in when joining (#224). A provider already attached is told at once, as it would have been.
+        /// </summary>
+        private void InstallSessionFollow(GamemodeSessionOrchestrator sessions)
+        {
+            if (sessionFollow != null) return;
+            var follow = new SessionFollow(sessions, followedScene, sceneAuthority.GrantFollow, LeaveForFollow, () => networkWorld.Progress,
+                DiscoverWorldsAsync, () => multiplayer.Control == null, nativeDispatcher, multiplayer.Log);
+            sessionFollow = follow;
+            multiplayer.NativeWorldSource = () => followedScene.IsGameplay;
+            multiplayer.AddObserver(follow);
+            multiplayer.SessionFollow = follow;
+            var attached = multiplayer.Control;
+            if (attached == null) return;
+            follow.Attached(attached);
+            if (multiplayer.Realm != Core.Multiplayer.NetRealm.Offline) follow.RealmChanged(Core.Multiplayer.NetRealm.Offline, multiplayer.Realm);
+        }
+
+        private void LeaveForFollow() => multiplayer.Leave();
 
         /// <summary>Gets the asset service the gameplay host made for a loaded mod's package context, beneath its network seam.</summary>
         private IAssetService? FindPackageAssets(string modId)

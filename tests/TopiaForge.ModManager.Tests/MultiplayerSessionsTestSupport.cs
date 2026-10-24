@@ -458,6 +458,9 @@ namespace TopiaForge.ModManager.Tests
 
         public SessionPhase LocalPhase => Phase;
 
+        /// <summary>Gets the follow status the connecting overlay reads, which a test moves as a session follower would.</summary>
+        public SessionFollowStatus Follow { get; } = new SessionFollowStatus();
+
         /// <summary>Gets or sets the session this game was launched to host or join, which the screens take once.</summary>
         internal ILaunchedSession? Launched { get; set; }
 

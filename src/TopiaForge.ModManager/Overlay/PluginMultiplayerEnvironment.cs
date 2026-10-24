@@ -107,6 +107,8 @@ namespace TopiaForge.ModManager
 
         public SessionPhase LocalPhase => plugin.LocalPhase;
 
+        public SessionFollowStatus Follow => plugin.FollowStatus;
+
         public ILaunchedSession? TakeLaunchedSession() => plugin.TakeLaunchedSession();
 
         public long UnixSeconds => DateTimeOffset.UtcNow.ToUnixTimeSeconds();

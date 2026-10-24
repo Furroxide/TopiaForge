@@ -87,7 +87,10 @@ namespace TopiaForge.ModManager.Sessions
             Waiting,
             Joining,
             Succeeded,
-            Failed
+            Failed,
+
+            /// <summary>Following the host's world after the join: the host changed worlds, or this game left the host's world.</summary>
+            Following
         }
 
         /// <summary>Gets whether a join is being prepared or running, so no other may start.</summary>
@@ -125,7 +128,7 @@ namespace TopiaForge.ModManager.Sessions
 
         public bool CanTrust => HasFailed && failure != null && failure.CanTrust && changedServerId != null && request != null;
 
-        public bool CanCancel => IsBusy;
+        public bool CanCancel => IsBusy || stage == Stage.Following;
 
         public string DetailOf(int step) => step >= 0 && step < details.Length ? details[step] : string.Empty;
 
@@ -156,8 +159,12 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Main thread, every frame: follows the join, or what comes before it: the return to the menu, or a wait.</summary>
         internal void Tick(float deltaTime)
         {
+            WatchFollow();
             switch (stage)
             {
+                case Stage.Following:
+                    Refollow();
+                    break;
                 case Stage.Leaving:
                     // The menu may still load after the game ended; the runtime's rules say busy until it has.
                     if (menuReturned) Settle();
@@ -260,6 +267,12 @@ namespace TopiaForge.ModManager.Sessions
 
         public void Cancel()
         {
+            if (stage == Stage.Following)
+            {
+                CancelFollowing();
+                return;
+            }
+
             if (stage == Stage.Joining)
             {
                 // Leaving is never refused: the runtime stops the join on its way, whatever the provider says.

@@ -15,6 +15,22 @@ namespace TopiaForge.ModManager
     {
         RuntimeSessionSnapshot Capture();
         Task<OperationResult<bool>> LoadMainMenuAsync(IInternalSceneTransitionService transitions, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Loads a level by its scene name through the game's own loader, replacing the scene as a Build Scenes world does, and
+        /// once the player is in it, stands the player at <paramref name="spawn"/> when one is given. Session follow (WS3.8)
+        /// loads the level a host's additive arena is built over with it, and the level a host is in outside a world session.
+        /// </summary>
+        Task<OperationResult<bool>> LoadSceneAsync(IInternalSceneTransitionService transitions, string sceneName, TransformState? spawn,
+            CancellationToken cancellationToken);
+    }
+
+    /// <summary>The gameplay host's level loader, which session follow (WS3.8) loads a level by its scene name through.</summary>
+    internal interface ISessionLevelLoader
+    {
+        /// <inheritdoc cref="IRuntimeSessionEnvironment.LoadSceneAsync"/>
+        Task<OperationResult<bool>> LoadLevelAsync(IInternalSceneTransitionService transitions, string sceneName, TransformState? spawn,
+            CancellationToken cancellationToken);
     }
 
     internal sealed class RuntimeSessionSnapshot

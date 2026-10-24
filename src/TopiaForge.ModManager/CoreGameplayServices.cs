@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace TopiaForge.ModManager
 {
     /// <summary>Unity-backed manager-owned implementation of the safe V1 gameplay contracts.</summary>
-    internal sealed class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource, IGameClockSource
+    internal sealed partial class CoreGameplayServices : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource, IGameClockSource
     {
         private readonly UnityGameClock gameClock = new UnityGameClock();
         private readonly UnityInputRegistry input = new UnityInputRegistry();

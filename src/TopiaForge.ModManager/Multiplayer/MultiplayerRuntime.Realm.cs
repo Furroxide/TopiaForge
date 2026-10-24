@@ -24,8 +24,10 @@ namespace TopiaForge.ModManager
         internal const string SessionBusy = "A game is starting or stopping; try again once it has settled.";
 
         private static readonly Func<SessionPhase> IdleSession = () => SessionPhase.Idle;
+        private static readonly Func<bool> NoNativeWorld = () => false;
 
         private Func<SessionPhase> sessionPhaseSource = IdleSession;
+        private Func<bool> nativeWorldSource = NoNativeWorld;
         private InternalSessionRole realmRole;
         private bool censusFailureLogged;
         private bool phaseFailureLogged;
@@ -48,6 +50,17 @@ namespace TopiaForge.ModManager
         {
             get => sessionPhaseSource;
             set => sessionPhaseSource = value ?? throw new ArgumentNullException(nameof(value));
+        }
+
+        /// <summary>
+        /// Gets or sets whether a gameplay level is loaded now. A level the game's own menus loaded runs no world session, so
+        /// the session reads idle there (#224); joining from it still replaces a game the player is in, so the realm rules
+        /// count it as running for a join, and the interface asks "Leave current game?" first (WS3.8).
+        /// </summary>
+        internal Func<bool> NativeWorldSource
+        {
+            get => nativeWorldSource;
+            set => nativeWorldSource = value ?? throw new ArgumentNullException(nameof(value));
         }
 
         /// <summary>
@@ -100,8 +113,12 @@ namespace TopiaForge.ModManager
         /// asks before it offers a choice, so it can ask "Leave current game?" first, and asks every frame its views bind a
         /// choice, so it allocates nothing.
         /// </summary>
-        internal NetRealmTransition EvaluateRealmChange(NetRealm target) =>
-            NetRealms.EvaluateTransition(Realm, target, ReadSessionPhase(), HasStandaloneMod());
+        internal NetRealmTransition EvaluateRealmChange(NetRealm target)
+        {
+            var phase = ReadSessionPhase();
+            if (target == NetRealm.Client && phase == SessionPhase.Idle && Realm == NetRealm.Offline && ReadNativeWorld()) phase = SessionPhase.Running;
+            return NetRealms.EvaluateTransition(Realm, target, phase, HasStandaloneMod());
+        }
 
         /// <summary>
         /// Opens this game to other players. In single player with a world running, the running session is promoted in place
@@ -218,6 +235,21 @@ namespace TopiaForge.ModManager
             }
 
             return false;
+        }
+
+        /// <summary>Reads whether a gameplay level is loaded; one that cannot be read counts as loaded, so no game is replaced on a guess.</summary>
+        private bool ReadNativeWorld()
+        {
+            try
+            {
+                return nativeWorldSource();
+            }
+            catch (Exception exception)
+            {
+                if (!phaseFailureLogged) log.Error("Multiplayer: whether a level is loaded could not be read: " + Describe(exception));
+                phaseFailureLogged = true;
+                return true;
+            }
         }
 
         /// <summary>Reads the local session's phase; one that cannot be read counts as busy, so nothing goes online on a guess.</summary>

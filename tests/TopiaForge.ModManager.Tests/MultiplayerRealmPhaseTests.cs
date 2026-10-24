@@ -114,8 +114,9 @@ namespace TopiaForge.ModManager.Tests
 
             public Task<NativeDrainResult> WaitForIdleAsync() => inner.WaitForIdleAsync();
 
-            public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId) =>
-                inner.TryReserve(owner, operationId);
+            public OperationResult<INativeTransitionReservation> TryReserve(NativeTransitionOwner owner, string operationId,
+                SceneTransitionPriority priority = SceneTransitionPriority.UserInitiated) =>
+                inner.TryReserve(owner, operationId, priority);
         }
     }
 }
