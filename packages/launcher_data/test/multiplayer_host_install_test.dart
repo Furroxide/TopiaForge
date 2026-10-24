@@ -177,6 +177,45 @@ void main() {
     }
   });
 
+  test('developer mode turned off, or its settings unreadable, while the '
+      "join waits for the host's beacon asks the host for nothing", () async {
+    for (final unreadable in [false, true]) {
+      final host = await ServingHost.start([hosted]);
+      final join = await HostJoin.create(host);
+      await join.hearHost();
+      final state = await join.downloading();
+      // Browsing stopped, so once the stage's own checks pass it starts
+      // browsing again and waits for the host's beacon.
+      await join.multiplayer.stopLanBrowsing();
+      final driving = join.drive(state);
+      bool waiting() =>
+          join.lan.binder.sockets.length == 4 && join.lan.client.isListening;
+      for (var round = 0; round < 5000 && !waiting(); round++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(waiting(), isTrue);
+      if (unreadable) {
+        File('${join.rig.dataRoot}/settings.json').writeAsStringSync('{not');
+      } else {
+        await join.rig.repository.setDeveloperMode(false);
+      }
+      join.beacon();
+      final failure = (await driving).outcome!.failure!;
+      final reason = unreadable ? 'unreadable' : 'off';
+      expect(failure.code, JoinFailureCode.hostDownloadUnsupported);
+      expect(failure.stage, JoinStage.downloading, reason: reason);
+      expect(failure.detail, contains('example.hosted 1.0.0'));
+      expect(failure.detail, contains('developer mode, which is off'));
+      expect(host.packageRequests, 0, reason: reason);
+      expect(join.cacheFiles(), isEmpty, reason: reason);
+      expect(join.lan.client.isListening, isFalse, reason: reason);
+      for (final address in addressTexts) {
+        expect(failure.detail, isNot(contains(address)));
+        expect(join.launcherLog(), isNot(contains(address)));
+      }
+    }
+  });
+
   test(
     'a host that stalls mid-archive is given up on, keeping nothing',
     () async {

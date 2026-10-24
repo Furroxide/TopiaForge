@@ -91,9 +91,11 @@ final class JoinHostPackageFailed extends JoinHostPackageResult {
 
 /// The packages one join takes from its host, reached under the join's
 /// [JoinContactRules], which are checked again before every package: the
-/// host is contacted only where the descriptor fetch contacted it, never for
-/// a join the service resolves, and under relay-only never beyond the local
-/// network.
+/// host is reached only as the descriptor fetch reached it, never for a join
+/// the service resolves, and under relay-only never beyond the local
+/// network. A LAN listing's host is wherever its server's beacons come from
+/// when each package is fetched; a direct link's or typed address's is only
+/// the address that served the descriptor the join verified.
 abstract interface class JoinHostPackageSource {
   /// Readies the host for downloads, before anything is fetched: null when
   /// it may be asked for packages, otherwise why not. A host heard on the

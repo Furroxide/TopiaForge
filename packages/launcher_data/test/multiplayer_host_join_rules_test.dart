@@ -11,7 +11,7 @@ import 'multiplayer_network_support.dart';
 
 /// The rules a host-served download keeps, through the launcher's real data
 /// layer: developer mode and the acknowledgement checked by the data layer
-/// itself, the host contacted only where the descriptor fetch contacted it,
+/// itself, the host contacted only as the descriptor fetch reached it,
 /// relay-only honoured, LAN browsing held through the downloads and released
 /// after, and nothing partial left behind.
 void main() {
