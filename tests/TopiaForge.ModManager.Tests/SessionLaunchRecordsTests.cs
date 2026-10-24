@@ -303,8 +303,9 @@ namespace TopiaForge.ModManager.Tests
                 "its phases move on under the join's block, to the host's next world");
             That(!File.Exists(store.OutcomePath(request, true)), "the end of the world before is not the join's end");
 
-            launch.Follow(new InternalLiveStatus { IsLiveAvailable = true, JoinPhase = InternalJoinPhase.Ended, JoinFailure = InternalLiveFailure.HostEnded,
-                Server = Server(JoinServer) }, 3, 3);
+            var hostEnded = new InternalLiveStatus { IsLiveAvailable = true, JoinPhase = InternalJoinPhase.Ended, JoinFailure = InternalLiveFailure.HostEnded };
+            hostEnded.Server = Server(JoinServer);
+            launch.Follow(hostEnded, 3, 3);
             var end = LaunchTransportJson.ReadOutcome(File.ReadAllText(store.OutcomePath(request, true)));
             That(end.Multiplayer!.EndReason == "host-ended" && end.SessionId == next && end.Status == "succeeded",
                 "the provider's end of the join is its terminal record, naming the host's world it was in");

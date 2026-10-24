@@ -68,8 +68,8 @@ namespace TopiaForge.ModRuntime.Tests
         /// the host's session id, the host's world arrives through the network world, the player's participant starts, and the
         /// gamemode's server controller never runs on it. A join started in game publishes nothing to the launcher. Online,
         /// both games keep running in the background. The host starts its world again and the player follows it into the new
-        /// one; at rest neither game allocates; and the player leaves, its main menu loads, and its game's own background
-        /// setting comes back exactly.
+        /// one; offline before, and at rest after, neither game allocates; and the player leaves, its main menu loads, and its
+        /// game's own background setting comes back exactly.
         /// </summary>
         private static void TestSessionFollowAcrossRuntimes(string root)
         {
@@ -119,6 +119,8 @@ namespace TopiaForge.ModRuntime.Tests
                 guestSessions.Progress += guestProgress.Add;
                 guestSessions.Outcome += guestOutcomes.Add;
                 Assert(!host.Game.RunInBackground && !guest.Game.RunInBackground, "in single player each game keeps its own setting: not in the background");
+                var offline = MeasureFollowFrames(games);
+                Assert(offline == 0, "offline, with session follow installed in both games, frames allocate nothing (" + offline + " bytes over 10,000 frames)");
 
                 // The host opens its game to other players, then starts the package's target.
                 Assert(host.Runtime.Multiplayer.OpenToMultiplayer(new InternalHostSettings("Follow", 4)).Succeeded, "the host opens its game to other players");
