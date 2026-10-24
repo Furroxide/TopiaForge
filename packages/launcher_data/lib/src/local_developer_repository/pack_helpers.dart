@@ -70,10 +70,10 @@ extension LocalDeveloperPackOperations on LocalDeveloperRepository {
             )
             as Map<String, Object?>;
     final manifestContract = ModManifest.fromJson(manifest);
-    final blockingManifestIssues = manifestContract
-        .validate()
-        .where((issue) => issue.isBlocking)
-        .toList();
+    final blockingManifestIssues = [
+      ...manifestContract.validate(),
+      ...manifestFeatures.validate(manifestContract),
+    ].where((issue) => issue.isBlocking).toList();
     if (blockingManifestIssues.isNotEmpty) {
       throw StateError(
         'topiaforge.mod.json is invalid: '

@@ -11,6 +11,7 @@ export 'src/unity_vpm_resolver.dart';
 export 'src/versioning.dart';
 export 'src/launch_resolution.dart';
 export 'src/manifest_migration.dart';
+export 'src/manifest_feature_requirements.dart';
 export 'src/json_value_preservation.dart';
 export 'src/json_duplicate_properties.dart';
 export 'src/multiplayer.dart';

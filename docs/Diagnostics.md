@@ -194,6 +194,38 @@ declared, and the local functions either one calls. It does not follow the handl
 it calls, or into a handler kept in a field. The rule is a warning, applies to every mod project like
 TF1008, and exempts test projects.
 
+### TF1010
+
+**SDK API needs a newer loader (error).**
+
+An API marked `[RequiresTopiaForge("0.2.0")]` needs a manifest whose
+`supportedLoaderVersionRange` has a lower bound of at least `0.2.0`. The diagnostic names the API,
+its required version and the admitted range. Raise that field and `supportedSdkVersionRange` to
+the releases the mod actually supports. SemVer prereleases sort before the corresponding release;
+`>=0.2.0-rc.1` still admits loaders older than `0.2.0`. An unbounded or unreadable floor cannot prove
+compatibility and reports the error when a marked API is used. Ordinary manifest validation still
+reports invalid or missing fields.
+
+The IDE fix updates both fields only when each is a simple `>=A <B` range and the required version
+stays below both ceilings. It preserves a stricter existing floor. Exact pins, wildcards, unbounded,
+reordered, repeated and other comparator shapes receive no fix; edit those intentionally. The fix
+does not widen a ceiling or invent missing fields. For `>=0.1.0 <0.2.0`, decide the new ceiling by hand.
+
+Checks read attributes from referenced assembly metadata, including a containing type's requirement.
+They cover method calls and method groups, helper bodies in this compilation, property reads and
+writes (including marked accessors), events, fields and constants, constructors, attributes and their
+constant arguments, generic arguments and `nameof`. `nameof` and constant uses are intentionally
+checked even when they emit no runtime call: the declared SDK floor also describes source support.
+Reflection, dynamic binding and the bodies of precompiled third-party helpers are not inspected;
+their authors must propagate their required loader floor. Generated source and test projects retain
+the analyzer's existing exemption. The check also applies to interop projects.
+
+Compiler-inserted calls without an explicit symbol reference, such as an omitted base-constructor
+initializer, operators, conversions and `foreach`/`await` protocols, are outside this syntax check.
+Raise the manifest floor manually when relying on a newer member through one of these forms.
+
+SDK authors: see [how to mark additions](CompatibilityPolicy.md#version-gated-sdk-additions).
+
 ### TF1101
 
 **Interop references unavailable.**
@@ -443,6 +475,19 @@ bundled-framework finding. Validation reads metadata only and never loads mod co
 **Downloaded package metadata differs from the manifest approved during planning.** Refresh the
 package source and retry. Source maintainers must publish immutable bytes whose canonical V6
 manifest exactly matches the indexed manifest; TopiaForge does not stage mismatched packages.
+
+### TFPKG180
+
+**Manifest feature needs a newer loader.**
+
+`topiaforge pack` and `topiaforge check package` compare each used manifest feature with the lower
+bound of `supportedLoaderVersionRange`. Raise that floor to the required release. The shared table
+is `ManifestFeatureRequirements.current` in
+`packages/launcher_domain/lib/src/manifest_feature_requirements.dart`. It is empty for the 0.1
+contract; tests inject a feature without adding a pretend production feature. When the `map` world
+content kind is introduced, add its predicate and first loader release (`0.2.0`) to that table alongside
+the schema and reader changes, whether it lands in V7 or a pre-release V6 amendment. An unknown kind
+still fails the existing schema validation.
 
 ### TFINBOX100–TFINBOX130
 

@@ -381,8 +381,16 @@ List<LauncherIssue> _runtimeCompatibilityIssues(
         severity: IssueSeverity.error,
         subjectId: manifest.id,
         message:
-            '${manifest.name} supports loader ${manifest.loaderVersionRange}, '
-            'not $loaderVersion.',
+            manifest.loaderVersionRange.min != null &&
+                (SemanticVersion.tryParse(
+                          loaderVersion,
+                        )?.compareTo(manifest.loaderVersionRange.min!) ??
+                        0) <
+                    0
+            ? '${manifest.name} needs TopiaForge '
+                  '${manifest.loaderVersionRange.min} or newer; update TopiaForge.'
+            : '${manifest.name} supports loader ${manifest.loaderVersionRange}, '
+                  'not $loaderVersion.',
       ),
     );
   }

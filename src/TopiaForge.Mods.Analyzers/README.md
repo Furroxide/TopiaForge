@@ -10,6 +10,11 @@ This package is included automatically by the TopiaForge V1 SDK. It reports acti
 - references `TopiaForge.Mods.Interop.Unity` without the root-level `unsafe-native` capability; or
 - references the loader-owned `TopiaForge.Mods.UnityUi` renderer instead of `Context.Ui`; or
 - calls a retired pre-V1 authoring API.
+- uses an SDK API newer than its manifest's minimum loader version (TF1010).
+
+TF1010 reads `RequiresTopiaForge` from shipped SDK metadata. Its code fix raises both the loader and
+SDK floors in simple `>=A <B` manifest ranges without widening their ceilings. Other ranges need an
+intentional manifest edit. See [version gates](https://docs.topiaforge.dev/diagnostics/TF1010).
 
 It also warns when a mod reads an input press or release in a FixedUpdate handler, which misses or
 repeats presses and, in multiplayer, never counts as the player's own action.

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace TopiaForge.Mods.Analyzers
 {
@@ -17,14 +18,26 @@ namespace TopiaForge.Mods.Analyzers
         private ManifestSnapshot(
             string packageId,
             IEnumerable<string> capabilities,
-            IEnumerable<string> dependencies)
+            IEnumerable<string> dependencies,
+            string loaderRange = "*", string sdkRange = "*",
+            TextSpan loaderSpan = default, TextSpan sdkSpan = default)
         {
             PackageId = packageId;
             this.capabilities = capabilities.ToImmutableHashSet(StringComparer.Ordinal);
             this.dependencies = dependencies.ToImmutableHashSet(StringComparer.Ordinal);
+            LoaderRange = loaderRange;
+            SdkRange = sdkRange;
+            LoaderSpan = loaderSpan;
+            SdkSpan = sdkSpan;
         }
 
         public string PackageId { get; }
+        public string LoaderRange { get; }
+        public string SdkRange { get; }
+        public TextSpan LoaderSpan { get; }
+        public TextSpan SdkSpan { get; }
+
+        internal static ManifestSnapshot Parse(string json) => new ManifestParser(json).Parse();
 
         public static ManifestSnapshot Read(
             ImmutableArray<AdditionalText> files,
@@ -68,6 +81,8 @@ namespace TopiaForge.Mods.Analyzers
             private readonly HashSet<string> dependencies = new HashSet<string>(StringComparer.Ordinal);
             private int position;
             private string packageId = string.Empty;
+            private string loaderRange = "*", sdkRange = "*";
+            private TextSpan loaderSpan, sdkSpan;
 
             public ManifestParser(string json)
             {
@@ -77,15 +92,25 @@ namespace TopiaForge.Mods.Analyzers
             public ManifestSnapshot Parse()
             {
                 Expect('{');
+                var seen = new HashSet<string>(StringComparer.Ordinal);
                 if (!TryConsume('}'))
                 {
                     while (true)
                     {
                         var propertyName = ReadString();
+                        if (!seen.Add(propertyName)) throw InvalidJson();
                         Expect(':');
                         if (string.Equals(propertyName, "name", StringComparison.Ordinal))
                         {
                             ReadPackageId();
+                        }
+                        else if (propertyName == "supportedLoaderVersionRange")
+                        {
+                            loaderRange = ReadRange(out loaderSpan);
+                        }
+                        else if (propertyName == "supportedSdkVersionRange")
+                        {
+                            sdkRange = ReadRange(out sdkSpan);
                         }
                         else if (string.Equals(propertyName, "capabilities", StringComparison.Ordinal))
                         {
@@ -116,7 +141,17 @@ namespace TopiaForge.Mods.Analyzers
                     throw InvalidJson();
                 }
 
-                return new ManifestSnapshot(packageId, capabilities, dependencies);
+                return new ManifestSnapshot(packageId, capabilities, dependencies,
+                    loaderRange, sdkRange, loaderSpan, sdkSpan);
+            }
+
+            private string ReadRange(out TextSpan span)
+            {
+                SkipWhitespace();
+                var start = position;
+                var value = ReadString();
+                span = TextSpan.FromBounds(start, position);
+                return value;
             }
 
             private void ReadPackageId()

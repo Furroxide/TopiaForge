@@ -355,8 +355,21 @@ namespace TopiaForge.ModManager.Core
             }
             else if (!VersionUtil.AllowsRange(actualVersion, range))
             {
-                errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
+                if (componentName == "loader")
+                    errors.Add(LoaderCompatibilityError(range, actualVersion)!);
+                else
+                    errors.Add(fieldName + " does not include " + componentName + " " + actualVersion + ".");
             }
+        }
+
+        /// <summary>Rechecks the loader range before package code is loaded.</summary>
+        public static string? LoaderCompatibilityError(string range, string actualVersion)
+        {
+            if (VersionUtil.AllowsRange(actualVersion, range)) return null;
+            if (VersionUtil.TryGetMinimum(range, out var minimum) && minimum != null
+                && !VersionUtil.IsAtLeast(actualVersion, minimum))
+                return "This mod needs TopiaForge " + minimum + " or newer; update TopiaForge.";
+            return "supportedLoaderVersionRange does not include loader " + actualVersion + ".";
         }
 
         private static void ValidateLicenseFiles(

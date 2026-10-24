@@ -54,6 +54,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     String? repositoryRoot,
     String? workingDirectory,
     DeveloperProjectResolver resolver = const DeveloperProjectResolver(),
+    this.manifestFeatures = ManifestFeatureRequirements.current,
     UnityEditorScanner? unityEditorScanner,
     UnityEditorVersionProbe? unityEditorVersionProbe,
     UnityEditorLauncher? unityEditorLauncher,
@@ -73,6 +74,7 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
        super(Directory(dataRoot ?? resolveTopiaForgeDataRoot()));
 
   final Directory _repositoryRoot;
+  final ManifestFeatureRequirements manifestFeatures;
   final DeveloperProjectResolver _resolver;
   final UnityEditorScanner? _unityEditorScanner;
   final UnityEditorVersionProbe? _unityEditorVersionProbe;
@@ -227,7 +229,10 @@ class LocalDeveloperRepository extends _DeveloperDataRootRepository {
     } else {
       manifest = (await _readPackage(packagePath, expectedSha256: '')).manifest;
     }
-    final issues = manifest.validate();
+    final issues = [
+      ...manifest.validate(),
+      ...manifestFeatures.validate(manifest),
+    ];
     if (issues.any((issue) => issue.isBlocking)) {
       throw StateError(issues.map((issue) => issue.message).join(' '));
     }
