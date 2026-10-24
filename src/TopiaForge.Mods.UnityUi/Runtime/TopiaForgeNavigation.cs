@@ -45,7 +45,8 @@ namespace TopiaForge.Mods.UnityUi
                 TopiaForgeInputOwnership.SubmitPressedThisFrame,
                 deltaSeconds,
                 module.moveRepeatDelay,
-                module.moveRepeatRate);
+                module.moveRepeatRate,
+                root);
             if (step.IsEmpty)
             {
                 return;
