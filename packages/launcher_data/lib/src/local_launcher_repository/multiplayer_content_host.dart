@@ -27,10 +27,12 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
     JoinSessionState state, {
     void Function(JoinDownloadProgressed progress)? onProgress,
     CancellationToken? cancellation,
-  }) => _host._downloadJoinContent(
-    state,
-    onProgress: onProgress,
-    cancellation: cancellation,
+  }) => _host._tracked(
+    () => _host._downloadJoinContent(
+      state,
+      onProgress: onProgress,
+      cancellation: cancellation,
+    ),
   );
 
   @override
@@ -39,30 +41,34 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
     JoinSessionState state, {
     void Function(JoinInstallProgressed progress)? onProgress,
     CancellationToken? cancellation,
-  }) => _host._installJoinContent(
-    install,
-    state,
-    onProgress: onProgress,
-    cancellation: cancellation,
+  }) => _host._tracked(
+    () => _host._installJoinContent(
+      install,
+      state,
+      onProgress: onProgress,
+      cancellation: cancellation,
+    ),
   );
 
   @override
   Future<JoinEvent?> prepareJoinProfile(
     GameInstall install,
     JoinSessionState state,
-  ) => _host._prepareJoinProfile(install, state);
+  ) => _host._tracked(() => _host._prepareJoinProfile(install, state));
 
   @override
   Future<ServerContentCleanupPlan> planServerContentCleanup(
     GameInstall install, {
     Set<String>? serverProfileIds,
-  }) => _host._planServerContentCleanup(install, scope: serverProfileIds);
+  }) => _host._tracked(
+    () => _host._planServerContentCleanup(install, scope: serverProfileIds),
+  );
 
   @override
   Future<ServerContentCleanupResult> applyServerContentCleanup(
     GameInstall install,
     ServerContentCleanupPlan plan,
-  ) => _host._applyServerContentCleanup(install, plan);
+  ) => _host._tracked(() => _host._applyServerContentCleanup(install, plan));
 }
 
 extension _JoinGameClosing on LocalLauncherRepository {

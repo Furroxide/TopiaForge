@@ -6,6 +6,8 @@ import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'open_handle_support.dart';
+
 void main() {
   // The launcher used to merge the player's selection into the Worlds mod's own config file. That
   // document is a {schemaVersion, value} envelope owned by the mod, the launcher wrote its keys
@@ -28,11 +30,16 @@ void main() {
         gameProcessStarter: (_) async => 42,
         gameRunningProbe: (_) async => false,
       );
+      final work = RepositoryWork()..checkAtEnd(root);
       addTearDown(repository.dispose);
-      var install = await repository.selectGameDirectory(gameRoot.path);
-      final repair = await repository.installOrRepairRuntime(install);
+      var install = await work.track(
+        repository.selectGameDirectory(gameRoot.path),
+      );
+      final repair = await work.track(
+        repository.installOrRepairRuntime(install),
+      );
       expect(repair.ok, isTrue);
-      install = await repository.selectGameDirectory(gameRoot.path);
+      install = await work.track(repository.selectGameDirectory(gameRoot.path));
       final settingsFile = File(p.join(dataRoot.path, 'settings.json'));
       final settings =
           jsonDecode(settingsFile.readAsStringSync()) as Map<String, Object?>;
@@ -52,21 +59,23 @@ void main() {
         ),
       )..writeAsStringSync(untouched);
 
-      final result = await repository.launch(
-        install,
-        LauncherProfile(
-          id: 'world-config-test',
-          name: 'World Config Test',
-          launchSelection: LaunchSelection.unresolvedLegacy({
-            'worldSelection': {
-              'worldId': 'io.github.furroxide.topiaforge.worlds.open_sandbox',
-              'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
-              'loadMode': 'additiveArena',
-              'launchIntoGamemode': true,
-            },
-          }),
+      final result = await work.track(
+        repository.launch(
+          install,
+          LauncherProfile(
+            id: 'world-config-test',
+            name: 'World Config Test',
+            launchSelection: LaunchSelection.unresolvedLegacy({
+              'worldSelection': {
+                'worldId': 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+                'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
+                'loadMode': 'additiveArena',
+                'launchIntoGamemode': true,
+              },
+            }),
+          ),
+          selectionOverride: const LaunchSelection.mainMenu(),
         ),
-        selectionOverride: const LaunchSelection.mainMenu(),
       );
       expect(result.started, isTrue, reason: result.message);
 
@@ -105,10 +114,16 @@ void main() {
       gameProcessStarter: (_) async => 42,
       gameRunningProbe: (_) async => false,
     );
+    final work = RepositoryWork()..checkAtEnd(root);
     addTearDown(repository.dispose);
-    var install = await repository.selectGameDirectory(gameRoot.path);
-    expect((await repository.installOrRepairRuntime(install)).ok, isTrue);
-    install = await repository.selectGameDirectory(gameRoot.path);
+    var install = await work.track(
+      repository.selectGameDirectory(gameRoot.path),
+    );
+    expect(
+      (await work.track(repository.installOrRepairRuntime(install))).ok,
+      isTrue,
+    );
+    install = await work.track(repository.selectGameDirectory(gameRoot.path));
     // Starting a Windows executable off Windows needs a wine command, or the
     // launch reports "not started" for a reason that has nothing to do with
     // the intent this test is about.
@@ -118,19 +133,21 @@ void main() {
     settings['wineCommand'] = Platform.resolvedExecutable;
     settingsFile.writeAsStringSync(jsonEncode(settings));
 
-    final result = await repository.launch(
-      install,
-      LauncherProfile(
-        id: 'remembers-only',
-        name: 'Remembers only',
-        launchSelection: LaunchSelection.unresolvedLegacy({
-          'worldSelection': {
-            'worldId': 'io.github.furroxide.topiaforge.worlds.open_sandbox',
-            'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
-            'loadMode': 'additiveArena',
-            'launchIntoGamemode': false,
-          },
-        }),
+    final result = await work.track(
+      repository.launch(
+        install,
+        LauncherProfile(
+          id: 'remembers-only',
+          name: 'Remembers only',
+          launchSelection: LaunchSelection.unresolvedLegacy({
+            'worldSelection': {
+              'worldId': 'io.github.furroxide.topiaforge.worlds.open_sandbox',
+              'gamemodeId': 'io.github.furroxide.topiaforge.zombies.survival',
+              'loadMode': 'additiveArena',
+              'launchIntoGamemode': false,
+            },
+          }),
+        ),
       ),
     );
     expect(result.started, isTrue, reason: result.message);

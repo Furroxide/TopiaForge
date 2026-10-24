@@ -96,8 +96,9 @@ void _registerLaunchV4AdmissionTests({
         restartProbe = true;
         final pending = repo.restart(install, profile);
         await entered.future;
-        await repo.dispose();
+        final closing = repo.dispose();
         proceed.complete();
+        await closing;
         expect((await pending).processStarted, isFalse);
         expect(stops, 0);
         expect(running, isTrue);
@@ -242,8 +243,9 @@ void _registerLaunchV4AdmissionTests({
           expect(competing.message, contains('Busy'));
           expect(starts, 0);
         } finally {
-          await first.dispose();
+          final closing = first.dispose();
           proceed.complete();
+          await closing;
           expect((await pending).processStarted, isFalse);
         }
         expect(

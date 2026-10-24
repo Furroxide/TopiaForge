@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import 'multiplayer_join_content_fixtures.dart';
+import 'open_handle_support.dart';
 
 /// What the player's own setup holds and loads: the manager records, the
 /// rest of the manager state, the stored profiles that are not server
@@ -62,6 +63,8 @@ final class JoinRig {
     addTearDown(() {
       if (root.existsSync()) root.deleteSync(recursive: true);
     });
+    // Runs once every repository the rig opened is closed.
+    addTearDown(() => expectNothingOpenUnder(root));
     final rig = JoinRig._(
       root,
       createTestGame(root),
