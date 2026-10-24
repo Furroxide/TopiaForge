@@ -335,6 +335,9 @@ namespace TopiaForge.ModRuntime.Tests
 
             public INetworkWorldBackend NetworkWorldBackend => Scene;
 
+            /// <summary>Gets or sets what hears of each session scope's lifetime as its services are made.</summary>
+            internal Action<IModLifetime>? ScopeCreated { get; set; }
+
             public GameplayContextServices Create(
                 string ownerModId,
                 string packagePath,
@@ -344,6 +347,7 @@ namespace TopiaForge.ModRuntime.Tests
                 ModNetProfile profile,
                 NativeTransitionAccessSlot? transitionAccess = null)
             {
+                if (transitionAccess != null) ScopeCreated?.Invoke(lifetime);
                 var assets = new FakeWorldAssets(Scene, lifetime);
                 Assets.Add((ownerModId, transitionAccess != null, assets));
                 var other = GameplayContextServices.Unavailable(lifetime);
