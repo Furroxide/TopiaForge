@@ -35,6 +35,7 @@ namespace TopiaForge.Mods.UnityUi
             : base(host, layerRoot.Scheme, layerRoot.CreateChildGameObject("Window"))
         {
             canvasRoot = layerRoot.Go;
+            TopiaForgeEventSystems.Track(canvasRoot.GetComponent<GraphicRaycaster>(), Go);
             canvasRect = layerRoot.Rect;
             designedSize = new Vector2(width, height);
             persistKey = "win:" + id;

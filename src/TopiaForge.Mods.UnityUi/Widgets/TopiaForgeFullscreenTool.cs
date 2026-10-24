@@ -28,6 +28,7 @@ namespace TopiaForge.Mods.UnityUi
             : base(host, layerRoot.Scheme, layerRoot.CreateChildGameObject("FullscreenTool"))
         {
             canvasRoot = layerRoot.Go;
+            TopiaForgeEventSystems.Track(canvasRoot.GetComponent<GraphicRaycaster>(), Go);
             TopiaForgeAnchors.Stretch(Rect, TopiaForgeTokens.SafeMargin, TopiaForgeTokens.SafeMargin,
                 TopiaForgeTokens.SafeMargin, TopiaForgeTokens.SafeMargin);
 
