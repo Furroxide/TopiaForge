@@ -134,7 +134,8 @@ namespace TopiaForge.ModManager.Tests
                 Test = new SessionFixture(root, replication: new MultiplayerReplication(Runtime), configure: configure);
                 Runtime.SessionPhaseSource = () => Test.Hosted.RealmPhase;
                 Follow = new SessionFollow(Test.Hosted, Scene, new MultiplayerSceneTransitionAuthorityPolicy(() => null).GrantFollow, () => Runtime.Leave(),
-                    () => new NetworkWorldProgress(NetworkWorldPhase.Hosting, 0, 0, 0), null, () => Runtime.Control == null, Test.Host, Log);
+                    () => new NetworkWorldProgress(NetworkWorldPhase.Hosting, 0, 0, 0), null, () => Runtime.Control == null, () => Runtime.LaunchedJoin,
+                    Test.Host, Log);
                 Runtime.AddObserver(Follow);
                 Runtime.SessionFollow = Follow;
                 Scene.Activated(GameScenes.MainMenuSceneName);

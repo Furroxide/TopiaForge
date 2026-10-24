@@ -48,6 +48,8 @@ namespace TopiaForge.ModManager
 
         public bool IsHost => Identity.Role == "host";
 
+        public string RequestId => Identity.RequestId;
+
         public bool IsLiveJoin { get; }
 
         public bool StartsGame { get; }

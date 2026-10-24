@@ -24,6 +24,10 @@ namespace TopiaForge.ModManager
         /// <summary>Gets where following the host's world stands on a joined player (WS3.8).</summary>
         internal SessionFollowStatus FollowStatus => runtime?.SessionFollow?.Follower.Status ?? SessionFollowStatus.None;
 
+        /// <summary>Hands <paramref name="progress"/> the session orchestrator's progress under <paramref name="requestId"/>, for a live join's records, until disposed.</summary>
+        internal System.IDisposable SubscribeSessionProgress(string requestId, System.Action<LaunchProgress> progress) =>
+            runtime?.SubscribeSessionProgress(requestId, progress) ?? GamemodeSessionOrchestrator.NoProgress;
+
         /// <summary>Gets the multiplayer provider's session as mods see it, for the participant list; null without the provider.</summary>
         internal IMultiplayerSession? GetMultiplayerSession() => runtime?.GetService<IMultiplayerSession>();
 

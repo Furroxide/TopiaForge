@@ -60,8 +60,12 @@ namespace TopiaForge.ModManager.Sessions
         /// <summary>Opens this game to other players through the realm rules (<see cref="MultiplayerRuntime.OpenToMultiplayer"/>).</summary>
         MultiplayerRealmChange OpenToMultiplayer(InternalHostSettings settings);
 
-        /// <summary>Joins <paramref name="target"/> through the realm rules (<see cref="MultiplayerRuntime.Join"/>).</summary>
-        MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings);
+        /// <summary>
+        /// Joins <paramref name="target"/> through the realm rules (<see cref="MultiplayerRuntime.Join"/>).
+        /// <paramref name="launchRequestId"/> is the request of the launcher-planned join this carries out, which session
+        /// follow reports the host's world under (WS3.8); null for a join started in game.
+        /// </summary>
+        MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings, string? launchRequestId = null);
 
         /// <summary>Leaves whatever this game does online, or a join on its way (<see cref="MultiplayerRuntime.Leave"/>); never refused.</summary>
         MultiplayerRealmChange Leave();
@@ -127,5 +131,13 @@ namespace TopiaForge.ModManager.Sessions
         /// when there is none. A frame may call it; it allocates nothing.
         /// </summary>
         ILaunchedSession? TakeLaunchedSession();
+
+        /// <summary>
+        /// Hands <paramref name="progress"/> each progress record the session orchestrator publishes under
+        /// <paramref name="requestId"/>, on the main thread, until the returned handle is disposed: a live join's records
+        /// take the progress of the session follow that runs the host's world for that join (WS3.8). Nothing is handed
+        /// where there is no session orchestrator.
+        /// </summary>
+        IDisposable SubscribeSessionProgress(string requestId, Action<LaunchProgress> progress);
     }
 }

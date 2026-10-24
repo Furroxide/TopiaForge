@@ -110,7 +110,10 @@ namespace TopiaForge.ModManager
             }
 
             INativeTransitionReservation? reservation = null;
-            var requestId = Guid.NewGuid().ToString("N");
+
+            // A follow of a launcher-planned join reports under that join's request; any other follow reports to no one, and its
+            // own id names its reservation alone (ReportsToLauncher).
+            var requestId = plan.LaunchRequestId ?? Guid.NewGuid().ToString("N");
             try
             {
                 var snapshot = environment.Capture();

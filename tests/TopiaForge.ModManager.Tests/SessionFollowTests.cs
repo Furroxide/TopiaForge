@@ -29,21 +29,25 @@ namespace TopiaForge.ModManager.Tests
             AJoinedPlayersOwnCommandsAreRefused(root + "-commands");
             TheFollowGrantLetsOnlyTheFollowThrough(root + "-grant");
             AFollowedLevelReplacesTheSession(root + "-level");
+            OnlyALaunchedJoinsFollowReportsToTheLauncher(root + "-launcher");
             Console.WriteLine("SessionFollowTests passed.");
         }
 
         internal static string NewSessionId() => Guid.NewGuid().ToString("N");
 
-        /// <summary>The host's launch of the fixture's target, followed: its own resolution, and the host's session id.</summary>
+        /// <summary>
+        /// The host's launch of the fixture's target, followed: its own resolution, and the host's session id; with
+        /// <paramref name="launchRequestId"/>, as the follow of a launcher-planned join.
+        /// </summary>
         internal static SessionFollowPlan Plan(SessionFixture test, string sessionId, Func<CancellationToken, Task<OperationResult<bool>>>? synchronize = null,
-            string? baseScene = null, TransformState? spawn = null, string? gamemode = null)
+            string? baseScene = null, TransformState? spawn = null, string? gamemode = null, string? launchRequestId = null)
         {
             var request = new LaunchRequest(test.Plan.Descriptor.Request.TargetId);
             var resolution = LaunchResolver.Resolve(test.Profile, request);
             That(resolution.Resolved, "the host's launch resolves here: " + string.Join("; ", resolution.Blocks.Select(block => block.Code + " " + block.Subject)));
             var resolved = resolution.Plan!.Descriptor;
             return new SessionFollowPlan(sessionId, request, gamemode ?? resolved.GamemodeId, resolved.WorldId, resolved.WorldFamilyId,
-                resolved.Transition, baseScene, spawn, synchronize ?? (_ => Task.FromResult(OperationResult<bool>.Success(true))));
+                resolved.Transition, baseScene, spawn, synchronize ?? (_ => Task.FromResult(OperationResult<bool>.Success(true))), launchRequestId);
         }
 
         internal static SessionFollowResult Follow(SessionFixture test, SessionFollowPlan plan, List<string>? reached = null, CancellationToken token = default)
@@ -312,6 +316,52 @@ namespace TopiaForge.ModManager.Tests
             test.Wait(menu);
             That(menu.Result.Succeeded && test.MenuLoads == 1 && test.Outcomes.All(outcome => outcome.Kind != "launch"),
                 "the follower's own return to the menu loads it and publishes no launch outcome");
+        }
+
+        /// <summary>
+        /// A follow reports to the launcher only when it belongs to a launcher-planned join, and then under that join's
+        /// request: each phase of the host's world session as this game runs it, and each followed session's end. A follow of
+        /// a join started in game publishes nothing to the launcher, from its start to its end, and no follow publishes a
+        /// launch outcome, which is the launch command's alone.
+        /// </summary>
+        private static void OnlyALaunchedJoinsFollowReportsToTheLauncher(string root)
+        {
+            using (var test = GamemodeParticipantRealmTests.InRealm(root + "-in-game", NetRealm.Client))
+            {
+                var progress = new List<LaunchProgress>();
+                test.Hosted.Progress += progress.Add;
+                That(Follow(test, Plan(test, NewSessionId())).Succeeded && Follow(test, Plan(test, NewSessionId())).Succeeded,
+                    "an in-game join follows the host's world, and the host's next one");
+                var menu = test.Hosted.FollowMainMenuAsync();
+                test.Wait(menu);
+                test.Until(() => test.Hosted.Current.Phase == SessionPhase.Idle);
+                That(menu.Result.Succeeded && progress.Count == 0 && test.Outcomes.Count == 0,
+                    "and publishes nothing to the launcher, neither progress nor a session's end (" + progress.Count + " progress, " + test.Outcomes.Count + " outcomes)");
+            }
+
+            using (var test = GamemodeParticipantRealmTests.InRealm(root + "-launched", NetRealm.Client))
+            {
+                const string join = "0f1e2d3c4b5a69788796a5b4c3d2e1f0";
+                var progress = new List<LaunchProgress>();
+                test.Hosted.Progress += progress.Add;
+                var first = NewSessionId();
+                That(Follow(test, Plan(test, first, launchRequestId: join)).Succeeded, "a launched join follows the host's world");
+                That(progress.Select(record => record.Phase).SequenceEqual(new[] { "preparing", "loading-world", "starting-mode", "running" })
+                    && progress.All(record => record.RequestId == join && record.SessionId == first) && test.Hosted.Current.Identity!.RequestId == join,
+                    "its session takes the join's request, and each phase it commits is published under it (" + string.Join(", ", progress.Select(record => record.Phase)) + ")");
+                That(test.Outcomes.Count == 0, "a session that runs has not ended");
+
+                var second = NewSessionId();
+                That(Follow(test, Plan(test, second, launchRequestId: join)).Succeeded, "the host's next world is followed");
+                var ended = test.Outcomes.Single();
+                That(ended.Kind == "session" && ended.RequestId == join && ended.SessionId == first && ended.Status == "succeeded" && ended.Command == null,
+                    "the world followed before ends under the join's request, as a session's end, never as a launch (" + ended.Kind + " " + ended.Status + ")");
+                var last = progress[progress.Count - 1];
+                That(last.Phase == "running" && last.SessionId == second && last.RequestId == join, "and the next one runs under it");
+                That(progress.Select(record => record.Sequence).Zip(progress.Select(record => record.Sequence).Skip(1), (before, after) => after > before).All(rises => rises),
+                    "under one rising sequence");
+                That(test.Outcomes.All(outcome => outcome.Kind != "launch"), "no follow publishes a launch outcome");
+            }
         }
 
         /// <summary>A follower as the orchestrator sees it, recording the player's own way to the menu.</summary>

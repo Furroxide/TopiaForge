@@ -133,7 +133,7 @@ namespace TopiaForge.ModManager.Sessions
 
                 // The runtime asks the realm rules again before the provider hears of the join; a game that began to change
                 // meanwhile is waited for, never joined.
-                var change = context.Environment.Join(join.Target, settings);
+                var change = context.Environment.Join(join.Target, settings, LaunchedJoin(join));
                 if (change.Verdict == NetRealmTransitionVerdict.Busy)
                 {
                     Wait(join);

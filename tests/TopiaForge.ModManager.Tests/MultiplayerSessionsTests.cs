@@ -73,6 +73,7 @@ namespace TopiaForge.ModManager.Tests
             LaunchedSessionsStart();
             LiveJoinsAndTheLauncher(root);
             LaunchesEndOnTheirOwnRecords();
+            LaunchedJoinsReportTheirFollows();
             SettledFramesAllocateNothing();
             VoiceSaysWhenTheSessionOffersNone();
             Console.WriteLine("MultiplayerSessionsTests passed.");

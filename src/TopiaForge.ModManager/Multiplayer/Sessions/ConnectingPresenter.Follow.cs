@@ -28,6 +28,14 @@ namespace TopiaForge.ModManager.Sessions
 
         private SessionFollowStatus FollowStatus => context.Environment.Follow;
 
+        /// <summary>
+        /// The request of the launcher-planned join <paramref name="join"/> carries out, while that launch still waits for its
+        /// result; session follow reports the host's world to the launcher under it, and under nothing else. Null for a join
+        /// started in game, and for a launch already settled, as when RETRY joins again after it failed: the launcher keeps
+        /// the result it has, and the player's own join reports nothing.
+        /// </summary>
+        private static string? LaunchedJoin(JoinRequest join) => join.Launch != null && !join.Launch.IsSettled ? join.Launch.RequestId : null;
+
         /// <summary>Remembers which join the follow speaks for from now: the next link-up's.</summary>
         private void FollowJoinStarted()
         {

@@ -123,7 +123,8 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
 
     public MultiplayerRealmChange OpenToMultiplayer(InternalHostSettings settings) => composition.OpenToMultiplayer(settings);
 
-    public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings) => composition.Join(target, settings);
+    public MultiplayerRealmChange Join(IInternalJoinTarget target, InternalJoinSettings settings, string? launchRequestId = null) =>
+        composition.Join(target, settings, launchRequestId);
 
     public MultiplayerRealmChange Leave() => composition.Leave();
 
@@ -148,6 +149,9 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
         return launched;
     }
 
+    /// <summary>These screens run without a session orchestrator, so no session follow reports progress to a live join here.</summary>
+    public IDisposable SubscribeSessionProgress(string requestId, Action<LaunchProgress> progress) => NoProgress.Instance;
+
     /// <summary>Gets every text this game left for the launcher and the player: the staged files and the toasts.</summary>
     internal IEnumerable<string> Written() =>
         Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories).Select(File.ReadAllText).Concat(Notices).Concat(Opened);
@@ -163,6 +167,15 @@ internal sealed class PeerScreens : IMultiplayerSessionEnvironment, IDisposable
         {
         }
         catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private sealed class NoProgress : IDisposable
+    {
+        internal static readonly NoProgress Instance = new();
+
+        public void Dispose()
         {
         }
     }

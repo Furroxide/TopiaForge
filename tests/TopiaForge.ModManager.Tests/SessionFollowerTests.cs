@@ -36,6 +36,7 @@ namespace TopiaForge.ModManager.Tests
             ThePlayersOwnWayOutLeavesOnce(root + "-own-menu");
             ShuttingDownLoadsNoMenu(root + "-shutdown");
             UnreadableAnnouncementsChangeNothing(root + "-unreadable");
+            ALaunchedJoinsFollowsReportUnderItsRequest(root + "-launched");
             FollowFailureWordsAreThisGamesOwn();
             SessionFollowWireTests.Run();
             Console.WriteLine("SessionFollowerTests passed.");
@@ -355,6 +356,54 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Status.Stage == FollowStage.AtMenu, "and the host's next one is followed");
         }
 
+        /// <summary>
+        /// A join the launcher planned hands its request to the realm, and every follow of that join reports under it, the
+        /// host's next world included, until this game leaves; a join started in game, after it, reports nothing at all.
+        /// </summary>
+        private static void ALaunchedJoinsFollowsReportUnderItsRequest(string root)
+        {
+            const string join = "join-0f1e2d3c";
+            using var rig = new FollowRig(root);
+            var progress = new List<LaunchProgress>();
+            rig.Test.Hosted.Progress += progress.Add;
+            That(rig.Runtime.Join(new FakeJoinTarget(), new InternalJoinSettings(), join).Succeeded && rig.Runtime.LaunchedJoin == join,
+                "a launched join hands the realm its request");
+            rig.Frame();
+            That(rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == join, "the follower takes it at link-up");
+            var first = SessionFollowTests.NewSessionId();
+            rig.Announce(rig.World(first));
+            rig.Until(() => rig.Status.Stage == FollowStage.Running, "the host's world runs");
+            var second = SessionFollowTests.NewSessionId();
+            rig.Announce(rig.World(second));
+            rig.Until(() => rig.Status.Stage == FollowStage.Running && rig.Test.Hosted.FollowedSessionId == second, "and the host's next world");
+            That(progress.Count > 0 && progress.All(record => record.RequestId == join) && progress.Any(record => record.SessionId == first)
+                && progress[progress.Count - 1].Phase == "running" && progress[progress.Count - 1].SessionId == second,
+                "every follow of the join reports its phases under the join's request (" + string.Join(", ", progress.Select(record => record.Phase)) + ")");
+            That(rig.Test.Outcomes.Count == 1 && rig.Test.Outcomes[0].Kind == "session" && rig.Test.Outcomes[0].RequestId == join && rig.Test.Outcomes[0].SessionId == first,
+                "and the end of the world it left behind");
+
+            That(rig.Runtime.Leave().Succeeded && rig.Runtime.LaunchedJoin == null, "leaving lets go of the launched join");
+            rig.Frame();
+            That(!rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == null, "and so does the follower");
+            rig.Until(() => rig.Test.Hosted.Current.Phase == SessionPhase.Idle && rig.Test.MenuLoads == 1, "the game returns to the main menu");
+            rig.Scene.Activated(GameScenes.MainMenuSceneName);
+
+            // The player joins again from the game: nothing it follows reaches the launcher.
+            var reported = progress.Count;
+            var ends = rig.Test.Outcomes.Count;
+            That(rig.Runtime.Join(new FakeJoinTarget(), new InternalJoinSettings()).Succeeded && rig.Runtime.LaunchedJoin == null, "an in-game join names no request");
+            rig.Frame();
+            That(rig.Follower.IsFollowing && rig.Follower.LaunchRequestId == null, "so its follower has none");
+            var third = SessionFollowTests.NewSessionId();
+            rig.Announce(rig.World(third));
+            rig.Until(() => rig.Status.Stage == FollowStage.Running && rig.Test.Hosted.FollowedSessionId == third, "the host's world runs again");
+            var fourth = SessionFollowTests.NewSessionId();
+            rig.Announce(rig.World(fourth));
+            rig.Until(() => rig.Status.Stage == FollowStage.Running && rig.Test.Hosted.FollowedSessionId == fourth, "and its next one");
+            That(progress.Count == reported && rig.Test.Outcomes.Count == ends,
+                "an in-game join's follows publish nothing to the launcher (" + (progress.Count - reported) + " progress, " + (rig.Test.Outcomes.Count - ends) + " outcomes)");
+        }
+
         private static void FollowFailureWordsAreThisGamesOwn()
         {
             var codes = (ModErrorCode[])Enum.GetValues(typeof(ModErrorCode));
@@ -402,7 +451,7 @@ namespace TopiaForge.ModManager.Tests
                 {
                     Discoveries++;
                     return Task.CompletedTask;
-                }, () => Runtime.Control == null, Test.Host, Log);
+                }, () => Runtime.Control == null, () => Runtime.LaunchedJoin, Test.Host, Log);
                 Runtime.AddObserver(Follow);
                 Runtime.SessionFollow = Follow;
                 Runtime.NativeWorldSource = () => Scene.IsGameplay;

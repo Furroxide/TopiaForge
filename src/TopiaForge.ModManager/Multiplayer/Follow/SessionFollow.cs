@@ -20,6 +20,7 @@ namespace TopiaForge.ModManager
         private readonly GamemodeSessionOrchestrator sessions;
         private readonly FollowedScene scene;
         private readonly Func<bool> detaching;
+        private readonly Func<string?> launchedJoin;
         private readonly IMultiplayerLog log;
         private IInternalSystemChannel? channel;
         private IInternalMultiplayerControl? control;
@@ -34,13 +35,18 @@ namespace TopiaForge.ModManager
         /// <param name="world">Reads the network world's progress, which the follow's Synchronizing stage waits on.</param>
         /// <param name="discover">Looks for the game's own worlds once more, for a host's world this game has not listed yet.</param>
         /// <param name="detaching">Gets whether the runtime is detaching from its provider, as the game shuts down.</param>
+        /// <param name="launchedJoin">
+        /// Gets the request the launcher-planned join this game went online with reports under, or null for a join started in
+        /// game (<see cref="MultiplayerRuntime.LaunchedJoin"/>): the follow of that join reports to the launcher under it.
+        /// </param>
         internal SessionFollow(GamemodeSessionOrchestrator sessions, FollowedScene scene, Func<IDisposable> grantFollow, Action leave,
-            Func<NetworkWorldProgress> world, Func<CancellationToken, Task>? discover, Func<bool> detaching, IHostDispatcher dispatcher,
-            IMultiplayerLog log)
+            Func<NetworkWorldProgress> world, Func<CancellationToken, Task>? discover, Func<bool> detaching, Func<string?> launchedJoin,
+            IHostDispatcher dispatcher, IMultiplayerLog log)
         {
             this.sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
             this.scene = scene ?? throw new ArgumentNullException(nameof(scene));
             this.detaching = detaching ?? throw new ArgumentNullException(nameof(detaching));
+            this.launchedJoin = launchedJoin ?? throw new ArgumentNullException(nameof(launchedJoin));
             this.log = log ?? throw new ArgumentNullException(nameof(log));
             Host = new SessionFollowHost(() => channel, Describe);
             Follower = new SessionFollower(sessions, scene, () => channel, grantFollow, leave, world, discover, dispatcher, log);
@@ -89,7 +95,7 @@ namespace TopiaForge.ModManager
             if (previous == NetRealm.Client) Follower.Left(detaching());
             if (previous == NetRealm.ListenHost) Host.Deactivate();
             if (next == NetRealm.ListenHost) Host.Activate();
-            if (next == NetRealm.Client && control != null) Follower.Joined(control);
+            if (next == NetRealm.Client && control != null) Follower.Joined(control, launchedJoin());
         }
 
         public void Detaching(IInternalMultiplayerControl detached)
