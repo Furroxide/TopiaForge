@@ -277,6 +277,13 @@ and the snapshot says which one is current, whether this process holds world aut
   join. The state goes from `Connecting` through `Synchronizing` to `Ready`, which it reaches only once all the host's
   values and objects have arrived. A participant id names a player only on the host that gave it, so the snapshot lists
   nobody until the host's own list arrives, which it does before `Ready`.
+- **Following the host's world.** A joined player's game loads and runs the world the host is in, with no code from you:
+  the host's world session under the host's session id, so whatever reads the world session sees the host's, and the
+  gamemode's participant controller runs for the player, as [gamemodes in a session](#gamemodes-in-a-session)
+  describes; the level the host is in outside a session; or the main menu. It follows the host into its next world, and
+  back again when the player's own game strays from it. The world is the host's: on a joined player a world session's
+  `StopAsync` and `RestartAsync`, and a launch, return `NotAuthoritative`, and returning to the main menu leaves the
+  session.
 - **What replicates.** What a contract declares: `[ReplicatedState]` values, `[ReplicatedObject]` objects, commands
   with their confirmations, and presentation events, which reach players only once the host commits them. And, with no
   code from you, the host's world: what the host spawns through the SDK, its custom-world content, and the scene props
