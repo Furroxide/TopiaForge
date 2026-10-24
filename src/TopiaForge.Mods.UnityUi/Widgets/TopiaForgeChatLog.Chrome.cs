@@ -27,6 +27,7 @@ namespace TopiaForge.Mods.UnityUi
             // keeps scrollback usable while open even on a HUD layer whose raycaster is off.
             this.Dynamic();
             raycaster = TopiaForgeComponents.GetOrAdd<GraphicRaycaster>(Go);
+            TopiaForgeEventSystems.Track(raycaster);
 
             backdrop = CreateChromeImage(Go.transform, "Backdrop", TopiaForgeSprites.Fill(TopiaForgeRadius.Control), sliced: true);
             TopiaForgeAnchors.Stretch(backdrop.rectTransform);

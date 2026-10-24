@@ -141,9 +141,13 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>Gets button.</summary>
         public Button Button => button;
 
-        /// <summary>Moves keyboard/controller focus to this button.</summary>
+        /// <summary>
+        /// Moves keyboard/controller focus to this button. A dialog focuses its default button in the frame it appears, and
+        /// Unity drops a selection made while no event system is active, so one is made active first.
+        /// </summary>
         public void Focus()
         {
+            TopiaForgeEventSystems.EnsureEventSystem();
             button.Select();
         }
 
