@@ -337,6 +337,7 @@ internal sealed class LiveRig : IDisposable
     internal Dictionary<Provider, SteppedNetworkFactory> Factories { get; } = new();
 
     private readonly Dictionary<Provider, MemoryDataFiles> clientFiles = new();
+    private readonly Dictionary<Provider, string> names = new();
     private readonly int seed;
     private readonly bool seededTransports;
     private int providers;
@@ -367,7 +368,7 @@ internal sealed class LiveRig : IDisposable
     internal VirtualNode NodeOf(Provider client) => Factories[client].Networks[^1].Node;
 
     /// <summary>How long a run waits, in real time, for work the providers do on other threads before calling it stuck.</summary>
-    internal static readonly TimeSpan BackgroundWorkBound = TimeSpan.FromSeconds(30);
+    internal TimeSpan BackgroundWorkBound { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Runs the network and pumps every provider until <paramref name="condition"/> holds or virtual time runs out.
@@ -402,15 +403,11 @@ internal sealed class LiveRig : IDisposable
         {
             while (true)
             {
-                var pending = Host.Live!.PendingBackgroundWork(saves: HostFiles.HeldWrites == 0);
-                foreach (var client in Clients) pending.AddRange(client.Live!.PendingBackgroundWork(saves: clientFiles[client].HeldWrites == 0));
+                var pending = new BackgroundWorkWait();
+                pending.Add(names[Host], Host.Live!.PendingBackgroundWork(saves: HostFiles.HeldWrites == 0));
+                foreach (var client in Clients) pending.Add(names[client], client.Live!.PendingBackgroundWork(saves: clientFiles[client].HeldWrites == 0));
                 if (pending.Count == 0) return waited;
-                if (waiting.Elapsed > BackgroundWorkBound)
-                {
-                    throw new InvalidOperationException("Assertion failed: work on other threads finishes within " + BackgroundWorkBound.TotalSeconds + " s of real time");
-                }
-
-                Task.WaitAny(pending.ToArray(), 10);
+                pending.Wait(waiting, BackgroundWorkBound);
                 waited = true;
             }
         }
@@ -452,7 +449,9 @@ internal sealed class LiveRig : IDisposable
         var number = ++providers;
         if (seededTransports) setup.TransportOptions = new SeededTransportOptions((seed * 131) + number, configure: configureTransport).Next;
         else if (configureTransport != null) setup.TransportOptions = () => Configured(configureTransport);
-        return new Provider(ProviderId, null, () => Network.Now, setup);
+        var provider = new Provider(ProviderId, null, () => Network.Now, setup);
+        names.Add(provider, name);
+        return provider;
     }
 
     private static TransportOptions Configured(Action<TransportOptions> configure)

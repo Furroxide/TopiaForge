@@ -312,6 +312,9 @@ internal sealed class ControlRig : IDisposable
     internal ControlPeer Host { get; private set; }
     internal List<ControlPeer> Peers { get; } = new();
 
+    /// <summary>Gets or sets the cumulative real-time bound for background work in each run.</summary>
+    internal TimeSpan BackgroundWorkBound { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// Replaces the host's process with a new one under the same identity, bound to the same address and port, as a game
     /// that crashed and started again: the old process is never pumped again and leaves the network at once, saying
@@ -378,19 +381,14 @@ internal sealed class ControlRig : IDisposable
         {
             while (true)
             {
-                var pending = new List<Task>();
+                var pending = new BackgroundWorkWait();
                 foreach (var peer in Peers.Prepend(Host))
                 {
-                    if (peer.Provider.Live is { } live) pending.AddRange(live.PendingBackgroundWork(saves: peer.Files.HeldWrites == 0));
+                    if (peer.Provider.Live is { } live) pending.Add(peer.Name, live.PendingBackgroundWork(saves: peer.Files.HeldWrites == 0));
                 }
 
                 if (pending.Count == 0) return;
-                if (waiting.Elapsed > LiveRig.BackgroundWorkBound)
-                {
-                    throw new InvalidOperationException("Assertion failed: work on other threads finishes within " + LiveRig.BackgroundWorkBound.TotalSeconds + " s of real time");
-                }
-
-                Task.WaitAny(pending.ToArray(), 10);
+                pending.Wait(waiting, BackgroundWorkBound);
             }
         }
         finally

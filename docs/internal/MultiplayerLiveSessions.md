@@ -130,6 +130,7 @@ A host describes its session in a descriptor and signs it. A joining player chec
   join. In the game, a link's `ToString()` therefore names its kind alone, in a join target's words (`invite`,
   `listed server`, `direct session`), and only `Canonical` spells the link. A link never joins on its own: it opens the
   consent flow.
+  Tests compare `ToString()`, interpolation, `string.Format` and concatenation with those exact kind words.
 
 ## 5. LAN discovery
 
@@ -298,6 +299,10 @@ the workload could break it, not at a table's own capacity. No endpoint may repo
 throw or report a fault. Identities and every endpoint's randomness come from the seed, so a seed repeats every byte,
 and the run takes a few seconds, so every pass runs it twice and compares. The harness's `--soak` flag adds eight more
 seeds and a four-hour run.
+
+The live, control and Internet rigs bound background work by 30 seconds of cumulative real time per run. A timeout
+names each unfinished operation and its test peer, using fixed operation labels and no address or task result. The
+bound can be shortened per rig to test a held identity read; waiting never advances the virtual clock.
 
 The fuzzers feed seeded hostile input to every format and boundary this layer reads: canonical JSON (checked against
 an independent JSON reader), signed descriptors, links, invite codes and hosts, LAN beacons and session info, join
