@@ -103,7 +103,8 @@ default root is the one under the user's own roaming folder, read from the
 user's shell-folder setting and expanded for the user's token, never from
 `APPDATA` or `USERPROFILE`, so a run isolated with a scratch `APPDATA` or
 `USERPROFILE` never registers. Turning link
-handling off removes the registration while it names this launcher. Until the
-setting is saved with the other multiplayer settings, it is on again at the
-next start, which registers again. A link never joins by itself; it opens the
-consent flow.
+handling off removes the registration while it names this launcher. The choice
+is kept with the other multiplayer settings, so "off" lasts across restarts,
+and every start while it is off removes a registration that still names this
+launcher, such as one a failed removal left. A link never joins by itself; it
+opens the consent flow.

@@ -3,10 +3,11 @@
 ///
 /// Releases ship no installer, so the launcher registers itself at run time:
 /// at start while the player's setting is on, and it removes its own
-/// registration when the player turns the setting off. The setting governs
-/// only that registration. A link that still reaches the launcher, as on
-/// macOS where the application bundle declares the scheme, opens the consent
-/// flow like any other and never joins by itself.
+/// registration when the player turns the setting off, and again at each
+/// start while it is off. The setting governs only that registration. A link
+/// that still reaches the launcher, as on macOS where the application bundle
+/// declares the scheme, opens the consent flow like any other and never joins
+/// by itself.
 library;
 
 import 'dart:async';
@@ -85,8 +86,7 @@ final class SessionLinkHandlingStatus {
 
   final bool enabled;
 
-  /// What the registrar reported, or null when it was not asked because the
-  /// setting was off at start.
+  /// What the registrar reported, or null when it was not asked.
   final SessionLinkRegistration? registration;
 
   /// For people; empty when there is nothing to add.
@@ -107,10 +107,12 @@ abstract interface class SessionLinkHandlingGateway {
 }
 
 /// The rule between the setting and the registrar. At start it registers
-/// only while the setting is on, and does not call the registrar otherwise.
-/// Afterwards it registers or removes as the setting changes, one call at a
-/// time and in order, so the registration always ends where the setting
-/// ended. A registrar failure is reported, never thrown.
+/// while the setting is on, and removes this launcher's own registration
+/// while it is off, so a removal that failed, or that a launcher stopped
+/// before making, is made then. Afterwards it registers or removes as the
+/// setting changes, one call at a time and in order, so the registration
+/// always ends where the setting ended. A registrar failure is reported,
+/// never thrown.
 final class SessionLinkHandling implements SessionLinkHandlingGateway {
   SessionLinkHandling({
     required SessionLinkSetting setting,
@@ -160,8 +162,10 @@ final class SessionLinkHandling implements SessionLinkHandlingGateway {
       );
     }
     _applied = enabled;
-    if (!enabled) return const SessionLinkHandlingStatus(enabled: false);
-    return _apply(true);
+    // "Off" is kept, so the registration follows it at every start: one
+    // left behind names this launcher still, and the registrar removes only
+    // one that does.
+    return _apply(enabled);
   }
 
   void _follow(bool enabled) {

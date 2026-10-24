@@ -214,10 +214,11 @@ has loaded, a native scene change, any other operation that holds the session, a
   defaults.
 - **Launcher channels.** Launch request V5's C# channels, `LaunchStagingStore.WriteSessionHandoff` and
   `RecordPreferenceChange`, can wait for a shared file for about 310 ms while they retry, so the interface never calls
-  them on the main thread. Nothing in the game calls them yet, and the launcher neither takes a handoff nor applies the
-  journal yet. Once both sides are wired, a handoff from a launcher-owned game and every journal write go through
-  `MultiplayerBackgroundQueue`, as the settings do, and the views show them pending the same way. Until then the
-  hand-off is the `Application.OpenURL` link above, and preferences stay in manager data.
+  them on the main thread. Nothing in the game calls them yet. The launcher applies the journal while the game is closed
+  (`MultiplayerLaunchContract.md`, section 7) but takes no handoff yet. Once both sides are wired, a handoff from a
+  launcher-owned game and every journal write go through `MultiplayerBackgroundQueue`, as the settings do, and the views
+  show them pending the same way. Until then the hand-off is the `Application.OpenURL` link above, and preferences stay
+  in manager data.
 
 ## 9. Seams for later slices
 

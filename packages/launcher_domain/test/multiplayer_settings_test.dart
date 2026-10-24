@@ -42,6 +42,33 @@ void main() {
       expect(MultiplayerSettings().withDisplayName('Sam').displayName, 'Sam');
     });
 
+    test('display names never hold what the game cannot read back', () {
+      // The game's JSON reader refuses U+FFFE and U+FFFF, so the preferences
+      // projection and launch requests refuse them; a name the game could
+      // never be given is never saved.
+      for (final name in ['Sam\uFFFE', '\uFFFFSam', 'S\uFFFFm']) {
+        expect(MultiplayerSettings.isValidDisplayName(name), isFalse);
+        expect(
+          () => MultiplayerSettings(displayName: name),
+          throwsArgumentError,
+        );
+        expect(
+          () => MultiplayerPreferencesProjection(
+            revision: 0,
+            displayName: name,
+            disclosure: 0,
+            voiceConsent: 0,
+            voiceEnabled: false,
+            lanDiscovery: true,
+            upnp: false,
+            hosting: MultiplayerHostingDefaults.forPlayer('Sam'),
+          ),
+          throwsFormatException,
+        );
+      }
+      expect(MultiplayerSettings.isValidDisplayName('Sam\uFFFD'), isTrue);
+    });
+
     test('direct is a per-session choice after the disclosure', () {
       final fresh = MultiplayerSettings();
       expect(

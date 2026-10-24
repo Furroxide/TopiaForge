@@ -108,12 +108,18 @@ final class MultiplayerSettings {
   final ServerHistory history;
 
   /// Display names follow the wire's display-text rules, with 2 to 24 UTF-16
-  /// code units.
-  static bool isValidDisplayName(String? name) => WireText.isDisplayText(
-    name,
-    maximumDisplayNameLength,
-    minimum: minimumDisplayNameLength,
-  );
+  /// code units, and hold neither U+FFFE nor U+FFFF: the game's JSON reader
+  /// refuses those, so the preferences projection and a launch request
+  /// refuse them too, and a name that could not reach the game is never
+  /// saved.
+  static bool isValidDisplayName(String? name) =>
+      WireText.isDisplayText(
+        name,
+        maximumDisplayNameLength,
+        minimum: minimumDisplayNameLength,
+      ) &&
+      !name!.contains('\uFFFE') &&
+      !name.contains('\uFFFF');
 
   /// The privacy every session starts from. It is always relay-only.
   MultiplayerAddressPrivacy get defaultPrivacy =>

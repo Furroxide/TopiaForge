@@ -7,41 +7,87 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const ScreenHeader(
-          title: 'Settings',
-          subtitle: 'Local launcher paths and runtime management.',
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const ScreenHeader(
+            title: 'Settings',
+            subtitle:
+                'Local launcher paths, runtime management and multiplayer.',
+          ),
+          const _SectionTabs(tabs: ['General', 'Multiplayer']),
+          Expanded(
+            child: TabBarView(
+              physics: const NeverScrollableScrollPhysics(),
               children: [
-                _GameInstallSettings(state: state),
-                if (_shouldShowGameInstallSelector(state)) ...[
-                  const SizedBox(height: 14),
-                  _GameInstallCandidateSelector(state: state),
-                ],
-                const SizedBox(height: 14),
-                _PackageSourcesSettings(state: state),
-                const SizedBox(height: 14),
-                _LauncherDataSettings(state: state),
-                const SizedBox(height: 14),
-                _LauncherUpdateSettings(state: state),
-                const SizedBox(height: 14),
-                _DeveloperModeSettings(state: state),
-                const SizedBox(height: 14),
-                const BorderedPane(
-                  child: Text(
-                    'RoboPatch behavior is treated as clean-room compatibility. No RoboPatch or Prism Launcher code is copied into this launcher.',
-                  ),
-                ),
+                _GeneralSettings(state: state),
+                _MultiplayerSettingsPane(state: state),
               ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Tabs that split a screen into its parts, such as Settings into General
+/// and Multiplayer.
+class _SectionTabs extends StatelessWidget {
+  const _SectionTabs({required this.tabs});
+
+  final List<String> tabs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TabBar(
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        labelColor: TopiaForgePalette.text,
+        unselectedLabelColor: TopiaForgePalette.mutedText,
+        indicatorColor: TopiaForgePalette.launch,
+        dividerColor: TopiaForgePalette.surfaceTint,
+        tabs: [for (final tab in tabs) Tab(text: tab, height: 40)],
+      ),
+    );
+  }
+}
+
+class _GeneralSettings extends StatelessWidget {
+  const _GeneralSettings({required this.state});
+
+  final LauncherState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      child: Column(
+        children: [
+          _GameInstallSettings(state: state),
+          if (_shouldShowGameInstallSelector(state)) ...[
+            const SizedBox(height: 14),
+            _GameInstallCandidateSelector(state: state),
+          ],
+          const SizedBox(height: 14),
+          _PackageSourcesSettings(state: state),
+          const SizedBox(height: 14),
+          _LauncherDataSettings(state: state),
+          const SizedBox(height: 14),
+          _LauncherUpdateSettings(state: state),
+          const SizedBox(height: 14),
+          _DeveloperModeSettings(state: state),
+          const SizedBox(height: 14),
+          const BorderedPane(
+            child: Text(
+              'RoboPatch behavior is treated as clean-room compatibility. No RoboPatch or Prism Launcher code is copied into this launcher.',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

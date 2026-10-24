@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_data/src/multiplayer/descriptor_client.dart';
 import 'package:launcher_data/src/multiplayer/lan_datagrams.dart';
 import 'package:launcher_data/src/multiplayer/lan_discovery_client.dart';

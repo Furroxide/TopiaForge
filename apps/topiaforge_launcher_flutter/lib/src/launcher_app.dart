@@ -21,6 +21,7 @@ class TopiaForgeLauncherApp extends StatelessWidget {
     this.reachabilityProbe,
     this.sessionLinks,
     this.sessionLinkHandling,
+    this.multiplayer,
     this.quitLauncher = exitLauncher,
   });
 
@@ -37,6 +38,9 @@ class TopiaForgeLauncherApp extends StatelessWidget {
   /// The link-handling setting and the system registration.
   final SessionLinkHandlingGateway? sessionLinkHandling;
 
+  /// Multiplayer preferences and network diagnostics.
+  final MultiplayerGateway? multiplayer;
+
   /// Quits the launcher once a staged update is being applied.
   final Future<void> Function() quitLauncher;
 
@@ -52,6 +56,7 @@ class TopiaForgeLauncherApp extends StatelessWidget {
           reachabilityProbe: reachabilityProbe,
           sessionLinks: sessionLinks,
           sessionLinkHandling: sessionLinkHandling,
+          multiplayer: multiplayer,
         )..add(const LauncherStarted()),
         child: BlocListener<LauncherBloc, LauncherState>(
           listenWhen: (previous, current) =>

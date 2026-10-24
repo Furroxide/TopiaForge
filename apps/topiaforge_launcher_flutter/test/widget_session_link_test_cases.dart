@@ -380,7 +380,7 @@ void registerSessionLinkWidgetTests() {
   ) async {
     final registrar = _RecordingRegistrar();
     final handling = SessionLinkHandling(
-      setting: TransientSessionLinkSetting(),
+      setting: _MemorySessionLinkSetting(),
       registrar: registrar,
     );
     await pumpLauncher(

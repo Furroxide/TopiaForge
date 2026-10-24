@@ -101,14 +101,15 @@ void main() {
       expect(status.registration, SessionLinkRegistration.registered);
     });
 
-    test('skips the registrar entirely while the setting is off', () async {
+    test('removes its own registration while the setting is off, so one a '
+        'failed or unfinished removal left is gone', () async {
       setting.enabled = false;
 
       final status = await handling.start();
 
-      expect(calls.log, ['read']);
+      expect(calls.log, ['read', 'unregister']);
       expect(status.enabled, isFalse);
-      expect(status.registration, isNull);
+      expect(status.registration, SessionLinkRegistration.removed);
     });
 
     test(
@@ -227,7 +228,7 @@ void main() {
       final status = await handling.start();
       await pumpEventQueue();
 
-      expect(calls.log, ['read']);
+      expect(calls.log, ['read', 'unregister']);
       expect(status.enabled, isFalse);
       expect(statuses, isEmpty);
     });

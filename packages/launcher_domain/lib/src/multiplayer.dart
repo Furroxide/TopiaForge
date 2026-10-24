@@ -1,6 +1,7 @@
 /// Network-free models for joining live multiplayer sessions: canonical JSON,
-/// signed server descriptors, session links, LAN formats, settings, join
-/// planning and the join reducer.
+/// signed server descriptors, session links, LAN formats, what LAN discovery
+/// and the network checks found, settings, join planning and the join
+/// reducer.
 ///
 /// The formats match the game's provider byte for byte; the shared fixtures in
 /// `tests/fixtures/multiplayer/` pin them (see
@@ -31,6 +32,8 @@ part 'multiplayer/invite_code.dart';
 part 'multiplayer/network_host.dart';
 part 'multiplayer/session_link.dart';
 part 'multiplayer/lan_beacon.dart';
+part 'multiplayer/lan_browse_state.dart';
+part 'multiplayer/network_report.dart';
 part 'multiplayer/session_info.dart';
 part 'multiplayer/server_listing.dart';
 part 'multiplayer/server_bookmarks.dart';
