@@ -335,6 +335,7 @@
     <Compile Include="../../src/TopiaForge.ModManager/GamemodeSessionOrchestrator.Content.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/RuntimeSessionSelection.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/NativeWorldReflection.cs" />
+    <Compile Include="../../src/TopiaForge.ModManager/NativeSceneNames.cs" />
     <Compile Include="../../src/TopiaForge.ModManager/LaunchDiscoveryGate.cs" />
   </ItemGroup>
 
