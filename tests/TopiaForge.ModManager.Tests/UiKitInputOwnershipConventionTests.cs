@@ -277,6 +277,8 @@ namespace TopiaForge.ModManager.Tests
             Require(navigation, "ExecuteEvents.submitHandler", "and submits");
             Assert(!navigation.Contains("cancelHandler", StringComparison.Ordinal), "never a cancel: Back stays the dismiss stack's");
             Require(navigation, "TopiaForgeDismissStack.FocusRoot", "and only inside the topmost surface that takes navigation");
+            Require(navigation, "module.moveRepeatRate,\n                root);",
+                "the driver sees each surface handover even when navigation stays claimed throughout");
         }
 
         private static void KitTextFieldsTakeTheKeyboard()

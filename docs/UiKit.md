@@ -139,7 +139,9 @@ Surfaces own the input they handle, with no code in the mod:
   never moves or presses. The surface's own controls move and submit at the UI module's own repeat
   delay and rate, and the first press with none of them selected selects the first. A window takes
   navigation only while one of its controls is selected, so gameplay keeps Space and the stick
-  otherwise.
+  otherwise. An unselected window does not block the overlay or another selected window's navigation.
+  A direction held while opening or dismissing a modal does not navigate the next
+  surface; release it and press again.
 - **The keyboard** belongs to a text field while it has focus, and to a key capture while it waits.
   Typing reaches the field and none of it the game; Escape cancels a capture without closing the
   window around it.

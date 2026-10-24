@@ -138,13 +138,23 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         /// <summary>
-        /// Gets the root of the topmost live surface if that surface takes navigation now, or null: the kit then moves and
-        /// submits inside it. A surface above it that takes no navigation, such as a key capture, leaves the keys to itself.
+        /// Gets the root of the topmost live navigation owner. Back-only surfaces do not block it, but a keyboard capture
+        /// above it leaves the keys to itself. The kit moves and submits only inside the returned root.
         /// </summary>
         public object? FocusRoot()
         {
-            var index = TopIndex();
-            return index >= 0 && (Resolve(index) & TopiaForgeInputClaim.Navigation) != 0 ? roots[index] : null;
+            var top = -1;
+            for (var index = 0; index < surfaces.Count; index++)
+            {
+                if (IsLive(index)
+                    && (Resolve(index) & (TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.Keyboard)) != 0
+                    && (top < 0 || surfaces[index].Band >= surfaces[top].Band))
+                {
+                    top = index;
+                }
+            }
+
+            return top >= 0 && (Resolve(top) & TopiaForgeInputClaim.Navigation) != 0 ? roots[top] : null;
         }
 
         /// <summary>Empties the stack and forgets a held Back, as the kit's teardown does.</summary>

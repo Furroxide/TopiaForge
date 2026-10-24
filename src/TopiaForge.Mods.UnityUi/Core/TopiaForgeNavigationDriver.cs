@@ -85,13 +85,15 @@ namespace TopiaForge.Mods.UnityUi
         private TopiaForgeMoveDirection stale;
         private float wait;
         private bool claimed;
+        private object? surface;
 
         /// <summary>
         /// One frame. <paramref name="claimedNow"/> is whether the topmost surface takes navigation;
         /// <paramref name="selectionInSurface"/> whether the EventSystem selection is one of its controls, and
         /// <paramref name="typing"/> whether that control is a text field with the keyboard. <paramref name="x"/>,
         /// <paramref name="y"/> and <paramref name="submitPressed"/> are the presses TopiaForge took; the delay and rate
-        /// are the UI module's own.
+        /// are the UI module's own. <paramref name="surface"/> identifies the current surface, so switching directly
+        /// between two surfaces does not carry a held direction or the old surface's submit into the new one.
         /// </summary>
         public TopiaForgeNavigationStep Tick(
             bool claimedNow,
@@ -102,16 +104,26 @@ namespace TopiaForge.Mods.UnityUi
             bool submitPressed,
             float deltaSeconds,
             float repeatDelay,
-            float repeatRate)
+            float repeatRate,
+            object? surface = null)
         {
             var direction = DirectionOf(x, y);
             if (!claimedNow)
             {
                 claimed = false;
+                this.surface = null;
                 repeating = TopiaForgeMoveDirection.None;
                 return default;
             }
 
+            if (claimed && !ReferenceEquals(this.surface, surface))
+            {
+                // Back can uncover another surface before this frame's navigation, with no unclaimed frame between.
+                claimed = false;
+                submitPressed = false;
+            }
+
+            this.surface = surface;
             if (!claimed)
             {
                 // A claim begins: whatever direction is held now was pressed before it, for something else.

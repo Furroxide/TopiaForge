@@ -56,6 +56,9 @@ namespace TopiaForge.ModManager.Tests
             DevicesThatGoAwayLetGo();
             TheKitNavigatesAtTheUiModulesPace();
             TheKitNavigatesOnlyWhileItsSurfaceClaimsNavigation();
+            HeldNavigationDoesNotCrossDirectSurfaceChanges();
+            BackOnlyWindowsDoNotBlockTheNavigationOwner();
+            DeviceAndControlBoundsDoNotStealOtherInput();
             AModsOwnKeyStillReachesItsAction();
             NothingIsAllocatedAtRestOrWhileHeld();
             Console.WriteLine("UiKitInputOwnershipTests passed.");
