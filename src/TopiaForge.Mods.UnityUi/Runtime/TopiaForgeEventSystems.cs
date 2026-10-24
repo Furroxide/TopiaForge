@@ -51,6 +51,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             WatchScenes();
+            DropDestroyed();
             if (!KitRaycasters.Contains(raycaster))
             {
                 KitRaycasters.Add(raycaster);
@@ -133,21 +134,28 @@ namespace TopiaForge.Mods.UnityUi
         // Whether a kit canvas takes input now. Raycasters of destroyed canvases are dropped on the way.
         private static bool KitTakesInput()
         {
-            var takesInput = false;
-            for (var index = KitRaycasters.Count - 1; index >= 0; index--)
+            DropDestroyed();
+            foreach (var raycaster in KitRaycasters)
             {
-                var raycaster = KitRaycasters[index];
-                if (raycaster == null)
+                if (raycaster.isActiveAndEnabled)
                 {
-                    KitRaycasters.RemoveAt(index);
-                }
-                else if (raycaster.isActiveAndEnabled)
-                {
-                    takesInput = true;
+                    return true;
                 }
             }
 
-            return takesInput;
+            return false;
+        }
+
+        // Canvases come and go with every modal and every scene, so the list holds only live raycasters.
+        private static void DropDestroyed()
+        {
+            for (var index = KitRaycasters.Count - 1; index >= 0; index--)
+            {
+                if (KitRaycasters[index] == null)
+                {
+                    KitRaycasters.RemoveAt(index);
+                }
+            }
         }
 
         // An active event system the kit did not make: the game's own, or another mod's.
