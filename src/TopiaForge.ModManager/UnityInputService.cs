@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using TopiaForge.Mods;
+using TopiaForge.Mods.UnityUi;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -178,11 +179,28 @@ namespace TopiaForge.ModManager
                 actions.Values.CopyTo(snapshot, 0);
             }
 
-            var uiFocused = IsUiFocused;
+            var focus = UiFocus();
             foreach (var action in snapshot)
             {
-                action.Sample(uiFocused);
+                action.Sample(focus);
             }
+        }
+
+        /// <summary>
+        /// What the UI holds this frame, for actions that yield to it (InputActionYield): the TopiaForge surfaces' claims, a
+        /// surface holding the focus outright, the game's own UI holding the selection, and the pointer over UI. A control a
+        /// closed window left selected counts for nothing.
+        /// </summary>
+        private static UiInputFocus UiFocus()
+        {
+            var events = EventSystem.current;
+            var selected = events != null ? events.currentSelectedGameObject : null;
+            var gameUiSelected = selected != null && selected.activeInHierarchy && !TopiaForgeInputOwnership.IsKitObject(selected);
+            return new UiInputFocus(
+                TopiaForgeDismissStack.Claims,
+                TopiaForgeDismissStack.HoldsFocus || TopiaForgeInputOwnership.KitTextFieldHasKeyboard(),
+                gameUiSelected,
+                events != null && events.IsPointerOverGameObject());
         }
 
         public void Dispose()
@@ -258,15 +276,16 @@ namespace TopiaForge.ModManager
                 lifetimeLease = lease ?? throw new ArgumentNullException(nameof(lease));
             }
 
-            public void Sample(bool uiFocused)
+            public void Sample(UiInputFocus focus)
             {
                 if (owner == null)
                 {
                     return;
                 }
 
+                // A binding yields only to UI that holds its control, so a mod's own key still works over its window.
                 var previous = held;
-                value = definition.SuppressWhileUiFocused && uiFocused ? 0f : ReadBindings(bindings);
+                value = ReadBindings(bindings, definition.SuppressWhileUiFocused ? focus : default);
                 held = Math.Abs(value) > 0.0001f;
                 pressed = held && !previous;
                 released = !held && previous;
@@ -334,12 +353,15 @@ namespace TopiaForge.ModManager
                 Interlocked.Exchange(ref lifetimeLease, null)?.Dispose();
             }
 
-            private static float ReadBindings(IReadOnlyList<InputBinding> bindings)
+            private static float ReadBindings(IReadOnlyList<InputBinding> bindings, UiInputFocus focus)
             {
                 var value = 0f;
                 for (var index = 0; index < bindings.Count; index++)
                 {
-                    value += ReadBinding(bindings[index]);
+                    if (!InputActionYield.Yields(bindings[index], focus))
+                    {
+                        value += ReadBinding(bindings[index]);
+                    }
                 }
 
                 return Mathf.Clamp(value, -1f, 1f);

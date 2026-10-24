@@ -294,7 +294,8 @@ namespace TopiaForge.ModManager
             cursorLease.SetActive(open);
             if (open)
             {
-                TopiaForgeDismissStack.Push(this);
+                // While it shows, the overlay keeps the game's menu navigation from reaching the menu beneath it.
+                TopiaForgeDismissStack.Push(this, TopiaForgeInputClaim.Navigation, root);
                 if (shell != null)
                 {
                     TopiaForgeMotion.WindowIn(shell);

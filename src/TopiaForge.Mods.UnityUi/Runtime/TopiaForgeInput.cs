@@ -23,7 +23,7 @@ namespace TopiaForge.Mods.UnityUi
             }
         }
 
-        /// <summary>Dual-backend Escape check used by the dismiss stack.</summary>
+        /// <summary>Dual-backend Escape check: true in the frame Escape was pressed, also when TopiaForge took it from the game.</summary>
         public static bool EscapePressedThisFrame()
         {
             Probe();
@@ -33,7 +33,22 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             var keyboard = UnityEngine.InputSystem.Keyboard.current;
-            return keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+            return (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+                || TopiaForgeInputOwnership.KeyPressedThisFrame(UnityEngine.InputSystem.Key.Escape);
+        }
+
+        /// <summary>Gets whether Back is held: Escape through legacy input, or an Escape or controller B TopiaForge took.</summary>
+        internal static bool BackHeld()
+        {
+            Probe();
+            return (legacyAvailable && Input.GetKey(KeyCode.Escape)) || TopiaForgeInputOwnership.BackHeld;
+        }
+
+        /// <summary>Gets whether Back was pressed this frame: Escape through legacy input, or a Back press TopiaForge took.</summary>
+        internal static bool BackPressedThisFrame()
+        {
+            Probe();
+            return (legacyAvailable && Input.GetKeyDown(KeyCode.Escape)) || TopiaForgeInputOwnership.BackPressedThisFrame;
         }
 
         private static void Probe()
