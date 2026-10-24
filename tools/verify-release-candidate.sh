@@ -44,7 +44,8 @@ def same_repository:
   type == "string" and ascii_downcase == ($repository | ascii_downcase);
 def repository_url($prefix; $suffix):
   type == "string" and startswith($prefix) and endswith($suffix) and
-  (ltrimstr($prefix) | rtrimstr($suffix) | same_repository);
+  (ltrimstr($prefix) |
+    (if $suffix == "" then . else rtrimstr($suffix) end) | same_repository);
 '
 
 tag_ref="refs/tags/$tag"
