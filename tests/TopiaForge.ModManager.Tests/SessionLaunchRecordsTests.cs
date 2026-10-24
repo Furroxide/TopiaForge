@@ -70,6 +70,13 @@ namespace TopiaForge.ModManager.Tests
                  noIPv6.Error.Message == "This computer has no IPv6, so it cannot reach this address; ask the host for an IPv4 address or an invite.",
                 "a launched join names the local IPv6 limit and an available next step");
 
+            // A launched host whose ban list cannot be read opened nothing, for a cause on this computer that its record names.
+            var unreadBans = SessionLaunchRecords.Result(new LaunchSessionIdentity(RequestId, "host", IntentId),
+                new InternalLiveStatus { HostPhase = InternalHostPhase.Failed, HostFailure = InternalLiveFailure.BansUnreadable });
+            That(unreadBans?.Status == "failed" && unreadBans.Error?.Code == "io" &&
+                 unreadBans.Error.Message == "This game could not read its list of banned players, so hosting did not start; close any program that may be using it, then try again.",
+                "a launched host whose ban list cannot be read says so, and what to do next (" + unreadBans?.Error?.Code + ": " + unreadBans?.Error?.Message + ")");
+
             // A refusal's words can be the provider's: an address in them never reaches the launcher.
             var refused = SessionLaunchRecords.Refused(new LaunchSessionIdentity(RequestId, "join", IntentId), ModErrorCode.External,
                 "The relay at 203.0.113.9:3478 refused play.example.org.");

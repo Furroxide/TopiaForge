@@ -227,6 +227,9 @@ namespace TopiaForge.ModManager
                     return Failed(identity, null, "service-unavailable", "The TopiaForge service could not take this session.");
                 case InternalLiveFailure.ContentUnreadable:
                     return Errored(identity, ModErrorCode.Io, "This game's mods could not be read.");
+                case InternalLiveFailure.BansUnreadable:
+                    return Errored(identity, ModErrorCode.Io,
+                        "This game could not read its list of banned players, so hosting did not start; close any program that may be using it, then try again.");
                 case InternalLiveFailure.Rejected:
                     return Errored(identity, ModErrorCode.External, "The session password could not be prepared.");
                 default:
