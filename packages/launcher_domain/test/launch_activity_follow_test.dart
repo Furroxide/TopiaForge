@@ -34,25 +34,29 @@ LaunchProgress _progress(
   ),
 );
 
-LaunchOutcome _outcome(int sequence, String world, {bool ended = false}) =>
-    LaunchTransport.readOutcome(
-      LaunchTransport.writeOutcome(
-        LaunchOutcome(
-          kind: ended ? 'session' : 'launch',
-          requestId: 'join-request',
-          command: ended ? null : 'join-session',
-          sessionId: world,
-          sequence: sequence,
-          status: 'succeeded',
-          phase: ended ? 'idle' : 'running',
-          multiplayer: LaunchOutcomeMultiplayer(
-            role: LaunchSessionRole.join,
-            intentId: 'join-intent',
-            endReason: ended ? LaunchSessionEndReason.left : null,
-          ),
-        ),
+LaunchOutcome _outcome(
+  int sequence,
+  String world, {
+  bool ended = false,
+  String intent = 'join-intent',
+}) => LaunchTransport.readOutcome(
+  LaunchTransport.writeOutcome(
+    LaunchOutcome(
+      kind: ended ? 'session' : 'launch',
+      requestId: 'join-request',
+      command: ended ? null : 'join-session',
+      sessionId: world,
+      sequence: sequence,
+      status: 'succeeded',
+      phase: ended ? 'idle' : 'running',
+      multiplayer: LaunchOutcomeMultiplayer(
+        role: LaunchSessionRole.join,
+        intentId: intent,
+        endReason: ended ? LaunchSessionEndReason.left : null,
       ),
-    );
+    ),
+  ),
+);
 
 void main() {
   test('a joined activity follows world changes and accepts its final end', () {
@@ -109,5 +113,20 @@ void main() {
       acknowledged.applyProgress(_progress(4, null)).progress!.sessionId,
       isNull,
     );
+  });
+
+  test('an outcome for another join intent is refused in another world', () {
+    final current = _join().applyProgress(_progress(1, 'first-world'));
+    for (final ended in [false, true]) {
+      final foreign = _outcome(
+        2,
+        'second-world',
+        ended: ended,
+        intent: 'foreign-intent',
+      );
+      expect(current.applyOutcome(foreign), same(current));
+    }
+    final own = current.applyOutcome(_outcome(2, 'second-world'));
+    expect(own.launchOutcome!.sessionId, 'second-world');
   });
 }
