@@ -35,7 +35,7 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             var selected = system.currentSelectedGameObject;
-            var inSurface = selected != null && selected.activeInHierarchy && selected.transform.IsChildOf(root.transform);
+            var inSurface = IsInside(selected, root);
             var step = Driver.Tick(
                 true,
                 inSurface,
@@ -65,6 +65,12 @@ namespace TopiaForge.Mods.UnityUi
                 move.moveDir = ToUnity(step.Move);
                 move.moveVector = new Vector2(x, y);
                 ExecuteEvents.Execute(selected, move, ExecuteEvents.moveHandler);
+                if (!IsInside(system.currentSelectedGameObject, root))
+                {
+                    // Unity's automatic navigation picks the nearest control on any canvas. Past the surface's last control the
+                    // selection stays where it was, so neither the move nor a submit with it reaches a surface beneath.
+                    system.SetSelectedGameObject(selected);
+                }
             }
 
             var target = system.currentSelectedGameObject;
@@ -108,6 +114,11 @@ namespace TopiaForge.Mods.UnityUi
             }
 
             Controls.Clear();
+        }
+
+        private static bool IsInside(GameObject? target, GameObject root)
+        {
+            return target != null && target.activeInHierarchy && target.transform.IsChildOf(root.transform);
         }
 
         private static bool IsTyping(GameObject selected)

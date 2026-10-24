@@ -58,6 +58,8 @@ namespace TopiaForge.ModManager.Tests
             TheKitNavigatesOnlyWhileItsSurfaceClaimsNavigation();
             HeldNavigationDoesNotCrossDirectSurfaceChanges();
             BackOnlyWindowsDoNotBlockTheNavigationOwner();
+            NothingBeneathAModalNavigates();
+            TheKitsNavigationStaysInsideItsSurface();
             DeviceAndControlBoundsDoNotStealOtherInput();
             AModsOwnKeyStillReachesItsAction();
             NothingIsAllocatedAtRestOrWhileHeld();

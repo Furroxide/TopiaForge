@@ -137,9 +137,11 @@ Surfaces own the input they handle, with no code in the mod:
 - **Menu navigation**, the arrows, Tab, Enter and Space, and a controller's left stick, D-pad, A and
   B, belongs to a modal, a fullscreen tool and the manager overlay while they show. The menu beneath
   never moves or presses. The surface's own controls move and submit at the UI module's own repeat
-  delay and rate, and the first press with none of them selected selects the first. A window takes
+  delay and rate, and the first press with none of them selected selects the first. A move never
+  leaves the surface: past its last control, the selection stays where it is. A window takes
   navigation only while one of its controls is selected, so gameplay keeps Space and the stick
-  otherwise. An unselected window does not block the overlay or another selected window's navigation.
+  otherwise. An unselected window does not block the overlay or another selected window's navigation,
+  but nothing beneath a modal or a key capture moves or presses.
   A direction held while opening or dismissing a modal does not navigate the next
   surface; release it and press again.
 - **The keyboard** belongs to a text field while it has focus, and to a key capture while it waits.

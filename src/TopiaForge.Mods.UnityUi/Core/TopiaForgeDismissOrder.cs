@@ -138,8 +138,9 @@ namespace TopiaForge.Mods.UnityUi
         }
 
         /// <summary>
-        /// Gets the root of the topmost live navigation owner. Back-only surfaces do not block it, but a keyboard capture
-        /// above it leaves the keys to itself. The kit moves and submits only inside the returned root.
+        /// Gets the root of the topmost live navigation owner. A Back-only window does not block it, but a keyboard capture
+        /// above it leaves the keys to itself, and so does any surface in the modal band or above, whatever it claims: nothing
+        /// beneath a modal moves or submits. The kit moves and submits only inside the returned root.
         /// </summary>
         public object? FocusRoot()
         {
@@ -147,7 +148,8 @@ namespace TopiaForge.Mods.UnityUi
             for (var index = 0; index < surfaces.Count; index++)
             {
                 if (IsLive(index)
-                    && (Resolve(index) & (TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.Keyboard)) != 0
+                    && (surfaces[index].Band >= TopiaForgeLayerBand.Modal
+                        || (Resolve(index) & (TopiaForgeInputClaim.Navigation | TopiaForgeInputClaim.Keyboard)) != 0)
                     && (top < 0 || surfaces[index].Band >= surfaces[top].Band))
                 {
                     top = index;
