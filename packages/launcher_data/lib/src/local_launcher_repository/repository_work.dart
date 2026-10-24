@@ -5,9 +5,11 @@ part of '../local_launcher_repository.dart';
 /// Every public operation runs through [_tracked]. Until an operation ends it
 /// can hold files open in the game's and the launcher's folders, the
 /// install's staging lease among them, and write there. So [_close] waits for
-/// each one: a launch stops at its next step, and anything else finishes.
-/// Once the close completes, nothing the repository started still runs or
-/// holds a file open, and the folders it used can be moved or deleted.
+/// each one, work started while it waits included: a launch stops at its
+/// next step, and anything else finishes. Once the close completes, nothing
+/// started before then still runs or holds a file open, and the folders it
+/// used can be moved or deleted. Work started after that still runs, and
+/// nothing waits for it.
 extension _RepositoryWork on LocalLauncherRepository {
   /// Starts [operation], kept in [_inFlight] until it ends.
   Future<T> _tracked<T>(Future<T> Function() operation) {

@@ -183,6 +183,62 @@ void main() {
       expectNothingOpenUnder(root);
     },
   );
+
+  test(
+    'closing also waits for work started while it waits, which finishes and leaves nothing open',
+    () async {
+      final committing = Completer<void>();
+      final proceed = Completer<void>();
+      final repairing = Completer<void>();
+      final repairProceeds = Completer<void>();
+      final repository = LocalLauncherRepository(
+        dataRoot: dataRoot.path,
+        repositoryRoot: repositoryRoot.path,
+        packageMetadataValidator: (_) async => const [],
+        packageInstallCommitHook: (_) async {
+          committing.complete();
+          await proceed.future;
+        },
+        runtimeRepairCommitHook: (_) async {
+          if (repairing.isCompleted) return;
+          repairing.complete();
+          await repairProceeds.future;
+        },
+      );
+      final work = RepositoryWork()..checkAtEnd(root);
+      addTearDown(repository.dispose);
+      addTearDown(() {
+        for (final gate in [proceed, repairProceeds]) {
+          if (!gate.isCompleted) gate.complete();
+        }
+      });
+      final install = await repository.selectGameDirectory(gameRoot.path);
+      final installing = work.track(
+        repository.installPackage(_package(root, 'held.mod').path, install),
+      );
+      await committing.future;
+
+      var closed = false;
+      final closing = repository.dispose().then((_) => closed = true);
+      // A caller's next step can start more work while the close waits, as
+      // a refresh after an install does, and the close waits for it too.
+      final repairs = work.track(repository.installOrRepairRuntime(install));
+      proceed.complete();
+      await installing;
+      await repairing.future;
+      await pumpEventQueue();
+      expect(
+        closed,
+        isFalse,
+        reason: 'The repair started during the close has not finished yet.',
+      );
+      repairProceeds.complete();
+      await closing;
+      expect(work.finished, isTrue, reason: 'The repair finished first.');
+      expectNothingOpenUnder(root);
+      expect((await repairs).ok, isTrue);
+    },
+  );
 }
 
 void _createGame(Directory gameRoot) {
