@@ -2274,8 +2274,8 @@ section 5, has the rest.
   players and starts the package's target; the player joins from its menu, runs the host's world under the host's
   session id once the network world has it in place, starts its participant, and never its server controller; a join
   started in game publishes nothing to the launcher; both games run in the background while online; the host starts its
-  world again and the player follows it there; at rest the two allocate nothing over 10,000 frames; and the player
-  leaves, its main menu loads, and its background setting comes back exactly.
+  world again and the player follows it there; offline before the session, and at rest in it, the two allocate nothing
+  over 10,000 frames; and the player leaves, its main menu loads, and its background setting comes back exactly.
 - **Mutation checks**, each applied, run and reverted byte for byte. The follower suites fail when the follower never
   takes the follow grant, when the policy ignores it, when a joined player's `RestartAsync` runs (caught by its own
   words: the launch guard behind it still refuses the restart), when the follow takes no readiness hold of its own, when

@@ -144,7 +144,7 @@ synchronizes. The stepper follows that order on the steps the plan names:
 | Synchronizing, while session follow prepares and loads the host's world | Loading world ("Getting your mods ready", "Loading the host's world", or for an arena "Loading the host's level (1/2)" and then "Building the host's arena (2/2)") |
 | Synchronizing, while session follow waits for the host's world to arrive | Synchronizing ("Receiving the world", then n/m as the network world reports it) |
 | Synchronizing, while session follow starts this player's controls | Spawning ("Starting your controls") |
-| Synchronizing, with a readiness hold | Loading world (the network world's hold, while its baseline arrives before the follow begins) |
+| Synchronizing, with a readiness hold | Loading world (the follow's hold and the network world's, while the follow waits for the host's announcement) |
 | Synchronizing | Synchronizing ("Receiving the world", or n/m once the network world reports it) |
 | In session | every step done; Spawning completes until avatars land (WS3.10) |
 
