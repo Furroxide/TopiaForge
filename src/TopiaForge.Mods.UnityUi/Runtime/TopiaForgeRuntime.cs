@@ -58,6 +58,7 @@ namespace TopiaForge.Mods.UnityUi
             // The game re-asserts its own cursor lock every frame, so the lease must
             // fight back every frame while held (proven by the Zombies modal behavior).
             TopiaForgeCursor.Tick();
+            TopiaForgeEventSystems.Tick();
             TopiaForgeTween.Tick(Time.unscaledDeltaTime);
             TopiaForgeDismissStack.TickEscape();
             TopiaForgeHotkeys.Tick();

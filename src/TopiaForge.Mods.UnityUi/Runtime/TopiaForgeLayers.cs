@@ -40,11 +40,12 @@ namespace TopiaForge.Mods.UnityUi
         /// <summary>
         /// Creates a ScreenSpaceOverlay canvas in a band with the brand reference
         /// resolution (divided by the accessibility UI scale) and a raycaster that is
-        /// enabled only for interactive layers.
+        /// enabled only for interactive layers. Only a canvas that takes input asks for an
+        /// event system, so a HUD made before the game's first scene leaves the menu's own
+        /// event system in charge.
         /// </summary>
         public static GameObject CreateCanvas(string name, TopiaForgeLayerBand band, bool interactive, bool persistent)
         {
-            TopiaForgeEventSystems.EnsureEventSystem();
             TopiaForgeRuntime.Ensure();
 
             var root = new GameObject(name, typeof(RectTransform));
@@ -62,6 +63,7 @@ namespace TopiaForge.Mods.UnityUi
 
             var raycaster = root.AddComponent<GraphicRaycaster>();
             raycaster.enabled = interactive;
+            TopiaForgeEventSystems.Track(raycaster);
 
             var rect = (RectTransform)root.transform;
             rect.anchorMin = Vector2.zero;
