@@ -105,8 +105,9 @@ abstract interface class MultiplayerRepository {
   ///   [install], and preparing the server profile. Download and install
   ///   progress go to [onProgress] as the events the reducer takes for them,
   ///   [JoinDownloadProgressed] and [JoinInstallProgressed]. Packages only
-  ///   the host serves download from where the descriptor came, and a LAN
-  ///   host's browsing entry stays alive until the downloading stage ends.
+  ///   the host serves download from the host as the descriptor fetch
+  ///   reached it (`JoinHostPackages`), and a LAN host's browsing entry
+  ///   stays alive until the downloading stage ends.
   ///
   /// Null for any other stage, for a content stage when there is no content
   /// host, and when [cancellation] stopped the work. The content stages need
@@ -362,9 +363,10 @@ final class LocalMultiplayerRepository implements MultiplayerRepository {
   }
 
   /// Answers the downloading stage through [content], with the packages
-  /// only the host serves taken from where the descriptor came. A LAN host
-  /// stays heard until the stage ends, however it ends: a stop asked for
-  /// meanwhile waits for it, and browsing it had to start stops after it.
+  /// only the host serves taken from the host as the descriptor fetch
+  /// reached it (`JoinHostPackages`). A LAN host stays heard until the
+  /// stage ends, however it ends: a stop asked for meanwhile waits for it,
+  /// and browsing it had to start stops after it.
   Future<JoinEvent?> _download(
     MultiplayerContentHost content,
     GameInstall install,

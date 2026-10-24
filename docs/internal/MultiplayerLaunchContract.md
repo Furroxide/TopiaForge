@@ -356,8 +356,9 @@ launcher log, and neither ever names a URL or an address.
   download is in the cache, from the host's own endpoint with `TFD1 package <sha256>` (`HostPackageClient`), through
   a `JoinHostPackageSource` the multiplayer facade hands the content host.
   - **Gates the data layer checks itself.** Developer mode, as the launcher's settings say at that moment, and the
-    acknowledgement, before anything is fetched, sources included, and again before the install; without either the
-    join ends as `hostDownloadUnsupported`.
+    acknowledgement, before anything is fetched, sources included, again before each of the host's packages, so that
+    turning developer mode off asks the host for nothing more, and again before the install; settings that cannot be
+    read count as off. Without either the join ends as `hostDownloadUnsupported`.
   - **Where the host is.** Only as the descriptor fetch reached it: a LAN listing through its beacon's entry, looked
     up again for each package, so wherever the server's beacons come from at that moment, as for its descriptor; and a
     direct link or typed address only through the address that served the descriptor the join verified, which the
