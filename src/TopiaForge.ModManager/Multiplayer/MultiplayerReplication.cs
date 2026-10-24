@@ -99,6 +99,8 @@ namespace TopiaForge.ModManager
         /// <summary>Gets the composition root: the realm, and the ledger spawns are recorded in.</summary>
         internal MultiplayerRuntime Runtime { get; }
 
+        internal IMultiplayerMotion? Motion { get; set; }
+
         /// <summary>Gets the microphone's arbiter, which every context's leases share.</summary>
         internal MultiplayerMicrophoneArbiter Microphone { get; } = new MultiplayerMicrophoneArbiter();
 

@@ -214,7 +214,7 @@ namespace TopiaForge.ModRuntime.Tests
                 return OperationResult<bool>.Success(true);
             }
 
-            public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => OperationResult<IEntityMotion>.Failure(ModErrorCode.Unavailable, "No motion here.");
+            public OperationResult<IEntityMotion> AcquireMotion(IEntity entity) => FakeEntityMotion.Acquire(entity);
 
             private static FakeWorldObject? ObjectOf(IEntity entity) =>
                 entity is FakeSpawnedEntity spawned ? spawned.Object : entity is FakeWorldEntity fake ? fake.Object : null;

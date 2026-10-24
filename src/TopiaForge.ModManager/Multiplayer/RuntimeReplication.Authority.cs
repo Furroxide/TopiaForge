@@ -28,6 +28,8 @@ namespace TopiaForge.ModManager
         /// </summary>
         internal IUiService? Ui { get; set; }
 
+        internal bool IsStopping => lifetime.IsStopping;
+
         /// <summary>Gets authority routing while this process is a joined player, or null: offline and on a host nothing routes.</summary>
         internal IMultiplayerAuthority? JoinedAuthority
         {

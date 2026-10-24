@@ -91,6 +91,8 @@ namespace TopiaForge.ModManager
 
         internal int DriverIndex { get; set; } = -1;
 
+        internal bool SimulatedHere { get; set; }
+
         /// <summary>Gets the shadow key the host's entry names: the spawn's number in its mod's shadowable spawns, or zero.</summary>
         internal long ShadowKey { get; set; }
 

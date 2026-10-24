@@ -73,6 +73,10 @@ namespace TopiaForge.ModManager
         /// <summary>Step 4, online only: the local player's pose and voice (WS3.10 presence, WS5 voice capture).</summary>
         internal IMultiplayerFrameStage? PresenceSend { get; set; }
 
+        internal IMultiplayerFrameStage? MotionSend { get; set; }
+
+        private bool motionFailureLogged;
+
         /// <summary>Step 4, listen host only: snapshots of the host's world for each player (WS3.6).</summary>
         internal IMultiplayerFrameStage? HostSnapshots { get; set; }
 
@@ -191,6 +195,7 @@ namespace TopiaForge.ModManager
             var current = control;
             if (current == null) return;
             Run(PresenceSend, ref presenceFailureLogged, deltaTime);
+            Run(MotionSend, ref motionFailureLogged, deltaTime);
             if (role == InternalSessionRole.ListenHost) Run(HostSnapshots, ref snapshotFailureLogged, deltaTime);
             SendSessionTime();
             try

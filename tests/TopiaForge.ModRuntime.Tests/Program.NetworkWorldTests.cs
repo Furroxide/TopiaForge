@@ -309,6 +309,7 @@ namespace TopiaForge.ModRuntime.Tests
             internal void Frame()
             {
                 Runtime.DispatchUpdate(0.016f);
+                Game.RaiseFixedUpdate();
                 Game.RaiseLateUpdate();
             }
         }
@@ -320,11 +321,13 @@ namespace TopiaForge.ModRuntime.Tests
         /// </summary>
         private sealed class WorldGameHost : IRuntimeGameplayHost, IMultiplayerPlatform, INetworkWorldBackendSource
         {
-            public event Action<GameTimeSample>? FixedUpdate { add { } remove { } }
+            public event Action<GameTimeSample>? FixedUpdate;
 
             public event Action<GameTimeSample>? LateUpdate;
 
             internal FakeWorldScene Scene { get; } = new FakeWorldScene();
+
+            internal MotionControls Motion { get; } = new MotionControls();
 
             internal List<(string Owner, bool Scoped, FakeWorldAssets Assets)> Assets { get; } = new List<(string, bool, FakeWorldAssets)>();
 
@@ -347,11 +350,17 @@ namespace TopiaForge.ModRuntime.Tests
                 var assets = new FakeWorldAssets(Scene, lifetime);
                 Assets.Add((ownerModId, transitionAccess != null, assets));
                 var other = GameplayContextServices.Unavailable(lifetime);
-                return new GameplayContextServices(other.Input, other.LocalPlayer, new WorldEntities(), other.Physics, other.Time, other.Scheduler,
+                return new GameplayContextServices(Motion, Motion, new WorldEntities(), Motion, other.Time, other.Scheduler,
                     other.Scenes, other.Interactions, other.Items, assets, other.Audio, new WorldToasts(this, ownerModId, other.Ui), other.UnityInterop, other.SceneTransitions);
             }
 
-            public GameTimeSample BeginFrame(float deltaTime) => new GameTimeSample(GameLoopPhase.Frame, deltaTime, deltaTime, 0d, 0);
+            public GameTimeSample BeginFrame(float deltaTime)
+            {
+                Motion.Sample();
+                return new GameTimeSample(GameLoopPhase.Frame, deltaTime, deltaTime, 0d, 0);
+            }
+
+            internal void RaiseFixedUpdate() => FixedUpdate?.Invoke(new GameTimeSample(GameLoopPhase.Fixed, 0.016f, 0.016f, 0d, 0));
 
             internal void RaiseLateUpdate() => LateUpdate?.Invoke(new GameTimeSample(GameLoopPhase.Late, 0.016f, 0.016f, 0d, 0));
 

@@ -1,6 +1,6 @@
 # Multiplayer runtime integration — design record
 
-Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.9 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-22 · Owner: multiplayer
+Status: Implementing (WS3.1 to WS3.4, WS3.6, part of WS3.7, WS3.9 and WS3.13 of the live-multiplayer plan) · Date: 2026-10-24 · Owner: multiplayer
 
 This records how TopiaForge's runtime drives the multiplayer provider: the internal SPI between them, the provider's
 side of it, ModManager's composition root and its frame, and where later WS3 slices plug in. How the provider hosts and
@@ -17,9 +17,8 @@ The work lands in three steps:
 
 All three have landed, and so have the voice service behind the SPI (section 2, "Voice"), intent tracking (WS3.4,
 section 14), the participant realm (WS3.9, section 15), the first part of authority routing (WS3.7, section 16):
-spawn adoption, shadows, and validated transform changes and destroys; and pause and time (WS3.13, section 17).
-Section 8 says what each later WS3 slice plugs in where, and section 13 says exactly where motion ownership (WS3.7's
-second part) and session follow (WS3.8) attach to the network world.
+spawn adoption, shadows, and validated transform changes and destroys; pause and time (WS3.13, section 17); and
+motion ownership (WS3.7, section 18). Section 8 records the remaining integration points, including session follow.
 
 ## 1. Shape
 
@@ -496,7 +495,7 @@ The frame:
 | 1 | `DispatchUpdate`, before the mods | The provider's `Pump`: network receive and the session engine | Whenever a provider is attached |
 | 2 | `DispatchUpdate`, before the mods | The host's time on a joined player (section 17), then `WorldEvents`: world events and the session follower | Online |
 | 3 | `DispatchUpdate` | The mods' Update | Always |
-| 4 | `DispatchUpdate`, after the mods | `PresenceSend` (pose and voice), `HostSnapshots` and the session's time (host only), then the provider's `Flush` | Online |
+| 4 | `DispatchUpdate`, after the mods | `PresenceSend` (pose and voice), `MotionSend` (ownership samples and handbacks), `HostSnapshots` and the session's time (host only), then the provider's `Flush` | Online |
 | Late | `DispatchLateUpdate`, before the mods | The pause guard (section 17), then `ReplicaInterpolation` | The guard online, and after leaving until it has handed the clock back; interpolation on joined players |
 
 - `BeginFrame` (time, input and the mods' scheduler) still runs first, as before.
@@ -519,7 +518,7 @@ plug in here:
 | WS3.4 intent tracking | Landed (section 14): `IntentScope`, fed by input-active frames, the UI kit's controls and the SDK UI service, commands and interaction handlers, and read through `IRuntimeReplication.CurrentIntent` and `RouteCurrentIntent()` and the decorators' `RuntimeReplication.VisibleIntent` |
 | WS3.5 core replication model | Landed in Core (`MultiplayerReplicationModel.md`); the slices below drive it |
 | WS3.6 network world | Landed (section 13): `PromotionCensus`, `WorldEvents`, `HostSnapshots` and `ReplicaInterpolation`, an observer of the realm, the spawn ledger's observer, the `WorldReplication` channel, `SetEntityIdentitySource`, `MultiplayerReplication.References` and `LocalContent`, and replicas through `TryGetReplicaFactory` |
-| WS3.7 authority routing | First part landed (section 16): `NetAssetService` and `NetEntityService` route a joined player's spawns, transform changes and destroys by `ExecutionRouting.Route(realm, profile, intent)`, and the SPI's `RequestSpawn` and `RegisterCanonical` do so for providers: spawn adoption under a host's per-player `ProxyParticipant` scope, shadows bound by `NetSpawnOrigin`, and requests the host validates through `PermissionPolicy` and `TokenBucket`, over message types 64 to 66 and 96 and 97. Still to come: `NetEntityMotion` behind `AcquireMotion` and `HeldItemOwnershipTracker` behind `NetItemService`, whose hooks into the network world are listed in section 13, and forwarded commands naming their sender in `InternalCommand.Sender` |
+| WS3.7 authority routing | First part landed (section 16): `NetAssetService` and `NetEntityService` route a joined player's spawns, transform changes and destroys by `ExecutionRouting.Route(realm, profile, intent)`, and the SPI's `RequestSpawn` and `RegisterCanonical` do so for providers: spawn adoption under a host's per-player `ProxyParticipant` scope, shadows bound by `NetSpawnOrigin`, and requests the host validates through `PermissionPolicy` and `TokenBucket`, over message types 64 to 66 and 96 and 97. Motion ownership is implemented in section 18: `NetEntityMotion` wraps `AcquireMotion`, and `HeldItemOwnershipTracker` observes native pickups. Forwarded commands naming their sender in `InternalCommand.Sender` remain separate |
 | WS3.8 session follow | `WorldEvents`; the `SceneFollow` channel, re-baselined like world replication; `HoldReadiness` around loading the host's world, with `ReportProgress` while it loads; `ReplaceSession` for a new world; the follower's world-owner scopes through `CreateChildScopeAsync`'s execution context; `Leave` from a joined player's main menu. The network world's scene hooks, hold and progress it works beside are listed in section 13 |
 | WS3.9 participant realm | Landed (section 15): `IGamemodeParticipantFactory`, the participant's scope through `CreateChildScopeAsync(..., ModExecutionContext.Participant)`, and the orchestrator's start by realm, which session follow (WS3.8) calls on a joined player |
 | WS3.10 presence | `PresenceSend`; the `Avatars` channel and its unreliable lane; `SetAvatarSource` |
@@ -1029,7 +1028,9 @@ stops at its first bad field: items before it in a list still apply, as the host
 | 66 `DestroyRequest` | Player | target |
 | 96 `SpawnAdopted` | Host | provisional id, network id |
 | 97 `SpawnRefused` | Host | provisional id, reason |
-| 67 to 95, 98 to 127 | Either | Kept for authority routing's second part (WS3.7) |
+| 67 to 70 | Player to host | Motion grab, sample, release and handback (section 18) |
+| 98, 99 | Host to player | Motion verdict and accepted state (section 18) |
+| 71 to 95, 100 to 127 | Either | Reserved for later authority routing |
 
 An entry starts with its source: a scene object (id, key, pose), an SDK spawn (id, kind, owning mod, origin sequence,
 owner slot, scale, pose, description), world content (id, kind, content key, owning mod, owner slot, scale, pose,
@@ -1148,17 +1149,10 @@ Authority routing (WS3.7). Its first part has landed (section 16): its messages 
 `NetworkWorld.Channel`; a host's adopted spawn is a ledger record announced with its player's owner slot; a joined
 player's `NetworkWorldClient.Build` binds a prediction or a shadow in place of a new replica before `Attach` marks it;
 and `SetTransform` and `Destroy` on a joined player are requests whose results reach the player as announcements,
-despawns and snapshots. The second part attaches here:
-
-- **Messages.** Types 67 to 95 and 98 to 127 on `NetworkWorld.Channel`, through `NetworkWorldChannel.Register`, beside
-  world replication's own on the same ordered stream. `TrySendTo`, `TrySendToHost` and `Broadcast` keep this section's
-  window and skip rules.
-- **Motion.** A body a player holds is simulated there: `ReplicaTransformDriver.Drive` must skip it, its kinematic
-  switch must be handed back to the game for the hold and suppressed again after, and the host must bind an unbound
-  scene object at once when a player acquires it, since today binding waits for first motion (`NetworkWorldHost.Bind`).
-  A hand-back carries `{position, linear velocity, angular velocity}`, and snapshots carry no angular velocity, so the
-  hand-back is one of authority routing's own messages. A player's own adopted object is already simulated nowhere
-  but the host; a grab of one goes through the same ownership protocol as any other body.
+despawns and snapshots. Motion ownership now attaches through `NetworkWorldMotion` (section 18): types 67 to 70
+and 98 and 99 share the ordered world channel, the driver skips local holders, and the host binds scene objects
+immediately on grab. Motion handback carries position, rotation, linear velocity and angular velocity. A player's own
+adopted body follows the same ownership protocol as a scene body.
 
 Session follow (WS3.8):
 
@@ -1195,7 +1189,7 @@ Session follow (WS3.8):
   provider with eight players in a City Streets of 1,031 keyed objects: up to about 50 bodies moving at once, each
   reaches every player at the full 10 Hz; 100 at 5.3 Hz each; 300 at 1.7 Hz each, below what interpolation hides. No
   player ever missed a broadcast, and snapshots cost each link about 8 KB a second. Per-player budgets and relevancy
-  come with presence; bodies a player holds will stream at 30 Hz of their own (WS3.7).
+  come with presence; bodies a player holds stream at 30 Hz under their own budget (section 18).
 
 ### Choices
 
@@ -1285,7 +1279,7 @@ continuations, timers and callbacks see.
 | The player's own input on a TopiaForgeUi control: a click or confirm, a value chosen, typed, dragged or submitted, a selection, a close by the close button or Escape, a hotkey, a key pressed into a keybind field | `UiCallback` | The kit, where the input arrives (`TopiaForgeCallbacks.Player`, `TopiaForgeIntent.PlayerAction`); the SDK UI service renders through the kit, so its callbacks run inside it | The local player, as the control's owner: `UiHost.OwnerId`, the mod's id for `Context.Ui` and for `TopiaForgeUi.For(context)` |
 | A command the player runs, or that code acting on a player's intent runs | `OwnerCommand` | `ModServiceRegistry`, around the command's handler, as the command's own mod; `ModRuntime.TryExecutePlayerCommand` for the chat overlay (WS5) | The player whose intent ran it |
 | An interaction handler | `InteractionHandler` | `NetInteractionService`, around each call the game makes when the local player interacts | The local player |
-| Code driving a motion lease the player holds | `MotionLease` | `MultiplayerIntents.EnterMotionLease`, the seam WS3.7 calls; nothing calls it yet | The local player |
+| Code driving a motion lease the player holds | `MotionLease` | `MultiplayerIntents.EnterMotionLease`, called around `NetEntityMotion.MoveToward` and `Throw` | The local player |
 | On a listen host, the code that carries out a participant's forwarded request | The request's own | `MultiplayerIntents.EnterForwarded`, the seam WS3.7 calls; a joined player never acts for another, so there it opens nothing | That participant, by id |
 
 **Input-active frames are the coarse source.** A mod's whole Update and LateUpdate carry the player's intent while its
@@ -1600,7 +1594,7 @@ player's own actions run where that player is (the execution model), so a joined
 ways. What the player does is made at once where the player is, asked of the host, and kept or ended by the host's
 answer; what scripts do is the host's to do, and the player's own run of the same script only stands in for it; and
 nothing a player makes is ever recorded as canonical there. Offline and on a listen host every call is canonical, as
-before. Motion ownership (`NetEntityMotion`, `HeldItemOwnershipTracker`) is the second part.
+before. Motion ownership (`NetEntityMotion`, `HeldItemOwnershipTracker`) is implemented in section 18.
 
 | Part | Where | What it does |
 | --- | --- | --- |
@@ -1824,7 +1818,7 @@ copy of each message and the SDK's result for each call included.
 - **A scale set after a spawn is not replicated**: snapshots carry poses, so a transform request moves and turns its
   target, and the scale stays as the spawn made it.
 - **A scene object that has never moved is no entity**, so a joined player's change to it applies to its own copy only,
-  as offline, until the host moves it. Binding one at once when a player acts on it comes with motion ownership.
+  as offline, until the host moves it. Acquiring motion binds it immediately (section 18).
 - **Leaving ends a player's copies of the host's world**, its predictions and shadows with its replicas, so a mod's
   handles to them die. A player back within its grace finds its objects on the host as the host's, still counted
   against its quota until it leaves for good, since its handles to them ended when it left. A link that drops and comes
@@ -2055,3 +2049,62 @@ Chronos (`TimeControlService`) reaches the runtime through its package context's
   harness on a clock the test reads; in the game both are Unity's, so nothing changes there.
 - **Nothing public changes.** Every new type and member is internal, so the SDK API baselines stay as they are, and a
   mod sees only `NotAuthoritative` where single player would have changed time.
+
+
+## 18. Motion ownership
+
+`NetEntityService.AcquireMotion` wraps known network bodies in `NetEntityMotion` online. The existing GravityGun
+package needs no ownership calls, ids, or synchronization code. Offline and client-local motion use the original
+service. SDK-spawned bodies bind through their existing entity; player intent is required on joined process contexts; grabbed scene bodies bind on the first request,
+without waiting for the world's first-motion scan. A prediction waiting for adoption must wait for the host.
+
+### Ownership and physics
+
+- The grab starts local physics optimistically. Samples may precede the verdict, including a scene-key sample before
+  its id arrives. Only the authenticated channel sender and current ownership epoch can change the host's body.
+- `OwnershipStateMachine` decides first-grab wins, denial, catches during release, speed credit, range, yielding,
+  silence and first-sample deadlines. Motion slots are 1–255 for remote participants and 256 for the listen host.
+- Motion sends at 30 Hz with phase preserved across frames; a stalled frame drops missed samples. Each sender has
+  an independent 8 KiB/s bucket with a 16 KiB burst. At most four bodies per player and 4,096 retained body histories
+  are allowed. Histories retain cooldowns until the body ends or the session ends. The host has the same outgoing
+  motion budget, so many simultaneous holders share its downstream allowance.
+- `Throw` retains local simulation for one second even when the controller immediately disposes its lease. Handback
+  includes position, rotation, linear velocity and angular velocity. The host clamps velocity to the rules' limits
+  and resumes physics. A stolen throw stops its previous owner. A normal release restores the original kinematic
+  state; a thrown body resumes dynamically, including on silence or link loss.
+- Joined bodies stay kinematic except while locally simulated. Baseline placement and interpolation skip a local
+  holder. The host is kinematic while a remote holder simulates. Ending the host's own throw cannot undo a new remote
+  holder's suppression. Scene unload, scope shutdown, role changes and stream generations retire local leases.
+- `HeldItemOwnershipTracker` observes `PlayerController.HeldItem` once per online frame and uses the same protocol.
+  A denied native pickup drops; native release retains the same throw window. Proxy cleanup calls motion's
+  `Disconnect` before reusing its participant slot, clearing ownership and cooldown history.
+
+### Validation and the presence dependency
+
+The host validates finite bounded positions, epoch and sender, displacement credit, hold range, permission and
+per-player request and byte budgets. The wire accepts no trailing bytes and carries no addresses. Verdict queues
+are bounded to 16 per participant and 256 overall. Linear and angular velocity are clamped before forwarding as
+well as at handback, so extrapolation cannot amplify a claimed velocity.
+
+Until presence (3.10) is installed, range is measured against the sender's reported local avatar position. This is
+**not a trustworthy remote-location check** against a modified client. Displacement speed, sender and epoch checks
+remain host-enforced. Presence must install `NetworkWorldMotion.ParticipantPosition` from its validated avatar state;
+once installed, a missing avatar fails closed rather than falling back to the packet. This seam remains internal.
+
+Bodies moved with `AcquireMotion` get ownership automatically. Host-authored changes continue through ordinary world
+snapshots. Arbitrary raw Unity rigidbody writes cannot be attributed reliably to a player's intent; tools should use
+the SDK lease. A future analyzer can flag direct transform/velocity writes in shared player tools and suggest that
+lease. This change does not add an analyzer or a public ownership API.
+
+### Verification and cost
+
+The Unity-free motion tests cover contention, catches, handback velocities, host catches, speed and range rejection,
+silence, scope stop, native pickups, stream restarts, stale epochs, forged senders, floods and wire truncations.
+`Program.MotionTests` loads the shipping GravityGun assembly into three real ModRuntime instances over loopback,
+then drives its actual input and fixed-update controller through grant, denial, catch, handback and disconnect.
+
+In the deterministic loopback measurement, host and player together allocate 129.3 bytes per moving frame; 600 frames
+of 16 ms accept 288 samples and send 16,128 motion payload bytes from the player (26.9 bytes/frame). Channel copies
+are included; transport framing and Unity physics are not. Offline frames and online motion history at rest allocate
+zero. The real-runtime host also allocates zero over 10,000 resting frames. These are harness measurements, not
+in-game performance claims; native pickup/throw ordering and two-instance physics still need the queued game checks.
