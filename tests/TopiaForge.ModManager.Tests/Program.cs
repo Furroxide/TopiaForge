@@ -491,6 +491,7 @@ namespace TopiaForge.ModManager.Tests
                 UiKitSourceConventionTests.Run();
                 UiKitMultiplayerConventionTests.Run();
                 ModConcurrencyConventionTests.Run();
+                MicrophoneLogPrivacyConventionTests.Run();
                 UiKitLayerLedgerTests.Run();
                 UiKitHudLayoutTests.Run();
                 UiSurfaceLifetimeTests.Run();

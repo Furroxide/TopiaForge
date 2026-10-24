@@ -80,7 +80,7 @@ namespace TopiaForge.RobotKit
                     "The microphone could not begin recording.");
             }
 
-            LogAvailabilityOnce(device);
+            LogAvailabilityOnce();
             var capture = new VoiceCapture(client, logger, serviceCts.Token, device, clip);
             active.Add(capture);
             return OperationResult<IVoiceCapture>.Success(capture);
@@ -194,7 +194,8 @@ namespace TopiaForge.RobotKit
             return devices[0];
         }
 
-        private void LogAvailabilityOnce(string? device)
+        // Names no microphone: a device's name can carry its owner's, and the log goes into diagnostic bundles.
+        private void LogAvailabilityOnce()
         {
             if (loggedAvailability)
             {
@@ -202,8 +203,7 @@ namespace TopiaForge.RobotKit
             }
 
             loggedAvailability = true;
-            logger.Info("RobotKit: voice input enabled — push-to-talk on '" + (device ?? "<default>")
-                + "' transcribes through /agent/stt (16 kHz mono).");
+            logger.Info("RobotKit: voice input is available; push-to-talk transcribes through /agent/stt (16 kHz mono).");
         }
 
         private sealed class OwnerFacade : IPlayerDialogueInputService
