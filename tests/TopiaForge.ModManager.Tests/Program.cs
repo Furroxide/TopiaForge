@@ -88,7 +88,14 @@ namespace TopiaForge.ModManager.Tests
             if (args.Length == 1 && string.Equals(args[0], "--session-follow", StringComparison.Ordinal))
             {
                 var followRoot = Directory.CreateTempSubdirectory("TopiaForgeFollowTests-").FullName;
-                try { SessionFollowTests.Run(followRoot); SessionFollowerTests.Run(Path.Combine(followRoot, "follower")); SessionFollowHostTests.Run(Path.Combine(followRoot, "host")); return 0; }
+                try
+                {
+                    SessionFollowTests.Run(followRoot);
+                    SessionFollowerTests.Run(Path.Combine(followRoot, "follower"));
+                    SessionFollowHostTests.Run(Path.Combine(followRoot, "host"));
+                    SessionLaunchRecordsTests.Run(FindRepoRoot(), Path.Combine(followRoot, "records"));
+                    return 0;
+                }
                 finally { TryDelete(followRoot); }
             }
 
@@ -420,6 +427,9 @@ namespace TopiaForge.ModManager.Tests
                 SessionLifecycleTests.Run(root + "-state");
                 GamemodeSessionOrchestratorTests.Run(root + "-session");
                 GamemodeParticipantRealmTests.Run(root + "-participant");
+                SessionFollowTests.Run(Path.Combine(root, "session-follow"));
+                SessionFollowerTests.Run(Path.Combine(root, "session-follower"));
+                SessionFollowHostTests.Run(Path.Combine(root, "session-follow-host"));
                 SessionActivationTests.Run(root + "-activation");
                 ContentAdmissionTests.Run(root + "-content-admission");
                 RuntimeSessionSelectionTests.Run();
