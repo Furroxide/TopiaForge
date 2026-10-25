@@ -183,7 +183,7 @@ internal static class NetworkIdleTurnTests
         using var stack = Stack(171);
         var archive = new byte[16 * 1024 * 1024];
         new Random(171).NextBytes(archive);
-        using var endpoint = new DescriptorEndpoint(0, _ => new MemoryStream(archive, false), bindAddress: IPAddress.Loopback);
+        using var endpoint = new DescriptorEndpoint(0, (_, _) => new MemoryStream(archive, false), bindAddress: IPAddress.Loopback);
         Idle(() => endpoint.Turn(stack, 1_000), "the descriptor endpoint's turn with no connection waiting");
 
         using (var quiet = Connect(endpoint.LocalPort, receiveBuffer: 0))

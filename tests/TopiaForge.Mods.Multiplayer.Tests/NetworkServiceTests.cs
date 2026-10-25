@@ -27,7 +27,7 @@ internal static class NetworkServiceTests
         var brokenSha = new string('b', 64);
         var lockedSha = new string('c', 64);
         using var host = StartThread(122);
-        var endpoint = new DescriptorEndpoint(0, sha => sha switch
+        var endpoint = new DescriptorEndpoint(0, (sha, _) => sha switch
         {
             _ when sha == packageSha => new MemoryStream(package, false),
             _ when sha == brokenSha => new BrokenArchive(),

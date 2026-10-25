@@ -23,6 +23,9 @@ namespace TopiaForge.Multiplayer.Network
         /// </summary>
         IReadOnlyList<DescriptorPackage>? HostPackages();
 
+        /// <summary>Reports an unavailable host archive on the main thread, without a path or an exception.</summary>
+        void ReportPackageWarning(string message);
+
         /// <summary>Gets what a joining player presents for admission, as opaque bytes the host's runtime reads.</summary>
         byte[] ClientContent();
 

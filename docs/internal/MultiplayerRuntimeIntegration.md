@@ -276,6 +276,15 @@ Each loaded package is described from its manifest and the hash multiplayer comp
   one small read each, at the first look.
 - **The host's descriptor** lists implicit mods as `implicit` and session mods as `session-required` or
   `session-optional`. Client-local, server-only and standalone mods are never listed.
+- **Serving original archives.** A launched host with developer mode and `servePackages` both enabled signs
+  `hostServesPackages` and supplies the endpoint with `HostPackageArchives`. Its fixed map uses only the descriptor's
+  SHA-256 values as names in the launcher cache; unknown and unlisted digests receive the same `404`. Each request
+  rechecks developer mode, hashes the archive on a cancellable worker, then streams that same read-only handle from
+  byte zero. Empty archives and archives over 512 MiB are refused before hashing. Nothing hashes on the game or network
+  thread, and at most eight verification workers exist per endpoint, including cancelled disk reads still finishing.
+  Missing or changed archives are refused and warned of once per listed hash, on the main thread, without paths,
+  addresses or filesystem exception text. World changes reuse the original package snapshot and allowlist.
+  `tests/fixtures/multiplayer/package-answer/case.json` pins the unchanged TFD1 framing for the C# writer and Dart reader.
 
 ### The offer
 

@@ -146,6 +146,8 @@ namespace TopiaForge.Multiplayer
         /// </summary>
         public byte[] ClientContent() => EncodedOffer() ?? Array.Empty<byte>();
 
+        public void ReportPackageWarning(string message) => Warn("content.archive-unavailable", message);
+
         /// <summary>
         /// Decides with the runtime's planner whether a player presenting <paramref name="clientContent"/> may join. The
         /// planner's lines become the problems the host's policy puts in the admission report, which the player sees.

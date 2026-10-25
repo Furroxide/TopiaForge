@@ -85,6 +85,8 @@ namespace TopiaForge.Multiplayer.Network
             settings.FallBackToAnyPort = false;
             settings.AllowDirect = AllowDirect;
             settings.MapPorts = RouterForwarding;
+            settings.DeveloperMode = DeveloperMode;
+            settings.ServePackages = ServePackages;
         }
 
         /// <summary>

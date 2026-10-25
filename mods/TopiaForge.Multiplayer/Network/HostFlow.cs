@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using TopiaForge.Mods;
 using TopiaForge.Multiplayer.ControlPlane;
 using TopiaForge.Multiplayer.Engine;
@@ -38,7 +40,7 @@ namespace TopiaForge.Multiplayer.Network
         TraversalNetwork StartTraversal(int port, NetworkStack stack, NatAgentOptions options);
 
         /// <summary>Creates the host's descriptor endpoint on <paramref name="port"/>, or null where the network serves none.</summary>
-        DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly);
+        DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly, Func<string, CancellationToken, Stream?>? packages = null);
 
         /// <summary>Creates the host's LAN announcer, or null where the network has no LAN.</summary>
         LanAnnouncer? CreateAnnouncer(LanBeacon beacon);
@@ -99,7 +101,8 @@ namespace TopiaForge.Multiplayer.Network
             return new TraversalNetwork(thread, nat.Agent);
         }
 
-        public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => new DescriptorEndpoint(port, relayOnly: relayOnly);
+        public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly, Func<string, CancellationToken, Stream?>? packages = null) =>
+            new DescriptorEndpoint(port, packages, relayOnly: relayOnly, bindAddress: bindAddress, withoutIPv6: withoutIPv6);
 
         public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => new LanAnnouncer(beacon);
 
@@ -144,6 +147,9 @@ namespace TopiaForge.Multiplayer.Network
         private readonly Func<TransportOptions> transportOptions;
         private readonly InternetServices? services;
         private readonly Func<NatAgentOptions> natOptions;
+        private readonly Func<string?> packageCache;
+        private readonly Action<string> reportPackageWarning;
+        private HostPackageArchives? archives;
 
         /// <summary>Whether the session offers voice chat, taken once as hosting starts and fixed for the whole run.</summary>
         private readonly bool offersVoice;
@@ -165,17 +171,20 @@ namespace TopiaForge.Multiplayer.Network
             byte[]? passwordKey,
             Func<TransportOptions>? transportOptions = null,
             InternetServices? services = null,
-            Func<NatAgentOptions>? natOptions = null)
+            Func<NatAgentOptions>? natOptions = null,
+            Func<string?>? packageCache = null)
         {
             this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
             this.identity = identity ?? throw new ArgumentNullException(nameof(identity));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.content = content ?? throw new ArgumentNullException(nameof(content));
+            reportPackageWarning = content.ReportPackageWarning;
             this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.unixSeconds = unixSeconds ?? throw new ArgumentNullException(nameof(unixSeconds));
             this.transportOptions = transportOptions ?? (() => new TransportOptions());
             this.services = settings.Visibility == ServerVisibility.Lan ? null : services;
             this.natOptions = natOptions ?? (() => new NatAgentOptions());
+            this.packageCache = packageCache ?? HostPackageArchives.LauncherCache;
 
             // The descriptor is signed with it once and the engine holds it while anyone is connected, so a later change to
             // the settings object reaches neither: hosting again is how the setting changes.
@@ -219,8 +228,14 @@ namespace TopiaForge.Multiplayer.Network
         {
             if (factory == null) throw new ArgumentNullException(nameof(factory));
             if (network != null) throw new InvalidOperationException("The host has already started.");
-            packages = content.HostPackages();
-            if (packages == null) return LiveFailure.ContentUnreadable;
+            var announced = content.HostPackages();
+            if (announced == null) return LiveFailure.ContentUnreadable;
+            packages = new List<DescriptorPackage>(announced).AsReadOnly();
+            if (settings.DeveloperMode && settings.ServePackages)
+            {
+                archives = new HostPackageArchives(packages, packageCache(), () => settings.DeveloperMode && settings.ServePackages);
+                archives.ReportWarnings(reportPackageWarning);
+            }
             var port = settings.Port;
             for (var attempt = 0; attempt < PortAttempts && network == null; attempt++)
             {
@@ -268,6 +283,7 @@ namespace TopiaForge.Multiplayer.Network
         internal void Pump()
         {
             if (network == null || stopped) return;
+            archives?.ReportWarnings(reportPackageWarning);
             while (network.TryTakeEvent(out var networkEvent))
             {
                 if (networkEvent.Kind == NetworkEventKind.LinkAccepted)
@@ -351,7 +367,7 @@ namespace TopiaForge.Multiplayer.Network
             DescriptorEndpoint? tcp;
             try
             {
-                tcp = factory.CreateDescriptorEndpoint(started.LocalPort, !settings.AllowDirect);
+                tcp = factory.CreateDescriptorEndpoint(started.LocalPort, !settings.AllowDirect, archives == null ? null : archives.Open);
             }
             catch (SocketException)
             {
@@ -382,7 +398,7 @@ namespace TopiaForge.Multiplayer.Network
                 settings.Password != null,
                 offersVoice,
                 settings.Visibility,
-                false,
+                archives != null && settings.DeveloperMode && settings.ServePackages,
                 settings.Gamemode,
                 settings.World,
                 packages);

@@ -6,6 +6,11 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--host-packages")
+            {
+                HostPackageTests.Run();
+                return 0;
+            }
             HarnessOptions.Parse(args);
             if (HarnessOptions.Staging)
             {
@@ -13,6 +18,7 @@ internal static class Program
                 return 0;
             }
 
+            HostPackageTests.Run();
             MultiplayerIdentityTests.SnapshotsRejectInvalidOrAmbiguousIdentityData();
             SdkContractCompletionTests.DeterministicRandomMatchesFrozenVectors();
             SdkContractCompletionTests.PresentationTargetsSelectExactRecipients();

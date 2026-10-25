@@ -226,7 +226,7 @@ internal sealed class TraversalNetworkFactory : INetworkFactory
         return new TraversalNetwork(network, network.Agent);
     }
 
-    public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly) => null;
+    public DescriptorEndpoint? CreateDescriptorEndpoint(int port, bool relayOnly, Func<string, CancellationToken, Stream?>? packages = null) => null;
 
     public LanAnnouncer? CreateAnnouncer(LanBeacon beacon) => null;
 
