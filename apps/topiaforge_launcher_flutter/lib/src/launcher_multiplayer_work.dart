@@ -36,9 +36,15 @@ final class _MultiplayerWork {
   bool? linkChoice;
   int linkChosenAt = -1;
 
+  /// The join flow's own bookkeeping.
+  final join = _JoinWork();
+
   void cancelAll() {
     round?.cancel();
     check?.cancel();
+    join.stop();
+    join.handoffs?.cancel().ignore();
+    join.handoffs = null;
   }
 }
 

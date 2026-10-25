@@ -132,8 +132,8 @@ void registerSessionLinkWidgetTests() {
     await pumpLauncher(tester, repository: repository, inbox: inbox);
 
     final intake = blocOf(tester).state.multiplayer.sessionLink;
-    expect(intake, isA<SessionLinkConsentPlaceholder>());
-    intake as SessionLinkConsentPlaceholder;
+    expect(intake, isA<SessionLinkOpened>());
+    intake as SessionLinkOpened;
     expect(intake.link, SessionLink.tryParse(invite));
     expect(intake.source, SessionLinkSource.commandLine);
     expect(intake.arrival, 1);
@@ -157,11 +157,8 @@ void registerSessionLinkWidgetTests() {
     await tester.pumpAndSettle();
 
     final intake = blocOf(tester).state.multiplayer.sessionLink;
-    expect(intake, isA<SessionLinkConsentPlaceholder>());
-    expect(
-      (intake as SessionLinkConsentPlaceholder).source,
-      SessionLinkSource.forwarded,
-    );
+    expect(intake, isA<SessionLinkOpened>());
+    expect((intake as SessionLinkOpened).source, SessionLinkSource.forwarded);
     expect(intake.link.inviteCode, 'ABCDE12345');
     expectNothingJoined(tester, repository);
   });
@@ -181,7 +178,7 @@ void registerSessionLinkWidgetTests() {
     await tester.pumpAndSettle();
 
     final multiplayer = blocOf(tester).state.multiplayer;
-    final intake = multiplayer.sessionLink as SessionLinkConsentPlaceholder;
+    final intake = multiplayer.sessionLink as SessionLinkOpened;
     expect(intake.link.canonical, invite);
     expect(intake.arrival, 3);
     expect(multiplayer.linkArrivals, 3);
@@ -278,8 +275,7 @@ void registerSessionLinkWidgetTests() {
       );
       await tester.pumpAndSettle();
       final intake =
-          blocOf(tester).state.multiplayer.sessionLink
-              as SessionLinkConsentPlaceholder;
+          blocOf(tester).state.multiplayer.sessionLink as SessionLinkOpened;
       expect(intake.link.kind, SessionLinkKind.direct);
       expect(intake.link.toString(), isNot(contains('192.168')));
       expect(
