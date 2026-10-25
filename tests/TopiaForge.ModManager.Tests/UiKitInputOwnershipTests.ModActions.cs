@@ -98,6 +98,17 @@ namespace TopiaForge.ModManager.Tests
             Assert(!InputActionYield.Yields(KeyU, window), "an unrelated key can still toggle its window");
             var unselected = new UiInputFocus(TopiaForgeInputClaim.Back, false, false, false, navigation);
             Assert(!InputActionYield.Yields(KeyW, unselected), "an unselected window does not take a mod's W");
+
+            // With the game's navigation followed, one of the game's text fields still holds every key and controller
+            // control, and a game control merely selected, as its menu panel stays after a click, holds none of them.
+            var typing = new UiInputFocus(TopiaForgeInputClaim.None, false, true, false, navigation);
+            var resumed = new UiInputFocus(TopiaForgeInputClaim.None, false, false, false, navigation);
+            foreach (var binding in new[] { KeyW, KeyU, PadLeftX, PadRightX })
+            {
+                Assert(InputActionYield.Yields(binding, typing), "a game text field holds " + binding.Control + " with the game's navigation followed");
+                Assert(!InputActionYield.Yields(binding, resumed), "a merely selected game control holds no " + binding.Control);
+            }
+
             navigation.Listening = false;
             Assert(!InputActionYield.Yields(KeyW, window) && !InputActionYield.Yields(PadRightX, window),
                 "disabled game navigation leaves these controls to gameplay and mods");
