@@ -24,7 +24,12 @@ namespace TopiaForge.ModManager.Sessions
         internal static string ForDisplay(string? text, int maximumChars = NameChars)
         {
             if (string.IsNullOrEmpty(text)) return string.Empty;
-            return TopiaForgePlainText.Sanitize(MultiplayerDiagnosticRedactor.Redact(text), maximumChars);
+            var redacted = MultiplayerDiagnosticRedactor.Redact(text);
+            var plain = TopiaForgePlainText.Sanitize(redacted, maximumChars);
+            // Removing a direction control or splitting a token can reveal an address the original text did not contain.
+            // Check the displayed form too, and keep the bound if its replacement is longer than the original token.
+            return ReferenceEquals(plain, redacted) ? plain :
+                TopiaForgePlainText.Sanitize(MultiplayerDiagnosticRedactor.Redact(plain), maximumChars);
         }
 
         /// <summary>Attributes the host's own words to it, redacted; empty when it said nothing.</summary>

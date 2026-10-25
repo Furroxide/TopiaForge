@@ -13,7 +13,8 @@ internal static class InSessionChatProviderTests
         ConversationAndAbuse(voice: false);
         ConversationAndAbuse(voice: true);
         HostileHost();
-        Console.WriteLine("InSessionChatProviderTests passed: real host and two clients, with and without voice, plus hostile host relays.");
+        HostBackpressureKeepsTheDraftAndAllowance();
+        Console.WriteLine("InSessionChatProviderTests passed: real host and two clients, with and without voice, plus hostile host relays and host backpressure.");
     }
 
     private static void ConversationAndAbuse(bool voice)
@@ -76,6 +77,49 @@ internal static class InSessionChatProviderTests
         That(rig.Host.Control.GetStatistics().ServerMutes == 0, "hosting end clears mute state");
         That(rig.Host.Log.Lines.Concat(first.Log.Lines).Concat(second.Log.Lines).All(line => !line.Contains("hello host", StringComparison.Ordinal) && !line.Contains("flood ", StringComparison.Ordinal)), "chat content never reaches runtime logs");
     }
+
+    private static void HostBackpressureKeepsTheDraftAndAllowance()
+    {
+        using var rig = new ControlRig(511);
+        rig.StartHosting(new InternalHostSettings("Chat", 8));
+        using var hostChat = Wire(rig, rig.Host);
+        That(hostChat.Send("alone").Length == 0 && Heard(hostChat, "alone"), "a host without guests can still chat locally");
+        Advance(rig, 6_000_000);
+        var guest = rig.AddPeer("guest");
+        using var guestChat = Wire(rig, guest);
+        rig.JoinAndWait(guest);
+        That(rig.Run(() => guestChat.IsAvailable), "the guest's chat is ready");
+        var channel = rig.Host.Provider.Engine.FindSystemChannel(InternalSystemChannelKind.Chat)!;
+        // Fill the real provider's window without spending SessionChat's allowance. Invalid chat frames are ignored by
+        // the receiver, so draining this setup cannot spend its display allowance and hide the recovery messages.
+        var filler = new ArraySegment<byte>(new byte[] { 0 });
+        for (var index = 0; index < InternalSystemLimits.HostWindowMessages; index++)
+            That(channel.Send(filler, InternalSystemTarget.Everyone).Value == 1, "fill the real host window");
+        That(!channel.CanSend(InternalSystemTarget.Everyone, filler.Count), "the host window is full");
+        for (var index = 0; index < 3; index++)
+            That(hostChat.Send("not delivered").StartsWith("The message could not be sent", StringComparison.Ordinal), "all skipped recipients report refusal");
+        That(!hostChat.TryTakeLine(out _), "an all-skipped broadcast produces no false local echo");
+        var started = rig.Network.Now;
+        That(rig.Run(() => channel.CanSend(InternalSystemTarget.Everyone, filler.Count)), "consuming the pending frames reopens the window");
+        That(rig.Network.Now - started < 2_000_000, "the window recovers before a sender token could refill");
+        for (var index = 0; index < 3; index++)
+            That(hostChat.Send("recovered " + index).Length == 0, "three refusals leave the host's full burst intact");
+        That(hostChat.Send("fourth").Contains("Wait two seconds", StringComparison.Ordinal), "successful host sends spend the allowance");
+        That(rig.Run(() => Heard(guestChat, "recovered 2")), "the recovered send reaches the guest");
+
+        var second = rig.AddPeer("second");
+        using var secondChat = Wire(rig, second);
+        rig.JoinAndWait(second);
+        Advance(rig, 6_000_000);
+        var firstId = guest.Session.Snapshot.LocalParticipantId!.Value;
+        var onlyFirst = InternalSystemTarget.Only(firstId);
+        for (var index = 0; index < InternalSystemLimits.HostWindowMessages && channel.CanSend(onlyFirst, filler.Count); index++)
+            channel.Send(filler, onlyFirst);
+        That(!channel.CanSend(onlyFirst, filler.Count), "one peer's window is full again");
+        That(hostChat.Send("healthy peer").Length == 0 && Heard(hostChat, "healthy peer"), "one full peer does not refuse a partial broadcast");
+        That(rig.Run(() => Heard(secondChat, "healthy peer")), "the healthy peer still receives the broadcast");
+    }
+
 
     private static void HostileHost()
     {

@@ -379,10 +379,13 @@ action uses Return. Both are named input actions. Other focused tools keep their
 
 - Messages contain 1 to 256 UTF-16 characters, with valid surrogate pairs. The sender permits a burst of three, then
   one message every two seconds, and spends that allowance only on a message that leaves: a refusal while reconnecting,
-  text that sanitizes to nothing and a send the link refuses cost nothing. The host applies the limit independently per
-  authenticated player key, including across a reconnect. It counts arrivals, which a link's delay can bunch, so it
-  takes a message up to a second early (half a message of slack): it still never takes more than three at once, and the
-  rate over time stays one every two seconds. Its bounded rate table evicts only an allowance that has fully refilled.
+  text that sanitizes to nothing and a send the link refuses cost nothing. If every remote send window is full, the host
+  also reports refusal and keeps its draft and allowance, without a false local echo. A partially delivered broadcast
+  is accepted once, and a host without guests can still chat locally. The host applies its arrival limit independently
+  per authenticated player key, including
+  across a reconnect. It counts arrivals, which a link's delay can bunch, so it takes a message up to a second early
+  (half a message of slack): it still never takes more than three at once, and the rate over time stays one every two
+  seconds. Its bounded rate table evicts only an allowance that has fully refilled.
 - The existing reliable Chat system channel carries version 1 frames. A request contains only text; a relay contains
   the participant id assigned by the host and text. Clients cannot supply an attribution, target list or command flag.
   The host checks the connected roster and server mute again when relaying, so a queued message cannot pass a new mute
@@ -395,6 +398,8 @@ action uses Return. Both are named input actions. Other focused tools keep their
   before showing anything. A relay crossed two links, so their bound allows one message of slack: a host can show at
   most four of one participant's messages at once, then one every two seconds. Names, messages, command replies and
   toasts render as plain text. Chat text is never logged or persisted. Network messages are never executed as commands.
+  Display text is checked for addresses after normalization too: removing a direction control or splitting a token
+  cannot reconstruct an address after the first redaction pass.
 - `/help` describes local commands. Host-only `/kick`, `/ban` and `/mute` take a player name, quoted when it contains
   spaces, or the id chat shows after PLAYER. A name counts only for players the host can moderate; one that two of
   them share selects nobody and names an id to use instead, since PLAYERS lists namesakes alike. Kick and ban reuse

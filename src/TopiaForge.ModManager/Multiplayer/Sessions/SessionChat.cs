@@ -16,6 +16,7 @@ namespace TopiaForge.ModManager.Sessions
         private static readonly Stopwatch Monotonic = Stopwatch.StartNew();
         private readonly Queue<ChatLine> lines = new Queue<ChatLine>();
         private readonly Dictionary<MultiplayerPlayerKey, ChatRateLimit> rates = new Dictionary<MultiplayerPlayerKey, ChatRateLimit>();
+        private readonly List<ParticipantId> skipped = new List<ParticipantId>();
         private IInternalMultiplayerControl? control;
         private IInternalSystemChannel? channel;
         private MultiplayerSessionSnapshot? snapshot;
@@ -64,7 +65,10 @@ namespace TopiaForge.ModManager.Sessions
             // Only a message that leaves spends the allowance: a refusal above, or a send the link refuses, costs nothing.
             var allowance = sendRate;
             if (!allowance.Take(Clock())) return "Chat is sending too quickly. Wait two seconds and try again.";
-            if (role == InternalSessionRole.ListenHost) Relay(local, safe);
+            if (role == InternalSessionRole.ListenHost)
+            {
+                if (!Relay(local, safe)) return "The message could not be sent. Wait for the connection and try again.";
+            }
             else
             {
                 var result = channel!.Send(new ArraySegment<byte>(ChatWire.Write(safe)), InternalSystemTarget.Host);
@@ -100,11 +104,16 @@ namespace TopiaForge.ModManager.Sessions
             if (allowed) Append(new ChatLine(Author(sender), HostText.ForDisplay(text, ChatWire.MaximumCharacters)));
         }
 
-        private void Relay(MultiplayerParticipant sender, string text)
+        private bool Relay(MultiplayerParticipant sender, string text)
         {
-            if (text.Length == 0) return;
-            channel!.Send(new ArraySegment<byte>(ChatWire.Write(text, sender.Id.Value)), InternalSystemTarget.Everyone);
+            if (text.Length == 0) return false;
+            skipped.Clear();
+            var result = channel!.Send(new ArraySegment<byte>(ChatWire.Write(text, sender.Id.Value)), InternalSystemTarget.Everyone, skipped);
+            // Everyone broadcasts succeed with zero recipients when all windows are full. That differs from a host
+            // with nobody else joined, whose local chat still works. A partial broadcast must not be retried as a whole.
+            if (!result.TryGetValue(out var recipients) || (recipients == 0 && skipped.Count > 0)) return false;
             Append(new ChatLine(Author(sender), text));
+            return true;
         }
 
         private static string Author(MultiplayerParticipant sender)
@@ -152,6 +161,7 @@ namespace TopiaForge.ModManager.Sessions
         {
             lines.Clear();
             rates.Clear();
+            skipped.Clear();
             sendRate = default;
             Revision++;
         }

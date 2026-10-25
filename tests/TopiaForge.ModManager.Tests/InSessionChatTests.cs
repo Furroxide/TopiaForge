@@ -18,6 +18,8 @@ namespace TopiaForge.ModManager.Tests
             RateLimitsUseMonotonicTime();
             ArrivalJitterDropsNothingTheSenderAllowed();
             RefusedSendsSpendNoAllowance();
+            HostRefusalsSpendNoAllowance();
+            NormalizedChatTextStaysPrivate();
             HostAssignsIdentityAndLimitsEverySender();
             MutesAndDeparturesAreCheckedAtRelay();
             HostileRelaysAreBoundedAndRedacted();
@@ -29,7 +31,7 @@ namespace TopiaForge.ModManager.Tests
             PauseActionsFollowTheirLifetime();
             IdleFramesAllocateNothing();
             ChatViewContractTests.Run();
-            Console.WriteLine("InSessionChatTests passed: 14 logic groups and the production view contract.");
+            Console.WriteLine("InSessionChatTests passed: 16 logic groups and the production view contract.");
         }
 
         private static void MessageBoundsAndWire()
@@ -56,6 +58,15 @@ namespace TopiaForge.ModManager.Tests
             var rate = new ChatRateLimit();
             That(rate.Take(0) && rate.Take(0) && rate.Take(0) && !rate.Take(0), "burst is exactly three");
             That(!rate.Take(-1) && !rate.Take(1_999_999) && rate.Take(2_000_000) && !rate.Take(2_000_000), "one token every two seconds, never on clock reversal");
+            foreach (var slack in new[] { ChatRateLimit.HostSlack, ChatRateLimit.RelaySlack })
+            {
+                var arrival = new ChatRateLimit();
+                for (var index = 0; index < 3; index++) That(arrival.Take(0, slack), "arrival burst fits");
+                var last = slack == ChatRateLimit.HostSlack ? 1_000_000L : 0;
+                That(arrival.Take(last, slack), "the slack permits an early fourth arrival");
+                var refill = (long)((3 + slack) * 2_000_000);
+                That(!arrival.IsExpired(last + refill - 1, slack) && arrival.IsExpired(last + refill, slack), "rate-table eviction waits for the whole arrival allowance to refill");
+            }
             using var rig = new ChatRig(false);
             That(rig.Chat.Send("one").Length == 0 && rig.Chat.Send("two").Length == 0 && rig.Chat.Send("three").Length == 0, "sender burst succeeds");
             That(rig.Chat.Send("four").Contains("Wait two seconds", StringComparison.Ordinal) && rig.Channel.Sent.Count == 3, "sender limit prevents a send");

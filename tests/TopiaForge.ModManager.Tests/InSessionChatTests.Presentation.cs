@@ -60,6 +60,10 @@ namespace TopiaForge.ModManager.Tests
             That(rig.Screen.Submit("/ban p1") && rig.Rig.Prompt?.Kind == ScreenPromptKind.Destructive, "a guest named p1 cannot shield the guest whose id is p1");
             rig.Rig.Answer(ScreenPromptKind.Destructive, true);
             That(rig.Rig.Control.Calls.Contains("Ban:p1") && !rig.Rig.Control.Calls.Contains("Ban:p3"), "the id wins over the name");
+            rig.Rig.Environment.SessionSnapshot = HostSnapshot(MultiplayerSessionState.Ready, "chat", Player("p4", "Sam", "four"));
+            rig.Frame();
+            rig.Screen.Open();
+            That(rig.Screen.Submit("/mute Sam") && rig.Rig.Control.Muted.Contains("p4"), "the host's own name does not make its only namesake ambiguous");
         }
 
         private static void ModCommandFailuresKeepTheirWords()
