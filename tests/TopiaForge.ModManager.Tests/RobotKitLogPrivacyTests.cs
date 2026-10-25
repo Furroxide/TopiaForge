@@ -27,9 +27,52 @@ namespace TopiaForge.ModManager.Tests
         public static void Run()
         {
             TokenReadFailure();
+            DamagedTokenFile();
             ExceptionPayloadIsNeverRead();
             CompatibilityFallback();
-            Console.WriteLine("RobotKitLogPrivacyTests passed: locked token, exception payloads, diagnostic fallback.");
+            ObjectiveTargetResolverFailure();
+            Console.WriteLine("RobotKitLogPrivacyTests passed: locked and damaged tokens, exception payloads, diagnostic fallback, target resolver.");
+        }
+
+        private static void DamagedTokenFile()
+        {
+            var directory = Directory.CreateTempSubdirectory("TopiaForgeTokenPrivacy-");
+            var previous = Environment.GetEnvironmentVariable("ROBOAPI_BACKEND_ROOT");
+            try
+            {
+                Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", null);
+                var path = Path.Combine(directory.FullName, RoboApiClient.TokenFileName);
+                // Too large, then not UTF-8 text: the file opens, so the lock and permission advice would mislead.
+                var cases = new[]
+                {
+                    (Contents: new byte[RoboApiClient.MaxTokenFileBytes + 1], Category: "InvalidDataException"),
+                    (Contents: new byte[] { 0xFF, 0xFE, 0xFD }, Category: "DecoderFallbackException"),
+                };
+                foreach (var damaged in cases)
+                {
+                    File.WriteAllBytes(path, damaged.Contents);
+                    var logger = new RecordingLogger();
+                    Assert(!new RoboApiClient(directory.FullName, "private-session-sentinel", logger).HasToken, "a damaged token is unavailable");
+                    Assert(logger.Messages.Count == 1 && logger.Messages[0]
+                        == "RoboAPI token file is too large or is not valid text; restart the game so it can refresh its sign-in: " + damaged.Category,
+                        "a damaged token file is reported as damaged, with its category and no path (" + damaged.Category + ")");
+                }
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("ROBOAPI_BACKEND_ROOT", previous);
+                directory.Delete(true);
+            }
+        }
+
+        private static void ObjectiveTargetResolverFailure()
+        {
+            var logger = new RecordingLogger();
+            using var objectives = new RobotObjectiveService(logger, () => 0f);
+            objectives.RegisterTarget("Kitchen", RobotTargetKind.Custom, () => throw new HostileException());
+            Assert(!objectives.TryResolveTarget("Kitchen", out _), "a throwing target resolver resolves nothing");
+            Assert(logger.Messages.Count == 1 && logger.Messages[0] == "Robot objective target 'Kitchen' resolver failed: HostileException",
+                "a resolver failure names the target its author registered and the category, without reading the exception");
         }
 
         private static void TokenReadFailure()

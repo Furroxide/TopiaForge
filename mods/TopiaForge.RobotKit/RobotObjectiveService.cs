@@ -172,7 +172,7 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective target resolver failed: " + RobotKitLog.ExceptionType(exception));
+                logger.Warn("Robot objective target '" + name + "' resolver failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
 

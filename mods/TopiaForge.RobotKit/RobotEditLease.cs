@@ -60,7 +60,8 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                return OperationResult<TransformState>.Failure(ModErrorCode.External, exception.Message);
+                return OperationResult<TransformState>.Failure(ModErrorCode.External,
+                    "The temporary robot transform could not be applied: " + RobotKitLog.ExceptionType(exception));
             }
         }
 
@@ -103,7 +104,8 @@ namespace TopiaForge.RobotKit
             catch (Exception exception)
             {
                 GameReflection.RestoreBrainState(target.Root, before, logger);
-                return OperationResult<bool>.Failure(ModErrorCode.External, exception.Message);
+                return OperationResult<bool>.Failure(ModErrorCode.External,
+                    "The temporary robot brain mode could not be applied: " + RobotKitLog.ExceptionType(exception));
             }
         }
 

@@ -292,9 +292,15 @@ namespace TopiaForge.RobotKit
 
                 return RoboApiProtocol.ParseAgentToken(ReadBoundedUtf8File(tokenFilePath, MaxTokenFileBytes));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 logger.Debug("RoboAPI token could not be read; check the token file permissions and close any program locking it, then restart the game: " + RobotKitLog.ExceptionType(ex));
+                return null;
+            }
+            catch (Exception ex)
+            {
+                // The file opened but is too large or is not UTF-8 text, so lock and permission advice would mislead.
+                logger.Debug("RoboAPI token file is too large or is not valid text; restart the game so it can refresh its sign-in: " + RobotKitLog.ExceptionType(ex));
                 return null;
             }
         }
