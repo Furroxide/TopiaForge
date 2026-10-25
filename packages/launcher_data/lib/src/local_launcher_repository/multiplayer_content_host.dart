@@ -21,6 +21,11 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
   /// one after another.
   final Map<String, ServerContentStore> _serverContentStores = {};
 
+  /// The downloads stop at once when either [cancellation] or the
+  /// repository's close asks: the close waits for no transfer. A download the
+  /// close stopped answers [JoinCancelRequested], so the join ends as
+  /// cancelled; one the caller stopped answers null, as its cancel already
+  /// reached the join.
   @override
   Future<JoinEvent?> downloadJoinContent(
     GameInstall install,
@@ -28,14 +33,25 @@ mixin _MultiplayerContentHosting implements MultiplayerContentHost {
     void Function(JoinDownloadProgressed progress)? onProgress,
     CancellationToken? cancellation,
     JoinHostPackageSource? hostPackages,
-  }) => _host._tracked(
-    () => _host._downloadJoinContent(
-      state,
-      onProgress: onProgress,
-      cancellation: cancellation,
-      hostPackages: hostPackages,
-    ),
-  );
+  }) => _host._tracked(() async {
+    final (linked, registrations) = _host._linkedToClose(cancellation);
+    try {
+      final answer = await _host._downloadJoinContent(
+        state,
+        onProgress: onProgress,
+        cancellation: linked,
+        hostPackages: hostPackages,
+      );
+      if (answer != null || !_host._closing.isCancelled) return answer;
+      return (cancellation?.isCancelled ?? false)
+          ? null
+          : const JoinCancelRequested();
+    } finally {
+      for (final registration in registrations) {
+        registration.dispose();
+      }
+    }
+  });
 
   @override
   Future<JoinEvent?> installJoinContent(
