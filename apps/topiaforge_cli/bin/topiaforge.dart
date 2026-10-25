@@ -5,6 +5,11 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:topiaforge/src/cli_launch_options.dart';
 import 'package:topiaforge/src/cli_launch_workflow.dart';
+import 'package:topiaforge/src/cli_host_options.dart';
+import 'package:topiaforge/src/cli_host_workflow.dart';
+import 'package:topiaforge/src/cli_servers.dart';
+import 'package:topiaforge/src/multiplayer_acceptance_spec.dart';
+import 'package:topiaforge/src/multiplayer_acceptance_runner.dart';
 import 'package:launcher_data/launcher_data.dart';
 import 'package:launcher_domain/launcher_domain.dart';
 import 'package:path/path.dart' as p;
@@ -39,6 +44,8 @@ part 'topiaforge_environment_commands.dart';
 part 'topiaforge_help.dart';
 part 'topiaforge_launcher_commands.dart';
 part 'topiaforge_launch_commands.dart';
+part 'topiaforge_multiplayer_commands.dart';
+part 'topiaforge_multiplayer_acceptance_commands.dart';
 part 'topiaforge_mod_commands.dart';
 part 'topiaforge_manifest_migration_commands.dart';
 part 'topiaforge_mod_module_commands.dart';
@@ -110,6 +117,8 @@ class _TopiaForgeCli {
       'install' => _install(rest),
       'launch' => _launch(rest, restart: false),
       'restart' => _launch(rest, restart: true),
+      'servers' => _servers(rest),
+      'host' => _host(rest),
       'dev-install' => _devInstall(rest),
       'doctor' => _doctor(rest),
       'compat' => _compat(rest),

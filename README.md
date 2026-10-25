@@ -110,7 +110,7 @@ The release-facing component and contract map is
 | **Mod loader** | BepInEx plugin that discovers, orders, and runs `.topiaforgemod` packages, with an in-game manager on `F10`. |
 | **Typed C# SDK** | 24 owner-scoped services on `IModContext`. No Unity types, no game internals, no reflection handles. |
 | **Desktop launcher** | Detects and repairs the install, manages profiles, previews dependency and conflict plans, launches the game. |
-| **`topiaforge` CLI** | 27 commands covering scaffold, restore, build, test, pack, validate, install, and release. |
+| **`topiaforge` CLI** | 29 commands covering scaffold, restore, build, test, pack, validate, install, multiplayer, and release. |
 | **In-game UI kit** | Declarative `UiNode` trees rendered by TopiaForgeUi — HUDs, windows, modals, toasts, with accessibility built in. See [docs/UiKit.md](docs/UiKit.md). |
 | **8 mod templates** | `minimal`, `gameplay`, `gamemode`, `service`, `ui`, `asset`, `world`, `multiplayer` — each scaffolded, built, packed, and validated in CI. |
 | **14 first-party mods** | Working reference implementations, from physics toys to a wave-survival showcase. See [docs/FirstPartyMods.md](docs/FirstPartyMods.md). |
@@ -120,6 +120,20 @@ The release-facing component and contract map is
 Authoring content instead of code? The launcher's Developer tab is a Creator-Companion-style cockpit
 for Unity projects, VPM packages, and template scaffolding —
 see [docs/CreatorCompanion.md](docs/CreatorCompanion.md).
+
+For live multiplayer builds, `topiaforge servers` lists Internet and LAN sessions;
+add `--json` for the versioned machine-readable snapshot. `topiaforge host` uses
+the launcher's profile and multiplayer preferences, waits for the game to confirm
+hosting, and prints an Internet invite when the game issues one. Hide my IP stays
+on unless `--allow-direct` is explicitly chosen for this session. Non-interactive
+hosting requires `--yes`; an interactive terminal still asks for consent.
+
+`topiaforge acceptance run --suite multiplayer --dry-run` prints the separate
+25-case listen-pair plan without starting a game. The live suite requires the
+multiplayer acceptance probe and two admitted QA layouts. See the
+[multiplayer CLI and acceptance contract](docs/internal/MultiplayerCliAcceptance.md)
+for options, stage codes and the game-side dependency. `topiaforge join` is a later
+addition that will share the launcher's consent and join flow.
 
 ## Status
 

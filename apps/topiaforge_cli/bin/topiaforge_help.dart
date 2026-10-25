@@ -19,6 +19,8 @@ const _commands = [
   'install',
   'launch',
   'restart',
+  'servers',
+  'host',
   'dev-install',
   'doctor',
   'compat',
@@ -181,6 +183,15 @@ extension _HelpCommand on _TopiaForgeCli {
       '      --no-wait reports process creation only; it never confirms session startup.',
     );
     stdout.writeln(
+      '  topiaforge servers [--source all|internet|lan] [--game-build build] [--json]',
+    );
+    stdout.writeln(
+      '  topiaforge host [--visibility lan|private|invite|public] [--yes] [--allow-direct]',
+    );
+    stdout.writeln(
+      '      Host waits for game confirmation and prints the game-issued invite. See host --help.',
+    );
+    stdout.writeln(
       '  topiaforge compat [--json]             Resolve declared game bindings against the install.',
     );
     stdout.writeln(
@@ -188,6 +199,9 @@ extension _HelpCommand on _TopiaForgeCli {
     );
     stdout.writeln(
       '  topiaforge acceptance run              Run the instrumented Robotopia V1 live gate.',
+    );
+    stdout.writeln(
+      '  topiaforge acceptance run --suite multiplayer [--dry-run]  Run the separate listen-pair matrix.',
     );
     stdout.writeln('');
     stdout.writeln('Unity & worlds:');

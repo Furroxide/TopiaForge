@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "topology": "listen-pair",
+  "packageId": "dev.topiaforge.multiplayer-acceptance",
+  "cases": [
+    {"id":"multiplayer.host-start","mode":"automatic","peers":["host"],"steps":"Start the listen host and confirm its own hosting progress and successful outcome."},
+    {"id":"multiplayer.lan","mode":"automatic","peers":["host","guest"],"steps":"Discover the host on LAN, verify its signed descriptor, join and observe two participants."},
+    {"id":"multiplayer.direct","mode":"automatic","peers":["host","guest"],"steps":"Explicitly consent to a direct session, join its pinned descriptor, and retain relay-only for later sessions."},
+    {"id":"multiplayer.invite","mode":"automatic","peers":["host","guest"],"steps":"Wait for the game-issued invite and join through the configured service."},
+    {"id":"multiplayer.relay","mode":"automatic","peers":["host","guest"],"steps":"Keep Hide my IP on, verify relay transport, and refuse a direct fallback when relay is unavailable."},
+    {"id":"multiplayer.join-in-progress","mode":"automatic","peers":["host","guest"],"steps":"Join after the host changes world state; verify the initial snapshot before accepting input."},
+    {"id":"multiplayer.follow-sandbox","mode":"automatic","peers":["host","guest"],"steps":"Enter Sandbox on the host; verify the guest follows once and can use its own participant tools."},
+    {"id":"multiplayer.follow-curated","mode":"automatic","peers":["host","guest"],"steps":"Change to a curated world on the host; verify both peers follow the same world."},
+    {"id":"multiplayer.avatar-pose","mode":"manual","peers":["host","guest"],"steps":"Move and aim on each peer and inspect the remote avatar pose at both window sizes."},
+    {"id":"multiplayer.spawn-ring","mode":"automatic","peers":["host","guest"],"steps":"Join and respawn; verify distinct spawn-ring positions without overlapping players."},
+    {"id":"multiplayer.gravity-gun","mode":"manual","peers":["host","guest"],"steps":"Both players try to grab one prop; verify exclusive ownership and release on disconnect."},
+    {"id":"multiplayer.native-pickup","mode":"manual","peers":["host","guest"],"steps":"Pick up and release a native object on each peer; inspect the same authoritative object."},
+    {"id":"multiplayer.sandbox-spawn","mode":"manual","peers":["host","guest"],"steps":"Use each player's F5 workbench to spawn an object; verify one shared object per action."},
+    {"id":"multiplayer.robot-replica","mode":"manual","peers":["host","guest"],"steps":"Spawn a robot and give it a host script; verify one simulation and the same replica on the guest."},
+    {"id":"multiplayer.zombies-coop","mode":"manual","peers":["host","guest"],"steps":"Play Zombies together; verify shared waves, player-local input and targeted HUD feedback."},
+    {"id":"multiplayer.chronos-scale","mode":"automatic","peers":["host","guest"],"steps":"Change Chronos scale from the host gamemode; verify guest scale follows and guest authority is refused."},
+    {"id":"multiplayer.non-freezing-pause","mode":"manual","peers":["host","guest"],"steps":"Open each player's pause menu; verify the other player and shared world keep moving."},
+    {"id":"multiplayer.chat","mode":"manual","peers":["host","guest"],"steps":"Send chat from both peers; inspect attribution, delivery and scrolling."},
+    {"id":"multiplayer.voice-ptt","mode":"manual","peers":["host","guest"],"steps":"Give microphone consent, hold and release push-to-talk and verify audio only while held."},
+    {"id":"multiplayer.voice-dialogue","mode":"manual","peers":["host","guest"],"steps":"Trigger robot dialogue during voice chat; verify voice yields and recovers afterwards."},
+    {"id":"multiplayer.kick-ban","mode":"manual","peers":["host","guest"],"steps":"Kick, reconnect, then ban the guest; verify the ban prevents another join by the same identity."},
+    {"id":"multiplayer.disconnect-cleanup","mode":"automatic","peers":["host","guest"],"steps":"Disconnect the guest; verify participant, avatar, ownership and subscriptions are removed."},
+    {"id":"multiplayer.reconnect","mode":"automatic","peers":["host","guest"],"steps":"Interrupt and restore the transport within the reconnect window; verify identity and state recover."},
+    {"id":"multiplayer.host-quit","mode":"manual","peers":["host","guest"],"steps":"After confirming NoFeedbackUrl loaded, quit the host; verify the guest sees host left and no migration."},
+    {"id":"multiplayer.run-in-background","mode":"manual","peers":["host","guest"],"steps":"Alternate focus between windows; verify background simulation and input ownership remain correct."}
+  ]
+}
