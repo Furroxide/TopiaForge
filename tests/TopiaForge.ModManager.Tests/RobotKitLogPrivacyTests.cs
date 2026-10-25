@@ -30,8 +30,9 @@ namespace TopiaForge.ModManager.Tests
             DamagedTokenFile();
             ExceptionPayloadIsNeverRead();
             CompatibilityFallback();
+            ObjectiveTargetNamesArePrivate();
             ObjectiveTargetResolverFailure();
-            Console.WriteLine("RobotKitLogPrivacyTests passed: locked and damaged tokens, exception payloads, diagnostic fallback, target resolver.");
+            Console.WriteLine("RobotKitLogPrivacyTests passed: locked and damaged tokens, exception payloads, diagnostic fallback, target resolver, private target names.");
         }
 
         private static void DamagedTokenFile()
@@ -71,8 +72,29 @@ namespace TopiaForge.ModManager.Tests
             using var objectives = new RobotObjectiveService(logger, () => 0f);
             objectives.RegisterTarget("Kitchen", RobotTargetKind.Custom, () => throw new HostileException());
             Assert(!objectives.TryResolveTarget("Kitchen", out _), "a throwing target resolver resolves nothing");
-            Assert(logger.Messages.Count == 1 && logger.Messages[0] == "Robot objective target 'Kitchen' resolver failed: HostileException",
-                "a resolver failure names the target its author registered and the category, without reading the exception");
+            Assert(logger.Messages.Count == 1 && logger.Messages[0] == "Robot objective Custom target resolver failed: HostileException",
+                "a resolver failure identifies the target kind and exception category without reading arbitrary text");
+        }
+
+        private static void ObjectiveTargetNamesArePrivate()
+        {
+            // Registration accepts mod-supplied text, which can be derived from a player or a local file.
+            // Matching a registered target therefore does not make its name safe for a diagnostic.
+            var names = new[]
+            {
+                Path.Combine(Path.GetTempPath(), "private-target-sentinel"),
+                "private-player-sentinel",
+                "Kitchen\r\nprivate-player-sentinel",
+            };
+            foreach (var name in names)
+            {
+                var logger = new RecordingLogger();
+                using var objectives = new RobotObjectiveService(logger, () => 0f);
+                objectives.RegisterTarget(name, RobotTargetKind.Custom, () => throw new HostileException());
+                Assert(!objectives.TryResolveTarget(name, out _), "a throwing named resolver resolves nothing");
+                Assert(logger.Messages.Count == 1 && !logger.Messages[0].Contains(name, StringComparison.OrdinalIgnoreCase),
+                    "a registered target name can contain a path or player text and must not reach the log");
+            }
         }
 
         private static void TokenReadFailure()

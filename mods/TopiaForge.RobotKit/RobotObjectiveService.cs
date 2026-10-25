@@ -172,7 +172,8 @@ namespace TopiaForge.RobotKit
             }
             catch (Exception exception)
             {
-                logger.Warn("Robot objective target '" + name + "' resolver failed: " + RobotKitLog.ExceptionType(exception));
+                // Registered names are arbitrary mod-supplied text and can still contain paths or player data.
+                logger.Warn("Robot objective " + entry.Info.Kind + " target resolver failed: " + RobotKitLog.ExceptionType(exception));
                 return false;
             }
 
